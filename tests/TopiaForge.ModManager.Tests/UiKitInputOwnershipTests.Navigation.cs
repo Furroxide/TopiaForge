@@ -94,11 +94,13 @@ namespace TopiaForge.ModManager.Tests
                     looked += rig.Order.TakeOnBack(false, false) == null ? 0 : 1;
                     looked += driver.Tick(rig.Order.FocusRoot() != null, false, false, 0f, 0f, false, FrameTime, ModuleDelay, ModuleRate).IsEmpty ? 0 : 1;
                     looked += TopiaForge.ModManager.InputActionYield.Yields(KeyU, new TopiaForge.ModManager.UiInputFocus(claims, rig.Order.HoldsFocus(), false, false)) ? 1 : 0;
+                    looked += rig.Navigation.KeyCount + (rig.Navigation.Moves(W) ? 1 : 0);
                 }
 
                 return GC.GetAllocatedBytesForCurrentThread() - before;
             }
 
+            BindTheGamesNavigation(rig.Navigation);
             AssertEqual(Fewest(AtRest), 0L, "at rest the filter's front door, the claims, Back and the navigation allocate nothing");
             AssertEqual(looked, 0, "and nothing at rest is looked at: every event passes at once");
 
@@ -106,9 +108,11 @@ namespace TopiaForge.ModManager.Tests
             var overlayRoot = new Root();
             rig.Order.Push(new Surface(TopiaForgeLayerBand.Window), TopiaForgeInputClaim.Navigation, overlayRoot);
             rig.Order.Push(new Surface(TopiaForgeLayerBand.Window), TopiaForgeInputClaim.NavigationWhileSelected, new Root());
+            rig.Navigation.Listening = true;
             rig.Key(DownArrow, true);
             rig.Stick(LeftStick, 0f, -0.9f);
             var mouse = 0;
+            var steered = 0f;
 
             [MethodImpl(MethodImplOptions.NoInlining)]
             long Held(int count)
@@ -121,6 +125,8 @@ namespace TopiaForge.ModManager.Tests
                     rig.Gate.Take(KeyboardId, TopiaForgeInputDevice.Keyboard, DownArrow, TopiaForgeInputRole.Direction, 1f, 0f, 0f, -1f, claims, index);
                     rig.Gate.Take(KeyboardId, TopiaForgeInputDevice.Keyboard, W, TopiaForgeInputRole.Key, 1f, 1f, 0f, 0f, claims, index);
                     rig.Gate.Take(GamepadId, TopiaForgeInputDevice.Gamepad, LeftStick, TopiaForgeInputRole.Direction, 0.9f, 0f, 0f, -0.9f, claims, index);
+                    rig.Navigation.Direction(W, out var keyX, out var keyY);
+                    steered += rig.Navigation.RoleOf(W) == TopiaForgeInputRole.Direction ? keyY : keyX;
                     rig.Gate.Direction(out var x, out var y);
                     rig.Order.TakeOnBack(rig.Gate.BackHeld, rig.Gate.BackPressedIn(index));
                     TopiaForge.ModManager.InputActionYield.Yields(KeyReturn, new TopiaForge.ModManager.UiInputFocus(claims, rig.Order.HoldsFocus(), false, true));
@@ -132,6 +138,7 @@ namespace TopiaForge.ModManager.Tests
 
             AssertEqual(Fewest(Held), 0L, "while keys are held, every event and frame allocates nothing");
             AssertEqual(mouse, 0, "and a mouse moving while the overlay shows still passes at once");
+            Assert(steered > 0f, "the game's navigation keys were looked up throughout, W pointing up");
             Assert(rig.Gate.IsTaken(KeyboardId, DownArrow) && rig.Gate.IsTaken(GamepadId, LeftStick), "the held presses stayed TopiaForge's throughout");
         }
 

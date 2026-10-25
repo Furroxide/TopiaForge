@@ -8,11 +8,11 @@ namespace TopiaForge.ModManager
     internal readonly struct UiInputFocus
     {
         /// <summary>Creates a frame's focus.</summary>
-        public UiInputFocus(TopiaForgeInputClaim claims, bool surfaceHoldsFocus, bool gameUiSelected, bool pointerOverUi)
+        public UiInputFocus(TopiaForgeInputClaim claims, bool surfaceHoldsFocus, bool gameTextFieldHasKeyboard, bool pointerOverUi)
         {
             Claims = claims;
             SurfaceHoldsFocus = surfaceHoldsFocus;
-            GameUiSelected = gameUiSelected;
+            GameTextFieldHasKeyboard = gameTextFieldHasKeyboard;
             PointerOverUi = pointerOverUi;
         }
 
@@ -25,8 +25,11 @@ namespace TopiaForge.ModManager
         /// </summary>
         public bool SurfaceHoldsFocus { get; }
 
-        /// <summary>Gets whether the game's own UI holds the EventSystem selection, where it may be typing.</summary>
-        public bool GameUiSelected { get; }
+        /// <summary>
+        /// Gets whether one of the game's own text fields has the keyboard. A game control that is merely selected does not
+        /// count: the game's menu panel stays selected after a click into it.
+        /// </summary>
+        public bool GameTextFieldHasKeyboard { get; }
 
         /// <summary>Gets whether the pointer is over UI.</summary>
         public bool PointerOverUi { get; }
@@ -36,9 +39,10 @@ namespace TopiaForge.ModManager
     /// Which of a mod's bindings yield to the UI in a frame, Unity-free. A binding yields only to what holds its control:
     /// every binding while a TopiaForge surface holds the focus outright; a key or controller control the open windows claim
     /// (Escape and a controller's B, and the navigation controls while one of a window's own controls is selected); every key
-    /// and controller control while the game's own UI holds the selection, since it may be typing; and a mouse button, the
-    /// pointer's motion or the wheel while the pointer is over UI. Anything else reaches the action, wherever the pointer is
-    /// and whichever kit control is selected: a mod's own key opens its window at the main menu and closes it while it shows.
+    /// and controller control while one of the game's own text fields has the keyboard; and a mouse button, the pointer's
+    /// motion or the wheel while the pointer is over UI. Anything else reaches the action, wherever the pointer is and
+    /// whichever control is selected, the game's included: a mod's own key opens its window at the main menu, closes it while
+    /// it shows, and still works in a level after a click on the game's own menu.
     /// </summary>
     internal static class InputActionYield
     {
@@ -57,16 +61,16 @@ namespace TopiaForge.ModManager
                 case InputBindingKind.Axis:
                     return IsPointerAxis(binding.Control)
                         ? focus.PointerOverUi
-                        : focus.GameUiSelected || Covers(focus, TopiaForgeInputRole.Direction, TopiaForgeInputDevice.Keyboard);
+                        : focus.GameTextFieldHasKeyboard || Covers(focus, TopiaForgeInputRole.Direction, TopiaForgeInputDevice.Keyboard);
                 case InputBindingKind.Key:
-                    return focus.GameUiSelected || Covers(focus, KeyRole(binding.Control), TopiaForgeInputDevice.Keyboard);
+                    return focus.GameTextFieldHasKeyboard || Covers(focus, KeyRole(binding.Control), TopiaForgeInputDevice.Keyboard);
                 case InputBindingKind.GamepadButton:
-                    return focus.GameUiSelected || Covers(focus, ButtonRole(binding.Control), TopiaForgeInputDevice.Gamepad);
+                    return focus.GameTextFieldHasKeyboard || Covers(focus, ButtonRole(binding.Control), TopiaForgeInputDevice.Gamepad);
                 case InputBindingKind.GamepadAxis:
-                    return focus.GameUiSelected
+                    return focus.GameTextFieldHasKeyboard
                         || (IsLeftStick(binding.Control) && Covers(focus, TopiaForgeInputRole.Direction, TopiaForgeInputDevice.Gamepad));
                 default:
-                    return focus.GameUiSelected;
+                    return focus.GameTextFieldHasKeyboard;
             }
         }
 

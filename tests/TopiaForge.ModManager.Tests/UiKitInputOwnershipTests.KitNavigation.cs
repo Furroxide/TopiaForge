@@ -14,7 +14,8 @@ namespace TopiaForge.ModManager.Tests
         /// The kit's own navigation (TopiaForgeNavigation), compiled unchanged against a small Unity contract double, since it
         /// needs Unity to run. Unity's automatic navigation picks the nearest control in the move's direction on any canvas, so
         /// a move past a dialog's last control would select a control of the surface beneath it, and a submit in the same
-        /// frame would press that control.
+        /// frame would press that control. Unity's UI module sends moves of its own, on a key the game still holds, and those
+        /// stay inside the surface too.
         /// </summary>
         private static void TheKitsNavigationStaysInsideItsSurface()
         {
@@ -39,7 +40,12 @@ namespace TopiaForge.ModManager.Tests
                 + string.Join("\n", result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
             var scenarios = Assembly.Load(bytes.ToArray()).GetType("NavigationScenarios", throwOnError: true)!;
             var failures = new List<string>();
-            foreach (var name in new[] { "AMoveStopsAtTheSurfacesEdge", "ASubmitWithAMovePressesOnlyTheSurfacesControl", "AHeldDirectionStaysWithItsSurface" })
+            foreach (var name in new[]
+            {
+                "AMoveStopsAtTheSurfacesEdge", "ASubmitWithAMovePressesOnlyTheSurfacesControl", "AHeldDirectionStaysWithItsSurface",
+                "AModuleMoveStaysInsideTheSurface", "AModuleMoveStaysInsideAWindowToo", "AModuleMoveIsFreeWithNoSurfaceTakingNavigation",
+                "AClickAndAMoveInOneFrameStayInside",
+            })
             {
                 try
                 {
@@ -75,6 +81,7 @@ namespace TopiaForge.ModManager.Tests
                     public Transform transform => gameObject.transform;
                 }
                 public class Behaviour : Component { }
+                public class MonoBehaviour : Behaviour { }
                 public class Transform : Component
                 {
                     public Transform? parent;
@@ -338,6 +345,58 @@ namespace TopiaForge.ModManager.Tests
                     Frame(0f, 0f, false);
                     Frame(0f, -1f, false);
                     Check(system.currentSelectedGameObject == overlayFooter.gameObject, "released and pressed again, Down moves the overlay");
+                }
+
+                // Unity's UI module moves the selection itself on a key the game still holds, such as one pressed before the
+                // dialog opened: it sends the move to the selected control, as the kit does.
+                private static void ModuleMove(Button from, MoveDirection direction)
+                {
+                    var data = new AxisEventData(system) { moveDir = direction };
+                    ExecuteEvents.Execute(from.gameObject, data, ExecuteEvents.moveHandler);
+                }
+
+                public static void AModuleMoveStaysInsideTheSurface()
+                {
+                    Start();
+                    ModuleMove(notNow, MoveDirection.Down);
+                    Check(system.currentSelectedGameObject == notNow.gameObject,
+                        "Unity's module moving Down off the dialog's last control leaves it selected, never the overlay control beneath");
+                    ModuleMove(notNow, MoveDirection.Up);
+                    Check(system.currentSelectedGameObject == turnOn.gameObject, "a module move inside the dialog still moves");
+                    Frame(0f, 0f, false);
+                    ModuleMove(turnOn, MoveDirection.Up);
+                    Check(system.currentSelectedGameObject == turnOn.gameObject, "and the control it moved to keeps the next one inside too");
+                }
+
+                // A window takes navigation only while one of its controls is selected: once the module's move has taken the
+                // selection out of it, it claims nothing any more, and still the move stays inside it.
+                public static void AModuleMoveStaysInsideAWindowToo()
+                {
+                    Start();
+                    TopiaForgeDismissStack.FocusRoot = null;
+                    ModuleMove(notNow, MoveDirection.Down);
+                    Check(system.currentSelectedGameObject == notNow.gameObject,
+                        "a module move off a window's control stays in the window, though its claim ends with the move");
+                }
+
+                public static void AModuleMoveIsFreeWithNoSurfaceTakingNavigation()
+                {
+                    Start();
+                    TopiaForgeDismissStack.FocusRoot = null;
+                    Frame(0f, 0f, false);
+                    ModuleMove(notNow, MoveDirection.Down);
+                    Check(system.currentSelectedGameObject == overlayFooter.gameObject, "with no surface taking navigation, a move goes where Unity sends it");
+                }
+
+                // The player clicks the dialog's first button and presses Up in the same frame: the kit moves from a control
+                // that was selected after the last frame.
+                public static void AClickAndAMoveInOneFrameStayInside()
+                {
+                    Start();
+                    system.SetSelectedGameObject(turnOn.gameObject);
+                    Frame(0f, 1f, false);
+                    Check(system.currentSelectedGameObject == turnOn.gameObject,
+                        "Up on the dialog's first control, in the frame it was clicked, leaves it selected, never the overlay tab above");
                 }
             }
             """;

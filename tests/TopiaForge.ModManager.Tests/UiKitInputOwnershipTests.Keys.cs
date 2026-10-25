@@ -196,9 +196,9 @@ namespace TopiaForge.ModManager.Tests
 
         /// <summary>
         /// The Input System and the game around the core, as TopiaForgeInputOwnership drives them: a device holds what the game
-        /// sees; each control an event carries goes through the gate, and a taken one is held at rest, as
-        /// ResetToDefaultStateInEvent does; the game counts every press that reaches it. A frame ends with Back, as
-        /// TopiaForgeDismissStack.TickEscape runs it.
+        /// sees; each control an event carries goes through the gate, with the part and the way each key plays from
+        /// TopiaForgeNavigationBindings, and a taken one is held at rest, as ResetToDefaultStateInEvent does; the game counts
+        /// every press that reaches it. A frame ends with Back, as TopiaForgeDismissStack.TickEscape runs it.
         /// </summary>
         private sealed class Rig
         {
@@ -213,6 +213,9 @@ namespace TopiaForge.ModManager.Tests
             public TopiaForgeInputGate Gate { get; } = new TopiaForgeInputGate();
 
             public TopiaForgeDismissOrder Order { get; }
+
+            /// <summary>Gets what the game's navigate action binds, as TopiaForgeNavigateAction follows it.</summary>
+            public TopiaForgeNavigationBindings Navigation { get; } = new TopiaForgeNavigationBindings();
 
             public int Frame { get; private set; }
 
@@ -236,9 +239,8 @@ namespace TopiaForge.ModManager.Tests
             /// <summary>A keyboard event in which <paramref name="key"/> reads held or not; returns whether the game saw a press.</summary>
             public bool Key(int key, bool down)
             {
-                var x = key == LeftArrow ? -1f : key == RightArrow ? 1f : 0f;
-                var y = key == DownArrow ? -1f : key == UpArrow ? 1f : 0f;
-                return Event(KeyboardId, TopiaForgeInputDevice.Keyboard, key, RoleOf(key), down ? 1f : 0f, x, y);
+                Navigation.Direction(key, out var x, out var y);
+                return Event(KeyboardId, TopiaForgeInputDevice.Keyboard, key, Navigation.RoleOf(key), down ? 1f : 0f, x, y);
             }
 
             /// <summary>A controller event in which a button reads held or not.</summary>
@@ -289,28 +291,6 @@ namespace TopiaForge.ModManager.Tests
 
                 seen[device, control] = applied;
                 return reached;
-            }
-
-            private static TopiaForgeInputRole RoleOf(int key)
-            {
-                switch (key)
-                {
-                    case Escape:
-                        return TopiaForgeInputRole.Back;
-                    case UpArrow:
-                    case DownArrow:
-                    case LeftArrow:
-                    case RightArrow:
-                        return TopiaForgeInputRole.Direction;
-                    case Enter:
-                    case NumpadEnter:
-                    case Space:
-                        return TopiaForgeInputRole.Submit;
-                    case Tab:
-                        return TopiaForgeInputRole.Tab;
-                    default:
-                        return TopiaForgeInputRole.Key;
-                }
             }
         }
 

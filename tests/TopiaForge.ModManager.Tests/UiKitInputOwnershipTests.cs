@@ -60,8 +60,14 @@ namespace TopiaForge.ModManager.Tests
             BackOnlyWindowsDoNotBlockTheNavigationOwner();
             NothingBeneathAModalNavigates();
             TheKitsNavigationStaysInsideItsSurface();
+            TheGamesNavigationKeysAreTheSurfacesToo();
+            TheNavigationBindingsFollowWhatTheGameBinds();
+            TheKitFollowsTheGamesNavigateAction();
+            TheKitsKeyNumbersAreTheInputSystems();
             DeviceAndControlBoundsDoNotStealOtherInput();
             AModsOwnKeyStillReachesItsAction();
+            OnlyAGameTextFieldWithTheKeyboardHoldsTheKeys();
+            TheGamesUiToolkitHasWhatTheKitReads();
             NothingIsAllocatedAtRestOrWhileHeld();
             Console.WriteLine("UiKitInputOwnershipTests passed.");
         }

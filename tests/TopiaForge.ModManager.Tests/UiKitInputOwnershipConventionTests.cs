@@ -27,13 +27,15 @@ namespace TopiaForge.ModManager.Tests
             TheKitNavigatesAtTheModulesPaceAndNeverCancels();
             KitTextFieldsTakeTheKeyboard();
             AModsActionsYieldOnlyToWhatHoldsTheirControls();
+            TheGamesNavigationKeysAreTakenWithTheKitsOwn();
             Console.WriteLine("UiKitInputOwnershipConventionTests passed.");
         }
 
         /// <summary>
         /// A mod's input action yields binding by binding to what holds each control (InputActionYield), never as a whole to a
         /// pointer over UI or a selected kit control: the ui template's own key toggled nothing at the main menu or over its
-        /// window while either counted as focus.
+        /// window while either counted as focus. The game's own UI holds the keys only while one of its text fields has the
+        /// keyboard: Unity keeps the game's menu panel selected after a click into it, and every mod key waited in the level.
         /// </summary>
         private static void AModsActionsYieldOnlyToWhatHoldsTheirControls()
         {
@@ -41,8 +43,12 @@ namespace TopiaForge.ModManager.Tests
             Require(Between(service, "public void Sample()", "private static UiInputFocus UiFocus()"), "var focus = UiFocus();",
                 "a frame's focus is read once for every action");
             var focus = Between(service, "private static UiInputFocus UiFocus()", "public void Dispose()");
-            Require(focus, "selected.activeInHierarchy && !TopiaForgeInputOwnership.IsKitObject(selected)",
-                "only the game's own live UI holding the selection holds the keys, a kit control or a closed window's leftover never");
+            Require(focus, "TopiaForgeGameTextFocus.Current.HasKeyboard(selected)",
+                "only one of the game's own text fields with the keyboard holds the keys");
+            Assert(!focus.Contains("IsKitObject", StringComparison.Ordinal) && !focus.Contains("activeInHierarchy", StringComparison.Ordinal),
+                "a game control merely selected no longer holds them");
+            Require(Kit("Runtime", "TopiaForgeGameTextFocus.cs"), "new TopiaForgeGameTextFocus(TopiaForgeUiToolkitFocus.Find())",
+                "the running game's UI Toolkit is read through the kit's reflection reader, so the loader takes no UIElements reference");
             Require(focus, "TopiaForgeDismissStack.HoldsFocus || TopiaForgeInputOwnership.KitTextFieldHasKeyboard()",
                 "the overlay, a modal, a fullscreen tool, a key capture or a kit text field hold every control");
             Require(focus, "TopiaForgeDismissStack.Claims", "and the open windows hold what they claim");
@@ -55,6 +61,44 @@ namespace TopiaForge.ModManager.Tests
             Require(kitObject, "target.activeInHierarchy", "an inactive object is nobody's");
             Require(kitObject, "order >= TopiaForgeLayerBands.DefaultHudBase && order < TopiaForgeLayerBands.DefaultCeiling",
                 "a kit object is one whose canvas sits in the kit's own sorting bands");
+        }
+
+        /// <summary>
+        /// While a surface claims navigation, the filter takes whatever else the game's navigate action binds, as it takes the
+        /// arrows: W, A, S and D walked the native main menu and Unity's module moved the selection on them under an open
+        /// overlay. The kit follows that action once a frame, reading it only, and no move leaves the surface, whoever sends it.
+        /// UiKitInputOwnershipTests runs the follower and the guard against contract doubles.
+        /// </summary>
+        private static void TheGamesNavigationKeysAreTakenWithTheKitsOwn()
+        {
+            var filter = Ownership();
+            var keyboard = Between(filter, "private static void FilterKeyboard(", "private static void Examine(Keyboard keyboard");
+            var claimed = keyboard.IndexOf("if ((claims & TopiaForgeInputClaim.Navigation) == 0)", StringComparison.Ordinal);
+            var gameKeys = keyboard.IndexOf("Examine(keyboard, keyboard[(InputSystemKey)bindings.KeyAt(index)], eventPtr, claims, frame);", StringComparison.Ordinal);
+            Assert(claimed >= 0 && gameKeys > claimed, "the game's navigation keys are examined only while a surface claims navigation");
+            Require(keyboard, "for (var index = 0; index < bindings.KeyCount; index++)", "every one of them, none while the game's menus do not listen");
+            var examine = Between(filter, "private static void Examine(Keyboard keyboard", "private static void FilterGamepad(");
+            Require(examine, "bindings.Direction(code, out var x, out var y);", "each moves the way the game's binding points");
+            Require(examine, "bindings.RoleOf(code)", "and plays a direction's part");
+            Require(Between(filter, "private static void FilterGamepad(", "private static void Examine(Gamepad gamepad, ButtonControl"),
+                "if (TopiaForgeNavigateAction.Bindings.RightStickMoves || Gate.IsTaken(gamepad.deviceId, RightStick))",
+                "the right stick is examined while the game's navigation binds it, and until its release once taken, so it never stays held");
+            Require(Between(filter, "internal static void Reset()", "internal static void ForgetHeld()"), "TopiaForgeNavigateAction.Reset();",
+                "the kit's teardown forgets the game's navigation");
+
+            var update = Between(Kit("Runtime", "TopiaForgeRuntime.cs"), "private void Update()", "TopiaForgeToasts.Tick(");
+            var follow = update.IndexOf("TopiaForgeNavigateAction.Follow();", StringComparison.Ordinal);
+            Assert(follow >= 0 && follow < update.IndexOf("TopiaForgeNavigation.Tick(", StringComparison.Ordinal),
+                "the driver follows the game's navigate action every frame, before the kit navigates");
+            var follower = Kit("Runtime", "TopiaForgeNavigateAction.cs");
+            Require(follower, "events.currentInputModule as InputSystemUIInputModule", "the action is the one Unity's UI module moves with");
+            Require(follower, "Bindings.Listening = current != null && current.enabled;", "and only while it is enabled");
+            Assert(!Between(filter, "private static void OnEvent(", "private static void OnDeviceChange(").Contains("TopiaForgeNavigateAction.Follow", StringComparison.Ordinal),
+                "the filter never reads the game's actions while an event passes");
+
+            var navigation = Kit("Runtime", "TopiaForgeNavigation.cs");
+            Require(navigation, "selected.AddComponent<TopiaForgeMoveGuard>();", "the control selected inside a surface carries the move guard");
+            Require(navigation, "internal sealed class TopiaForgeMoveGuard : MonoBehaviour, IMoveHandler", "which sees every move sent to it");
         }
 
         private static void SurfacesPushWhatTheyTake()
@@ -238,6 +282,9 @@ namespace TopiaForge.ModManager.Tests
             {
                 Ownership(),
                 Kit("Runtime", "TopiaForgeNavigation.cs"),
+                Kit("Runtime", "TopiaForgeNavigateAction.cs"),
+                Kit("Runtime", "TopiaForgeGameTextFocus.cs"),
+                Kit("Core", "TopiaForgeUiToolkitFocus.cs"),
                 Kit("Runtime", "TopiaForgeDismissStack.cs"),
                 Manager("Overlay", "ManagerOverlay.cs"),
             };
@@ -254,16 +301,24 @@ namespace TopiaForge.ModManager.Tests
 
         private static void NoDeviceNameReachesALog()
         {
-            foreach (var line in Ownership().Split('\n').Where(line => line.Contains("TopiaForgeLog.", StringComparison.Ordinal)))
+            foreach (var source in new[] { Ownership(), Kit("Runtime", "TopiaForgeNavigateAction.cs") })
             {
-                foreach (var forbidden in new[] { "device", "displayName", "description", "product", ".Message", "exception)" })
+                var logs = 0;
+                for (var at = source.IndexOf("TopiaForgeLog.", StringComparison.Ordinal); at >= 0; at = source.IndexOf("TopiaForgeLog.", at + 1, StringComparison.Ordinal))
                 {
-                    Assert(!line.Contains(forbidden, StringComparison.Ordinal),
-                        "the filter logs no device name or exception text, which can carry a person's name ('" + forbidden + "')");
+                    // The whole statement, however many lines its message takes.
+                    var statement = source.Substring(at, source.IndexOf(';', at) - at);
+                    logs++;
+                    foreach (var forbidden in new[] { "device", "displayName", "description", "product", ".Message", "exception)" })
+                    {
+                        Assert(!statement.Contains(forbidden, StringComparison.Ordinal),
+                            "the filter logs no device name or exception text, which can carry a person's name ('" + forbidden + "')");
+                    }
                 }
-            }
 
-            Require(Ownership(), "exception.GetType().Name", "it logs only a failure's type");
+                Assert(logs > 0, "the failure logs were found");
+                Require(source, "exception.GetType().Name", "it logs only a failure's type");
+            }
         }
 
         private static void TheKitNavigatesAtTheModulesPaceAndNeverCancels()

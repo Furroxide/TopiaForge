@@ -5,9 +5,9 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>
     /// The kit's single hidden driver MonoBehaviour (the loader dedupes this assembly
     /// process-wide, so exactly one exists). Ticks the cursor hold, the tween pool, the
-    /// Back stack, the kit's own navigation, the hotkey poll and the toast queue. While it
-    /// runs, TopiaForge keeps what its surfaces claim away from the game; when it stops, it
-    /// lets go of everything.
+    /// Back stack, the game's navigate bindings, the kit's own navigation, the hotkey poll
+    /// and the toast queue. While it runs, TopiaForge keeps what its surfaces claim away
+    /// from the game; when it stops, it lets go of everything.
     /// </summary>
     internal sealed class TopiaForgeRuntime : MonoBehaviour
     {
@@ -82,6 +82,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeEventSystems.Tick();
             TopiaForgeTween.Tick(Time.unscaledDeltaTime);
             TopiaForgeDismissStack.TickEscape();
+            TopiaForgeNavigateAction.Follow();
             TopiaForgeNavigation.Tick(Time.unscaledDeltaTime);
             TopiaForgeHotkeys.Tick();
             TopiaForgeToasts.Tick(Time.unscaledDeltaTime);

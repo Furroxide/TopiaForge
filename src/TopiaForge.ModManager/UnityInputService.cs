@@ -188,18 +188,18 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// What the UI holds this frame, for actions that yield to it (InputActionYield): the TopiaForge surfaces' claims, a
-        /// surface holding the focus outright, the game's own UI holding the selection, and the pointer over UI. A control a
-        /// closed window left selected counts for nothing.
+        /// surface holding the focus outright, one of the game's own text fields with the keyboard, and the pointer over UI.
+        /// A game control that is merely selected holds nothing: Unity keeps the game's menu panel selected after a click into
+        /// it, through the level that follows. A control a closed window left selected counts for nothing either.
         /// </summary>
         private static UiInputFocus UiFocus()
         {
             var events = EventSystem.current;
             var selected = events != null ? events.currentSelectedGameObject : null;
-            var gameUiSelected = selected != null && selected.activeInHierarchy && !TopiaForgeInputOwnership.IsKitObject(selected);
             return new UiInputFocus(
                 TopiaForgeDismissStack.Claims,
                 TopiaForgeDismissStack.HoldsFocus || TopiaForgeInputOwnership.KitTextFieldHasKeyboard(),
-                gameUiSelected,
+                TopiaForgeGameTextFocus.Current.HasKeyboard(selected),
                 events != null && events.IsPointerOverGameObject());
         }
 

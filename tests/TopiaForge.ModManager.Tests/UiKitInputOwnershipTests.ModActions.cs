@@ -63,12 +63,20 @@ namespace TopiaForge.ModManager.Tests
                 Assert(InputActionYield.Yields(binding, held), "a surface holding the focus holds every control (" + binding.Control + ")");
             }
 
-            // The game's own UI holds the selection: it may be typing, so keys and controller controls wait.
-            var gameUi = new UiInputFocus(TopiaForgeInputClaim.None, false, true, false);
-            Assert(InputActionYield.Yields(KeyU, gameUi) && InputActionYield.Yields(PadSouth, gameUi) && InputActionYield.Yields(MoveAxis, gameUi),
-                "while the game's own UI holds the selection, its keys are its own");
-            Assert(!InputActionYield.Yields(MousePrimary, gameUi) && !InputActionYield.Yields(PointerAxis, gameUi),
+            // One of the game's own text fields has the keyboard, as its reply field to a robot does: keys and controller
+            // controls wait.
+            var gameText = new UiInputFocus(TopiaForgeInputClaim.None, false, true, false);
+            Assert(InputActionYield.Yields(KeyU, gameText) && InputActionYield.Yields(PadSouth, gameText) && InputActionYield.Yields(MoveAxis, gameText),
+                "while one of the game's text fields has the keyboard, the keys are the field's");
+            Assert(!InputActionYield.Yields(MousePrimary, gameText) && !InputActionYield.Yields(PointerAxis, gameText),
                 "but a click away from UI fires");
+
+            // A game control merely selected, as the game's menu panel stays after a click on RESUME GAME, holds nothing.
+            var resumed = new UiInputFocus(TopiaForgeInputClaim.None, false, false, false);
+            foreach (var binding in new[] { KeyU, KeyEscape, KeyReturn, KeySpace, PadSouth, PadNorth, MoveAxis, PadLeftX })
+            {
+                Assert(!InputActionYield.Yields(binding, resumed), "back in the level, the mod's own controls work again (" + binding.Control + ")");
+            }
 
             // An action that never yields reads its bindings with no focus at all.
             foreach (var binding in new[] { KeyU, KeyEscape, MousePrimary, PadSouth, MoveAxis, PointerAxis, default(InputBinding) })

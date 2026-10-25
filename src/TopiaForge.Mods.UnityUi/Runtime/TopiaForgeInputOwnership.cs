@@ -15,10 +15,12 @@ namespace TopiaForge.Mods.UnityUi
     /// UI module share. So the kit looks at each keyboard and controller event before any action does. A press of a control
     /// the surfaces claim (through the dismiss stack, or a kit text field with the keyboard) that begins while the claim
     /// holds is held at rest in that event and every later one until the control is released (TopiaForgeInputGate), and the
-    /// kit reads the press itself. Nothing the game owns is changed, no action map, module or binding, so there is nothing to
-    /// restore and nothing to fight the game's own action-map switches: with no claim and no taken press, every event passes
-    /// at once, untouched. Unity's legacy input cannot be filtered this way and still sees every key. A failure stops the
-    /// filtering until the game restarts and is logged once, so the game always keeps its input. Main thread only.
+    /// kit reads the press itself. Navigation covers the kit's own keys and whatever else the game's navigate action binds
+    /// while it listens, W, A, S and D among them (TopiaForgeNavigateAction). Nothing the game owns is changed, no action
+    /// map, module or binding, so there is nothing to restore and nothing to fight the game's own action-map switches: with
+    /// no claim and no taken press, every event passes at once, untouched. Unity's legacy input cannot be filtered this way
+    /// and still sees every key. A failure stops the filtering until the game restarts and is logged once, so the game
+    /// always keeps its input. Main thread only.
     /// </summary>
     internal static class TopiaForgeInputOwnership
     {
@@ -26,6 +28,7 @@ namespace TopiaForge.Mods.UnityUi
         private const int SouthButton = 1;
         private const int Dpad = 2;
         private const int LeftStick = 3;
+        private const int RightStick = 4;
 
         private static readonly TopiaForgeInputGate Gate = new TopiaForgeInputGate();
         private static readonly Action<InputEventPtr, InputDevice> Filter = OnEvent;
@@ -89,6 +92,7 @@ namespace TopiaForge.Mods.UnityUi
 
             stopped = false;
             Gate.ForgetAll();
+            TopiaForgeNavigateAction.Reset();
             selection = null;
             selectionText = null;
         }
@@ -208,6 +212,13 @@ namespace TopiaForge.Mods.UnityUi
             Examine(keyboard, keyboard.enterKey, eventPtr, claims, frame);
             Examine(keyboard, keyboard.numpadEnterKey, eventPtr, claims, frame);
             Examine(keyboard, keyboard.spaceKey, eventPtr, claims, frame);
+
+            // The game's menus also navigate on whatever else its navigate action binds, W, A, S and D among them.
+            var bindings = TopiaForgeNavigateAction.Bindings;
+            for (var index = 0; index < bindings.KeyCount; index++)
+            {
+                Examine(keyboard, keyboard[(InputSystemKey)bindings.KeyAt(index)], eventPtr, claims, frame);
+            }
         }
 
         private static void Examine(Keyboard keyboard, KeyControl key, InputEventPtr eventPtr, TopiaForgeInputClaim claims, int frame)
@@ -217,12 +228,12 @@ namespace TopiaForge.Mods.UnityUi
                 return;
             }
 
-            var code = key.keyCode;
-            var x = code == InputSystemKey.LeftArrow ? -1f : code == InputSystemKey.RightArrow ? 1f : 0f;
-            var y = code == InputSystemKey.DownArrow ? -1f : code == InputSystemKey.UpArrow ? 1f : 0f;
+            var code = (int)key.keyCode;
+            var bindings = TopiaForgeNavigateAction.Bindings;
+            bindings.Direction(code, out var x, out var y);
             var pressed = key.IsValueConsideredPressed(value) ? 1f : 0f;
             var before = key.isPressed ? 1f : 0f;
-            if (Gate.Take(keyboard.deviceId, TopiaForgeInputDevice.Keyboard, (int)code, RoleOf(code), pressed, before, x, y, claims, frame))
+            if (Gate.Take(keyboard.deviceId, TopiaForgeInputDevice.Keyboard, code, bindings.RoleOf(code), pressed, before, x, y, claims, frame))
             {
                 key.ResetToDefaultStateInEvent(eventPtr);
             }
@@ -234,6 +245,12 @@ namespace TopiaForge.Mods.UnityUi
             Examine(gamepad, gamepad.buttonSouth, SouthButton, TopiaForgeInputRole.Submit, eventPtr, claims, frame);
             Examine(gamepad, gamepad.dpad, Dpad, eventPtr, claims, frame);
             Examine(gamepad, gamepad.leftStick, LeftStick, eventPtr, claims, frame);
+
+            // The right stick while the game's navigation binds it, and until its release once taken, however that changes.
+            if (TopiaForgeNavigateAction.Bindings.RightStickMoves || Gate.IsTaken(gamepad.deviceId, RightStick))
+            {
+                Examine(gamepad, gamepad.rightStick, RightStick, eventPtr, claims, frame);
+            }
         }
 
         private static void Examine(Gamepad gamepad, ButtonControl button, int control, TopiaForgeInputRole role, InputEventPtr eventPtr, TopiaForgeInputClaim claims, int frame)
@@ -262,28 +279,6 @@ namespace TopiaForge.Mods.UnityUi
             if (Gate.Take(gamepad.deviceId, TopiaForgeInputDevice.Gamepad, control, TopiaForgeInputRole.Direction, value.magnitude, before, value.x, value.y, claims, frame))
             {
                 direction.ResetToDefaultStateInEvent(eventPtr);
-            }
-        }
-
-        private static TopiaForgeInputRole RoleOf(InputSystemKey key)
-        {
-            switch (key)
-            {
-                case InputSystemKey.Escape:
-                    return TopiaForgeInputRole.Back;
-                case InputSystemKey.UpArrow:
-                case InputSystemKey.DownArrow:
-                case InputSystemKey.LeftArrow:
-                case InputSystemKey.RightArrow:
-                    return TopiaForgeInputRole.Direction;
-                case InputSystemKey.Enter:
-                case InputSystemKey.NumpadEnter:
-                case InputSystemKey.Space:
-                    return TopiaForgeInputRole.Submit;
-                case InputSystemKey.Tab:
-                    return TopiaForgeInputRole.Tab;
-                default:
-                    return TopiaForgeInputRole.Key;
             }
         }
 
