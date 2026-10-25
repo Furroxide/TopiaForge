@@ -16,6 +16,15 @@ final class _Rig {
   String get gameRoot => p.join(root.path, 'Game');
   String get dataRoot => p.join(root.path, 'data');
 
+  /// The disclosure the game's copy of the preferences on disk holds; null
+  /// when there is no copy.
+  int? get projectedDisclosure {
+    final copy = File(_projection(gameRoot));
+    return copy.existsSync()
+        ? LaunchTransport.readPreferences(copy.readAsStringSync()).disclosure
+        : null;
+  }
+
   static Future<_Rig> create() async {
     final root = Directory(
       Directory.systemTemp
@@ -273,15 +282,7 @@ final class _RecordingGame {
     );
     requests.add(file.readAsStringSync());
     file.deleteSync();
-    final projection = File(
-      p.join(
-        gameRoot,
-        'BepInEx',
-        'TopiaForge',
-        'staging',
-        'multiplayer-preferences-v1.json',
-      ),
-    );
+    final projection = File(_projection(gameRoot));
     projections.add(
       projection.existsSync() ? projection.readAsStringSync() : null,
     );
@@ -397,3 +398,12 @@ int _crc32(List<int> data) {
   }
   return crc ^ 0xffffffff;
 }
+
+/// The game's copy of the preferences under [gameRoot].
+String _projection(String gameRoot) => p.join(
+  gameRoot,
+  'BepInEx',
+  'TopiaForge',
+  'staging',
+  'multiplayer-preferences-v1.json',
+);

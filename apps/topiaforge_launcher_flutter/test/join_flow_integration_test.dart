@@ -67,6 +67,9 @@ void main() {
       isEmpty,
     );
     expect(rig.game.requests, isEmpty);
+    // The game's copy on disk is still the one the launcher's start wrote,
+    // from before this join's acknowledgement.
+    expect(rig.projectedDisclosure, 0);
     final plan = _flow(bloc.state)!.plan!;
     expect(plan.isJoinable, isTrue, reason: '${plan.blockers}');
     expect(plan.needsDownloads, isTrue);
@@ -117,12 +120,14 @@ void main() {
         .singleWhere((profile) => profile['id'] == profileId);
     expect(saved['name'], "Server · Sam's Sandbox");
 
-    // The game found its copy of the preferences when it started.
+    // The game found its copy of the preferences when it started, written
+    // since the acknowledgement: by the round just before the start.
     expect(rig.game.requests, hasLength(1));
-    expect(
-      LaunchTransport.readPreferences(rig.game.projections.single!).displayName,
-      'Sam',
+    final projected = LaunchTransport.readPreferences(
+      rig.game.projections.single!,
     );
+    expect(projected.displayName, 'Sam');
+    expect(projected.disclosure, greaterThan(0));
     final text = rig.game.requests.single;
     final request = LaunchTransport.readProfileV5(text);
     expect(LaunchTransport.writeProfileV5(request), text);
