@@ -14,6 +14,9 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
       throw UsageError(_acceptanceUsage);
     }
     final runArgs = args.skip(1).toList(growable: false);
+    if (runArgs.contains('--suite')) {
+      return _multiplayerAcceptance(runArgs);
+    }
     if (runArgs.contains('--help')) {
       stdout.writeln(_acceptanceUsage);
       stdout.writeln(
