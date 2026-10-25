@@ -108,7 +108,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             Assert(!Analyze("using TopiaForge.Mods; class Mod { int Run() => -Api.Setter; }", VersionManifest("*"),
                 additionalReferences: new[] { reference }).Any(d => d.Id == "TF1010"), "a unary read does not invoke the setter");
             RunVersionFixTests(reference);
-            Console.WriteLine("SDK version gates passed (20 metadata uses, 14 range cases, 30 code-fix cases, 2 accessor read checks).");
+            Console.WriteLine("SDK version gates passed (20 metadata uses, 14 range cases, 32 code-fix cases, 2 accessor read checks).");
         }
 
         private static Diagnostic[] VersionDiagnostics(string range, MetadataReference reference) =>
@@ -133,7 +133,8 @@ namespace TopiaForge.Mods.Analyzers.Tests
             }
 
             foreach (var range in new[] { "*", "0.1.0", "=0.1.0", "0.1.*", ">=0.1.0", ">0.1.0 <1.0.0", ">=0.1.0 <=1.0.0",
-                "<1.0.0 >=0.1.0", ">=0.1.0 <0.2.0", ">=0.1.0 <0.2.0-rc.1", ">=0.1.0 <1.0.0 >=0.1.1", "^0.1.0" })
+                "<1.0.0 >=0.1.0", ">=0.1.0 <0.2.0", ">=0.1.0 <0.2.0-rc.1", ">=0.1.0 <1.0.0 >=0.1.1", "^0.1.0",
+                ">=0.1.0 <1.0.0 || >=2.0.0" })
             {
                 Assert(VersionFixes(VersionManifest(range), reference, out _).Count == 0, "no fix for loader range: " + range);
                 Assert(VersionFixes(VersionManifest(">=0.1.0 <1.0.0", range), reference, out _).Count == 0, "no partial fix for SDK range: " + range);

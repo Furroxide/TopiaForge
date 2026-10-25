@@ -62,6 +62,60 @@ void main() {
     },
   );
 
+  // The TF1010 fix raises both floors, and a player is told once what to do.
+  test('both raised floors give one update message', () async {
+    final manifest = testManifest(
+      'example.feature',
+      loaderRange: '>=0.2.0 <0.3.0',
+      sdkRange: '>=0.2.0 <0.3.0',
+    );
+    const update =
+        'Fixture example.feature needs TopiaForge 0.2.0 or newer; '
+        'update TopiaForge.';
+    final issues = const DependencyPlanner().runtimeCompatibilityIssues(
+      manifest,
+      gameVersion: '0.0.2545',
+      loaderVersion: '0.1.0-rc.1',
+      sdkVersion: '0.1.0-rc.1',
+      platform: 'windows',
+      architecture: 'x64',
+    );
+    expect(issues.map((issue) => issue.message), [update]);
+    final plan = await planJoin([
+      (testPackage('example.feature'), installedOf(manifest)),
+    ], environment: environmentWith(runtimeVersion: '0.1.0-rc.1'));
+    expect(plan.blockers.single.message, update);
+  });
+
+  test('an excluded floor or a ceiling keeps its exact advice', () {
+    List<String> messages(String loaderRange, String sdkRange, String at) =>
+        const DependencyPlanner()
+            .runtimeCompatibilityIssues(
+              testManifest(
+                'example.feature',
+                loaderRange: loaderRange,
+                sdkRange: sdkRange,
+              ),
+              gameVersion: '0.0.2545',
+              loaderVersion: at,
+              sdkVersion: at,
+              platform: 'windows',
+              architecture: 'x64',
+            )
+            .map((issue) => issue.message)
+            .toList();
+    for (final at in ['0.1.0-rc.1', '0.2.0']) {
+      expect(messages('>0.2.0', '*', at), [
+        'Fixture example.feature needs a TopiaForge newer than 0.2.0; '
+            'update TopiaForge.',
+      ]);
+    }
+    expect(messages('>=0.1.0 <0.2.0', '>=0.1.0 <0.2.0', '0.3.0'), [
+      'Fixture example.feature supports loader >=0.1.0 <0.2.0, not 0.3.0.',
+      'Fixture example.feature supports SDK >=0.1.0 <0.2.0, not 0.3.0.',
+    ]);
+  });
+
   test('feature floors use SemVer minimums, including prereleases', () {
     final policy = ManifestFeatureRequirements([
       ManifestFeatureRequirement(

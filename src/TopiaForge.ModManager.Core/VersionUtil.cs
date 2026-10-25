@@ -68,12 +68,20 @@ namespace TopiaForge.ModManager.Core
         /// <summary>Gets the lower bound of a valid range, or null for an unbounded range.</summary>
         public static bool TryGetMinimum(string? range, out string? minimum)
         {
+            return TryGetMinimum(range, out minimum, out _);
+        }
+
+        /// <summary>Gets the lower bound of a valid range, or null for an unbounded range, and whether it is admitted.</summary>
+        public static bool TryGetMinimum(string? range, out string? minimum, out bool inclusive)
+        {
             minimum = null;
+            inclusive = true;
             if (!TryParseRange(range, out var parsed)) return false;
             if (parsed.Min is ParsedSemanticVersion value)
             {
                 minimum = value.Major + "." + value.Minor + "." + value.Patch
                     + (value.Prerelease.Length == 0 ? string.Empty : "-" + value.Prerelease);
+                inclusive = parsed.IncludeMin;
             }
 
             return true;
@@ -492,7 +500,7 @@ namespace TopiaForge.ModManager.Core
 
             public ParsedSemanticVersion? Min { get; }
             private ParsedSemanticVersion? Max { get; }
-            private bool IncludeMin { get; }
+            public bool IncludeMin { get; }
             private bool IncludeMax { get; }
 
             public bool Allows(ParsedSemanticVersion version)

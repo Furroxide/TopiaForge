@@ -373,37 +373,21 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
       );
     }
   }
-  if (loaderVersion != null &&
-      !manifest.loaderVersionRange.isAny &&
-      !manifest.loaderVersionRange.allows(loaderVersion)) {
+  // Below either floor, the player's next step is the same, so it is said once.
+  final updates = <String>{};
+  for (final (label, range, version) in [
+    ('loader', manifest.loaderVersionRange, loaderVersion),
+    ('SDK', manifest.sdkVersionRange, sdkVersion),
+  ]) {
+    if (version == null || range.isAny || range.allows(version)) continue;
+    final update = _updateRequired(manifest.name, range, version);
+    if (update != null && !updates.add(update)) continue;
     issues.add(
       LauncherIssue(
         severity: IssueSeverity.error,
         subjectId: manifest.id,
         message:
-            manifest.loaderVersionRange.min != null &&
-                (SemanticVersion.tryParse(
-                          loaderVersion,
-                        )?.compareTo(manifest.loaderVersionRange.min!) ??
-                        0) <
-                    0
-            ? '${manifest.name} needs TopiaForge '
-                  '${manifest.loaderVersionRange.min} or newer; update TopiaForge.'
-            : '${manifest.name} supports loader ${manifest.loaderVersionRange}, '
-                  'not $loaderVersion.',
-      ),
-    );
-  }
-  if (sdkVersion != null &&
-      !manifest.sdkVersionRange.isAny &&
-      !manifest.sdkVersionRange.allows(sdkVersion)) {
-    issues.add(
-      LauncherIssue(
-        severity: IssueSeverity.error,
-        subjectId: manifest.id,
-        message:
-            '${manifest.name} supports SDK ${manifest.sdkVersionRange}, not '
-            '$sdkVersion.',
+            update ?? '${manifest.name} supports $label $range, not $version.',
       ),
     );
   }
@@ -450,6 +434,22 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
 
 String _gameVersionRangeDisplay(VersionRange range) =>
     RobotopiaGameVersion.tryBuildLabel(range.toString()) ?? range.toString();
+
+/// What [name] needs when [installed] is below [range]'s floor, or null.
+String? _updateRequired(String name, VersionRange range, String installed) {
+  final min = range.min;
+  final comparison = min == null
+      ? null
+      : SemanticVersion.tryParse(installed)?.compareTo(min);
+  if (comparison == null ||
+      comparison > 0 ||
+      (comparison == 0 && range.includeMin)) {
+    return null;
+  }
+  return range.includeMin
+      ? '$name needs TopiaForge $min or newer; update TopiaForge.'
+      : '$name needs a TopiaForge newer than $min; update TopiaForge.';
+}
 
 int _compareDependencyVersions(String left, String right) {
   final leftVersion = SemanticVersion.tryParse(left);

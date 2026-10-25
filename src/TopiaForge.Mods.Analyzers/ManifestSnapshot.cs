@@ -20,7 +20,7 @@ namespace TopiaForge.Mods.Analyzers
             IEnumerable<string> capabilities,
             IEnumerable<string> dependencies,
             string loaderRange = "*", string sdkRange = "*",
-            TextSpan loaderSpan = default, TextSpan sdkSpan = default)
+            TextSpan loaderSpan = default, TextSpan sdkSpan = default, bool exists = true)
         {
             PackageId = packageId;
             this.capabilities = capabilities.ToImmutableHashSet(StringComparer.Ordinal);
@@ -29,8 +29,11 @@ namespace TopiaForge.Mods.Analyzers
             SdkRange = sdkRange;
             LoaderSpan = loaderSpan;
             SdkSpan = sdkSpan;
+            Exists = exists;
         }
 
+        /// <summary>Whether the project has a topiaforge.mod.json at all, readable or not.</summary>
+        public bool Exists { get; }
         public string PackageId { get; }
         public string LoaderRange { get; }
         public string SdkRange { get; }
@@ -47,10 +50,15 @@ namespace TopiaForge.Mods.Analyzers
                 Path.GetFileName(item.Path),
                 "topiaforge.mod.json",
                 StringComparison.OrdinalIgnoreCase));
-            var json = file?.GetText(cancellationToken)?.ToString();
+            if (file == null)
+            {
+                return Empty(exists: false);
+            }
+
+            var json = file.GetText(cancellationToken)?.ToString();
             if (json == null || string.IsNullOrWhiteSpace(json) || json.Length > MaximumManifestCharacters)
             {
-                return Empty();
+                return Empty(exists: true);
             }
 
             try
@@ -59,7 +67,7 @@ namespace TopiaForge.Mods.Analyzers
             }
             catch (FormatException)
             {
-                return Empty();
+                return Empty(exists: true);
             }
         }
 
@@ -69,8 +77,8 @@ namespace TopiaForge.Mods.Analyzers
 
         public bool IsPackage(string packageId) => string.Equals(PackageId, packageId, StringComparison.Ordinal);
 
-        private static ManifestSnapshot Empty() =>
-            new ManifestSnapshot(string.Empty, Array.Empty<string>(), Array.Empty<string>());
+        private static ManifestSnapshot Empty(bool exists) =>
+            new ManifestSnapshot(string.Empty, Array.Empty<string>(), Array.Empty<string>(), exists: exists);
 
         private sealed class ManifestParser
         {

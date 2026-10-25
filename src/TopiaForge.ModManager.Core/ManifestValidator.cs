@@ -355,10 +355,12 @@ namespace TopiaForge.ModManager.Core
             }
             else if (!VersionUtil.AllowsRange(actualVersion, range))
             {
-                if (componentName == "loader")
-                    errors.Add(LoaderCompatibilityError(range, actualVersion)!);
-                else
+                // Below either floor, the player's next step is the same, so it is said once.
+                var update = UpdateRequiredError(range, actualVersion);
+                if (update == null)
                     errors.Add(fieldName + " does not include " + componentName + " " + actualVersion + ".");
+                else if (!errors.Contains(update))
+                    errors.Add(update);
             }
         }
 
@@ -366,10 +368,18 @@ namespace TopiaForge.ModManager.Core
         public static string? LoaderCompatibilityError(string range, string actualVersion)
         {
             if (VersionUtil.AllowsRange(actualVersion, range)) return null;
-            if (VersionUtil.TryGetMinimum(range, out var minimum) && minimum != null
-                && !VersionUtil.IsAtLeast(actualVersion, minimum))
-                return "This mod needs TopiaForge " + minimum + " or newer; update TopiaForge.";
-            return "supportedLoaderVersionRange does not include loader " + actualVersion + ".";
+            return UpdateRequiredError(range, actualVersion)
+                ?? "supportedLoaderVersionRange does not include loader " + actualVersion + ".";
+        }
+
+        private static string? UpdateRequiredError(string range, string actualVersion)
+        {
+            if (!VersionUtil.TryGetMinimum(range, out var minimum, out var inclusive) || minimum == null
+                || (VersionUtil.IsAtLeast(actualVersion, minimum) && (inclusive || !VersionUtil.IsAtLeast(minimum, actualVersion))))
+                return null;
+            return inclusive
+                ? "This mod needs TopiaForge " + minimum + " or newer; update TopiaForge."
+                : "This mod needs a TopiaForge newer than " + minimum + "; update TopiaForge.";
         }
 
         private static void ValidateLicenseFiles(

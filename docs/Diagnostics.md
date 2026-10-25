@@ -209,20 +209,30 @@ reports invalid or missing fields.
 The IDE fix updates both fields only when each is a simple `>=A <B` range and the required version
 stays below both ceilings. It preserves a stricter existing floor. Exact pins, wildcards, unbounded,
 reordered, repeated and other comparator shapes receive no fix; edit those intentionally. The fix
-does not widen a ceiling or invent missing fields. For `>=0.1.0 <0.2.0`, decide the new ceiling by hand.
+does not widen a ceiling or invent missing fields. When the range's ceiling is below the API too, as
+in `>=0.1.0-rc.1 <0.2.0`, raising the floor alone would leave an empty range, so the message names
+both fields and bounds that admit the API, such as `">=0.2.0 <0.3.0"`.
 
 Checks read attributes from referenced assembly metadata, including a containing type's requirement.
 They cover method calls and method groups, helper bodies in this compilation, property reads and
-writes (including marked accessors), events, fields and constants, constructors, attributes and their
-constant arguments, generic arguments and `nameof`. `nameof` and constant uses are intentionally
-checked even when they emit no runtime call: the declared SDK floor also describes source support.
-Reflection, dynamic binding and the bodies of precompiled third-party helpers are not inspected;
-their authors must propagate their required loader floor. Generated source and test projects retain
-the analyzer's existing exemption. The check also applies to interop projects.
+writes (including marked accessors, null-conditional assignments and attribute named arguments),
+indexers (including `?[]`), events, fields and constants, constructors, attributes and their
+constant arguments, generic arguments and `nameof`. An override or an explicit interface
+implementation of a marked member is checked too, because it only runs on a loader that has the
+member. `nameof` and constant uses are intentionally checked even when they emit no runtime call: the
+declared SDK floor also describes source support. Documentation comments are not code, so a `cref`
+is not checked. Reflection, dynamic binding and the bodies of precompiled third-party helpers are not
+inspected; their authors must propagate their required loader floor. Generated source and test
+projects retain the analyzer's existing exemption. The check also applies to interop projects.
+
+A project without its own `topiaforge.mod.json`, such as a service mod's contracts project, has no
+floor to raise, so TF1010 does not run there. When such a library uses a newer API, raise the floor
+of the mod that ships it.
 
 Compiler-inserted calls without an explicit symbol reference, such as an omitted base-constructor
-initializer, operators, conversions and `foreach`/`await` protocols, are outside this syntax check.
-Raise the manifest floor manually when relying on a newer member through one of these forms.
+initializer, operators, conversions and `foreach`/`await` protocols, are outside this syntax check,
+as is a method that implements a newer interface member implicitly, without naming it. Raise the
+manifest floor manually when relying on a newer member through one of these forms.
 
 SDK authors: see [how to mark additions](CompatibilityPolicy.md#version-gated-sdk-additions).
 
