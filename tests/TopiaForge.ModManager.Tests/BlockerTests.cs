@@ -29,6 +29,7 @@ namespace TopiaForge.ModManager.Tests
             AMoveKeepsTheSize();
             TheTestingKitAnswersAsTheGame();
             UnityConstruction();
+            PreviewSourceGuard();
             Console.WriteLine("Blocker tests passed: " + assertions + " assertions.");
         }
 
@@ -231,9 +232,32 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var preview = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager/UnityBlockerPreview.cs"))).GetRoot();
-            Check(!preview.DescendantNodes().OfType<GenericNameSyntax>().Any(name => name.Identifier.ValueText == "AddComponent") &&
-                  !preview.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(created => created.Type.ToString() == "GameObject"),
+            Check(PreviewOnlyDraws(preview),
                 "the preview adds nothing to a blocker or the scene");
+        }
+
+        // Identifier tokens include qualified types, aliases, target-typed declarations and conditional member calls,
+        // while ignoring comments and strings. The preview needs neither the GameObject type nor AddComponent.
+        private static bool PreviewOnlyDraws(SyntaxNode source) => !source.DescendantTokens().Any(token =>
+            token.IsKind(SyntaxKind.IdentifierToken) && (token.ValueText == "GameObject" || token.ValueText == "AddComponent"));
+
+        private static void PreviewSourceGuard()
+        {
+            foreach (var source in new[]
+            {
+                "class Preview { void Draw() { _ = new GameObject(); } }",
+                "class Preview { void Draw() { _ = new UnityEngine.GameObject(); } }",
+                "class Preview { void Draw() { _ = new global::UnityEngine.GameObject(); } }",
+                "using Box = UnityEngine.GameObject; class Preview { void Draw() { _ = new Box(); } }",
+                "class Preview { void Draw() { GameObject box = new(); } }",
+                "class Preview { void Draw() { root.gameObject.AddComponent<BoxCollider>(); } }",
+                "class Preview { void Draw() { root.gameObject?.AddComponent(typeof(BoxCollider)); } }",
+                "class Preview { void Draw() { root.gameObject?.AddComponent<BoxCollider>(); } }"
+            })
+                Check(!PreviewOnlyDraws(CSharpSyntaxTree.ParseText(source).GetRoot()), "preview source rejects scene construction: " + source);
+            Check(PreviewOnlyDraws(CSharpSyntaxTree.ParseText(
+                "class Preview { void Draw() { /* GameObject AddComponent */ _ = \"GameObject AddComponent\"; _ = new Mesh(); _ = new Material(shader); } }").GetRoot()),
+                "preview source permits draw resources and ignores comments and strings");
         }
 
         private static void Throws(Action action, string message)
