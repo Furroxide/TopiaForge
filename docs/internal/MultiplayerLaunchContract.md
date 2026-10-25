@@ -80,10 +80,15 @@ game for a launch V5 cannot carry.
   retry advice. Reinstalling identical bytes reuses the entry; replacing a build or uninstalling removes its local
   archive only after no installed receipt references it. Versions kept side by side, disabled mods and other game
   installs sharing the data root retain their originals. Cleanup failure leaves the install successful, logs a
-  path-free warning and retries on a later install or uninstall. Unreadable receipts conservatively retain archives.
+  path-free warning and retries on a later install or uninstall. Unreadable receipts and linked mod folders
+  conservatively retain archives; a stray file among the mod folders, or a copied version folder without a receipt,
+  names no archive and does not stop cleanup.
   HTTPS and join archives, including a local archive subsequently used by either flow, keep their existing retention
-  policy; eviction of those entries is out of scope. Unpacked copies and local installs made before caching was added
-  still need reinstalling from the `.topiaforgemod` file: the game does not reconstruct a ZIP from installed files.
+  policy; eviction of those entries is out of scope. So when another game install sharing the data root, such as a
+  second install on the same PC, joins a host with the host's local archive, that install's server-content cleanup can
+  later remove the archive from the shared cache; the host then reinstalls the mod to share it again. Unpacked copies
+  and local installs made before caching was added still need reinstalling from the `.topiaforgemod` file: the game
+  does not reconstruct a ZIP from installed files.
 - **Display text** has no surrounding white space, no control characters, no unpaired surrogates, and neither U+FFFE
   nor U+FFFF, which the game's JSON reader refuses: a document holding one could never be read back.
 - **The service origin** is written one way: `https://`, a lowercase DNS name, and a port of 1 to 65535 in plain

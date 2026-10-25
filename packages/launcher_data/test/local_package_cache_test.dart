@@ -277,6 +277,35 @@ void main() {
     skip: !Platform.isWindows ? 'Windows file sharing semantics.' : false,
   );
 
+  // Another TopiaForge process holds the lease the way the repository does;
+  // a shared hold also shows that the repository asks for more than a
+  // shared lock, and an exclusive one that it refuses rather than waits.
+  for (final shared in [false, true]) {
+    final mode = shared ? 'shared' : 'exclusive';
+    test(
+      'a lease another process holds ($mode) refuses until that process ends',
+      () async {
+        final holder = await fixture.holdLease(shared: shared);
+        await expectLater(
+          fixture.put(archive),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              contains('unavailable or in use'),
+            ),
+          ),
+        );
+        expect(fixture.receipt(archive).existsSync(), isFalse);
+        expect(fixture.archives, isEmpty);
+        // The holder ends without letting go, as a crash does, which frees it.
+        expect(await holder.end(), 3);
+        await fixture.put(archive);
+        expect(fixture.cached(archive).readAsBytesSync(), archive.bytes);
+      },
+    );
+  }
+
   test(
     'incomplete rollback preserves both original archives',
     () async {

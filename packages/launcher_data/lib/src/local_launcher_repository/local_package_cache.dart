@@ -142,29 +142,41 @@ extension _LocalPackageCache on LocalLauncherRepository {
       // install/uninstall to retry; uncertain receipts always retain archives.
       await _appendLauncherLogBestEffort(
         'Unused local mod archives could not be removed. The installed mods '
-        'are unchanged. Close programs using the package cache and check '
-        'folder permissions; cleanup will retry on the next install or uninstall.',
+        'are unchanged. Close programs using the package cache, check folder '
+        'permissions and repair any mod the launcher reports as damaged; '
+        'cleanup will retry on the next install or uninstall.',
       );
     }
   }
 
   /// Read every installed version, including disabled mods and receipts whose
-  /// source is remote. Missing, linked or unreadable receipts stop retirement.
+  /// source is remote. A plain file among the mod folders (a desktop.ini, a
+  /// note) holds no receipt, and a version folder without one, as a copied
+  /// folder has, names no archive; the game loads neither, so both are passed
+  /// over. Linked folders and receipts that are there but cannot be read stop
+  /// retirement.
   Future<Set<String>> _receiptArchiveHashes(GameInstall install) async {
     final packages = _packagesRoot(install);
     if (!packages.existsSync()) return {};
     _requireCacheDirectory(packages);
     final hashes = <String>{};
     for (final mod in packages.listSync(followLinks: false)) {
+      if (mod is File) continue;
       if (mod is! Directory) {
         throw StateError('Installed mod directory is unreadable.');
       }
       for (final version in mod.listSync(followLinks: false)) {
+        if (version is File) continue;
         if (version is! Directory) {
           throw StateError('Installed mod version is unreadable.');
         }
+        final file = File(p.join(version.path, _packageInstallReceiptFileName));
+        if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+            FileSystemEntityType.notFound) {
+          continue;
+        }
         final receipt = await _readJsonFileBounded(
-          File(p.join(version.path, _packageInstallReceiptFileName)),
+          file,
           maxBytes: _maxInstalledReceiptBytes,
           label: 'Installed mod receipt',
         );

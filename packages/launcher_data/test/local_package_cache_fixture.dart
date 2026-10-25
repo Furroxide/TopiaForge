@@ -124,4 +124,53 @@ final class LocalCacheFixture {
 
   String get log =>
       File(p.join(data.path, 'logs', 'launcher.log')).readAsStringSync();
+
+  /// Starts another process that holds the package cache lease, shared or
+  /// exclusive, the way a second TopiaForge process holds it.
+  Future<LeaseHolder> holdLease({bool shared = false}) async {
+    final script = File(p.join(root.path, 'hold_lease.dart'))
+      ..writeAsStringSync(_holdLeaseScript);
+    data.createSync(recursive: true);
+    final process = await Process.start(Platform.resolvedExecutable, [
+      script.path,
+      p.join(data.path, 'package-cache.lock'),
+      shared ? 'shared' : 'exclusive',
+    ]);
+    addTearDown(process.kill);
+    final said = await process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .first;
+    expect(said, 'held');
+    return LeaseHolder._(process);
+  }
 }
+
+/// Another process holding the package cache lease.
+final class LeaseHolder {
+  LeaseHolder._(this._process);
+
+  final Process _process;
+
+  /// Ends the holder without letting go of the lease, as a crash does, and
+  /// returns its exit code.
+  Future<int> end() async {
+    await _process.stdin.close();
+    return _process.exitCode;
+  }
+}
+
+/// Holds the package cache lease at the path and in the mode it is given
+/// until its input closes, then ends without releasing it.
+const _holdLeaseScript = '''
+import 'dart:io';
+
+Future<void> main(List<String> args) async {
+  final lease = await File(args[0]).open(mode: FileMode.append);
+  await lease.lock(args[1] == 'shared' ? FileLock.shared : FileLock.exclusive);
+  stdout.writeln('held');
+  await stdout.flush();
+  await stdin.drain<void>();
+  exit(3);
+}
+''';

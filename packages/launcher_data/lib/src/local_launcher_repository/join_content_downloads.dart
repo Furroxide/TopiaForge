@@ -286,7 +286,9 @@ extension _JoinContentDownloads on LocalLauncherRepository {
   }
 
   /// Moves a verified download into the cache. Another writer may have put
-  /// the same archive there meanwhile, which is as good.
+  /// the same archive there meanwhile, which is as good. A cache lease that
+  /// another process holds, or a retention that fails, throws [StateError],
+  /// so the join says what to close rather than to free disk space.
   Future<bool> _keepVerifiedDownload(
     File temp,
     File cached,
@@ -297,6 +299,9 @@ extension _JoinContentDownloads on LocalLauncherRepository {
         await _retainPackageCache(sha256Hex);
         return _keepVerifiedDownloadLocked(temp, cached, sha256Hex);
       });
+    } on StateError {
+      await _deleteFileBestEffort(temp);
+      rethrow;
     } on Object {
       await _deleteFileBestEffort(temp);
       return false;

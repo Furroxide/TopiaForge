@@ -118,6 +118,71 @@ void main() {
   );
 
   test(
+    'files among the mod folders and copied folders do not stop retirement',
+    () async {
+      await fixture.put(archive);
+      final packages = Directory(
+        p.join(fixture.game.path, 'BepInEx', 'TopiaForge', 'packages'),
+      );
+      File(p.join(packages.path, 'desktop.ini')).writeAsStringSync('[x]');
+      File(
+        p.join(packages.path, archive.id, 'notes.txt'),
+      ).writeAsStringSync('mine');
+      final copied = TestArchive('example.copied', '1.0.0');
+      final folder = Directory(p.join(packages.path, copied.id, copied.version))
+        ..createSync(recursive: true);
+      File(
+        p.join(folder.path, 'topiaforge.mod.json'),
+      ).writeAsStringSync(jsonEncode(copied.manifestJson));
+      for (var build = 0; build < 3; build++) {
+        final next = TestArchive(
+          archive.id,
+          archive.version,
+          payload: 'build $build',
+        );
+        await fixture.put(next);
+        expect(fixture.archives, hasLength(1));
+        expect(fixture.cached(next).readAsBytesSync(), next.bytes);
+      }
+      expect(fixture.log, isNot(contains('Unused local')));
+    },
+  );
+
+  test('a linked mod folder keeps every archive it may name', () async {
+    await fixture.put(archive);
+    final elsewhere = Directory(p.join(fixture.root.path, 'linked', '1.0.0'))
+      ..createSync(recursive: true);
+    File(
+      p.join(elsewhere.path, 'topiaforge.install.json'),
+    ).writeAsStringSync(jsonEncode({'sourceSha256': archive.sha256Hex}));
+    final link = Link(
+      p.join(
+        fixture.game.path,
+        'BepInEx',
+        'TopiaForge',
+        'packages',
+        'example.linked',
+      ),
+    );
+    try {
+      link.createSync(elsewhere.parent.path);
+    } on FileSystemException catch (error) {
+      markTestSkipped('Folder links unavailable: ${error.osError?.message}');
+      return;
+    }
+    addTearDown(() {
+      if (FileSystemEntity.typeSync(link.path, followLinks: false) ==
+          FileSystemEntityType.link) {
+        link.deleteSync();
+      }
+    });
+    final next = TestArchive(archive.id, archive.version, payload: 'next');
+    await fixture.put(next);
+    expect(fixture.cached(archive).readAsBytesSync(), archive.bytes);
+    expect(fixture.cached(next).readAsBytesSync(), next.bytes);
+  });
+
+  test(
     'failed retirement keeps the successful install and retries later',
     () async {
       await fixture.put(archive);
@@ -263,4 +328,67 @@ void main() {
     expect(failure.detail, isNot(contains(fixture.root.path)));
     expect(fixture.cached(archive).readAsBytesSync(), archive.bytes);
   });
+
+  test(
+    'a lease another process takes during a download says what to close',
+    () async {
+      await fixture.repository.setDeveloperMode(true);
+      final hosted = TestArchive('example.hosted', '1.0.0');
+      final server = await verifiedServer([
+        hosted.package,
+      ], hostServesPackages: true);
+      final plan = planJoin(server, {
+        hosted.sha256Hex: JoinPackageResolution.hostOffered(),
+      }, developerMode: true);
+      LeaseHolder? holder;
+      final result = await fixture.repository.downloadJoinContent(
+        fixture.install,
+        consentedJoin(server, plan, onLocalNetwork: true),
+        hostPackages: _LeaseTakenMidDownload(
+          hosted,
+          () async => holder = await fixture.holdLease(),
+        ),
+      );
+      expect(result, isA<JoinFailed>());
+      final failure = result as JoinFailed;
+      expect(failure.code, JoinFailureCode.downloadFailed);
+      expect(failure.detail, contains('Close other TopiaForge install'));
+      expect(failure.detail, isNot(contains(fixture.root.path)));
+      expect(fixture.archives, isEmpty);
+      expect(
+        fixture.cache.listSync().where((entry) => entry.path.endsWith('.tmp')),
+        isEmpty,
+      );
+      expect(await holder!.end(), 3);
+    },
+  );
+}
+
+/// A host whose download finishes while another process holds the cache
+/// lease.
+final class _LeaseTakenMidDownload implements JoinHostPackageSource {
+  _LeaseTakenMidDownload(this.archive, this.takeLease);
+
+  final TestArchive archive;
+  final Future<void> Function() takeLease;
+
+  @override
+  Future<JoinHostPackageProblem?> prepare({
+    CancellationToken? cancellation,
+  }) async => null;
+
+  @override
+  Future<JoinHostPackageResult> download(
+    DescriptorPackage package,
+    String path, {
+    void Function(int bytesReceived, int bytesTotal)? onProgress,
+    CancellationToken? cancellation,
+  }) async {
+    await takeLease();
+    File(path).writeAsBytesSync(archive.bytes);
+    return JoinHostPackageDownloaded(
+      sha256: archive.sha256Hex,
+      length: archive.bytes.length,
+    );
+  }
 }
