@@ -181,6 +181,10 @@ abstract interface class MultiplayerContentHost {
   /// ([JoinSessionState.hostServedAcknowledged]); without either, or without
   /// [hostPackages], the join ends as
   /// [JoinFailureCode.hostDownloadUnsupported] before anything is fetched.
+  ///
+  /// When the repository closes during the downloads, it stops them at once,
+  /// as a cancel does, and answers [JoinCancelRequested], so the join ends as
+  /// cancelled; the close does not wait for a transfer.
   Future<JoinEvent?> downloadJoinContent(
     GameInstall install,
     JoinSessionState state, {
