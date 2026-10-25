@@ -9,13 +9,15 @@ namespace TopiaForge.Mods.Testing
     {
         /// <summary>
         /// Creates a ready participant session using the supplied context, which stands in for the player's own scope; it
-        /// does not construct or start gameplay.
+        /// does not construct or start gameplay. As in the game, a fake context's physics then refuses blockers, which only
+        /// the server controller places.
         /// </summary>
         public FakeGamemodeParticipantSession(IModContext context, WorldReadiness world, string sessionId = "test.session",
             string targetId = "test.target", string gamemodeId = "test.mode", string worldId = "test.world",
             string? worldFamilyId = null, CancellationToken cancellationToken = default)
         {
             Context = context ?? throw new ArgumentNullException(nameof(context));
+            if (context.Physics is FakePhysicsService physics) physics.RefusesBlockers = true;
             World = world ?? throw new ArgumentNullException(nameof(world));
             SessionId = sessionId; TargetId = targetId; GamemodeId = gamemodeId;
             WorldId = worldId; WorldFamilyId = worldFamilyId; CancellationToken = cancellationToken;

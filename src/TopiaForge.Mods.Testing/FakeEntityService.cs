@@ -38,6 +38,9 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Gets or sets deterministic local scale.</summary>
         public Vec3 Scale { get; set; } = new Vec3(1f, 1f, 1f);
 
+        /// <summary>Gets or sets whether a fake blocker's box is this entity: as in the game, it keeps its size and no tool holds it.</summary>
+        internal bool IsBlocker { get; set; }
+
         /// <summary>Marks the entity unavailable for future SDK operations.</summary>
         public void Destroy()
         {
@@ -125,6 +128,11 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentNullException(nameof(entity));
             }
 
+            if ((entity is FakeBlocker blocker ? blocker.Entity : entity as FakeEntity)?.IsBlocker == true)
+            {
+                return OperationResult<IEntityMotion>.Failure(ModErrorCode.NotAuthoritative, FakePhysicsService.NotHeld);
+            }
+
             if (AcquireMotionErrorCode != ModErrorCode.None)
             {
                 return OperationResult<IEntityMotion>.Failure(
@@ -184,6 +192,8 @@ namespace TopiaForge.Mods.Testing
                 return OperationResult<TransformState>.Failure(ModErrorCode.NotFound, "The entity is no longer alive.");
             }
 
+            // A blocker keeps the size it was made with, as the game keeps it: a move ignores the placement's scale.
+            if (fake.IsBlocker) transform = new TransformState(transform.Position, transform.Rotation, new Vec3(1f, 1f, 1f));
             fake.Position = transform.Position;
             fake.Rotation = transform.Rotation;
             fake.Scale = transform.Scale;

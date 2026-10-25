@@ -14,7 +14,7 @@ using TopiaForge.Mods.Testing;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal static class BlockerTests
+    internal static partial class BlockerTests
     {
         private static int assertions;
         private static readonly Vec3 Size = new Vec3(2, 3, .5f);
@@ -25,6 +25,9 @@ namespace TopiaForge.ModManager.Tests
             HostileDescriptions();
             RoutingAndLifetime();
             ReplicasAndShadows();
+            NoToolHoldsABlocker();
+            AMoveKeepsTheSize();
+            TheTestingKitAnswersAsTheGame();
             UnityConstruction();
             Console.WriteLine("Blocker tests passed: " + assertions + " assertions.");
         }
@@ -63,7 +66,8 @@ namespace TopiaForge.ModManager.Tests
             Check(payload.Length == 14 && payload[0] == 1 && payload[13] == 0, "14-byte box envelope");
             Check(BlockerDescriptor.TryRead(payload, out var size, out var sight) && size == Size && !sight, "descriptor round trip");
             var scene = new FakeWorldScene();
-            var factory = new BlockerReplicaFactory(scene);
+            var replicas = new Dictionary<string, IBlocker>(StringComparer.Ordinal);
+            var factory = new BlockerReplicaFactory(scene, replicas);
             foreach (var length in new[] { 0, 1, 13, 15, 100 }) Reject(new byte[length]);
             var bad = (byte[])payload.Clone(); bad[0] = 0; Reject(bad);
             bad = (byte[])payload.Clone(); bad[13] = 2; Reject(bad);
@@ -74,22 +78,42 @@ namespace TopiaForge.ModManager.Tests
                     BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(offset), BitConverter.SingleToInt32Bits(value));
                     Reject(bad);
                 }
-            Check(scene.Blockers.Count == 0, "invalid bytes never reach engine creation");
+            Check(scene.Blockers.Count == 0 && replicas.Count == 0, "invalid bytes never reach engine creation");
             var made = factory.CreateReplica(new InternalSpawnDescriptor(BlockerDescriptor.Kind, request.Placement, payload));
-            Check(made.Value is IBlocker box && box.Size == Size && box.IsAlive, "factory builds requested collider geometry");
+            Check(made.Value is IBlocker box && box.Size == Size && box.IsAlive && replicas.ContainsKey(box.Id),
+                "factory builds requested collider geometry, listed as a blocker no tool holds");
             factory.ReleaseReplica(made.Value!);
-            Check(!made.Value!.IsAlive, "factory releases replica");
+            Check(!made.Value!.IsAlive && replicas.Count == 0, "factory releases replica");
+
+            // The wire takes a blocker only as the host's own SDK spawn: not in a player's name, and not as world content.
+            Check(Reads(Spawn(payload, ownerSlot: 0)), "the host's blocker entry reads");
+            Check(!Reads(Spawn(payload, ownerSlot: 1)), "a blocker entry in a player's name is refused");
+            var content = new WorldWireWriter(1024);
+            WorldEntryCodec.WriteContent(content, new NetworkEntityId(1), BlockerDescriptor.Kind, "world.box", WorldPeer.ModId, 0,
+                new NetVector3(1, 1, 1), new NetPose(default, NetQuaternion.Identity), payload);
+            Check(!Reads(content), "a blocker entry as world content is refused");
 
             void Reject(byte[] bytes)
             {
                 Check(!BlockerDescriptor.TryRead(bytes, out _, out _), "hostile descriptor rejected");
                 Check(!factory.CreateReplica(new InternalSpawnDescriptor(BlockerDescriptor.Kind, TransformState.Identity, bytes)).Succeeded,
                     "factory refuses hostile descriptor");
+                Check(!Reads(Spawn(bytes, ownerSlot: 0)), "wire rejects descriptor before binding a shadow");
+            }
+
+            static WorldWireWriter Spawn(byte[] bytes, int ownerSlot)
+            {
                 var writer = new WorldWireWriter(1024);
-                WorldEntryCodec.WriteSpawn(writer, new NetworkEntityId(1), BlockerDescriptor.Kind, WorldPeer.ModId, 0, 0,
+                WorldEntryCodec.WriteSpawn(writer, new NetworkEntityId(1), BlockerDescriptor.Kind, WorldPeer.ModId, 0, ownerSlot,
                     new NetVector3(1, 1, 1), new NetPose(default, NetQuaternion.Identity), bytes);
-                var reader = new WorldWireReader(); reader.Reset(writer.Segment.AsSpan().ToArray());
-                Check(!WorldEntryCodec.TryRead(reader, new WorldEntry()), "wire rejects descriptor before binding a shadow");
+                return writer;
+            }
+
+            static bool Reads(WorldWireWriter writer)
+            {
+                var reader = new WorldWireReader();
+                reader.Reset(writer.Segment.AsSpan().ToArray());
+                return WorldEntryCodec.TryRead(reader, new WorldEntry());
             }
         }
 
@@ -192,6 +216,24 @@ namespace TopiaForge.ModManager.Tests
             foreach (var file in new[] { "UnityWorldServices.cs", "Multiplayer/World/Unity/UnityNetworkWorldBackend.cs" })
                 Check(File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager", file)).Contains("UnityBlocker.Create(entities, request)", StringComparison.Ordinal),
                     "canonical and replica paths use the same Unity construction");
+
+            // Nothing else brings a renderer: no primitive, prefab or mesh, and no component added by its type, in the blocker or
+            // in the preview, which only draws.
+            foreach (var file in new[] { "UnityBlocker.cs", "UnityBlockerPreview.cs" })
+            {
+                var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager", file))).GetRoot();
+                var names = tree.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).Select(token => token.ValueText).ToArray();
+                Check(!names.Any(name => name.Contains("Renderer") || name == "MeshFilter" || name == "CreatePrimitive" || name == "Instantiate"),
+                    file + " names no renderer, mesh filter, primitive or prefab");
+                Check(!tree.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+                        (call.Expression as IdentifierNameSyntax ?? (call.Expression as MemberAccessExpressionSyntax)?.Name as IdentifierNameSyntax)?.Identifier.ValueText == "AddComponent"),
+                    file + " adds no component by its type");
+            }
+
+            var preview = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager/UnityBlockerPreview.cs"))).GetRoot();
+            Check(!preview.DescendantNodes().OfType<GenericNameSyntax>().Any(name => name.Identifier.ValueText == "AddComponent") &&
+                  !preview.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(created => created.Type.ToString() == "GameObject"),
+                "the preview adds nothing to a blocker or the scene");
         }
 
         private static void Throws(Action action, string message)

@@ -2114,7 +2114,9 @@ without waiting for the world's first-motion scan. A prediction waiting for adop
 The host validates finite bounded positions, epoch and sender, displacement credit, hold range, permission and
 per-player request and byte budgets. The wire accepts no trailing bytes and carries no addresses. Verdict queues
 are bounded to 16 per participant and 256 overall. Linear and angular velocity are clamped before forwarding as
-well as at handback, so extrapolation cannot amplify a claimed velocity.
+well as at handback, so extrapolation cannot amplify a claimed velocity. A blocker (`asset.blocker`) is never a
+motion body: `NetEntityService.AcquireMotion` refuses one on every peer, by the id its handle, a raycast's entity, a
+shadow and a joined player's replica share, and the host refuses a player's grab of one whatever its client sends.
 
 Until presence (3.10) is installed, range is measured against the sender's reported local avatar position. This is
 **not a trustworthy remote-location check** against a modified client. Displacement speed, sender and epoch checks

@@ -42,11 +42,14 @@ namespace TopiaForge.Mods
         internal static bool ValidSide(float side) => side >= 0.05f && side <= 1_000f;
     }
 
-    /// <summary>A blocker this context owns. Disposing it removes it for every player.</summary>
+    /// <summary>
+    /// A blocker this context owns. Disposing it removes it for every player. Move it with
+    /// <c>Context.Entities.SetTransform</c>, which keeps its size; no tool can hold or throw it.
+    /// </summary>
     [RequiresTopiaForge("0.2.0")]
     public interface IBlocker : ISpawnedEntity
     {
-        /// <summary>Gets the box's size in metres.</summary>
+        /// <summary>Gets the box's size in metres, which a move never changes.</summary>
         Vec3 Size { get; }
     }
 }

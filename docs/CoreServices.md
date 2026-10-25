@@ -67,14 +67,17 @@ if (result.TryGetValue(out var blocker))
 
 The host records and replicates the box, including to players who join later. Move a sliding door
 with `session.Context.Entities.SetTransform(blocker, placement)`. Use the `TransformState` overload
-of `BlockerRequest.Box` for an existing placement; its scale is ignored and the explicit size is in
-metres. Every side must be finite and between 0.05 and 1,000 metres, inclusive; position and rotation
-must be finite. A mod can keep 1,024 live blockers across all its scopes.
+of `BlockerRequest.Box` for an existing placement. Both ignore a placement's scale, so a blocker keeps
+the explicit size, in metres, it was made with. Every side must be finite and between 0.05 and 1,000
+metres, inclusive; position and rotation must be finite. A mod can keep 1,024 live blockers across all
+its scopes.
 
 Blockers use a kinematic box collider, with no renderer. `blocksSight: false` selects Unity's Ignore
 Raycast layer, excluding the box from ordinary raycast, sphere-cast and overlap queries while retaining
-its collider. Collision with the game's player, robots and props, including how robots navigate around
-the box, needs live-game acceptance for the supported game build.
+its collider. No tool can hold or throw a blocker: `Context.Entities.AcquireMotion` refuses one on
+every peer, so the Gravity Gun cannot pull it out of a doorway, and the host refuses any player's grab
+of one. Collision with the game's player, robots and props, including how robots navigate around the
+box, needs live-game acceptance for the supported game build.
 
 Process and world-owner scripts on a joined player receive a shadow of the host's box. Participant
 code is refused in every role, including single player; a joined player's own input is refused too.
@@ -89,7 +92,10 @@ collision nor network state.
 
 `FakeModContext.Physics.Blockers` records test handles. Its overlap queries account for box size and
 rotation; `FakeModContext.Entities.SetTransform` moves them, and disposing the context removes them.
-The fake's raycast and sphere-cast results remain explicitly configured test inputs.
+As in the game, a move keeps their size, `AcquireMotion` refuses them, and a participant controller's
+context (a `FakeGamemodeParticipantSession`'s, including `GamemodeSessionRunner.ParticipantContext`)
+refuses `AddBlocker` with `NotAuthoritative`. The fake's raycast and sphere-cast results remain
+explicitly configured test inputs.
 
 ## Start from a compiled template
 

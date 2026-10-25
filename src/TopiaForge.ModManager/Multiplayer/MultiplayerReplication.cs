@@ -89,6 +89,29 @@ namespace TopiaForge.ModManager
             return live;
         }
 
+        /// <summary>Gets the blockers a joined player built from the host's descriptions, by id: no mod holds them.</summary>
+        internal Dictionary<string, IBlocker> BlockerReplicas { get; } = new Dictionary<string, IBlocker>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Whether <paramref name="entity"/> is one of this process's live blockers, by the id every handle to the box shares:
+        /// one a mod placed here, a joined player's shadow of the host's, or a joined player's replica. No tool holds one.
+        /// </summary>
+        internal bool IsBlocker(IEntity entity)
+        {
+            var id = entity.Id;
+            if (string.IsNullOrEmpty(id)) return false;
+            if (BlockerReplicas.TryGetValue(id, out var replica) && replica.IsAlive) return true;
+            foreach (var live in blockers.Values)
+            {
+                foreach (var blocker in live)
+                {
+                    if (string.Equals(blocker.Id, id, StringComparison.Ordinal) && blocker.IsAlive) return true;
+                }
+            }
+
+            return false;
+        }
+
         private readonly Dictionary<string, Registration<IInternalReplicaFactory>> factories =
             new Dictionary<string, Registration<IInternalReplicaFactory>>(StringComparer.Ordinal);
         private readonly Dictionary<string, Registration<Func<InternalCommand, OperationResult<bool>>>> commands =

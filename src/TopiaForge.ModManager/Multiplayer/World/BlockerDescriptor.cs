@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -42,11 +43,20 @@ namespace TopiaForge.ModManager
         OperationResult<IBlocker> CreateBlocker(BlockerRequest request);
     }
 
-    /// <summary>Available before any mod runs on a joined player; no bundle or provider registration is required.</summary>
+    /// <summary>
+    /// Available before any mod runs on a joined player; no bundle or provider registration is required. Each replica it
+    /// builds is listed by id until it is released, so no tool on that player can hold it.
+    /// </summary>
     internal sealed class BlockerReplicaFactory : IInternalReplicaFactory
     {
         private readonly IBlockerBackend backend;
-        internal BlockerReplicaFactory(IBlockerBackend backend) { this.backend = backend; }
+        private readonly Dictionary<string, IBlocker> built;
+
+        internal BlockerReplicaFactory(IBlockerBackend backend, Dictionary<string, IBlocker> built)
+        {
+            this.backend = backend;
+            this.built = built;
+        }
 
         public OperationResult<IEntity> CreateReplica(InternalSpawnDescriptor descriptor)
         {
@@ -55,10 +65,16 @@ namespace TopiaForge.ModManager
                 return OperationResult<IEntity>.Failure(ModErrorCode.InvalidArgument,
                     "The host sent an invalid blocker. Leave and join again; if it repeats, update TopiaForge.");
             var result = backend.CreateBlocker(BlockerRequest.Box(descriptor.Transform, size, blocksSight));
-            return result.TryGetValue(out var blocker) ? OperationResult<IEntity>.Success(blocker) :
-                OperationResult<IEntity>.Failure(result.ErrorCode, result.ErrorMessage);
+            if (!result.TryGetValue(out var blocker) || blocker == null) return OperationResult<IEntity>.Failure(result.ErrorCode, result.ErrorMessage);
+            built[blocker.Id] = blocker;
+            return OperationResult<IEntity>.Success(blocker);
         }
 
-        public void ReleaseReplica(IEntity entity) { (entity as IBlocker)?.Dispose(); }
+        public void ReleaseReplica(IEntity entity)
+        {
+            if (!(entity is IBlocker blocker)) return;
+            if (built.TryGetValue(blocker.Id, out var listed) && ReferenceEquals(listed, blocker)) built.Remove(blocker.Id);
+            blocker.Dispose();
+        }
     }
 }

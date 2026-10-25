@@ -12,6 +12,7 @@ namespace TopiaForge.ModManager
         internal const string NotAuthoritative = "Only the host places blockers. Place them in the gamemode's server controller.";
         internal const string Stopping = "The part of the mod that asked for this is stopping. Place the blocker after a new scope starts.";
         internal const string Limit = "A mod can keep at most 1,024 blockers. Dispose of an existing blocker before adding another.";
+        internal const string NotHeld = "A blocker cannot be held or thrown. Move it with Context.Entities.SetTransform from the code that placed it.";
         private readonly IPhysicsService inner;
         private readonly RuntimeReplication replication;
         private readonly IModLifetime lifetime;
