@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.TestDoubles
     /// systems, network marks, poses, and an asset service that spawns into them. The ModRuntime and ModManager harnesses
     /// both compile it.
     /// </summary>
-    internal sealed class FakeWorldScene : INetworkWorldBackend, INetworkMotionBackend
+    internal sealed class FakeWorldScene : INetworkWorldBackend, INetworkMotionBackend, IBlockerBackend
     {
         private readonly List<FakeSceneData> scenes = new List<FakeSceneData>();
         private int nextHandle = 100;
@@ -155,7 +155,20 @@ namespace TopiaForge.ModManager.TestDoubles
         }
 
         private static FakeWorldObject? ObjectOf(IEntity entity) =>
-            entity is FakeWorldEntity fake ? fake.Object : entity is FakeSpawnedEntity spawned ? spawned.Object : null;
+            entity is FakeWorldEntity fake ? fake.Object : entity is FakeSpawnedEntity spawned ? spawned.Object :
+            entity is FakeWorldBlocker blocker ? blocker.Object : null;
+
+        internal List<FakeWorldBlocker> Blockers { get; } = new List<FakeWorldBlocker>();
+        public OperationResult<IBlocker> CreateBlocker(BlockerRequest request)
+        {
+            var target = Add(ActiveScene ?? AddScene("World"), "Blocker", rigidbody: true,
+                position: new NetVector3(request.Placement.Position.X, request.Placement.Position.Y, request.Placement.Position.Z));
+            var rotation = request.Placement.Rotation;
+            target.Rotation = new NetQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
+            var blocker = new FakeWorldBlocker(target, request);
+            Blockers.Add(blocker);
+            return OperationResult<IBlocker>.Success(blocker);
+        }
 
         private void Walk(FakeSceneData scene, FakeWorldObject current, int siblingIndex, List<SceneObjectPathSegment> path,
             List<(NetworkSceneObject Object, SceneObjectDescriptor Descriptor)> into)

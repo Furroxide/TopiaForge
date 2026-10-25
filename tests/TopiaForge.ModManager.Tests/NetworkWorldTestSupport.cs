@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             ReplicaTransformDriverTests.Run();
             NetworkWorldLifecycleTests.Run();
             NetworkWorldPrivacyTests.Run();
+            BlockerTests.Run();
             AuthorityTests.Run();
             Console.WriteLine("Network world tests passed.");
         }

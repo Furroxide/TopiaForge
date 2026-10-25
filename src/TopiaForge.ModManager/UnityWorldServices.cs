@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager
             this.entities = entities;
         }
 
+        public OperationResult<IBlocker> AddBlocker(BlockerRequest request) => UnityBlocker.Create(entities, request);
+
         public bool TryRaycast(TopiaForge.Mods.Ray ray, float maximumDistance, out PhysicsHit? hit)
         {
             UnityMainThreadGuard.AssertCurrent();

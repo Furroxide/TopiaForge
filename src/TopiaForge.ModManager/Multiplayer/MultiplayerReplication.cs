@@ -81,6 +81,14 @@ namespace TopiaForge.ModManager
     /// </summary>
     internal sealed class MultiplayerReplication
     {
+        private readonly Dictionary<string, List<IBlocker>> blockers = new Dictionary<string, List<IBlocker>>(StringComparer.Ordinal);
+
+        internal List<IBlocker> BlockersFor(string modId)
+        {
+            if (!blockers.TryGetValue(modId, out var live)) blockers.Add(modId, live = new List<IBlocker>());
+            return live;
+        }
+
         private readonly Dictionary<string, Registration<IInternalReplicaFactory>> factories =
             new Dictionary<string, Registration<IInternalReplicaFactory>>(StringComparer.Ordinal);
         private readonly Dictionary<string, Registration<Func<InternalCommand, OperationResult<bool>>>> commands =

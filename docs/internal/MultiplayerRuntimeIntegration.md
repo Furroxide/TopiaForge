@@ -721,6 +721,7 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | Recorded from | Kind | Description |
   | --- | --- | --- |
   | `Assets.Spawn` that succeeds, through `NetAssetService` | `asset.prefab` | The prefab's bundle path and asset name (`MultiplayerAssetDescriptor`); a prefab that cannot say them is described as unknown, and stays local |
+  | `Physics.AddBlocker`, through `NetPhysicsService` | `asset.blocker` | Runtime box: shape byte `1`, three little-endian float sides, one flags byte (`0` or `1` for `BlocksSight`); exactly 14 bytes |
   | `RegisterCanonical` and `RequestSpawn`, from first-party providers | The provider's own | Its `InternalSpawnDescriptor`, world content with its content key |
 
   Each record keeps a sequence that is never reused, the owning mod, the network profile of the context that made it,

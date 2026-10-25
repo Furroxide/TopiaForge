@@ -247,6 +247,9 @@ namespace TopiaForge.ModManager
                 return false;
             }
 
+            public OperationResult<IBlocker> AddBlocker(BlockerRequest request) => OperationResult<IBlocker>.Failure(
+                ModErrorCode.Unavailable, "This host cannot create blockers. Run the mod in the game or use the testing physics service.");
+
             public System.Collections.Generic.IReadOnlyList<IEntity> Overlap(Bounds bounds, int maximumResults = 64)
             {
                 return Array.Empty<IEntity>();

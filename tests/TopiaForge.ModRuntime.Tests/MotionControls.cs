@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModRuntime.Tests
@@ -7,6 +8,9 @@ namespace TopiaForge.ModRuntime.Tests
     /// <summary>Physical input, aim and collision queries beneath real context decorators.</summary>
     internal sealed class MotionControls : IInputService, ILocalPlayerService, IPhysicsService
     {
+        internal IBlockerBackend? BlockerBackend { get; set; }
+        public OperationResult<IBlocker> AddBlocker(BlockerRequest request) => BlockerBackend?.CreateBlocker(request) ??
+            OperationResult<IBlocker>.Failure(ModErrorCode.Unavailable, "No test blocker backend.");
         private readonly Dictionary<string, MotionAction> actions = new Dictionary<string, MotionAction>();
         internal PlayerSnapshot Snapshot { get; set; } = new PlayerSnapshot(Vec3.Zero, new Ray(Vec3.Zero, new Vec3(0, 0, 1)));
         internal PhysicsHit? Hit { get; set; }

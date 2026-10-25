@@ -88,6 +88,16 @@ type public sealed class TopiaForge.Mods.Testing.FakeAudioService : System.Objec
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeAudioPlayback> ActivePlaybacks { get; }
   property TopiaForge.Mods.ModErrorCode PlayErrorCode { get; set; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeBlocker : System.Object, System.IDisposable, TopiaForge.Mods.IBlocker, TopiaForge.Mods.IEntity, TopiaForge.Mods.ISpawnedEntity [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  property System.Boolean BlocksSight { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAlive { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Id { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Name { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.TransformState InitialTransform { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Vec3 Position { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Vec3 Size { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.Testing.FakeCommandService : System.Object, TopiaForge.Mods.ICommandService
   method [virtual,final,newslot] System.Boolean TryExecute(System.String name, System.Collections.Generic.IReadOnlyList<System.String> arguments, out TopiaForge.Mods.OperationResult<System.String>? result)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICommandRegistration> Register(TopiaForge.Mods.CommandDefinition definition, System.Func<TopiaForge.Mods.CommandInvocation, TopiaForge.Mods.OperationResult<System.String>> handler)
@@ -403,7 +413,9 @@ type public sealed class TopiaForge.Mods.Testing.FakePhysicsService : System.Obj
   method [virtual,final,newslot] System.Boolean TryRaycast(TopiaForge.Mods.Ray ray, System.Single maximumDistance, out TopiaForge.Mods.PhysicsHit? hit)
   method [virtual,final,newslot] System.Boolean TrySphereCast(TopiaForge.Mods.Ray ray, System.Single radius, System.Single maximumDistance, out TopiaForge.Mods.PhysicsHit? hit)
   method [virtual,final,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IEntity> Overlap(TopiaForge.Mods.Bounds bounds, System.Int32 maximumResults = 64)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IBlocker> AddBlocker(TopiaForge.Mods.BlockerRequest request) [requires-topiaforge="0.2.0"]
   property System.Collections.Generic.IList<TopiaForge.Mods.IEntity> OverlapEntities { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeBlocker> Blockers { get; } [requires-topiaforge="0.2.0"]
   property System.Int32 OverlapCount { get; }
   property System.Int32 RaycastCount { get; }
   property System.Int32 SphereCastCount { get; }

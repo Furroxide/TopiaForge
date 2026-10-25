@@ -45,7 +45,9 @@ namespace TopiaForge.ModManager
             Counters = new NetworkWorldCounters();
             SceneKeys = new SceneKeyRegistry(backend);
             Host = new NetworkWorldHost(channel, backend, SceneKeys, clock, Counters);
-            Client = new NetworkWorldClient(channel, backend, SceneKeys, clock, Counters, kind => replication.TryGetReplicaFactory(kind, out var factory) ? factory : null, findAssets,
+            var blockers = backend is IBlockerBackend boxes ? new BlockerReplicaFactory(boxes) : null;
+            Client = new NetworkWorldClient(channel, backend, SceneKeys, clock, Counters,
+                kind => kind == BlockerDescriptor.Kind ? blockers : replication.TryGetReplicaFactory(kind, out var factory) ? factory : null, findAssets,
                 runtime.Spawns.ShadowKeys, replication.AssetLoads);
             Proxies = new NetworkWorldProxies(channel, Host, runtime.Spawns, runtime.Intents, replication, findAssets, clock, Counters)
             {

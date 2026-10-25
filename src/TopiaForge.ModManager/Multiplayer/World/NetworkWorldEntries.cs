@@ -292,6 +292,9 @@ namespace TopiaForge.ModManager
         private static bool TryReadPayload(WorldWireReader reader, WorldEntry entry)
         {
             if (!reader.TryReadBytes(InternalReplicationLimits.MaximumPayloadBytes, out var payload)) return false;
+            if (entry.Kind == BlockerDescriptor.Kind &&
+                (entry.Source != WorldEntrySource.SdkSpawn || entry.OwnerSlot != 0 ||
+                 !BlockerDescriptor.TryRead(payload, out _, out _))) return false;
             entry.Payload = payload;
             return true;
         }

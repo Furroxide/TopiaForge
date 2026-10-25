@@ -157,6 +157,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public bool TryGetTransform(IEntity entity, out TransformState transform)
         {
+            if (entity is FakeBlocker blocker) entity = blocker.Entity;
             if (entity is FakeEntity fake && entities.ContainsKey(fake.Id) && fake.IsAlive)
             {
                 transform = new TransformState(fake.Position, fake.Rotation, fake.Scale);
@@ -170,6 +171,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform)
         {
+            if (entity is FakeBlocker blocker) entity = blocker.Entity;
             if (!(entity is FakeEntity fake) || !entities.ContainsKey(fake.Id))
             {
                 return OperationResult<TransformState>.Failure(
