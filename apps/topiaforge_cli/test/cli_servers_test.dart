@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
@@ -38,6 +39,21 @@ void main() {
       expect(json['sources'], {'internet': 'available', 'lan': 'listening'});
       expect(json['retryAfterSeconds'], isNull);
       expect(json['next'], 'c' * 64);
+      final contract = File(
+        '../../docs/internal/MultiplayerCliAcceptance.md',
+      ).readAsStringSync().split('## Hosting').first;
+      for (final key in json.keys) {
+        expect(contract, contains('`$key`'));
+      }
+      for (final status in [
+        'available',
+        'buildRequired',
+        ...MultiplayerServiceProblem.values.map((value) => value.name),
+        ...LanDiscoveryStatus.values.map((value) => value.name),
+        ...LanDiscoveryProblem.values.map((value) => value.name),
+      ]) {
+        expect(contract, contains('`$status`'));
+      }
       final rows = json['servers'] as List;
       expect(rows.length, 2);
       expect(rows[0]['source'], 'internet');

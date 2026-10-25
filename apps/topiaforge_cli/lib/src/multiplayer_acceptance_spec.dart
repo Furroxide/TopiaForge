@@ -81,8 +81,8 @@ final class MultiplayerAcceptanceSpec {
       'packageId': packageId,
       'peers': ['host', 'guest'],
       'stages': [
-        'admit-both-layouts',
         'validate-package',
+        'admit-both-layouts',
         'install-both-peers',
         'challenge-both-peers',
         'launch-host',

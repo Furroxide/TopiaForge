@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
@@ -88,6 +89,27 @@ void main() {
     );
     expect(CliHostOptions(const []).waitTimeout, const Duration(seconds: 30));
   });
+  for (final seconds in [300, 40]) {
+    test('protected hosting schedules the $seconds-second wait', () async {
+      final waits = <Duration>[];
+      rig.onLaunch = () => rig.controller.add(rig.success());
+      final result = await runZoned(
+        () => rig.run([
+          '--yes',
+          '--password',
+          if (seconds != 300) ...['--wait-seconds', '$seconds'],
+        ]),
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) {
+            waits.add(duration);
+            return parent.createTimer(zone, duration, callback);
+          },
+        ),
+      );
+      expect(result, 0);
+      expect(waits, [Duration(seconds: seconds)]);
+    });
+  }
   test(
     'voice turned on elsewhere while consent was open refuses the launch',
     () async {

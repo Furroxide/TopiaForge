@@ -17,6 +17,10 @@ void main() {
     expect(dry['liveEvidence'], isFalse);
     expect(dry['dryRun'], isTrue);
     expect(dry['peers'], ['host', 'guest']);
+    expect((dry['stages'] as List).take(2), [
+      'validate-package',
+      'admit-both-layouts',
+    ]);
   });
   test(
     'selection preserves canonical order and rejects unknown or repeated cases',

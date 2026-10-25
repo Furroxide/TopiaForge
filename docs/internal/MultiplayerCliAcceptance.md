@@ -17,10 +17,12 @@ seconds. Internet browsing uses the detected install's build, or the explicit
 disable LAN browsing. Stored LAN-off and unreadable preferences stay off.
 No install is needed for LAN browsing. A missing Internet build asks for the filter.
 
-JSON schema version 1 contains `sources`, `retryAfterSeconds`, `next`, and
-`servers`. `sources` holds one status string for each requested source,
-`internet` and `lan`, and nothing else. `retryAfterSeconds` is the delay the
-service named before Internet browsing can be retried, or null. Each server has
+JSON always contains exactly `schemaVersion` (1), `sources`, `retryAfterSeconds`,
+`next`, and `servers`. `sources` holds one status string for each requested source,
+`internet` and `lan`, and nothing else; an unrequested source is omitted.
+`retryAfterSeconds` is the integer delay the service named before Internet
+browsing can be retried, or null, including when Internet browsing was not
+requested. `next` is the next server-id cursor, or null. Each server has
 `serverId`, `name`, `source`, `players`, `maxPlayers`, `passwordRequired`, `voice`,
 `gamemode`, `world`, `gameBuild`, `runtimeVersion`, `pingMilliseconds`, and
 `readiness`; absent optional values are null. Rows sort by source then server id.
@@ -29,6 +31,13 @@ The same server heard from both sources keeps both rows. `next` is passed as
 Notices go to stderr, so stdout remains one JSON document. Exit 0 means at least
 one requested source was available, even with zero sessions; exit 1 means none
 was available. The per-source statuses expose partial availability.
+
+Internet statuses are `available`, `notConfigured`, `buildRequired`, `offline`,
+`unreachable`, `unavailable`, `turnedOff`, `rateLimited`, `notFound`, `refused`,
+`invalidAnswer`, and `descriptorInvalid`. LAN statuses are `stopped`, `disabled`,
+`listening`, `unavailable`, `portInUse`, `permissionDenied`, `failed`, and
+`settingsUnreadable`. A LAN cleanup failure is a stderr notice only; it adds no
+JSON field and does not change the snapshot's availability.
 
 ## Hosting
 
