@@ -174,7 +174,9 @@ route the status reports, Relay or Direct. The failure view offers Retry where t
 where the launcher can take the join over, Copy details, and Trust for a typed host that now serves a different server,
 or whose server could not be checked because this game's record of earlier ones could not be read
 (`KnownHostsUnreadable`). CONNECT's check asks the same "Trust this server?" question for both, each with its own words.
-Cancel, the close button and ESC stop a running join at any step, and leaving is never refused.
+A failure that replaces another without the view closing, as a RETRY that fails at once does, shows its own heading and
+words, never the earlier failure's: the view binds them on every frame. Cancel, the close button and ESC stop a running
+join at any step, and leaving is never refused.
 
 The overlay and the prompts are persistent modals: joining from a running game returns to the main menu first, and a
 modal that is not persistent is destroyed with the scene it opened in, which in the game left the join running with no

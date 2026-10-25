@@ -7,7 +7,8 @@ namespace TopiaForge.ModManager.Sessions
     /// The connecting overlay: a Paper modal with the join's phase stepper (Resolving, Connecting, Authenticating, Verifying
     /// mods, Loading world, Synchronizing, Spawning), a password field when the session asks, and a failure view with Retry,
     /// Open launcher and Copy details. Cancel, the close button and ESC all stop a running join. Its layout is rebuilt only
-    /// when it switches between running and failed; otherwise it binds through dirty-checked setters.
+    /// when it switches between running and failed; otherwise it binds through dirty-checked setters, the failure's own
+    /// words included, so a failure that replaces another in the same layout never keeps the earlier one's.
     /// </summary>
     internal sealed class ConnectingOverlay
     {
@@ -22,6 +23,9 @@ namespace TopiaForge.ModManager.Sessions
         private TopiaForgeContainer? passwordRow;
         private TopiaForgeInputField? password;
         private TopiaForgeLabel? passwordError;
+        private TopiaForgeLabel? failureTitle;
+        private TopiaForgeLabel? failureMessage;
+        private TopiaForgeLabel? hostSays;
         private TopiaForgeLabel? lines;
         private TopiaForgeButton? retry;
         private TopiaForgeButton? launcher;
@@ -86,7 +90,7 @@ namespace TopiaForge.ModManager.Sessions
             passwordRow = null;
             password = null;
             passwordError = null;
-            lines = null;
+            failureTitle = failureMessage = hostSays = lines = null;
             retry = launcher = copy = trust = null;
             shownLines = null;
             if (shownShape != 2)
@@ -109,10 +113,10 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
-            body!.Label(screen.FailureTitle, TopiaForgeTextStyle.Heading).Tone(TopiaForgeTone.Danger).PlainText();
-            body.Label(screen.FailureMessage, TopiaForgeTextStyle.Body).PlainText();
+            failureTitle = body!.Label(screen.FailureTitle, TopiaForgeTextStyle.Heading).Tone(TopiaForgeTone.Danger).PlainText();
+            failureMessage = body.Label(screen.FailureMessage, TopiaForgeTextStyle.Body).PlainText();
             lines = body.Label(string.Empty, TopiaForgeTextStyle.Caption).PlainText();
-            body.Label(screen.HostSays, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).PlainText();
+            hostSays = body.Label(screen.HostSays, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).PlainText();
             var buttons = body.Row(TopiaForgeGap.Sm);
             retry = buttons.Button("RETRY", screen.Retry);
             launcher = buttons.Button("OPEN LAUNCHER", screen.OpenLauncher, TopiaForgeButtonStyle.Outline);
@@ -135,6 +139,12 @@ namespace TopiaForge.ModManager.Sessions
 
             for (var step = 0; step < ConnectingSteps.Count; step++) stepper!.SetDetail(step, screen.DetailOf(step));
             passwordError?.SetText(screen.PasswordError);
+
+            // A RETRY that fails at once replaces one failure with another before the layout changes: the heading and the
+            // words are bound every frame, so they are always the current failure's.
+            failureTitle?.SetText(screen.FailureTitle);
+            failureMessage?.SetText(screen.FailureMessage);
+            hostSays?.SetText(screen.HostSays);
 
             if (lines != null && !ReferenceEquals(screen.FailureLines, shownLines))
             {
