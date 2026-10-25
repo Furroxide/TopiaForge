@@ -33,9 +33,11 @@
     <ProjectReference Include="../TopiaForge.BindingForwarderTestMod/TopiaForge.BindingForwarderTestMod.csproj" ReferenceOutputAssembly="false" />
     <!-- The real Chronos package, which the pause and time tests load into each game (WS3.13). -->
     <ProjectReference Include="../../mods/TopiaForge.Chronos/TopiaForge.Chronos.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <Target Name="CopySyntheticMod" AfterTargets="Build">
+    <Copy SourceFiles="../../mods/TopiaForge.GravityGun/bin/$(Configuration)/netstandard2.1/TopiaForge.GravityGun.dll" DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="../TopiaForge.GeneratedWorldsTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.GeneratedWorldsTestMod.dll" DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="../TopiaForge.BindingTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.BindingTestMod.dll" DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="../TopiaForge.BindingForwarderTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.BindingForwarderTestMod.dll" DestinationFolder="$(OutDir)" />
