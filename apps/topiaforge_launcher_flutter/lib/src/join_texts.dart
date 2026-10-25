@@ -1,5 +1,9 @@
 import 'package:launcher_domain/launcher_domain.dart';
 
+import 'join_address_redaction.dart';
+
+export 'join_address_redaction.dart';
+
 /// What a failure card offers beside Retry and Copy details.
 enum JoinFailureAction {
   none,
@@ -139,85 +143,6 @@ String sessionEndMessage(JoinSessionEndReason reason) => switch (reason) {
     'The connection to the session failed.',
   JoinSessionEndReason.gameExited => 'Robotopia closed, so the session ended.',
 };
-
-/// [text] with every token shaped like a network address replaced: an IP
-/// literal, alone or with a port, and a name with a port. Host-written text
-/// and what the game reports pass through it before the launcher shows or
-/// copies them; the only address the launcher shows is the one the player
-/// typed, in the dialog they typed it in. Mod ids and server names read as
-/// before.
-String withoutAddresses(String text) {
-  if (text.isEmpty) return text;
-  final out = StringBuffer();
-  var index = 0;
-  while (index < text.length) {
-    if (_isDelimiter(text.codeUnitAt(index))) {
-      out.writeCharCode(text.codeUnitAt(index));
-      index++;
-      continue;
-    }
-    final start = index;
-    while (index < text.length && !_isDelimiter(text.codeUnitAt(index))) {
-      index++;
-    }
-    final token = text.substring(start, index);
-    out.write(_holdsAddress(token) ? withheldAddress : token);
-  }
-  return out.toString();
-}
-
-/// What stands in for an address [withoutAddresses] took out.
-const withheldAddress = '[address]';
-
-bool _isDelimiter(int unit) =>
-    unit <= 0x20 || '"\'`()<>{}[],;|'.codeUnits.contains(unit);
-
-bool _holdsAddress(String token) {
-  // Keep IPv6's trailing compression while testing each punctuation suffix.
-  // Also inspect literal-shaped runs inside URLs, key=value text and scoped
-  // addresses; a host controls the surrounding text too.
-  for (final match in RegExp(r'[0-9A-Fa-f:.]+').allMatches(token)) {
-    var literal = match.group(0)!;
-    if (!literal.contains(':')) continue;
-    while (literal.isNotEmpty) {
-      if (_isIpLiteral(literal)) return true;
-      if (!'.:'.contains(literal[literal.length - 1])) break;
-      literal = literal.substring(0, literal.length - 1);
-    }
-  }
-  var core = token;
-  while (core.isNotEmpty && '.!?:'.contains(core[core.length - 1])) {
-    core = core.substring(0, core.length - 1);
-  }
-  if (core.isEmpty) return false;
-  if (_isIpLiteral(core)) return true;
-  // A host with a port: an IP literal or a dotted name before the last colon.
-  final colon = core.lastIndexOf(':');
-  if (colon > 0 && colon < core.length - 1) {
-    final port = core.substring(colon + 1);
-    final host = core.substring(0, colon);
-    if (RegExp(r'^[0-9]{1,5}$').hasMatch(port) &&
-        (_isIpLiteral(host) ||
-            host == 'localhost' ||
-            RegExp(r'^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$').hasMatch(host) &&
-                RegExp('[A-Za-z]').hasMatch(host))) {
-      return true;
-    }
-  }
-  // An IPv4 address glued to other text, such as a word or a path.
-  return RegExp(
-    r'(^|[^0-9.])(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])'
-    r'(\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}($|[^0-9.])',
-  ).hasMatch(core);
-}
-
-bool _isIpLiteral(String text) {
-  try {
-    return NetworkHost.pathKindOf(text) != null;
-  } on ArgumentError {
-    return false;
-  }
-}
 
 const _texts = <JoinFailureCode, JoinFailureText>{
   JoinFailureCode.invalidLink: JoinFailureText(
