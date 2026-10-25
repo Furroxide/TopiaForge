@@ -57,6 +57,7 @@ extension _PackageHelpers on LocalLauncherRepository {
     }
 
     return _PackageReadResult(
+      bytes: bytes,
       archive: archive,
       manifest: manifest,
       sha256Hex: actualSha,
@@ -90,42 +91,48 @@ extension _PackageHelpers on LocalLauncherRepository {
     }
 
     if (uri != null && uri.scheme == 'https') {
-      if (normalizedSha.isEmpty) {
-        throw StateError(
-          'Remote packages require a SHA-256 hash before install or preview.',
-        );
-      }
-      final cached = File(
-        p.join(_packageCache.path, '$normalizedSha.topiaforgemod'),
-      );
-      if (cached.existsSync()) {
-        try {
-          final cachedBytes = await _readLauncherFileBounded(
-            cached,
-            _maxPackageBytes,
+      return _withPackageCacheLock(() async {
+        if (normalizedSha.isEmpty) {
+          throw StateError(
+            'Remote packages require a SHA-256 hash before install or preview.',
           );
-          if (sha256.convert(cachedBytes).toString() == normalizedSha) {
-            return _PackageReferenceBytes(
-              reference: packageReference,
-              bytes: cachedBytes,
-            );
-          }
-        } on StateError {
-          // Invalid cache entries are removed below and fetched afresh.
         }
-        await cached.delete();
-      }
-
-      final bytes = await _downloadBytes(uri);
-      final downloadedSha = sha256.convert(bytes).toString();
-      if (downloadedSha != normalizedSha) {
-        throw StateError(
-          'Package SHA-256 mismatch for ${_safePackageReference(packageReference)}. '
-          'Expected $normalizedSha but got $downloadedSha.',
+        final cached = File(
+          p.join(_packageCache.path, '$normalizedSha.topiaforgemod'),
         );
-      }
-      await _writePackageCacheAtomic(cached, bytes, normalizedSha);
-      return _PackageReferenceBytes(reference: packageReference, bytes: bytes);
+        await _retainPackageCache(normalizedSha);
+        if (cached.existsSync()) {
+          try {
+            final cachedBytes = await _readLauncherFileBounded(
+              cached,
+              _maxPackageBytes,
+            );
+            if (sha256.convert(cachedBytes).toString() == normalizedSha) {
+              return _PackageReferenceBytes(
+                reference: packageReference,
+                bytes: cachedBytes,
+              );
+            }
+          } on StateError {
+            // Invalid cache entries are removed below and fetched afresh.
+          }
+          await cached.delete();
+        }
+
+        final bytes = await _downloadBytes(uri);
+        final downloadedSha = sha256.convert(bytes).toString();
+        if (downloadedSha != normalizedSha) {
+          throw StateError(
+            'Package SHA-256 mismatch for ${_safePackageReference(packageReference)}. '
+            'Expected $normalizedSha but got $downloadedSha.',
+          );
+        }
+        await _writePackageCacheAtomic(cached, bytes, normalizedSha);
+        return _PackageReferenceBytes(
+          reference: packageReference,
+          bytes: bytes,
+        );
+      });
     }
 
     if (uri != null && uri.hasScheme) {
@@ -150,6 +157,17 @@ extension _PackageHelpers on LocalLauncherRepository {
     if (targetType != FileSystemEntityType.notFound &&
         targetType != FileSystemEntityType.file) {
       throw StateError('Package cache entry is not a regular file.');
+    }
+    if (targetType == FileSystemEntityType.file) {
+      try {
+        final existing = await _readLauncherFileBounded(
+          cached,
+          _maxPackageBytes,
+        );
+        if (sha256.convert(existing).toString() == expectedSha) return;
+      } on StateError {
+        // A damaged or oversized regular entry is replaced below.
+      }
     }
     final token = '$pid-${DateTime.now().microsecondsSinceEpoch}';
     final temp = File('${cached.path}.$token.tmp');
@@ -216,6 +234,7 @@ const _maxManifestBytes = 1024 * 1024;
 
 class _PackageReadResult {
   const _PackageReadResult({
+    required this.bytes,
     required this.archive,
     required this.manifest,
     required this.sha256Hex,
@@ -224,6 +243,7 @@ class _PackageReadResult {
   });
 
   final SafeZipArchive archive;
+  final List<int> bytes;
   final ModManifest manifest;
   final String sha256Hex;
   final String reference;

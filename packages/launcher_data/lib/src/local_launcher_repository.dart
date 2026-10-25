@@ -54,6 +54,8 @@ part 'local_launcher_repository/package_installation_helpers.dart';
 part 'local_launcher_repository/package_repair.dart';
 part 'local_launcher_repository/package_metadata_validation.dart';
 part 'local_launcher_repository/package_helpers.dart';
+part 'local_launcher_repository/local_package_cache.dart';
+part 'local_launcher_repository/package_cache_lock.dart';
 part 'local_launcher_repository/path_helpers.dart';
 part 'local_launcher_repository/profile_launch_helpers.dart';
 part 'local_launcher_repository/effective_launch_selection.dart';
