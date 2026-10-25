@@ -71,10 +71,14 @@ game for a launch V5 cannot carry.
   otherwise the launcher's usual platform data root. A custom root must reach the game in its inherited environment;
   use an absolute value because the game has its own working directory.
   Each request checks developer mode and verifies the same open archive handle it will stream, on a worker with
-  cancellation and the endpoint's existing two-minute deadline. Missing, unreadable, oversized or changed archives
+  cancellation and the endpoint's existing two-minute deadline. The status line follows verification, so
+  verification also counts against the launcher's 15 seconds of silence: the largest archive, 512 MiB, needs at
+  least 34 MiB/s of reading and hashing. Missing, unreadable, oversized or changed archives
   receive `TFD1 404`; a bounded warning says why without a path or address. No request text forms a filesystem path.
-  Locally installed or unpacked development packages whose original archives were never cached cannot be shared:
-  the game does not reconstruct a ZIP from installed files. Keep the exact original archive in the launcher cache.
+  Packages installed from a local file, as `topiaforge dev` and `topiaforge install` install them, or copied unpacked,
+  have no cached original and cannot be shared: the game does not reconstruct a ZIP from installed files. The host's
+  warning says what works instead: give players the `.topiaforgemod` file, or reinstall the mod from its source so
+  the launcher keeps a copy.
 - **Display text** has no surrounding white space, no control characters, no unpaired surrogates, and neither U+FFFE
   nor U+FFFF, which the game's JSON reader refuses: a document holding one could never be read back.
 - **The service origin** is written one way: `https://`, a lowercase DNS name, and a port of 1 to 65535 in plain

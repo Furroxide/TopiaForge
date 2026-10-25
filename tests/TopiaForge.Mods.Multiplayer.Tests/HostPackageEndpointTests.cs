@@ -18,6 +18,7 @@ internal static class HostPackageEndpointTests
         AbandonedWorkersStayBounded();
         TransfersKeepTheTwoMinuteBudget();
         DeveloperModeIsCheckedAfterHashing();
+        FinishedWorkersReturnTheirSlots();
     }
 
     private static void VerificationDoesNotBlockTheNetwork()
@@ -110,6 +111,32 @@ internal static class HostPackageEndpointTests
         That(offered == null && reads == 2, "disabling developer mode during verification prevents the answer");
         // The failed open released its file handle too.
         using var exclusive = new FileStream(files.Path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+    }
+
+    private static void FinishedWorkersReturnTheirSlots()
+    {
+        using var stack = Stack();
+        var calls = 0;
+
+        // Each way a verification ends, eight times over: a refusal, a disk failure and an archive. Each one gives its
+        // worker slot back, so a host serves for its whole run instead of turning everyone away after eight requests.
+        using var endpoint = new DescriptorEndpoint(0, (_, _) => (Interlocked.Increment(ref calls) % 3) switch
+        {
+            1 => null,
+            2 => throw new IOException("The disk failed."),
+            _ => new TrackedStream(),
+        }, bindAddress: IPAddress.Loopback);
+        var busy = Encoding.ASCII.GetBytes("TFD1 503\n");
+        for (var index = 0; index <= 3 * DescriptorEndpoint.MaximumConnections; index++)
+        {
+            // A second apart, so the per-address request budget never answers in their place.
+            var now = index * 1_000_000L;
+            using var socket = Connect(endpoint.LocalPort);
+            socket.Send(Request);
+            TurnUntil(endpoint, stack, now, () => socket.Available != 0);
+            var answer = Read(socket);
+            That(answer.Length > 0 && !answer.SequenceEqual(busy), "a finished verification gives its worker slot back (request " + (index + 1) + ")");
+        }
     }
 
     private static readonly byte[] Request = Encoding.ASCII.GetBytes("TFD1 package " + new string('a', 64) + "\n");

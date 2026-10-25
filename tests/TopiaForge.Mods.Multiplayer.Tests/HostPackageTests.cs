@@ -16,8 +16,9 @@ internal static class HostPackageTests
         HostingRequiresBothLaunchOptions();
         TheAllowlistAndArchiveBytesStayPinned();
         CacheRootsMatchTheLauncher();
+        EachPackageWarnsOnce();
         HostPackageEndpointTests.Run();
-        Console.WriteLine("Host packages: 7 test groups passed (including all 4 launch-option combinations).");
+        Console.WriteLine("Host packages: 9 test groups passed (including all 4 launch-option combinations).");
     }
 
     private static void HostingRequiresBothLaunchOptions()
@@ -125,6 +126,35 @@ internal static class HostPackageTests
         That(HostPackageArchives.CacheFor(Read, false, files.Root.FullName) == Path.Combine(files.Root.FullName, ".topiaforge_launcher", "package-cache"), "other platforms use the launcher's home root");
         values["TOPIAFORGE_DATA_ROOT"] = "  " + files.Root.FullName + "  ";
         That(HostPackageArchives.CacheFor(Read, true, files.Root.FullName) == Path.Combine(files.Root.FullName, "package-cache"), "a configured root wins and is trimmed");
+    }
+
+    private static void EachPackageWarnsOnce()
+    {
+        using var files = new PackageFiles();
+        var changed = files.Archive.ToArray();
+        changed[0] ^= 1;
+        File.WriteAllBytes(files.Path, changed);
+        var archives = new HostPackageArchives(files.Packages, files.Root.FullName, () => true);
+
+        // A peer may ask for a broken archive as often as its request budget allows; the host's log hears of it once.
+        for (var attempt = 0; attempt < 20; attempt++)
+            That(archives.Open(files.Sha, CancellationToken.None) == null, "a changed archive is refused every time");
+        File.WriteAllBytes(files.Path, Array.Empty<byte>());
+        That(archives.Open(files.Sha, CancellationToken.None) == null, "an emptied archive is refused too");
+        var warnings = new List<string>();
+        archives.ReportWarnings(warnings.Add);
+        archives.ReportWarnings(warnings.Add);
+        That(warnings.Count == 1, "a package warns once, however often and however its archive fails (" + warnings.Count + ")");
+        That(warnings[0].EndsWith(". Give its .topiaforgemod file to players who lack it, or reinstall it from its mod source so the launcher keeps a copy.", StringComparison.Ordinal),
+            "the warning says what the host can do next: " + warnings[0]);
+
+        File.Delete(files.Path);
+        var missing = new HostPackageArchives(files.Packages, files.Root.FullName, () => true);
+        for (var attempt = 0; attempt < 5; attempt++)
+            That(missing.Open(files.Sha, CancellationToken.None) == null, "a missing archive is refused");
+        var startup = new List<string>();
+        missing.ReportWarnings(startup.Add);
+        That(startup.Count == 1, "a package missing at hosting start warns once, and its refused requests add nothing (" + startup.Count + ")");
     }
 
     internal sealed class PackageFiles : IDisposable

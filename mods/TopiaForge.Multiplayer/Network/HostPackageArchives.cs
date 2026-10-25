@@ -101,8 +101,10 @@ namespace TopiaForge.Multiplayer.Network
 
         private void Warn(Entry entry, string reason)
         {
+            // The host reads this. A mod installed from a file never reaches the launcher cache, so the advice is what
+            // works without a cache entry.
             if (Interlocked.Exchange(ref entry.Warned, 1) == 0)
-                warnings.Enqueue("Cannot share " + entry.Name + ": " + reason + ". Restore the exact archive in the launcher cache and try the join again.");
+                warnings.Enqueue("Cannot share " + entry.Name + ": " + reason + ". Give its .topiaforgemod file to players who lack it, or reinstall it from its mod source so the launcher keeps a copy.");
         }
 
         /// <summary>Follows the launcher's data_root.dart; a configured root is inherited by the game process.</summary>
