@@ -17,6 +17,8 @@ void main() {
       '64:ff9b::cb00:714d',
       '0064:ff9b:1:2:3:4:5:6',
       '2001:db8:1:2:3:4:5:77',
+      // Written out in full, as long as an address without a dotted tail is.
+      '2001:0db8:0000:0000:0000:0000:0000:0077',
     ]) {
       for (final prefix in ['', 'peer:', 'peer.', 'v1.2.3:', 'ip=', 'dead']) {
         for (final suffix in [
@@ -109,4 +111,57 @@ void main() {
     }
     expect(withoutAddresses('tf.sandbox@1.4.0'), 'tf.sandbox@1.4.0');
   });
+
+  test(
+    'a cut line keeps whole words, and no part of one reads as an address',
+    () {
+      expect(
+        withoutAddresses('peer 203.0.113.7 joined', maxLength: 64),
+        'peer $withheldAddress joined',
+      );
+      // Each word below is no address, but cut after its eleventh or twelfth
+      // letter it would read 203.0.113.7 or 203.0.113.77. Whatever the limit,
+      // a word it would cut is left out whole.
+      for (final word in ['203.0.113.777', '203.0.113.7777']) {
+        final line = '${'word ' * 6}$word tail';
+        for (var limit = 30; limit <= 30 + word.length; limit++) {
+          expect(
+            withoutAddresses(line, maxLength: limit),
+            'word word word word word word…',
+            reason: '$word cut at $limit',
+          );
+        }
+      }
+      // An address past the limit is never read, let alone kept.
+      final long = withoutAddresses(
+        '${'x ' * 3000}203.0.113.7',
+        maxLength: 4096,
+      );
+      expect(long, isNot(contains('203.0.113')));
+      expect(long.length, lessThanOrEqualTo(4096));
+      expect(long, endsWith('…'));
+      // What stands in for an address is longer than ::1, and the line still
+      // fits.
+      final loopbacks = withoutAddresses('::1 ' * 40, maxLength: 100);
+      expect(loopbacks.length, lessThanOrEqualTo(100));
+      expect(loopbacks, isNot(contains('::1')));
+      expect(loopbacks, endsWith('…'));
+      expect(() => withoutAddresses('x', maxLength: 0), throwsRangeError);
+    },
+  );
+
+  test(
+    'a megabyte of host text costs no more than the words a cut line keeps',
+    () {
+      // Hex digits and colons make the scrubber try every candidate: read
+      // whole, this much text takes over a minute. The scrub runs without a
+      // pause, so a test timeout could not stop it; the time is measured.
+      final text = '${'2:' * 2000} ' * 250;
+      final watch = Stopwatch()..start();
+      final line = withoutAddresses(text, maxLength: 4096);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 10)));
+      expect(line.length, lessThanOrEqualTo(4096));
+      expect(line, endsWith('…'));
+    },
+  );
 }

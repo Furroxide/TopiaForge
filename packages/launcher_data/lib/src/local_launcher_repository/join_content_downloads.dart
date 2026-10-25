@@ -149,10 +149,14 @@ extension _JoinContentDownloads on LocalLauncherRepository {
     return JoinFailed(JoinFailureCode.manifestMismatch, detail: mismatch);
   }
 
+  /// Logs why [package] did not download. [reason] can repeat what an
+  /// archive's author wrote, at any length, so only what the log keeps of
+  /// it is read.
   Future<void> _logJoinDownload(DescriptorPackage package, String reason) =>
       _appendLauncherLogBestEffort(
         withoutAddresses(
           'Join download of ${package.id} ${package.version} failed: $reason',
+          maxLength: _maxLauncherLogMessageCharacters,
         ),
       );
 

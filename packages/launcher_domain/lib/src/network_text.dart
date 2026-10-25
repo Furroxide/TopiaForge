@@ -9,7 +9,34 @@ import 'multiplayer.dart';
 /// only address the launcher shows is the one the player typed, in the
 /// dialog they typed it in. Mod ids and server names read as before, colons
 /// included: `::` names no one, and "Cafe::Bar" is no address a peer has.
-String withoutAddresses(String text) {
+///
+/// [maxLength] is for a line its writer cuts, such as the launcher log's:
+/// only the words that fit are read, so a host's long text costs no more
+/// than a short one, and the cut falls between words, so no word is cut
+/// into what reads as an address. A line that was cut ends with '…'.
+String withoutAddresses(String text, {int? maxLength}) {
+  if (maxLength == null) return _withoutAddresses(text);
+  if (maxLength < 1) throw RangeError.range(maxLength, 1, null, 'maxLength');
+  final read = _wholeWords(text, maxLength);
+  final scrubbed = _withoutAddresses(read);
+  if (identical(read, text) && scrubbed.length <= maxLength) return scrubbed;
+  // What stands in for an address can be longer than the address, so the
+  // words are cut again once scrubbed, with room left for the ellipsis.
+  return '${_wholeWords(scrubbed, maxLength - 1)}…';
+}
+
+/// The start of [text], at most [maxLength] long, that ends between words:
+/// a word the limit would cut is left out whole.
+String _wholeWords(String text, int maxLength) {
+  if (text.length <= maxLength) return text;
+  var end = maxLength;
+  while (end > 0 && !_isDelimiter(text.codeUnitAt(end))) {
+    end--;
+  }
+  return text.substring(0, end);
+}
+
+String _withoutAddresses(String text) {
   if (text.isEmpty) return text;
   final out = StringBuffer();
   var index = 0;

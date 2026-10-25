@@ -87,4 +87,63 @@ void main() {
       },
     );
   }
+
+  test(
+    'a megabyte of archive error text is logged cut, without a long wait',
+    () async {
+      // Read whole, this much host-written text would hold the launcher's
+      // only isolate for over a minute.
+      final archive = TestArchive(
+        'example.hosted',
+        '1.0.0',
+        manifestChanges: {'entryAssembly': '${'2:' * 2000} ' * 250},
+      );
+      final host = await ServingHost.start([archive]);
+      final join = await HostJoin.create(host);
+      await join.hearHost();
+      final downloading = await join.downloading();
+      final watch = Stopwatch()..start();
+      final ended = await join.drive(downloading);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 20)));
+      expect(ended.outcome!.failure!.code, JoinFailureCode.manifestMismatch);
+      final line = join
+          .launcherLog()
+          .split('\n')
+          .firstWhere((line) => line.contains('Join download'));
+      expect(line.length, lessThan(4200));
+      expect(line, endsWith('…'));
+      expect(join.cacheFiles(), isEmpty);
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
+
+  test(
+    'the log never cuts a word into what reads as an address',
+    () async {
+      // Each word is no address, but cut after its eleventh or twelfth
+      // letter it would read 203.0.113.7 or 203.0.113.77. Fifteen shifts
+      // move the log's limit across a whole word.
+      for (var shift = 0; shift < 15; shift++) {
+        final archive = TestArchive(
+          'example.hosted',
+          '1.0.0',
+          manifestChanges: {
+            'entryAssembly': '${'x' * shift} ${'203.0.113.7777 ' * 300}',
+          },
+        );
+        final host = await ServingHost.start([archive]);
+        final join = await HostJoin.create(host);
+        await join.hearHost();
+        final ended = await join.drive(await join.downloading());
+        expect(ended.outcome!.failure!.code, JoinFailureCode.manifestMismatch);
+        expect(
+          join.launcherLog(),
+          isNot(matches(RegExp(r'203\.0\.113\.77?(?![0-9])'))),
+          reason: 'shift $shift',
+        );
+      }
+    },
+    // Fifteen joins, each with its own host.
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 }

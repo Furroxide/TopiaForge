@@ -405,11 +405,11 @@ launcher log, and neither ever names a URL or an address.
   checkbox and Join events carry the exact consent state displayed when they were created; an event from an earlier
   sheet cannot acknowledge a retry or a changed plan. Cancel clears the box before showing its outcome. Host-written
   ids, versions and error details use the same address scrubber on screen, in copied details and in download and
-  install failure logs.
-  Longer dotted numbers that contain an IPv4 address are withheld too, since a numeric suffix can disguise one. The
-  downloading stage fetches it last, once every source download is in the cache, from the host's own endpoint with
-  `TFD1 package <sha256>` (`HostPackageClient`), through a `JoinHostPackageSource` the multiplayer facade hands the
-  content host.
+  install failure logs; for a log line it reads only the words the line keeps, so a host's long text costs no more
+  than a short one, and it cuts between words. Longer dotted numbers that contain an IPv4 address are withheld too,
+  since a numeric suffix can disguise one. The downloading stage fetches such a package last, once every source
+  download is in the cache, from the host's own endpoint with `TFD1 package <sha256>` (`HostPackageClient`), through
+  a `JoinHostPackageSource` the multiplayer facade hands the content host.
   - **Gates the data layer checks itself.** Developer mode, as the launcher's settings say at that moment, and the
     acknowledgement, before anything is fetched, sources included, again before each of the host's packages, so that
     turning developer mode off asks the host for nothing more, and again before the install; settings that cannot be

@@ -94,26 +94,31 @@ void registerConsentGenerationTests() {
     () async {
       final (bloc, gateway) = await _atHostServedConsent();
       final earlier = _flowOf(bloc)!;
-      bloc.add(_tick(earlier));
-      await pumpEventQueue();
-      bloc.add(
-        MultiplayerJoinStepAnswered(
-          flow: earlier.id,
-          attempt: 1,
-          answer: JoinFailed(JoinFailureCode.cancelled),
-        ),
+      gateway.answers[JoinStage.downloading] = (_) => JoinFailed(
+        JoinFailureCode.downloadFailed,
+        detail: 'The host stopped answering.',
       );
-      await _failed(bloc);
+      final press = _consent(bloc);
+      bloc
+        ..add(_tick(earlier))
+        ..add(press);
+      expect((await _failed(bloc)).code, JoinFailureCode.downloadFailed);
       expect(_flowOf(bloc)!.hostServedTicked, isFalse);
       bloc.add(MultiplayerJoinRequested(_lanLink));
       final current = await _atStage(bloc, JoinStage.awaitingConsent);
       expect(current.id, isNot(earlier.id));
+      // The earlier sheet's tick and Join, then this sheet's own Join.
       bloc
         ..add(_tick(earlier))
+        ..add(press)
         ..add(_consent(bloc));
       await pumpEventQueue();
       expect(_flowOf(bloc)!.hostServedTicked, isFalse);
-      expect(gateway.calls, isNot(contains('answer downloading')));
+      expect(_flowOf(bloc)!.join, same(current.join));
+      expect(
+        gateway.calls.where((call) => call == 'answer downloading'),
+        hasLength(1),
+      );
     },
   );
 
