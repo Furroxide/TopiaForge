@@ -44,10 +44,14 @@ final class MultiplayerJoinQuestionAnswered extends MultiplayerJoinEvent {
 final class MultiplayerJoinHostServedTicked extends MultiplayerJoinEvent {
   const MultiplayerJoinHostServedTicked({
     required this.flow,
+    required this.consent,
     required this.ticked,
   });
 
   final int flow;
+
+  /// The exact consent shown when the box was changed.
+  final JoinSessionState consent;
   final bool ticked;
 }
 
@@ -58,10 +62,14 @@ final class MultiplayerJoinHostServedTicked extends MultiplayerJoinEvent {
 final class MultiplayerJoinConsented extends MultiplayerJoinEvent {
   const MultiplayerJoinConsented({
     required this.flow,
+    required this.consent,
     this.closeOwnedGame = false,
   });
 
   final int flow;
+
+  /// The exact consent shown when Join was pressed.
+  final JoinSessionState consent;
   final bool closeOwnedGame;
 }
 

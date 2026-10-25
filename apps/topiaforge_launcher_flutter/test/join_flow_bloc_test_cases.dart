@@ -155,7 +155,7 @@ void registerJoinBlocTests() {
     test('a consented join installs, saves the profile, launches, and follows '
         'the game into the session', () async {
       final (bloc, gateway, repository) = await _atConsent();
-      bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+      bloc.add(_consent(bloc));
 
       final launching = await _launched(bloc);
       expect(
@@ -202,7 +202,7 @@ void registerJoinBlocTests() {
         final gateway = _JoinGateway()
           ..launch = (_) => _started(live: true, requestId: 'live-join-1');
         final (bloc, _, repository) = await _atConsent(gateway: gateway);
-        bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+        bloc.add(_consent(bloc));
         final launching = await _launched(bloc);
         expect(launching.launch!.live, isTrue);
 
@@ -219,7 +219,7 @@ void registerJoinBlocTests() {
       'a game that has not answered for a while says so, and waits',
       () async {
         final (bloc, _, repository) = await _atConsent();
-        bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+        bloc.add(_consent(bloc));
         await _launched(bloc);
 
         repository.report(_activity(unconfirmed: true));
@@ -235,9 +235,7 @@ void registerJoinBlocTests() {
       await _until(bloc, (state) => _flowOf(bloc)!.gameRunning != null);
       expect(_flowOf(bloc)!.gameRunning, JoinGameRunning.owned);
 
-      bloc.add(
-        MultiplayerJoinConsented(flow: _flowOf(bloc)!.id, closeOwnedGame: true),
-      );
+      bloc.add(_consent(bloc, closeOwnedGame: true));
       final downloading = await _until(
         bloc,
         (state) =>
@@ -261,7 +259,7 @@ void registerJoinBlocTests() {
       await _atStage(bloc, JoinStage.awaitingConsent);
 
       gateway.hold(JoinStage.downloading);
-      bloc.add(MultiplayerJoinConsented(flow: second));
+      bloc.add(_consent(bloc));
       await _atStage(bloc, JoinStage.downloading);
       bloc.add(MultiplayerJoinRequested(JoinLinkTarget(_serverLink)));
       await _until(
@@ -338,7 +336,7 @@ void registerJoinBlocTests() {
         expect(flow.target, isA<JoinListingTarget>());
 
         // Started, then handed back as the game's current join.
-        bloc.add(MultiplayerJoinConsented(flow: flow.id));
+        bloc.add(_consent(bloc));
         await _launched(bloc);
         repository.report(
           _activity(
@@ -401,7 +399,7 @@ void registerJoinBlocTests() {
       final gateway = _JoinGateway();
       final (bloc, _, repository) = await _atConsent(gateway: gateway);
       final download = gateway.hold(JoinStage.downloading);
-      bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+      bloc.add(_consent(bloc));
       await _atStage(bloc, JoinStage.downloading);
       expect(gateway.tokens[JoinStage.downloading]!.isCancelled, isFalse);
 

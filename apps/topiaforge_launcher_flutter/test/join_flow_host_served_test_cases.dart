@@ -11,14 +11,17 @@ final _lanLink = JoinLinkTarget(
 /// declaring [capabilities].
 Future<(VerifiedServerDescriptor, JoinPlan)> _hostServedPlan({
   String hostedId = 'tf.zombies',
+  String hostedVersion = '2.1.0',
+  String serverName = "Sam's Sandbox",
   List<String> capabilities = const [],
 }) async {
   final server = await _server(
+    name: serverName,
     hostServesPackages: true,
     packages: [
       DescriptorPackage(
         id: hostedId,
-        version: '2.1.0',
+        version: hostedVersion,
         sha256: _sha('zombies'),
         role: DescriptorPackageRole.implicit,
       ),
@@ -73,10 +76,17 @@ Future<_JoinGateway> _toHostServedSheet(
   WidgetTester tester, {
   Size size = const Size(1280, 900),
   String hostedId = 'tf.zombies',
+  String hostedVersion = '2.1.0',
+  String serverName = "Sam's Sandbox",
   List<String> capabilities = const [],
 }) async {
   final (server, plan) = (await tester.runAsync(
-    () => _hostServedPlan(hostedId: hostedId, capabilities: capabilities),
+    () => _hostServedPlan(
+      hostedId: hostedId,
+      hostedVersion: hostedVersion,
+      serverName: serverName,
+      capabilities: capabilities,
+    ),
   ))!;
   final (gateway, _) = await _openApp(
     tester,
@@ -137,26 +147,50 @@ void registerJoinHostServedTests() {
       };
 
       // Unticked, the reducer does not take the consent.
-      bloc.add(MultiplayerJoinConsented(flow: id));
+      bloc.add(_consent(bloc));
       await pumpEventQueue();
       expect(_flowOf(bloc)!.join!.stage, JoinStage.awaitingConsent);
 
       // A tick for another flow counts for nothing; a cleared box holds the
       // join again.
-      bloc.add(MultiplayerJoinHostServedTicked(flow: id + 1, ticked: true));
+      bloc.add(
+        MultiplayerJoinHostServedTicked(
+          consent: _flowOf(bloc)!.join!,
+          flow: id + 1,
+          ticked: true,
+        ),
+      );
       await pumpEventQueue();
       expect(_flowOf(bloc)!.hostServedTicked, isFalse);
       bloc
-        ..add(MultiplayerJoinHostServedTicked(flow: id, ticked: true))
-        ..add(MultiplayerJoinHostServedTicked(flow: id, ticked: false))
-        ..add(MultiplayerJoinConsented(flow: id));
+        ..add(
+          MultiplayerJoinHostServedTicked(
+            consent: _flowOf(bloc)!.join!,
+            flow: id,
+            ticked: true,
+          ),
+        )
+        ..add(
+          MultiplayerJoinHostServedTicked(
+            consent: _flowOf(bloc)!.join!,
+            flow: id,
+            ticked: false,
+          ),
+        )
+        ..add(_consent(bloc));
       await pumpEventQueue();
       expect(_flowOf(bloc)!.join!.stage, JoinStage.awaitingConsent);
       expect(gateway.calls, isNot(contains('answer downloading')));
 
       bloc
-        ..add(MultiplayerJoinHostServedTicked(flow: id, ticked: true))
-        ..add(MultiplayerJoinConsented(flow: id));
+        ..add(
+          MultiplayerJoinHostServedTicked(
+            consent: _flowOf(bloc)!.join!,
+            flow: id,
+            ticked: true,
+          ),
+        )
+        ..add(_consent(bloc));
       final flow = await _atStage(bloc, JoinStage.launching);
       expect(acknowledged, isTrue);
       expect(flow.join!.hostServedAcknowledged, isTrue);
@@ -167,7 +201,13 @@ void registerJoinHostServedTests() {
     test('a join tried again asks for the box afresh', () async {
       final (bloc, _) = await _atHostServedConsent();
       final id = _flowOf(bloc)!.id;
-      bloc.add(MultiplayerJoinHostServedTicked(flow: id, ticked: true));
+      bloc.add(
+        MultiplayerJoinHostServedTicked(
+          consent: _flowOf(bloc)!.join!,
+          flow: id,
+          ticked: true,
+        ),
+      );
       await pumpEventQueue();
       expect(_flowOf(bloc)!.hostServedTicked, isTrue);
       bloc.add(MultiplayerJoinCancelled(id));
@@ -181,10 +221,16 @@ void registerJoinHostServedTests() {
     test('a plan with no mod from the host has no box to tick', () async {
       final (bloc, _, _) = await _atConsent();
       final id = _flowOf(bloc)!.id;
-      bloc.add(MultiplayerJoinHostServedTicked(flow: id, ticked: true));
+      bloc.add(
+        MultiplayerJoinHostServedTicked(
+          consent: _flowOf(bloc)!.join!,
+          flow: id,
+          ticked: true,
+        ),
+      );
       await pumpEventQueue();
       expect(_flowOf(bloc)!.hostServedTicked, isFalse);
-      bloc.add(MultiplayerJoinConsented(flow: id));
+      bloc.add(_consent(bloc));
       final flow = await _atStage(bloc, JoinStage.launching);
       expect(flow.join!.hostServedAcknowledged, isFalse);
     });

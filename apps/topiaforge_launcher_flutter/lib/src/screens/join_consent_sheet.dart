@@ -150,6 +150,7 @@ class _JoinConsentSheet extends StatelessWidget {
                   context,
                   MultiplayerJoinConsented(
                     flow: flow.id,
+                    consent: join,
                     closeOwnedGame: closesGame,
                   ),
                 ),

@@ -74,7 +74,12 @@ void main() {
     expect(plan.isJoinable, isTrue, reason: '${plan.blockers}');
     expect(plan.needsDownloads, isTrue);
 
-    bloc.add(MultiplayerJoinConsented(flow: _flow(bloc.state)!.id));
+    bloc.add(
+      MultiplayerJoinConsented(
+        flow: _flow(bloc.state)!.id,
+        consent: _flow(bloc.state)!.join!,
+      ),
+    );
     final launched = await _until(
       bloc,
       (state) =>

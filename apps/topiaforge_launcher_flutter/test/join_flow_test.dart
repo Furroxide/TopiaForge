@@ -25,6 +25,8 @@ part 'join_flow_widget_test_cases.dart';
 part 'join_flow_layout_test_cases.dart';
 part 'join_flow_privacy_test_cases.dart';
 part 'join_flow_host_served_test_cases.dart';
+part 'join_consent_generation_test_cases.dart';
+part 'join_address_surfaces_test_cases.dart';
 part 'join_flow_golden_test_cases.dart';
 
 /// A server link, an invite, a direct link to a host on the local network,
@@ -61,6 +63,15 @@ Future<LauncherState> _until(
 }
 
 JoinFlow? _flowOf(LauncherBloc bloc) => bloc.state.multiplayer.join.flow;
+
+MultiplayerJoinConsented _consent(
+  LauncherBloc bloc, {
+  bool closeOwnedGame = false,
+}) => MultiplayerJoinConsented(
+  flow: _flowOf(bloc)!.id,
+  consent: _flowOf(bloc)!.join!,
+  closeOwnedGame: closeOwnedGame,
+);
 
 /// Waits until the running join reaches [stage].
 Future<JoinFlow> _atStage(LauncherBloc bloc, JoinStage stage) async {
@@ -120,5 +131,7 @@ void main() {
   registerJoinLayoutTests();
   registerJoinPrivacyTests();
   registerJoinHostServedTests();
+  registerConsentGenerationTests();
+  registerAddressSurfaceTests();
   registerJoinGoldenRenders();
 }

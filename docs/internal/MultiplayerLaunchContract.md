@@ -402,6 +402,11 @@ launcher log, and neither ever names a URL or an address.
   id, version and SHA-256 as "Served by the host", says that what it may do is not known until it is checked, and adds
   a red developer-mode section whose box Join waits for; only a ticked box sends
   `JoinConsentGiven(hostServedAcknowledged: true)`, and the box counts only for the consent it was ticked on. The
+  checkbox and Join events carry the exact consent state displayed when they were created; an event from an earlier
+  sheet cannot acknowledge a retry or a changed plan. Cancel clears the box before showing its outcome. Host-written
+  ids, versions and error details use the same address scrubber on screen, in copied details and in download and
+  install failure logs.
+  Longer dotted numbers that contain an IPv4 address are withheld too, since a numeric suffix can disguise one. The
   downloading stage fetches it last, once every source download is in the cache, from the host's own endpoint with
   `TFD1 package <sha256>` (`HostPackageClient`), through a `JoinHostPackageSource` the multiplayer facade hands the
   content host.

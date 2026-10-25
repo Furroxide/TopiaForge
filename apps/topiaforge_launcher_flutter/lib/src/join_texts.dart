@@ -1,7 +1,5 @@
 import 'package:launcher_domain/launcher_domain.dart';
 
-import 'join_address_redaction.dart';
-
 export 'join_address_redaction.dart';
 
 /// What a failure card offers beside Retry and Copy details.

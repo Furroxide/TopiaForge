@@ -59,11 +59,16 @@ void main() {
     }
   });
 
-  test('IPv4 glued to a dotted name is withheld, a longer version is not', () {
-    for (final text in ['peer.203.0.113.7', '203.0.113.7.example.net']) {
+  test('IPv4 glued to a dotted name or numeric suffix is withheld', () {
+    for (final text in [
+      'peer.203.0.113.7',
+      '203.0.113.7.example.net',
+      '203.0.113.7.1',
+      '1.2.3.4.5',
+    ]) {
       expect(withoutAddresses(text), withheldAddress, reason: text);
     }
-    for (final version in ['1.2.3.4.5', '2026.10.25', 'tf.sandbox 1.4.0']) {
+    for (final version in ['2026.10.25', 'tf.sandbox 1.4.0']) {
       expect(withoutAddresses(version), version);
     }
   });

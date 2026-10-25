@@ -1,7 +1,5 @@
 import 'package:launcher_domain/launcher_domain.dart';
 
-import 'join_texts.dart';
-
 /// The join events [activity], the game's records of a join, mean for
 /// [join], in the order the reducer takes them.
 ///

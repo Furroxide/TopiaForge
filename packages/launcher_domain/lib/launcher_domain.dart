@@ -20,3 +20,4 @@ export 'src/multiplayer_join_gateway.dart';
 export 'src/session_link_handling.dart';
 export 'src/cancellation.dart';
 export 'src/join_host_packages.dart';
+export 'src/network_text.dart';

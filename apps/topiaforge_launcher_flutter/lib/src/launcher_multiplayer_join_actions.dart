@@ -278,6 +278,7 @@ extension LauncherJoinActions on LauncherBloc {
     final join = flow?.join;
     if (flow == null ||
         flow.id != event.flow ||
+        !identical(join, event.consent) ||
         join?.stage != JoinStage.awaitingConsent ||
         !(join?.plan?.hasUnverifiedPackages ?? false)) {
       return;
@@ -295,6 +296,7 @@ extension LauncherJoinActions on LauncherBloc {
     final flow = _flow;
     if (flow == null ||
         flow.id != event.flow ||
+        !identical(flow.join, event.consent) ||
         flow.join?.stage != JoinStage.awaitingConsent) {
       return;
     }
@@ -322,7 +324,7 @@ extension LauncherJoinActions on LauncherBloc {
     final cancelled = JoinSession.reduce(join, const JoinCancelRequested());
     _showFlow(
       emit,
-      flow.copyWith(join: cancelled),
+      flow.copyWith(join: cancelled, hostServedTicked: false),
       status: cancelled.isEnded
           ? null
           : 'Stopping the join once this step finishes…',
@@ -400,6 +402,7 @@ extension LauncherJoinActions on LauncherBloc {
     _multiplayerWork.join.stop();
     final next = flow.copyWith(
       clearJoin: true,
+      hostServedTicked: false,
       clearProblem: true,
       clearQuestion: true,
       clearLaunch: true,

@@ -73,6 +73,7 @@ class _HostServedSection extends StatelessWidget {
                   context,
                   MultiplayerJoinHostServedTicked(
                     flow: flow.id,
+                    consent: flow.join!,
                     ticked: value ?? false,
                   ),
                 ),

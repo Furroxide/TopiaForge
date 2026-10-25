@@ -151,7 +151,9 @@ extension _JoinContentDownloads on LocalLauncherRepository {
 
   Future<void> _logJoinDownload(DescriptorPackage package, String reason) =>
       _appendLauncherLogBestEffort(
-        'Join download of ${package.id} ${package.version} failed: $reason',
+        withoutAddresses(
+          'Join download of ${package.id} ${package.version} failed: $reason',
+        ),
       );
 
   /// Streams [item]'s archive from its source into [temp], hashing it.

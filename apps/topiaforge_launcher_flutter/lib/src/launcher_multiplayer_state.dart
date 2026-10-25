@@ -1,6 +1,5 @@
 import 'package:launcher_domain/launcher_domain.dart';
 
-import 'join_texts.dart';
 import 'session_link_inbox.dart';
 
 part 'launcher_multiplayer_join_state.dart';

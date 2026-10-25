@@ -60,7 +60,7 @@ Future<(LauncherBloc, JoinFailure)> _failAt(
   bloc.add(MultiplayerJoinRequested(target));
   if (stage.index > JoinStage.awaitingConsent.index) {
     await _atStage(bloc, JoinStage.awaitingConsent);
-    bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+    bloc.add(_consent(bloc));
   }
   if (stage == JoinStage.connecting || stage == JoinStage.synchronizing) {
     await _launched(bloc);
@@ -146,7 +146,7 @@ void registerJoinFailureTests() {
 
     test('a game that exits ends the join, or the session it began', () async {
       final (bloc, _, repository) = await _atConsent();
-      bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+      bloc.add(_consent(bloc));
       await _launched(bloc);
       repository.report(_activity(exited: true));
       final failure = await _failed(bloc);
@@ -155,7 +155,7 @@ void registerJoinFailureTests() {
       expect(JoinFailureText.of(failure).retry, isTrue);
 
       final (other, _, again) = await _atConsent();
-      other.add(MultiplayerJoinConsented(flow: _flowOf(other)!.id));
+      other.add(_consent(other));
       await _launched(other);
       again.report(_activity(succeeded: true));
       await _atStage(other, JoinStage.inSession);
@@ -170,7 +170,7 @@ void registerJoinFailureTests() {
     test('a launch the game could not run ends the join as a failed start, '
         'without addresses', () async {
       final (bloc, _, repository) = await _atConsent();
-      bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+      bloc.add(_consent(bloc));
       await _launched(bloc);
       repository.report(
         _activity(
@@ -246,7 +246,7 @@ void registerJoinFailureTests() {
         detail: 'Only planning fails this way.',
       );
       final (bloc, _, _) = await _atConsent(gateway: gateway);
-      bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+      bloc.add(_consent(bloc));
       final failure = await _failed(bloc);
       expect(failure.code, JoinFailureCode.downloadFailed);
       expect(failure.stage, JoinStage.downloading);
@@ -258,7 +258,7 @@ void registerJoinFailureTests() {
       final gateway = _JoinGateway();
       final late = gateway.hold(JoinStage.downloading);
       final (bloc, _, _) = await _atConsent(gateway: gateway);
-      bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+      bloc.add(_consent(bloc));
       await _atStage(bloc, JoinStage.downloading);
       bloc.add(MultiplayerJoinCancelled(_flowOf(bloc)!.id));
       await _until(bloc, (state) => _flowOf(bloc)!.join!.isEnded);
@@ -291,7 +291,7 @@ void registerJoinFailureTests() {
         bloc.add(MultiplayerJoinRequested(JoinLinkTarget(_serverLink)));
         if (stage == JoinStage.downloading) {
           await _atStage(bloc, JoinStage.awaitingConsent);
-          bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+          bloc.add(_consent(bloc));
         }
         await _atStage(bloc, stage);
 
@@ -318,7 +318,7 @@ void registerJoinFailureTests() {
         '${stage.name} stops following, and says the game may go on',
         () async {
           final (bloc, _, repository) = await _atConsent();
-          bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+          bloc.add(_consent(bloc));
           await _launched(bloc);
           repository.report(
             _activity(
@@ -345,7 +345,7 @@ void registerJoinFailureTests() {
         final gateway = _JoinGateway();
         gateway.hold(JoinStage.installing);
         final (bloc, _, _) = await _atConsent(gateway: gateway);
-        bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+        bloc.add(_consent(bloc));
         await _atStage(bloc, JoinStage.installing);
 
         bloc.add(MultiplayerJoinCancelled(_flowOf(bloc)!.id));
@@ -363,7 +363,7 @@ void registerJoinFailureTests() {
         final gateway = _JoinGateway();
         final saving = gateway.hold(JoinStage.preparingProfile);
         final (bloc, _, _) = await _atConsent(gateway: gateway);
-        bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+        bloc.add(_consent(bloc));
         await _atStage(bloc, JoinStage.preparingProfile);
 
         bloc.add(MultiplayerJoinCancelled(_flowOf(bloc)!.id));
@@ -383,7 +383,7 @@ void registerJoinFailureTests() {
       () async {
         final gateway = _JoinGateway()..launchGate = Completer<JoinLaunch>();
         final (bloc, _, _) = await _atConsent(gateway: gateway);
-        bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+        bloc.add(_consent(bloc));
         await _atStage(bloc, JoinStage.launching);
 
         bloc.add(MultiplayerJoinCancelled(_flowOf(bloc)!.id));
@@ -401,7 +401,7 @@ void registerJoinFailureTests() {
         'card says so', () async {
       final gateway = _JoinGateway();
       final (bloc, _, _) = await _atConsent(gateway: gateway);
-      bloc.add(MultiplayerJoinConsented(flow: _flowOf(bloc)!.id));
+      bloc.add(_consent(bloc));
       await _launched(bloc);
       expect(_flowOf(bloc)!.launch, isNotNull);
 

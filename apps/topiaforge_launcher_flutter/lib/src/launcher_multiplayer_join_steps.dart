@@ -116,6 +116,7 @@ extension LauncherJoinSteps on LauncherBloc {
     final next = flow.copyWith(
       join: join,
       voice: preferences.settings.voiceActive,
+      hostServedTicked: false,
       clearQuestion: true,
       clearProblem: true,
       clearGameRunning: true,
