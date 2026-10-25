@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
@@ -222,5 +223,94 @@ namespace TopiaForge.ModManager.Tests
             That(answers == 64, "scope cleanup must not lose modal cancellations to the control reply burst: " + answers);
         }
 
+        internal static void AHostHideIsNotThePlayersDismissal()
+        {
+            foreach (var shownAgain in new[] { "never", "as it was", "with new content" })
+            {
+                using var peers = new Peers();
+                var surface = peers.Host.Player(peers.First.Id).Ui.CreateSurface(new UiSurfaceRequest("round", "Round", "Waiting")).Value!;
+                var dismissed = 0;
+                ((IUiSurfaceDismissalSource)surface).Dismissed += () => dismissed++;
+                peers.Rig.Frames(3);
+                var received = peers.FirstServices.Ui.Surfaces[0];
+                var rejected = peers.HostRuntime.Rejected;
+                surface.Hide();
+                That(peers.Rig.RunUntil(() => !received.IsVisible, 10), "the player's copy hides with the host's");
+                // The host shows the window again before anything the player's game sent about that hide could arrive.
+                if (shownAgain == "with new content") That(surface.SetContent(new UiText("Round two")).Succeeded, "the host replaces the content");
+                if (shownAgain != "never") surface.Show();
+                peers.Rig.Frames(6);
+                var open = shownAgain != "never";
+                That(surface.IsVisible == open && received.IsVisible == open && dismissed == 1 && peers.HostRuntime.Rejected == rejected,
+                    "applying the host's own hide is not the player's dismissal, so nothing answers it and a window shown again (" +
+                    shownAgain + ") stays open: host " + surface.IsVisible + ", player " + received.IsVisible + ", dismissed " + dismissed +
+                    ", refused replies " + (peers.HostRuntime.Rejected - rejected));
+            }
+        }
+
+        internal static void CancellationsKeepTheirChecksUnderAFlood()
+        {
+            using var peers = new Peers();
+            var second = peers.Rig.AddPlayer("p2");
+            second.Runtime.Disconnect();
+            var secondRuntime = MultiplayerPlayers.Install(second.Runtime, second.Presence);
+            second.Runtime.Connect();
+            using var secondServices = new PlayersTestServices(secondRuntime, second.Control, second.Backend);
+            peers.Rig.Join(second);
+            peers.Rig.Frames(24);
+            var firstRuntime = peers.FirstServices.Context.Runtime;
+            var answers = new List<bool>();
+            var modal = (RemoteUiModal)peers.Host.Player(peers.First.Id).Ui.ShowModal(new UiModalRequest("Ready", "Start?"), answers.Add).Value!;
+            peers.Rig.Frames(3);
+            void Answer(MultiplayerPlayers from, ulong token, ulong revision, string value, int copies)
+            {
+                var writer = new WorldWireWriter(256);
+                writer.Begin(14); writer.WriteString("players-test"); writer.WriteVarUInt(token); writer.WriteVarUInt(revision);
+                writer.WriteString(""); writer.WriteString(value);
+                for (var i = 0; i < copies; i++) from.Channel!.Send(writer.Segment, InternalSystemTarget.Host);
+            }
+            // Another player floods cancellations for this modal, far past the cancellation burst.
+            for (var round = 0; round < 6; round++) { Answer(secondRuntime, modal.Token, 1, "0", 64); peers.Rig.Frames(2); }
+            Answer(firstRuntime, modal.Token, 2, "0", 1);
+            Answer(firstRuntime, modal.Token + 1000, 1, "0", 1);
+            Answer(firstRuntime, modal.Token, 1, "2", 1);
+            peers.Rig.Frames(3);
+            That(answers.Count == 0 && modal.IsOpen, "another player, a wrong revision, a wrong token or a value other than 0 or 1 cannot cancel it");
+            peers.FirstServices.Ui.Modals[0].Close();
+            peers.Rig.Frames(3);
+            That(answers.Count == 1 && !answers[0], "the target's own cancellation still arrives through the flood (" + answers.Count + ")");
+            Answer(firstRuntime, modal.Token, 1, "0", 3);
+            Answer(firstRuntime, modal.Token, 1, "1", 1);
+            peers.Rig.Frames(3);
+            That(answers.Count == 1, "a cancellation never runs twice (" + answers.Count + ")");
+            var clicks = 0;
+            peers.Host.Player(second.Id).Ui.CreateSurface(new UiSurfaceRequest("go", "Go", "", content: new UiButton("go", "Go", () => clicks++)));
+            peers.Rig.Frames(3);
+            ((UiButton)secondServices.Ui.Surfaces[0].Content!).Activated();
+            peers.Rig.Frames(3);
+            That(clicks == 1, "the flood spent only its sender's cancellation budget; its control replies still run (" + clicks + ")");
+        }
+
+        internal static void HealCreditKeepsToItsGap()
+        {
+            // Two heals at 40 of 100 can restore 60 between them, whatever the next report says.
+            var damaged = new PresenceHealth(PresencePolicy.Default);
+            damaged.Take(40, 100, 0);
+            damaged.AllowGain(50);
+            damaged.AllowGain(50);
+            damaged.Take(30, 100, 0);
+            damaged.Take(100, 100, 1);
+            That(damaged.Health < 91, "two heals at 40 leave no more than the 60 they could restore for a false report after damage: " + damaged.Health);
+
+            // Health that regeneration raised to a report the host held back retires credit it can no longer use.
+            var held = new PresenceHealth(PresencePolicy.Default);
+            held.Take(40, 100, 0);
+            held.Take(100, 100, 0);
+            held.AllowGain(10);
+            held.Advance(2_400_000);
+            held.Take(50, 100, 2_400_000);
+            held.Take(100, 100, 2_400_001);
+            That(held.Health < 51, "health regenerated toward a held report retires heal credit it can no longer use: " + held.Health);
+        }
     }
 }

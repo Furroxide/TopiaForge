@@ -2775,11 +2775,13 @@ and escape parsing. Toasts use `ShowPlain`.
 Host surfaces retain the original composition and its callbacks. A control reply must match the mod, token, target
 handle, sender, visible state and current revision. The codec then checks the declared enabled control and its value's
 range or membership. A dismissal can name an earlier content revision of the same window, so a concurrent content
-update cannot discard the player's close; zero and future revisions remain refused. Modal answers are one-shot.
-The callback runs under forwarded UI intent for that player. Replacing content,
-closing, departure or scope shutdown revokes old answers. Client closures also check their revision, as a second guard.
-Windows and unanswered modals resend on a retained target's new stream. A different player's join changes no existing
-window. A generation change at the client disposes its received UI without answering it.
+update cannot discard the player's close; zero and future revisions remain refused. The player's game sends a dismissal
+only for a close while the host shows the window: a surface raises `Dismissed` for any hide, and an answer to the
+host's own hide would arrive after the host had shown the window again and close it a second time. Modal answers are
+one-shot. The callback runs under forwarded UI intent for that player. Replacing content, closing, departure or scope
+shutdown revokes old answers. Client closures also check their revision, as a second guard. Windows and unanswered
+modals resend on a retained target's new stream. A different player's join changes no existing window. A generation
+change at the client disposes its received UI without answering it.
 
 Host callbacks run as the local kit runs them. A control, dismissal or modal callback that throws is logged to the mod's
 own logger ("A mod UI window control 'buy' callback failed.") and counts neither as a refused reply nor as a failed frame
@@ -2816,11 +2818,12 @@ rosters, key and generation retirement, real-engine fast joins, reconnect and pr
 workflows, input reconstruction, codec bounds, sender and UI forgery, floods, and scoreboard replication.
 `PlayersRemoteContractTests` holds remote UI and actions to the local contracts: modal cancellation on dispose, leave,
 scope end and session end, in the fake too; failing callbacks and handlers; client-local and server-only mods; toast
-rules; a heal at full health that leaves no allowance; consecutive heals and regenerated health; cancellation that resets
-the runtime or disposes another scope; isolated dismissal subscribers; dismissal during a content update; recipient
-disposal and recipient scope cleanup in either order, including all 64 open modals; placement and teleport budgets; and a short host teleport that
-hides no later one. Real `ModRuntime`
-instances run two-player and three-player scenarios over the loopback network, with actions, targeted
+rules; a heal at full health that leaves no allowance; consecutive heals, heals followed by damage, and health
+regenerated after a report or toward a held one; cancellation that resets the runtime or disposes another scope;
+isolated dismissal subscribers; dismissal during a content update; a host hide that the player's game does not answer;
+recipient disposal and recipient scope cleanup in either order, including all 64 open modals; another player's flood of
+forged cancellations; placement and teleport budgets; and a short host teleport that hides no later one. Real
+`ModRuntime` instances run two-player and three-player scenarios over the loopback network, with actions, targeted
 clicks and input. Allocation assertions measure repeated directory/presence reads and 10,000 resting runtime frames.
 Source guards cover the native plain-text renderer; visual layout and actual game health/controller behavior require
 in-game checks. `FakePlayerDirectory`, `FakePlayerState` and `FakePlayerInput` are the only new public SDK types; the

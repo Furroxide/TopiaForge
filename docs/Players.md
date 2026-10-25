@@ -48,7 +48,9 @@ var window = player.Ui.CreateSurface(new UiSurfaceRequest(
 For a remote player, only that player sees the window. The callback stays on the host; a reply carries a control id and
 the control's value. The runtime checks the sender, target handle, window revision, visibility and value before running
 it. Replacing content revokes the old controls. Disposing the surface or its owning scope revokes every callback.
-Windows and unanswered modals are recreated automatically after reconnecting to the same session.
+Windows and unanswered modals are recreated automatically after reconnecting to the same session. A remote window is an
+`IUiSurfaceDismissalSource` too, and its `Dismissed` event fires as a local window's does: once when the player closes
+the window, and once when you hide it.
 
 Use `ShowModal` for confirmation and `ShowToast` for action results. A modal reports exactly one answer, as a local one
 does: the player's choice, or `false` when it is closed or disposed, its player leaves, or its scope or the session

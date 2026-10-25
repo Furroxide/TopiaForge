@@ -80,7 +80,9 @@ namespace TopiaForge.ModManager
                 ui.Surface = surface; receivedUi.Add(token, ui);
                 if (surface is IUiSurfaceDismissalSource dismissal) dismissal.Dismissed += () =>
                 {
-                    if (!ui.Disposed) Reply(context, sender, token, ui.Revision, "", "", 15);
+                    // A surface raises Dismissed for any hide, so only a close while the host shows the window is the player's.
+                    // Answering the host's own hide would close the window again once the host shows it, whatever its revision.
+                    if (!ui.Disposed && ui.Shown) Reply(context, sender, token, ui.Revision, "", "", 15);
                 };
             }
             else
@@ -88,7 +90,7 @@ namespace TopiaForge.ModManager
                 if (body != ui.Body) ui.Surface.SetBody(body);
                 if (revision != ui.Revision && !ui.Surface.SetContent(content ?? new UiColumn()).Succeeded) return false;
             }
-            ui.Body = body; ui.Revision = revision;
+            ui.Body = body; ui.Revision = revision; ui.Shown = visible;
             if (visible) ui.Surface.Show(); else ui.Surface.Hide();
             return true;
         }

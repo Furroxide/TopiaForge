@@ -249,6 +249,7 @@ namespace TopiaForge.ModManager
             internal IUiModal? Modal;
             internal ulong Revision;
             internal string Body = "";
+            internal bool Shown;
             internal bool Disposed;
             public void Dispose() { Disposed = true; Surface?.Dispose(); Modal?.Dispose(); }
         }

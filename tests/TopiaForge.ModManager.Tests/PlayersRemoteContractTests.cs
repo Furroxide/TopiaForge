@@ -39,8 +39,11 @@ namespace TopiaForge.ModManager.Tests
             Check(failures, RecipientScopeDisposalAnswersTheHost);
             Check(failures, RecipientCleanupOrdersAnswerTheHost);
             Check(failures, RecipientCleanupCanCancelEveryOpenModal);
+            Check(failures, AHostHideIsNotThePlayersDismissal);
+            Check(failures, CancellationsKeepTheirChecksUnderAFlood);
+            Check(failures, HealCreditKeepsToItsGap);
             if (failures.Count > 0) throw new InvalidOperationException("Players API: " + string.Join(" | ", failures));
-            Console.WriteLine("PlayersRemoteContractTests: 22 groups passed.");
+            Console.WriteLine("PlayersRemoteContractTests: 25 groups passed.");
         }
 
         private static void Check(List<string> failures, Action test)
