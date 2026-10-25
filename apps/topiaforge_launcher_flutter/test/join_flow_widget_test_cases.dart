@@ -428,6 +428,18 @@ void registerJoinWidgetTests() {
         expect(_copied, contains('Reason: ${code.name}'));
         expect(_copied, isNot(contains(_planted)));
         expect(find.text('Copied'), findsOneWidget);
+
+        // The card fits the smallest window with text at twice its size.
+        tester.view.physicalSize = const Size(800, 600);
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpAndSettle();
+        await tester.drag(
+          find.byKey(const Key('join-scroll')),
+          const Offset(0, -6000),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
       });
     }
   });
