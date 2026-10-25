@@ -268,7 +268,8 @@ has loaded, a native scene change, any other operation that holds the session, a
   shared file for about 310 ms while they retry, so the interface never calls them on the main thread: preference reads
   and journal writes, handoffs and live joins' records run on `MultiplayerBackgroundQueue`, and live joins are looked for
   once a second on a pool thread. The views show a pending write as they show the settings'. The launcher applies the
-  journal while the game is closed (`MultiplayerLaunchContract.md`, section 7), and takes no handoff yet.
+  journal while the game is closed (`MultiplayerLaunchContract.md`, section 7), and its join flow takes the
+  handoffs.
 
 ## 9. Sessions the launcher asks for
 
