@@ -49,8 +49,10 @@ namespace TopiaForge.ModManager
                 Action<bool> completed = answer =>
                 {
                     if (ui.Disposed) return;
-                    Reply(context, sender, token, revision, "", answer ? "1" : "0", 14);
                     receivedUi.Remove(token); ui.Disposed = true;
+                    if (context.Lifetime.IsStopping) answer = false;
+                    // Teardown still owes the host a cancellation, even after this recipient's scope starts stopping.
+                    Reply(context, sender, token, revision, "", answer ? "1" : "0", 14, allowStopping: !answer);
                 };
                 var result = context.UiService is IRemoteUiReceiver plain ? plain.RemoteModal(request, completed) : context.UiService.ShowModal(request, completed);
                 if (!result.TryGetValue(out var modal)) return false;
@@ -91,9 +93,9 @@ namespace TopiaForge.ModManager
             return true;
         }
 
-        private void Reply(PlayerContext context, ParticipantId host, ulong token, ulong revision, string control, string value, byte kind)
+        private void Reply(PlayerContext context, ParticipantId host, ulong token, ulong revision, string control, string value, byte kind, bool allowStopping = false)
         {
-            if (IsHost || context.Lifetime.IsStopping || control.Length > 128 || value.Length > 4096) return;
+            if (IsHost || (context.Lifetime.IsStopping && !allowStopping) || control.Length > 128 || value.Length > 4096) return;
             Begin(kind, context.Mod); Writer.WriteVarUInt(token); Writer.WriteVarUInt(revision);
             Writer.WriteString(control); Writer.WriteString(value);
             Send(host);
@@ -104,21 +106,26 @@ namespace TopiaForge.ModManager
             if (!IsHost || !Present(sender)) return false;
             var token = UiNodeWireCodec.Id(r); var revision = UiNodeWireCodec.Id(r);
             var control = UiNodeWireCodec.Text(r, 128); var value = UiNodeWireCodec.Text(r); UiNodeWireCodec.End(r);
-            if (!uiReplies.TryGetValue(sender, out var budget)) uiReplies.Add(sender, budget = new TokenBucket(32, 20, Now));
-            if (!budget.TryTake(Now)) return false;
+            if (!uiReplies.TryGetValue(sender, out var budget)) uiReplies.Add(sender, budget = new UiReplyBudget(Now));
+            var cancelling = kind == 14 && revision == 1 && control.Length == 0 && value == "0";
+            if (!(cancelling ? budget.Cancellations : budget.Controls).TryTake(Now)) return false;
             for (var i = 0; i < surfaces.Count; i++)
             {
                 var surface = surfaces[i];
                 if (surface.Token != token || surface.Context.Mod != context.Mod) continue;
-                if (!surface.Target.Id.Equals(sender) || !surface.Target.IsPresent || !surface.IsVisible || surface.Revision != revision) return false;
+                if (!surface.Target.Id.Equals(sender) || !surface.Target.IsPresent || !surface.IsVisible) return false;
                 // An author's callback that throws is the author's failure, logged as the local UI kit logs it, never a
                 // refused reply and never the end of this frame's other replies.
                 if (kind == 15)
                 {
+                    // Revisions retire controls, not the player's choice to close the same window. A content update
+                    // can cross that dismissal in flight; accept its earlier revision, never an unseen future one.
+                    if (revision == 0 || revision > surface.Revision) return false;
                     try { surface.Hide(); }
                     catch (Exception exception) { ReportCallback(context, "window dismissal", exception); }
                     return true;
                 }
+                if (surface.Revision != revision) return false;
                 using (runtime.Intents.EnterForwarded(context.Mod, IntentSource.UiCallback, sender.Value))
                 {
                     try { return UiNodeWireCodec.Invoke(surface.Content, control, value); }

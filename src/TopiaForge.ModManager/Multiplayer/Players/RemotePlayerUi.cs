@@ -32,7 +32,7 @@ namespace TopiaForge.ModManager
         public bool IsVisible => !Closed && Target.IsPresent && !Context.Lifetime.IsStopping && Visible;
         public event Action? Dismissed;
         public void Show() { Check(); if (Closed || Visible) return; Visible = true; Dirty = true; }
-        public void Hide() { Check(); if (Closed || !Visible) return; Visible = false; Dirty = true; Dismissed?.Invoke(); }
+        public void Hide() { Check(); if (Closed || !Visible) return; Visible = false; Dirty = true; Runtime.Dismiss(Context, Dismissed); }
         public void SetBody(string body)
         {
             Check();
@@ -80,6 +80,7 @@ namespace TopiaForge.ModManager
         {
             var callback = Completed;
             Completed = null;
+            Context.Modals.Remove(this);
             return callback;
         }
     }

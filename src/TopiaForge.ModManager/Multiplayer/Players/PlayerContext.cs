@@ -21,6 +21,8 @@ namespace TopiaForge.ModManager
         internal readonly IUiService UiService;
         internal readonly ModInputActivity Activity;
         internal PlayerDirectory? Directory { get; set; }
+        // Keep pending callbacks owned even while a session reset detaches its transport UI list.
+        internal readonly List<RemoteUiModal> Modals = new List<RemoteUiModal>();
         internal readonly Dictionary<ParticipantId, RemotePlayerInput> Inputs = new Dictionary<ParticipantId, RemotePlayerInput>();
         private readonly Dictionary<ParticipantId, CachedPose> poses = new Dictionary<ParticipantId, CachedPose>();
         private readonly Dictionary<ParticipantId, RemotePlayerUi> uis = new Dictionary<ParticipantId, RemotePlayerUi>();

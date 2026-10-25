@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
     /// A remote player's UI and actions keep the contracts the local ones keep: a modal always reports one answer, an
     /// author's failing callback is reported to its mod, and nothing reports success when it cannot reach the player.
     /// </summary>
-    internal static class PlayersRemoteContractTests
+    internal static partial class PlayersRemoteContractTests
     {
         internal static void Run()
         {
@@ -29,8 +29,18 @@ namespace TopiaForge.ModManager.Tests
             Check(failures, TheFakeKeepsTheModalContract);
             Check(failures, AShortHostTeleportHidesNoLaterTeleport);
             Check(failures, AStoppingScopeCancelsBeforeItIsDisposed);
+            Check(failures, CancellationCanResetTheRuntime);
+            Check(failures, ResetMustCancelBeforeAScopeFinishesDisposing);
+            Check(failures, PlacementsKeepTheTeleportAndSpeedBudgets);
+            Check(failures, ConsecutiveHealsCannotBankExcessHealth);
+            Check(failures, DismissalSubscribersAreIsolated);
+            Check(failures, TheRecipientCanDisposeItsModal);
+            Check(failures, DismissalSurvivesAContentUpdate);
+            Check(failures, RecipientScopeDisposalAnswersTheHost);
+            Check(failures, RecipientCleanupOrdersAnswerTheHost);
+            Check(failures, RecipientCleanupCanCancelEveryOpenModal);
             if (failures.Count > 0) throw new InvalidOperationException("Players API: " + string.Join(" | ", failures));
-            Console.WriteLine("PlayersRemoteContractTests: 12 groups passed.");
+            Console.WriteLine("PlayersRemoteContractTests: 22 groups passed.");
         }
 
         private static void Check(List<string> failures, Action test)
@@ -148,6 +158,11 @@ namespace TopiaForge.ModManager.Tests
             That(peers.First.Backend.Health == health && peers.First.Backend.Feet.X == feet.X && peers.FirstServices.Ui.Surfaces.Count == 0 &&
                 peers.FirstServices.Ui.Modals.Count == 0 && peers.FirstServices.Ui.Toasts.Count == 0, "and nothing was sent");
             That(hostOnly.Player(peers.Rig.Host.Id).Heal(1, "own").Succeeded, "it still acts on the host's own player");
+            That(target.TryGetSnapshot(out _) && target.TryGetHealth(out _) && target.Entity != null, "non-shared mods retain presence reads");
+            using var column = hostOnly.Directory.RegisterScoreboardColumn(new ScoreboardColumnDefinition("local-score", "Score")).Value!;
+            That(column.SetValue(target.Id, "7", 7).Succeeded, "non-shared mods can still write scoreboard columns");
+            peers.Rig.Frames(3);
+            That(peers.FirstServices.Context.Runtime.Scoreboard.Count == 1, "their columns still reach the other player without a mod receiver");
             That(peers.Host.Player(peers.First.Id).Damage(new PlayerDamageRequest(30, "trap")).Succeeded, "a shared mod still reaches the player");
             peers.Rig.Frames(24);
             That(peers.First.Backend.Health < health, "and its damage arrives");

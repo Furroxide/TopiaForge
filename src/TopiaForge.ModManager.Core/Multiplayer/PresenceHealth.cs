@@ -75,6 +75,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             // A heal the host made itself is spent by the rise it allowed.
             if (health > regenerated) allowance = Math.Max(0f, allowance - (health - regenerated));
             Health = health;
+            allowance = Math.Min(allowance, Maximum - Health);
             lastMicros = nowMicros;
             if (!stood) Refused++;
             return stood;
@@ -91,6 +92,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             lastMicros = nowMicros;
             if (risen <= Health) return false;
             Health = risen;
+            allowance = Math.Min(allowance, Maximum - Health);
             return true;
         }
 
@@ -101,7 +103,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public void AllowGain(float amount)
         {
             if (!HasValue || float.IsNaN(amount) || amount <= 0f || float.IsInfinity(amount)) return;
-            allowance = Math.Min(Maximum, allowance + amount);
+            // Several host heals may arrive before the next report. Their combined unspent credit must fit the gap,
+            // and Take/Advance retire any part that a later health value can no longer use.
+            allowance = Math.Min(Maximum - Health, allowance + amount);
         }
 
         /// <summary>The health kept now plus what it could have regenerated since it was last set, up to the maximum.</summary>

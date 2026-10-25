@@ -11,7 +11,7 @@ namespace TopiaForge.ModManager
         private readonly List<RemoteUiSurface> surfaces = new List<RemoteUiSurface>();
         private readonly List<RemoteUiModal> modals = new List<RemoteUiModal>();
         private readonly Dictionary<ulong, ReceivedUi> receivedUi = new Dictionary<ulong, ReceivedUi>();
-        private readonly Dictionary<ParticipantId, TokenBucket> uiReplies = new Dictionary<ParticipantId, TokenBucket>();
+        private readonly Dictionary<ParticipantId, UiReplyBudget> uiReplies = new Dictionary<ParticipantId, UiReplyBudget>();
         private readonly Dictionary<ParticipantId, UiSendBudget> uiSends = new Dictionary<ParticipantId, UiSendBudget>();
         private TokenBucket hostUiBudget = new TokenBucket(65536, 32768, 0);
         private TokenBucket hostUiCount = new TokenBucket(32, 20, 0);
@@ -58,6 +58,7 @@ namespace TopiaForge.ModManager
             var sent = SendModal(modal);
             if (!sent.Succeeded) return OperationResult<IUiModal>.Failure(sent.ErrorCode, sent.ErrorMessage);
             modals.Add(modal);
+            context.Modals.Add(modal);
             return OperationResult<IUiModal>.Success(modal);
         }
         private OperationResult<bool> SendModal(RemoteUiModal modal)
@@ -133,6 +134,17 @@ namespace TopiaForge.ModManager
             internal readonly TokenBucket Count, Bytes;
             internal UiSendBudget(long now) { Count = new TokenBucket(32, 20, now); Bytes = new TokenBucket(65536, 32768, now); }
         }
+        private sealed class UiReplyBudget
+        {
+            internal readonly TokenBucket Controls, Cancellations;
+            internal UiReplyBudget(long now)
+            {
+                Controls = new TokenBucket(32, 20, now);
+                // Cleanup may cancel all 64 open modals at once, followed by the host's 32-request send burst.
+                // Refill matches the host's UI send rate; cancellation remains bounded independently of clicks.
+                Cancellations = new TokenBucket(96, 20, now);
+            }
+        }
 
         private void ReconcileUi()
         {
@@ -154,11 +166,16 @@ namespace TopiaForge.ModManager
                     // A player who left cannot answer, and a stopping scope may wait for native work before it disposes
                     // anything: either way the modal reports a cancellation now, as a local one does when it closes.
                     m.Cancel();
-                    if (i >= modals.Count || !ReferenceEquals(modals[i], m)) continue;
+                    if (i >= modals.Count || !ReferenceEquals(modals[i], m))
+                    {
+                        i = Math.Min(i, modals.Count);
+                        continue;
+                    }
                 }
                 if (!m.IsOpen && (!Present(m.Target.Id) || CloseRemote(m.Context, m.Target.Id, m.Token))) modals.RemoveAt(i);
                 else if (m.IsOpen && m.Stream != (Channel?.GetGeneration(m.Target.Id) ?? 0)) SendModal(m);
             }
+            ReleaseReceivedUi(null);
         }
 
         /// <summary>Runs a modal's answer as the local UI kit does: one failing subscriber is logged against its mod and stops nothing.</summary>
@@ -172,6 +189,16 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal void Dismiss(PlayerContext context, Action? dismissed)
+        {
+            if (dismissed == null) return;
+            foreach (var subscriber in dismissed.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception exception) { ReportCallback(context, "window dismissal", exception); }
+            }
+        }
+
         private static void ReportCallback(PlayerContext context, string what, Exception exception)
         {
             try { context.Logger.Error(exception, "A mod UI " + what + " callback failed."); }
@@ -182,11 +209,26 @@ namespace TopiaForge.ModManager
         internal void ReleaseUi(PlayerContext context)
         {
             for (var i = 0; i < surfaces.Count; i++) if (surfaces[i].Context == context) surfaces[i].Dispose();
-            for (var i = 0; i < modals.Count; i++) if (modals[i].Context == context) modals[i].Dispose();
-            var removed = new List<ulong>();
+            // Take removes ownership before invoking the callback, so reentrant disposal is safe, including during reset.
+            while (context.Modals.Count != 0) context.Modals[context.Modals.Count - 1].Dispose();
+            ReleaseReceivedUi(context);
+        }
+        private void ReleaseReceivedUi(PlayerContext? context)
+        {
+            List<ulong>? removed = null;
             foreach (var pair in receivedUi)
-                if (pair.Value.Context == context) { pair.Value.Dispose(); removed.Add(pair.Key); }
-            for (var i = 0; i < removed.Count; i++) receivedUi.Remove(removed[i]);
+                if (context == null ? pair.Value.Context.Lifetime.IsStopping : pair.Value.Context == context)
+                    (removed ??= new List<ulong>()).Add(pair.Key);
+            if (removed == null) return;
+            for (var i = 0; i < removed.Count; i++)
+            {
+                if (!receivedUi.TryGetValue(removed[i], out var ui)) continue;
+                // Unlike a session reset, scope cleanup owes a cancellation to the still-connected host. Complete
+                // before marking the received UI disposed; the callback may remove its own dictionary entry.
+                ui.Modal?.Dispose();
+                ui.Dispose();
+                receivedUi.Remove(removed[i]);
+            }
         }
         private void ResetUi()
         {

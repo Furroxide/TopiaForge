@@ -2738,7 +2738,8 @@ the target is its own participant, all values are finite and bounded, and no byt
 frames to the host is refused. API calls from a client targeting another player return `NotAuthoritative` before
 serialization. Health changes go through the owning context's local player service. An accepted remote heal increases
 presence's bounded health allowance by the health it can add, never more, so a heal at full health leaves nothing for a
-later false report to spend. An accepted teleport records an expected placement, which takes the landing pose whether or
+later false report to spend. Combined pending heals cannot exceed the remaining health gap, and accepted health or
+regeneration retires any allowance that no longer fits that gap. An accepted teleport records an expected placement, which takes the landing pose whether or
 not the owner flags it as a teleport. The owner does not arm presence's jump expectation for it: a move shorter than a
 jump would never spend it, and it would hide the player's next teleport of its own, which the host would then correct
 as speed. A send with no recipient is a failure. The immediate health result is an estimate; presence subsequently
@@ -2765,13 +2766,17 @@ consequences of an action.
 Both ends call `UiComposition.Validate`; decoding also bounds recursion, allocation counts, strings, enum values and
 finite numbers before constructing nodes. A frame cannot create half a surface. Text fields are at most 4096
 characters, toasts 512, and a window is 80–1920 by 80–1440 scaled units. UI ingress is separately limited to 20 messages
-and 32 KiB/s, with bounded bursts; replies are limited to 20/s. The received canvas carries the kit's internal
+and 32 KiB/s, with bounded bursts; controls allow 20 replies/s with a burst of 32. Modal cancellations have a separate
+20/s budget with a burst of 96, enough for all 64 open modals plus the host's 32-request send burst, so scope cleanup
+cannot lose answers to the control budget. Sender, target, token and one-shot validation still apply. The received canvas carries the kit's internal
 `TopiaForgePlainTextRoot` marker. All TMP labels under it, including controls and rows created later, disable rich-text
 and escape parsing. Toasts use `ShowPlain`.
 
-Host surfaces retain the original composition and its callbacks. A reply must match the mod, token, target handle,
-sender, visible state and current revision. The codec then checks the declared enabled control and its value's range or
-membership. Modal answers are one-shot. The callback runs under forwarded UI intent for that player. Replacing content,
+Host surfaces retain the original composition and its callbacks. A control reply must match the mod, token, target
+handle, sender, visible state and current revision. The codec then checks the declared enabled control and its value's
+range or membership. A dismissal can name an earlier content revision of the same window, so a concurrent content
+update cannot discard the player's close; zero and future revisions remain refused. Modal answers are one-shot.
+The callback runs under forwarded UI intent for that player. Replacing content,
 closing, departure or scope shutdown revokes old answers. Client closures also check their revision, as a second guard.
 Windows and unanswered modals resend on a retained target's new stream. A different player's join changes no existing
 window. A generation change at the client disposes its received UI without answering it.
@@ -2781,6 +2786,12 @@ own logger ("A mod UI window control 'buy' callback failed.") and counts neither
 stage, so the frame's other replies still run. A remote modal keeps `IUiService.ShowModal`'s contract and reports exactly
 one answer: the player's, or `false` when it is closed or disposed, its player leaves, its scope ends or the session
 resets. A local player's toast goes to the ordinary UI service; the 512-character limit applies only on the wire.
+Pending modal callbacks remain owned by their exact context while reset detaches the transport lists, so a cancellation
+that disposes another scope completes that scope's modals before disposal returns. Reconciliation rechecks its iteration
+position after a reentrant reset. Dismissal subscribers are isolated individually, including when a prior subscriber throws.
+If the recipient's scope starts stopping or is disposed while the session stays connected, its modal sends one
+cancellation before received UI is retired. This works whichever order the scope and UI resources are disposed;
+session replacement still discards old received UI without sending an answer into a different session.
 `PlayerDirectory` reports a join or leave handler that throws, and the next handler still runs: to the mod's logger in
 the game, to the engine's diagnostics on a bare engine facade, and to `FakePlayerDirectory.CallbackErrors` in tests.
 
@@ -2805,8 +2816,11 @@ rosters, key and generation retirement, real-engine fast joins, reconnect and pr
 workflows, input reconstruction, codec bounds, sender and UI forgery, floods, and scoreboard replication.
 `PlayersRemoteContractTests` holds remote UI and actions to the local contracts: modal cancellation on dispose, leave,
 scope end and session end, in the fake too; failing callbacks and handlers; client-local and server-only mods; toast
-rules; a heal at full health that leaves no allowance; and a short host teleport that hides no later one. Real
-`ModRuntime` instances run two-player and three-player scenarios over the loopback network, with actions, targeted
+rules; a heal at full health that leaves no allowance; consecutive heals and regenerated health; cancellation that resets
+the runtime or disposes another scope; isolated dismissal subscribers; dismissal during a content update; recipient
+disposal and recipient scope cleanup in either order, including all 64 open modals; placement and teleport budgets; and a short host teleport that
+hides no later one. Real `ModRuntime`
+instances run two-player and three-player scenarios over the loopback network, with actions, targeted
 clicks and input. Allocation assertions measure repeated directory/presence reads and 10,000 resting runtime frames.
 Source guards cover the native plain-text renderer; visual layout and actual game health/controller behavior require
 in-game checks. `FakePlayerDirectory`, `FakePlayerState` and `FakePlayerInput` are the only new public SDK types; the
