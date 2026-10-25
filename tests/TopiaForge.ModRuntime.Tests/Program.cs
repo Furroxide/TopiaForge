@@ -17,6 +17,13 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--loader-version")
+            {
+                var versionRoot = Directory.CreateTempSubdirectory("TopiaForgeVersionTests-").FullName;
+                try { TestLoaderVersionRefusalBeforeCode(versionRoot); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+                finally { TryDelete(versionRoot); }
+            }
             if (args.Length > 0)
                 return args.Length != 2 ? 2 : args[0] == "--binding-case" ? RunBindingCase(args[1])
                     : args[0] == "--generated-binding-case" ? RunGeneratedBindingCase(args[1])
@@ -51,6 +58,7 @@ namespace TopiaForge.ModRuntime.Tests
                 TestOptionalDependencyRuntimeFailureDoesNotBlock(root);
                 TestConstructorFailure(root);
                 TestRuntimeCompatibilityDefense(root);
+                TestLoaderVersionRefusalBeforeCode(root);
                 TestReceiptRecheckedImmediatelyBeforeLoad(root);
                 TestResolverLifetime(root);
                 TestGeneratedMultiplayerAutoBinding();
@@ -188,8 +196,8 @@ namespace TopiaForge.ModRuntime.Tests
                     Logger,
                     new ManifestValidationContext(
                         "0.0.2309",
-                        "1.0.0",
-                        "1.0.0",
+                        TopiaForgeVersions.LoaderVersion,
+                        TopiaForgeVersions.SdkVersion,
                         platform: "windows",
                         architecture: "x64",
                         contentTargets: new[] { "code", "standalonewindows64" },

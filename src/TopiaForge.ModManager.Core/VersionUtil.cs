@@ -3,7 +3,11 @@ using System.Text.RegularExpressions;
 
 namespace TopiaForge.ModManager.Core
 {
+#if TOPIAFORGE_ANALYZER
+    internal static class VersionUtil
+#else
     public static class VersionUtil
+#endif
     {
         private static readonly Regex SemanticVersionRegex = new Regex(
             "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)" +
@@ -59,6 +63,28 @@ namespace TopiaForge.ModManager.Core
         public static bool TryParseRange(string? range)
         {
             return TryParseRange(range, out _);
+        }
+
+        /// <summary>Gets the lower bound of a valid range, or null for an unbounded range.</summary>
+        public static bool TryGetMinimum(string? range, out string? minimum)
+        {
+            return TryGetMinimum(range, out minimum, out _);
+        }
+
+        /// <summary>Gets the lower bound of a valid range, or null for an unbounded range, and whether it is admitted.</summary>
+        public static bool TryGetMinimum(string? range, out string? minimum, out bool inclusive)
+        {
+            minimum = null;
+            inclusive = true;
+            if (!TryParseRange(range, out var parsed)) return false;
+            if (parsed.Min is ParsedSemanticVersion value)
+            {
+                minimum = value.Major + "." + value.Minor + "." + value.Patch
+                    + (value.Prerelease.Length == 0 ? string.Empty : "-" + value.Prerelease);
+                inclusive = parsed.IncludeMin;
+            }
+
+            return true;
         }
 
         internal static bool TryParseSemantic(string? text, out ParsedSemanticVersion version)
@@ -472,9 +498,9 @@ namespace TopiaForge.ModManager.Core
                 IncludeMax = includeMax;
             }
 
-            private ParsedSemanticVersion? Min { get; }
+            public ParsedSemanticVersion? Min { get; }
             private ParsedSemanticVersion? Max { get; }
-            private bool IncludeMin { get; }
+            public bool IncludeMin { get; }
             private bool IncludeMax { get; }
 
             public bool Allows(ParsedSemanticVersion version)

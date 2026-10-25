@@ -24,6 +24,14 @@ namespace TopiaForge.ModManager
 
             var manifest = package.Manifest!;
 
+            var loaderError = ManifestValidator.LoaderCompatibilityError(manifest.SupportedLoaderVersionRange, validationContext.LoaderVersion);
+            if (loaderError != null)
+            {
+                failedMods[manifest.Id] = loaderError;
+                logger.Warn("Skipping " + manifest.Id + ": " + loaderError);
+                return;
+            }
+
             var compatibility = ManifestRuntimeCompatibility.Evaluate(manifest, validationContext);
             if (!compatibility.IsCompatible)
             {

@@ -128,7 +128,8 @@ namespace TopiaForge.Mods.Analyzers
                 MissingRequiredCapability,
                 LoaderOwnedUiReference,
                 BlockingWaitOnSdkTask,
-                InputEdgeInFixedUpdate);
+                InputEdgeInFixedUpdate,
+                SdkVersionRequired);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -158,6 +159,7 @@ namespace TopiaForge.Mods.Analyzers
 
             // FixedUpdate's timing is the game loop's too, whichever profile the mod builds with.
             RegisterFixedUpdateInput(context);
+            RegisterVersionGates(context);
 
             if (HasBooleanBuildProperty(
                     context.Options.AnalyzerConfigOptionsProvider,

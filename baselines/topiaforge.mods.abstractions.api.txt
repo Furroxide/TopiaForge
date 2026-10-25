@@ -576,6 +576,10 @@ type public readonly struct TopiaForge.Mods.Ray : System.ValueType, System.IEqua
   property TopiaForge.Mods.Vec3 Direction { get; }
   property TopiaForge.Mods.Vec3 Origin { get; }
 
+type public sealed class TopiaForge.Mods.RequiresTopiaForgeAttribute : System.Attribute
+  constructor .ctor(System.String version)
+  property System.String Version { get; }
+
 type public readonly struct TopiaForge.Mods.RgbaColor : System.ValueType, System.IEquatable<TopiaForge.Mods.RgbaColor>
   constructor .ctor(System.Single red, System.Single green, System.Single blue, System.Single alpha = 1)
   method [static] System.Boolean op_Equality(TopiaForge.Mods.RgbaColor left, TopiaForge.Mods.RgbaColor right)

@@ -61,9 +61,8 @@ part 'topiaforge_unity_commands.dart';
 part 'topiaforge_world_commands.dart';
 
 Future<void> main(List<String> args) async {
-  final cli = _TopiaForgeCli(LocalDeveloperRepository());
   try {
-    final code = await cli.run(args);
+    final code = await runCli(args);
     exitCode = code;
   } on UsageError catch (error) {
     stderr.writeln(error.message);
@@ -75,6 +74,13 @@ Future<void> main(List<String> args) async {
     exitCode = 1;
   }
 }
+
+/// Runs a command with an optional repository supplied by an embedding host.
+Future<int> runCli(
+  List<String> args, {
+  LocalDeveloperRepository? developerRepository,
+}) =>
+    _TopiaForgeCli(developerRepository ?? LocalDeveloperRepository()).run(args);
 
 /// A wrong-invocation error: printed as plain usage text (no "Bad state:"
 /// noise) and distinguished from operation failures via exit code 2.

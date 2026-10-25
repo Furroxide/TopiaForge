@@ -140,7 +140,7 @@ namespace TopiaForge.ModRuntime.Tests
             var runtime = new RuntimeUnderTest(
                 fixture.Paths,
                 fixture.Logger,
-                new ManifestValidationContext("0.0.2309", "1.0.0", "1.0.0", platform: "windows", architecture: "x64",
+                new ManifestValidationContext("0.0.2309", TopiaForgeVersions.LoaderVersion, TopiaForgeVersions.SdkVersion, platform: "windows", architecture: "x64",
                     contentTargets: new[] { "code", "standalonewindows64" }, enforceRuntimeCompatibility: true),
                 fixture.Observer,
                 host);

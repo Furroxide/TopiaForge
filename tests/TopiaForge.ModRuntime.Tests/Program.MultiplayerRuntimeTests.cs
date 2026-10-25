@@ -121,8 +121,8 @@ namespace TopiaForge.ModRuntime.Tests
                 fixture.Logger,
                 new ManifestValidationContext(
                     "0.0.2309",
-                    "1.0.0",
-                    "1.0.0",
+                    TopiaForgeVersions.LoaderVersion,
+                    TopiaForgeVersions.SdkVersion,
                     platform: "windows",
                     architecture: "x64",
                     contentTargets: new[] { "code", "standalonewindows64" },

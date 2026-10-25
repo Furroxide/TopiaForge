@@ -149,19 +149,29 @@ namespace TopiaForge.ModManager.Core
 
             ValidateGameCompatibility(manifest.SupportedGameVersionRange, context, errors);
 
+            var updates = new List<(string Version, bool Inclusive)>();
             ValidateCompatibilityRange(
                 manifest.SupportedLoaderVersionRange,
                 "supportedLoaderVersionRange",
                 "loader",
                 context.LoaderVersion,
-                errors);
+                errors, updates);
 
             ValidateCompatibilityRange(
                 manifest.SupportedSdkVersionRange,
                 "supportedSdkVersionRange",
                 "SDK",
                 context.SdkVersion,
-                errors);
+                errors, updates);
+
+            if (updates.Count > 0)
+            {
+                var required = updates[0];
+                foreach (var update in updates.Skip(1))
+                    if (!VersionUtil.IsAtLeast(required.Version, update.Version)
+                        || (VersionUtil.IsAtLeast(update.Version, required.Version) && !update.Inclusive)) required = update;
+                errors.Add(FormatUpdateRequired(required.Version, required.Inclusive));
+            }
 
             ValidateStringLength(manifest.Category, "category", 0, 64, required: false, errors);
             ValidateStringLength(manifest.Homepage, "homepage", 0, 2048, required: false, errors);
@@ -340,7 +350,7 @@ namespace TopiaForge.ModManager.Core
             string fieldName,
             string componentName,
             string actualVersion,
-            List<string> errors)
+            List<string> errors, ICollection<(string Version, bool Inclusive)> updates)
         {
             ValidateStringLength(range, fieldName, 1, 256, required: true, errors);
             if (string.IsNullOrWhiteSpace(range))
@@ -355,9 +365,34 @@ namespace TopiaForge.ModManager.Core
             }
             else if (!VersionUtil.AllowsRange(actualVersion, range))
             {
-                errors.Add(fieldName + " does not include " + componentName + " " + actualVersion + ".");
+                // Below either floor, the player's next step is the same, so it is said once.
+                var update = UpdateRequiredError(range, actualVersion);
+                if (update == null)
+                    errors.Add(fieldName + " does not include " + componentName + " " + actualVersion + ".");
+                else if (VersionUtil.TryGetMinimum(range, out var minimum, out var inclusive))
+                    updates.Add((minimum!, inclusive));
             }
         }
+
+        /// <summary>Rechecks the loader range before package code is loaded.</summary>
+        public static string? LoaderCompatibilityError(string range, string actualVersion)
+        {
+            if (VersionUtil.AllowsRange(actualVersion, range)) return null;
+            return UpdateRequiredError(range, actualVersion)
+                ?? "supportedLoaderVersionRange does not include loader " + actualVersion + ".";
+        }
+
+        private static string? UpdateRequiredError(string range, string actualVersion)
+        {
+            if (!VersionUtil.TryGetMinimum(range, out var minimum, out var inclusive) || minimum == null
+                || (VersionUtil.IsAtLeast(actualVersion, minimum) && (inclusive || !VersionUtil.IsAtLeast(minimum, actualVersion))))
+                return null;
+            return FormatUpdateRequired(minimum, inclusive);
+        }
+
+        private static string FormatUpdateRequired(string minimum, bool inclusive) => inclusive
+                ? "This mod needs TopiaForge " + minimum + " or newer; update TopiaForge."
+                : "This mod needs a TopiaForge newer than " + minimum + "; update TopiaForge.";
 
         private static void ValidateLicenseFiles(
             IEnumerable<string>? paths,

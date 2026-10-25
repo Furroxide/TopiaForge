@@ -19,6 +19,7 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);TOPIAFORGE_ANALYZER</DefineConstants>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <!-- RS1038: the TF1008 code fix references the workspace assemblies, which only the IDE loads. The compiler
          instantiates the analyzer type alone, and that type references compiler assemblies only. -->
@@ -26,6 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../TopiaForge.ModManager.Core/VersionUtil.cs" Link="VersionUtil.cs" />
     <!-- Roslyn supplies these assemblies at analyzer load time. Keep them compile-only. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0"
                       PrivateAssets="all" />
