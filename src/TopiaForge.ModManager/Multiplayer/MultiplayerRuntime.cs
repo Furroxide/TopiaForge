@@ -46,6 +46,11 @@ namespace TopiaForge.ModManager
         private bool replicaFailureLogged;
         private bool presenceReceiveFailureLogged;
         private bool avatarFailureLogged;
+        private bool playersFailureLogged;
+        private bool inputFailureLogged;
+
+        internal IMultiplayerFrameStage? PlayersReceive { get; set; }
+        internal IMultiplayerFrameStage? PlayersSend { get; set; }
 
         /// <param name="findControl">Reads the provider's control from the service registry; null when no provider published one.</param>
         /// <param name="host">The runtime's side of the SPI, handed to the control on attach.</param>
@@ -201,16 +206,20 @@ namespace TopiaForge.ModManager
             }
 
             FollowRealm();
-            if (role == InternalSessionRole.Solo) return;
-            ReceiveSessionTime();
-            Run(WorldEvents, ref worldFailureLogged, deltaTime);
-            Run(SessionFollow, ref followFailureLogged, deltaTime);
-            Run(PresenceReceive, ref presenceReceiveFailureLogged, deltaTime);
+            if (role != InternalSessionRole.Solo)
+            {
+                ReceiveSessionTime();
+                Run(WorldEvents, ref worldFailureLogged, deltaTime);
+                Run(SessionFollow, ref followFailureLogged, deltaTime);
+                Run(PresenceReceive, ref presenceReceiveFailureLogged, deltaTime);
+            }
+            Run(PlayersReceive, ref playersFailureLogged, deltaTime);
         }
 
-        /// <summary>Step 4, after the mods' Update: what the frame sends, then the provider's flush. Nothing runs offline.</summary>
+        /// <summary>Step 4, after the mods' Update: sample player input, then send online traffic and flush the provider.</summary>
         internal void AfterModsUpdate(float deltaTime)
         {
+            if (control != null) Run(PlayersSend, ref inputFailureLogged, deltaTime);
             if (role == InternalSessionRole.Solo) return;
             var current = control;
             if (current == null) return;

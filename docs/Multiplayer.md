@@ -261,16 +261,16 @@ The contract also carries what live sessions need. It is additive, so existing m
   `MaximumUpdatesPerSecond` (zero uses the provider's snapshot rate).
 - `session.Players` is an `IPlayerDirectory` of `IPlayer` handles. Each handle carries identity, host status, and the
   player's key, which is stable on one host and unlinkable across hosts. Replicated position, aim and health, the
-  `Damage`, `Heal` and `Teleport` actions, per-player `Input` and `Ui`, scoreboard columns, and the join and leave
-  subscriptions arrive with the Players API runtime. Until then the reads find nothing, the actions and columns report
-  `Unavailable`, and `SubscribeJoined` and `SubscribeLeft` never run, so follow who is playing through
-  `Snapshot.Participants`. Single-player play has exactly one player, so player-aware code needs no separate path.
+  `Damage`, `Heal` and `Teleport` actions, per-player `Input` and `Ui`, scoreboard columns, and join and leave
+  subscriptions run through the Players runtime. A departed handle permanently reports `NotFound`, even if another
+  host reuses its id. Single-player play has exactly one player, so player-aware code needs no separate path.
+  See [Act on players](Players.md) for targeted windows, input, scores and tests.
 - Participants report `IsHost`, a bucketed `Quality`, `PingMilliseconds` rounded to 10 ms, and `PlayerKey`.
   Snapshots report `HostParticipantId`, `TryGetParticipant`, a `Reconnecting` state, and an `EndReason` once ended.
 
 The test rig runs the session engine, so ticks, sequences, seeds, targeted events, and `Apply` behave there as they
-will in a live session. The provider runs the same engine in solo sessions. In both, player actions and replicated
-presence report `Unavailable` rather than pretending to succeed.
+will in a live session. The provider runs the same engine in solo sessions, with player actions bound to the game's
+services. The standalone rig has no game services; use `FakePlayerDirectory` to test player-aware mod logic.
 
 ## How sessions work
 

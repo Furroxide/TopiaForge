@@ -16,6 +16,11 @@ namespace TopiaForge.Mods.UnityUi
         {
             var tmp = go.AddComponent<TextMeshProUGUI>();
             tmp.isOrthographic = true;
+            if (go.GetComponentInParent<TopiaForgePlainTextRoot>(true) != null)
+            {
+                tmp.richText = false;
+                tmp.parseCtrlCharacters = false;
+            }
             // Awake() re-applies TMP's project defaults, extra padding and raycast target among them,
             // while the size still holds TMP's unset marker. Under an inactive window Awake runs only
             // later, so set a kit size first; callers then set the size of their style.
@@ -31,4 +36,7 @@ namespace TopiaForge.Mods.UnityUi
             return tmp;
         }
     }
+
+    /// <summary>Marks a received UI subtree, including controls or pooled rows created later, as literal text.</summary>
+    internal sealed class TopiaForgePlainTextRoot : MonoBehaviour { }
 }

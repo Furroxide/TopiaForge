@@ -17,6 +17,9 @@ namespace TopiaForge.ModManager
         /// <summary>Gets how many actions are tracked.</summary>
         internal int Count => actions.Count;
 
+        internal IReadOnlyList<NetInputAction> Actions => actions;
+        internal ulong Version { get; private set; }
+
         /// <summary>Gets whether one of the actions was pressed or released this frame, or is held. It allocates nothing.</summary>
         internal bool IsActive
         {
@@ -31,9 +34,9 @@ namespace TopiaForge.ModManager
             }
         }
 
-        internal void Add(NetInputAction action) => actions.Add(action);
+        internal void Add(NetInputAction action) { actions.Add(action); Version++; }
 
-        internal void Remove(NetInputAction action) => actions.Remove(action);
+        internal void Remove(NetInputAction action) { if (actions.Remove(action)) Version++; }
     }
 
     /// <summary>

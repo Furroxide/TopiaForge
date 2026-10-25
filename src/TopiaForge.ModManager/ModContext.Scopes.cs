@@ -104,6 +104,7 @@ namespace TopiaForge.ModManager
             Audio = gameplay.Audio;
             Ui = new NetUiService(gameplay.Ui, replication);
             replication.Ui = gameplay.Ui;
+            playerContext = replicationServices.Players?.Bind(Identity.Id, Lifetime, LocalPlayer, gameplay.Ui, inputActivity);
             Ui.ApplyAccessibility(parent.Ui.Accessibility);
             SceneTransitions = gameplay.SceneTransitions;
             WorldRuntime = gameplay.WorldRuntime;

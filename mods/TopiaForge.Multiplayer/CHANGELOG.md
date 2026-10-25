@@ -6,6 +6,7 @@
 
 ## 0.1.0-rc.1
 
+- Added the Players runtime: permanent player handles, presence reads and avatar targets, owner-applied damage, healing and teleportation, per-player input edges, targeted interactive UI, and replicated scoreboard columns. The same API works in solo play. Handles never retarget after a join, repeated directory reads allocate nothing, and cancelling a join before its first flush no longer sends a premature leave.
 - Added the stable Unity-free multiplayer authoring contract and generated registration, codecs, snapshots, and prediction support.
 - Predicted handlers can keep per-player state: they may read the arrays in their request and state, copy and resize arrays, and call the mod's own non-virtual methods, whose bodies the generator checks by the same rules. TFMP006 now says how to move other work out of a prediction. Work the generator cannot read stays refused: `this` handed to a helper or kept in a local, an event, an interface's or overridable property, a helper whose call runs a static constructor, `new T()`, an async helper, and a static `ReplicatedState<T>`.
 - Added the solo provider, which runs the multiplayer session engine in single-player play while live transport remains unsupported.

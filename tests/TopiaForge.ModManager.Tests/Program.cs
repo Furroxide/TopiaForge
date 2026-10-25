@@ -41,6 +41,11 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && args[0] is "--robotkit-log-privacy" or "--robotkit-log-privacy-behavior" or "--robotkit-log-privacy-convention")
                 return RobotKitLogPrivacyTests.RunFocused(args[0]);
+            if (args.Length == 1 && args[0] == "--players")
+            {
+                try { PlayersApiTests.Run(); PlayersNetworkTests.Run(); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+            }
             if (args.Length == 1 && args[0] == "--robo-api-client")
             {
                 var owned = Directory.CreateTempSubdirectory("TopiaForgeRoboApi-");
@@ -474,6 +479,8 @@ namespace TopiaForge.ModManager.Tests
                 MultiplayerSeamTests.Run(root);
                 NetworkWorldTests.Run();
                 PresenceSuite.Run();
+                PlayersApiTests.Run();
+                PlayersNetworkTests.Run();
                 RunMultiplayerSessions(root);
                 ModuleContractSurfaceTests.Run();
                 V1LaunchCoverageTests.Run();

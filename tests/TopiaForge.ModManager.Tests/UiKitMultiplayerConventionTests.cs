@@ -14,7 +14,19 @@ namespace TopiaForge.ModManager.Tests
             var widgets = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi", "Widgets");
             PlayerTextRendersAsPlainText(widgets);
             ChatVisibilityFollowsAccessibilityChanges(widgets);
+            RemoteUiIsPlainText();
             Console.WriteLine("UiKitMultiplayerConventionTests passed.");
+        }
+
+        internal static void RemoteUiIsPlainText()
+        {
+            var root = Program.FindRepoRoot();
+            var kit = Path.Combine(root, "src", "TopiaForge.Mods.UnityUi");
+            Require(kit, "UiHost.cs", "AddComponent<TopiaForgePlainTextRoot>()", "Received UI must mark the whole canvas, including pooled content.");
+            Require(Path.Combine(kit, "Text"), "TopiaForgeTmp.cs", "GetComponentInParent<TopiaForgePlainTextRoot>(true)", "Labels must inherit the remote canvas's literal text policy.");
+            Require(Path.Combine(kit, "Text"), "TopiaForgeTmp.cs", "tmp.richText = false;", "Host markup must not restyle remote controls.");
+            Require(Path.Combine(kit, "Text"), "TopiaForgeTmp.cs", "tmp.parseCtrlCharacters = false;", "Host escape sequences must remain literal.");
+            Require(Path.Combine(root, "src", "TopiaForge.ModManager"), "UnityUiService.Remote.cs", "TopiaForgeToasts.ShowPlain(message", "Remote toasts must use the kit's plain renderer.");
         }
 
         /// <summary>
