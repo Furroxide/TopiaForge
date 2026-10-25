@@ -449,7 +449,7 @@ LaunchActivity _activity({
     requestId: requestId,
     profileId: 'mp-0123456789abcdef',
     profileRevision: 0,
-    installIdentity: '/games/robotopia/robotopia.exe',
+    installIdentity: '/games/Robotopia/Robotopia.exe',
     packageDigest: packageSetDigest(const []),
     command: 'join-session',
     progress: progress,
