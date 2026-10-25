@@ -55,9 +55,10 @@ Both verification and refresh reject additions missing the marker, with guidance
 match APIs by type and member signature, so a new overload, or a new accessor on an existing property or
 event, needs its own marker, while a changed line for an API that is already there (a deprecation,
 a parameter rename or nullability fix, a new base interface) needs none. An API that is already in
-the baseline must never gain a marker: mods that admit older loaders use it. Replacing a parameter or
+the baseline must never gain a marker: mods that admit older loaders use it. An API the baseline
+records as marked must keep its marker, because older loaders lack it. Replacing a parameter or
 return type introduces a new signature even if another overload is removed. Generic parameter names,
-parameter names, defaults and reference nullability do not change that identity; nested types retain
+parameter names, defaults, `params` and reference nullability do not change that identity; nested types retain
 the generic arity of each declaring type. Accessor requirements belong to their exact property or event,
 including the index parameter types. Review
 the baseline diff before accepting it; the reviewed baseline is the inventory of pre-existing APIs.

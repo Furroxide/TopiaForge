@@ -48,6 +48,11 @@ namespace TopiaForge.ModManager.Tests
             const string explicitMember = header + "  method System.Void Example.IHandler<System.Int32>.Run(System.String text)\n";
             ExpectRejected(explicitMember, explicitMember.Replace("System.String text", "System.Int32 number", StringComparison.Ordinal), MustAdd,
                 "an explicit member with a new signature");
+            const string byValue = header + "  method System.Void Run(System.Int32 count)\n";
+            ExpectRejected(byValue, byValue + "  method System.Void Run(ref System.Int32 count)\n", MustAdd,
+                "a new by-reference overload beside a by-value one");
+            RequireVersionedAdditions(header + "  method System.Void Run(System.String[] values)\n",
+                header + "  method System.Void Run(params System.String[] values)\n");
             const string eventLine = "  event System.Action Changed { add; }\n";
             ExpectRejected(header + eventLine, header + eventLine.Replace("add;", "add; remove;", StringComparison.Ordinal),
                 "adds the remove accessor", "an unmarked event remover");
@@ -57,10 +62,13 @@ namespace TopiaForge.ModManager.Tests
             if (outerGeneric == innerGeneric) throw new InvalidOperationException("Nested type identities must retain the declaring type's generic arity.");
             ExpectRejected("type public class " + outerGeneric + "\n", "type public class " + innerGeneric + "\n", MustAdd,
                 "a new nested type with generic parameters on a different declaring type");
-            Console.WriteLine("SDK signature identity checks passed (19 cases).");
+            var twoLevels = FormatType(typeof(IdentityContainer<int>.Inner<string>), null);
+            if (!twoLevels.EndsWith("IdentityContainer<System.Int32>.Inner<System.String>", StringComparison.Ordinal))
+                throw new InvalidOperationException("Each declaring type must keep its own generic arguments: " + twoLevels);
+            Console.WriteLine("SDK signature identity checks passed (22 cases).");
         }
 
-        private sealed class IdentityContainer<T> { public sealed class Nested { } }
+        private sealed class IdentityContainer<T> { public sealed class Nested { } public sealed class Inner<U> { } }
         private sealed class IdentityContainer { public sealed class Nested<T> { } }
     }
 }

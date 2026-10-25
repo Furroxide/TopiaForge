@@ -23,7 +23,8 @@ namespace TopiaForge.ModRuntime.Tests
             foreach (var (loader, sdk, expected) in new[] {
                 (">=0.2.0 <1.0.0", ">=0.3.0 <1.0.0", "This mod needs TopiaForge 0.3.0 or newer; update TopiaForge."),
                 (">=0.3.0 <1.0.0", ">=0.2.0 <1.0.0", "This mod needs TopiaForge 0.3.0 or newer; update TopiaForge."),
-                (">=0.2.0 <1.0.0", ">0.2.0 <1.0.0", "This mod needs a TopiaForge newer than 0.2.0; update TopiaForge.") })
+                (">=0.2.0 <1.0.0", ">0.2.0 <1.0.0", "This mod needs a TopiaForge newer than 0.2.0; update TopiaForge."),
+                (">0.2.0 <1.0.0", ">=0.2.0 <1.0.0", "This mod needs a TopiaForge newer than 0.2.0; update TopiaForge.") })
             {
                 fixture.Manifest.SupportedLoaderVersionRange = loader;
                 fixture.Manifest.SupportedSdkVersionRange = sdk;

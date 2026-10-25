@@ -112,6 +112,13 @@ namespace TopiaForge.Mods.Analyzers.Tests
                     new AnalyzerOptions(ImmutableArray.Create<AdditionalText>(new UnreadableVersionManifest())))
                 .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
             Assert(unreadable.Any(d => d.Id == "TF1010"), "an unreadable AdditionalFile still reports TF1010");
+            // Pack and load explain a duplicate key or a non-string range; the manifest's capabilities still count here,
+            // so neither sets off unrelated capability errors.
+            foreach (var invalid in new[] {
+                "{\"name\":\"example.mod\",\"description\":\"a\",\"description\":\"b\",\"capabilities\":[\"unsafe-native\"]}",
+                "{\"name\":\"example.mod\",\"supportedLoaderVersionRange\":5,\"capabilities\":[\"unsafe-native\"]}" })
+                Assert(Analyze("using UnityEngine; public sealed class Mod { }", invalid).All(d => d.Id != "TF1001"),
+                    "an invalid manifest keeps its capabilities: " + invalid);
 
             // Raising the floor alone cannot admit the API when the range's ceiling is below it, as in every 0.1 mod.
             var call = "using TopiaForge.Mods; class Mod { void Run() { NewApi.Call(); } }";
@@ -123,7 +130,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             var open = GatesForMod(call, VersionManifest(">=0.1.0-rc.1 <1.0.0"), reference);
             Assert(open.Length > 0 && open.All(d => d.GetMessage().EndsWith("admits >=0.1.0-rc.1 <1.0.0. Raise supportedLoaderVersionRange.", StringComparison.Ordinal)),
                 "a ceiling above the API keeps the short advice");
-            Console.WriteLine("SDK version gate coverage passed (" + gated.Length + " gated uses, " + ungated.Length + " ungated uses, 5 manifest cases).");
+            Console.WriteLine("SDK version gate coverage passed (" + gated.Length + " gated uses, " + ungated.Length + " ungated uses, 7 manifest cases).");
         }
 
         private static MetadataReference CoverageApiReference()

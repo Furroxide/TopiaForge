@@ -6,6 +6,7 @@ namespace TopiaForge.ModManager.Tests
     {
         private const string MustAdd = "must add [RequiresTopiaForge";
         private const string MustNotGain = "must not gain [RequiresTopiaForge]";
+        private const string MustKeep = "must keep that marker";
 
         private static void VersionGateBaselineTests()
         {
@@ -21,7 +22,7 @@ namespace TopiaForge.ModManager.Tests
                 throw new InvalidOperationException("API baselines must record inherited and accessor requirements.");
             ChangedApiBaselineTests();
             SignatureIdentityBaselineTests();
-            Console.WriteLine("SDK version baseline checks passed (16 cases).");
+            Console.WriteLine("SDK version baseline checks passed (20 cases).");
         }
 
         // An API that is already in the baseline keeps working on older loaders when its line changes, so it
@@ -53,6 +54,15 @@ namespace TopiaForge.ModManager.Tests
             ExpectRejected(old, old + newType, MustAdd, "an unmarked new type");
             RequireVersionedAdditions(old, old + "type public class Example.Added : System.Object [requires-topiaforge=\"0.2.0\"]\n"
                 + "  method System.Void Go() [requires-topiaforge=\"0.2.0\"]\n");
+            // An API the baseline records as newer keeps its marker, because older loaders still lack it.
+            var markedOld = old.Replace(method, method.TrimEnd() + " [requires-topiaforge=\"0.2.0\"]\n", StringComparison.Ordinal);
+            ExpectRejected(markedOld, old, MustKeep, "a marked method losing its marker");
+            RequireVersionedAdditions(markedOld, markedOld.Replace("String name)", "String label)", StringComparison.Ordinal));
+            ExpectRejected(old.Replace(header, header.TrimEnd() + " [requires-topiaforge=\"0.2.0\"]\n", StringComparison.Ordinal), old,
+                MustKeep, "a marked type losing its marker");
+            ExpectRejected(old.Replace(property, "  property System.Int32 Count { get; set [requires-topiaforge=\"0.2.0\"]; }\n", StringComparison.Ordinal),
+                old.Replace(property, "  property System.Int32 Count { get; set; }\n", StringComparison.Ordinal), MustKeep,
+                "a marked setter losing its marker");
         }
 
         private static void ExpectRejected(string old, string current, string message, string description)

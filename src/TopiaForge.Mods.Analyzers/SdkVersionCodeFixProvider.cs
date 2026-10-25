@@ -38,6 +38,8 @@ namespace TopiaForge.Mods.Analyzers
             ManifestSnapshot manifest;
             try { manifest = ManifestSnapshot.Parse(text.ToString()); }
             catch (FormatException) { return; }
+            // A repeated key leaves no single range to edit.
+            if (manifest.HasDuplicateKeys) return;
             var loader = Raise(manifest.LoaderRange, required);
             var sdk = Raise(manifest.SdkRange, required);
             if (loader == null || sdk == null || manifest.LoaderSpan.IsEmpty || manifest.SdkSpan.IsEmpty) return;

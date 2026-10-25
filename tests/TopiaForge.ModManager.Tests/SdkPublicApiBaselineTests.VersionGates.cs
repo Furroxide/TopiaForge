@@ -33,7 +33,8 @@ namespace TopiaForge.ModManager.Tests
         }
 
         // Match metadata signatures, ignoring source-only details such as parameter names and nullability.
-        // Counting overloads by name can hide a new signature behind a removed or edited overload.
+        // Counting overloads by name can hide a new signature behind a removed or edited overload. A marker is
+        // never gained by an API that is already there, nor lost by one the baseline records as newer.
         private static void RequireVersionedAdditions(string expected, string actual)
         {
             var old = ApiTypes(expected);
@@ -48,6 +49,7 @@ namespace TopiaForge.ModManager.Tests
                 }
 
                 if (IsMarked(type.Value.Header) && !IsMarked(before.Header)) throw ExistingApi(type.Value.Header);
+                if (!IsMarked(type.Value.Header) && IsMarked(before.Header)) throw LostMarker(type.Value.Header);
                 var oldMembers = before.Members.ToDictionary(line => MemberKey(line, before.Header), StringComparer.Ordinal);
                 foreach (var line in type.Value.Members)
                 {
@@ -57,12 +59,14 @@ namespace TopiaForge.ModManager.Tests
                         continue;
                     }
                     if (IsMarked(line) && !IsMarked(previous)) throw ExistingApi(line);
+                    if (!IsMarked(line) && IsMarked(previous)) throw LostMarker(line);
                     RequireVersionedAccessors(new List<string> { previous }, new List<string> { line });
                 }
             }
         }
 
-        // A property or event that is already there may gain an accessor, which needs its own marker.
+        // A property or event that is already there may gain an accessor, which needs its own marker; a marked
+        // accessor keeps its marker.
         private static void RequireVersionedAccessors(List<string> oldLines, List<string> added)
         {
             var before = oldLines.SelectMany(Accessors).ToList();
@@ -75,6 +79,7 @@ namespace TopiaForge.ModManager.Tests
                         throw new InvalidOperationException("New SDK API " + line.Trim() + " adds the " + name +
                             " accessor; add " + MarkerAdvice + " to that accessor before refreshing the baseline.");
                     if (existing.Count > 0 && marked && existing.All(accessor => !accessor.Marked)) throw ExistingApi(line);
+                    if (existing.Count > 0 && !marked && existing.Any(accessor => accessor.Marked)) throw LostMarker(line);
                 }
             }
         }
@@ -85,6 +90,11 @@ namespace TopiaForge.ModManager.Tests
         private static InvalidOperationException ExistingApi(string line) => new InvalidOperationException("SDK API " +
             line.Trim() + " is already in the baseline, so it must not gain [RequiresTopiaForge]: mods that admit older " +
             "loaders use it. Mark only APIs that are new in this release.");
+
+        private static InvalidOperationException LostMarker(string line) => new InvalidOperationException("SDK API " +
+            line.Trim() + " is marked [RequiresTopiaForge] in the baseline, so it must keep that marker: older loaders " +
+            "lack it, and without the marker TF1010 lets mods that admit them use it. Put " + MarkerAdvice +
+            " back, naming the release it first shipped in.");
 
         private static bool IsMarked(string line) => TrailingRequirement.IsMatch(line);
 

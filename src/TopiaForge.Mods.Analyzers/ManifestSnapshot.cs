@@ -20,7 +20,7 @@ namespace TopiaForge.Mods.Analyzers
             IEnumerable<string> capabilities,
             IEnumerable<string> dependencies,
             string loaderRange = "*", string sdkRange = "*",
-            TextSpan loaderSpan = default, TextSpan sdkSpan = default, bool exists = true)
+            TextSpan loaderSpan = default, TextSpan sdkSpan = default, bool exists = true, bool hasDuplicateKeys = false)
         {
             PackageId = packageId;
             this.capabilities = capabilities.ToImmutableHashSet(StringComparer.Ordinal);
@@ -30,6 +30,7 @@ namespace TopiaForge.Mods.Analyzers
             LoaderSpan = loaderSpan;
             SdkSpan = sdkSpan;
             Exists = exists;
+            HasDuplicateKeys = hasDuplicateKeys;
         }
 
         /// <summary>Whether the project has a topiaforge.mod.json at all, readable or not.</summary>
@@ -39,6 +40,12 @@ namespace TopiaForge.Mods.Analyzers
         public string SdkRange { get; }
         public TextSpan LoaderSpan { get; }
         public TextSpan SdkSpan { get; }
+
+        /// <summary>
+        /// Whether a top-level key repeats. Pack and load reject such a manifest with their own message; the other
+        /// rules still read it, but nothing edits it, because no single occurrence is the one to change.
+        /// </summary>
+        public bool HasDuplicateKeys { get; }
 
         internal static ManifestSnapshot Parse(string json) => new ManifestParser(json).Parse();
 
@@ -91,6 +98,7 @@ namespace TopiaForge.Mods.Analyzers
             private string packageId = string.Empty;
             private string loaderRange = "*", sdkRange = "*";
             private TextSpan loaderSpan, sdkSpan;
+            private bool hasDuplicateKeys;
 
             public ManifestParser(string json)
             {
@@ -106,7 +114,7 @@ namespace TopiaForge.Mods.Analyzers
                     while (true)
                     {
                         var propertyName = ReadString();
-                        if (!seen.Add(propertyName)) throw InvalidJson();
+                        if (!seen.Add(propertyName)) hasDuplicateKeys = true;
                         Expect(':');
                         if (string.Equals(propertyName, "name", StringComparison.Ordinal))
                         {
@@ -150,12 +158,19 @@ namespace TopiaForge.Mods.Analyzers
                 }
 
                 return new ManifestSnapshot(packageId, capabilities, dependencies,
-                    loaderRange, sdkRange, loaderSpan, sdkSpan);
+                    loaderRange, sdkRange, loaderSpan, sdkSpan, hasDuplicateKeys: hasDuplicateKeys);
             }
 
+            // A range that is not a string is invalid, which pack and load report; TF1010 then sees no floor.
             private string ReadRange(out TextSpan span)
             {
-                SkipWhitespace();
+                span = default;
+                if (Peek() != '"')
+                {
+                    SkipValue(1);
+                    return "*";
+                }
+
                 var start = position;
                 var value = ReadString();
                 span = TextSpan.FromBounds(start, position);
