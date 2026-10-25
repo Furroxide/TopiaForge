@@ -20,7 +20,7 @@ namespace TopiaForge.Multiplayer.Network
     /// listener follows the game socket's rule (<see cref="UdpSocketDriver"/>): dual-mode IPv6, or IPv4 alone where the
     /// operating system has no IPv6.
     /// </summary>
-    internal sealed class DescriptorEndpoint : INetworkService
+    internal sealed partial class DescriptorEndpoint : INetworkService
     {
         internal const int MaximumConnections = 8;
         internal const int MaximumRequestBytes = DescriptorRequest.MaximumBytes;
@@ -33,7 +33,8 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Socket listener;
         private readonly List<Client> clients = new List<Client>();
         private readonly Dictionary<string, SourceBudget> budgets = new Dictionary<string, SourceBudget>(StringComparer.Ordinal);
-        private readonly Func<string, Stream?>? packages;
+        private readonly Func<string, CancellationToken, Stream?>? packages;
+        private int pendingArchives;
         private readonly bool relayOnly;
         private readonly long requestTimeoutMicros;
         private readonly long transferTimeoutMicros;
@@ -47,7 +48,7 @@ namespace TopiaForge.Multiplayer.Network
         /// <param name="withoutIPv6">Listens as a system without IPv6 does, on IPv4 alone, on any system; tests use it.</param>
         internal DescriptorEndpoint(
             int port,
-            Func<string, Stream?>? packages = null,
+            Func<string, CancellationToken, Stream?>? packages = null,
             bool relayOnly = false,
             long requestTimeoutMicros = 5_000_000,
             long transferTimeoutMicros = 120_000_000,
@@ -153,6 +154,11 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Advances one connection; returns false once it is finished.</summary>
         private bool Serve(Client client, long now)
         {
+            if (client.Archive != null)
+            {
+                if (now - client.OpenedAt > transferTimeoutMicros) return false;
+                if (!FinishArchive(client)) return true;
+            }
             if (!client.Responding)
             {
                 if (now - client.OpenedAt > requestTimeoutMicros) return false;
@@ -191,22 +197,7 @@ namespace TopiaForge.Multiplayer.Network
 
             if (request.Kind == DescriptorRequestKind.Package)
             {
-                Stream? stream = null;
-                long length = 0;
-                try
-                {
-                    stream = packages?.Invoke(request.Sha256!);
-                    if (stream != null) length = stream.Length;
-                }
-                catch (Exception exception) when (IsArchiveFailure(exception))
-                {
-                    // An archive that cannot be opened is as good as missing, for this request alone.
-                    stream?.Dispose();
-                    stream = null;
-                }
-
-                if (stream == null) client.Respond("TFD1 404\n", null);
-                else client.Respond("TFD1 200 " + length.ToString(CultureInfo.InvariantCulture) + "\n", stream);
+                BeginArchive(client, request.Sha256!);
                 return;
             }
 
@@ -315,6 +306,7 @@ namespace TopiaForge.Multiplayer.Network
             internal string Source { get; }
             internal long OpenedAt { get; }
             internal bool Responding { get; private set; }
+            internal PendingArchive? Archive { get; set; }
             internal ArraySegment<byte> Pending { get; set; } = new ArraySegment<byte>(Array.Empty<byte>());
 
             /// <summary>Gets whether the header and the whole body have been handed to the socket.</summary>
@@ -388,6 +380,8 @@ namespace TopiaForge.Multiplayer.Network
 
             public void Dispose()
             {
+                Archive?.Dispose();
+                Archive = null;
                 body?.Dispose();
                 body = null;
                 Socket.Dispose();

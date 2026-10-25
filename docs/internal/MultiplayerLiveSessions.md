@@ -538,7 +538,9 @@ again.
    join within 10 seconds is closed, so peers that connect and say nothing cannot keep players out on keepalives
    alone. One address holds at most four links, enough for a household behind one router; paths whose source cannot
    be told apart, such as a relay's, are not capped.
-5. **Serving.** The host signs its descriptor (the packages it read, `hostServesPackages` false) and serves it.
+5. **Serving.** The host signs its descriptor with the packages it read and serves it. `hostServesPackages` is true
+   only for a developer-mode launch with `servePackages`; its archive source serves only those listed hashes from the
+   launcher cache, verified on each request. See `MultiplayerLaunchContract.md`, section 2.
    It sets the engine's capacity and join policy, and keeps its session info current as players come and go. Whether
    the session offers voice chat is read once and fixed for the run: the descriptor and the info say it, and the engine
    enforces it, telling every joining player in `JoinAccepted` (`MultiplayerVoice.md`, section 2.12). Hosting again

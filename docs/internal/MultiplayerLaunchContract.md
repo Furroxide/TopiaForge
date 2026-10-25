@@ -65,6 +65,16 @@ game for a launch V5 cannot carry.
   and a `password` member anywhere is refused.
 - **Served packages need developer mode.** Both readers refuse `servePackages` without `developerMode`, and the
   provider's plan serves nothing without it either.
+  The game applies both options to hosting: only their conjunction installs an archive source and signs
+  `hostServesPackages: true`. The source fixes its allowlist to the descriptor's package hashes when hosting starts.
+  It opens `<sha256>.topiaforgemod` from the launcher's `package-cache`, following `TOPIAFORGE_DATA_ROOT` when set,
+  otherwise the launcher's usual platform data root. A custom root must reach the game in its inherited environment;
+  use an absolute value because the game has its own working directory.
+  Each request checks developer mode and verifies the same open archive handle it will stream, on a worker with
+  cancellation and the endpoint's existing two-minute deadline. Missing, unreadable, oversized or changed archives
+  receive `TFD1 404`; a bounded warning says why without a path or address. No request text forms a filesystem path.
+  Locally installed or unpacked development packages whose original archives were never cached cannot be shared:
+  the game does not reconstruct a ZIP from installed files. Keep the exact original archive in the launcher cache.
 - **Display text** has no surrounding white space, no control characters, no unpaired surrogates, and neither U+FFFE
   nor U+FFFF, which the game's JSON reader refuses: a document holding one could never be read back.
 - **The service origin** is written one way: `https://`, a lowercase DNS name, and a port of 1 to 65535 in plain

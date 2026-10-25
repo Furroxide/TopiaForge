@@ -137,7 +137,7 @@ internal sealed class SteppedNetworkFactory : INetworkFactory
     public TraversalNetwork StartTraversal(int port, NetworkStack stack, NatAgentOptions options) =>
         throw new NotSupportedException("The stepped networks carry no NAT layer; Internet sessions run on the traversal factory.");
 
-    public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly) => null;
+    public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly, Func<string, CancellationToken, Stream?>? packages = null) => null;
 
     public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => null;
 
@@ -236,7 +236,10 @@ internal sealed class TestContent : ILiveSessionContent
     /// <summary>Gets or sets the host's verdict on every player, overriding the check of what they present.</summary>
     internal ContentAdmission? Verdict { get; set; }
 
-    public IReadOnlyList<DescriptorPackage> HostPackages() => Array.Empty<DescriptorPackage>();
+    internal IReadOnlyList<DescriptorPackage> Packages { get; set; } = Array.Empty<DescriptorPackage>();
+    internal List<string> PackageWarnings { get; } = new();
+    public IReadOnlyList<DescriptorPackage> HostPackages() => Packages;
+    public void ReportPackageWarning(string message) => PackageWarnings.Add(message);
 
     public byte[] ClientContent() => Presents;
 
