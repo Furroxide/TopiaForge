@@ -87,8 +87,8 @@ points.
   host drops a muted player's voice at the relay and their chat at ingress (section 5), so nothing the host relays can
   carry either. `IsServerMuted` counts the automatic mutes the relay makes for abusing voice chat
   ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.4), and answers on a joined player too, from the host's voice
-  roster. Live sessions always run with voice; a provider without it, as some tests compose, answers `SetServerMute`
-  with `Unavailable`.
+  roster. Live sessions always run with voice; a provider without it, as some tests compose, keeps its own set of muted
+  identities for chat alone, until hosting stops, so `SetServerMute` still silences a player's chat at ingress.
 - **Names.** The provider names this player after the runtime's display name whenever it hosts, in solo play too, and
   again whenever the name changes. A joining player sends the name in its join request.
 - **Developer switch.** The `TOPIAFORGE_LIVE_MULTIPLAYER` switch still drives live sessions directly through the

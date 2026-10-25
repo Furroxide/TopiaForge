@@ -16,16 +16,20 @@ namespace TopiaForge.ModManager.Tests
         {
             MessageBoundsAndWire();
             RateLimitsUseMonotonicTime();
+            ArrivalJitterDropsNothingTheSenderAllowed();
+            RefusedSendsSpendNoAllowance();
             HostAssignsIdentityAndLimitsEverySender();
             MutesAndDeparturesAreCheckedAtRelay();
             HostileRelaysAreBoundedAndRedacted();
             LocalCommandsAndModeration();
+            DuplicateNamesPointToTheChatId();
+            ModCommandFailuresKeepTheirWords();
             FocusEndsWithSessionAndDisposal();
             ConnectionGraceAndNotices();
             PauseActionsFollowTheirLifetime();
             IdleFramesAllocateNothing();
             ChatViewContractTests.Run();
-            Console.WriteLine("InSessionChatTests passed: 10 logic groups and the production view contract.");
+            Console.WriteLine("InSessionChatTests passed: 14 logic groups and the production view contract.");
         }
 
         private static void MessageBoundsAndWire()
@@ -64,6 +68,66 @@ namespace TopiaForge.ModManager.Tests
             That(host.Channel.Sent.Count == 3, "a new participant id cannot reset the authenticated player's host allowance");
             host.Now = 2_000_000; host.Receive("p9", ChatWire.Write("refilled after reconnect"));
             That(host.Channel.Sent.Count == 4, "the rejoined identity still refills normally");
+        }
+
+        private static void ArrivalJitterDropsNothingTheSenderAllowed()
+        {
+            // An honest sender at its full rate: three at once, then a fourth two seconds later, as its own limit allows.
+            using var guest = new ChatRig(false);
+            for (var index = 0; index < 3; index++) guest.Chat.Send("burst " + index);
+            guest.Now = 2_000_000;
+            That(guest.Chat.Send("on time").Length == 0 && guest.Channel.Sent.Count == 4, "the sender's own limit allows a fourth message after two seconds");
+
+            // A retransmission holds the first three back 300 ms on the link; the fourth arrives 50 ms after it left.
+            using var host = new ChatRig(true);
+            host.Now = 300_000;
+            for (var index = 0; index < 3; index++) host.Receive("p1", guest.Channel.Sent[index]);
+            host.Now = 2_050_000;
+            host.Receive("p1", guest.Channel.Sent[3]);
+            That(host.Channel.Sent.Count == 4, "the host relays every message the sender's limit allowed, though the link bunched them");
+
+            // The relays leave the host 1.75 s apart and reach a client bunched again: 350 ms late, then 100 ms late.
+            using var client = new ChatRig(false);
+            client.Now = 650_000;
+            for (var index = 0; index < 3; index++) client.Receive("p0", host.Channel.Sent[index]);
+            client.Now = 2_150_000;
+            client.Receive("p0", host.Channel.Sent[3]);
+            var shown = 0;
+            while (client.Chat.TryTakeLine(out _)) shown++;
+            That(shown == 4, "a client shows every relay its host accepted, though its own link bunched them too");
+
+            // The slack never widens a burst or the rate: a modified client's flood still relays three at once, and one every
+            // two seconds after that.
+            host.Now = 60_000_000;
+            var before = host.Channel.Sent.Count;
+            for (var index = 0; index < 10; index++) host.Receive("p2", ChatWire.Write("flood " + index));
+            That(host.Channel.Sent.Count - before == 3, "the host still takes at most three at once");
+            for (var step = 1; step <= 200; step++) { host.Now = 60_000_000 + step * 100_000L; host.Receive("p2", ChatWire.Write("steady")); }
+            That(host.Channel.Sent.Count - before == 13, "over twenty seconds the host takes the burst and ten more, one every two seconds");
+        }
+
+        private static void RefusedSendsSpendNoAllowance()
+        {
+            // A player whose link dropped presses Return a few times; nothing leaves, so nothing is spent.
+            using var rig = new ChatRig(false);
+            rig.Snapshot = new MultiplayerSessionSnapshot(new MultiplayerSessionId("chat"), MultiplayerSessionState.Ready, MultiplayerProcessKind.Interactive,
+                MultiplayerExecutionSide.Client, new ParticipantId("p1"),
+                new[] { Player("p0", "Ada", "host-key", host: true), Player("p1", "Sam", "my-key", local: true, connected: false) },
+                new NetworkTick(1), new SessionSeed(7), new ParticipantId("p0"), MultiplayerSessionEndReason.None);
+            rig.Chat.Tick(rig.Control, rig.Snapshot);
+            for (var index = 0; index < 3; index++)
+                That(rig.Chat.Send("are you there?").Contains("reconnecting", StringComparison.Ordinal), "a reconnecting player is told to wait for the link");
+            rig.Snapshot = ClientSnapshot(MultiplayerSessionState.Ready, "chat", "p1", Player("p2", "Lee", "two"));
+            rig.Chat.Tick(rig.Control, rig.Snapshot);
+            for (var index = 0; index < 3; index++)
+                That(rig.Chat.Send("\u202e").StartsWith("Write a message", StringComparison.Ordinal), "text that is only a direction override sends nothing");
+            rig.Channel.Refuse = true;
+            for (var index = 0; index < 3; index++)
+                That(rig.Chat.Send("window full").StartsWith("The message could not be sent", StringComparison.Ordinal), "a send the link refuses is reported");
+            rig.Channel.Refuse = false;
+            for (var index = 0; index < 3; index++)
+                That(rig.Chat.Send("back " + index).Length == 0, "after nine refusals the player still has the whole burst of three");
+            That(rig.Channel.Sent.Count == 3 && rig.Chat.Send("fourth").Contains("Wait two seconds", StringComparison.Ordinal), "and the limit still holds after it");
         }
 
         private static void HostAssignsIdentityAndLimitsEverySender()
@@ -119,7 +183,7 @@ namespace TopiaForge.ModManager.Tests
                 That(!line.Text.Contains("192.0.2.8", StringComparison.Ordinal) && !line.Text.Contains("2001:db8", StringComparison.Ordinal) && !line.Text.Contains("host.test", StringComparison.Ordinal), "relayed addresses never reach the screen");
                 That(line.Text.Length <= 256, "relays stay bounded");
             }
-            That(count == 3, "host flood is limited on reception too");
+            That(count == 4, "host flood is limited on reception too: the burst of three and one message of slack for the second link");
         }
 
         private sealed class ChatRig : IDisposable
@@ -147,13 +211,18 @@ namespace TopiaForge.ModManager.Tests
         {
             internal readonly Queue<InternalSystemMessage> Inbox = new Queue<InternalSystemMessage>();
             internal readonly List<byte[]> Sent = new List<byte[]>();
+            internal bool Refuse;
             public InternalSystemChannelKind Kind => InternalSystemChannelKind.Chat;
             public bool IsOpen { get; private set; } = true;
             public ulong Generation => 1;
             public ulong GetGeneration(ParticipantId peer) => 1;
-            public bool CanSend(InternalSystemTarget target, int bytes) => IsOpen;
+            public bool CanSend(InternalSystemTarget target, int bytes) => IsOpen && !Refuse;
             public OperationResult<int> Send(ArraySegment<byte> payload, InternalSystemTarget target, ICollection<ParticipantId>? skipped = null)
-            { Sent.Add(payload.ToArray()); return OperationResult<int>.Success(1); }
+            {
+                if (Refuse) return OperationResult<int>.Failure(ModErrorCode.RateLimited, "The host has not taken the earlier system messages yet.");
+                Sent.Add(payload.ToArray());
+                return OperationResult<int>.Success(1);
+            }
             public bool TryReceive(out InternalSystemMessage message)
             { if (Inbox.Count > 0) { message = Inbox.Dequeue(); return true; } message = default; return false; }
             public InternalSystemChannelStatistics GetStatistics() => new InternalSystemChannelStatistics(Kind, Sent.Count, 0, 0, Inbox.Count, 0);

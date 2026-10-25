@@ -95,7 +95,7 @@ internal static class InSessionChatProviderTests
             count++;
             That(line.Text.Length <= 256 && !line.Text.Contains("192.0.2.8", StringComparison.Ordinal) && !line.Text.Contains("2001:db8", StringComparison.Ordinal) && !line.Text.Contains("host.test", StringComparison.Ordinal), "host relays are bounded and private");
         }
-        That(count == 3, "host flood is independently rate-limited by receiver");
+        That(count == 4, "host flood is independently rate-limited by receiver: the burst of three and one message of slack for the second link");
         rawHost.Send(new ArraySegment<byte>(ChatWire.Write("fake player", "unknown")), InternalSystemTarget.Everyone);
         Advance(rig, 100_000);
         That(!received.TryTakeLine(out _), "unknown relayed player cannot impersonate a participant");

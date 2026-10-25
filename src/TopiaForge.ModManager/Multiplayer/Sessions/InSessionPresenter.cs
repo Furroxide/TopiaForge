@@ -10,6 +10,7 @@ namespace TopiaForge.ModManager.Sessions
     /// <summary>Chat composition, local command dispatch, link status and bounded membership notices. Unity-free.</summary>
     internal sealed class InSessionPresenter : IInSessionScreen, IDisposable
     {
+        private const string CommandFailed = "The command could not run. Check its arguments and try again.";
         private readonly MultiplayerScreensContext context;
         private readonly ISessionScreen session;
         private readonly ExecuteChatCommand execute;
@@ -83,21 +84,15 @@ namespace TopiaForge.ModManager.Sessions
             switch (name.ToLowerInvariant())
             {
                 case "help":
-                    chat.Feedback("/help; host: /kick, /ban, /mute followed by a player name in quotes. Use PLAYERS for duplicate names. Mod commands: /mod:command arguments. /mute toggles the server mute.");
+                    chat.Feedback("/help lists these. Host: /kick, /ban or /mute with a player's name, in quotes if it has spaces, or the id chat shows after PLAYER, such as p2. /mute toggles the mute for everyone. Mod commands: /mod:command arguments.");
                     return true;
                 case "kick":
                 case "ban":
                 case "mute":
                     if (!session.CanEnd) return Fail("Only the host can use moderation commands.");
-                    if (args.Count != 1) return Fail("Give one player name in quotes. Use PLAYERS for duplicate names.");
-                    PlayerRow? target = null;
-                    for (var index = 0; index < session.Players.Count; index++)
-                    {
-                        var row = session.Players[index];
-                        if (row.Key != args[0] && !string.Equals(row.Name, args[0], StringComparison.OrdinalIgnoreCase)) continue;
-                        if (target != null) return Fail("That name matches more than one player. Use PLAYERS to select one.");
-                        target = row;
-                    }
+                    if (args.Count != 1) return Fail("Give one player's name, in quotes if it has spaces, or the id chat shows after PLAYER.");
+                    var target = FindPlayer(args[0], out var namesake);
+                    if (namesake != null) return Fail("More than one player has that name. Use the id chat shows after PLAYER, as in /" + name.ToLowerInvariant() + " " + namesake.Key + ".");
                     if (target == null || !target.CanModerate) return Fail("That player cannot be moderated. Check PLAYERS and try again.");
                     session.Select(target.Key);
                     Close();
@@ -109,15 +104,40 @@ namespace TopiaForge.ModManager.Sessions
                     try
                     {
                         if (!execute(name, args, out var result)) return Fail("Unknown command. Use /help, or /mod:command for a registered mod command.");
-                        if (result == null || !result.Succeeded) return Fail("The command could not run. Check its arguments and try again.");
+                        if (result == null || !result.Succeeded)
+                        {
+                            // The mod's own failure text says what went wrong with its command: show it, redacted and plain.
+                            var failure = result == null ? string.Empty : HostText.ForDisplay(result.ErrorMessage, HostText.LineChars);
+                            return Fail(failure.Length > 0 ? failure : CommandFailed);
+                        }
                         if (result.TryGetValue(out var answer)) chat.Feedback(answer);
                         return true;
                     }
-                    catch (Exception) { return Fail("The command could not run. Check its arguments and try again."); }
+                    catch (Exception) { return Fail(CommandFailed); }
             }
         }
 
         private bool Fail(string text) { chat.Feedback(text, true); return false; }
+
+        /// <summary>
+        /// Finds the player a moderation command names. An id, as chat shows it after PLAYER, is never ambiguous, so it wins
+        /// over a name: a player who calls themselves p2 cannot shield p2. A name counts only for players the host can
+        /// moderate; one that two of them share finds nobody, and <paramref name="namesake"/> is one of them, for the hint.
+        /// </summary>
+        private PlayerRow? FindPlayer(string text, out PlayerRow? namesake)
+        {
+            namesake = null;
+            PlayerRow? named = null;
+            for (var index = 0; index < session.Players.Count; index++)
+            {
+                var row = session.Players[index];
+                if (string.Equals(row.Key, text, StringComparison.Ordinal)) { namesake = null; return row; }
+                if (!row.CanModerate || !string.Equals(row.Name, text, StringComparison.OrdinalIgnoreCase)) continue;
+                if (named == null) named = row;
+                else namesake = row;
+            }
+            return namesake == null ? named : null;
+        }
 
         private bool LocalDisconnected()
         {

@@ -57,17 +57,20 @@ namespace TopiaForge.ModManager.Sessions
         {
             if (!IsAvailable) return "Chat is unavailable. Join a session and try again.";
             if (!ChatWire.IsValid(text)) return "Write a message of 1 to 256 characters.";
-            if (!sendRate.Take(Clock())) return "Chat is sending too quickly. Wait two seconds and try again.";
             var local = Find(snapshot!.LocalParticipantId!.Value);
             if (local == null || !local.IsConnected) return "Chat is reconnecting. Try again once the link returns.";
             var safe = HostText.ForDisplay(text, ChatWire.MaximumCharacters);
             if (safe.Length == 0) return "Write a message of 1 to 256 characters.";
+            // Only a message that leaves spends the allowance: a refusal above, or a send the link refuses, costs nothing.
+            var allowance = sendRate;
+            if (!allowance.Take(Clock())) return "Chat is sending too quickly. Wait two seconds and try again.";
             if (role == InternalSessionRole.ListenHost) Relay(local, safe);
             else
             {
                 var result = channel!.Send(new ArraySegment<byte>(ChatWire.Write(safe)), InternalSystemTarget.Host);
                 if (!result.Succeeded) return "The message could not be sent. Wait for the connection and try again.";
             }
+            sendRate = allowance;
             return string.Empty;
         }
 
@@ -76,8 +79,8 @@ namespace TopiaForge.ModManager.Sessions
             var sender = Find(message.Sender);
             if (sender == null || sender.IsHost || !sender.IsConnected || !sender.PlayerKey.IsValid || control!.IsServerMuted(sender.Id)) return;
             if (!ChatWire.TryRead(message.Payload, false, out _, out var text)) return;
-            if (!rates.TryGetValue(sender.PlayerKey, out var rate) && !MakeRoom()) return;
-            var allowed = rate.Take(Clock());
+            if (!rates.TryGetValue(sender.PlayerKey, out var rate) && !MakeRoom(ChatRateLimit.HostSlack)) return;
+            var allowed = rate.Take(Clock(), ChatRateLimit.HostSlack);
             rates[sender.PlayerKey] = rate;
             if (!allowed) return;
             Relay(sender, HostText.ForDisplay(text, ChatWire.MaximumCharacters));
@@ -91,8 +94,8 @@ namespace TopiaForge.ModManager.Sessions
             if (sender == null) return;
             // A hostile host cannot fill an unbounded log or spend unbounded rendering work. This allowance is per
             // displayed sender so a legitimate burst from several players does not crowd out another player's line.
-            if (!rates.TryGetValue(sender.PlayerKey, out var rate) && !MakeRoom()) return;
-            var allowed = rate.Take(Clock());
+            if (!rates.TryGetValue(sender.PlayerKey, out var rate) && !MakeRoom(ChatRateLimit.RelaySlack)) return;
+            var allowed = rate.Take(Clock(), ChatRateLimit.RelaySlack);
             rates[sender.PlayerKey] = rate;
             if (allowed) Append(new ChatLine(Author(sender), HostText.ForDisplay(text, ChatWire.MaximumCharacters)));
         }
@@ -112,12 +115,12 @@ namespace TopiaForge.ModManager.Sessions
             return prefix + HostText.ForDisplay(sender.DisplayName, 32 - prefix.Length);
         }
 
-        private bool MakeRoom()
+        private bool MakeRoom(double slack)
         {
             if (rates.Count < 64) return true;
             var now = Clock();
             MultiplayerPlayerKey expired = default;
-            foreach (var entry in rates) if (entry.Value.IsExpired(now)) { expired = entry.Key; break; }
+            foreach (var entry in rates) if (entry.Value.IsExpired(now, slack)) { expired = entry.Key; break; }
             return expired.IsValid && rates.Remove(expired);
         }
 

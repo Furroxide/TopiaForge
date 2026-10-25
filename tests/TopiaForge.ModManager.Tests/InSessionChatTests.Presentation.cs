@@ -41,6 +41,47 @@ namespace TopiaForge.ModManager.Tests
             That(client.Rig.Prompt == null && client.Channel.Sent.Count == 0, "client commands never go to the host or a confirmation");
         }
 
+        private static void DuplicateNamesPointToTheChatId()
+        {
+            // Chat tells two guests called Sam apart only by id; PLAYERS lists two identical rows, so a hint must name the id.
+            using var rig = new PresenterRig(true);
+            rig.Rig.Environment.SessionSnapshot = HostSnapshot(MultiplayerSessionState.Ready, "chat",
+                Player("p1", "Sam", "one"), Player("p2", "Sam", "two"), Player("p3", "p1", "three"));
+            rig.Frame();
+            rig.LastLine();
+            rig.Screen.Open();
+            That(!rig.Screen.Submit("/kick Sam") && rig.Rig.Prompt == null, "a name two guests share selects nobody");
+            var hint = rig.LastLine();
+            That(hint.Error && hint.Text.Contains("/kick p2", StringComparison.Ordinal), "the hint names an id chat shows after PLAYER: " + hint.Text);
+            That(rig.Screen.Submit("/kick p2") && rig.Rig.Prompt?.Kind == ScreenPromptKind.Destructive, "that id asks to remove exactly that guest");
+            rig.Rig.Answer(ScreenPromptKind.Destructive, true);
+            That(rig.Rig.Control.Calls.Contains("Kick:p2") && !rig.Rig.Control.Calls.Contains("Kick:p1"), "and removes only them");
+            rig.Screen.Open();
+            That(rig.Screen.Submit("/ban p1") && rig.Rig.Prompt?.Kind == ScreenPromptKind.Destructive, "a guest named p1 cannot shield the guest whose id is p1");
+            rig.Rig.Answer(ScreenPromptKind.Destructive, true);
+            That(rig.Rig.Control.Calls.Contains("Ban:p1") && !rig.Rig.Control.Calls.Contains("Ban:p3"), "the id wins over the name");
+        }
+
+        private static void ModCommandFailuresKeepTheirWords()
+        {
+            using var rig = new PresenterRig(false);
+            rig.Screen.Open();
+            rig.Result = OperationResult<string>.Failure(ModErrorCode.InvalidArgument, "Give a speed from 1 to 10.");
+            That(!rig.Screen.Submit("/sample:speed 99") && rig.Screen.IsOpen, "a failed mod command keeps the draft open");
+            var line = rig.LastLine();
+            That(line.Error && line.Text == "Give a speed from 1 to 10.", "the player reads the mod's own words: " + line.Text);
+            rig.Result = OperationResult<string>.Failure(ModErrorCode.Unavailable, "<b>No route</b> to 192.0.2.8:27250");
+            rig.Screen.Submit("/sample:speed 5");
+            line = rig.LastLine();
+            That(!line.Text.Contains("192.0.2.8", StringComparison.Ordinal) && line.Text.StartsWith("<b>No route</b>", StringComparison.Ordinal), "redacted, and plain: " + line.Text);
+            rig.Result = OperationResult<string>.Failure(ModErrorCode.Unavailable, " \u202e ");
+            rig.Screen.Submit("/sample:speed 5");
+            That(rig.LastLine().Text.StartsWith("The command could not run", StringComparison.Ordinal), "a failure without words of its own gets the general hint");
+            rig.Throws = true;
+            rig.Screen.Submit("/sample:speed 5");
+            That(rig.LastLine().Text.StartsWith("The command could not run", StringComparison.Ordinal), "so does a command that throws");
+        }
+
         private static void FocusEndsWithSessionAndDisposal()
         {
             using var rig = new PresenterRig(true);
@@ -127,6 +168,8 @@ namespace TopiaForge.ModManager.Tests
             internal readonly InSessionPresenter Screen;
             internal long Now;
             internal string Executed = string.Empty;
+            internal OperationResult<string>? Result = OperationResult<string>.Success("Done.");
+            internal bool Throws;
             internal PresenterRig(bool host)
             {
                 Rig.Control.ChatChannel = Channel;
@@ -138,7 +181,18 @@ namespace TopiaForge.ModManager.Tests
                 Frame();
             }
             private bool Execute(string name, IReadOnlyList<string> args, out OperationResult<string>? result)
-            { Executed = name + ":" + string.Join(" ", args); result = OperationResult<string>.Success("Done."); return true; }
+            {
+                if (Throws) throw new InvalidOperationException("The sample command failed.");
+                Executed = name + ":" + string.Join(" ", args);
+                result = Result;
+                return true;
+            }
+            internal ChatLine LastLine()
+            {
+                ChatLine last = default;
+                while (Screen.TryTakeLine(out var line)) last = line;
+                return last;
+            }
             internal void Frame(float dt = 0.05f)
             {
                 Rig.Frame(deltaTime: dt); Screen.Tick(dt);

@@ -54,19 +54,34 @@ namespace TopiaForge.ModManager.Sessions
         }
     }
 
-    /// <summary>Three messages at once, then one every two seconds; a monotonic clock, no timer or frame allocation.</summary>
+    /// <summary>
+    /// Three messages at once, then one every two seconds; a monotonic clock, no timer or frame allocation. A sender counts
+    /// its own sends exactly. The host counts arrivals, which a link's delay can bunch, so it takes a message up to a second
+    /// early: half a message of slack, and still never more than three at once. A client bounding relays allows a second
+    /// more, as a relay crossed the host's link and then its own. Over time the rate is one every two seconds everywhere.
+    /// </summary>
     internal struct ChatRateLimit
     {
+        /// <summary>The host's slack for arrivals a link bunched: half a message, so a message may arrive a second early.</summary>
+        internal const double HostSlack = 0.5;
+
+        /// <summary>A client's slack for relays, which crossed two links: one message, so a relay may arrive two seconds early.</summary>
+        internal const double RelaySlack = 1;
+
+        private const double Burst = 3;
+        private const double MicrosPerMessage = 2_000_000d;
         private double tokens;
         private long sampled;
         private bool started;
 
-        internal bool IsExpired(long now) => started && now >= sampled && now - sampled >= 6_000_000;
+        /// <summary>Gets whether the allowance has refilled completely, so forgetting it changes nothing.</summary>
+        internal bool IsExpired(long now, double slack) => started && now >= sampled && now - sampled >= (Burst + slack) * MicrosPerMessage;
 
-        internal bool Take(long now)
+        internal bool Take(long now, double slack = 0)
         {
-            if (!started) { tokens = 3; sampled = now; started = true; }
-            if (now > sampled) { tokens = Math.Min(3, tokens + (now - sampled) / 2_000_000d); sampled = now; }
+            var capacity = Burst + slack;
+            if (!started) { tokens = capacity; sampled = now; started = true; }
+            if (now > sampled) { tokens = Math.Min(capacity, tokens + (now - sampled) / MicrosPerMessage); sampled = now; }
             if (tokens < 1) return false;
             tokens--;
             return true;
