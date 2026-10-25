@@ -140,6 +140,9 @@ extension LauncherJoinSteps on LauncherBloc {
         join: next,
         plan: plan,
         clearLaunch: _replanned(join, next),
+        // The developer-mode box counts only on the consent it was ticked on.
+        hostServedTicked:
+            flow.hostServedTicked && next.stage == JoinStage.awaitingConsent,
       ),
     );
     if (next.stage != join.stage) _advanceJoin(emit);

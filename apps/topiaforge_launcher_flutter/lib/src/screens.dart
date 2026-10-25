@@ -32,6 +32,7 @@ part 'screens/home_screen.dart';
 part 'screens/join_consent_sheet.dart';
 part 'screens/join_failure_card.dart';
 part 'screens/join_flow_dialog.dart';
+part 'screens/join_host_served_section.dart';
 part 'screens/join_progress_view.dart';
 part 'screens/mods_screen.dart';
 part 'screens/mod_version_status.dart';

@@ -82,6 +82,22 @@ final class JoinFailureText {
   }
 }
 
+/// The consent sheet's red developer-mode section, shown when the plan takes
+/// mods only the host has from the host itself. Drafted for approval: it is
+/// in `docs/internal/MultiplayerPrivacyText.md`, marked as awaiting approval,
+/// and the sheet uses it word for word.
+abstract final class JoinHostServedText {
+  static const title = 'Mods from the host (developer mode)';
+  static const warning =
+      'Only this host has the mods marked "Served by the host". Ticking the '
+      'box lets the launcher download them from the host itself. Each one is '
+      "checked against the SHA-256 in the host's signed description, but no "
+      'mod source has reviewed what is inside. This is for developer mode '
+      'only.';
+  static const checkbox = 'Download these mods from the host';
+  static const untickedHint = 'Join stays off until you tick the box.';
+}
+
 /// The steps the rail shows, in order, with their names.
 const joinSteps = <(JoinStage, String)>[
   (JoinStage.resolving, 'Finding the server'),
@@ -267,8 +283,11 @@ const _texts = <JoinFailureCode, JoinFailureText>{
   JoinFailureCode.hostDownloadUnsupported: JoinFailureText(
     title: 'A mod is only on the host',
     sentence:
-        'This launcher cannot download mods from a host yet. Ask the '
-        'host to publish it to a mod source you use.',
+        'Only the host has this mod. Taking it from the host needs '
+        "developer mode, your agreement in the join's developer-mode "
+        'section, and a host reached on your local network or by its '
+        'address rather than through the TopiaForge service. Otherwise, ask '
+        'the host to publish it to a mod source you use.',
   ),
   JoinFailureCode.integrityFailed: JoinFailureText(
     title: 'A download did not match',

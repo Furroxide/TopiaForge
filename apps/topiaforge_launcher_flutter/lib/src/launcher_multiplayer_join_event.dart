@@ -39,9 +39,22 @@ final class MultiplayerJoinQuestionAnswered extends MultiplayerJoinEvent {
   final bool yes;
 }
 
+/// The player ticked or cleared the consent sheet's developer-mode box for
+/// the mods only the host has. Join stays off until it is ticked.
+final class MultiplayerJoinHostServedTicked extends MultiplayerJoinEvent {
+  const MultiplayerJoinHostServedTicked({
+    required this.flow,
+    required this.ticked,
+  });
+
+  final int flow;
+  final bool ticked;
+}
+
 /// The player pressed Join on the consent sheet. [closeOwnedGame] says
 /// whether the sheet told them that joining closes the game this launcher
-/// started.
+/// started. Whether the developer-mode box is ticked is the flow's own
+/// `hostServedTicked`.
 final class MultiplayerJoinConsented extends MultiplayerJoinEvent {
   const MultiplayerJoinConsented({
     required this.flow,

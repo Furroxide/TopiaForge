@@ -84,6 +84,9 @@ _joinScreens() => {
     _blocIn(tester).add(MultiplayerJoinRequested(JoinLinkTarget(_serverLink)));
     await tester.pumpAndSettle();
   },
+  'a consent sheet with a mod only the host has': (tester, size) async {
+    await _toHostServedSheet(tester, size: size, capabilities: ['network']);
+  },
   'the progress rail': (tester, size) async {
     final gateway = _JoinGateway()..hold(JoinStage.installing);
     await _openApp(tester, size: size, gateway: gateway);

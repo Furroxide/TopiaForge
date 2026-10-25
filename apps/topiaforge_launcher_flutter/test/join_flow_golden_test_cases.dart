@@ -98,52 +98,42 @@ void registerJoinGoldenRenders() {
       await _toSheet(tester);
       await _renderJoin(tester, 'join-consent-closes-game');
 
+      // Without developer mode a mod only the host has blocks the plan.
       final hostServed = (await tester.runAsync(
         () => _server(hostServesPackages: true),
       ))!;
-      // Without developer mode a mod only the host has blocks the plan;
-      // with it, the sheet shows the mod and keeps Join off.
-      for (final (developerMode, name) in [
-        (false, 'join-failure-host-only'),
-        (true, 'join-consent-host-only'),
-      ]) {
-        await _freshJoinScene(tester);
-        await _openApp(
-          tester,
-          gateway: _JoinGateway(
+      await _freshJoinScene(tester);
+      await _openApp(
+        tester,
+        gateway: _JoinGateway(
+          server: hostServed,
+          plan: const JoinPlanner().plan(
             server: hostServed,
-            plan: const JoinPlanner().plan(
-              server: hostServed,
-              resolutions: {
-                _sha('zombies'): JoinPackageResolution.hostOffered(),
-                _sha('sandbox'): JoinPackageResolution.installed(
-                  _manifest('tf.sandbox', '1.4.0', name: 'Sandbox'),
-                ),
-              },
-              environment: JoinEnvironment(
-                gameBuild: _environment.gameBuild,
-                runtimeVersion: _environment.runtimeVersion,
-                sdkVersion: _environment.sdkVersion,
-                protocolVersion: _environment.protocolVersion,
-                developerMode: developerMode,
+            resolutions: {
+              _sha('zombies'): JoinPackageResolution.hostOffered(),
+              _sha('sandbox'): JoinPackageResolution.installed(
+                _manifest('tf.sandbox', '1.4.0', name: 'Sandbox'),
               ),
-              mayContactHost: true,
-            ),
+            },
+            environment: _environment,
+            mayContactHost: true,
           ),
-        );
-        _blocIn(tester).add(
-          MultiplayerJoinRequested(
-            JoinLinkTarget(
-              SessionLink.direct(
-                serverId: _serverId,
-                host: '192.168.1.20',
-                port: 27250,
-              ),
-            ),
-          ),
-        );
-        await _renderJoin(tester, name);
-      }
+        ),
+      );
+      _blocIn(tester).add(MultiplayerJoinRequested(_lanLink));
+      await _renderJoin(tester, 'join-failure-host-only');
+
+      // With it, the sheet shows the red section and Join waits for its
+      // box; a download the launcher then refuses names what is missing.
+      await _freshJoinScene(tester);
+      final served = await _toHostServedSheet(tester);
+      await _renderJoin(tester, 'join-consent-host-served');
+      await _tapHostServedBox(tester);
+      await _renderJoin(tester, 'join-consent-host-served-ticked');
+      served.answers[JoinStage.downloading] = (_) =>
+          JoinFailed(JoinFailureCode.hostDownloadUnsupported);
+      await tester.tap(find.byKey(const Key('join-consent-join')));
+      await _renderJoin(tester, 'join-failure-host-download');
 
       await _freshJoinScene(tester);
       final downloading = _JoinGateway()
@@ -229,6 +219,10 @@ void registerJoinGoldenRenders() {
       await _renderJoin(tester, 'join-consent-crowded-800x600-text2x');
       await tester.tap(find.byKey(const Key('join-consent-cancel')));
       await _renderJoin(tester, 'join-failure-800x600-text2x');
+      await _freshJoinScene(tester);
+      await _toHostServedSheet(tester, size: const Size(800, 600));
+      await tester.ensureVisible(find.byKey(const Key('join-host-served')));
+      await _renderJoin(tester, 'join-consent-host-served-800x600-text2x');
       tester.platformDispatcher.clearTextScaleFactorTestValue();
 
       tester.platformDispatcher.accessibilityFeaturesTestValue =
@@ -237,6 +231,10 @@ void registerJoinGoldenRenders() {
             highContrast: true,
           );
       await _renderSheetAndCard(tester, 'high-contrast');
+      await _freshJoinScene(tester);
+      await _toHostServedSheet(tester);
+      await tester.ensureVisible(find.byKey(const Key('join-host-served')));
+      await _renderJoin(tester, 'join-consent-host-served-high-contrast');
       tester.platformDispatcher.accessibilityFeaturesTestValue =
           const FakeAccessibilityFeatures(disableAnimations: true);
 

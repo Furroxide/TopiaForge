@@ -24,6 +24,7 @@ part 'join_flow_failure_test_cases.dart';
 part 'join_flow_widget_test_cases.dart';
 part 'join_flow_layout_test_cases.dart';
 part 'join_flow_privacy_test_cases.dart';
+part 'join_flow_host_served_test_cases.dart';
 part 'join_flow_golden_test_cases.dart';
 
 /// A server link, an invite, a direct link to a host on the local network,
@@ -118,5 +119,6 @@ void main() {
   registerJoinWidgetTests();
   registerJoinLayoutTests();
   registerJoinPrivacyTests();
+  registerJoinHostServedTests();
   registerJoinGoldenRenders();
 }

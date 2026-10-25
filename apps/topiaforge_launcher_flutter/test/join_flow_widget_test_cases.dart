@@ -279,58 +279,6 @@ void registerJoinWidgetTests() {
       );
     });
 
-    testWidgets('mods only the host has keep Join off, and say why', (
-      tester,
-    ) async {
-      final server = await tester.runAsync(
-        () => _server(hostServesPackages: true),
-      );
-      final plan = const JoinPlanner().plan(
-        server: server!,
-        resolutions: {
-          _sha('zombies'): JoinPackageResolution.hostOffered(),
-          _sha('sandbox'): JoinPackageResolution.installed(
-            _manifest('tf.sandbox', '1.4.0'),
-          ),
-        },
-        environment: JoinEnvironment(
-          gameBuild: '0.0.2545',
-          runtimeVersion: '0.1.0-rc.1',
-          sdkVersion: '0.1.0-rc.1',
-          protocolVersion: '1.0.0',
-          developerMode: true,
-        ),
-        mayContactHost: true,
-      );
-      await _openApp(
-        tester,
-        gateway: _JoinGateway(server: server, plan: plan),
-      );
-      // Only a host the launcher reaches itself can serve its mods.
-      _blocIn(tester).add(
-        MultiplayerJoinRequested(
-          JoinLinkTarget(
-            SessionLink.direct(
-              serverId: _serverId,
-              host: '192.168.1.20',
-              port: 27250,
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('join-host-only')), findsOneWidget);
-      expect(find.text('Served by the host'), findsOneWidget);
-      expect(
-        tester
-            .widget<ButtonStyleButton>(
-              find.byKey(const Key('join-consent-join')),
-            )
-            .onPressed,
-        isNull,
-      );
-    });
-
     testWidgets('Join by address takes a host and port, says how passwords '
         'work, and remembers what was typed', (tester) async {
       await _openApp(tester);

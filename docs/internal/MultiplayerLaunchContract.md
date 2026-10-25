@@ -393,14 +393,18 @@ launcher log, and neither ever names a URL or an address.
   passes its bound as soon as it does, and one that ends short once it ends. The SHA-256 must be the pinned one before
   anything is kept. Then the archive's `topiaforge.mod.json` must equal the trusted manifest the plan used, compared as
   package installs compare it. Verified archives stay in the cache by SHA-256, so a join tried again fetches nothing
-  twice. A launcher that closes stops a join's downloads at once: each download's token is linked to the repository's
-  own, which closing cancels before it waits for the work in flight, so the join answers `JoinCancelRequested` and no
-  partial file is left.
+  twice. A launcher that closes stops a join's downloads at once, the host's own included, and the wait for a LAN
+  host's beacon: each download's token is linked to the repository's own, which closing cancels before it waits for
+  the work in flight, so the join answers `JoinCancelRequested` and no partial file is left.
 - **Packages only the host serves (developer mode).** A package none of the player's sources offers, from a host whose
   descriptor says `hostServesPackages`, is planned as `downloadFromHost` in developer mode, and the consent must
-  acknowledge it (`JoinSessionState.hostServedAcknowledged`). The downloading stage fetches it last, once every source
-  download is in the cache, from the host's own endpoint with `TFD1 package <sha256>` (`HostPackageClient`), through
-  a `JoinHostPackageSource` the multiplayer facade hands the content host.
+  acknowledge it (`JoinSessionState.hostServedAcknowledged`). The launcher's consent sheet shows such a package by its
+  id, version and SHA-256 as "Served by the host", says that what it may do is not known until it is checked, and adds
+  a red developer-mode section whose box Join waits for; only a ticked box sends
+  `JoinConsentGiven(hostServedAcknowledged: true)`, and the box counts only for the consent it was ticked on. The
+  downloading stage fetches it last, once every source download is in the cache, from the host's own endpoint with
+  `TFD1 package <sha256>` (`HostPackageClient`), through a `JoinHostPackageSource` the multiplayer facade hands the
+  content host.
   - **Gates the data layer checks itself.** Developer mode, as the launcher's settings say at that moment, and the
     acknowledgement, before anything is fetched, sources included, again before each of the host's packages, so that
     turning developer mode off asks the host for nothing more, and again before the install; settings that cannot be

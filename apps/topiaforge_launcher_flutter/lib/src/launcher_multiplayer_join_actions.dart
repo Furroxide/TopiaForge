@@ -16,6 +16,7 @@ extension LauncherJoinActions on LauncherBloc {
   ) => switch (event) {
     MultiplayerJoinRequested() => _onJoinRequested(event, emit),
     MultiplayerJoinQuestionAnswered() => _onJoinQuestionAnswered(event, emit),
+    MultiplayerJoinHostServedTicked() => _onJoinHostServedTicked(event, emit),
     MultiplayerJoinConsented() => _onJoinConsented(event, emit),
     MultiplayerJoinCancelled() => _onJoinCancelled(event.flow, emit),
     MultiplayerJoinRetried() => _onJoinRetried(event, emit),
@@ -267,6 +268,26 @@ extension LauncherJoinActions on LauncherBloc {
     _askOrStart(emit, flow);
   }
 
+  /// The developer-mode box exists only on a consent whose plan takes mods
+  /// from the host, so a tick counts nowhere else.
+  Future<void> _onJoinHostServedTicked(
+    MultiplayerJoinHostServedTicked event,
+    Emitter<LauncherState> emit,
+  ) async {
+    final flow = _flow;
+    final join = flow?.join;
+    if (flow == null ||
+        flow.id != event.flow ||
+        join?.stage != JoinStage.awaitingConsent ||
+        !(join?.plan?.hasUnverifiedPackages ?? false)) {
+      return;
+    }
+    _showFlow(emit, flow.copyWith(hostServedTicked: event.ticked));
+  }
+
+  /// The reducer takes no consent to a plan with mods only the host has
+  /// unless the developer-mode box was ticked, so the join then waits at
+  /// the sheet.
   Future<void> _onJoinConsented(
     MultiplayerJoinConsented event,
     Emitter<LauncherState> emit,
@@ -279,7 +300,10 @@ extension LauncherJoinActions on LauncherBloc {
     }
     _reduceJoin(
       emit,
-      JoinConsentGiven(closeOwnedGameAcknowledged: event.closeOwnedGame),
+      JoinConsentGiven(
+        hostServedAcknowledged: flow.hostServedTicked,
+        closeOwnedGameAcknowledged: event.closeOwnedGame,
+      ),
     );
   }
 

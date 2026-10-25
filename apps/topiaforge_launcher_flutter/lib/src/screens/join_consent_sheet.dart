@@ -2,9 +2,10 @@ part of '../screens.dart';
 
 /// The consent sheet: what joining the server installs, what those mods may
 /// do, how the session treats the player's address and microphone, the
-/// profile it saves, and what happens to a running game. Nothing is
-/// downloaded, installed or started before the player presses Join, and
-/// the focus starts on Cancel, so a stray Enter never joins.
+/// profile it saves, and what happens to a running game. Mods only the host
+/// has add the red developer-mode section, whose box Join waits for.
+/// Nothing is downloaded, installed or started before the player presses
+/// Join, and the focus starts on Cancel, so a stray Enter never joins.
 class _JoinConsentSheet extends StatelessWidget {
   const _JoinConsentSheet({required this.flow, required this.state});
 
@@ -21,7 +22,7 @@ class _JoinConsentSheet extends StatelessWidget {
     final updates = state.profiles.any(
       (profile) => profile.id == plan.derivedProfile.id,
     );
-    final hostOnly = plan.hasUnverifiedPackages;
+    final hostServed = plan.hasUnverifiedPackages;
     final closesGame = flow.gameRunning == JoinGameRunning.owned;
     final theme = Theme.of(context);
     return _JoinFrame(
@@ -75,7 +76,19 @@ class _JoinConsentSheet extends StatelessWidget {
           const SizedBox(height: 16),
           Text('What these mods may do', style: theme.textTheme.titleSmall),
           const SizedBox(height: 6),
-          CapabilityChips(capabilities: plan.capabilities),
+          // No manifest anyone vouches for comes with a mod only the host
+          // has, so what it may do is not known before it is checked.
+          if (!hostServed || plan.capabilities.isNotEmpty)
+            CapabilityChips(capabilities: plan.capabilities),
+          if (hostServed) ...[
+            if (plan.capabilities.isNotEmpty) const SizedBox(height: 6),
+            Text(
+              'What the mods served by the host may do is not known until '
+              'each one is downloaded and checked.',
+              key: const Key('join-host-served-capabilities'),
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 8),
           const SessionNotice(
             key: Key('join-code-warning'),
@@ -116,17 +129,9 @@ class _JoinConsentSheet extends StatelessWidget {
                   'it for you.',
             ),
           ],
-          if (hostOnly) ...[
-            const SizedBox(height: 8),
-            SessionNotice(
-              key: const Key('join-host-only'),
-              tone: StatusTone.danger,
-              message:
-                  'Only the host has ${_hostOnlyNames(plan)}, and this '
-                  'launcher cannot download mods from a host yet. Ask the host '
-                  'to publish ${plan.hostServedPackages.length == 1 ? 'it' : 'them'} '
-                  'to a mod source you use, then join again.',
-            ),
+          if (hostServed) ...[
+            const SizedBox(height: 12),
+            _HostServedSection(flow: flow),
           ],
         ],
       ),
@@ -139,7 +144,7 @@ class _JoinConsentSheet extends StatelessWidget {
         ),
         FilledButton.icon(
           key: const Key('join-consent-join'),
-          onPressed: hostOnly
+          onPressed: hostServed && !flow.hostServedTicked
               ? null
               : () => _add(
                   context,
@@ -169,12 +174,18 @@ String _downloadSummary(JoinPlan plan) {
     for (final item in plan.packages)
       if (item.disposition == JoinPackageDisposition.download) item,
   ];
+  final hosted = plan.hostServedPackages.length;
+  final fromHost = switch (hosted) {
+    0 => '',
+    1 => ' 1 mod comes from the host itself.',
+    _ => ' $hosted mods come from the host itself.',
+  };
   if (downloads.isEmpty) {
     return plan.packages.every(
           (item) => item.disposition == JoinPackageDisposition.useInstalled,
         )
         ? 'Nothing to download: every mod is installed.'
-        : 'Nothing to download from your mod sources.';
+        : 'Nothing to download from your mod sources.$fromHost';
   }
   final sizes = downloads.map((item) => item.resolution.sizeBytes);
   final known = sizes.every((size) => size != null);
@@ -182,12 +193,9 @@ String _downloadSummary(JoinPlan plan) {
   final count = downloads.length == 1 ? '1 mod' : '${downloads.length} mods';
   return known
       ? 'Downloads $count, ${_formatBytes(total)}, from your mod sources.'
-      : 'Downloads $count from your mod sources.';
+            '$fromHost'
+      : 'Downloads $count from your mod sources.$fromHost';
 }
-
-String _hostOnlyNames(JoinPlan plan) => plan.hostServedPackages
-    .map((package) => '${package.id} ${package.version}')
-    .join(', ');
 
 /// [bytes] as people read a size.
 String _formatBytes(int bytes) {
@@ -295,10 +303,13 @@ class _PackageRow extends StatelessWidget {
     final theme = Theme.of(context);
     final package = item.package;
     final manifestName = item.manifest?.name.trim() ?? '';
+    // A mod only the host has is named by the host alone, so its id and
+    // version are held to the same rule as every other word from the host.
     final name = withoutAddresses(
       manifestName.isEmpty ? package.id : manifestName,
     );
-    final identity = '${package.id}@${package.version}';
+    final identity =
+        '${withoutAddresses(package.id)}@${withoutAddresses(package.version)}';
     final source = _sourceOf(item);
     final sha = Tooltip(
       message: package.sha256,

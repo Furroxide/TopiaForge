@@ -58,6 +58,7 @@ final class JoinFlow {
     this.gameRunning,
     this.launch,
     this.voice = false,
+    this.hostServedTicked = false,
     this.waitingLong = false,
     this.closed = false,
   });
@@ -97,6 +98,11 @@ final class JoinFlow {
   /// started; the consent sheet's voice line says it with the server's own.
   final bool voice;
 
+  /// Whether the player ticked the consent sheet's developer-mode box for
+  /// the mods only the host has. It counts only for the consent on screen:
+  /// the join forgets it as soon as it leaves that consent.
+  final bool hostServedTicked;
+
   /// Whether the game has not answered a started join for a while.
   final bool waitingLong;
 
@@ -128,6 +134,7 @@ final class JoinFlow {
     JoinLaunchStarted? launch,
     bool clearLaunch = false,
     bool? voice,
+    bool? hostServedTicked,
     bool? waitingLong,
     bool? closed,
   }) => JoinFlow(
@@ -143,6 +150,7 @@ final class JoinFlow {
     gameRunning: clearGameRunning ? null : gameRunning ?? this.gameRunning,
     launch: clearLaunch ? null : launch ?? this.launch,
     voice: voice ?? this.voice,
+    hostServedTicked: hostServedTicked ?? this.hostServedTicked,
     waitingLong: waitingLong ?? this.waitingLong,
     closed: closed ?? this.closed,
   );

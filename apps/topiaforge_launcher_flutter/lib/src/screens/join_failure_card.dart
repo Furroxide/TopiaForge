@@ -19,11 +19,13 @@ class _JoinFailureView extends StatelessWidget {
     final text = JoinFailureText.of(failure, startedGame: _startedGame);
     final cancelled = failure.code == JoinFailureCode.cancelled;
     final theme = Theme.of(context);
+    // A blocked mod's id is the host's own word, as its message is.
     final blockers = [
       for (final blocker in failure.blockers)
         blocker.modId.isEmpty
             ? withoutAddresses(blocker.message)
-            : '${blocker.modId}: ${withoutAddresses(blocker.message)}',
+            : '${withoutAddresses(blocker.modId)}: '
+                  '${withoutAddresses(blocker.message)}',
     ];
     return _JoinFrame(
       key: const Key('join-failure-card'),
@@ -152,7 +154,7 @@ String joinFailureDetails(
     text.bodyFor(failure),
     if (text.nextStep case final next?) 'What to do: $next',
     for (final blocker in failure.blockers)
-      'Mod ${blocker.modId.isEmpty ? '(session)' : blocker.modId}: '
+      'Mod ${blocker.modId.isEmpty ? '(session)' : withoutAddresses(blocker.modId)}: '
           '${withoutAddresses(blocker.message)}',
     'Privacy: ${flow.privacy.wireName}',
     'TopiaForge ${TopiaForgeRuntimeVersions.loaderVersion}',

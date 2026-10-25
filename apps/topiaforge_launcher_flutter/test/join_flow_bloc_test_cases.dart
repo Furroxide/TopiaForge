@@ -249,52 +249,6 @@ void registerJoinBlocTests() {
       );
     });
 
-    test('a plan with packages only the host serves cannot be consented to '
-        'yet', () async {
-      final server = await _server(hostServesPackages: true);
-      final plan = const JoinPlanner().plan(
-        server: server,
-        resolutions: {
-          _sha('zombies'): JoinPackageResolution.hostOffered(),
-          _sha('sandbox'): JoinPackageResolution.installed(
-            _manifest('tf.sandbox', '1.4.0'),
-          ),
-        },
-        environment: JoinEnvironment(
-          gameBuild: '0.0.2545',
-          runtimeVersion: '0.1.0-rc.1',
-          sdkVersion: '0.1.0-rc.1',
-          protocolVersion: '1.0.0',
-          developerMode: true,
-        ),
-        mayContactHost: true,
-      );
-      expect(plan.hasUnverifiedPackages, isTrue);
-      final gateway = _JoinGateway(server: server, plan: plan);
-      final bloc = await _startedBloc(
-        _JoinRepository(install: _install),
-        gateway,
-      );
-      bloc.add(
-        MultiplayerJoinRequested(
-          JoinLinkTarget(
-            SessionLink.direct(
-              serverId: _serverId,
-              host: '192.168.1.20',
-              port: 27250,
-            ),
-          ),
-        ),
-      );
-      final flow = await _atStage(bloc, JoinStage.awaitingConsent);
-
-      // Without the developer-mode acknowledgement the reducer holds it.
-      bloc.add(MultiplayerJoinConsented(flow: flow.id));
-      await pumpEventQueue();
-      expect(_flowOf(bloc)!.join!.stage, JoinStage.awaitingConsent);
-      expect(gateway.calls, isNot(contains('answer downloading')));
-    });
-
     test('a newer link replaces a join waiting for consent, and a join under '
         'way keeps going', () async {
       final gateway = _JoinGateway();
