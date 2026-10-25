@@ -3,6 +3,7 @@ part of 'join_flow_test.dart';
 /// An address planted in every text the fakes control, so a test sees at
 /// once if any of it travels further than it may.
 const _planted = '203.0.113.77';
+const _plantedEndpoint = '[2001:db8::77]:27250';
 
 /// Host A's public keys, from `tests/fixtures/multiplayer/descriptor/`.
 const _signingKey = 'X_63eOUQF6uSrrIZ1DhX5w-ouzCDzlMBavIFLxvmABE';

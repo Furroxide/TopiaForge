@@ -95,38 +95,43 @@ class LauncherShell extends StatelessWidget {
           onSectionSelected: (section) => context.read<LauncherBloc>().add(
             LauncherSectionSelected(section),
           ),
-          child: Scaffold(
-            body: TopiaForgeBackdrop(
-              child: Row(
-                children: [
-                  NavigationRail(
-                    minWidth: compactNavigation ? 64 : 86,
-                    scrollable: true,
-                    labelType: compactNavigation
-                        ? NavigationRailLabelType.none
-                        : NavigationRailLabelType.all,
-                    selectedIndex: selectedIndex < 0 ? null : selectedIndex,
-                    onDestinationSelected: (index) => context
-                        .read<LauncherBloc>()
-                        .add(LauncherSectionSelected(visibleSections[index])),
-                    destinations: [
-                      for (final section in visibleSections)
-                        _destinationFor(section, state.availableModUpdateCount),
-                    ],
-                  ),
-                  const VerticalDivider(width: 1),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _TopBar(state: state),
-                        if (state.isBusy)
-                          const LinearProgressIndicator(minHeight: 3),
-                        Expanded(child: LauncherBody(state: state)),
-                        _StatusBar(state: state),
+          child: JoinFlowHost(
+            child: Scaffold(
+              body: TopiaForgeBackdrop(
+                child: Row(
+                  children: [
+                    NavigationRail(
+                      minWidth: compactNavigation ? 64 : 86,
+                      scrollable: true,
+                      labelType: compactNavigation
+                          ? NavigationRailLabelType.none
+                          : NavigationRailLabelType.all,
+                      selectedIndex: selectedIndex < 0 ? null : selectedIndex,
+                      onDestinationSelected: (index) => context
+                          .read<LauncherBloc>()
+                          .add(LauncherSectionSelected(visibleSections[index])),
+                      destinations: [
+                        for (final section in visibleSections)
+                          _destinationFor(
+                            section,
+                            state.availableModUpdateCount,
+                          ),
                       ],
                     ),
-                  ),
-                ],
+                    const VerticalDivider(width: 1),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _TopBar(state: state),
+                          if (state.isBusy)
+                            const LinearProgressIndicator(minHeight: 3),
+                          Expanded(child: LauncherBody(state: state)),
+                          _StatusBar(state: state),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -287,6 +292,15 @@ class _TopBar extends StatelessWidget {
                   ),
                 ),
               ),
+              if (bloc.canJoin)
+                Tooltip(
+                  message: 'Join a server by address',
+                  child: IconButton(
+                    key: const Key('join-by-address'),
+                    onPressed: () => showDirectConnectDialog(context),
+                    icon: const Icon(Icons.group_add_outlined),
+                  ),
+                ),
               if (!iconOnlyActions)
                 Tooltip(
                   message: 'Refresh launcher state',

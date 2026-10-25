@@ -1,10 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io' show File, FileSystemException, Platform;
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:launcher_domain/launcher_domain.dart';
+import 'package:launcher_ui/launcher_ui.dart';
 import 'package:topiaforge_launcher_flutter/src/join_texts.dart';
+import 'package:topiaforge_launcher_flutter/src/launcher_app.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_bloc.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_event.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_multiplayer_state.dart';
@@ -14,6 +21,10 @@ import 'package:topiaforge_launcher_flutter/src/session_link_inbox.dart';
 part 'join_flow_fakes.dart';
 part 'join_flow_bloc_test_cases.dart';
 part 'join_flow_failure_test_cases.dart';
+part 'join_flow_widget_test_cases.dart';
+part 'join_flow_layout_test_cases.dart';
+part 'join_flow_privacy_test_cases.dart';
+part 'join_flow_golden_test_cases.dart';
 
 /// A server link, an invite, a direct link to a host on the local network,
 /// and a typed public address that only a direct connection reaches.
@@ -104,4 +115,8 @@ void main() {
 
   registerJoinBlocTests();
   registerJoinFailureTests();
+  registerJoinWidgetTests();
+  registerJoinLayoutTests();
+  registerJoinPrivacyTests();
+  registerJoinGoldenRenders();
 }
