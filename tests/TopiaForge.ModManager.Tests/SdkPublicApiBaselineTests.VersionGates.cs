@@ -32,9 +32,8 @@ namespace TopiaForge.ModManager.Tests
             return required == null ? string.Empty : RequirementMarker + JsonSerializer.Serialize(required) + "]";
         }
 
-        // APIs are matched by type and member name, not by line, so a changed line for an API that is already
-        // there (a deprecation, a parameter rename or nullability fix, a new base interface) is never mistaken
-        // for a new API, and an API that is already there never gains a marker.
+        // Match metadata signatures, ignoring source-only details such as parameter names and nullability.
+        // Counting overloads by name can hide a new signature behind a removed or edited overload.
         private static void RequireVersionedAdditions(string expected, string actual)
         {
             var old = ApiTypes(expected);
@@ -49,17 +48,16 @@ namespace TopiaForge.ModManager.Tests
                 }
 
                 if (IsMarked(type.Value.Header) && !IsMarked(before.Header)) throw ExistingApi(type.Value.Header);
-                foreach (var group in type.Value.Members.GroupBy(MemberKey, StringComparer.Ordinal))
+                var oldMembers = before.Members.ToDictionary(line => MemberKey(line, before.Header), StringComparer.Ordinal);
+                foreach (var line in type.Value.Members)
                 {
-                    var oldLines = before.Members.Where(line => MemberKey(line) == group.Key).ToList();
-                    var added = group.Where(line => !oldLines.Contains(line)).ToList();
-                    var removed = oldLines.Where(line => !group.Contains(line)).ToList();
-                    // Lines beyond those they replace are new overloads or members, and each needs a marker.
-                    var surplus = Math.Max(0, added.Count - removed.Count);
-                    var marked = added.Count(IsMarked);
-                    if (marked < surplus) throw NewApi(added.First(line => !IsMarked(line)));
-                    if (marked - surplus > removed.Count(IsMarked)) throw ExistingApi(added.First(IsMarked));
-                    RequireVersionedAccessors(oldLines, added);
+                    if (!oldMembers.TryGetValue(MemberKey(line, type.Value.Header), out var previous))
+                    {
+                        if (!IsMarked(line)) throw NewApi(line);
+                        continue;
+                    }
+                    if (IsMarked(line) && !IsMarked(previous)) throw ExistingApi(line);
+                    RequireVersionedAccessors(new List<string> { previous }, new List<string> { line });
                 }
             }
         }
@@ -101,70 +99,11 @@ namespace TopiaForge.ModManager.Tests
             {
                 if (line.Length == 0 || line[0] == '#' || line.StartsWith("assembly ", StringComparison.Ordinal)
                     || line.StartsWith("target-framework ", StringComparison.Ordinal)) continue;
-                if (line[0] != ' ') types[TypeKey(line)] = current = new ApiType(line);
+                if (line[0] != ' ') types.Add(TypeKey(line), current = new ApiType(line));
                 else current?.Members.Add(line);
             }
 
             return types;
-        }
-
-        // A type's kind and name, without its base types, constraints or annotations.
-        private static string TypeKey(string header)
-        {
-            var text = WithoutAnnotations(header);
-            foreach (var separator in new[] { " : ", " where " })
-            {
-                var index = text.IndexOf(separator, StringComparison.Ordinal);
-                if (index >= 0) text = text.Substring(0, index);
-            }
-
-            return text;
-        }
-
-        // A member's kind and name. Overloads share a key; parameters, types and annotations are left out.
-        private static string MemberKey(string line)
-        {
-            var text = WithoutAnnotations(line).Trim();
-            var space = text.IndexOf(' ');
-            var kind = space < 0 ? text : text.Substring(0, space);
-            int end;
-            string head;
-            switch (kind)
-            {
-                case "constructor":
-                    return kind;
-                case "method":
-                    end = text.IndexOf('(');
-                    head = end < 0 ? text : TrimTrailingGroup(text.Substring(0, end), '<', '>');
-                    break;
-                case "property":
-                case "event":
-                    end = text.IndexOf(" { ", StringComparison.Ordinal);
-                    head = end < 0 ? text : TrimTrailingGroup(text.Substring(0, end), '[', ']');
-                    break;
-                case "field":
-                    end = text.IndexOf(" = ", StringComparison.Ordinal);
-                    head = end < 0 ? text : text.Substring(0, end);
-                    break;
-                default:
-                    return text;
-            }
-
-            return kind + " " + head.Substring(head.LastIndexOf(' ') + 1);
-        }
-
-        // Removes a trailing bracketed group: a method's generic parameters or an indexer's parameters.
-        private static string TrimTrailingGroup(string text, char open, char close)
-        {
-            if (text.Length == 0 || text[text.Length - 1] != close) return text;
-            var depth = 0;
-            for (var index = text.Length - 1; index >= 0; index--)
-            {
-                if (text[index] == close) depth++;
-                else if (text[index] == open && --depth == 0) return text.Substring(0, index);
-            }
-
-            return text;
         }
 
         private static IEnumerable<(string Name, bool Marked)> Accessors(string line)

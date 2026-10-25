@@ -374,20 +374,38 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
     }
   }
   // Below either floor, the player's next step is the same, so it is said once.
-  final updates = <String>{};
+  VersionRange? updateRange;
+  String? updateMessage;
   for (final (label, range, version) in [
     ('loader', manifest.loaderVersionRange, loaderVersion),
     ('SDK', manifest.sdkVersionRange, sdkVersion),
   ]) {
     if (version == null || range.isAny || range.allows(version)) continue;
     final update = _updateRequired(manifest.name, range, version);
-    if (update != null && !updates.add(update)) continue;
+    if (update != null) {
+      final comparison = updateRange == null
+          ? 1
+          : range.min!.compareTo(updateRange.min!);
+      if (comparison > 0 || (comparison == 0 && !range.includeMin)) {
+        updateRange = range;
+        updateMessage = update;
+      }
+      continue;
+    }
     issues.add(
       LauncherIssue(
         severity: IssueSeverity.error,
         subjectId: manifest.id,
-        message:
-            update ?? '${manifest.name} supports $label $range, not $version.',
+        message: '${manifest.name} supports $label $range, not $version.',
+      ),
+    );
+  }
+  if (updateMessage != null) {
+    issues.add(
+      LauncherIssue(
+        severity: IssueSeverity.error,
+        subjectId: manifest.id,
+        message: updateMessage,
       ),
     );
   }

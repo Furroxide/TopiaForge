@@ -52,10 +52,14 @@ public interface IExampleService
 
 API baselines record the effective requirement, including accessor and containing-type requirements.
 Both verification and refresh reject additions missing the marker, with guidance to add it. They
-match APIs by type and member name, so a new overload, or a new accessor on an existing property or
+match APIs by type and member signature, so a new overload, or a new accessor on an existing property or
 event, needs its own marker, while a changed line for an API that is already there (a deprecation,
 a parameter rename or nullability fix, a new base interface) needs none. An API that is already in
-the baseline must never gain a marker: mods that admit older loaders use it. Review
+the baseline must never gain a marker: mods that admit older loaders use it. Replacing a parameter or
+return type introduces a new signature even if another overload is removed. Generic parameter names,
+parameter names, defaults and reference nullability do not change that identity; nested types retain
+the generic arity of each declaring type. Accessor requirements belong to their exact property or event,
+including the index parameter types. Review
 the baseline diff before accepting it; the reviewed baseline is the inventory of pre-existing APIs.
 Refresh with `dotnet run --project tests/TopiaForge.ModManager.Tests -c Release --
 --update-sdk-api-baselines .`, then rebuild because baselines are embedded resources. Do not edit a
@@ -70,7 +74,7 @@ release into a compatibility promise.
 An older loader refuses an incompatible mod during discovery and checks the loader range again
 before loading code. The launcher names the mod and says it needs TopiaForge's minimum version or
 newer, followed by "update TopiaForge", once, even when both the loader and SDK floors are above the
-installed release. A join plan identifies the incompatible mod and blocks admission before enabling
+installed release; unequal floors report the stricter requirement. A join plan identifies the incompatible mod and blocks admission before enabling
 it.
 
 ## Manifest and serialized state

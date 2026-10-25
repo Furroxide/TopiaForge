@@ -216,7 +216,8 @@ both fields and bounds that admit the API, such as `">=0.2.0 <0.3.0"`.
 Checks read attributes from referenced assembly metadata, including a containing type's requirement.
 They cover method calls and method groups, helper bodies in this compilation, property reads and
 writes (including marked accessors, null-conditional assignments and attribute named arguments),
-indexers (including `?[]`), events, fields and constants, constructors, attributes and their
+indexers (including `?[]` and index initializers), events (checking the add or remove accessor actually
+used), fields and constants, constructors, attributes and their
 constant arguments, generic arguments and `nameof`. An override or an explicit interface
 implementation of a marked member is checked too, because it only runs on a loader that has the
 member. `nameof` and constant uses are intentionally checked even when they emit no runtime call: the

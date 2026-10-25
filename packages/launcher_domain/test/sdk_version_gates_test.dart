@@ -116,6 +116,26 @@ void main() {
     ]);
   });
 
+  test('different floors give one update to the stricter requirement', () {
+    for (final ranges in [
+      ('>=0.2.0 <1.0.0', '>=0.3.0 <1.0.0', '0.3.0 or newer'),
+      ('>=0.3.0 <1.0.0', '>=0.2.0 <1.0.0', '0.3.0 or newer'),
+      ('>=0.2.0 <1.0.0', '>0.2.0 <1.0.0', 'newer than 0.2.0'),
+    ]) {
+      final issues = const DependencyPlanner().runtimeCompatibilityIssues(
+        testManifest(
+          'example.feature',
+          loaderRange: ranges.$1,
+          sdkRange: ranges.$2,
+        ),
+        loaderVersion: '0.1.0',
+        sdkVersion: '0.1.0',
+      );
+      expect(issues, hasLength(1));
+      expect(issues.single.message, contains(ranges.$3));
+    }
+  });
+
   test('feature floors use SemVer minimums, including prereleases', () {
     final policy = ManifestFeatureRequirements([
       ManifestFeatureRequirement(

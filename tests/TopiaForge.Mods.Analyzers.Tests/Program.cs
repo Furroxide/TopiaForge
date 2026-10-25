@@ -75,6 +75,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 RunBlockingWaitFixTests();
                 RunVersionGateTests();
                 RunVersionGateCoverageTests();
+                RunVersionGateEventTests();
                 Console.WriteLine("All TopiaForge analyzer tests passed.");
                 return 0;
             }

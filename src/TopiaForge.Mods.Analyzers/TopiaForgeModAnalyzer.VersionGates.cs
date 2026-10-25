@@ -29,7 +29,7 @@ namespace TopiaForge.Mods.Analyzers
                 SyntaxKind.IdentifierName, SyntaxKind.GenericName,
                 SyntaxKind.ObjectCreationExpression, SyntaxKind.ImplicitObjectCreationExpression,
                 SyntaxKind.Attribute, SyntaxKind.BaseConstructorInitializer, SyntaxKind.ThisConstructorInitializer,
-                SyntaxKind.ElementAccessExpression, SyntaxKind.ElementBindingExpression);
+                SyntaxKind.ElementAccessExpression, SyntaxKind.ElementBindingExpression, SyntaxKind.ImplicitElementAccess);
             context.RegisterSymbolAction(symbol => AnalyzeImplementedVersionGate(symbol, manifest),
                 SymbolKind.Method, SymbolKind.Property, SymbolKind.Event);
         }
@@ -135,8 +135,13 @@ namespace TopiaForge.Mods.Analyzers
 
             if (symbol is IEventSymbol eventSymbol)
             {
-                if (eventSymbol.AddMethod != null) yield return eventSymbol.AddMethod;
-                if (eventSymbol.RemoveMethod != null) yield return eventSymbol.RemoveMethod;
+                var access = node.Parent is MemberAccessExpressionSyntax member && member.Name == node ? member
+                    : node.Parent is MemberBindingExpressionSyntax binding && binding.Name == node ? binding : node;
+                var assignment = access.Parent as AssignmentExpressionSyntax;
+                if (eventSymbol.AddMethod != null && assignment?.IsKind(SyntaxKind.SubtractAssignmentExpression) != true)
+                    yield return eventSymbol.AddMethod;
+                if (eventSymbol.RemoveMethod != null && assignment?.IsKind(SyntaxKind.AddAssignmentExpression) != true)
+                    yield return eventSymbol.RemoveMethod;
             }
 
             for (var type = symbol.ContainingType; type != null; type = type.ContainingType)

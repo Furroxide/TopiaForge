@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
                 || !FormatRequirement(type.GetProperty(nameof(VersionedFixture.Later))!.GetMethod!).Contains("0.3.0", StringComparison.Ordinal))
                 throw new InvalidOperationException("API baselines must record inherited and accessor requirements.");
             ChangedApiBaselineTests();
+            SignatureIdentityBaselineTests();
             Console.WriteLine("SDK version baseline checks passed (16 cases).");
         }
 

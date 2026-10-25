@@ -456,15 +456,21 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var namedType = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
-            var name = RemoveGenericArity((namedType.FullName ?? namedType.Name).Replace('+', '.'));
+            var name = (namedType.FullName ?? namedType.Name).Replace('+', '.');
             if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var nullableArguments = nullability?.GenericTypeArguments;
-                name += "<" + string.Join(", ", arguments.Select((argument, index) =>
-                    FormatType(argument, nullableArguments != null && index < nullableArguments.Length
-                        ? nullableArguments[index]
-                        : null))) + ">";
+                var index = 0;
+                name = System.Text.RegularExpressions.Regex.Replace(name, @"`(\d+)", match =>
+                {
+                    var count = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                    var rendered = "<" + string.Join(", ", Enumerable.Range(index, count).Select(argumentIndex =>
+                        FormatType(arguments[argumentIndex], nullableArguments != null && argumentIndex < nullableArguments.Length
+                            ? nullableArguments[argumentIndex] : null))) + ">";
+                    index += count;
+                    return rendered;
+                });
             }
 
             return name + FormatNullableSuffix(type, nullability);
@@ -473,26 +479,6 @@ namespace TopiaForge.ModManager.Tests
         private static string FormatNullableSuffix(Type type, NullabilityInfo? nullability)
         {
             return !type.IsValueType && nullability?.ReadState == NullabilityState.Nullable ? "?" : string.Empty;
-        }
-
-        private static string RemoveGenericArity(string name)
-        {
-            var builder = new StringBuilder(name.Length);
-            for (var index = 0; index < name.Length; index++)
-            {
-                if (name[index] != '`')
-                {
-                    builder.Append(name[index]);
-                    continue;
-                }
-
-                while (index + 1 < name.Length && char.IsDigit(name[index + 1]))
-                {
-                    index++;
-                }
-            }
-
-            return builder.ToString();
         }
 
         private static string FormatValue(object? value, Type declaredType)
