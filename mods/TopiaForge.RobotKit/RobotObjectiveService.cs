@@ -172,7 +172,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Objective target '" + name + "' resolver threw: " + exception.Message);
+                logger.Warn("Robot objective target resolver failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
 
@@ -249,7 +249,7 @@ namespace TopiaForge.RobotKit
                 random01,
                 resolveAgent,
                 (recipient, payload) => DeliverProgram(ownerModId, agent, recipient, payload),
-                exception => logger.Warn("Robot objective cancellation cleanup failed: " + exception.Message));
+                exception => logger.Warn("Robot objective cancellation cleanup failed: " + RobotKitLog.ExceptionType(exception)));
 
             if (runners.TryGetValue(agentId, out var previous))
             {
@@ -358,7 +358,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception exception)
                 {
-                    logger.Warn("Robot objective tick failed; the faulty objective was cancelled: " + exception.Message);
+                    logger.Warn("Robot objective tick failed; the faulty objective was cancelled: " + RobotKitLog.ExceptionType(exception));
                     TryCancel(runner, "isolating a failed objective");
                 }
             }
@@ -377,7 +377,7 @@ namespace TopiaForge.RobotKit
                     catch (Exception exception)
                     {
                         logger.Warn("Robot objective liveness check failed; the faulty objective was removed: "
-                            + exception.Message);
+                            + RobotKitLog.ExceptionType(exception));
                         remove = true;
                     }
                 }
@@ -418,11 +418,11 @@ namespace TopiaForge.RobotKit
             SafeEvent.Invoke(
                 ProgramDelivered,
                 delivery,
-                exception => logger.Warn("A ProgramDelivered subscriber threw: " + exception.Message));
+                exception => logger.Warn("A ProgramDelivered subscriber threw: " + RobotKitLog.ExceptionType(exception)));
             SafeEvent.Invoke(
                 ProgramDeliveredOwned,
                 new OwnedDelivery(ownerModId, delivery),
-                exception => logger.Warn("An owner-bound ProgramDelivered subscriber threw: " + exception.Message));
+                exception => logger.Warn("An owner-bound ProgramDelivered subscriber threw: " + RobotKitLog.ExceptionType(exception)));
         }
 
         public void OnSceneChanged()
@@ -566,7 +566,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective rejected an agent whose id getter failed: " + exception.Message);
+                logger.Warn("Robot objective rejected an agent whose id getter failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
 
@@ -589,7 +589,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective rejected an agent whose liveness getter failed: " + exception.Message);
+                logger.Warn("Robot objective rejected an agent whose liveness getter failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
         }
@@ -602,7 +602,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective failed while " + operation + ": " + exception.Message);
+                logger.Warn("Robot objective failed while " + operation + ": " + RobotKitLog.ExceptionType(exception));
             }
         }
 

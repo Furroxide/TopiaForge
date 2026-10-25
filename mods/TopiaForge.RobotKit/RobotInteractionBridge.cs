@@ -60,7 +60,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger?.Error(ex, "RobotKit custom interaction gate failed.");
+                logger?.Error("RobotKit custom interaction gate failed: " + RobotKitLog.ExceptionType(ex));
                 return false;
             }
         }
@@ -78,7 +78,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger?.Error(ex, "RobotKit custom interaction callback failed.");
+                logger?.Error("RobotKit custom interaction callback failed: " + RobotKitLog.ExceptionType(ex));
             }
 
             return UniTask.CompletedTask;

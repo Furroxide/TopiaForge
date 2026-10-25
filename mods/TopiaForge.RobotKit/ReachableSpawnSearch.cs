@@ -256,7 +256,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger.Debug("RobotKit reachable-spawn cancellation failed: " + ex.Message);
+                    logger.Debug("RobotKit reachable-spawn cancellation failed: " + RobotKitLog.ExceptionType(ex));
                 }
 
                 cts.Dispose();

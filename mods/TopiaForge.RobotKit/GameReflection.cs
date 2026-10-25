@@ -110,7 +110,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger?.Debug("RobotKit reflection call failed for " + component.GetType().Name + "." + methodName + ": " + ex.Message);
+                logger?.Debug("RobotKit reflection call failed for " + component.GetType().Name + "." + methodName + ": " + RobotKitLog.ExceptionType(ex));
                 return false;
             }
         }
@@ -265,7 +265,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger.Debug("RobotKit could not restore the native brain snapshot: " + ex.Message);
+                logger.Debug("RobotKit could not restore the native brain snapshot: " + RobotKitLog.ExceptionType(ex));
             }
         }
 
@@ -318,7 +318,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger.Debug("RobotKit could not restore the native brain snapshot: " + ex.Message);
+                logger.Debug("RobotKit could not restore the native brain snapshot: " + RobotKitLog.ExceptionType(ex));
                 return false;
             }
 
@@ -373,7 +373,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger.Debug("RobotKit could not wake the LLM agent: " + ex.Message);
+                logger.Debug("RobotKit could not wake the LLM agent: " + RobotKitLog.ExceptionType(ex));
             }
         }
 
@@ -391,7 +391,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger.Debug("RobotKit could not re-enable the LLM: " + ex.Message);
+                    logger.Debug("RobotKit could not re-enable the LLM: " + RobotKitLog.ExceptionType(ex));
                 }
             }
 
@@ -481,7 +481,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger.Debug("RobotKit could not make the LLM agent dormant: " + ex.Message);
+                logger.Debug("RobotKit could not make the LLM agent dormant: " + RobotKitLog.ExceptionType(ex));
             }
         }
 
@@ -527,7 +527,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger?.Debug("RobotKit Health.Damage failed: " + ex.Message);
+                logger?.Debug("RobotKit Health.Damage failed: " + RobotKitLog.ExceptionType(ex));
                 return false;
             }
         }
@@ -549,7 +549,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger?.Debug("RobotKit Health.ChangeHealth failed: " + ex.Message);
+                logger?.Debug("RobotKit Health.ChangeHealth failed: " + RobotKitLog.ExceptionType(ex));
                 return false;
             }
         }
@@ -574,7 +574,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger?.Debug("RobotKit StartEmote failed: " + ex.Message);
+                logger?.Debug("RobotKit StartEmote failed: " + RobotKitLog.ExceptionType(ex));
             }
         }
 

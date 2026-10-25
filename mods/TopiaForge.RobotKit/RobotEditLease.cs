@@ -167,7 +167,7 @@ namespace TopiaForge.RobotKit
                 catch (Exception exception)
                 {
                     restoreFailure = restoreFailure ?? exception;
-                    logger.Warn("Robot edit restoration failed: " + exception.Message);
+                    logger.Warn("Robot edit restoration failed: " + RobotKitLog.ExceptionType(exception));
                 }
             }
 
@@ -177,7 +177,8 @@ namespace TopiaForge.RobotKit
 
             if (restoreFailure != null)
             {
-                return OperationResult<bool>.Failure(ModErrorCode.External, restoreFailure.Message);
+                return OperationResult<bool>.Failure(ModErrorCode.External,
+                    "Robot edit restoration failed; reload the world before editing again: " + RobotKitLog.ExceptionType(restoreFailure));
             }
 
             return conflict
