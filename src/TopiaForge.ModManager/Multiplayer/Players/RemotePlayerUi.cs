@@ -58,6 +58,10 @@ namespace TopiaForge.ModManager
         private static void Check() => UnityMainThreadGuard.AssertCurrent();
     }
 
+    /// <summary>
+    /// A host-owned modal. Like a local one it reports exactly one answer: the player's, or a cancellation when it is closed
+    /// or disposed, its player leaves, or its scope or the session ends.
+    /// </summary>
     internal sealed class RemoteUiModal : IUiModal
     {
         internal readonly PlayerContext Context;
@@ -69,12 +73,14 @@ namespace TopiaForge.ModManager
         internal RemoteUiModal(PlayerContext context, IPlayer target, ulong token, UiModalRequest request, Action<bool> completed)
         { Context = context; Target = target; Token = token; Request = request; Completed = completed; }
         public bool IsOpen => Completed != null && Target.IsPresent && !Context.Lifetime.IsStopping;
-        public void Close()
+        public void Close() { UnityMainThreadGuard.AssertCurrent(); Cancel(); }
+        public void Dispose() { UnityMainThreadGuard.AssertCurrent(); Cancel(); }
+        internal void Cancel() => Context.Runtime.Complete(Context, Take(), false);
+        internal Action<bool>? Take()
         {
-            UnityMainThreadGuard.AssertCurrent();
-            var callback = Completed; Completed = null;
-            callback?.Invoke(false);
+            var callback = Completed;
+            Completed = null;
+            return callback;
         }
-        public void Dispose() { UnityMainThreadGuard.AssertCurrent(); Completed = null; }
     }
 }

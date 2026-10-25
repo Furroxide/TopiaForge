@@ -36,6 +36,7 @@ namespace TopiaForge.ModManager
             var refused = CheckUi<IUiSurface>(context, player);
             if (refused != null) return refused;
             if (IsLocal(player)) return context.UiService.CreateSurface(request);
+            if (!context.Networked) return Unshared<IUiSurface>();
             if (request.Id.Length > 128 || !Finite(request.Width) || !Finite(request.Height) || request.Width < 80 || request.Width > 1920 || request.Height < 80 || request.Height > 1440)
                 return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, "Use a short surface id and a window between 80 and 1920 units wide and 80 and 1440 units high.");
             if (UiFull(player)) return Limit<IUiSurface>();
@@ -51,6 +52,7 @@ namespace TopiaForge.ModManager
             var refused = CheckUi<IUiModal>(context, player);
             if (refused != null) return refused;
             if (IsLocal(player)) return context.UiService.ShowModal(request, completed);
+            if (!context.Networked) return Unshared<IUiModal>();
             if (UiFull(player)) return Limit<IUiModal>();
             var modal = new RemoteUiModal(context, Target(context, player), ++nextUiToken, request, completed);
             var sent = SendModal(modal);
@@ -78,8 +80,11 @@ namespace TopiaForge.ModManager
         {
             var refused = CheckUi<bool>(context, player);
             if (refused != null) return refused;
-            if (message == null || message.Length > 512 || (uint)tone > 3) return Limit<bool>();
+            // The local player's toast is the ordinary one, with its rules; the remote limit applies to the wire alone.
             if (IsLocal(player)) return context.UiService.ShowToast(message, tone);
+            if (!context.Networked) return Unshared<bool>();
+            if (string.IsNullOrWhiteSpace(message) || message.Length > 512 || (uint)tone > (uint)UiTone.Danger)
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "A toast for another player needs text of at most 512 characters and one of the UiTone values.");
             BeginUi(12, context, player, 0, 0);
             Writer.WriteString(message); Writer.WriteByte((byte)tone);
             return SendUi(player);
@@ -144,9 +149,33 @@ namespace TopiaForge.ModManager
             for (var i = modals.Count - 1; i >= 0; i--)
             {
                 var m = modals[i];
+                if (m.Completed != null && (!m.Target.IsPresent || m.Context.Lifetime.IsStopping))
+                {
+                    // A player who left cannot answer, and a stopping scope may wait for native work before it disposes
+                    // anything: either way the modal reports a cancellation now, as a local one does when it closes.
+                    m.Cancel();
+                    if (i >= modals.Count || !ReferenceEquals(modals[i], m)) continue;
+                }
                 if (!m.IsOpen && (!Present(m.Target.Id) || CloseRemote(m.Context, m.Target.Id, m.Token))) modals.RemoveAt(i);
                 else if (m.IsOpen && m.Stream != (Channel?.GetGeneration(m.Target.Id) ?? 0)) SendModal(m);
             }
+        }
+
+        /// <summary>Runs a modal's answer as the local UI kit does: one failing subscriber is logged against its mod and stops nothing.</summary>
+        internal void Complete(PlayerContext context, Action<bool>? completed, bool answer)
+        {
+            if (completed == null) return;
+            foreach (var subscriber in completed.GetInvocationList())
+            {
+                try { ((Action<bool>)subscriber)(answer); }
+                catch (Exception exception) { ReportCallback(context, "modal completion", exception); }
+            }
+        }
+
+        private static void ReportCallback(PlayerContext context, string what, Exception exception)
+        {
+            try { context.Logger.Error(exception, "A mod UI " + what + " callback failed."); }
+            catch (Exception) { /* A failing log sink cannot stop the frame stage. */ }
         }
         private bool CloseRemote(PlayerContext context, ParticipantId player, ulong token)
         { BeginUi(13, context, player, token, 0); return Send(player).Succeeded; }
@@ -162,11 +191,13 @@ namespace TopiaForge.ModManager
         private void ResetUi()
         {
             foreach (var surface in surfaces) { surface.Closed = true; surface.Dirty = false; }
-            foreach (var modal in modals) modal.Completed = null;
+            var cancelled = modals.Count == 0 ? Array.Empty<RemoteUiModal>() : modals.ToArray();
             surfaces.Clear(); modals.Clear();
             foreach (var ui in receivedUi.Values) ui.Dispose();
             receivedUi.Clear(); uiReplies.Clear(); uiSends.Clear();
             hostUiBudget = new TokenBucket(65536, 32768, Now); hostUiCount = new TokenBucket(32, 20, Now);
+            // The session that asked has ended, so every open modal reports a cancellation, once the lists are clear.
+            for (var i = 0; i < cancelled.Length; i++) cancelled[i].Cancel();
         }
         private sealed class ReceivedUi : IDisposable
         {

@@ -33,6 +33,7 @@ namespace TopiaForge.Mods.Internal
         private readonly Func<MultiplayerSessionSnapshot> snapshot;
         private readonly Func<ulong> generation;
         private readonly IInternalPlayerBackend? backend;
+        private readonly Action<Exception>? failed;
         private readonly int thread = Thread.CurrentThread.ManagedThreadId;
         private readonly List<IPlayer> players = new List<IPlayer>();
         private readonly IReadOnlyList<IPlayer> view;
@@ -44,11 +45,14 @@ namespace TopiaForge.Mods.Internal
         private bool disposed;
         private bool refreshing;
 
-        internal PlayerDirectory(Func<MultiplayerSessionSnapshot> snapshot, Func<ulong> generation, IInternalPlayerBackend? backend = null)
+        // failed hears what a join or leave handler threw, so its mod learns of it; the next handler still runs.
+        internal PlayerDirectory(
+            Func<MultiplayerSessionSnapshot> snapshot, Func<ulong> generation, IInternalPlayerBackend? backend = null, Action<Exception>? failed = null)
         {
             this.snapshot = snapshot;
             this.generation = generation;
             this.backend = backend;
+            this.failed = failed;
             view = players.AsReadOnly();
             Refresh();
         }
@@ -149,14 +153,21 @@ namespace TopiaForge.Mods.Internal
             return new Subscription(this, list, handler);
         }
 
-        private static void Notify(List<Action<IPlayer>> handlers, IPlayer player)
+        private void Notify(List<Action<IPlayer>> handlers, IPlayer player)
         {
             // Changes are rare. Copying permits callbacks to unsubscribe without skipping their neighbours.
             foreach (var callback in handlers.ToArray())
             {
+                // One mod callback cannot prevent roster reconciliation, but its failure is reported, never dropped.
                 try { callback(player); }
-                catch (Exception) { /* One mod callback cannot prevent roster reconciliation. */ }
+                catch (Exception exception) { Report(exception); }
             }
+        }
+
+        private void Report(Exception exception)
+        {
+            try { failed?.Invoke(exception); }
+            catch (Exception) { /* A failing report cannot stop reconciliation either. */ }
         }
 
         internal static OperationResult<T> Unavailable<T>() where T : notnull =>

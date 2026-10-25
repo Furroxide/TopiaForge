@@ -2737,9 +2737,19 @@ Only the host may send remote damage, heal or teleport commands. The receiving g
 the target is its own participant, all values are finite and bounded, and no bytes remain. A client sending these
 frames to the host is refused. API calls from a client targeting another player return `NotAuthoritative` before
 serialization. Health changes go through the owning context's local player service. An accepted remote heal increases
-presence's bounded health allowance; an accepted teleport records an expected placement and suppresses an ordinary
-teleport strike at the owner. A send with no recipient is a failure. The immediate health result is an estimate;
-presence subsequently confirms the owner's value.
+presence's bounded health allowance by the health it can add, never more, so a heal at full health leaves nothing for a
+later false report to spend. An accepted teleport records an expected placement, which takes the landing pose whether or
+not the owner flags it as a teleport. The owner does not arm presence's jump expectation for it: a move shorter than a
+jump would never spend it, and it would hide the player's next teleport of its own, which the host would then correct
+as speed. A send with no recipient is a failure. The immediate health result is an estimate; presence subsequently
+confirms the owner's value.
+
+Every frame names the mod, and the receiving game hands it to that mod's context, so it can reach only a game that
+runs the mod. Each context therefore binds with its mod's network class. A `client-local` or `server-only` mod's remote
+damage, heal, teleport, surface, modal and toast return `Unavailable` before anything is written, with a message that
+says why and how to make the mod shared; acting on its own game's player is unchanged, and so are reads. Admission puts
+an implicitly shared or required `session` mod on every peer. An optional `session` mod can still be missing on one
+player's game, where its frames are refused unseen; telling the host which players run it is later work.
 
 Input never carries a participant id: the authenticated sender is the player. The host accepts only names registered
 by that mod. At most 64 actions are tracked per player and mod. An outgoing bucket permits 4 KiB/s with an 8 KiB burst;
@@ -2766,6 +2776,14 @@ closing, departure or scope shutdown revokes old answers. Client closures also c
 Windows and unanswered modals resend on a retained target's new stream. A different player's join changes no existing
 window. A generation change at the client disposes its received UI without answering it.
 
+Host callbacks run as the local kit runs them. A control, dismissal or modal callback that throws is logged to the mod's
+own logger ("A mod UI window control 'buy' callback failed.") and counts neither as a refused reply nor as a failed frame
+stage, so the frame's other replies still run. A remote modal keeps `IUiService.ShowModal`'s contract and reports exactly
+one answer: the player's, or `false` when it is closed or disposed, its player leaves, its scope ends or the session
+resets. A local player's toast goes to the ordinary UI service; the 512-character limit applies only on the wire.
+`PlayerDirectory` reports a join or leave handler that throws, and the next handler still runs: to the mod's logger in
+the game, to the engine's diagnostics on a bare engine facade, and to `FakePlayerDirectory.CallbackErrors` in tests.
+
 ### Scoreboard seam and later presentation
 
 `MultiplayerPlayers.Scoreboard` exposes internal `ScoreboardData` rows to the scoreboard overlay: mod id, definition
@@ -2784,7 +2802,10 @@ own host-commit routing and must not invent a second player identity or callback
 
 `--players` selects focused cases in the ModManager, ModRuntime and Multiplayer harnesses. Unity-free cases cover solo
 rosters, key and generation retirement, real-engine fast joins, reconnect and pre-flush cancellation, fake author
-workflows, input reconstruction, codec bounds, sender and UI forgery, floods, and scoreboard replication. Real
+workflows, input reconstruction, codec bounds, sender and UI forgery, floods, and scoreboard replication.
+`PlayersRemoteContractTests` holds remote UI and actions to the local contracts: modal cancellation on dispose, leave,
+scope end and session end, in the fake too; failing callbacks and handlers; client-local and server-only mods; toast
+rules; a heal at full health that leaves no allowance; and a short host teleport that hides no later one. Real
 `ModRuntime` instances run two-player and three-player scenarios over the loopback network, with actions, targeted
 clicks and input. Allocation assertions measure repeated directory/presence reads and 10,000 resting runtime frames.
 Source guards cover the native plain-text renderer; visual layout and actual game health/controller behavior require

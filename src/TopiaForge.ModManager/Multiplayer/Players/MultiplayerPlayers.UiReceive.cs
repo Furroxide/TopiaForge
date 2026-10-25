@@ -111,19 +111,28 @@ namespace TopiaForge.ModManager
                 var surface = surfaces[i];
                 if (surface.Token != token || surface.Context.Mod != context.Mod) continue;
                 if (!surface.Target.Id.Equals(sender) || !surface.Target.IsPresent || !surface.IsVisible || surface.Revision != revision) return false;
-                if (kind == 15) { surface.Hide(); return true; }
+                // An author's callback that throws is the author's failure, logged as the local UI kit logs it, never a
+                // refused reply and never the end of this frame's other replies.
+                if (kind == 15)
+                {
+                    try { surface.Hide(); }
+                    catch (Exception exception) { ReportCallback(context, "window dismissal", exception); }
+                    return true;
+                }
                 using (runtime.Intents.EnterForwarded(context.Mod, IntentSource.UiCallback, sender.Value))
-                    return UiNodeWireCodec.Invoke(surface.Content, control, value);
+                {
+                    try { return UiNodeWireCodec.Invoke(surface.Content, control, value); }
+                    catch (Exception exception) { ReportCallback(context, "window control '" + control + "'", exception); return true; }
+                }
             }
             for (var i = 0; i < modals.Count; i++)
             {
                 var modal = modals[i];
                 if (modal.Token != token || modal.Context.Mod != context.Mod) continue;
                 if (!modal.Target.Id.Equals(sender) || !modal.IsOpen || revision != 1 || kind != 14 || control.Length != 0 || (value != "0" && value != "1")) return false;
-                var callback = modal.Completed;
-                modal.Completed = null;
+                var callback = modal.Take();
                 modals.RemoveAt(i);
-                using (runtime.Intents.EnterForwarded(context.Mod, IntentSource.UiCallback, sender.Value)) callback?.Invoke(value == "1");
+                using (runtime.Intents.EnterForwarded(context.Mod, IntentSource.UiCallback, sender.Value)) Complete(context, callback, value == "1");
                 return true;
             }
             return false;

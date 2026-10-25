@@ -24,6 +24,11 @@ attempt to change another player returns `NotAuthoritative`. Check `OperationRes
 `Unavailable` means the world or connection cannot receive it yet, and `NotFound` means the handle has retired.
 For a remote health change the immediate result is an estimate; `TryGetHealth` subsequently reads the confirmed pose.
 
+Actions, windows and input travel between games under your mod's id, so reaching another player needs a mod that every
+player runs: one with no `multiplayer` block, or a required `session` mod. A `client-local` or `server-only` mod reaches
+only its own game's player. For anyone else its actions and UI return `Unavailable` with a message that says so, and
+their `Input` reads stay false; reads such as `TryGetSnapshot`, `TryGetHealth` and `Entity` still work.
+
 `TryGetSnapshot` reads position and aim; `TryGetHealth` reads current and maximum health. Either can return false while
 the world loads. `Entity` is the local player entity or the remote presence avatar, suitable for an entity target.
 Repeated unchanged reads allocate nothing after the first read.
@@ -45,10 +50,14 @@ the control's value. The runtime checks the sender, target handle, window revisi
 it. Replacing content revokes the old controls. Disposing the surface or its owning scope revokes every callback.
 Windows and unanswered modals are recreated automatically after reconnecting to the same session.
 
-Use `ShowModal` for confirmation and `ShowToast` for action results. Remote text is literal, including titles and
-control labels. Graph canvases become a text placeholder. HUDs remain noninteractive. Compositions use the ordinary
-`UiComposition` limits, with a 32 KiB wire limit, 4096-character text fields, 512-character toasts, and bounded window
-dimensions. A request that does not fit returns an error; keep long content in a scroll or virtual list.
+Use `ShowModal` for confirmation and `ShowToast` for action results. A modal reports exactly one answer, as a local one
+does: the player's choice, or `false` when it is closed or disposed, its player leaves, or its scope or the session
+ends. A callback that throws is logged to your mod's log, as a local UI callback is, and every other reply still runs.
+
+Remote text is literal, including titles and control labels. Graph canvases become a text placeholder. HUDs remain
+noninteractive. Compositions use the ordinary `UiComposition` limits, with a 32 KiB wire limit, 4096-character text
+fields, 512-character toasts, and bounded window dimensions. The local player's UI is the ordinary `Context.Ui`, with
+its own rules. A request that does not fit returns an error; keep long content in a scroll or virtual list.
 
 ## Input and scores
 
@@ -78,10 +87,12 @@ var sam = players.Add(new ParticipantId("p1"), "Sam");
 sam.Damage(new PlayerDamageRequest(20, "enemy"));
 sam.TryGetHealth(out var health); // 80 / 100
 players.State(sam.Id).Input.SetHeld("fire", true);
-players.AdvanceTick();
+var fired = sam.Input.WasPressed("fire"); // true for the rest of this tick
+players.AdvanceTick(); // the press edge ends; "fire" stays held
 players.Remove(sam.Id); // sam now stays retired
 ```
 
 The fake exposes each player's local services, captured UI and simulated input. `ReplaceGeneration` exercises a new
 participant list with reused ids and keys. `IsAuthoritative = false` exercises refused remote actions and score writes.
-`TryGetScore` inspects display values and sort keys. Import `TopiaForge.Mods` and `TopiaForge.Mods.Testing` in these tests.
+`TryGetScore` inspects display values and sort keys, and `CallbackErrors` lists what join and leave handlers threw.
+Import `TopiaForge.Mods` and `TopiaForge.Mods.Testing` in these tests.

@@ -50,7 +50,8 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 ThrowIfClosing();
                 if (players != null) return players;
-                var directory = new PlayerDirectory(() => engine.Snapshot, () => engine.ParticipantListGeneration);
+                var directory = new PlayerDirectory(() => engine.Snapshot, () => engine.ParticipantListGeneration, null,
+                    exception => engine.ReportCallbackFailure("player join or leave handler", exception));
                 players = directory;
                 OwnSubscription(directory);
                 OwnSubscription(engine.SubscribeSession(_ => directory.Refresh()));

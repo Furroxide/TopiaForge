@@ -43,7 +43,7 @@ namespace TopiaForge.ModManager.Tests
                 return RobotKitLogPrivacyTests.RunFocused(args[0]);
             if (args.Length == 1 && args[0] == "--players")
             {
-                try { PlayersApiTests.Run(); PlayersNetworkTests.Run(); return 0; }
+                try { PlayersApiTests.Run(); PlayersNetworkTests.Run(); PlayersRemoteContractTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
             if (args.Length == 1 && args[0] == "--robo-api-client")
@@ -481,6 +481,7 @@ namespace TopiaForge.ModManager.Tests
                 PresenceSuite.Run();
                 PlayersApiTests.Run();
                 PlayersNetworkTests.Run();
+                PlayersRemoteContractTests.Run();
                 RunMultiplayerSessions(root);
                 ModuleContractSurfaceTests.Run();
                 V1LaunchCoverageTests.Run();

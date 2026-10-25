@@ -34,9 +34,9 @@ namespace TopiaForge.ModManager
             return players;
         }
 
-        internal PlayerContext Bind(string mod, IModLifetime lifetime, ILocalPlayerService local, IUiService ui, ModInputActivity input)
+        internal PlayerContext Bind(string mod, bool networked, IModLogger logger, IModLifetime lifetime, ILocalPlayerService local, IUiService ui, ModInputActivity input)
         {
-            var context = new PlayerContext(this, mod, lifetime, local, ui, input);
+            var context = new PlayerContext(this, mod, networked, logger, lifetime, local, ui, input);
             contexts.Add(context);
             lifetime.Track(context);
             return context;

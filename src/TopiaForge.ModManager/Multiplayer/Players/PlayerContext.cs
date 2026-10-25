@@ -10,6 +10,12 @@ namespace TopiaForge.ModManager
     {
         internal readonly MultiplayerPlayers Runtime;
         internal readonly string Mod;
+
+        /// <summary>Whether every player runs this mod, so its actions and UI can reach them: false for a client-local or server-only mod.</summary>
+        internal readonly bool Networked;
+
+        /// <summary>The mod's own logger, which its failing UI callbacks are reported to, as the local UI kit reports them.</summary>
+        internal readonly IModLogger Logger;
         internal readonly IModLifetime Lifetime;
         internal readonly ILocalPlayerService Local;
         internal readonly IUiService UiService;
@@ -20,8 +26,8 @@ namespace TopiaForge.ModManager
         private readonly Dictionary<ParticipantId, RemotePlayerUi> uis = new Dictionary<ParticipantId, RemotePlayerUi>();
         private readonly CachedPose localPose = new CachedPose();
 
-        internal PlayerContext(MultiplayerPlayers runtime, string mod, IModLifetime lifetime, ILocalPlayerService local, IUiService ui, ModInputActivity input)
-        { Runtime = runtime; Mod = mod; Lifetime = lifetime; Local = local; UiService = ui; Activity = input; }
+        internal PlayerContext(MultiplayerPlayers runtime, string mod, bool networked, IModLogger logger, IModLifetime lifetime, ILocalPlayerService local, IUiService ui, ModInputActivity input)
+        { Runtime = runtime; Mod = mod; Networked = networked; Logger = logger; Lifetime = lifetime; Local = local; UiService = ui; Activity = input; }
 
         public IEntity? Entity(ParticipantId id) => Runtime.IsLocal(id) ? Runtime.Presence.Backend.LocalPlayerEntity
             : Runtime.Presence.TryGetAvatar(id, out var entity) ? entity : null;

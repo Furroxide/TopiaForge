@@ -451,6 +451,7 @@ type public sealed class TopiaForge.Mods.Testing.FakePlayerDirectory : System.Ob
   method [virtual,final,newslot] System.Void Dispose()
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IScoreboardColumn> RegisterScoreboardColumn(TopiaForge.Mods.ScoreboardColumnDefinition definition)
   property System.Boolean IsAuthoritative { get; set; }
+  property System.Collections.Generic.IReadOnlyList<System.String> CallbackErrors { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IPlayer> Players { get [virtual,final,newslot]; }
   property TopiaForge.Mods.IPlayer? Local { get [virtual,final,newslot]; }
 

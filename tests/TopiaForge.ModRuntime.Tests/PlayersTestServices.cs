@@ -10,18 +10,21 @@ namespace TopiaForge.ModManager.TestDoubles
     internal sealed class PlayersTestServices : IDisposable
     {
         internal readonly FakeModLifetime Lifetime = new FakeModLifetime();
+        internal readonly CapturedModLogger Logger = new CapturedModLogger();
         internal readonly FakeUiService Ui;
         internal readonly FakeInputService Input;
         internal readonly PlayerContext Context;
         internal readonly PlayerDirectory Directory;
-        internal PlayersTestServices(MultiplayerPlayers runtime, LoopbackControl control, FakePresenceBackend backend)
+
+        // networked: false binds the mod as a client-local or server-only one, which no other player runs.
+        internal PlayersTestServices(MultiplayerPlayers runtime, LoopbackControl control, FakePresenceBackend backend, string mod = "players-test", bool networked = true)
         {
             Ui = new FakeUiService(Lifetime);
             Input = new FakeInputService(Lifetime);
             var activity = new ModInputActivity();
             var tracked = new NetInputService(Input, activity, Lifetime);
             tracked.RegisterAction(new InputActionDefinition("fire", "Fire", new[] { InputBinding.Key("K") }));
-            Context = runtime.Bind("players-test", Lifetime, new Local(backend), Ui, activity);
+            Context = runtime.Bind(mod, networked, Logger, Lifetime, new Local(backend), Ui, activity);
             Directory = new PlayerDirectory(() => control.SessionSnapshot, () => 0, Context);
             Context.Directory = Directory;
         }

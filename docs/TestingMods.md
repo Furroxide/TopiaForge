@@ -36,7 +36,8 @@ dotnet test --configuration Release
 - `DeterministicGameTime` and `DeterministicModScheduler` advance only when the test asks.
 - `FakeSceneService`, `FakeLocalPlayerService`, `FakeEntityService`, and `FakePhysicsService` control gameplay state.
 - `FakePlayerDirectory` starts with one solo player and adds remote players with the runtime's permanent handle
-  retirement rules. It captures targeted UI and scores and simulates per-player input; see [Act on players](Players.md).
+  retirement rules. It captures targeted UI and scores, simulates per-player input, and keeps what join and leave
+  handlers threw in `CallbackErrors`; see [Act on players](Players.md).
 - `FakeAssetService`, `FakeAudioService`, and `FakeUiService` expose active handles and captured requests;
   `FakeUiSurface` also finds controls by id, invokes form/list/graph interactions, captures state and
   dismissal, and isolates callback failures.

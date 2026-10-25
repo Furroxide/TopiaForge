@@ -10,6 +10,7 @@ namespace TopiaForge.Mods.Testing
         private readonly FakeModLifetime lifetime = new FakeModLifetime();
         private readonly List<MultiplayerParticipant> records = new List<MultiplayerParticipant>();
         private readonly Dictionary<ParticipantId, FakePlayerState> states = new Dictionary<ParticipantId, FakePlayerState>();
+        private readonly List<string> callbackErrors = new List<string>();
         private readonly PlayerDirectory directory;
         private MultiplayerSessionSnapshot snapshot;
         private ulong generation;
@@ -21,10 +22,13 @@ namespace TopiaForge.Mods.Testing
         {
             AddRecord(new ParticipantId("local"), "Sam", new MultiplayerPlayerKey("local-key"), true);
             snapshot = BuildSnapshot();
-            directory = new PlayerDirectory(() => snapshot, () => generation, new Backend(this));
+            directory = new PlayerDirectory(() => snapshot, () => generation, new Backend(this),
+                exception => callbackErrors.Add("join or leave handler failed: " + exception.Message));
         }
         /// <summary>Gets or sets whether mutations of other players and scoreboard values are allowed.</summary>
         public bool IsAuthoritative { get; set; } = true;
+        /// <summary>Gets what join and leave handlers threw, in order; as in the game, the next handler still ran.</summary>
+        public IReadOnlyList<string> CallbackErrors => callbackErrors.AsReadOnly();
         /// <inheritdoc/>
         public IReadOnlyList<IPlayer> Players => directory.Players;
         /// <inheritdoc/>
@@ -46,13 +50,17 @@ namespace TopiaForge.Mods.Testing
             AddRecord(id, displayName, key, false); Refresh();
             directory.TryGet(id, out var player); return player!;
         }
-        /// <summary>Removes a remote player, permanently retiring its handles.</summary>
+        /// <summary>Removes a remote player, permanently retiring its handles and cancelling the modals it was asked.</summary>
         public bool Remove(ParticipantId id)
         {
             Check();
             if (id.Value == "local") throw new InvalidOperationException("A solo directory keeps its local player.");
-            if (!states.Remove(id)) return false;
-            records.RemoveAll(record => record.Id.Equals(id)); Refresh(); return true;
+            if (!states.TryGetValue(id, out var state)) return false;
+            states.Remove(id);
+            records.RemoveAll(record => record.Id.Equals(id)); Refresh();
+            // As in the game, a player who leaves answers no modal, so each one it was asked reports a cancellation.
+            foreach (var modal in new List<FakeUiModal>(state.Ui.Modals)) modal.Close();
+            return true;
         }
         /// <summary>Replaces the participant list generation, even if every id and key is unchanged.</summary>
         public void ReplaceGeneration() { Check(); generation++; Refresh(); }
