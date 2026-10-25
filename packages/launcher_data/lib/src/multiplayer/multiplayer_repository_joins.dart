@@ -22,20 +22,47 @@ extension _JoinLaunches on LocalMultiplayerRepository {
         ),
       );
     }
+    final prepared = await _prepareJoinRequest(state, intentId, developerMode);
+    if (prepared.failure case final failure?) return JoinLaunchRefused(failure);
+    return sessions.launchJoinSession(
+      install,
+      state,
+      prepared.session!,
+      beforeStart: () async {
+        final blocked = await _projectPreferences(install);
+        if (blocked != null) return (session: null, failure: blocked);
+        // Quitting can journal a new name or network preferences. Use the
+        // settings just projected, rather than overwriting them with the
+        // request captured while the previous game was still running.
+        return _prepareJoinRequest(state, intentId, developerMode);
+      },
+    );
+  }
+
+  Future<JoinStartPreparation> _prepareJoinRequest(
+    JoinSessionState state,
+    String intentId,
+    bool developerMode,
+  ) async {
     final load = await _store.loadSettings();
     if (load.recovery == MultiplayerStoreRecovery.unreadable) {
-      return JoinLaunchRefused(
-        JoinFailed(JoinFailureCode.launchBlocked, detail: _settingsUnreadable),
+      return (
+        session: null,
+        failure: JoinFailed(
+          JoinFailureCode.launchBlocked,
+          detail: _settingsUnreadable,
+        ),
       );
     }
     final settings = load.settings;
     final LaunchSessionRequest session;
     try {
-      final target = LaunchSessionTarget.forPlan(state.target, plan);
+      final target = LaunchSessionTarget.forPlan(state.target, state.plan!);
       final refusal = _requestRefusal(target, settings);
       if (refusal != null) {
-        return JoinLaunchRefused(
-          JoinFailed(JoinFailureCode.launchBlocked, detail: refusal),
+        return (
+          session: null,
+          failure: JoinFailed(JoinFailureCode.launchBlocked, detail: refusal),
         );
       }
       session = LaunchSessionRequest.join(
@@ -51,8 +78,9 @@ extension _JoinLaunches on LocalMultiplayerRepository {
     } on StateError {
       // A direct session needs the disclosure, which the settings no longer
       // record, as when they were reset since the join began.
-      return JoinLaunchRefused(
-        JoinFailed(
+      return (
+        session: null,
+        failure: JoinFailed(
           JoinFailureCode.launchBlocked,
           detail:
               'A direct connection needs the address disclosure, and your '
@@ -61,8 +89,9 @@ extension _JoinLaunches on LocalMultiplayerRepository {
         ),
       );
     } on Object {
-      return JoinLaunchRefused(
-        JoinFailed(
+      return (
+        session: null,
+        failure: JoinFailed(
           JoinFailureCode.launchBlocked,
           detail:
               'The launcher could not prepare this join for the game, so '
@@ -70,12 +99,7 @@ extension _JoinLaunches on LocalMultiplayerRepository {
         ),
       );
     }
-    return sessions.launchJoinSession(
-      install,
-      state,
-      session,
-      beforeStart: () => _projectPreferences(install),
-    );
+    return (session: session, failure: null);
   }
 
   /// Why the game could not take a join of [target], when it could not.

@@ -49,7 +49,7 @@ mixin _JoinSessionHosting implements MultiplayerSessionHost {
     GameInstall install,
     JoinSessionState state,
     LaunchSessionRequest session, {
-    Future<JoinFailed?> Function()? beforeStart,
+    Future<JoinStartPreparation> Function()? beforeStart,
   }) => _launcher._tracked(() async {
     try {
       return await _launcher._startJoinSession(
@@ -155,7 +155,7 @@ extension _JoinSessionLaunching on LocalLauncherRepository {
     GameInstall install,
     JoinSessionState state,
     LaunchSessionRequest session,
-    Future<JoinFailed?> Function()? beforeStart,
+    Future<JoinStartPreparation> Function()? beforeStart,
   ) async {
     final plan = state.plan;
     if (state.stage != JoinStage.launching ||
@@ -212,12 +212,16 @@ extension _JoinSessionLaunching on LocalLauncherRepository {
       );
     }
     if (_disposed) return const JoinLaunchStopped();
-    final blocked = await beforeStart?.call();
-    if (blocked != null) return JoinLaunchRefused(blocked);
+    final prepared = await beforeStart?.call();
+    if (prepared?.failure case final failure?) {
+      return JoinLaunchRefused(failure);
+    }
+    final startSession = prepared == null ? session : prepared.session;
+    if (startSession == null) return JoinLaunchRefused(_joinNotStarted);
     final result = await _launchSession(
       install,
       profile,
-      session,
+      startSession,
       selectionOverride: null,
       restart: false,
     );

@@ -75,6 +75,7 @@ final class OwnedGame {
 
   /// The quit requests its manager took.
   final taken = <LauncherQuitRequest>[];
+  final launchRequests = <String>[];
   var running = false;
   var stopped = 0;
   var _quitting = false;
@@ -117,7 +118,13 @@ final class OwnedGame {
         if (game.steps.contains('staged')) game._closing = true;
         return game.running || (game.anotherCopyRuns && game._ended);
       },
-      creator: (_) async {
+      creator: (request) async {
+        game.launchRequests.add(
+          File(
+            request.environment[ProfileLaunchConfigurationV4
+                .environmentVariable]!,
+          ).readAsStringSync(),
+        );
         game.running = true;
         game.record('startup-complete');
         final identity = LaunchProcessIdentity(

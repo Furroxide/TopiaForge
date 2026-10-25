@@ -217,7 +217,9 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   install: at its own start or when another install is chosen, once a game it found running has closed, and after a
   change in Settings. A join runs the same round as the last thing before it starts a session, once any game it
   closed has exited, and stops as `launchBlocked` when the round cannot finish, since a projection left as it was
-  could still hold a voice consent the player has withdrawn. A live join runs none, since the game runs. Every edit
+  could still hold a voice consent the player has withdrawn. After that round the join rebuilds its launch request
+  from the synchronized settings, so a name or network choice saved as the game quits is not replaced by the earlier
+  request. A live join runs none, since the game runs. Every edit
   of a session therefore lands in one journal. Each change sets its whole preference, so when the game appends one
   (`MultiplayerPreferencesJournal.Append`) it drops every earlier change of the same preference; an earlier disclosure
   goes only when the new one acknowledges at least as much. The launcher's result is the same either way.

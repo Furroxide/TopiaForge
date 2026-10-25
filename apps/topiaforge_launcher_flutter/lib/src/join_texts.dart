@@ -173,6 +173,18 @@ bool _isDelimiter(int unit) =>
     unit <= 0x20 || '"\'`()<>{}[],;|'.codeUnits.contains(unit);
 
 bool _holdsAddress(String token) {
+  // Keep IPv6's trailing compression while testing each punctuation suffix.
+  // Also inspect literal-shaped runs inside URLs, key=value text and scoped
+  // addresses; a host controls the surrounding text too.
+  for (final match in RegExp(r'[0-9A-Fa-f:.]+').allMatches(token)) {
+    var literal = match.group(0)!;
+    if (!literal.contains(':')) continue;
+    while (literal.isNotEmpty) {
+      if (_isIpLiteral(literal)) return true;
+      if (!'.:'.contains(literal[literal.length - 1])) break;
+      literal = literal.substring(0, literal.length - 1);
+    }
+  }
   var core = token;
   while (core.isNotEmpty && '.!?:'.contains(core[core.length - 1])) {
     core = core.substring(0, core.length - 1);

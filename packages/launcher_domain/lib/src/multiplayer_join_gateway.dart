@@ -33,6 +33,13 @@ enum JoinGameRunning {
   foreign,
 }
 
+/// The request rebuilt after the stopped game's preferences have been read,
+/// or a failure that prevents the start. Exactly one field is non-null.
+typedef JoinStartPreparation = ({
+  LaunchSessionRequest? session,
+  JoinFailed? failure,
+});
+
 /// How the launching stage went.
 sealed class JoinLaunch {
   const JoinLaunch();
@@ -193,15 +200,16 @@ abstract interface class MultiplayerSessionHost {
   /// - a game whose next start opens in safe mode, where a session is
   ///   refused, ends the join before anything starts;
   /// - otherwise [beforeStart] runs, once no game runs, and the server
-  ///   profile starts with [session], unless [beforeStart] answered a
-  ///   failure, which the join then reports and nothing starts.
+  ///   profile starts with its refreshed request, unless it answered a
+  ///   failure, which the join then reports and nothing starts. Without
+  ///   [beforeStart], the supplied [session] is used.
   ///
   /// Never throws.
   Future<JoinLaunch> launchJoinSession(
     GameInstall install,
     JoinSessionState state,
     LaunchSessionRequest session, {
-    Future<JoinFailed?> Function()? beforeStart,
+    Future<JoinStartPreparation> Function()? beforeStart,
   });
 
   /// [MultiplayerJoinGateway.withdrawJoinLaunch].
