@@ -44,6 +44,7 @@ namespace TopiaForge.Mods.UnityUi
 
         private readonly int[] slots = new int[TopiaForgeInputGate.ControlsPerDevice];
         private readonly int[] keys = new int[MaxKeys];
+        private readonly string?[] names = new string?[MaxKeys];
         private readonly float[] directionX = new float[MaxKeys];
         private readonly float[] directionY = new float[MaxKeys];
         private int count;
@@ -87,6 +88,23 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets whether <paramref name="key"/> moves the game's menus now.</summary>
         public bool Moves(int key) => Listening && key >= 0 && key < slots.Length && slots[key] != 0;
 
+        /// <summary>Gets whether an SDK key name moves the game's menus now, using the same followed bindings as the filter.</summary>
+        public bool Moves(string name)
+        {
+            for (var index = 0; index < KeyCount; index++)
+            {
+                var key = names[index];
+                if (Is(key, name)
+                    || (Is(key, "LeftMeta") && (Is(name, "LeftCommand") || Is(name, "LeftApple") || Is(name, "LeftWindows")))
+                    || (Is(key, "RightMeta") && (Is(name, "RightCommand") || Is(name, "RightApple") || Is(name, "RightWindows"))))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>Gets the part <paramref name="key"/> plays now: its own as one of the kit's keys, else a direction while it moves the game's menus.</summary>
         public TopiaForgeInputRole RoleOf(int key)
         {
@@ -107,7 +125,7 @@ namespace TopiaForge.Mods.UnityUi
         /// (up, down, left or right); a key bound without one is still the action's, so it is taken, but moves nowhere. One of
         /// the kit's own keys, a key already followed, an unknown key, or one past <see cref="MaxKeys"/> changes nothing.
         /// </summary>
-        public void BindKey(int key, string? part)
+        public void BindKey(int key, string? part, string? name = null)
         {
             if (key <= 0 || key >= slots.Length || slots[key] != 0 || count == MaxKeys || KitRole(key) != TopiaForgeInputRole.Key)
             {
@@ -115,6 +133,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             keys[count] = key;
+            names[count] = LegacyName(name);
             directionX[count] = Is(part, "left") ? -1f : Is(part, "right") ? 1f : 0f;
             directionY[count] = Is(part, "down") ? -1f : Is(part, "up") ? 1f : 0f;
             slots[key] = ++count;
@@ -132,6 +151,7 @@ namespace TopiaForge.Mods.UnityUi
             for (var index = 0; index < count; index++)
             {
                 slots[keys[index]] = 0;
+                names[index] = null;
             }
 
             count = 0;
@@ -141,6 +161,15 @@ namespace TopiaForge.Mods.UnityUi
         private static bool Is(string? part, string name)
         {
             return string.Equals(part, name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string? LegacyName(string? name)
+        {
+            if (name != null && name.StartsWith("Digit", StringComparison.Ordinal)) return "Alpha" + name.Substring(5);
+            if (name != null && name.StartsWith("Numpad", StringComparison.Ordinal)) return "Keypad" + name.Substring(6);
+            if (name == "LeftCtrl") return "LeftControl";
+            if (name == "RightCtrl") return "RightControl";
+            return name == "PrintScreen" ? "Print" : name == "ContextMenu" ? "Menu" : name;
         }
     }
 }

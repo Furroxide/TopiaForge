@@ -158,6 +158,10 @@ field holds the focus; to the keys and buttons an open window handles; to every 
 control while one of the game's own text fields has the keyboard; and, for mouse controls, while the
 pointer is over UI. A game control that is merely selected holds nothing, so a mod's own key still
 reaches it at the main menu, over its own window, and in a level after a click on the game's menus.
+While a window navigates with the game's bindings, mod actions yield to those same keys and to a
+bound right stick. Rebinding updates both the claimed keys and their directions, even when the set
+of resolved controls stays the same. When the game's navigate action is disabled, those extra
+controls stay available to gameplay and mods.
 
 TopiaForge takes these presses from the Input System, which the game's menus, pause and navigation
 read. Code that reads Unity's legacy input still sees every key.

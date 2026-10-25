@@ -7,6 +7,7 @@ namespace TopiaForge.ModManager.Tests
     internal static partial class UiKitInputOwnershipTests
     {
         private static readonly InputBinding KeyU = InputBinding.Key("U");
+        private static readonly InputBinding KeyW = InputBinding.Key("W");
         private static readonly InputBinding KeyEscape = InputBinding.Key("Escape");
         private static readonly InputBinding KeyReturn = InputBinding.Key("Return");
         private static readonly InputBinding KeyUp = InputBinding.Key("UpArrow");
@@ -83,6 +84,37 @@ namespace TopiaForge.ModManager.Tests
             {
                 Assert(!InputActionYield.Yields(binding, default), "with no focus nothing yields (" + binding.Control + ")");
             }
+        }
+
+        private static void AModsNavigationBindingsYieldWithTheGame()
+        {
+            var navigation = new TopiaForgeNavigationBindings { Listening = true };
+            BindTheGamesNavigation(navigation);
+            var window = new UiInputFocus(TopiaForgeInputClaim.Navigation, false, false, false, navigation);
+            Assert(navigation.RoleOf(W) == TopiaForgeInputRole.Direction, "the game binds W to navigate the selected window");
+            Assert(InputActionYield.Yields(KeyW, window), "a mod's W action yields to the window navigating with W");
+            Assert(InputActionYield.Yields(InputBinding.Key("w"), window), "the followed key names match case-insensitively");
+            Assert(InputActionYield.Yields(PadRightX, window), "the right stick also yields while the game's navigate action binds it");
+            Assert(!InputActionYield.Yields(KeyU, window), "an unrelated key can still toggle its window");
+            var unselected = new UiInputFocus(TopiaForgeInputClaim.Back, false, false, false, navigation);
+            Assert(!InputActionYield.Yields(KeyW, unselected), "an unselected window does not take a mod's W");
+            navigation.Listening = false;
+            Assert(!InputActionYield.Yields(KeyW, window) && !InputActionYield.Yields(PadRightX, window),
+                "disabled game navigation leaves these controls to gameplay and mods");
+            navigation.Listening = true;
+            navigation.Clear();
+            navigation.BindKey(B, "up", "B");
+            Assert(!InputActionYield.Yields(KeyW, window) && InputActionYield.Yields(InputBinding.Key("B"), window),
+                "a rebind changes which mod key yields, with no stale claim on W");
+            navigation.BindKey(41, "left", "Digit1");
+            navigation.BindKey(42, "right", "Numpad1");
+            navigation.BindKey(43, "up", "LeftMeta");
+            navigation.BindKey(44, "down", "LeftCtrl");
+            Assert(InputActionYield.Yields(InputBinding.Key("Alpha1"), window)
+                && InputActionYield.Yields(InputBinding.Key("Keypad1"), window)
+                && InputActionYield.Yields(InputBinding.Key("LeftCommand"), window)
+                && InputActionYield.Yields(InputBinding.Key("LeftControl"), window),
+                "SDK key names retain their legacy digit, keypad and modifier aliases");
         }
     }
 }

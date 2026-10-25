@@ -157,13 +157,13 @@ namespace TopiaForge.ModManager.Tests
         {
             // W, A, S and D with the arrows, as the game's navigate action binds them in a two-dimensional composite, and the
             // right stick, as such an action may bind it too.
-            bindings.BindKey(W, "up");
+            bindings.BindKey(W, "up", "W");
             bindings.BindKey(UpArrow, "up");
-            bindings.BindKey(S, "down");
+            bindings.BindKey(S, "down", "S");
             bindings.BindKey(DownArrow, "down");
-            bindings.BindKey(A, "left");
+            bindings.BindKey(A, "left", "A");
             bindings.BindKey(LeftArrow, "left");
-            bindings.BindKey(D, "right");
+            bindings.BindKey(D, "right", "D");
             bindings.BindKey(RightArrow, "right");
             bindings.BindRightStick();
         }
@@ -401,6 +401,7 @@ namespace TopiaForge.ModManager.Tests
                     Points(Key.A, -1f, 0f);
                     Points(Key.D, 1f, 0f);
                     Check(Bindings.RoleOf((int)Key.W) == TopiaForgeInputRole.Direction, "W moves while the game's menus listen");
+                    Check(Bindings.Moves("W"), "the same key is followed by name for mod input actions");
                     Check(Bindings.RightStickMoves, "and so does the right stick, which the action binds by a part");
                 }
 
@@ -423,6 +424,13 @@ namespace TopiaForge.ModManager.Tests
                     TopiaForgeNavigateAction.Follow();
                     Check(Bindings.Moves((int)Key.Z) && !Bindings.Moves((int)Key.W), "a key rebound in the game's settings is followed in the next frame");
                     Points(Key.Z, 0f, 1f);
+                    action.Bindings[1] = new InputBinding { name = "down", isPartOfComposite = true };
+                    TopiaForgeNavigateAction.Follow();
+                    Points(Key.Z, 0f, -1f);
+                    Check(Bindings.Moves("Z") && !Bindings.Moves("W"), "a rebind updates SDK key names too");
+                    action.Bindings[1] = new InputBinding { name = "down", isPartOfComposite = false };
+                    TopiaForgeNavigateAction.Follow();
+                    Points(Key.Z, 0f, 0f);
                 }
 
                 public static void OnlyTheInputSystemsModuleIsFollowed()

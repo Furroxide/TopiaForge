@@ -200,7 +200,8 @@ namespace TopiaForge.ModManager
                 TopiaForgeDismissStack.Claims,
                 TopiaForgeDismissStack.HoldsFocus || TopiaForgeInputOwnership.KitTextFieldHasKeyboard(),
                 TopiaForgeGameTextFocus.Current.HasKeyboard(selected),
-                events != null && events.IsPointerOverGameObject());
+                events != null && events.IsPointerOverGameObject(),
+                TopiaForgeNavigateAction.Bindings);
         }
 
         public void Dispose()

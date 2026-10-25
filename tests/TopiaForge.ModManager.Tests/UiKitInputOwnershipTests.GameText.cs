@@ -28,7 +28,8 @@ namespace TopiaForge.ModManager.Tests
                 },
                 "AClosedMenuHoldsNothing", "AFocusedMenuButtonHoldsNothing", "TheGamesReplyFieldHoldsTheKeys",
                 "AGameButtonHoldsNothing", "AGameUguiTextFieldHoldsTheKeysOnlyWhileFocused", "AKitControlOrALeftoverHoldsNothing",
-                "APanelThatCannotBeReadHoldsTheKeys", "AUiToolkitThatCannotBeResolvedBreaksNothing", "TheSelectionIsLookedAtAgainWhenItChanges");
+                "APanelThatCannotBeReadHoldsTheKeys", "AUiToolkitThatCannotBeResolvedBreaksNothing", "TheSelectionIsLookedAtAgainWhenItChanges",
+                "AThrowingPanelReadHoldsKeysAndRecovers");
         }
 
         /// <summary>
@@ -144,6 +145,11 @@ namespace TopiaForge.ModManager.Tests
                 public interface IPanel { FocusController focusController { get; } }
                 public sealed class RuntimePanel : IPanel { public FocusController focusController { get; } = new FocusController(); }
                 public class PanelEventHandler : UnityEngine.Component { public IPanel? panel { get; set; } }
+                public class ThrowingPanelEventHandler : PanelEventHandler
+                {
+                    public bool Throws;
+                    public new IPanel? panel => Throws ? throw new InvalidOperationException("Panel unavailable") : base.panel;
+                }
                 public class TwicePanelEventHandler : PanelEventHandler { public new string panel => string.Empty; }
                 public abstract class TextInputBaseField<TValueType> : VisualElement { }
                 public class TextField : TextInputBaseField<string> { }
@@ -310,6 +316,26 @@ namespace TopiaForge.ModManager.Tests
                     Check(focus.HasKeyboard(rish), "and so is the panel when it is selected again");
                     ((PanelEventHandler)rish.GetComponent(typeof(PanelEventHandler))).panel = new RuntimePanel();
                     Check(!focus.HasKeyboard(rish), "a panel the handler serves anew is read anew");
+                }
+
+                public static void AThrowingPanelReadHoldsKeysAndRecovers()
+                {
+                    var focus = new TopiaForgeGameTextFocus(TopiaForgeUiToolkitFocus.Find(name =>
+                        name.StartsWith("UnityEngine.UIElements.PanelEventHandler,", StringComparison.Ordinal) ? typeof(ThrowingPanelEventHandler)
+                        : UiToolkit.TryGetValue(name, out var type) ? type : null));
+                    var selected = new GameObject("Game panel");
+                    var handler = selected.AddComponent<ThrowingPanelEventHandler>();
+                    var panel = new RuntimePanel();
+                    ((PanelEventHandler)handler).panel = panel;
+                    panel.focusController.focusedElement = new TextField();
+                    Check(focus.HasKeyboard(selected), "a readable focused field holds keys");
+                    handler.Throws = true;
+                    Check(focus.HasKeyboard(selected), "a getter failure cannot throw into mod input or surrender the field's keys");
+                    handler.Throws = false;
+                    panel.focusController.focusedElement = null;
+                    Check(!focus.HasKeyboard(selected), "the next readable closed field releases keys without changing the selection");
+                    ((PanelEventHandler)handler).panel = null;
+                    Check(!focus.HasKeyboard(selected), "a detached panel releases keys too");
                 }
             }
             """;

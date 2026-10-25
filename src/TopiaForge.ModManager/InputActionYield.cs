@@ -8,12 +8,14 @@ namespace TopiaForge.ModManager
     internal readonly struct UiInputFocus
     {
         /// <summary>Creates a frame's focus.</summary>
-        public UiInputFocus(TopiaForgeInputClaim claims, bool surfaceHoldsFocus, bool gameTextFieldHasKeyboard, bool pointerOverUi)
+        public UiInputFocus(TopiaForgeInputClaim claims, bool surfaceHoldsFocus, bool gameTextFieldHasKeyboard, bool pointerOverUi,
+            TopiaForgeNavigationBindings? navigation = null)
         {
             Claims = claims;
             SurfaceHoldsFocus = surfaceHoldsFocus;
             GameTextFieldHasKeyboard = gameTextFieldHasKeyboard;
             PointerOverUi = pointerOverUi;
+            Navigation = navigation;
         }
 
         /// <summary>Gets what the open TopiaForge surfaces take from the game.</summary>
@@ -33,6 +35,9 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets whether the pointer is over UI.</summary>
         public bool PointerOverUi { get; }
+
+        /// <summary>Gets the game's currently followed navigation bindings, also used by the event filter.</summary>
+        public TopiaForgeNavigationBindings? Navigation { get; }
     }
 
     /// <summary>
@@ -63,12 +68,13 @@ namespace TopiaForge.ModManager
                         ? focus.PointerOverUi
                         : focus.GameTextFieldHasKeyboard || Covers(focus, TopiaForgeInputRole.Direction, TopiaForgeInputDevice.Keyboard);
                 case InputBindingKind.Key:
-                    return focus.GameTextFieldHasKeyboard || Covers(focus, KeyRole(binding.Control), TopiaForgeInputDevice.Keyboard);
+                    return focus.GameTextFieldHasKeyboard || Covers(focus, KeyRole(binding.Control, focus.Navigation), TopiaForgeInputDevice.Keyboard);
                 case InputBindingKind.GamepadButton:
                     return focus.GameTextFieldHasKeyboard || Covers(focus, ButtonRole(binding.Control), TopiaForgeInputDevice.Gamepad);
                 case InputBindingKind.GamepadAxis:
                     return focus.GameTextFieldHasKeyboard
-                        || (IsLeftStick(binding.Control) && Covers(focus, TopiaForgeInputRole.Direction, TopiaForgeInputDevice.Gamepad));
+                        || ((IsLeftStick(binding.Control) || (focus.Navigation?.RightStickMoves == true && IsRightStick(binding.Control)))
+                            && Covers(focus, TopiaForgeInputRole.Direction, TopiaForgeInputDevice.Gamepad));
                 default:
                     return focus.GameTextFieldHasKeyboard;
             }
@@ -79,7 +85,7 @@ namespace TopiaForge.ModManager
             return TopiaForgeInputClaims.Cover(focus.Claims, role, device);
         }
 
-        private static TopiaForgeInputRole KeyRole(string control)
+        private static TopiaForgeInputRole KeyRole(string control, TopiaForgeNavigationBindings? navigation)
         {
             if (Is(control, "Escape"))
             {
@@ -96,7 +102,8 @@ namespace TopiaForge.ModManager
                 return TopiaForgeInputRole.Submit;
             }
 
-            return Is(control, "Tab") ? TopiaForgeInputRole.Tab : TopiaForgeInputRole.Key;
+            return Is(control, "Tab") ? TopiaForgeInputRole.Tab
+                : navigation?.Moves(control) == true ? TopiaForgeInputRole.Direction : TopiaForgeInputRole.Key;
         }
 
         private static TopiaForgeInputRole ButtonRole(string control)
@@ -117,6 +124,11 @@ namespace TopiaForge.ModManager
         private static bool IsLeftStick(string control)
         {
             return Is(control, nameof(InputGamepadAxis.LeftX)) || Is(control, nameof(InputGamepadAxis.LeftY));
+        }
+
+        private static bool IsRightStick(string control)
+        {
+            return Is(control, nameof(InputGamepadAxis.RightX)) || Is(control, nameof(InputGamepadAxis.RightY));
         }
 
         private static bool Is(string control, string name)

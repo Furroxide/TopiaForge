@@ -66,6 +66,7 @@ namespace TopiaForge.ModManager.Tests
             TheKitsKeyNumbersAreTheInputSystems();
             DeviceAndControlBoundsDoNotStealOtherInput();
             AModsOwnKeyStillReachesItsAction();
+            AModsNavigationBindingsYieldWithTheGame();
             OnlyAGameTextFieldWithTheKeyboardHoldsTheKeys();
             TheGamesUiToolkitHasWhatTheKitReads();
             NothingIsAllocatedAtRestOrWhileHeld();

@@ -129,7 +129,7 @@ namespace TopiaForge.ModManager.Tests
                     steered += rig.Navigation.RoleOf(W) == TopiaForgeInputRole.Direction ? keyY : keyX;
                     rig.Gate.Direction(out var x, out var y);
                     rig.Order.TakeOnBack(rig.Gate.BackHeld, rig.Gate.BackPressedIn(index));
-                    TopiaForge.ModManager.InputActionYield.Yields(KeyReturn, new TopiaForge.ModManager.UiInputFocus(claims, rig.Order.HoldsFocus(), false, true));
+                    TopiaForge.ModManager.InputActionYield.Yields(KeyW, new TopiaForge.ModManager.UiInputFocus(claims, false, false, true, rig.Navigation));
                     driver.Tick(rig.Order.FocusRoot() != null, true, false, x, y, rig.Gate.SubmitPressedIn(index), FrameTime, ModuleDelay, ModuleRate);
                 }
 

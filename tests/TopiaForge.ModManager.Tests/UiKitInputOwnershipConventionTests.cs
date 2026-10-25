@@ -52,6 +52,7 @@ namespace TopiaForge.ModManager.Tests
             Require(focus, "TopiaForgeDismissStack.HoldsFocus || TopiaForgeInputOwnership.KitTextFieldHasKeyboard()",
                 "the overlay, a modal, a fullscreen tool, a key capture or a kit text field hold every control");
             Require(focus, "TopiaForgeDismissStack.Claims", "and the open windows hold what they claim");
+            Require(focus, "TopiaForgeNavigateAction.Bindings", "mod actions yield to the same navigation bindings as the game's event filter");
             Require(service, "value = ReadBindings(bindings, definition.SuppressWhileUiFocused ? focus : default);",
                 "an action that opted out of yielding reads every binding");
             Require(service, "if (!InputActionYield.Yields(bindings[index], focus))", "each binding yields on its own");

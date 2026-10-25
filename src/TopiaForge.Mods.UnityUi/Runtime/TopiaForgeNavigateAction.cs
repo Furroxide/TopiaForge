@@ -4,7 +4,6 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.UI;
-using UnityEngine.InputSystem.Utilities;
 
 namespace TopiaForge.Mods.UnityUi
 {
@@ -12,12 +11,13 @@ namespace TopiaForge.Mods.UnityUi
     /// Follows the game's navigate action, the one Unity's UI module moves its selection with and Robotopia's menus read,
     /// once a frame as the kit's driver runs (TopiaForgeNavigationBindings): whether it is enabled, the keys it binds with
     /// the way each points, and whether it binds the right stick. Reading it changes nothing of the game's, and allocates
-    /// nothing unless the action or its controls changed. A failure stops the following until the game restarts, logged
+    /// nothing unless the action, its controls or their binding directions changed. A failure stops the following until the game restarts, logged
     /// once, and surfaces take only the kit's own navigation keys from the game again. Main thread only.
     /// </summary>
     internal static class TopiaForgeNavigateAction
     {
         private static readonly List<InputControl> Followed = new List<InputControl>();
+        private static readonly List<string?> Parts = new List<string?>();
         private static InputAction? action;
         private static bool failed;
 
@@ -39,7 +39,7 @@ namespace TopiaForge.Mods.UnityUi
                 var reference = module != null ? module.move : null;
                 var current = reference != null ? reference.action : null;
                 Bindings.Listening = current != null && current.enabled;
-                if (current != null && !(ReferenceEquals(current, action) && Unchanged(current.controls)))
+                if (current != null && !(ReferenceEquals(current, action) && Unchanged(current)))
                 {
                     Read(current);
                 }
@@ -62,6 +62,7 @@ namespace TopiaForge.Mods.UnityUi
             action = null;
             failed = false;
             Followed.Clear();
+            Parts.Clear();
             Bindings.Clear();
             Bindings.Listening = false;
         }
@@ -70,17 +71,18 @@ namespace TopiaForge.Mods.UnityUi
         {
             action = navigate;
             Followed.Clear();
+            Parts.Clear();
             Bindings.Clear();
             var controls = navigate.controls;
             for (var index = 0; index < controls.Count; index++)
             {
                 var control = controls[index];
                 Followed.Add(control);
+                var part = control is KeyControl ? Part(navigate, control) : null;
+                Parts.Add(part);
                 if (control is KeyControl key)
                 {
-                    var binding = navigate.GetBindingIndexForControl(control);
-                    var part = binding >= 0 ? navigate.bindings[binding] : default;
-                    Bindings.BindKey((int)key.keyCode, part.isPartOfComposite ? part.name : null);
+                    Bindings.BindKey((int)key.keyCode, part, key.keyCode.ToString());
                 }
                 else if (control.device is Gamepad gamepad && Within(control, gamepad.rightStick))
                 {
@@ -89,8 +91,10 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        private static bool Unchanged(ReadOnlyArray<InputControl> controls)
+        private static bool Unchanged(InputAction navigate)
         {
+            // A binding can change its composite part without changing any resolved control's identity.
+            var controls = navigate.controls;
             if (controls.Count != Followed.Count)
             {
                 return false;
@@ -98,13 +102,21 @@ namespace TopiaForge.Mods.UnityUi
 
             for (var index = 0; index < controls.Count; index++)
             {
-                if (!ReferenceEquals(controls[index], Followed[index]))
+                if (!ReferenceEquals(controls[index], Followed[index])
+                    || (controls[index] is KeyControl && !string.Equals(Part(navigate, controls[index]), Parts[index], StringComparison.Ordinal)))
                 {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        private static string? Part(InputAction navigate, InputControl control)
+        {
+            var binding = navigate.GetBindingIndexForControl(control);
+            var part = binding >= 0 ? navigate.bindings[binding] : default;
+            return part.isPartOfComposite ? part.name : null;
         }
 
         private static bool Within(InputControl control, InputControl stick)
