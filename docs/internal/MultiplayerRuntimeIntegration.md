@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.4, WS3.6, part of WS3.7, WS3.8, WS3.9 and WS3.13 of the live-multiplayer plan) · Date: 2026-10-24 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.4, WS3.6, part of WS3.7, WS3.8 to WS3.10 and WS3.13 of the live-multiplayer plan) · Date: 2026-10-25 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -18,8 +18,9 @@ The work lands in three steps:
 All three have landed, and so have the voice service behind the SPI (section 2, "Voice"), intent tracking (WS3.4,
 section 14), the participant realm (WS3.9, section 15), the first part of authority routing (WS3.7, section 16):
 spawn adoption, shadows, and validated transform changes and destroys; pause and time (WS3.13, section 17); motion
-ownership (WS3.7, section 18); and session follow (WS3.8, section 19), which runs the host's world on every joined
-player. Section 8 records the remaining integration points.
+ownership (WS3.7, section 18); session follow (WS3.8, section 19), which runs the host's world on every joined player;
+and presence (WS3.10, section 20), which shows every player to the others. Section 8 records the remaining integration
+points.
 
 ## 1. Shape
 
@@ -34,6 +35,7 @@ player. Section 8 records the remaining integration points.
 | The network world (section 13) | `src/TopiaForge.ModManager/Multiplayer/World/`, Unity-free; its engine side in `World/Unity/` |
 | Pause and time (section 17) | `src/TopiaForge.ModManager/Multiplayer/Time/`, Unity-free; the game's clock over Unity in `Time/Unity/`; Chronos' side in `mods/TopiaForge.Chronos/` |
 | Session follow (section 19) | `src/TopiaForge.ModManager/Multiplayer/Follow/`, Unity-free; the orchestrator's side in `GamemodeSessionOrchestrator.Follow.cs`; the level loader over Unity in `CoreGameplayServices.Levels.cs` |
+| Presence (section 20) | `src/TopiaForge.ModManager/Multiplayer/Presence/`, Unity-free; its engine side in `Presence/Unity/`; the host's rules in Core's `PresencePlausibility.cs`, `PresencePolicy.cs` and `PresenceHealth.cs`; RobotKit's bodies in `mods/TopiaForge.RobotKit/RobotCosmeticBodies.cs` |
 
 - **Visibility.** Every SPI type is internal. The multiplayer SDK assembly grants its internals to the provider,
   ModManager, the test rig and the three test harnesses that use them. The replication SPI lives in the core SDK
@@ -445,8 +447,27 @@ contract. `OpenSystemChannel` opens one of five channels, one owner each: `World
 - **Delivery** is by polling: the owner takes messages with `TryReceive` during its frame stage, which opens its sender's
   window again.
 
-Unreliable delivery for poses (WS3.10) and the voice path (WS2g) are separate: the avatars slice adds an unreliable
-lane over the link's realtime channel, and voice uses its own channel.
+### The realtime lane
+
+Beside each channel's stream runs a lane of unreliable datagrams (WS3.10), for traffic only the newest copy of matters,
+such as players' poses. Voice keeps a channel of its own.
+
+- **Wire.** `[type 0x01][epoch varint][join generation varint][kind byte][payload bytes to the end]`, one datagram per
+  frame on the link's realtime channel, which the transport carries unreliably and in sequence, ahead of the session's
+  queued traffic. A payload carries at most 1 KiB (`InternalSystemLimits.MaximumDatagramBytes`).
+- **Sending.** `SendDatagram` sends at once, with no window and no resend. The same targets as messages hold: a host to
+  everyone, one player or everyone but one, its joined players still synchronizing included; a player to its host only;
+  nothing on `Time`; nothing from inside a transaction. A joined player keeps to 64 datagrams a second after a burst of
+  64 (`PlayerDatagramBurst`, `PlayerDatagramsPerSecond`) and is refused with `RateLimited` past that.
+- **Taking.** `TryReceiveDatagram` gives the next datagram with its sender, named by the connection; its payload stays
+  good until the next one is taken. A channel holds at most 256 (`DatagramQueueLength`), and a full queue lets go of its
+  oldest.
+- **Dropped, never fatal.** A host takes twice a player's rate, a burst of 128 and 128 a second, and drops the rest. A
+  datagram from an earlier session or connection, by its epoch or join generation, one before its sender joined, and
+  what waited when a stream restarts or the channel closes are dropped and counted; a header that does not parse or a
+  payload past the bound is counted as malformed; a kind nobody has open, or `Time`'s, is unclaimed. None of it ends a
+  connection, since a datagram may be late or repeated by the path.
+- **Counters.** `GetStatistics` adds the datagrams sent, received and dropped.
 
 ## 6. Readiness
 
@@ -506,10 +527,10 @@ The frame:
 | Step | Where | What runs | When |
 | --- | --- | --- | --- |
 | 1 | `DispatchUpdate`, before the mods | The provider's `Pump`: network receive and the session engine | Whenever a provider is attached |
-| 2 | `DispatchUpdate`, before the mods | The host's time on a joined player (section 17), then `WorldEvents`: world events, then `SessionFollow`: the host's announcements and the joined player's follow (section 19) | Online |
+| 2 | `DispatchUpdate`, before the mods | The host's time on a joined player (section 17), then `WorldEvents`: world events, then `SessionFollow`: the host's announcements and the joined player's follow (section 19), then `PresenceReceive`: players' poses and states, checked on the host (section 20) | Online |
 | 3 | `DispatchUpdate` | The mods' Update | Always |
-| 4 | `DispatchUpdate`, after the mods | `PresenceSend` (pose and voice), `MotionSend` (ownership samples and handbacks), `HostSnapshots` and the session's time (host only), then the provider's `Flush` | Online |
-| Late | `DispatchLateUpdate`, before the mods | The pause guard (section 17), then `ReplicaInterpolation` | The guard online, and after leaving until it has handed the clock back; interpolation on joined players |
+| 4 | `DispatchUpdate`, after the mods | `PresenceSend` (this player's pose and state, on the host the relay, and voice), `MotionSend` (ownership samples and handbacks), `HostSnapshots` and the session's time (host only), then the provider's `Flush` | Online |
+| Late | `DispatchLateUpdate`, before the mods | The pause guard (section 17), then `AvatarInterpolation` (section 20), then `ReplicaInterpolation` | The guard online, and after leaving until it has handed the clock back; avatars online; interpolation on joined players |
 
 - `BeginFrame` (time, input and the mods' scheduler) still runs first, as before.
 - The late step runs from `CoreGameplayServices.BeginLateUpdate` through the runtime's LateUpdate dispatch, ahead of the
@@ -534,13 +555,13 @@ plug in here:
 | WS3.7 authority routing | First part landed (section 16): `NetAssetService` and `NetEntityService` route a joined player's spawns, transform changes and destroys by `ExecutionRouting.Route(realm, profile, intent)`, and the SPI's `RequestSpawn` and `RegisterCanonical` do so for providers: spawn adoption under a host's per-player `ProxyParticipant` scope, shadows bound by `NetSpawnOrigin`, and requests the host validates through `PermissionPolicy` and `TokenBucket`, over message types 64 to 66 and 96 and 97. Motion ownership is implemented in section 18: `NetEntityMotion` wraps `AcquireMotion`, and `HeldItemOwnershipTracker` observes native pickups. Forwarded commands naming their sender in `InternalCommand.Sender` remain separate |
 | WS3.8 session follow | Landed (section 19): the `SessionFollow` stage after `WorldEvents`; the `SceneFollow` channel, announced again on its generation changes like world replication; `HoldReadiness` from link-up until the host's world runs, with `ReportProgress` while it loads; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `SceneTransitionPriority.SessionFollow` with the authority policy's `FollowGrant`; `Leave` from a joined player's main menu; and the network world's progress and hold beside its own (section 13). A change of worlds does not use `ReplaceSession` (section 19, "Choices") |
 | WS3.9 participant realm | Landed (section 15): `IGamemodeParticipantFactory`, the participant's scope through `CreateChildScopeAsync(..., ModExecutionContext.Participant)`, and the orchestrator's start by realm, which session follow (WS3.8) calls on a joined player |
-| WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
-| WS3.11 Players API | Player references (`InternalNetRefKind.Player`) through `MultiplayerReplication.References`, beside the network world's entity references |
+| WS3.10 presence | Landed (section 20): `PresenceReceive`, `PresenceSend` and `AvatarInterpolation`; the `Avatars` channel and the realtime lane (section 5); `SetAvatarSource`; the session's players through `IInternalMultiplayerControl.SessionSnapshot`; bodies through `IRuntimeReplication.RegisterAvatarBodyFactory`; the spawn ring around the orchestrator's readiness spawn; and `ValidatedPosition` for motion ownership |
+| WS3.11 Players API | Player references (`InternalNetRefKind.Player`) through `MultiplayerReplication.References`, beside the network world's entity references; presence's avatars and poses (section 20), and `PresenceHealth.AllowGain` for heals the host makes |
 | WS3.12 presentation routing | `NetUiService`, routing each call by `PresentationRoutingPolicy.Route(realm, profile, kind)` |
 | WS3.13 pause and time | Landed (section 17): the `Time` channel and `MultiplayerSessionClock`, `IRuntimeReplication.GameClock`, `SessionTime` and `PublishSessionTime` beside `TimeAuthority` and `NativePauseFreezesWorld`, the pause guard in the late step, and Chronos' bridge |
 | WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority, which landed with WS3.13 (section 17) |
 | WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
-| WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
+| WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress; `MultiplayerPresence.LocalTyping` for the typing flag, and `IPresenceNametagSource` for nametags (section 20) |
 | WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted. The host's `InternalHostSettings.Voice` is enforced: a session that offers no voice chat carries none, and `TransmitState` reads `NotOffered` for the transmit indicator to show ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.12) |
 
 Two rules hold for everything that plugs in:
@@ -552,9 +573,9 @@ Two rules hold for everything that plugs in:
 - **Generations.** A change of a stream's generation, from a rejoin or a replacement, means "start again from a
   baseline", whatever the owner was in the middle of.
 
-The entity identity and avatar sources are shape only: the session's `TryGetNetworkObjectId`, `TryGetEntity`,
-`TryGetAvatar` and `TryGetPose` ask them once set, on the main thread, and answer no until then. A source that throws
-answers no and is reported.
+The session's `TryGetNetworkObjectId`, `TryGetEntity`, `TryGetAvatar` and `TryGetPose` ask the entity identity and avatar
+sources once set, on the main thread, and answer no until then: the network world sets the first (section 13) and
+presence the second (section 20). A source that throws answers no and is reported.
 
 ## 9. Tests
 
@@ -655,6 +676,7 @@ answers no and is reported.
 - **Intent tracking** (section 14 lists its suites).
 - **Pause and time** (section 17 lists its suites).
 - **Session follow** (section 19 lists its suites).
+- **The realtime lane** (`SystemDatagramTests`), and **presence** (section 20 lists its suites).
 
 ## 10. The realm
 
@@ -1203,12 +1225,13 @@ Session follow (WS3.8) has landed (section 19). Beside the network world:
   baseline placed them.
 - **A scene a joined player reloads on its own**, through the game's own buttons, keeps its unbound objects at the
   scene's poses until session follow takes the player back to the host's world (section 19).
-- **One snapshot schedule for every player.** Relevancy (`RelevancySet`) needs each player's position, which arrives
-  with presence (WS3.10), so every player gets the same snapshots, 800 bytes a tick at most. Measured over the real
-  provider with eight players in a City Streets of 1,031 keyed objects: up to about 50 bodies moving at once, each
-  reaches every player at the full 10 Hz; 100 at 5.3 Hz each; 300 at 1.7 Hz each, below what interpolation hides. No
-  player ever missed a broadcast, and snapshots cost each link about 8 KB a second. Per-player budgets and relevancy
-  come with presence; bodies a player holds stream at 30 Hz under their own budget (section 18).
+- **One snapshot schedule for every player.** Relevancy (`RelevancySet`) needs each player's position, which presence
+  (WS3.10, section 20) now gives the host as `ValidatedPosition`; until the network world uses it, every player gets the
+  same snapshots, 800 bytes a tick at most. Measured over the real provider with eight players in a City Streets of 1,031
+  keyed objects: up to about 50 bodies moving at once, each reaches every player at the full 10 Hz; 100 at 5.3 Hz each;
+  300 at 1.7 Hz each, below what interpolation hides. No player ever missed a broadcast, and snapshots cost each link
+  about 8 KB a second. Per-player budgets and relevancy are still to come; bodies a player holds stream at 30 Hz under
+  their own budget (section 18).
 
 ### Choices
 
@@ -2442,3 +2465,226 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
   has no launch for its records to settle, so its follow publishes nothing rather than writing progress under an id no
   one reads; a launched join's follow writes under the join's request, so the records the launcher already reads show
   the host's world and its session.
+
+## 20. Presence
+
+WS3.10 lets players in one session see each other in the host's world. Each player's own game owns its pose and sends
+it, 20 a second while anything changes and one a second at rest, on the `Avatars` channel's realtime lane; the host
+checks every pose against the session's rules and relays the ones that stand to every other player, within a byte
+budget per player; and every peer shows each other player as an avatar, the game's own robot when RobotKit offers one
+and a capsule in the player's colour otherwise, moved before the mods' LateUpdate. The host places each joining player
+on the spawn ring around its world's spawn. The runtime's side is in `src/TopiaForge.ModManager/Multiplayer/Presence/`,
+Unity-free, with its engine side over the game in `Presence/Unity/`; the host's rules are the replication model's
+(`PresencePlausibility.cs`, `PresencePolicy.cs` and `PresenceHealth.cs` in Core); RobotKit's bodies are in
+`mods/TopiaForge.RobotKit/RobotCosmeticBodies.cs`.
+
+| Part | What it does |
+| --- | --- |
+| `MultiplayerPresence`, `.Avatars` | Owns the `Avatars` channel and the session's avatar source while a provider is attached; runs in the frame's step 2, step 4 and the late step; keeps its peers in step with the session's players; moves the avatars |
+| `PresenceHost`, `.Relay` | A listen host: presence indices, the checks, corrections and kicks, states, the spawn ring and the relay |
+| `PresenceClient` | A joined player: sends its pose, state and arrival; takes the roster, states, relayed poses, placements and corrections |
+| `PresenceLocalPlayer` | Samples the local player each frame and says when a pose or a state is due |
+| `PresencePeer`, `PresenceRoster` | One participant as this peer knows it; the indices that name participants on the wire |
+| `RemotePlayerAvatar` | One avatar: its body or capsule, where it is drawn and how fast it walks |
+| `PresenceWire`, `PresenceMessages` | The lane's datagrams and the stream's messages, read strictly |
+| `PresencePlausibility`, `PresenceHealth`, `PresencePolicy` (Core) | The host's rules for poses and health |
+| `IPresenceBackend`, `UnityPresenceBackend`, `UnityPresenceAvatar` | The engine side: the local player, avatars, the ground, the room to stand and the world's bounds |
+| `RobotCosmeticBodies` (RobotKit) | Dormant robots of the game's own for avatars to wear |
+
+### The wire
+
+Every payload starts with `[version 1][type]`. Poses go as datagrams on the realtime lane (section 5), bit-packed with
+the replication model's quantization (a 1/512 m grid, smallest-three rotations, velocity in 1/16 m/s steps); everything
+that must arrive goes as messages on the stream, in world replication's primitives.
+
+| Type | Way | Body |
+| --- | --- | --- |
+| 1 `Pose` (datagram) | player to host | the sender's clock in milliseconds (32 bits), the correction it took (8), flags (8), eye height in centimetres (8), position (3 x 22), rotation (32), velocity (3 x 11): 26 bytes |
+| 2 `Poses` (datagram) | host to player | the host's clock in milliseconds (32), a count from 1 to 32 (8), then per pose its presence index (8), how long before the host's clock it was taken (16), flags, eyes, position, rotation and velocity: 22 bytes a pose |
+| 16 `Roster` | host to player | count, then a presence index and a participant id per participant |
+| 17 `State` | player to host | health and maximum as singles, then a flag and the held item's catalog id |
+| 18 `States` | host to player | count, then a presence index and a state per player |
+| 19 `Arrived` | player to host | the world session the player runs: printable ASCII, 1 to 64 characters |
+| 20 `Place` | host to player | that world, a slot from 0 to 23, the feet as three singles, and the yaw |
+| 21 `Correct` | host to player | the correction's number and the feet |
+
+A flag past the five known (crouching, talking, typing, away, teleported), an index of 0, a count out of range, a field
+cut short, a bit or byte after the last field, an id or held item longer than 128 characters or holding a control
+character, a coordinate past 1,000,000 or not a number, or a slot past the ring is refused whole and counted as
+malformed, and changes nothing. A relayed datagram is read to its end before any pose in it is taken. A message is at
+most 16 KiB; a roster of sixteen players with the longest ids fits in under 7 KiB.
+
+### Rates and the budget
+
+- **A player's poses.** Its game samples the player every frame after the mods' Update and sends a pose on a 50 ms beat
+  while anything changed (its position on the grid, its view, flags, eyes or velocity), so 20 a second at any frame rate
+  of 20 or more; one a second at rest; and none without a player, at the menu or while a world loads. A game that fell a
+  whole beat behind starts the beat again rather than catching up in a burst.
+- **States.** Health and the held item are read four times a second and sent when they change, ten a second at most.
+  The host relays the states that changed every 100 ms.
+- **The relay.** Every 50 ms, for each player, a `ReplicationScheduler` with a budget of 204 bytes a tick (4,096 bytes
+  a second: half the link's 64 kbit/s realtime share, leaving room for motion ownership's samples) picks the other
+  players' poses that fit, 22 bytes each: nine others at the full rate. Past that the nearer claim more of it, 1,000
+  beside the player falling to 100 at 150 m and beyond, so a far player still moves about once a second, and everyone
+  takes turns. A player at rest is relayed three more times and then costs nothing until it moves, so a session at rest
+  sends only each player's pose a second. A player's own pose never comes back to it.
+- **Clocks.** The host maps each player's clock onto its own: the offset follows the quickest arrival at once, drifts
+  the other way by 1/256 a pose, and starts again after a jump of more than a second, so a mapped time never runs ahead
+  of the host's clock and never goes back. A pose no newer than the newest taken is dropped.
+
+### The host's rules
+
+The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in microseconds.
+
+- **Speed.** 30 m/s, running, jumping or climbing, checked as a distance budget: credit accrues at the limit up to a
+  two-second bank of 60 m, and each pose spends its distance from the last one accepted. A pose may overdraw half a
+  metre once, owed until the credit comes back, so small overdraws never add up to a speed past the limit. Falling has
+  a budget of its own, at 64 m/s.
+- **Bounds.** Inside the box of the loaded scenes' solid colliders, widened by 64 m sideways and below and 256 m above,
+  measured again only when the set of scenes changes, at most once a second. A host that cannot tell checks none.
+- **Teleports.** A player's own game flags a pose as teleported when one frame moved it farther than 30 m/s and a metre
+  allow, as a respawn or a level load does, unless the host's placement or correction moved it. The host allows two at
+  once and one more every ten seconds; a flagged pose that needed no teleport costs nothing; the flag is never relayed.
+- **Placement.** The first pose within 2 m of the host's own placement, within ten seconds of it, is taken as it.
+- **Corrections.** A pose that breaks a rule is dropped, and the player is sent back to its last accepted position under
+  a new correction number (`Correct`), keeping the credit it had: a correction never refills the bank, so a cheat is
+  struck again as soon as it runs past the limit. Poses still carrying the old number are ignored for a second, as they
+  were on their way; keeping it after that is a strike of its own.
+- **Kicks.** The fifth strike removes the player through the control's `Kick`, with "The host removed this player: its
+  movement broke the session's rules.", which names no rule and so gives a cheat nothing to tune by. One strike is
+  forgiven for every ten seconds within the rules, so an honest player's rare spike never adds up. The host logs the
+  removal, naming nobody.
+- **Flags.** `Away` is cleared on a pose that moved more than half a metre, or turned more than about ten degrees, since
+  the last; `Talking` is what the host's voice relay heard (`IsSpeaking`), never the claim; `Typing` stands as claimed,
+  since it only shows. Each refused claim is counted.
+- **Health.** The player's own game owns its health, and the host refuses what no game reports: a value that is not
+  finite, below zero or past the maximum, a maximum past 1,000,000 or one that changes after the first report, and
+  health that comes back faster than a quarter of the maximum a second. A refused value is replaced by the nearest the
+  rules allow, and health held back rises toward the report at that pace, so an honest player's catches up with no
+  report more. `PresenceHealth.AllowGain` lets a heal the host made itself (WS3.11) through.
+- **Only the host speaks for players.** The channel names each sender. A player's datagram in the host's format
+  (`Poses`), or one of the host's messages (`Roster`, `States`, `Place`, `Correct`), would speak for others: it is
+  refused and counted as forged, and so is a host's datagram or message in a player's format on a joined player. A
+  participant the session does not list, or one the host removed, is not heard.
+
+### Avatars
+
+- **Made and moved.** A player's avatar is made when its first pose arrives and moved each frame in the late step,
+  before the mods' LateUpdate, to the pose an interpolation buffer plays back a little in the past (the replication
+  model's `SnapshotInterpolationBuffer`, at a 50 ms interval). A step no player could run or fall, 64 m/s and 2 m more,
+  is a teleport: the avatar snaps there instead of streaking across the world.
+- **The game object.** A root under one "TopiaForge Players" root kept across scenes, with a kinematic rigidbody and a
+  capsule collider of 1.8 m by 0.35 m (1.2 m crouched), so players bump into each other and robots find them;
+  registered with the runtime's entities, so `TryGetAvatar` names it and RobotKit's `Chase` follows it
+  (`IInternalNativeObjectEntity`); and a capsule in one of twelve colours, chosen by the player's index and the same on
+  every peer, hidden while it wears a body.
+- **Bodies.** The runtime asks the provider that registered an `IInternalAvatarBodyFactory` through
+  `IRuntimeReplication.RegisterAvatarBodyFactory`, one at a time (another gets `Conflict`), for a body in the player's
+  colour, and falls back to the capsule. RobotKit offers the game's default robot, made dormant: its brain off, its
+  locomotion, navigation and behaviour tree off, its rigidbodies kinematic and its colliders off, tinted, with its walk
+  animation following the avatar's speed. A body that cannot be made is asked for again five seconds later; one the
+  game destroyed comes off and another is made at once; a change of the active scene (session follow's
+  `FollowedScene.Version`) dresses every avatar afresh. A provider that throws is reported once, as a warning.
+- **Made again.** An avatar the game destroyed is made again; one the engine cannot make is tried again each second and
+  reported once.
+- **Kept and removed.** A player whose link was lost stays in the session's list, disconnected, through its grace, and
+  so does its avatar. It goes when the session lets go of the player: a leave, a kick, or its grace running out. Leaving
+  the realm removes every avatar.
+
+### The spawn ring
+
+A joined player tells the host when it runs the host's world session (`Arrived`, with the session id, which session
+follow gives it). The host plans a slot around its world's readiness spawn (the orchestrator's `Readiness.Spawn`) with
+`SpawnSlotPlanner`: the lowest free slot whose ground, found by a ray that looks through players, lies within 1.5 m of
+the spawn's height, and where a standing player fits, other players included. It sends `Place`, and the player moves
+there, facing the way the spawn faces, if it still runs that world. A player is placed once per world; a slot frees
+when its player leaves or arrives in another world; with no slot that fits, or no spawn known, the player stays where
+its world put it.
+
+### Lookups and seams
+
+- **The session's lookups.** Presence is the session's avatar source (`SetAvatarSource`): `TryGetAvatar` answers the
+  local player's own entity, and the avatar for anyone else; `TryGetPose` the newest pose this peer holds: position, aim
+  from the eyes, velocity, health and maximum, crouching, talking, typing, away and the held item. Offline, nobody.
+- **Motion ownership (WS3.7's second part).** `MultiplayerPresence.ValidatedPosition(participant)` gives where the host
+  last vouched for a player: its own player as sampled, a joined player's last accepted pose while fresh, and null
+  otherwise (not hosting, an unknown or departed participant, a lost link, no pose yet, or none accepted for 2.5
+  seconds), so a range check that needs a position fails closed. Motion ownership takes it as
+  `NetworkWorldMotion.ParticipantPosition`, assigned where ModRuntime installs presence.
+- **Nametags (WS5b).** `IPresenceNametagSource`, which `MultiplayerPresence` implements: each shown avatar's display name
+  and the point above its head, with a version that moves when the set or a name changes. Reading allocates nothing, and
+  a nametag carries nothing but the name and the place.
+- **Typing (WS5b's chat).** `MultiplayerPresence.LocalTyping`, which the chat overlay sets.
+- **Talking** follows the voice service with no code anywhere: the player's own `TransmitState`, checked against the
+  host's `IsSpeaking`.
+- **Held items** travel in the state by their catalog id (`OwnerItemService.GetItemId`). When held-item ownership
+  (WS3.7's `HeldItemOwnershipTracker`) lands, the host can check the claim against the lease the player holds.
+
+### Privacy and cost
+
+- **Privacy.** Datagrams name players by presence index, never by id; the roster carries the session's opaque
+  participant ids; nametags carry display names; the counters are counts; logs name nobody; no address appears.
+- **Cost.** Offline and in single player the stages never run. At rest a frame compares the session's snapshot by
+  reference, samples the player and finds nothing due, and the host relays nothing: zero bytes allocated over 10,000
+  frames, measured through the composition root and through real runtimes with the clock running and each player's
+  pose a second travelling. With players moving, once every avatar exists, a frame allocates nothing either: a datagram
+  send answers with a result made once, and the relay's scheduler sorts with a comparison made once. Both harnesses
+  measure a host and three players moving, and print the time a frame takes.
+
+### Tests
+
+- **ModManager harness** (`--presence`, and the full run):
+  - `PresencePlausibilityTests`: the speed budget and its bank, a steady run past the limit caught as its bank runs dry,
+    climbing and falling, the bounds and their margins, the teleport allowance, poses on their way, the fifth strike,
+    forgiveness and honest spikes, placements, away, freshness, and the health rules with their catch-up.
+  - `PresenceWireTests`: seeded round trips within the quantization's stated errors, relays of 1 to 32 poses, and every
+    payload cut, padded, bent or naming what it may not, refused whole.
+  - `PresenceTests`, over the loopback network with a real composition root on each peer: three players placed on the
+    ring and seeing each other where they stand; a walk followed smoothly, a little behind, and a stop; a leave taking
+    the avatar everywhere; a lost link's grace, its return, and its end; a teleport snapping; a session at rest relaying
+    nothing; the lookups, typing and talking; validated positions failing closed; and states with their checks.
+  - `PresenceRulesTests`: a speed hack corrected four times, each correction moving it back, then kicked, with the
+    host never vouching for a position past the limit; a player corrected once playing on.
+  - `PresenceHostileTests`: a raw player forging flags, teleports, another player's pose, the host's messages, health,
+    and bent payloads, none of which ends its connection; and a raw host unable to move a player through a relayed pose
+    or half a datagram.
+  - `PresenceSpawnRingTests`: twelve seeded worlds of slopes, terraces, holes and walls, each arrival checked against the
+    rule worked out apart from the planner; no room; slots freed by a leave and by a change of worlds.
+  - `PresenceAvatarTests`: bodies, their colour and walk, the second provider refused, a withdrawn one; bodies asked for
+    again, replaced and re-dressed; avatars made again; and nametags carrying names only.
+  - `PresenceBudgetTests`: sixteen players moving, each receiving the others within 4 KiB a second and none waiting more
+    than 1.2 s; a session at rest sending nothing; and zero bytes allocated in single player and online at rest, with
+    the cost of a frame with players moving printed.
+- **ModRuntime harness**: two real runtimes, then three, over the loopback network (`TestPresenceAcrossRuntimes`): the
+  ring, avatars that follow a walk smoothly, a third player seeing both others, a lost link's grace, a speed hack
+  corrected and then kicked, and a leave; and `TestPresenceCostsNothingAtRest`: zero bytes offline, with a solo provider
+  and online at rest with the clock running, and a frame's cost with a host and three players moving, printed.
+- **Multiplayer harness** (`SystemDatagramTests`): the realtime lane both ways and only where it may go, the player's
+  rate, the host dropping floods, stale and malformed datagrams without ending anything, the bounded queue, and a
+  replacement dropping what waited.
+- **Mutation checks**, each applied, run and reverted byte for byte: skipping the speed check fails the rules suites,
+  accepting a player's pose in the host's format fails the hostile suite, and leaving an avatar behind after a leave
+  fails the scenario suites.
+- **In the game.** The engine side (`UnityPresenceBackend`, `UnityPresenceAvatar`) and RobotKit's bodies run over Unity,
+  so the game checks them.
+
+### Limits, stated plainly
+
+- **Each player's own game is trusted within the rules.** A cheat that keeps under the limit and inside the bounds is
+  not caught; motion ownership and the Players API (WS3.11) make more of the session the host's.
+- **The bounds are as loose as the loaded colliders.**
+- **Typing and away are the player's to say**, within the rule above; they only show.
+- **No lag compensation.** An avatar shows the past by the interpolation delay, 80 ms at least, and on a joined player
+  the relay's 50 ms more.
+- **The engine side is checked only in the game.**
+
+### Choices
+
+- **Owner-authoritative poses, checked by the host**, rather than the host simulating every player: each game's own
+  controller keeps its player, and the host refuses what no controller could do.
+- **A realtime lane beside each system channel**, rather than a mod contract: presence is the runtime's own traffic, and
+  motion ownership's samples can use the same lane.
+- **Presence indices on the wire**, a byte each, held out of use for five seconds after their player leaves, so a
+  datagram on its way never names the next one.
+- **The bodies' seam in the runtime, and RobotKit's side in the same change**: it is small, and presence asks whichever
+  provider offers a body and falls back to the capsule, so neither depends on the other being loaded.

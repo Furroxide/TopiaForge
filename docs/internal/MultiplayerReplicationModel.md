@@ -1,11 +1,11 @@
 # Multiplayer replication model — design record
 
-Status: Implementing (WS3.1, WS3.4, WS3.5 and WS3.12 of the live-multiplayer plan) · Date: 2026-10-16 · Owner: multiplayer
+Status: Implementing (WS3.1, WS3.4, WS3.5, WS3.10 and WS3.12 of the live-multiplayer plan) · Date: 2026-10-25 · Owner: multiplayer
 
 This records the Unity-free rules and data structures that automatic replication is built on: realms and network
 classes, the execution model's routing tables, the entity table, transform quantization, snapshot interpolation,
-relevancy, the replication scheduler, motion ownership, scene object keys, the spawn ring, request limits and
-presentation routing. They are pure and deterministic, so the Unity side (`NetworkWorld`, the service decorators, the
+relevancy, the replication scheduler, motion ownership, scene object keys, the spawn ring, request limits, presentation
+routing and the host's rules for players' poses. They are pure and deterministic, so the Unity side (`NetworkWorld`, the service decorators, the
 internal SPI and the `ModRuntime` wiring, in a later slice) drives them and every peer reaches the same answers. How the
 session engine itself works is recorded in [MultiplayerSessionEngine.md](MultiplayerSessionEngine.md).
 
@@ -320,7 +320,8 @@ its own, plus one tick, per send it competes for; the tests hold a priority-1 en
 to 3,001 ticks. A tick spends at most its budget unless one update overdraws, and over any run the bytes sent stay
 within the budget plus one update.
 
-The default budget is 800 bytes a tick: the Realtime class's 64 kbit/s at the 10 Hz downstream rate.
+The default budget is 800 bytes a tick: the Realtime class's 64 kbit/s at the 10 Hz downstream rate. Once its entities
+are known, a tick allocates nothing: the sort takes a comparison made once.
 
 ## Motion ownership (WS3.5)
 
@@ -613,6 +614,33 @@ it: none is bound, rather than guessing which is which. Unique keys map to the o
 - The first free slot, in index order, that passes both wins. If none does, `TryPlan` returns false and the caller uses
   the spawn point itself, as single player does.
 
+## Players' poses (WS3.10)
+
+`PresencePlausibility` is the host's check of one player's poses, and `PresenceHealth` of its health; `PresencePolicy`
+holds the rules, immutable. Presence drives them ([MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md),
+section 20); `PresencePlausibilityTests`, in the presence suite (`--presence`), proves them.
+
+- **Speed.** A distance budget on the grid, as motion ownership's: credit accrues at 30 m/s up to a two-second bank, each
+  pose spends its distance from the last accepted one (horizontal and up), and falling spends a budget of its own at
+  64 m/s. A pose may overdraw 256 units (half a metre) once: what it overdraws is owed, so no run of small overdraws adds
+  up to a speed past the limit.
+- **Bounds.** `PresenceBounds`, a box on the grid, compared exactly. `FromMeters` widens a box of metres by a margin
+  sideways and below and a headroom above; `Everywhere` lets in every pose the wire can carry.
+- **Teleports.** A pose past the budget stands only when flagged `Teleported`, and only within a `TokenBucket` of two
+  that refills one every ten seconds; a standing teleport resets the budget at its landing.
+- **Placements.** `ExpectPlacement` takes the first pose within 2 m of the host's placement, within ten seconds, as it.
+- **Verdicts.** `Accepted`, `Ignored` (sent before the player heard the latest correction, within a second of it),
+  `Corrected` (the pose is dropped, and the player goes back to the last accepted position under a new correction
+  number, keeping the credit it had), or `Kick` at the fifth strike. One strike is forgiven for every ten seconds without
+  one. A player still on an old correction number after the second is struck.
+- **Flags.** An accepted pose loses `Away` when it moved more than half a metre, or turned more than about ten degrees
+  (the dot of the two rotations below 0.9962, no trigonometry), and never carries `Teleported` on.
+- **Freshness.** `IsFresh` holds for 2.5 seconds after the last accepted pose; `Restart` measures afresh from the next,
+  keeping strikes and teleports, as a new world or a rejoin needs.
+- **Health.** Finite, from zero to the maximum, a maximum of at most 1,000,000 that never changes after the first report,
+  and a rise of at most a quarter of the maximum a second, plus what `AllowGain` allows. A refused value is replaced by
+  the nearest allowed, and `Advance` raises health held back toward the report at that pace.
+
 ## Request limits (WS3.5)
 
 `TokenBucket` counts micro-tokens (a millionth of a token), so a rate of `r` tokens a second refills `r` micro-tokens a
@@ -700,6 +728,8 @@ The Unity side is expected to use the model like this:
   the host can spot a griefer (see [Limits](#limits)), and a client's claim recoveries (`LastRecovery`, `LostRequests`).
 - **Scene and spawns:** build a `SceneObjectKeyCensus` when the world loads or is promoted, and place joining players
   with `SpawnSlotPlanner`.
+- **Players' poses:** keep a `PresencePlausibility` and a `PresenceHealth` per joined player on the host, check every
+  pose and state with them, and act on each verdict.
 - **Presentation:** route UI and audio with `PresentationRoutingPolicy` and the calling context's profile, keep one
   `HudMirrorCoalescer` per mirrored surface, and one `PresentationBroadcastLimiter` per host session.
 

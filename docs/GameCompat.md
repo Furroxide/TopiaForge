@@ -66,14 +66,18 @@ import-suppression constructor, the supported UniTask awaiter shape, and the nat
 off: robot brains (`LLMAgent` and its `llmDisabled` field), locomotion and spawners. Those four are degraded rather
 than critical, since a missing one leaves that system running on joined players instead of failing the game. The
 behaviour tree and path follower the network world also turns off are matched by name up the base chain, and
-neither is a GameCode type. Worlds bindings cover native import
+neither is a GameCode type. Presence adds seven more degraded ones, for what it reads and moves of the local player:
+the camera's rotation, the first-person controller with its crouch, eyes and teleport, and the held item; a missing
+one leaves players unseen or unplaced rather than failing the game. RobotKit declares the two optional members its
+avatar bodies read, the robot's animator and its walk parameter. Worlds bindings cover native import
 selection, overrides, owned import roots, and cleanup. Manager sources and actual source-linked files such as
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2545 metadata capture currently contains 60 types and 15 simple-name lookups. Offline and installed
-metadata verification resolve 213 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
-bindings, errors, or warnings. All 37 Manager and 34 Worlds bindings are verifiable. The remaining uncheckable
+The build 2545 metadata capture currently contains 60 types and 15 simple-name lookups. Offline metadata verification
+resolves 222 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings, errors, or
+warnings; installed verification last ran before presence added nine of them. All 44 Manager and 34 Worlds bindings
+are verifiable. The remaining uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
