@@ -53,7 +53,7 @@ extension _MultiplayerCommands on _TopiaForgeCli {
     if (args.contains('--help')) {
       stdout.writeln(_hostUsage);
       stdout.writeln(
-        'Without a terminal --yes is required. With a terminal, every consent still asks. Direct play needs --allow-direct for this session. Passwords are entered in game.',
+        'Without a terminal --yes is required. With a terminal, every consent still asks. Direct play needs --allow-direct for this session. Passwords are typed in game, so --password waits up to 300 seconds unless --wait-seconds is given.',
       );
       return 0;
     }

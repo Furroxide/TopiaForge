@@ -25,6 +25,18 @@ void main() {
       expect(await run(['--json', '--game-build', '2545']), 0);
       final json = jsonDecode(output.single) as Map;
       expect(json['schemaVersion'], 1);
+      expect(
+        json.keys,
+        unorderedEquals([
+          'schemaVersion',
+          'sources',
+          'retryAfterSeconds',
+          'next',
+          'servers',
+        ]),
+      );
+      expect(json['sources'], {'internet': 'available', 'lan': 'listening'});
+      expect(json['retryAfterSeconds'], isNull);
       expect(json['next'], 'c' * 64);
       final rows = json['servers'] as List;
       expect(rows.length, 2);
@@ -117,11 +129,33 @@ void main() {
   test('LAN cleanup failure still emits redacted JSON', () async {
     repository.failStop = true;
     expect(await run(['--json', '--source', 'lan']), 0);
-    expect(
-      (jsonDecode(output.single) as Map)['sources']['lanCleanup'],
-      'unavailable',
-    );
+    expect((jsonDecode(output.single) as Map)['sources'], {'lan': 'listening'});
+    expect(notices.join(), contains('cleanup was unconfirmed'));
     expect([...output, ...notices].join(), isNot(contains('private endpoint')));
+  });
+  test('a service delay is a retry hint, never a source status', () async {
+    repository.page = const InternetBrowseResult.unavailable(
+      'Busy.',
+      problem: MultiplayerServiceProblem.rateLimited,
+      retryAfter: Duration(seconds: 30),
+    );
+    expect(await run(['--json', '--game-build', '2545']), 0);
+    final json = jsonDecode(output.single) as Map;
+    expect(json['sources'], {'internet': 'rateLimited', 'lan': 'listening'});
+    expect(json['retryAfterSeconds'], 30);
+    output.clear();
+    expect(await run(['--game-build', '2545']), 0);
+    expect(output, contains('internet: rateLimited'));
+    expect(output, contains('Internet browsing can be retried in 30 seconds.'));
+    expect(output.join('\n'), isNot(contains('retryAfterSeconds')));
+  });
+  test('table shows no retry line when the service named no delay', () async {
+    expect(await run(['--game-build', '2545']), 0);
+    expect(
+      output,
+      containsAllInOrder(['internet: available', 'lan: listening']),
+    );
+    expect(output.join('\n'), isNot(contains('retry')));
   });
   test('empty available browser is a successful snapshot', () async {
     repository.page = InternetBrowseResult.page([]);

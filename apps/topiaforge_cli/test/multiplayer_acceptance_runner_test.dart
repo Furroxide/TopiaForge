@@ -85,6 +85,25 @@ void main() {
       acceptancePackageBytes('dev.topiaforge.sdk-acceptance'),
     );
     await expectLater(fixture.run(), throwsStateError);
+    expect(fixture.admissions, 0);
+    expect(fixture.commands, isEmpty);
+    expect(fixture.events, isEmpty);
+  });
+  test('a missing probe is refused before admission or any effect', () async {
+    fixture.host.package.deleteSync();
+    await expectLater(
+      fixture.run(),
+      throwsA(
+        isA<MultiplayerAcceptanceRefusal>().having(
+          (refusal) => refusal.message,
+          'message',
+          startsWith(
+            'TFMPACCEPT110: The multiplayer acceptance probe package is missing.',
+          ),
+        ),
+      ),
+    );
+    expect(fixture.admissions, 0);
     expect(fixture.commands, isEmpty);
     expect(fixture.events, isEmpty);
   });
@@ -104,6 +123,7 @@ final class _Pair {
   final commands = <List<String>>[];
   final events = <String>[];
   var now = DateTime.utc(2026, 1, 1);
+  var admissions = 0;
   String? failConfirm, failClose;
   bool tamper = false, omitGuest = false;
   _Pair() {
@@ -133,6 +153,7 @@ final class _Pair {
         return 0;
       },
       admitPeer: (peer, _) {
+        admissions++;
         if (peer == 'guest' && refuseGuest) throw StateError('Guest refused.');
         final f = peer == 'host' ? host : guest;
         return f.admitIsolation(f.options());

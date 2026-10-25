@@ -39,7 +39,12 @@ extension _MultiplayerAcceptanceCommands on _TopiaForgeCli {
         p.join(root, 'tests', 'multiplayer-live-acceptance.json'),
       ).readAsStringSync(),
     );
-    final plan = spec.dryRun(parsed.cases);
+    final Map<String, Object?> plan;
+    try {
+      plan = spec.dryRun(parsed.cases);
+    } on FormatException catch (error) {
+      throw UsageError('${error.message}\n$usage');
+    }
     if (parsed.flags.contains('--dry-run')) {
       stdout.writeln(jsonEncode(plan));
       return 0;
@@ -84,6 +89,10 @@ extension _MultiplayerAcceptanceCommands on _TopiaForgeCli {
         'Multiplayer acceptance passed ${spec.select(parsed.cases).length} cases on the listen-pair topology.',
       );
       return 0;
+    } on MultiplayerAcceptanceRefusal catch (refusal) {
+      // The harness's own fixed sentence, with its stage and next step.
+      stderr.writeln(refusal.message);
+      return 1;
     } on Object {
       // Admission errors can contain private QA roots and OS identities.
       stderr.writeln(

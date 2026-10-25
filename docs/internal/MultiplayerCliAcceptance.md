@@ -17,7 +17,10 @@ seconds. Internet browsing uses the detected install's build, or the explicit
 disable LAN browsing. Stored LAN-off and unreadable preferences stay off.
 No install is needed for LAN browsing. A missing Internet build asks for the filter.
 
-JSON schema version 1 contains `sources`, `next`, and `servers`. Each server has
+JSON schema version 1 contains `sources`, `retryAfterSeconds`, `next`, and
+`servers`. `sources` holds one status string for each requested source,
+`internet` and `lan`, and nothing else. `retryAfterSeconds` is the delay the
+service named before Internet browsing can be retried, or null. Each server has
 `serverId`, `name`, `source`, `players`, `maxPlayers`, `passwordRequired`, `voice`,
 `gamemode`, `world`, `gameBuild`, `runtimeVersion`, `pingMilliseconds`, and
 `readiness`; absent optional values are null. Rows sort by source then server id.
@@ -48,8 +51,10 @@ The approved disclosure is shown before first hosting. Direct hosting requires
 `--yes` permits nonterminal consent after printing the disclosures; with a
 terminal it never skips the questions. Voice stays off without stored consent.
 `--serve-packages` requires the launcher's developer mode. Passwords are entered
-in game, never accepted or staged on the command line. `--allow-host-packages`
-belongs to the future join verb and is refused here.
+in game, never accepted or staged on the command line: with `--password`, the
+command says that the game asks for it, and waits up to 300 seconds for hosting
+unless `--wait-seconds` is given. A Safe Mode profile never hosts.
+`--allow-host-packages` belongs to the future join verb and is refused here.
 
 | Stage | Meaning and recovery |
 | --- | --- |
@@ -91,12 +96,15 @@ ancestors remain ordinary directories. Both processes share the isolated QA
 user's native Unity persistence; this does not claim separate OS profiles for
 the peers. The normal player's persistence remains outside both admissions.
 
-The harness validates both admissions before writes, checks the exact probe
-archive, prepares both runtimes, creates a fresh challenge, then launches host
-and guest in that order. Both use the existing V4 acceptance bootstrap and its
-owned process receipts. Cleanup attempts both original receipts even if one
-fails. Unconfirmed cleanup prevents success. The single-instance V5 prohibition
-is not weakened.
+The harness checks the exact probe archive and validates both admissions before
+writes, prepares both runtimes, creates a fresh challenge, then launches host
+and guest in that order. The probe comes first, so a missing probe is refused
+as `TFMPACCEPT110` before any QA layout is read. The harness's own refusals
+(`TFMPACCEPT100` to `TFMPACCEPT140`) print as they are; any other failure prints
+one generic sentence, since admission errors can name private QA roots. Both
+use the existing V4 acceptance bootstrap and its owned process receipts.
+Cleanup attempts both original receipts even if one fails. Unconfirmed cleanup
+prevents success. The single-instance V5 prohibition is not weakened.
 
 ### Game-side prerequisite
 

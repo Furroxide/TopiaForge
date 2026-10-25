@@ -78,4 +78,29 @@ void main() {
     monitor.bind(const LaunchResult(started: true, message: 'started'));
     expect(await monitor.completed.future, 3);
   });
+  test('another process cannot confirm hosting', () async {
+    final own = LaunchProcessIdentity(
+      pid: 10,
+      startTimeUtc: DateTime.utc(2026),
+      executablePath: 'fixture/game.exe',
+    );
+    final other = LaunchProcessIdentity(
+      pid: 11,
+      startTimeUtc: DateTime.utc(2026),
+      executablePath: 'fixture/game.exe',
+    );
+    monitor.bind(
+      LaunchResult(
+        started: true,
+        message: 'started',
+        requestId: 'request-one',
+        latestActivity: rig.base().copyWith(process: own),
+      ),
+    );
+    monitor.accept(rig.success().copyWith(process: other));
+    monitor.accept(rig.success());
+    expect(rig.messages, isEmpty);
+    monitor.accept(rig.success().copyWith(process: own));
+    expect(await monitor.completed.future, 0);
+  });
 }

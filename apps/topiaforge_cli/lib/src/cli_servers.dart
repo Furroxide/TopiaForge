@@ -57,6 +57,7 @@ final class CliServersOptions {
 
 /// A bounded browser snapshot: one Internet page and a timed LAN discovery.
 /// JSON is versioned and contains only the address-free listing projection.
+/// `sources` holds one status string for each requested source, nothing else.
 Future<int> runCliServers({
   required MultiplayerRepository repository,
   required CliServersOptions options,
@@ -66,7 +67,8 @@ Future<int> runCliServers({
   Future<String?> Function()? resolveGameBuild,
 }) async {
   final rows = <ServerListing>[];
-  final statuses = <String, Object?>{};
+  final statuses = <String, String>{};
+  int? retryAfterSeconds;
   String? next;
   var available = false;
   if (options.source != 'lan') {
@@ -88,7 +90,7 @@ Future<int> runCliServers({
           statuses['internet'] = page.isAvailable
               ? 'available'
               : page.problem?.name ?? 'unavailable';
-          statuses['retryAfterSeconds'] = page.retryAfter?.inSeconds;
+          retryAfterSeconds = page.retryAfter?.inSeconds;
           if (page.isAvailable) {
             available = true;
             rows.addAll(page.listings);
@@ -126,7 +128,6 @@ Future<int> runCliServers({
       try {
         await repository.stopLanBrowsing();
       } on Object {
-        statuses['lanCleanup'] = 'unavailable';
         notice(
           'LAN discovery cleanup was unconfirmed. Close this command before retrying.',
         );
@@ -146,6 +147,7 @@ Future<int> runCliServers({
       jsonEncode({
         'schemaVersion': 1,
         'sources': statuses,
+        'retryAfterSeconds': retryAfterSeconds,
         'next': next,
         'servers': [
           for (final row in servers)
@@ -178,7 +180,10 @@ Future<int> runCliServers({
     }
     if (servers.isEmpty) write('No sessions found in this snapshot.');
     for (final entry in statuses.entries) {
-      write('${entry.key}: ${entry.value ?? 'none'}');
+      write('${entry.key}: ${entry.value}');
+    }
+    if (retryAfterSeconds != null) {
+      write('Internet browsing can be retried in $retryAfterSeconds seconds.');
     }
     if (next != null) {
       write('More Internet sessions: rerun with --after $next.');

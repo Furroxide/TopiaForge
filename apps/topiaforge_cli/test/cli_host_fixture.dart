@@ -6,9 +6,10 @@ import 'package:topiaforge/src/cli_host_workflow.dart';
 
 final class HostFixture implements LauncherRepository, MultiplayerRepository {
   final controller = StreamController<LaunchActivity>.broadcast(sync: true);
+  final cancel = Completer<void>();
   final messages = <String>[];
   final prompts = <String>[];
-  final profile = LauncherProfile.defaultProfile();
+  var profile = LauncherProfile.defaultProfile();
   final install = const GameInstall(
     path: 'fixture',
     executablePath: 'fixture/game.exe',
@@ -21,8 +22,8 @@ final class HostFixture implements LauncherRepository, MultiplayerRepository {
   bool readable = true, syncFails = false, blocked = false, starts = true;
   bool consent = true, terminal = false, developer = false;
   bool throwLaunch = false, throwPreview = false;
-  var launches = 0, syncs = 0;
-  void Function()? onLaunch, onConsent;
+  var launches = 0, syncs = 0, previewRevisionShift = 0, previews = 0;
+  void Function()? onLaunch, onConsent, onSync;
   LaunchSessionRequest? request;
   MultiplayerServiceFeatures? features = const MultiplayerServiceFeatures(
     hosting: true,
@@ -51,6 +52,7 @@ final class HostFixture implements LauncherRepository, MultiplayerRepository {
     write: messages.add,
     launch: start,
     serviceOrigin: 'https://play.example',
+    cancelled: cancel.future,
     newIntent: () => 'intent-one',
   );
   @override
@@ -63,6 +65,7 @@ final class HostFixture implements LauncherRepository, MultiplayerRepository {
     CancellationToken? cancellation,
   }) async {
     syncs++;
+    onSync?.call();
     final prefs = MultiplayerPreferences(
       settings: settings,
       hosting: hosting,
@@ -101,10 +104,11 @@ final class HostFixture implements LauncherRepository, MultiplayerRepository {
     LauncherProfile profile, {
     LaunchSelection? selectionOverride,
   }) async {
+    previews++;
     if (throwPreview) throw StateError('private endpoint details');
     return LaunchPreview(
       profileId: profile.id,
-      profileRevision: profile.revision,
+      profileRevision: profile.revision + previewRevisionShift,
       installIdentity: 'install',
       packageDigest: 'digest',
       requestedSelection: selectionOverride ?? profile.launchSelection,

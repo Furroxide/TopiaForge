@@ -33,6 +33,12 @@ final class CliHostOptions {
         'Hosting needs runtime confirmation; omit --no-wait.',
       );
     }
+    // The game asks for a password only once it reaches its menu, and the
+    // player types it there, so a protected session waits as long as the
+    // command allows unless --wait-seconds says otherwise.
+    waitTimeout = password && !args.contains('--wait-seconds')
+        ? const Duration(seconds: 300)
+        : launch.waitTimeout;
     name = value('--name');
     port = _number(value('--port'), 0, 65535);
     maxPlayers = _number(value('--max-players'), 2, 16);
@@ -63,6 +69,9 @@ final class CliHostOptions {
 
   final CliLaunchOptions launch;
   final bool yes, allowDirect, servePackages, password;
+
+  /// How long to wait for the game's hosting confirmation.
+  late final Duration waitTimeout;
   late final String? name;
   late final int? port, maxPlayers;
   late final ServerVisibility? visibility;

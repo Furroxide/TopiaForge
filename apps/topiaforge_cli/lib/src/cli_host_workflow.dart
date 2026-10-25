@@ -43,6 +43,11 @@ Future<int> runCliHost({
     return code;
   }
 
+  int cancelledBeforeLaunch() => refuse(
+    'Hosting cancelled before the game started; nothing was launched. Run host again when ready.',
+    130,
+  );
+
   Future<bool> consent(String prompt) async =>
       !stopped && (hasTerminal ? await confirm(prompt) : options.yes);
 
@@ -65,7 +70,7 @@ Future<int> runCliHost({
       );
     }
     final round = await multiplayer.syncWithGame(install, cancellation: token);
-    if (stopped) return 130;
+    if (stopped) return cancelledBeforeLaunch();
     if (round is! MultiplayerPreferencesSynced || !round.preferences.readable) {
       return refuse(
         'Multiplayer preferences could not be synchronized. Close programs using the data folder and retry.',
@@ -86,7 +91,7 @@ Future<int> runCliHost({
         );
       }
       final status = await multiplayer.readServiceStatus(cancellation: token);
-      if (stopped) return 130;
+      if (stopped) return cancelledBeforeLaunch();
       final features = status.features;
       if (features == null ||
           !features.hosting ||
@@ -114,18 +119,26 @@ Future<int> runCliHost({
         'The saved hosting port is reserved for LAN discovery. Choose another port with --port.',
       );
     }
+    if (profile.launchSettings.safeMode) {
+      return refuse(
+        'Safe Mode never hosts a session. Turn Safe Mode off for this profile in the launcher, then retry.',
+      );
+    }
     final preview = await launcher.previewLaunch(
       install,
       profile,
       selectionOverride: options.launch.selectionOverride,
     );
-    if (stopped) return 130;
-    if (!preview.canLaunch ||
-        profile.launchSettings.safeMode ||
-        preview.profileId != profile.id ||
+    if (stopped) return cancelledBeforeLaunch();
+    if (preview.profileId != profile.id ||
         preview.profileRevision != profile.revision) {
       return refuse(
-        'The selected profile cannot host. Repair its runtime and launch selection in Setup, turn Safe Mode off, then retry.',
+        'The selected profile changed while hosting was prepared. Run host again to use its current settings.',
+      );
+    }
+    if (!preview.canLaunch) {
+      return refuse(
+        'The selected profile cannot launch as it is. Repair its runtime, packages or launch selection in Setup, then retry.',
       );
     }
     stage = 'TFHOST110';
@@ -160,14 +173,14 @@ Future<int> runCliHost({
     if (!await consent('Start hosting [y/N]')) {
       return refuse('Hosting cancelled. Run host again when ready.', 130);
     }
-    if (stopped) return 130;
+    if (stopped) return cancelledBeforeLaunch();
     if (await multiplayer.gameRunState(install) != GameRunState.notRunning) {
       return refuse(
         'Robotopia started while consent was open. Close it and try again.',
       );
     }
     final synced = await multiplayer.syncWithGame(install, cancellation: token);
-    if (stopped) return 130;
+    if (stopped) return cancelledBeforeLaunch();
     // A second writer must never change the preferences under this consent.
     if (synced is! MultiplayerPreferencesSynced ||
         synced.preferences.settings.toJson().toString() !=
@@ -214,15 +227,21 @@ Future<int> runCliHost({
       );
     }
     write('TFHOST130: Game started; waiting for hosting confirmation.');
+    if (options.password) {
+      write(
+        'Robotopia asks for the session password: type it in the game to open hosting.',
+      );
+    }
     monitor.bind(result);
     if (stopped) monitor.cancel();
     timeout = Timer(
-      options.launch.waitTimeout,
+      options.waitTimeout,
       () => monitor?.unavailable(force: true),
     );
     return await monitor.completed.future;
   } on Object {
-    if (stopped) return 130;
+    // Once the monitor exists, its own cancel has already said so.
+    if (stopped) return monitor == null ? cancelledBeforeLaunch() : 130;
     return refuse(
       'Hosting could not finish this step. Check Multiplayer settings and the selected profile, then retry.',
     );

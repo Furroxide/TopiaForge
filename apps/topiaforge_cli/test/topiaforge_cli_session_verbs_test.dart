@@ -50,6 +50,49 @@ void main() {
     },
   );
   test(
+    'a missing multiplayer probe is refused clearly without its path',
+    () async {
+      final result = await cli([
+        'acceptance',
+        'run',
+        '--suite',
+        'multiplayer',
+        '--game-dir',
+        'absent-game',
+        '--isolation-record',
+        'absent-host-record.json',
+        '--guest-isolation-record',
+        'absent-guest-record.json',
+        '--package',
+        'absent-probe.topiaforgemod',
+        '--output',
+        'absent-evidence',
+      ]);
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('TFMPACCEPT110:'));
+      expect(
+        result.stderr,
+        contains('Build tests/TopiaForge.MultiplayerAcceptanceMod'),
+      );
+      expect(result.stderr, isNot(contains('absent-probe')));
+      expect(Directory('absent-evidence').existsSync(), isFalse);
+    },
+  );
+  test('an unknown multiplayer case is a usage error', () async {
+    final result = await cli([
+      'acceptance',
+      'run',
+      '--suite',
+      'multiplayer',
+      '--dry-run',
+      '--case',
+      'multiplayer.unknown',
+    ]);
+    expect(result.exitCode, 2);
+    expect(result.stderr, contains('TFMPACCEPT100:'));
+    expect(result.stderr, isNot(contains('FormatException')));
+  });
+  test(
     'unknown suite cannot fall through to single-instance acceptance',
     () async {
       final result = await cli([

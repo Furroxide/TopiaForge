@@ -21,6 +21,13 @@ typedef MultiplayerPeerLauncher =
       String peer,
     );
 
+/// A refusal of the harness's own: a fixed sentence with its stage code and
+/// the next step. It names no path, identity or address, so the command
+/// prints it as it is; any other failure stays behind a generic sentence.
+final class MultiplayerAcceptanceRefusal extends StateError {
+  MultiplayerAcceptanceRefusal(super.message);
+}
+
 final class MultiplayerAcceptanceOptions {
   const MultiplayerAcceptanceOptions({
     required this.repositoryRoot,
@@ -71,11 +78,21 @@ final class MultiplayerAcceptanceRunner {
   ) async {
     final selected = spec.select(options.caseIds);
     if (options.timeout.inSeconds < 30 || options.timeout.inSeconds > 3600) {
-      throw StateError(
+      throw MultiplayerAcceptanceRefusal(
         'TFMPACCEPT100: Use a timeout from 30 through 3600 seconds.',
       );
     }
-    // Check both admissions and the probe before any write or process starts.
+    // The probe and both admissions are checked before any write or process
+    // starts. The probe goes first: reading it writes nothing, and while no
+    // probe exists, its absence is the refusal the tester needs to see.
+    final package = File(options.packagePath);
+    if (!package.existsSync()) {
+      throw MultiplayerAcceptanceRefusal(
+        'TFMPACCEPT110: The multiplayer acceptance probe package is missing. Build tests/TopiaForge.MultiplayerAcceptanceMod and supply --package. No game was started.',
+      );
+    }
+    _requireProbe(package);
+    final expected = readLiveAcceptancePackageReceipt(package.path);
     final host =
         admitPeer?.call('host', options) ?? _admitPeer('host', options);
     final guest =
@@ -88,14 +105,6 @@ final class MultiplayerAcceptanceRunner {
       guest.launcherRoot,
       guest.outputRoot,
     ]);
-    final package = File(options.packagePath);
-    if (!package.existsSync()) {
-      throw StateError(
-        'TFMPACCEPT110: The multiplayer acceptance probe package is missing. Build tests/TopiaForge.MultiplayerAcceptanceMod and supply --package. No game was started.',
-      );
-    }
-    _requireProbe(package);
-    final expected = readLiveAcceptancePackageReceipt(package.path);
     final contexts = {'host': host, 'guest': guest};
     for (final context in contexts.values) {
       context.verify();
@@ -105,7 +114,7 @@ final class MultiplayerAcceptanceRunner {
         ['install', package.path, '--game-dir', context.gameRoot],
       ]) {
         if (await command(args, context) != 0) {
-          throw StateError(
+          throw MultiplayerAcceptanceRefusal(
             'TFMPACCEPT110: A peer could not be prepared. Repair the QA runtime and probe package before retrying.',
           );
         }
@@ -206,7 +215,7 @@ final class MultiplayerAcceptanceRunner {
         }
       }
       if (closes.values.any((closed) => !closed)) {
-        throw StateError(
+        throw MultiplayerAcceptanceRefusal(
           'TFMPACCEPT140: Owned process exit is unconfirmed. Preserve both QA layouts and inspect the processes before retrying.',
         );
       }
@@ -246,7 +255,7 @@ final class MultiplayerAcceptanceRunner {
     output.parent.createSync(recursive: true);
     output.writeAsStringSync(jsonEncode(evidence), flush: true);
     if (evidence['succeeded'] != true) {
-      throw StateError(
+      throw MultiplayerAcceptanceRefusal(
         'TFMPACCEPT130: Multiplayer acceptance is incomplete. Review missing observations and receipts in the private result, then rerun.',
       );
     }
@@ -261,7 +270,7 @@ void requireSeparateMultiplayerRoots(List<String> roots) {
   for (var i = 0; i < roots.length; i++) {
     for (var j = i + 1; j < roots.length; j++) {
       if (acceptancePathsOverlap(roots[i], roots[j])) {
-        throw StateError(
+        throw MultiplayerAcceptanceRefusal(
           'TFMPACCEPT100: Peer writable roots overlap. Provision separate game, launcher and evidence roots for both peers.',
         );
       }
@@ -290,7 +299,9 @@ AcceptanceIsolationContext _admitPeer(
 void _requireProbe(File file) {
   requireAcceptanceUnlinkedPath(file.absolute.path);
   if (file.lengthSync() > 512 * 1024 * 1024) {
-    throw StateError('Probe package is too large.');
+    throw MultiplayerAcceptanceRefusal(
+      'TFMPACCEPT110: The probe package is larger than 512 MiB. Supply the reviewed probe package.',
+    );
   }
   final archive = SafeZipArchive.decode(
     readBoundedRegularFileSync(file, maxBytes: CliFileLimits.package),
@@ -309,7 +320,7 @@ void _requireProbe(File file) {
         );
   if (manifest is! Map ||
       manifest['name'] != MultiplayerAcceptanceSpec.packageId) {
-    throw StateError(
+    throw MultiplayerAcceptanceRefusal(
       'TFMPACCEPT110: This is not the multiplayer acceptance probe. Supply the reviewed probe package.',
     );
   }

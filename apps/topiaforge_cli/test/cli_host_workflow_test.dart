@@ -70,6 +70,95 @@ void main() {
     expect(rig.request!.host!.servePackages, isTrue);
     expect(rig.request!.host!.passwordRequired, isTrue);
     expect(rig.request!.transport.port, 0);
+    expect(
+      rig.messages,
+      contains(
+        'Robotopia asks for the session password: type it in the game to open hosting.',
+      ),
+    );
+  });
+  test('a protected session waits for the typed password by default', () {
+    expect(
+      CliHostOptions(['--password']).waitTimeout,
+      const Duration(seconds: 300),
+    );
+    expect(
+      CliHostOptions(['--password', '--wait-seconds', '40']).waitTimeout,
+      const Duration(seconds: 40),
+    );
+    expect(CliHostOptions(const []).waitTimeout, const Duration(seconds: 30));
+  });
+  test(
+    'voice turned on elsewhere while consent was open refuses the launch',
+    () async {
+      rig.terminal = true;
+      rig.settings = MultiplayerSettings(acknowledgedPrivacyDisclosure: 1);
+      rig.onLaunch = () => rig.controller.add(rig.success());
+      rig.onConsent = () {
+        rig.settings = MultiplayerSettings(
+          acknowledgedPrivacyDisclosure: 1,
+          voiceConsent: 1,
+          voiceEnabled: true,
+        );
+      };
+      expect(await rig.run(), 1);
+      expect(rig.prompts, ['Start hosting [y/N]']);
+      expect(rig.messages, contains(CliMultiplayerText.voiceOff));
+      expect(
+        rig.messages.last,
+        startsWith('TFHOST110: Multiplayer preferences changed'),
+      );
+      expect(rig.launches, 0);
+    },
+  );
+  test(
+    'hosting defaults changed while consent was open refuse the launch',
+    () async {
+      rig.terminal = true;
+      rig.settings = MultiplayerSettings(acknowledgedPrivacyDisclosure: 1);
+      rig.onLaunch = () => rig.controller.add(rig.success());
+      rig.onConsent = () {
+        rig.hosting = MultiplayerHostingDefaults(
+          name: "Player's server",
+          port: 27300,
+        );
+      };
+      expect(await rig.run(), 1);
+      expect(
+        rig.messages.last,
+        startsWith('TFHOST110: Multiplayer preferences changed'),
+      );
+      expect(rig.launches, 0);
+    },
+  );
+  test('a Safe Mode profile is refused by name before its preview', () async {
+    rig.profile = rig.profile.copyWith(
+      launchSettings: const LaunchSettings(safeMode: true),
+    );
+    expect(await rig.run(), 1);
+    expect(rig.messages.last, startsWith('TFHOST120: Safe Mode never hosts'));
+    expect(rig.previews, 0);
+    expect(rig.launches, 0);
+  });
+  test('a profile changed during preparation asks for a rerun', () async {
+    rig.previewRevisionShift = 1;
+    expect(await rig.run(), 1);
+    expect(
+      rig.messages.last,
+      startsWith('TFHOST120: The selected profile changed'),
+    );
+    expect(rig.launches, 0);
+  });
+  test('a cancel during preparation says nothing was launched', () async {
+    rig.onSync = () {
+      if (!rig.cancel.isCompleted) rig.cancel.complete();
+    };
+    expect(await rig.run(), 130);
+    expect(rig.messages, [
+      startsWith('TFHOST110: Hosting cancelled before the game started'),
+    ]);
+    expect(rig.syncs, 1);
+    expect(rig.launches, 0);
   });
   for (final state in [GameRunState.running, GameRunState.unknown]) {
     test('running state $state refuses preference writes', () async {
@@ -93,7 +182,10 @@ void main() {
   test('blocked preflight fails at 120', () async {
     rig.blocked = true;
     expect(await rig.run(), 1);
-    expect(rig.messages.last, startsWith('TFHOST120:'));
+    expect(
+      rig.messages.last,
+      startsWith('TFHOST120: The selected profile cannot launch as it is.'),
+    );
     expect(rig.launches, 0);
   });
   test('unavailable Internet never falls back to direct', () async {
@@ -157,9 +249,12 @@ void main() {
     ['--port'],
     ['--wait-seconds', '0'],
   ]) {
-    test('invalid host invocation ${args.first} refuses before effects', () {
-      expect(() => CliHostOptions(args), throwsFormatException);
-    });
+    test(
+      'invalid host invocation ${args.join(' ')} refuses before effects',
+      () {
+        expect(() => CliHostOptions(args), throwsFormatException);
+      },
+    );
   }
   test('approved disclosure and direct wording match the source', () {
     final text = File('../../docs/internal/MultiplayerPrivacyText.md')
