@@ -1,0 +1,6 @@
+# Windows runners do this package's file and process work far more slowly, and less steadily, than Linux ones: tests
+# that usually take 1 to 10 seconds there have run past the default 30 seconds. On Windows every limit is three times
+# what it is elsewhere: 90 seconds for a test without a limit of its own, and three times a test's own limit.
+on_platform:
+  windows:
+    timeout: 3x
