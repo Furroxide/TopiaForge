@@ -44,6 +44,8 @@ namespace TopiaForge.ModManager.Tests
 
         public IReadOnlyList<InternalLanListing> LanSessions => Lan;
 
+        public MultiplayerSessionSnapshot SessionSnapshot => SoloSnapshot.Instance;
+
         /// <summary>Gets the calls that reach the network: hosting, joining, checking a server or listening on the local network.</summary>
         internal int NetworkCalls
         {

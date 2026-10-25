@@ -51,6 +51,7 @@ namespace TopiaForge.RobotKit
             RegisterExtension<IPlayerDialogueInputService>(dialogueInputService);
             RegisterExtension<IRobotObjectiveService>(objectiveService);
             RegisterExtension<IRobotSceneEditorService>(sceneEditorService);
+            OfferAvatarBodies(service);
 
             Context.Events.SubscribeUpdate(OnUpdate);
             Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
@@ -163,6 +164,16 @@ namespace TopiaForge.RobotKit
             {
                 throw new InvalidOperationException(registration.ErrorMessage);
             }
+        }
+
+        // In a multiplayer session other players appear as the game's own robots: the runtime asks RobotKit for a dormant
+        // body for each avatar. A runtime without the seam, such as a test host, keeps its capsules.
+        private void OfferAvatarBodies(RobotAgentService agents)
+        {
+            var replication = (Context as Mods.Internal.IInternalReplicationContext)?.Replication;
+            if (replication == null) return;
+            var offered = replication.RegisterAvatarBodyFactory(new RobotCosmeticBodies(agents));
+            if (!offered.Succeeded) logger?.Warn("RobotKit could not offer robot bodies for players' avatars: " + offered.ErrorMessage);
         }
 
         private IPromptOverrideRegistry? ResolvePromptRegistry()

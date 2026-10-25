@@ -172,7 +172,10 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<bool> Chase(IEntity targetEntity)
         {
-            var target = (targetEntity as INativeEntityAdapter)?.NativeGameObject;
+            // RobotKit's own robots and player, or any entity the runtime made over a native object, such as another
+            // player's avatar in a multiplayer session.
+            var target = (targetEntity as INativeEntityAdapter)?.NativeGameObject
+                ?? (targetEntity as TopiaForge.Mods.Internal.IInternalNativeObjectEntity)?.NativeObject as GameObject;
             if (target == null)
             {
                 return OperationResult<bool>.Failure(

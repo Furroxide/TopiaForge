@@ -1205,6 +1205,35 @@
       "parameters": [],
       "exactParameters": true,
       "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.presence.robotbody.animator",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Multiplayer presence: players' avatars as robots",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotCosmeticBodies.cs",
+      "member": "Animator",
+      "returnType": "UnityEngine.Animator",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.presence.locomotioncontroller.walkparameter",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "WALK_PARAMETER_NAME",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Multiplayer presence: players' avatars as robots",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotCosmeticBodies.cs",
+      "returnType": "System.String",
+      "isStatic": true
     }
   ]
 }

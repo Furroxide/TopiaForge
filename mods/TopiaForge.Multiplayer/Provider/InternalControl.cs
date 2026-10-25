@@ -61,6 +61,16 @@ namespace TopiaForge.Multiplayer
 
         public bool IsReadinessHeld => engine.ReadinessHolds > 0;
 
+        /// <summary>Gets the engine's session snapshot, built again only when the session changed.</summary>
+        public MultiplayerSessionSnapshot SessionSnapshot
+        {
+            get
+            {
+                engine.RequireOwnerThread();
+                return engine.Snapshot;
+            }
+        }
+
         /// <summary>
         /// Gets the provider's voice service, or null while it has none: the provider runs voice only with live multiplayer
         /// switched on, and none once it has stopped. It hands out the service's own playback streams.

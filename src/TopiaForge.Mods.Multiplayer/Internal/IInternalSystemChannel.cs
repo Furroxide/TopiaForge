@@ -120,6 +120,22 @@ namespace TopiaForge.Mods.Internal
         internal byte[] Payload { get; }
     }
 
+    /// <summary>One datagram received on a system channel's realtime lane. It lives until the next pump; copy what you keep.</summary>
+    internal readonly struct InternalSystemDatagram
+    {
+        internal InternalSystemDatagram(ParticipantId sender, ArraySegment<byte> payload)
+        {
+            if (payload.Array == null) throw new ArgumentNullException(nameof(payload));
+            Sender = sender;
+            Payload = payload;
+        }
+
+        /// <summary>Gets who sent it, as for a system message: the joined player on a host, the host's player on a joined player.</summary>
+        internal ParticipantId Sender { get; }
+
+        internal ArraySegment<byte> Payload { get; }
+    }
+
     /// <summary>
     /// Bounds every system channel applies. Each stream, one channel between this process and one peer, has a window: the
     /// messages and bytes its sender may have outstanding, sent but not yet taken by the receiving owner. The receiver
@@ -154,6 +170,24 @@ namespace TopiaForge.Mods.Internal
 
         /// <summary>The steady rate at which a joined player may send messages over all channels.</summary>
         internal const int PlayerMessagesPerSecond = 256;
+
+        /// <summary>
+        /// The largest payload one datagram on a channel's realtime lane carries: 1 KiB, so it fits one transport packet with
+        /// the engine's header.
+        /// </summary>
+        internal const int MaximumDatagramBytes = 1024;
+
+        /// <summary>The datagrams a joined player may send at once over all channels, before <see cref="PlayerDatagramsPerSecond"/> applies.</summary>
+        internal const int PlayerDatagramBurst = 64;
+
+        /// <summary>
+        /// The steady rate at which a joined player may send datagrams over all channels: poses at 20 a second, and room for
+        /// the samples of a held body. Its host takes twice that and drops the rest, uncounted against the player's link.
+        /// </summary>
+        internal const int PlayerDatagramsPerSecond = 64;
+
+        /// <summary>The datagrams one channel keeps for its owner; past it the oldest goes, as on any unreliable lane.</summary>
+        internal const int DatagramQueueLength = 256;
     }
 
     /// <summary>
@@ -219,6 +253,23 @@ namespace TopiaForge.Mods.Internal
         /// <summary>Takes the oldest received message. Taking it opens its sender's window again.</summary>
         bool TryReceive(out InternalSystemMessage message);
 
+        /// <summary>
+        /// Sends one datagram, copied, on the channel's realtime lane: unreliable and unordered, never held behind the
+        /// stream's messages and never sent again. It may be lost, arrive more than once or overtake an older one, so the
+        /// owner stamps what it needs to tell them apart. It carries the stream's epoch and join generation, so one sent on
+        /// an earlier stream is dropped on arrival. It leaves at once and returns how many peers it went to. A host sends to
+        /// joined players; a joined player sends to its host only, within <see cref="InternalSystemLimits.PlayerDatagramsPerSecond"/>,
+        /// past which it is refused with <see cref="ModErrorCode.RateLimited"/>. The <see cref="InternalSystemChannelKind.Time"/>
+        /// channel has no lane.
+        /// </summary>
+        OperationResult<int> SendDatagram(ArraySegment<byte> payload, InternalSystemTarget target);
+
+        /// <summary>
+        /// Takes the oldest datagram received on the realtime lane. Its payload lives until the next pump, so the owner reads
+        /// it in its frame stage and copies what it keeps.
+        /// </summary>
+        bool TryReceiveDatagram(out InternalSystemDatagram datagram);
+
         InternalSystemChannelStatistics GetStatistics();
     }
 
@@ -226,6 +277,20 @@ namespace TopiaForge.Mods.Internal
     internal sealed class InternalSystemChannelStatistics
     {
         internal InternalSystemChannelStatistics(InternalSystemChannelKind kind, long sent, long received, long dropped, int pending, long refused)
+            : this(kind, sent, received, dropped, pending, refused, 0, 0, 0)
+        {
+        }
+
+        internal InternalSystemChannelStatistics(
+            InternalSystemChannelKind kind,
+            long sent,
+            long received,
+            long dropped,
+            int pending,
+            long refused,
+            long datagramsSent,
+            long datagramsReceived,
+            long datagramsDropped)
         {
             Kind = kind;
             Sent = sent;
@@ -233,6 +298,9 @@ namespace TopiaForge.Mods.Internal
             Dropped = dropped;
             Pending = pending;
             Refused = refused;
+            DatagramsSent = datagramsSent;
+            DatagramsReceived = datagramsReceived;
+            DatagramsDropped = datagramsDropped;
         }
 
         internal InternalSystemChannelKind Kind { get; }
@@ -257,5 +325,17 @@ namespace TopiaForge.Mods.Internal
         /// to everyone skipped because their window was full, one per player.
         /// </summary>
         internal long Refused { get; }
+
+        /// <summary>Gets the datagrams sent on the realtime lane, one per recipient.</summary>
+        internal long DatagramsSent { get; }
+
+        /// <summary>Gets the datagrams taken in for this channel's owner.</summary>
+        internal long DatagramsReceived { get; }
+
+        /// <summary>
+        /// Gets the datagrams dropped: one from a stream already gone, one past the sender's rate, one the queue pushed out,
+        /// or one waiting when the channel closed or its stream restarted.
+        /// </summary>
+        internal long DatagramsDropped { get; }
     }
 }

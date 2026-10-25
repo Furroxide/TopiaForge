@@ -179,6 +179,14 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         /// <returns>True when the session's time changed, false when it already was <paramref name="time"/>.</returns>
         OperationResult<bool> PublishSessionTime(InternalSessionTime time);
+
+        /// <summary>
+        /// Registers how this process makes the bodies remote players' avatars wear (WS3.10): RobotKit offers the game's own
+        /// robots. The process has one factory; a second is refused with <see cref="ModErrorCode.Conflict"/>, and disposing
+        /// the lease removes it. Avatars made while no factory is registered, or whose body could not be made, wear the
+        /// runtime's tinted capsule.
+        /// </summary>
+        OperationResult<IDisposable> RegisterAvatarBodyFactory(IInternalAvatarBodyFactory factory);
     }
 
     /// <summary>

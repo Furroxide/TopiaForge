@@ -5,8 +5,11 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.TestDoubles
 {
-    /// <summary>One system channel over the loopback network: a stream per peer, with its window, queues and credits.</summary>
-    internal sealed class LoopbackChannel : IInternalSystemChannel
+    /// <summary>
+    /// One system channel over the loopback network: a stream per peer, with its window, queues and credits, and the
+    /// realtime lane's datagrams beside it (the other part of this class).
+    /// </summary>
+    internal sealed partial class LoopbackChannel : IInternalSystemChannel
     {
         private readonly LoopbackControl owner;
         private readonly Dictionary<ParticipantId, Stream> streams = new Dictionary<ParticipantId, Stream>();
@@ -132,13 +135,15 @@ namespace TopiaForge.ModManager.TestDoubles
             return false;
         }
 
-        public InternalSystemChannelStatistics GetStatistics() => new InternalSystemChannelStatistics(Kind, sent, received, dropped, inbox.Count, refused);
+        public InternalSystemChannelStatistics GetStatistics() =>
+            new InternalSystemChannelStatistics(Kind, sent, received, dropped, inbox.Count, refused, datagramsSent, datagramsReceived, datagramsDropped);
 
         public void Dispose()
         {
             IsOpen = false;
             dropped += inbox.Count;
             inbox.Clear();
+            DropDatagrams(null);
         }
 
         /// <summary>Puts a message from <paramref name="sender"/> straight into the inbox, as a hostile or broken peer's would arrive.</summary>
@@ -153,6 +158,7 @@ namespace TopiaForge.ModManager.TestDoubles
         internal void EndStream(ParticipantId peer)
         {
             if (!streams.Remove(peer)) return;
+            DropDatagrams(peer);
             var kept = new List<Arrived>();
             while (inbox.Count > 0)
             {
@@ -175,11 +181,13 @@ namespace TopiaForge.ModManager.TestDoubles
                 {
                     dropped += stream.Outbox.Count;
                     stream.Outbox.Clear();
+                    DropQueued(stream);
                     continue;
                 }
 
                 foreach (var bytes in stream.Outbox) peer.arriving.Add(new Packet(owner.Id, stream.Id, bytes, 0, 0));
                 stream.Outbox.Clear();
+                TransmitDatagrams(peer, stream);
                 if (stream.ConsumedMessages > 0)
                 {
                     peer.arriving.Add(new Packet(owner.Id, stream.Id, null, stream.ConsumedMessages, stream.ConsumedBytes));
@@ -211,6 +219,7 @@ namespace TopiaForge.ModManager.TestDoubles
             }
 
             arriving.Clear();
+            DeliverDatagrams();
         }
 
         private ParticipantId HostId => owner.Network.Host.Id;
@@ -244,6 +253,8 @@ namespace TopiaForge.ModManager.TestDoubles
             internal ulong Generation { get; }
 
             internal List<byte[]> Outbox { get; } = new List<byte[]>();
+
+            internal List<PooledDatagram> Datagrams { get; } = new List<PooledDatagram>();
 
             internal int OutstandingMessages { get; set; }
 

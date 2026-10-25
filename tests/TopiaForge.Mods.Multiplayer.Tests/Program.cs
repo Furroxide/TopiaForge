@@ -535,6 +535,11 @@ internal static class Program
             SystemChannelTests.HostsEndPlayersThatNeverBecomeReady();
             SystemChannelTests.SourcesAnswerTheSessionsLookups();
             SystemChannelTests.TheFrameFlushSendsWithoutReceiving();
+            SystemDatagramTests.DatagramsTravelBothWays();
+            SystemDatagramTests.DatagramsGoOnlyWhereTheyMay();
+            SystemDatagramTests.PlayersKeepToTheirRate();
+            SystemDatagramTests.HostsDropWhatTheyCannotTake();
+            SystemDatagramTests.QueuesAreBoundedAndRestartsDropWhatWaits();
             SessionTimeChannelTests.OnlyTheHostSendsTheSessionsTime();
             SystemStreamTests.StreamsRestartWhenAPlayerRejoins();
             SystemStreamTests.OneSenderCannotStarveTheOthers();

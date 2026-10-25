@@ -16,12 +16,12 @@ namespace TopiaForge.ModManager
     /// attaches its <see cref="MultiplayerRuntimeHost"/> to it, and drives the multiplayer frame around the mods:
     /// <list type="number">
     /// <item><see cref="BeforeModsUpdate"/>: the provider's pump, which receives on the main thread, then the host's time on
-    /// a joined player, world events and the session follower.</item>
+    /// a joined player, world events, the session follower and players' poses.</item>
     /// <item>The mods' Update.</item>
     /// <item><see cref="AfterModsUpdate"/>: pose and voice send and the host's snapshots and time, then the provider's
     /// flush.</item>
-    /// <item><see cref="BeforeModsLateUpdate"/>: the pause guard online, then replica interpolation, before the mods'
-    /// LateUpdate.</item>
+    /// <item><see cref="BeforeModsLateUpdate"/>: the pause guard online, then avatars and replica interpolation, before the
+    /// mods' LateUpdate.</item>
     /// </list>
     /// The stages are named seams that later slices fill; an empty one costs a field read. With no provider attached,
     /// each hook costs one field read and allocates nothing. The realm and its rules live in the other part of this class.
@@ -44,6 +44,8 @@ namespace TopiaForge.ModManager
         private bool presenceFailureLogged;
         private bool snapshotFailureLogged;
         private bool replicaFailureLogged;
+        private bool presenceReceiveFailureLogged;
+        private bool avatarFailureLogged;
 
         /// <param name="findControl">Reads the provider's control from the service registry; null when no provider published one.</param>
         /// <param name="host">The runtime's side of the SPI, handed to the control on attach.</param>
@@ -86,6 +88,15 @@ namespace TopiaForge.ModManager
 
         /// <summary>LateUpdate, joined players only: interpolating replicas before mods see them (WS3.6 replica driver).</summary>
         internal IMultiplayerFrameStage? ReplicaInterpolation { get; set; }
+
+        /// <summary>
+        /// Step 2, online only, after session follow: players' poses as they arrive, checked on the host (WS3.10 presence),
+        /// so the mods' Update reads this frame's.
+        /// </summary>
+        internal IMultiplayerFrameStage? PresenceReceive { get; set; }
+
+        /// <summary>LateUpdate, online only, before the replicas: other players' avatars move to their poses (WS3.10).</summary>
+        internal IMultiplayerFrameStage? AvatarInterpolation { get; set; }
 
         /// <summary>
         /// Adds a slice that hears when a control attaches and detaches and when the realm changes: the network world
@@ -191,6 +202,7 @@ namespace TopiaForge.ModManager
             ReceiveSessionTime();
             Run(WorldEvents, ref worldFailureLogged, deltaTime);
             Run(SessionFollow, ref followFailureLogged, deltaTime);
+            Run(PresenceReceive, ref presenceReceiveFailureLogged, deltaTime);
         }
 
         /// <summary>Step 4, after the mods' Update: what the frame sends, then the provider's flush. Nothing runs offline.</summary>
@@ -222,6 +234,8 @@ namespace TopiaForge.ModManager
         internal void BeforeModsLateUpdate(GameTimeSample sample)
         {
             if (SessionTime.PauseGuard.IsArmed) GuardNativePause();
+            if (role == InternalSessionRole.Solo) return;
+            Run(AvatarInterpolation, ref avatarFailureLogged, sample.DeltaTime);
             if (role != InternalSessionRole.Client) return;
             Run(ReplicaInterpolation, ref replicaFailureLogged, sample.DeltaTime);
         }

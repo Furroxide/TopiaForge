@@ -309,6 +309,12 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--presence", StringComparison.Ordinal))
+            {
+                PresenceSuite.Run();
+                return 0;
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--authority-routing", StringComparison.Ordinal))
             {
                 AuthorityTests.Run();
@@ -437,6 +443,7 @@ namespace TopiaForge.ModManager.Tests
                 MultiplayerRuntimeHostTests.Run(root);
                 MultiplayerSeamTests.Run(root);
                 NetworkWorldTests.Run();
+                PresenceSuite.Run();
                 RunMultiplayerSessions(root);
                 ModuleContractSurfaceTests.Run();
                 V1LaunchCoverageTests.Run();

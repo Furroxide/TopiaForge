@@ -54,6 +54,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets the rate this player keeps to, so its host never has to refuse it.</summary>
         internal TokenBucket? SystemSendRate { get; set; }
 
+        /// <summary>Gets or sets the rate this player's datagrams keep to, half what its host takes.</summary>
+        internal TokenBucket? DatagramSendRate { get; set; }
+
         /// <summary>
         /// Gets or sets whether a host flush has started arriving without its closing <c>Commit</c>. Confirmed values
         /// are then only partly updated, so reconciliation waits for the <c>Commit</c>.

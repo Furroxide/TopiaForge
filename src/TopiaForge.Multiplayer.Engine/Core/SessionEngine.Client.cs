@@ -93,6 +93,7 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 if (channelKind == EngineChannel.Session) ProcessClientFrame(current, frame);
                 else if (channelKind == EngineChannel.Voice) HandleRelayedVoice(current, frame);
+                else if (channelKind == EngineChannel.Realtime) HandleDatagramFromHost(current, frame);
             }
 
             if (ReferenceEquals(channel, current) && current.Link.State == EngineLinkState.Closed)

@@ -72,4 +72,11 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\MultiplayerRuntime.Intent.cs" Link="Runtime\MultiplayerRuntime.Intent.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\RuntimeReplication.Intent.cs" Link="Runtime\RuntimeReplication.Intent.cs" />
   </ItemGroup>
+
+  <!-- Presence (WS3.10) over the real provider: its Unity-free half, beside the replication seam whose avatar bodies it
+       wears, and the fake engine the ModManager and ModRuntime harnesses share. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Presence\*.cs" Link="Runtime\Presence\%(Filename)%(Extension)" />
+    <Compile Include="..\TopiaForge.ModRuntime.Tests\FakePresenceBackend.cs" Link="Presence\FakePresenceBackend.cs" />
+  </ItemGroup>
 </Project>

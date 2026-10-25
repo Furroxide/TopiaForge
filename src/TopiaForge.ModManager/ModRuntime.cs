@@ -129,6 +129,7 @@ namespace TopiaForge.ModManager
                 SessionPhaseSource = CurrentSessionPhase
             };
             networkWorld = InstallNetworkWorld();
+            presence = InstallPresence();
             InstallSessionTime();
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;

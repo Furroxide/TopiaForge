@@ -30,6 +30,8 @@ namespace TopiaForge.ModRuntime.Tests
             TestSceneKeysCostOnlyTheLoad(root);
             TestAuthorityRoutingAcrossRuntimes(root);
             TestMotionAcrossRuntimes(root);
+            TestPresenceAcrossRuntimes(root);
+            TestPresenceCostsNothingAtRest(root);
             Console.WriteLine("ModRuntime multiplayer composition tests passed.");
         }
 
