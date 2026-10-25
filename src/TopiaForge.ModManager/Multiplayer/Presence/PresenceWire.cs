@@ -320,13 +320,14 @@ namespace TopiaForge.ModManager
             }
         }
 
+        /// <summary>Reads the host's states whole, refusing health that cannot form a usable public pose.</summary>
         internal static bool TryReadStates(WorldWireReader reader, List<PresenceStateRecord> into)
         {
             into.Clear();
             if (!reader.TryReadInt32(PresenceMessages.MaximumEntries, out var count)) return false;
             for (var entry = 0; entry < count; entry++)
             {
-                if (!reader.TryReadByte(out var index) || index == 0 || !TryReadStateBody(reader, index, out var state))
+                if (!reader.TryReadByte(out var index) || index == 0 || !TryReadStateBody(reader, index, out var state) || !IsHealth(state))
                 {
                     into.Clear();
                     return false;
@@ -474,6 +475,12 @@ namespace TopiaForge.ModManager
             state = new PresenceStateRecord(index, health, maximum, item);
             return true;
         }
+
+        // Zero health and maximum are the normal sentinel when the host cannot sample health.
+        private static bool IsHealth(in PresenceStateRecord state) =>
+            !float.IsNaN(state.Health) && !float.IsInfinity(state.Health) &&
+            !float.IsNaN(state.Maximum) && !float.IsInfinity(state.Maximum) &&
+            state.Health >= 0f && state.Maximum >= state.Health;
 
         private static bool TryReadPoint(WorldWireReader reader, out NetVector3 point)
         {

@@ -283,6 +283,38 @@ namespace TopiaForge.ModManager.Tests
             Frames(2);
             That(hostPeer.HasPose && Math.Abs(NetQuantization.DequantizePosition(hostPeer.Position).X - 10f) < 0.01f, "a relayed pose for the host stands");
 
+            // A host's states are untrusted too: no state may poison the public pose lookup, and a bad record refuses
+            // the whole message, including valid records before it.
+            Message(w => PresenceWire.WriteStates(w, new List<PresenceStateRecord> { new PresenceStateRecord(1, 80f, 100f, "wrench") }));
+            Frames(2);
+            foreach (var invalid in new (float Health, float Maximum)[]
+            {
+                (float.NaN, 100f), (50f, float.NaN), (float.PositiveInfinity, 100f), (50f, float.PositiveInfinity),
+                (-1f, 100f), (101f, 100f), (0f, -1f), (1f, 0f)
+            })
+            {
+                var refused = player.Counters.Malformed;
+                Message(w => PresenceWire.WriteStates(w, new List<PresenceStateRecord>
+                {
+                    new PresenceStateRecord(1, 20f, 100f, null),
+                    new PresenceStateRecord(1, invalid.Health, invalid.Maximum, null)
+                }));
+                Frames(2);
+                That(player.Presence.TryGetPose(hostControl.Id, out var safe) && safe.Health == 80f && safe.MaximumHealth == 100f && safe.HeldItemId == "wrench",
+                    "an invalid host health report preserves the last usable public pose");
+                That(player.Counters.Malformed == refused + 1, "an invalid host health report is refused whole and counted");
+            }
+
+            // The normal host uses zeroes when health is unavailable. That remains a valid state, and recovery works.
+            Message(w => PresenceWire.WriteStates(w, new List<PresenceStateRecord> { new PresenceStateRecord(1, 0f, 0f, null) }));
+            Frames(2);
+            That(player.Presence.TryGetPose(hostControl.Id, out var unknownHealth) && unknownHealth.Health == 0f && unknownHealth.MaximumHealth == 0f,
+                "a host without health data still provides a usable pose");
+            Message(w => PresenceWire.WriteStates(w, new List<PresenceStateRecord> { new PresenceStateRecord(1, 90f, 100f, null) }));
+            Frames(2);
+            That(player.Presence.TryGetPose(hostControl.Id, out var recovered) && recovered.Health == 90f,
+                "a valid state after a refused host report is still taken");
+
             // Half a datagram is no datagram: a relay that promises two poses and carries one and a half changes nothing, nor
             // does one with a bit to spare. The whole relay goes first and stands, and the bent ones after it change nothing more.
             var malformed = player.Counters.Malformed;
