@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'launcher_theme.dart';
 import 'widgets.dart';
 
+part 'session_join_widgets.dart';
+
 /// The approved player-facing wording on address exposure and microphone use,
 /// approved as written on 2026-10-14 (`docs/internal/MultiplayerPrivacyText.md`).
 /// Every launcher screen uses these strings word for word; a change to their
@@ -64,19 +66,7 @@ Future<bool> showPrivacyDisclosure(BuildContext context) async {
     builder: (context) => AlertDialog(
       key: const Key('privacy-disclosure-dialog'),
       title: const Text(MultiplayerPrivacyText.disclosureTitle),
-      content: const SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(MultiplayerPrivacyText.disclosureExposure),
-            SizedBox(height: 10),
-            Text(MultiplayerPrivacyText.disclosureHidden),
-            SizedBox(height: 10),
-            Text(MultiplayerPrivacyText.disclosureChoice),
-          ],
-        ),
-      ),
+      content: const SingleChildScrollView(child: PrivacyDisclosureBody()),
       actions: [
         FilledButton(
           autofocus: true,
