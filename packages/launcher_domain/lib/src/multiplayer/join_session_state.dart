@@ -38,6 +38,7 @@ final class JoinSessionState {
     this.descriptor,
     this.plan,
     this.consentKey,
+    this.hostServedAcknowledged = false,
     this.closeOwnedGameAcknowledged = false,
     this.progress,
     this.installProgress,
@@ -68,6 +69,13 @@ final class JoinSessionState {
   /// The [JoinPlan.consentKey] the player consented to.
   final String? consentKey;
 
+  /// Whether the plan the player consented to has packages only the host
+  /// serves, and the player ticked the developer-mode box for them
+  /// ([JoinConsentGiven.hostServedAcknowledged]). A re-plan that keeps the
+  /// consent keeps it. The data layer checks it again before it downloads
+  /// or installs anything the host serves.
+  final bool hostServedAcknowledged;
+
   /// Whether the player's consent covered closing a game this launcher
   /// started ([JoinConsentGiven.closeOwnedGameAcknowledged]). Only then does
   /// an install close one, after everything is staged and nothing can be
@@ -96,15 +104,14 @@ final class JoinSessionState {
 
   bool get isEnded => stage == JoinStage.ended;
 
-  /// Whether the join may contact the host itself rather than only the
-  /// control plane: always with direct paths allowed, and under relay-only
-  /// only when the host is on the local network. That holds for every
-  /// direct link, typed address or LAN listing that got past [JoinSession.start]
-  /// and the [JoinContactRules]; the host of an invite, server link or
-  /// Internet listing could be anywhere.
-  bool get mayContactHost =>
-      privacy == MultiplayerAddressPrivacy.direct ||
-      !target.resolvesThroughService;
+  /// Whether the launcher may contact the host itself rather than only the
+  /// control plane, as it does for the descriptor of a direct link, a typed
+  /// address or a LAN listing that got past [JoinSession.start] and the
+  /// [JoinContactRules]. The host of an invite, server link or Internet
+  /// listing was found by the service and could be anywhere: the launcher
+  /// never contacts it, whatever the session's privacy, so nothing comes
+  /// from that host itself.
+  bool get mayContactHost => !target.resolvesThroughService;
 
   /// What to fetch, and whom the fetch may contact, while fetching the
   /// descriptor; null in every other stage.
@@ -135,6 +142,7 @@ final class JoinSessionState {
     Object? descriptor = _keep,
     Object? plan = _keep,
     Object? consentKey = _keep,
+    bool? hostServedAcknowledged,
     bool? closeOwnedGameAcknowledged,
     Object? progress = _keep,
     Object? installProgress = _keep,
@@ -153,6 +161,8 @@ final class JoinSessionState {
     consentKey: identical(consentKey, _keep)
         ? this.consentKey
         : consentKey as String?,
+    hostServedAcknowledged:
+        hostServedAcknowledged ?? this.hostServedAcknowledged,
     closeOwnedGameAcknowledged:
         closeOwnedGameAcknowledged ?? this.closeOwnedGameAcknowledged,
     progress: identical(progress, _keep)

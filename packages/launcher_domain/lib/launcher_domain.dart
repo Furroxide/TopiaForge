@@ -17,3 +17,4 @@ export 'src/multiplayer.dart';
 export 'src/multiplayer_gateway.dart';
 export 'src/session_link_handling.dart';
 export 'src/cancellation.dart';
+export 'src/join_host_packages.dart';

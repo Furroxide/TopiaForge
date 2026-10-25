@@ -16,6 +16,7 @@ join installs them. The transport and the live sessions themselves are recorded 
 | Staging | `launch_staging_store.dart`, `launch_staging_sessions.dart` | `LaunchStagingStore.Sessions.cs` |
 | Exact-version resolution | `multiplayer/exact_package_resolution.dart`, `exact_package_catalog_loading.dart` | — |
 | Exact installs and server content | `MultiplayerContentHost` in `repositories.dart`; `multiplayer/server_content*.dart`, `server_profiles.dart`; `join_content_*.dart`, `join_install_journal.dart`, `join_server_profile.dart`, `server_content_*.dart`, `multiplayer/server_content_store.dart`, `secure_http_download.dart` | — |
+| Host-served packages (developer mode) | `join_host_packages.dart` (domain); `join_host_downloads.dart`; `multiplayer/host_package_client.dart`, `package_response.dart`, `join_host_packages.dart`, `lan_discovery_holds.dart` | `DescriptorEndpoint.cs` |
 
 ## 1. One launch, one version
 
@@ -343,7 +344,7 @@ of a launcher repository that `LocalLauncherRepository` has, answers the three s
 
 | Stage | What happens | What it can report |
 | --- | --- | --- |
-| Downloading | Each `download` package, from the source the plan names | `JoinDownloadProgressed`, `downloadFailed`, `integrityFailed`, `manifestMismatch`, `hostDownloadUnsupported`; a cancel stops it at once |
+| Downloading | Each `download` package, from the source the plan names, then each `downloadFromHost` package, from the host (developer mode) | `JoinDownloadProgressed`, `downloadFailed`, `integrityFailed`, `manifestMismatch`, `hostDownloadUnsupported`, `directNotAllowed`, `unreachable`; a cancel stops it at once |
 | Installing | Every downloaded package, as one change | `JoinInstallProgressed`, `installFailed` with `rollbackComplete`, `gameRunning`, `JoinInstallUndone` |
 | Preparing the profile | The server profile, saved | `profileSaveFailed` |
 
@@ -357,8 +358,49 @@ launcher log, and neither ever names a URL or an address.
   passes its bound as soon as it does, and one that ends short once it ends. The SHA-256 must be the pinned one before
   anything is kept. Then the archive's `topiaforge.mod.json` must equal the trusted manifest the plan used, compared as
   package installs compare it. Verified archives stay in the cache by SHA-256, so a join tried again fetches nothing
-  twice. A plan that needs a package only the host serves ends as `hostDownloadUnsupported` before anything is
-  fetched; host-served downloads are a later slice.
+  twice.
+- **Packages only the host serves (developer mode).** A package none of the player's sources offers, from a host whose
+  descriptor says `hostServesPackages`, is planned as `downloadFromHost` in developer mode, and the consent must
+  acknowledge it (`JoinSessionState.hostServedAcknowledged`). The downloading stage fetches it last, once every source
+  download is in the cache, from the host's own endpoint with `TFD1 package <sha256>` (`HostPackageClient`), through
+  a `JoinHostPackageSource` the multiplayer facade hands the content host.
+  - **Gates the data layer checks itself.** Developer mode, as the launcher's settings say at that moment, and the
+    acknowledgement, before anything is fetched, sources included, again before each of the host's packages, so that
+    turning developer mode off asks the host for nothing more, and again before the install; settings that cannot be
+    read count as off. Without either the join ends as `hostDownloadUnsupported`.
+  - **Where the host is.** Only as the descriptor fetch reached it: a LAN listing through its beacon's entry, looked
+    up again for each package, so wherever the server's beacons come from at that moment, as for its descriptor; and a
+    direct link or typed address only through the address that served the descriptor the join verified, which the
+    facade keeps privately for that join. A join the service resolved (an invite, a server link or an Internet
+    listing) never contacts its host, whose address the launcher does not know, whatever the session's privacy: its
+    plan never takes a package from the host (`JoinSessionState.mayContactHost`), so the consent never offers one. A
+    package only that host has blocks the join while checking (`contentUnavailable`), in words that name it and the
+    ways that work: joining the host on the local network or by an address it gives, or the host publishing it to a
+    source. The data layer refuses such a join's host as well (`hostDownloadUnsupported`). The session's privacy is
+    applied to the host's address again before every package, so under relay-only nothing beyond the local network is
+    contacted (`directNotAllowed`), and a LAN host no longer heard is `unreachable`.
+  - **The LAN entry.** A LAN host is reached only through the entry its beacons keep alive, so the downloading stage
+    holds LAN browsing (`LanDiscoveryClient.hold`): a stop asked for meanwhile, as when the player leaves the browser,
+    waits until the stage ends, however it ends, a cancel included. Turning LAN discovery off still stops it at once.
+    Browsing that had stopped before the stage starts again when the player's settings allow it, waits about six
+    seconds for the host's beacon, and stops again after.
+  - **Reading.** The status line comes within 64 bytes and holds the game's 64-bit length. A length past
+    `ModRegistryFormat.maxPackageBytes` is refused before the body is read. The body streams to a temporary file beside
+    the package cache, with its SHA-256 computed as it arrives, up to the announced length and no further, as the
+    game's own client reads; one that ends short is refused once it ends (`Tfd1PackageReader`). Nothing a host sends
+    makes the reader throw, and however a download ends early, its temporary file is deleted.
+  - **Deadlines.** 5 seconds to connect, as for a descriptor; 15 seconds of silence from the host, its status line
+    included, ends the transfer as stalled, long enough to ride out a brief network hiccup and short enough that a
+    host that went away is given up on quickly; and the whole archive must arrive within the two minutes the game's
+    endpoint gives one transfer before it closes it, so waiting longer could never succeed.
+  - **Checks.** The SHA-256 must be the one the host's signed descriptor pins (`integrityFailed`). No source the
+    player chose vouches for the manifest, so the archive's own must name exactly the mod and version the descriptor
+    claims (`manifestMismatch`). Verified archives join the cache by SHA-256 and install as registry archives do, the
+    receipt naming the verified cache as their source; nothing records where the host was.
+  - **Failures.** `unreachable` for a host gone, unreachable or stalled; `downloadFailed` for a refusal, a busy host,
+    an answer the launcher cannot read, a body cut short, an archive larger than a mod may be, a transfer past its two
+    minutes, or a full disk. Each names the mod and says what to do next, and neither they nor the launcher log name
+    an address.
 - **The player's state is untouched.** A join never writes the manager record of a mod that already has one. A mod
   new to the player, with neither a record nor an installed version, gets a disabled record before its folder
   appears, so neither the game nor an inheriting profile turns it on by default. If that record is lost, as when a

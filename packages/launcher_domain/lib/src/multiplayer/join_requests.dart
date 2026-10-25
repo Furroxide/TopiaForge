@@ -19,13 +19,14 @@ part of '../multiplayer.dart';
 ///     is left, report [JoinFailureCode.directNotAllowed];
 ///   - a LAN listing's host is contacted only when
 ///     [NetworkHost.pathKindOfAddress] puts the beacon's sender on the local
-///     network; otherwise report [JoinFailureCode.directNotAllowed];
-///   - for invite, server-link and Internet-listing targets the descriptor
-///     comes from the control plane, never from the host, and nothing is
-///     downloaded from the host: its location is unknown
-///     ([JoinSessionState.mayContactHost]). The service is not a peer.
+///     network; otherwise report [JoinFailureCode.directNotAllowed].
 /// - Under [MultiplayerAddressPrivacy.direct], any resolved address may be
 ///   contacted, IPv4 first.
+/// - **A host the service found is never contacted**, whatever the privacy:
+///   for invite, server-link and Internet-listing targets the descriptor
+///   comes from the control plane, never from the host, and nothing is
+///   downloaded from the host, whose location is unknown
+///   ([JoinSessionState.mayContactHost]). The service is not a peer.
 /// - Nothing logged or reported names [JoinTarget.directHost] or a resolved
 ///   address.
 sealed class JoinContactRules {
@@ -102,11 +103,14 @@ final class JoinDescriptorRequest extends JoinContactRules {
 ///   or [JoinFailureCode.manifestMismatch] otherwise.
 /// - [hostDownloads] (developer mode only) come from the host's own
 ///   descriptor endpoint, with `TFD1 package <sha256>`, under exactly the
-///   rules the descriptor fetch had. Each archive must match its SHA-256 and
-///   hold a manifest with the claimed id and version.
+///   rules the descriptor fetch had, and only where it contacted the host:
+///   never for an invite, server link or Internet listing, whose descriptor
+///   came from the service. Each archive must match its SHA-256 and hold a
+///   manifest with the claimed id and version.
 /// - When those rules now forbid reaching the host, because a local name
 ///   resolves to no local address or a LAN listing's sender is off the local
-///   network, report [JoinFailureCode.directNotAllowed]; the join ends.
+///   network, report [JoinFailureCode.directNotAllowed]; the join ends. A
+///   host that is gone or stops answering is [JoinFailureCode.unreachable].
 final class JoinDownloadRequest extends JoinContactRules {
   JoinDownloadRequest._({
     required super.target,

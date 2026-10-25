@@ -131,12 +131,16 @@ String _unavailableMessage(
   JoinPackageResolution resolution,
   JoinEnvironment environment,
   ServerDescriptorV1 descriptor,
-  DescriptorPackageRole claimed,
-) {
+  DescriptorPackage package, {
+  required bool mayContactHost,
+}) {
   final source = resolution.sourceName.isEmpty
       ? 'a source'
       : resolution.sourceName;
   final reason = switch (resolution.availability) {
+    // No setting changes this one, so it comes first.
+    JoinPackageAvailability.hostOffered when !mayContactHost =>
+      _hostSharesOnlyDirectly('${package.id} ${package.version}', 'it'),
     JoinPackageAvailability.inDisabledSource =>
       'Only the disabled source $source offers it. Enable it to join.',
     JoinPackageAvailability.installedAsOtherArchive =>
@@ -158,11 +162,21 @@ String _unavailableMessage(
       'The server does not serve its packages.',
     _ => 'None of your enabled sources offer it.',
   };
-  return claimed == DescriptorPackageRole.sessionOptional
+  return package.role == DescriptorPackageRole.sessionOptional
       ? '$reason The server calls it optional, but only its manifest could '
             'show that.'
       : reason;
 }
+
+/// Why packages only the host has, [names], cannot come from a host the
+/// service found ([JoinSessionState.mayContactHost]), and the two ways that
+/// work. [them] is how the sentence refers back to them: `it` or `them`.
+String _hostSharesOnlyDirectly(String names, String them) =>
+    'Only the host has $names, and a host shares mods only over a direct or '
+    'local-network connection, while this join reaches it through the '
+    'TopiaForge service. Join it on your local network or by an address the '
+    'host gives you, or ask the host to publish $them to a mod source you '
+    'use.';
 
 /// Notes where the host's claimed role disagrees with the trusted manifest.
 String _roleNote(

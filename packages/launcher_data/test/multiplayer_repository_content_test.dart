@@ -13,6 +13,7 @@ final class _RecordingHost implements MultiplayerContentHost {
   final calls = <String>[];
   GameInstall? install;
   CancellationToken? cancellation;
+  JoinHostPackageSource? hostPackages;
 
   @override
   Future<JoinEvent?> downloadJoinContent(
@@ -20,10 +21,12 @@ final class _RecordingHost implements MultiplayerContentHost {
     JoinSessionState state, {
     void Function(JoinDownloadProgressed progress)? onProgress,
     CancellationToken? cancellation,
+    JoinHostPackageSource? hostPackages,
   }) async {
     calls.add('download ${state.stage.name}');
     this.install = install;
     this.cancellation = cancellation;
+    this.hostPackages = hostPackages;
     onProgress?.call(JoinDownloadProgressed(bytesDone: 1, bytesTotal: 2));
     return const JoinDownloadsCompleted();
   }
@@ -135,6 +138,8 @@ void main() {
     }
     expect(state.stage, JoinStage.launching);
     expect(host.cancellation, same(cancellation));
+    // Nothing comes from the host, so no way to it is handed over.
+    expect(host.hostPackages, isNull);
     expect(progress, [
       isA<JoinDownloadProgressed>(),
       isA<JoinInstallProgressed>(),
@@ -146,6 +151,30 @@ void main() {
     expect(await repository.answerJoin(state, install: install), isNull);
     expect(host.calls, hasLength(3));
   });
+
+  test(
+    'a plan with packages only the host serves gets a way to them',
+    () async {
+      final host = _RecordingHost();
+      final repository = facade(content: host);
+      final hosted = TestArchive('example.hosted', '1.0.0');
+      final server = await verifiedServer([
+        hosted.package,
+      ], hostServesPackages: true);
+      final plan = planJoin(server, {
+        hosted.sha256Hex: JoinPackageResolution.hostOffered(),
+      }, developerMode: true);
+      final state = consentedJoin(server, plan, onLocalNetwork: true);
+      expect(
+        await repository.answerJoin(state, install: install),
+        isA<JoinDownloadsCompleted>(),
+      );
+      final source = host.hostPackages!;
+      // This join's descriptor never came from that address through this
+      // facade, so there is nowhere it may take the host's packages from.
+      expect(await source.prepare(), JoinHostPackageProblem.unreachable);
+    },
+  );
 
   test('a content stage needs the game install', () async {
     final repository = facade(content: _RecordingHost());

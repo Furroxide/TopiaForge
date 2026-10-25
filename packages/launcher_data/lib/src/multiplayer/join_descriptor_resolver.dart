@@ -8,8 +8,11 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import 'control_plane.dart';
 import 'descriptor_client.dart';
+import 'host_package_client.dart';
 import 'lan_discovery_client.dart';
 import 'multiplayer_store.dart';
+
+part 'join_host_packages.dart';
 
 /// Looks a host name up; the seam tests use to watch what is resolved.
 typedef HostLookup = Future<List<InternetAddress>> Function(String host);
@@ -47,6 +50,9 @@ Future<bool> _anyNetworkUp() async {
 ///   join already expects that server. When the record cannot be read, no
 ///   server is taken on trust: the player is asked as for a change.
 ///
+/// A join's packages that only its host serves come from where its
+/// descriptor did ([hostPackagesFor]): never from a host the service found.
+///
 /// No event or detail names a host, a name or an address.
 final class JoinDescriptorResolver {
   JoinDescriptorResolver({
@@ -58,7 +64,9 @@ final class JoinDescriptorResolver {
     NetworkPresence? networkPresence,
     DescriptorTimer? timer,
     DateTime Function()? clock,
+    HostPackageClient? packages,
   }) : _descriptors = descriptors,
+       _packages = packages ?? HostPackageClient(),
        _store = store,
        _controlPlane = controlPlane,
        _lan = lan,
@@ -73,6 +81,7 @@ final class JoinDescriptorResolver {
   static const fetchBudget = Duration(seconds: 15);
 
   final DescriptorClient _descriptors;
+  final HostPackageClient _packages;
   final MultiplayerStore _store;
   final ControlPlaneClient _controlPlane;
   final LanDiscoveryClient? _lan;
@@ -80,6 +89,19 @@ final class JoinDescriptorResolver {
   final NetworkPresence _networkPresence;
   final DescriptorTimer _timer;
   final DateTime Function() _clock;
+
+  /// Where each direct link or typed address last served the descriptor a
+  /// join verified, by the join's own target, so it lives as long as the
+  /// join does. It never leaves this library.
+  final _served = Expando<_HostContact>('host contact');
+
+  /// The packages the join of [request] takes from its host, from where its
+  /// descriptor came ([JoinHostPackages]). [mayBrowse] says whether the
+  /// player's settings let LAN browsing start again, should it have stopped.
+  JoinHostPackages hostPackagesFor(
+    JoinDownloadRequest request, {
+    Future<bool> Function()? mayBrowse,
+  }) => JoinHostPackages._(this, request, mayBrowse);
 
   /// The event that answers [request]; null only when [cancellation] stopped
   /// it, since the reducer already heard the cancel itself. Never throws.
@@ -206,7 +228,17 @@ final class JoinDescriptorResolver {
         expectedServerId: request.expectedServerId,
         cancellation: budget.token,
       );
-      if (fetch is! DescriptorFetchFailed) return fetch;
+      if (fetch is! DescriptorFetchFailed) {
+        // Where the join's host-served packages will come from.
+        if (fetch case DescriptorFetched(:final descriptor)) {
+          _served[request.target] = _HostContact(
+            address,
+            port,
+            descriptor.serverId,
+          );
+        }
+        return fetch;
+      }
       if (fetch.failure == DescriptorFetchFailure.cancelled) break;
       if (reported == null || _rank(fetch) > _rank(reported)) {
         reported = fetch;

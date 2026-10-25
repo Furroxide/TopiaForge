@@ -23,6 +23,52 @@ void main() {
       expect(result.blockers.single.message, contains('does not serve'));
     });
 
+    test('block, naming each mod, when the launcher may not contact the host, '
+        'and say what works instead', () async {
+      for (final environment in [
+        environmentWith(developerMode: true),
+        // No setting changes this, so it is what the player reads first.
+        testEnvironment,
+      ]) {
+        final result = await planJoin(
+          [
+            (testPackage('example.local'), hostOffered),
+            (
+              testPackage(
+                'example.extra',
+                version: '2.0.0',
+                role: DescriptorPackageRole.sessionOptional,
+              ),
+              hostOffered,
+            ),
+          ],
+          environment: environment,
+          hostServesPackages: true,
+          mayContactHost: false,
+        );
+        expect(result.isJoinable, isFalse);
+        expect(result.hasUnverifiedPackages, isFalse);
+        expect(result.needsDownloads, isFalse);
+        expect(result.derivedProfile.enabledMods, isEmpty);
+        expect(result.blockers.map((item) => (item.code, item.modId)), [
+          (JoinBlockerCode.contentUnavailable, 'example.extra'),
+          (JoinBlockerCode.contentUnavailable, 'example.local'),
+        ]);
+        final [extra, local] = result.blockers;
+        expect(local.message, startsWith('Only the host has example.local '));
+        expect(extra.message, startsWith('Only the host has example.extra '));
+        expect(extra.message, contains('example.extra 2.0.0'));
+        for (final blocker in result.blockers) {
+          expect(blocker.message, contains('TopiaForge service'));
+          expect(blocker.message, contains('or by an address the host gives'));
+          expect(blocker.message, contains('publish it to a mod source'));
+          expect(blocker.message, isNot(contains('developer mode')));
+        }
+        // An unverifiable claim of optional changes nothing, as ever.
+        expect(extra.message, endsWith('only its manifest could show that.'));
+      }
+    });
+
     test('are flagged in developer mode when the host serves them', () async {
       final result = await planJoin(
         [
