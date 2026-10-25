@@ -292,6 +292,7 @@ internal static class Program
             SaveRetryTests.AFailedSaveIsTriedAgainAfterAPause();
             SaveRetryTests.AFailedSaveIsTriedOnceMoreAtClose();
             SaveFailureObservationTests.RetriedAndLateSaveFailuresAreObserved();
+            IdentityLoadObservationTests.AFailedIdentityLoadIsObservedHoweverItIsLetGo();
             KnownHostsFailClosedTests.AnUnreadableRecordRefusesAndWritesNothing();
             KnownHostsFailClosedTests.ATrustGivenUncheckedEndsOnceTheRecordReads();
             KnownHostsFailClosedTests.ClosingWritesNothingOverAnUnreadableRecord();
