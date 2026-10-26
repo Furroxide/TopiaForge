@@ -54,7 +54,7 @@ namespace TopiaForge.RobotKit
                 sink = logger;
             }
 
-            var message = "RobotKit compatibility fallback in " + operation + ": " + exception.Message;
+            var message = "RobotKit compatibility fallback in " + operation + ": " + RobotKitLog.ExceptionType(exception);
             if (sink != null)
             {
                 try
@@ -64,7 +64,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception loggingFailure)
                 {
-                    message += "; diagnostic logger also failed: " + loggingFailure.Message;
+                    message += "; diagnostic logger also failed: " + RobotKitLog.ExceptionType(loggingFailure);
                 }
             }
 

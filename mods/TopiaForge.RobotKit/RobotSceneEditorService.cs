@@ -49,7 +49,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception exception)
                 {
-                    logger.Debug("Robot scene target discovery is unavailable: " + exception.Message);
+                    logger.Debug("Robot scene target discovery is unavailable: " + RobotKitLog.ExceptionType(exception));
                     return Array.Empty<IRobotEditTarget>();
                 }
             }
@@ -102,7 +102,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Debug("Robot edit snapshot failed: " + exception.Message);
+                logger.Debug("Robot edit snapshot failed: " + RobotKitLog.ExceptionType(exception));
                 return OperationResult<IRobotEditLease>.Failure(
                     nativeTarget.IsAlive ? ModErrorCode.External : ModErrorCode.NotFound,
                     "The robot changed or disappeared before its temporary edit could begin.");
@@ -239,7 +239,7 @@ namespace TopiaForge.RobotKit
                 catch (Exception exception)
                 {
                     lease.Dispose();
-                    service.logger.Debug("Robot edit lease tracking failed: " + exception.Message);
+                    service.logger.Debug("Robot edit lease tracking failed: " + RobotKitLog.ExceptionType(exception));
                     return OperationResult<IRobotEditLease>.Failure(
                         lifetime.IsStopping ? ModErrorCode.Cancelled : ModErrorCode.External,
                         lifetime.IsStopping

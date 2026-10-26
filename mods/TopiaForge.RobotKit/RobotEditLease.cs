@@ -60,7 +60,8 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                return OperationResult<TransformState>.Failure(ModErrorCode.External, exception.Message);
+                return OperationResult<TransformState>.Failure(ModErrorCode.External,
+                    "The temporary robot transform could not be applied: " + RobotKitLog.ExceptionType(exception));
             }
         }
 
@@ -103,7 +104,8 @@ namespace TopiaForge.RobotKit
             catch (Exception exception)
             {
                 GameReflection.RestoreBrainState(target.Root, before, logger);
-                return OperationResult<bool>.Failure(ModErrorCode.External, exception.Message);
+                return OperationResult<bool>.Failure(ModErrorCode.External,
+                    "The temporary robot brain mode could not be applied: " + RobotKitLog.ExceptionType(exception));
             }
         }
 
@@ -167,7 +169,7 @@ namespace TopiaForge.RobotKit
                 catch (Exception exception)
                 {
                     restoreFailure = restoreFailure ?? exception;
-                    logger.Warn("Robot edit restoration failed: " + exception.Message);
+                    logger.Warn("Robot edit restoration failed: " + RobotKitLog.ExceptionType(exception));
                 }
             }
 
@@ -177,7 +179,8 @@ namespace TopiaForge.RobotKit
 
             if (restoreFailure != null)
             {
-                return OperationResult<bool>.Failure(ModErrorCode.External, restoreFailure.Message);
+                return OperationResult<bool>.Failure(ModErrorCode.External,
+                    "Robot edit restoration failed; reload the world before editing again: " + RobotKitLog.ExceptionType(restoreFailure));
             }
 
             return conflict

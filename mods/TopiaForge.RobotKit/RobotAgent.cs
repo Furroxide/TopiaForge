@@ -505,7 +505,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (System.Exception ex)
                 {
-                    logger.Debug("RobotKit native walk cancellation failed: " + ex.Message);
+                    logger.Debug("RobotKit native walk cancellation failed: " + RobotKitLog.ExceptionType(ex));
                 }
             }
         }
@@ -528,7 +528,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (System.Exception ex)
                 {
-                    logger.Debug("RobotKit native walk cleanup cancellation failed: " + ex.Message);
+                    logger.Debug("RobotKit native walk cleanup cancellation failed: " + RobotKitLog.ExceptionType(ex));
                 }
 
                 walkCts.Dispose();

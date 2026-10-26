@@ -165,7 +165,7 @@ namespace TopiaForge.RobotKit
                 && Interlocked.Exchange(ref loggedDirectiveResolutionFailure, 1) == 0)
             {
                 logger.Warn("RobotKit could not resolve the optional global robot directive: "
-                    + resolutionFailure.Message);
+                    + RobotKitLog.ExceptionType(resolutionFailure));
             }
 
             if (exceededPromptLimit && Interlocked.Exchange(ref loggedDirectiveOverflow, 1) == 0)

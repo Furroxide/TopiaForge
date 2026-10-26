@@ -351,7 +351,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger.Debug("RobotKit agent step failed: " + ex.Message);
+                    logger.Debug("RobotKit agent step failed: " + RobotKitLog.ExceptionType(ex));
                 }
             }
 
@@ -366,7 +366,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger.Debug("RobotKit spawn search step failed: " + ex.Message);
+                    logger.Debug("RobotKit spawn search step failed: " + RobotKitLog.ExceptionType(ex));
                     search.Cancel();
                 }
 

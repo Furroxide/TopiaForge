@@ -24,6 +24,8 @@ namespace TopiaForge.ModManager.Tests
                 try { UiKitEventSystemTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
+            if (args.Length == 1 && args[0] is "--robotkit-log-privacy" or "--robotkit-log-privacy-behavior" or "--robotkit-log-privacy-convention")
+                return RobotKitLogPrivacyTests.RunFocused(args[0]);
             if (args.Length == 1 && args[0] == "--robo-api-client")
             {
                 var owned = Directory.CreateTempSubdirectory("TopiaForgeRoboApi-");
@@ -366,6 +368,8 @@ namespace TopiaForge.ModManager.Tests
                 BoundedTextFileTests.Run(root);
                 ExtractorFileIoTests.Run(root);
                 ModContextConfigPersistenceTests.Run(root);
+                RobotKitLogPrivacyTests.Run();
+                RobotKitLogPrivacyConventionTests.Run();
                 RoboApiClientTests.Run(root);
                 TestMissingManifestRejected(root);
                 TestZipTraversalRejected(root);

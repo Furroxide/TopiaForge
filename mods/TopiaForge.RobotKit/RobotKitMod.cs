@@ -137,8 +137,8 @@ namespace TopiaForge.RobotKit
         {
             if (!alreadyReported)
             {
-                logger?.Error(exception, "RobotKit " + component
-                    + " tick failed; other RobotKit services will continue.");
+                logger?.Error("RobotKit " + component
+                    + " tick failed; other RobotKit services will continue: " + RobotKitLog.ExceptionType(exception));
             }
 
             alreadyReported = true;
@@ -152,7 +152,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger?.Error(exception, "RobotKit failed during " + operation + ".");
+                logger?.Error("RobotKit failed during " + operation + ": " + RobotKitLog.ExceptionType(exception));
             }
         }
 

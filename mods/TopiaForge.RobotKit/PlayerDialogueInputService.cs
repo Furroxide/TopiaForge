@@ -143,7 +143,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception ex)
             {
-                logger.Debug("RobotKit voice service cancellation failed during unload: " + ex.Message);
+                logger.Debug("RobotKit voice service cancellation failed during unload: " + RobotKitLog.ExceptionType(ex));
             }
 
             for (var index = 0; index < active.Count; index++)
@@ -326,7 +326,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger?.Debug("Voice capture finalize failed: " + ex.Message);
+                    logger?.Debug("Voice capture finalize failed: " + RobotKitLog.ExceptionType(ex));
                     CompleteEmpty("capture failed");
                 }
             }
@@ -341,7 +341,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger?.Debug("Voice transcription cancellation failed: " + ex.Message);
+                    logger?.Debug("Voice transcription cancellation failed: " + RobotKitLog.ExceptionType(ex));
                 }
 
                 try
@@ -350,7 +350,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger?.Debug("Voice transcription cleanup failed: " + ex.Message);
+                    logger?.Debug("Voice transcription cleanup failed: " + RobotKitLog.ExceptionType(ex));
                 }
 
                 cts = null;
@@ -382,7 +382,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger?.Debug("Voice transcription completion failed: " + ex.Message);
+                    logger?.Debug("Voice transcription completion failed: " + RobotKitLog.ExceptionType(ex));
                     transcript = null;
                 }
 
@@ -460,7 +460,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger?.Debug("Voice microphone cleanup failed: " + ex.Message);
+                    logger?.Debug("Voice microphone cleanup failed: " + RobotKitLog.ExceptionType(ex));
                 }
             }
 
