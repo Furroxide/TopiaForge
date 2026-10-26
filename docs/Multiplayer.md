@@ -41,8 +41,9 @@ path unchanged. Throwing keeps a one-second simulation window after disposal, th
 velocities to the host; another player may catch it during that window. Native held-item pickups use the same rules.
 
 Offline behavior stays local. Raw Unity writes outside the SDK lease cannot be attributed automatically to a player.
-Remote range currently uses a client-reported avatar position until presence supplies validated positions. The motion
-limits and integration notes are maintainer-internal, in the "Motion ownership" section of
+Remote range uses the host's last validated presence position, never the position claimed in a motion packet. A player
+with no validated pose yet, a stale pose, or a lost link cannot acquire a remote body until a fresh pose is accepted.
+The motion limits and integration notes are maintainer-internal, in the "Motion ownership" section of
 `docs/internal/MultiplayerRuntimeIntegration.md`.
 
 ## Add the module
@@ -301,8 +302,10 @@ and the snapshot says which one is current, whether this process holds world aut
   code from you, the host's world: what the host spawns through the SDK, its custom-world content, and the scene props
   it moves or removes, which a joining player receives before `Ready` and then follows. What a joined player spawns,
   moves or removes goes through the host, which makes the change for everyone, as [the player's own
-  actions](#the-players-own-actions) describes; players' avatars are later work. Unity objects, files, configuration
-  and a mod's own fields stay in their process.
+  actions](#the-players-own-actions) describes. Every player sees the others too, as the game's own robots when the
+  RobotKit mod is loaded and as capsules in each player's colour otherwise, and the host places each joining player
+  beside its own; `TryGetAvatar` and `TryGetPose` name them for a mod, with no code to send anything. Unity objects,
+  files, configuration and a mod's own fields stay in their process.
 - **Session replacement.** Whenever a session gives way to another, a mod sees the same steps. `CurrentSessionToken` is
   cancelled, every replicated value returns to its declared default, every object despawns with a notification, and
   the snapshot names the new session. `OnMultiplayerSessionEnded` runs with the old session's last snapshot, then

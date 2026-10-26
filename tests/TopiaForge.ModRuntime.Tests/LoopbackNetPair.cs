@@ -11,11 +11,15 @@ namespace TopiaForge.ModManager.TestDoubles
     /// at the receiver's next flush; a message to everyone skips a player whose window is full and names it; a message to
     /// one player, or a player's own, is refused whole when its window is full; a generation changes whenever a stream
     /// starts, restarts or ends; and what an ended stream had in flight or waiting is dropped. A message leaves at its
-    /// sender's flush and arrives at its receiver's next pump. The ModRuntime and ModManager harnesses both compile it.
+    /// sender's flush and arrives at its receiver's next pump. Its session lists the host and every joined player, a player
+    /// whose link was lost as disconnected until it comes back or its grace runs out, as the engine does; a kick removes
+    /// the player. The ModRuntime and ModManager harnesses both compile it.
     /// </summary>
     internal sealed class LoopbackNetPair
     {
         private readonly List<LoopbackControl> players = new List<LoopbackControl>();
+        private readonly List<LoopbackControl> members = new List<LoopbackControl>();
+        private readonly HashSet<LoopbackControl> disconnected = new HashSet<LoopbackControl>();
         private long nextStream = 1;
 
         internal LoopbackNetPair()
@@ -26,6 +30,20 @@ namespace TopiaForge.ModManager.TestDoubles
         internal LoopbackControl Host { get; }
 
         internal IReadOnlyList<LoopbackControl> Players => players;
+
+        /// <summary>Gets the joined players the session lists, in the order they joined.</summary>
+        internal IReadOnlyList<LoopbackControl> Members => members;
+
+        /// <summary>Gets a number that moves whenever the session's list of players changes.</summary>
+        internal int SessionVersion { get; private set; }
+
+        /// <summary>Gets every player the host removed, with the host's message.</summary>
+        internal List<(ParticipantId Player, string Message)> Kicks { get; } = new List<(ParticipantId, string)>();
+
+        /// <summary>Gets the buffers datagrams travel in, reused so the realtime lane allocates nothing once warm.</summary>
+        internal Stack<byte[]> DatagramBuffers { get; } = new Stack<byte[]>();
+
+        internal bool IsConnected(LoopbackControl player) => !disconnected.Contains(player);
 
         /// <summary>Gets or sets the host's window per player and channel, in messages: the engine's 1,024 by default.</summary>
         internal int HostWindowMessages { get; set; } = InternalSystemLimits.HostWindowMessages;
@@ -60,6 +78,9 @@ namespace TopiaForge.ModManager.TestDoubles
             if (player.IsHost) throw new InvalidOperationException("The host does not join itself.");
             player.NextRole = InternalSessionRole.Client;
             StartStream(player);
+            if (!members.Contains(player)) members.Add(player);
+            disconnected.Remove(player);
+            SessionVersion++;
         }
 
         /// <summary>A player leaves: its stream ends on both sides and the player is back in single player.</summary>
@@ -67,6 +88,41 @@ namespace TopiaForge.ModManager.TestDoubles
         {
             EndStream(player);
             player.NextRole = InternalSessionRole.Solo;
+            members.Remove(player);
+            disconnected.Remove(player);
+            SessionVersion++;
+        }
+
+        /// <summary>A player's link is lost: its stream ends, and the session keeps listing it, disconnected, through its grace.</summary>
+        internal void LoseLink(LoopbackControl player)
+        {
+            EndStream(player);
+            disconnected.Add(player);
+            SessionVersion++;
+        }
+
+        /// <summary>A player whose link was lost finds it again within its grace: a new stream starts and it is listed connected.</summary>
+        internal void Restore(LoopbackControl player)
+        {
+            StartStream(player);
+            disconnected.Remove(player);
+            SessionVersion++;
+        }
+
+        /// <summary>A lost player's grace runs out: the session lets go of its record, and the player is back in single player.</summary>
+        internal void ExpireGrace(LoopbackControl player)
+        {
+            members.Remove(player);
+            disconnected.Remove(player);
+            player.NextRole = InternalSessionRole.Solo;
+            SessionVersion++;
+        }
+
+        /// <summary>The host removes a player, as a kick does: its stream ends and the session lets go of it.</summary>
+        internal void Kick(LoopbackControl player, string message)
+        {
+            Kicks.Add((player.Id, message));
+            Leave(player);
         }
 
         /// <summary>A player rejoins within its grace: the session goes on, but its stream restarts and what was in flight is lost.</summary>
@@ -74,6 +130,7 @@ namespace TopiaForge.ModManager.TestDoubles
         {
             EndStream(player);
             StartStream(player);
+            if (disconnected.Remove(player)) SessionVersion++;
         }
 
         /// <summary>The host replaces the session: every player's stream restarts.</summary>
@@ -126,6 +183,9 @@ namespace TopiaForge.ModManager.TestDoubles
         private readonly Dictionary<InternalSystemChannelKind, LoopbackChannel> channels = new Dictionary<InternalSystemChannelKind, LoopbackChannel>();
         private ulong generation;
         private int holds;
+        private MultiplayerSessionSnapshot? snapshot;
+        private int snapshotVersion = -1;
+        private InternalSessionRole snapshotRole;
 
         internal LoopbackControl(LoopbackNetPair network, ParticipantId id, bool isHost)
         {
@@ -171,9 +231,54 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public bool IsReadinessHeld => holds > 0;
 
-        public IInternalVoiceService? Voice => null;
+        /// <summary>Gets or sets the voice service this peer's provider offers: none by default.</summary>
+        public IInternalVoiceService? Voice { get; set; }
 
         public IReadOnlyList<InternalLanListing> LanSessions => Array.Empty<InternalLanListing>();
+
+        /// <summary>Gets or sets the name the session lists this peer by.</summary>
+        internal string DisplayName { get; set; } = string.Empty;
+
+        /// <summary>Gets how many times the session snapshot was built, so a test can tell that a frame at rest builds none.</summary>
+        internal int SnapshotsBuilt { get; private set; }
+
+        /// <summary>
+        /// Gets the session as this peer sees it: the host and every joined player while online, this peer alone in single
+        /// player. The same instance comes back while nothing changes, as the engine's does.
+        /// </summary>
+        public MultiplayerSessionSnapshot SessionSnapshot
+        {
+            get
+            {
+                if (snapshot != null && snapshotVersion == network.SessionVersion && snapshotRole == Role) return snapshot;
+                snapshotVersion = network.SessionVersion;
+                snapshotRole = Role;
+                SnapshotsBuilt++;
+                var participants = new List<MultiplayerParticipant>();
+                var online = Role != InternalSessionRole.Solo;
+                var listedSelf = false;
+                if (online)
+                {
+                    var host = network.Host;
+                    participants.Add(new MultiplayerParticipant(host.Id, host.Name, ReferenceEquals(host, this), true, true, MultiplayerConnectionQuality.Unknown, null, default));
+                    listedSelf = ReferenceEquals(host, this);
+                    foreach (var member in network.Members)
+                    {
+                        participants.Add(new MultiplayerParticipant(member.Id, member.Name, ReferenceEquals(member, this), network.IsConnected(member), false,
+                            MultiplayerConnectionQuality.Unknown, null, default));
+                        listedSelf |= ReferenceEquals(member, this);
+                    }
+                }
+
+                if (!listedSelf) participants.Add(new MultiplayerParticipant(Id, Name, true, true));
+                snapshot = new MultiplayerSessionSnapshot(new MultiplayerSessionId("loopback"), MultiplayerSessionState.Ready, MultiplayerProcessKind.Interactive,
+                    IsHost ? MultiplayerExecutionSide.Client | MultiplayerExecutionSide.Server : MultiplayerExecutionSide.Client, Id, participants,
+                    new NetworkTick(0), new SessionSeed(1), online ? network.Host.Id : (ParticipantId?)null, MultiplayerSessionEndReason.None);
+                return snapshot;
+            }
+        }
+
+        private string Name => string.IsNullOrEmpty(DisplayName) ? "Player " + Id.Value : DisplayName;
 
         public bool AttachRuntime(IInternalMultiplayerRuntimeHost runtime)
         {
@@ -254,7 +359,14 @@ namespace TopiaForge.ModManager.TestDoubles
         {
         }
 
-        public OperationResult<bool> Kick(ParticipantId participant, string message) => Unsupported<bool>();
+        public OperationResult<bool> Kick(ParticipantId participant, string message)
+        {
+            if (!IsHost) return OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, "Only the host removes players.");
+            var player = network.Find(participant);
+            if (player == null || player.IsHost || !Contains(network.Members, player)) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "No such player.");
+            network.Kick(player, message);
+            return OperationResult<bool>.Success(true);
+        }
 
         public OperationResult<bool> Ban(ParticipantId participant) => Unsupported<bool>();
 
@@ -328,6 +440,16 @@ namespace TopiaForge.ModManager.TestDoubles
         public OperationResult<IInternalLaunchPlan> PlanLaunchSession(InternalLaunchSession session) => Unsupported<IInternalLaunchPlan>();
 
         internal LoopbackControl? Peer(ParticipantId id) => network.Find(id);
+
+        private static bool Contains(IReadOnlyList<LoopbackControl> list, LoopbackControl player)
+        {
+            foreach (var each in list)
+            {
+                if (ReferenceEquals(each, player)) return true;
+            }
+
+            return false;
+        }
 
         private static OperationResult<T> Unsupported<T>() where T : notnull =>
             OperationResult<T>.Failure(ModErrorCode.Unavailable, "The loopback control does not do this.");

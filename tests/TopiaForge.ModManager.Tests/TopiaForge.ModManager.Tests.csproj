@@ -419,4 +419,14 @@
     <Compile Include="../../src/TopiaForge.ModManager/UiSurfacePresence.cs" Link="Runtime/UiSurfacePresence.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiHudAnchors.cs" Link="Runtime/UiHudAnchors.cs" />
   </ItemGroup>
+
+  <!-- Presence (WS3.10) is Unity-free too: poses, the host's checks and relay, avatars and the spawn ring. Its engine side
+       over Unity lives in Presence/Unity/. The loopback network's datagram lane and the fake engine are shared with the
+       ModRuntime harness. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Presence/*.cs" Link="Runtime/Multiplayer/Presence/%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Presence.cs" Link="Runtime/GamemodeSessionOrchestrator.Presence.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/LoopbackChannel.Datagrams.cs" Link="Multiplayer/LoopbackChannel.Datagrams.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/FakePresenceBackend.cs" Link="Multiplayer/FakePresenceBackend.cs" />
+  </ItemGroup>
 </Project>

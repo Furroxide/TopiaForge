@@ -79,7 +79,7 @@ namespace TopiaForge.ModManager
     /// seam and the microphone arbiter. Each mod context binds a <see cref="RuntimeReplication"/> to it with its own
     /// profile and lifetime. Main thread only. See docs/internal/MultiplayerRuntimeIntegration.md, section 11.
     /// </summary>
-    internal sealed class MultiplayerReplication
+    internal sealed partial class MultiplayerReplication
     {
         private readonly Dictionary<string, List<IBlocker>> blockers = new Dictionary<string, List<IBlocker>>(StringComparer.Ordinal);
 

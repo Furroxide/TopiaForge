@@ -14,10 +14,14 @@ namespace TopiaForge.Multiplayer.Engine
     {
         private readonly SessionEngine engine;
         private readonly Queue<Pending> inbox = new Queue<Pending>();
+        private readonly Queue<InternalSystemDatagram> datagrams = new Queue<InternalSystemDatagram>();
         private long sent;
         private long received;
         private long dropped;
         private long refused;
+        private long datagramsSent;
+        private long datagramsReceived;
+        private long datagramsDropped;
         private bool open = true;
 
         internal SystemChannelEndpoint(SessionEngine engine, InternalSystemChannelKind kind)
@@ -64,11 +68,54 @@ namespace TopiaForge.Multiplayer.Engine
             return true;
         }
 
+        public OperationResult<int> SendDatagram(ArraySegment<byte> payload, InternalSystemTarget target) =>
+            engine.SendSystemDatagram(this, payload, target);
+
+        public bool TryReceiveDatagram(out InternalSystemDatagram datagram)
+        {
+            engine.RequireOwnerThread();
+            if (datagrams.Count == 0)
+            {
+                datagram = default;
+                return false;
+            }
+
+            datagram = datagrams.Dequeue();
+            return true;
+        }
+
         public InternalSystemChannelStatistics GetStatistics() =>
-            new InternalSystemChannelStatistics(Kind, sent, received, dropped, inbox.Count, refused);
+            new InternalSystemChannelStatistics(Kind, sent, received, dropped, inbox.Count, refused, datagramsSent, datagramsReceived, datagramsDropped);
 
         /// <summary>Closes the channel. Safe from any thread; the engine applies it on its own.</summary>
         public void Dispose() => engine.CloseSystemChannel(this);
+
+        /// <summary>
+        /// Takes one datagram that arrived on the realtime lane, or drops and counts it when the channel is closed. A full
+        /// queue lets go of its oldest datagram, as an unreliable lane may.
+        /// </summary>
+        internal void DeliverDatagram(ParticipantId sender, ArraySegment<byte> payload)
+        {
+            if (!open)
+            {
+                datagramsDropped++;
+                return;
+            }
+
+            if (datagrams.Count >= InternalSystemLimits.DatagramQueueLength)
+            {
+                datagrams.Dequeue();
+                datagramsDropped++;
+            }
+
+            datagrams.Enqueue(new InternalSystemDatagram(sender, payload));
+            datagramsReceived++;
+        }
+
+        internal void CountDatagramsSent(int recipients) => datagramsSent += recipients;
+
+        /// <summary>Counts a datagram dropped on arrival: from a stream already gone, or past its sender's rate.</summary>
+        internal void CountDatagramDropped() => datagramsDropped++;
 
         /// <summary>
         /// Takes one message that arrived on <paramref name="stream"/>, or drops and counts it when the channel is closed or
@@ -101,11 +148,14 @@ namespace TopiaForge.Multiplayer.Engine
             foreach (var pending in inbox) pending.Stream.Consume(pending.Message.Payload.Length);
             dropped += inbox.Count;
             inbox.Clear();
+            datagramsDropped += datagrams.Count;
+            datagrams.Clear();
         }
 
         /// <summary>Drops what waits from <paramref name="sender"/>, whose stream restarted, and keeps everyone else's in order.</summary>
         internal void DropFrom(ParticipantId sender)
         {
+            DropDatagramsFrom(sender);
             if (inbox.Count == 0) return;
             var kept = inbox.ToArray();
             inbox.Clear();
@@ -128,6 +178,18 @@ namespace TopiaForge.Multiplayer.Engine
             open = false;
             Admit = null;
             DropPending();
+        }
+
+        private void DropDatagramsFrom(ParticipantId sender)
+        {
+            if (datagrams.Count == 0) return;
+            var kept = datagrams.ToArray();
+            datagrams.Clear();
+            foreach (var datagram in kept)
+            {
+                if (datagram.Sender.Equals(sender)) datagramsDropped++;
+                else datagrams.Enqueue(datagram);
+            }
         }
 
         private readonly struct Pending

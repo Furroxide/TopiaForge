@@ -1,13 +1,14 @@
 using System.Globalization;
 using System.Threading;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
     internal sealed partial class UnityEntityRegistry
     {
-        internal sealed class UnityEntity : IEntity
+        internal sealed class UnityEntity : IEntity, IInternalNativeObjectEntity
         {
             private readonly GameObject gameObject;
 
@@ -45,6 +46,16 @@ namespace TopiaForge.ModManager
                 {
                     UnityMainThreadGuard.AssertCurrent();
                     return gameObject != null;
+                }
+            }
+
+            /// <summary>Gets the game object, for a trusted provider that follows it natively, as RobotKit's Chase does; null once destroyed.</summary>
+            public object? NativeObject
+            {
+                get
+                {
+                    UnityMainThreadGuard.AssertCurrent();
+                    return gameObject != null ? gameObject : null;
                 }
             }
 

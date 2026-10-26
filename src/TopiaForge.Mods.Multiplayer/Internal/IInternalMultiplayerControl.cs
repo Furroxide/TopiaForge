@@ -39,6 +39,14 @@ namespace TopiaForge.Mods.Internal
         IReadOnlyList<InternalLanListing> LanSessions { get; }
 
         /// <summary>
+        /// Gets the session as this process's engine holds it now: the local player, the host's player, and every
+        /// participant with its name and whether its link is up, a player whose link was lost included for as long as its
+        /// grace keeps its record. The same instance comes back while nothing changes, so a per-frame hook may read it and
+        /// compare.
+        /// </summary>
+        MultiplayerSessionSnapshot SessionSnapshot { get; }
+
+        /// <summary>
         /// Attaches the runtime that drives the frame and supplies content. Returns false, changing nothing, when another
         /// runtime is attached.
         /// </summary>

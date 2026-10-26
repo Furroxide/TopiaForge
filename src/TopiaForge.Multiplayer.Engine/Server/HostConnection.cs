@@ -64,6 +64,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets the allowance within which the host counts the player's stale system messages.</summary>
         internal TokenBucket? StaleSystemIngress { get; set; }
 
+        /// <summary>Gets or sets the rate at which the host takes the player's datagrams; past it they are dropped.</summary>
+        internal TokenBucket? DatagramIngress { get; set; }
+
         /// <summary>
         /// Gets or sets when the host began waiting for this connection to acknowledge a snapshot and become Ready: its
         /// acceptance, or the replacement that took it out of Ready, or the player's report that this replacement reached

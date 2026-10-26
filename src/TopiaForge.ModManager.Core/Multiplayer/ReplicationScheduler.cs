@@ -136,7 +136,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             }
 
             ForgetUnseen();
-            order.Sort(PendingOrder.Instance);
+            order.Sort(PendingOrder.Comparison);
             for (var index = 0; index < order.Count && credit > 0; index++)
             {
                 var pending = order[index];
@@ -215,6 +215,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private sealed class PendingOrder : IComparer<Pending>
         {
             public static readonly PendingOrder Instance = new PendingOrder();
+
+            // Sorting through an IComparer makes a delegate every call; one made once keeps a tick allocation-free.
+            public static readonly Comparison<Pending> Comparison = Instance.Compare;
 
             public int Compare(Pending x, Pending y)
             {

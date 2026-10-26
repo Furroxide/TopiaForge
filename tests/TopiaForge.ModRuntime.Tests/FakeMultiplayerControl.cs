@@ -57,6 +57,9 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public IReadOnlyList<InternalLanListing> LanSessions => Array.Empty<InternalLanListing>();
 
+        /// <summary>Gets a session of this process's player alone, the same instance each time.</summary>
+        public MultiplayerSessionSnapshot SessionSnapshot => SoloSnapshot.Instance;
+
         public bool AttachRuntime(IInternalMultiplayerRuntimeHost runtime)
         {
             if (RefuseAttach || Runtime != null) return ReferenceEquals(Runtime, runtime);
@@ -226,6 +229,20 @@ namespace TopiaForge.ModManager.TestDoubles
         }
 
         private bool value;
+    }
+
+    /// <summary>A session of one player, this process's own, for fakes whose session nobody joins.</summary>
+    internal static class SoloSnapshot
+    {
+        internal static readonly MultiplayerSessionSnapshot Instance = new MultiplayerSessionSnapshot(
+            new MultiplayerSessionId("solo"),
+            MultiplayerSessionState.Ready,
+            MultiplayerProcessKind.Interactive,
+            MultiplayerExecutionSide.Client | MultiplayerExecutionSide.Server,
+            new ParticipantId("local"),
+            new[] { new MultiplayerParticipant(new ParticipantId("local"), "Player", true, true) },
+            new NetworkTick(0),
+            new SessionSeed(1));
     }
 
     /// <summary>Records what the multiplayer runtime logs.</summary>

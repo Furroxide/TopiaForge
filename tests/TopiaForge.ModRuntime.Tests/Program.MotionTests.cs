@@ -23,7 +23,11 @@ namespace TopiaForge.ModRuntime.Tests
             var games = new[] { host, first, second };
             try
             {
-                foreach (var game in games) game.Start();
+                foreach (var game in games)
+                {
+                    game.Game.Presence.HasPlayer = true;
+                    game.Start();
+                }
                 host.LoadScene("Yard", true);
                 Assert(host.Runtime.Multiplayer.OpenToMultiplayer(new InternalHostSettings("Motion", 4)).Succeeded, "motion's host opens");
                 WorldFrames(games, clock, 3);

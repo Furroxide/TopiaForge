@@ -269,6 +269,12 @@ namespace TopiaForge.Multiplayer.Engine
                     continue;
                 }
 
+                if (channelKind == EngineChannel.Realtime)
+                {
+                    HandleDatagramFromClient(connection, frame);
+                    continue;
+                }
+
                 if (channelKind != EngineChannel.Session) continue;
                 ProcessHostFrame(connection, frame);
                 Settle();

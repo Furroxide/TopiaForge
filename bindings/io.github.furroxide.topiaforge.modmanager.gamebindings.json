@@ -539,6 +539,122 @@
       "criticality": "Degraded",
       "feature": "Multiplayer: a joined player turns native authority off",
       "sourceRef": "src/TopiaForge.ModManager/Multiplayer/World/Unity/UnityNetworkWorldBackend.cs"
+    },
+    {
+      "id": "manager.presence.camerarotation",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer presence: the local player's pose, health and placement",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/Presence/Unity/UnityPresenceBackend.cs",
+      "member": "GetCameraRotation",
+      "returnType": "UnityEngine.Quaternion",
+      "exactParameters": true,
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "manager.presence.fpscontroller",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer presence: the local player's pose, health and placement",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/Presence/Unity/UnityPresenceBackend.cs",
+      "member": "FPSController",
+      "returnType": "FirstPersonController",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "manager.presence.helditem",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer presence: the local player's pose, health and placement",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/Presence/Unity/UnityPresenceBackend.cs",
+      "member": "HeldItem",
+      "returnType": "Grabbable",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "manager.type.FirstPersonController",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer presence: the local player's pose, health and placement",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/Presence/Unity/UnityPresenceBackend.cs"
+    },
+    {
+      "id": "manager.presence.iscrouched",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer presence: the local player's pose, health and placement",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/Presence/Unity/UnityPresenceBackend.cs",
+      "member": "IsCrouched",
+      "returnType": "System.Boolean",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "manager.presence.cameraattachpoint",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer presence: the local player's pose, health and placement",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/Presence/Unity/UnityPresenceBackend.cs",
+      "member": "CameraAttachPoint",
+      "returnType": "UnityEngine.GameObject",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "manager.presence.teleportto",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer presence: the local player's pose, health and placement",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/Presence/Unity/UnityPresenceBackend.cs",
+      "member": "TeleportTo",
+      "returnType": "System.Void",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "System.Nullable<UnityEngine.Quaternion>",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0
     }
   ]
 }
