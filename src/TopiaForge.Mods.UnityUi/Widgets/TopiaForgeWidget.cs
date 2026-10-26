@@ -90,6 +90,17 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeFocus.Release(Go);
         }
 
+        /// <summary>
+        /// Pushes a dismissible composition rooted in this widget. Back dismisses only the topmost surface;
+        /// navigation belongs to this subtree only while one of its controls is selected, as for a kit window.
+        /// Text fields own typing separately. Remove the surface with <see cref="TopiaForgeDismissStack.Remove"/>
+        /// when it closes. An inactive or destroyed root takes no input.
+        /// </summary>
+        public void PushDismissable(ITopiaForgeDismissable surface)
+        {
+            TopiaForgeDismissStack.Push(surface, TopiaForgeInputClaim.NavigationWhileSelected, Go);
+        }
+
         /// <summary>Destroys the widget's GameObject and unregisters it from theming.</summary>
         public void Destroy()
         {

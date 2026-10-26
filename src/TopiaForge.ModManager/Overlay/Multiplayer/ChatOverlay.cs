@@ -50,7 +50,7 @@ namespace TopiaForge.ModManager.Sessions
                 composer.SetShown(open);
                 log.SetOpen(open);
                 cursor.SetActive(open);
-                if (open) { TopiaForgeDismissStack.Push(this); field.Focus(); }
+                if (open) { root.PushDismissable(this); field.Focus(); }
             }
             screen.SetTyping(open && field.IsFocused);
         }

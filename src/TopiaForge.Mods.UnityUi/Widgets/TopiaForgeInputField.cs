@@ -14,7 +14,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeInputField : TopiaForgeWidget, ITopiaForgeThemeAware
     {
-        private readonly TMP_InputField input;
+        private readonly TopiaForgeTextInput input;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage focusRing;
@@ -86,11 +86,10 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets whether the text field currently has input focus.</summary>
         public bool IsFocused => input.isFocused;
 
-        /// <summary>Focuses this kit text field; input ownership then claims the keyboard for typing.</summary>
+        /// <summary>Focuses this kit text field after held keys are released; input ownership then claims typing.</summary>
         public void Focus()
         {
-            input.Select();
-            input.ActivateInputField();
+            input.FocusWhenReleased();
         }
 
         /// <summary>Ends text entry before the owning composer hides or is destroyed.</summary>

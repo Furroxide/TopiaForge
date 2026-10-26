@@ -174,6 +174,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--ui-input-ownership", StringComparison.Ordinal))
             {
+                ChatViewContractTests.Run();
                 UiKitInputOwnershipTests.Run();
                 UiKitInputOwnershipConventionTests.Run();
                 UiKitIntentConventionTests.Run();

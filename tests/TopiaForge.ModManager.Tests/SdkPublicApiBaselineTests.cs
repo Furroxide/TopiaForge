@@ -71,6 +71,7 @@ namespace TopiaForge.ModManager.Tests
 
         public static void Run()
         {
+            SdkUnityUiCompositionBaselineTests.Run();
             VersionGateBaselineTests();
             var assembly = typeof(SdkPublicApiBaselineTests).Assembly;
             foreach (var baseline in Baselines)
@@ -144,6 +145,7 @@ namespace TopiaForge.ModManager.Tests
             }
 
             Console.WriteLine("Updated SDK public API baselines (" + Baselines.Count + " assemblies).");
+            SdkUnityUiCompositionBaselineTests.Update(repositoryRoot);
         }
 
         private static string CreateBaseline(BaselineSpec baseline)

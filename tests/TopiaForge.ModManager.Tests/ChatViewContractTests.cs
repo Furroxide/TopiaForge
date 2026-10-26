@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static TopiaForge.ModManager.Tests.SessionAssert;
 
 namespace TopiaForge.ModManager.Tests
@@ -21,8 +22,18 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/Multiplayer/Screens/IInSessionScreen.cs",
                 "src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeFocus.cs"
             };
-            var trees = files.Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file))))
-                .Concat(new[] { CSharpSyntaxTree.ParseText(Contracts), CSharpSyntaxTree.ParseText(Probe) });
+            var kit = "src/TopiaForge.Mods.UnityUi/";
+            var inputFiles = new[] { "Core/TopiaForgeInputClaim.cs", "Core/TopiaForgeInputGate.cs", "Core/TopiaForgeDismissOrder.cs",
+                "Core/TopiaForgeNavigationDriver.cs", "Core/TopiaForgeTypingStart.cs", "Runtime/TopiaForgeTextInput.cs" };
+            var methods = "namespace TopiaForge.Mods.UnityUi { public partial class Widget { "
+                + Method(root, kit + "Widgets/TopiaForgeWidget.cs", "PushDismissable")
+                + " } public partial class TopiaForgeInputField { "
+                + Method(root, kit + "Widgets/TopiaForgeInputField.cs", "Focus") + " } }";
+            var contracts = UiKitInputOwnershipTests.TextInputContract.Replace("internal static bool AnyKeyHeld;",
+                "internal static bool AnyKeyHeld => InputProbe.AnyKeyHeld;", StringComparison.Ordinal);
+            var trees = files.Concat(inputFiles.Select(file => kit + file))
+                .Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file))))
+                .Concat(new[] { contracts, Contracts, methods, Probe, InputProbe }.Select(source => CSharpSyntaxTree.ParseText(source)));
             var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
             var compilation = CSharpCompilation.Create("ChatViewProbe" + Guid.NewGuid().ToString("N"), trees,
                 trusted.Select(path => MetadataReference.CreateFromFile(path)),
@@ -33,8 +44,14 @@ namespace TopiaForge.ModManager.Tests
             var assembly = Assembly.Load(bytes.ToArray());
             try { assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null); }
             catch (TargetInvocationException exception) { throw exception.InnerException!; }
-            Console.WriteLine("ChatViewContractTests passed: close click, leave, scene hide, destruction, selection isolation, and 10,000 idle view frames (0 bytes).");
+            try { assembly.GetType("InputProbe")!.GetMethod("Run")!.Invoke(null, null); }
+            catch (TargetInvocationException exception) { throw exception.InnerException!; }
+            Console.WriteLine("ChatViewContractTests passed: 6 input scenarios, close click, leave, scene hide, destruction, selection isolation, and 10,000 idle view frames (0 bytes).");
         }
+
+        // Compile these production methods verbatim too: a hand-written Focus double hid the held-key integration bug.
+        private static string Method(string root, string file, string name) => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file)))
+            .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == name).ToString();
 
         private const string Probe = """
             using System;
@@ -45,12 +62,19 @@ namespace TopiaForge.ModManager.Tests
             {
                 public static void Run()
                 {
+                    EventSystem.current = new EventSystem();
                     var root = new TopiaForgeContainer();
                     var screen = new Screen();
                     var view = new ChatOverlay(root, screen);
                     var indicator = new ConnectionIndicator(root, screen);
                     screen.Open(); view.Tick(true);
+                    TopiaForgeInputField.Last!.Advance(); view.Tick(true);
                     Check(screen.IsTyping && TopiaForgeInputField.Last!.IsFocused, "opening focuses a kit field");
+                    Check(TopiaForgeDismissStack.PushedRoot != root.Go && TopiaForgeDismissStack.PushedRoot?.transform.parent == root.Go.transform
+                        && TopiaForgeInputField.Last.Go.transform.IsChildOf(TopiaForgeDismissStack.PushedRoot.transform)
+                        && TopiaForgeChatLog.Last!.Go.transform.parent == TopiaForgeDismissStack.PushedRoot.transform
+                        && !TopiaForgeLabel.Last!.Go.transform.IsChildOf(TopiaForgeDismissStack.PushedRoot.transform),
+                        "chat claims its own log and composer subtree, never the parent or connection HUD");
                     TopiaForgeContainer.Click("CLOSE");
                     Check(!screen.IsTyping && EventSystem.current.currentSelectedGameObject == null && !TopiaForgeCursorLease.Active && TopiaForgeDismissStack.Count == 0,
                         "closing by click clears the selected button, cursor and typing");
@@ -63,6 +87,8 @@ namespace TopiaForge.ModManager.Tests
                     screen.Open(); view.Tick(true); view.Lost();
                     Check(!screen.IsTyping && !TopiaForgeCursorLease.Active && TopiaForgeDismissStack.Count == 0, "canvas destruction releases ownership");
                     screen.Open(); view.Tick(true);
+                    TopiaForgeInputField.Last!.Advance(); view.Tick(true);
+                    Check(screen.IsTyping, "the idle probe keeps the composer focused");
                     for (var index = 0; index < 200; index++) { view.Tick(true); indicator.Tick(true); }
                     var before = GC.GetAllocatedBytesForCurrentThread();
                     for (var index = 0; index < 10000; index++) { view.Tick(true); indicator.Tick(true); }
@@ -71,7 +97,7 @@ namespace TopiaForge.ModManager.Tests
                     Check(!screen.IsTyping && !TopiaForgeCursorLease.Active, "disposal ends typing");
                 }
                 private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
-                private sealed class Screen : IInSessionScreen
+                internal sealed class Screen : IInSessionScreen
                 {
                     public bool IsAvailable { get; set; } = true;
                     public bool IsOpen { get; private set; }

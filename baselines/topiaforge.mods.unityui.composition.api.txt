@@ -1,0 +1,31 @@
+# Kit composition API (source declarations, not the complete UnityUi assembly)
+# Regenerate with: --update-sdk-api-baselines .
+
+public abstract class TopiaForgeWidget
+  public UiHost Host { get; }
+  public TopiaForgeScheme Scheme { get; }
+  public GameObject Go { get; }
+  public RectTransform Rect { get; }
+  public bool Visible { get; }
+  public void SetVisible(bool value);
+  public void SetShown(bool value);
+  public void ReleaseFocus();
+  public void PushDismissable(ITopiaForgeDismissable surface);
+  public void Destroy();
+
+public sealed class TopiaForgeInputField : TopiaForgeWidget, ITopiaForgeThemeAware
+  public TMP_InputField Input { get; }
+  public string Text { get; }
+  public bool IsFocused { get; }
+  public void Focus();
+  public void Blur();
+  public TopiaForgeInputField PlainText();
+  public TopiaForgeInputField OnSubmit(Action<string> onSubmit);
+  public TopiaForgeInputField Password();
+  public TopiaForgeInputField Search();
+  public void SyncText(string modelValue);
+  public void SetText(string value);
+  public void SetEnabled(bool enabled);
+  public void SetCharacterLimit(int maximumLength);
+  public void SetError(bool hasError);
+  public void ApplyTheme(TopiaForgeResolvedTheme theme);

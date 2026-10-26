@@ -409,6 +409,9 @@ action uses Return. Both are named input actions. Other focused tools keep their
   local and redacted, and a failed command shows its mod's own failure text, redacted, or a general hint when it has
   none.
 - A kit text field owns typing through input ownership; chat never disables a native action map or `PlayerInput`.
+  Chat pushes its own log-and-composer root with `PushDismissable`, the kit window's selection-scoped navigation claim;
+  the connection HUD takes no input. Opening or refocusing the composer waits for every held key to be released.
+  Escape closes only chat, and Enter submits without reaching the game; both presses stay claimed until release.
   Close, submit, leave, session replacement, scene hiding and teardown release typing. Closing by click also clears
   a selected button inside the composer, so the next open key works. Other surfaces keep their selection.
 - `MultiplayerRuntime.IsLocalPlayerTyping` is the named seam for presence (3.10). It carries only a boolean, needs no
@@ -425,7 +428,9 @@ action uses Return. Both are named input actions. Other focused tools keep their
 
 F8's SESSIONS page includes the actual chat and connection views with open, fading, message, rate-limit, connected,
 hosting, reconnecting and left-session states. `InSessionChatTests` covers parsing, abuse, lifecycle, pause actions,
-notices and idle allocation; `ChatViewContractTests` compiles the production views and focus helper over UI doubles.
+notices and idle allocation; `ChatViewContractTests` compiles the production views, composition helpers, text input,
+dismiss order and input gate over UI/TMP doubles. It pins typing, Escape, held submit, both held-key release orders,
+refocusing and selection cancellation, and the boundary between the chat root and the connection HUD.
 `InSessionChatProviderTests` runs real hosts and clients over the virtual network, with and without voice, and exercises
 hostile clients and hosts. Actual glyph rendering, key delivery and layout at both window sizes and UI scales remain
 in-game checks.
