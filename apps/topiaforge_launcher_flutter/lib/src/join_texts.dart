@@ -81,9 +81,9 @@ final class JoinFailureText {
 }
 
 /// The consent sheet's red developer-mode section, shown when the plan takes
-/// mods only the host has from the host itself. Drafted for approval: it is
-/// in `docs/internal/MultiplayerPrivacyText.md`, marked as awaiting approval,
-/// and the sheet uses it word for word.
+/// mods only the host has from the host itself. Its approved wording is in
+/// `docs/internal/MultiplayerPrivacyText.md`, and the sheet uses it word for
+/// word.
 abstract final class JoinHostServedText {
   static const title = 'Mods from the host (developer mode)';
   static const warning =

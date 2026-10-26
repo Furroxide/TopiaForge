@@ -373,14 +373,12 @@ void registerJoinHostServedTests() {
       });
     });
 
-    test('the section says what the draft awaiting approval says, word for '
-        'word', () {
+    test('the section says what the approved wording says, word for word', () {
       final lines = _privacyDocument().split('\n');
       final heading = lines.indexWhere(
-        (line) =>
-            line.startsWith('## ') && line.endsWith('(awaiting approval)'),
+        (line) => line == '## Launcher consent sheet: mods only the host has',
       );
-      expect(heading, isNonNegative, reason: 'the draft is marked as one');
+      expect(heading, isNonNegative, reason: 'the approved section is there');
       final next = lines.indexWhere(
         (line) => line.startsWith('## '),
         heading + 1,
