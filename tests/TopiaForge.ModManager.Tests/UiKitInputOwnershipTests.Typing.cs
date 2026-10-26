@@ -62,7 +62,7 @@ namespace TopiaForge.ModManager.Tests
                 },
                 "AHeldKeyThatReachesTheFieldTypesNothing", "AMoveThatPassesOverTheFieldLeavesItAlone", "AMoveTheKitUndidLeavesNoFieldTyping",
                 "AFieldReachedWithNoKeyHeldStartsAtOnce", "AClickWhileAKeyIsHeldWaitsForItsRelease", "ASubmitWhileItsKeyIsHeldWaitsForItsRelease",
-                "AFieldHiddenWhileItWaitsForgetsIt");
+                "AFieldHiddenWhileItWaitsForgetsIt", "AClickOnASelectedIdleFieldWaitsForHeldKeys");
         }
 
         // A contract double, not TextMesh Pro's code: what the kit's text input relies on of TextMesh Pro's field, as the game's
@@ -260,6 +260,26 @@ namespace TopiaForge.ModManager.Tests
                     TopiaForgeInputOwnership.AnyKeyHeld = false;
                     Frame();
                     Check(field.isFocused, "then the field takes the keyboard");
+                }
+
+                // A completed edit keeps the selection, so clicking again has no OnSelect to guard the start.
+                public static void AClickOnASelectedIdleFieldWaitsForHeldKeys()
+                {
+                    Start();
+                    system.SetSelectedGameObject(field.gameObject);
+                    Frame();
+                    field.DeactivateInputField();
+                    Frame();
+                    Check(!field.isFocused && system.currentSelectedGameObject == field.gameObject, "the completed edit keeps the selection without the keyboard");
+                    TopiaForgeInputOwnership.AnyKeyHeld = true;
+                    field.OnPointerClick(new PointerEventData { button = PointerEventData.InputButton.Left });
+                    for (var frame = 0; frame < 10; frame++) Frame("w");
+                    Check(!field.isFocused && field.text == "Hello", "clicking an already-selected idle field waits for the held key without a new selection event");
+                    TopiaForgeInputOwnership.AnyKeyHeld = false;
+                    Frame();
+                    Check(field.isFocused && field.text == "Hello", "releasing the key starts the clicked field without typing it");
+                    Frame("w");
+                    Check(field.text == "Hellow", "the next fresh key types into the field");
                 }
 
                 // Enter ended an edit, so the field keeps the selection without the keyboard; Enter again starts it.
