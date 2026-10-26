@@ -34,7 +34,7 @@ namespace TopiaForge.ModManager
         private string[] titles = Array.Empty<string>();
         private int selectedTab;
         private bool connectingShown;
-        private string status = "Trusted local mode: install only packages you explicitly trust. C# mods execute code.";
+        private readonly ManagerStatus status = new ManagerStatus();
 
         public ManagerOverlay(TopiaForgeModManagerPlugin plugin, ManagerFileLogger logger)
         {
@@ -101,6 +101,7 @@ namespace TopiaForge.ModManager
             // ESC and cursor are handled by the kit (dismiss stack + per-frame lease). The multiplayer stages run through
             // their guard, so none of them can break this frame or the plugin's.
             multiplayerFrame.Tick(Time.unscaledDeltaTime);
+            if (status.Tick(Time.unscaledDeltaTime)) statusLabel?.SetText(status.Text);
         }
 
         public void Dispose()
@@ -229,7 +230,7 @@ namespace TopiaForge.ModManager
             // ---- main area ----
             var main = body.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
             main.Flex(1f, 1f);
-            statusLabel = main.Label(status, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning);
+            statusLabel = main.Label(status.Text, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning);
             statusLabel.FixedHeight(30f);
             var contentPanel = main.Panel(TopiaForgePanelStyle.Sunken);
             contentPanel.Flex(1f, 1f);
@@ -251,14 +252,14 @@ namespace TopiaForge.ModManager
             // cannot leave destroyed widgets, callbacks, or tweens registered for the rest of the process.
             host.Clear(content);
 
-            statusLabel?.SetText(status);
+            statusLabel?.SetText(status.Text);
             var context = new ManagerTabContext(plugin, host, RunAction, SetStatus, RefreshContent, Close);
             tabs[selectedTab].Build(content, context);
         }
 
         private void SetStatus(string message)
         {
-            status = message;
+            status.Set(message);
             statusLabel?.SetText(message);
         }
 

@@ -77,7 +77,8 @@ namespace TopiaForge.UiGallery
                 "TOPIAFORGE GALLERY — " + scheme.ToString().ToUpperInvariant(),
                 width: 860f,
                 height: 640f,
-                scheme: scheme);
+                scheme: scheme,
+                persistent: true);
 
             var column = window.Content;
 
