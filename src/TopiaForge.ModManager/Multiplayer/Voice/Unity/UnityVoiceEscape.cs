@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager.Voice
         public void Hold(Action onEscape)
         {
             cancel = onEscape ?? throw new ArgumentNullException(nameof(onEscape));
-            TopiaForgeDismissStack.Push(this);
+            TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.Keyboard, null);
         }
 
         public void Release()

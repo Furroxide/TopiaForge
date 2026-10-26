@@ -492,14 +492,14 @@ namespace TopiaForge.ModManager.Tests
     {
         internal const float FrameSeconds = 1f / 60f;
 
-        internal VoiceRig(InternalSessionRole role = InternalSessionRole.Client)
+        internal VoiceRig(InternalSessionRole role = InternalSessionRole.Client, IVoiceInput? input = null, IVoiceEscape? escape = null)
         {
             Control = new RecordingSessionControl { Role = role, Voice = Voice };
             Arbiter.ObserveNativeRecording(Native.Read);
-            Runtime = new VoiceChatRuntime(() => Control, () => Snapshot, Arbiter, Microphone, Input, Emitters);
+            Runtime = new VoiceChatRuntime(() => Control, () => Snapshot, Arbiter, Microphone, input ?? Input, Emitters);
             Queue = new MultiplayerBackgroundQueue(MultiplayerWorkSchedulers.Inline);
             Preferences = new VoicePreferences(Queue, Store, Channel);
-            Presenter = new VoicePresenter(Runtime, Preferences, Queue, Microphone, Input, Bindings, Escape, () => Control, () => Snapshot);
+            Presenter = new VoicePresenter(Runtime, Preferences, Queue, Microphone, input ?? Input, Bindings, escape ?? Escape, () => Control, () => Snapshot);
         }
 
         internal FakeVoiceService Voice { get; } = new FakeVoiceService();

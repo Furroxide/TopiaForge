@@ -119,7 +119,7 @@ namespace TopiaForge.ModManager.Voice
                 }
 
                 var button = Button();
-                return button != null && button.wasPressedThisFrame;
+                return (button != null && button.wasPressedThisFrame) || (key != Key.None && TopiaForgeInputOwnership.KeyPressedThisFrame(key));
             }
 
             private ButtonControl? Button()

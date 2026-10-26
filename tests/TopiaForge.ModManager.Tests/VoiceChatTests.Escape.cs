@@ -95,8 +95,9 @@ namespace TopiaForge.ModManager.Tests
             var overlay = TypeIn(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "ManagerOverlay.cs"), "ManagerOverlay");
             That(BandOf(adapter) == "TopiaForgeLayerBand.Modal" && BandOf(overlay) == "TopiaForgeLayerBand.Window" && LayerBand.Modal > LayerBand.Window,
                 "a capture's Esc beats the overlay's on the kit's stack (" + BandOf(adapter) + " over " + BandOf(overlay) + ")");
-            That(Calls(adapter, "Hold", "TopiaForgeDismissStack.Push") && Calls(adapter, "Release", "TopiaForgeDismissStack.Remove"),
-                "holding pushes the capture onto the kit's stack, and releasing removes it");
+            That(Calls(adapter, "Hold", "TopiaForgeDismissStack.Push", "this", "TopiaForgeInputClaim.Keyboard", "null") &&
+                 Calls(adapter, "Release", "TopiaForgeDismissStack.Remove", "this"),
+                "holding claims the keyboard on the kit's stack without a separate root, and every release removes it");
             var dismiss = adapter.Members.OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "Dismiss");
             var steps = dismiss.Body!.Statements;
             That(steps.Count == 3 && steps[1].ToString() == "Release();" && steps[2] is TryStatementSyntax attempt && attempt.Catches.Count == 1,
@@ -106,17 +107,29 @@ namespace TopiaForge.ModManager.Tests
             // within it, the latest pushed; the consent is a kit modal, in the modal band and pushed as it shows; and closing it
             // any way answers no.
             var kit = Path.Combine(root, "src", "TopiaForge.Mods.UnityUi");
-            var picks = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(kit, "Runtime", "TopiaForgeDismissStack.cs"))).GetRoot().DescendantNodes()
-                .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "Top");
-            That(picks.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(test => test.ToString() == "entry.Band >= top.Band"),
+            var stack = TypeIn(Path.Combine(kit, "Runtime", "TopiaForgeDismissStack.cs"), "TopiaForgeDismissStack");
+            var picks = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(kit, "Core", "TopiaForgeDismissOrder.cs"))).GetRoot().DescendantNodes()
+                .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "TopIndex");
+            That(Calls(stack, "Top", "Order.Top") &&
+                 picks.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(test => test.ToString() == "surfaces[index].Band >= surfaces[top].Band"),
                 "the kit's stack dismisses the highest band and, within it, the latest pushed");
             var modal = TypeIn(Path.Combine(kit, "Widgets", "TopiaForgeModal.cs"), "TopiaForgeModalInstance");
-            That(BandOf(modal) == "TopiaForgeLayerBand.Modal" && Calls(modal, "Show", "TopiaForgeDismissStack.Push"),
-                "a kit modal joins the stack in the modal band as it shows");
+            That(BandOf(modal) == "TopiaForgeLayerBand.Modal" &&
+                 Calls(modal, "Show", "TopiaForgeDismissStack.Push", "this", "TopiaForgeInputClaim.Navigation", "canvasRoot"),
+                "a kit modal joins the stack in the modal band and owns navigation as it shows");
             var consent = TypeIn(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer", "MultiplayerVoiceView.cs"), "MultiplayerVoiceView")
                 .Members.OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "AskConsent").Body!.ToString();
             That(consent.Contains("host.Modal.Custom(", StringComparison.Ordinal) && consent.Contains("modal.Show();", StringComparison.Ordinal) &&
                  consent.Contains("modal.Closed += () => question.Answer(false);", StringComparison.Ordinal), "the consent is such a modal, and closing it any way answers no");
+            That(consent.Contains("var decline = row.Button(question.DeclineLabel, () => question.Answer(false));", StringComparison.Ordinal) &&
+                 consent.IndexOf("decline.Focus();", StringComparison.Ordinal) > consent.IndexOf("modal.Show();", StringComparison.Ordinal),
+                "the consent focuses Not now after showing, so Enter and controller A decline");
+
+            var probe = TypeIn(Path.Combine(root, "src", "TopiaForge.ModManager", "Multiplayer", "Voice", "Unity", "UnityVoiceInput.cs"), "Probe");
+            var pressed = probe.Members.OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "WasPressed");
+            That(pressed.Body!.Statements.Last() is ReturnStatementSyntax returns && returns.Expression!.ToString() ==
+                 "(button != null && button.wasPressedThisFrame) || (key != Key.None && TopiaForgeInputOwnership.KeyPressedThisFrame(key))",
+                "with the Input System alone the capture reads the kit's taken keys too, without treating a mouse button as a key");
         }
 
         private static void CancelledAlone(VoiceRig rig, string order) =>
@@ -131,10 +144,10 @@ namespace TopiaForge.ModManager.Tests
         private static string BandOf(ClassDeclarationSyntax type) =>
             type.Members.OfType<PropertyDeclarationSyntax>().Single(property => property.Identifier.ValueText == "Band").ExpressionBody?.Expression.ToString() ?? string.Empty;
 
-        private static bool Calls(ClassDeclarationSyntax type, string method, string callee) =>
+        private static bool Calls(ClassDeclarationSyntax type, string method, string callee, params string[] arguments) =>
             type.Members.OfType<MethodDeclarationSyntax>().Where(declared => declared.Identifier.ValueText == method)
                 .SelectMany(declared => declared.DescendantNodes().OfType<InvocationExpressionSyntax>())
-                .Any(call => call.Expression.ToString() == callee && call.ArgumentList.Arguments.Count == 1 &&
-                             call.ArgumentList.Arguments[0].Expression is ThisExpressionSyntax);
+                .Any(call => call.Expression.ToString() == callee &&
+                             call.ArgumentList.Arguments.Select(argument => argument.Expression.ToString()).SequenceEqual(arguments));
     }
 }

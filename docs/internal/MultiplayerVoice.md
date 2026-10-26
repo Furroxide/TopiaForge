@@ -937,8 +937,12 @@ Esc cancels a binding capture, and only the capture. While a capture waits it ho
 stack, in the modal band above the overlay's window, and the capture's own frame leaves Esc to that stack. Esc
 therefore never closes the overlay too, whichever of the kit's driver and voice chat's frame reads the press first.
 Every other end of a capture, binding a control, asking again, leaving VOICE or the game closing, gives Esc back
-to the overlay. The game's own input still sees the key: the kit cannot consume input before the game reads it,
-and native input isolation while the overlay is open is a separate change.
+to the overlay. The capture claims the keyboard through the kit's input ownership and reads the presses the kit
+took, including when only the Input System is available. Captured presses stay out of the game's Input System
+actions and yielding mod actions until release, even after the capture or overlay closes. Focused text input
+keeps its keys out of a waiting voice binding too. The consent modal owns navigation, so Enter or controller A
+on **Not now** presses nothing beneath it. These are the kit's shared rules, not a voice-only input filter; raw
+legacy input reads retain the limitation documented in [UiKit.md](../UiKit.md#input-and-focus).
 
 ### 4.4 Consent and preferences
 
@@ -985,6 +989,11 @@ read once at every claim and watched from before mods load, approved consent, wi
 concurrency and failures, indicator states, reserved/censused controls, rebinding, Esc during a capture with the
 consent opened over it, devices, stable and session-scoped mutes, playback, allocation, wait-free callback shape and
 bounds.
+Four voice integration cases in `UiKitInputOwnershipTests` run the voice presenter against the kit's real input
+gate, dismiss order and navigation driver: consent by Enter and controller A, captured keys held across close,
+capture-only Escape in either frame order, and text focus while capturing. Unity adapter contracts supply the
+input and dismiss calls; source pins check the production keyboard claim, taken-key read and consent default.
+VOICE currently has no editable text field; the kit's separate text-field probes cover typing and held-key activation.
 Provider tests carry push-to-talk capture through the real SPI and codec to another player's stream, and keep
 player-key mutes across a move to another host and back, on the deterministic virtual network.
 
