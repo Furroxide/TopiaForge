@@ -34,6 +34,8 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && args[0] == "--overlay-refresh") { OverlayRefreshTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--arena-lifecycle") { ArenaLifecycleTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--log-privacy")
+            { DiagnosticPathRedactorTests.Run(); SafeEventTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit-event-systems")
             {
                 try { UiKitEventSystemTests.Run(); return 0; }
@@ -562,6 +564,7 @@ namespace TopiaForge.ModManager.Tests
                 MainThreadDispatchQueueTests.Run();
                 MainThreadGuardTests.Run();
                 SafeEventTests.Run();
+                DiagnosticPathRedactorTests.Run();
                 ChronosTests.Run();
                 SessionTimeTests.Run();
                 CreatorContentTests.Run();

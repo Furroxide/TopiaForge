@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using BepInEx.Logging;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
@@ -73,6 +74,9 @@ namespace TopiaForge.ModManager
 
         public void Write(string level, string source, string message)
         {
+            level = DiagnosticPathRedactor.Redact(level);
+            source = DiagnosticPathRedactor.Redact(source);
+            message = DiagnosticPathRedactor.Redact(message);
             var consoleMessage = string.Equals(source, "manager", StringComparison.Ordinal)
                 ? message
                 : "[" + source + "] " + message;
@@ -165,6 +169,7 @@ namespace TopiaForge.ModManager
 
         private void EmitToBepInEx(string level, string message)
         {
+            message = DiagnosticPathRedactor.Redact(message);
             try
             {
                 switch (level)
@@ -195,7 +200,7 @@ namespace TopiaForge.ModManager
         {
             try
             {
-                Console.Error.WriteLine(message);
+                Console.Error.WriteLine(DiagnosticPathRedactor.Redact(message));
             }
             catch
             {

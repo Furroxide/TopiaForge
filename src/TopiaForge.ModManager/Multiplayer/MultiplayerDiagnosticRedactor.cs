@@ -83,6 +83,7 @@ namespace TopiaForge.ModManager
         internal static string Redact(string? text)
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
+            text = DiagnosticPathRedactor.Redact(text);
             try
             {
                 StringBuilder? builder = null;
