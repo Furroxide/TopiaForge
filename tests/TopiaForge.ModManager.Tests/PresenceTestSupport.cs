@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             PresencePlausibilityTests.Run();
+            PresenceFirstPoseTests.Run();
+            PresenceFirstPoseHostTests.Run();
             PresenceWireTests.Run();
             PresenceTests.Run();
             PresenceRulesTests.Run();

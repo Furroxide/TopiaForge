@@ -215,7 +215,7 @@ namespace TopiaForge.ModManager
             if (Realm != NetRealm.ListenHost || !peersById.TryGetValue(participant, out var peer) || !peer.HasPose) return null;
             if (peer.IsLocal) return Local.HasPlayer ? NetQuantization.DequantizePosition(peer.Position) : (NetVector3?)null;
             var check = peer.Plausibility;
-            if (!peer.IsConnected || peer.Removed || check == null || !check.IsFresh(Now())) return null;
+            if (!Host.IsCurrentWorld || !peer.IsConnected || peer.Removed || check == null || !check.IsFresh(Now())) return null;
             return NetQuantization.DequantizePosition(check.Anchor);
         }
 
@@ -281,7 +281,6 @@ namespace TopiaForge.ModManager
                     nametagVersion++;
                 }
 
-                if (peer.IsConnected != participant.IsConnected && Realm == NetRealm.ListenHost) Host.LinkChanged(peer, participant.IsConnected, nowMicros);
                 peer.IsConnected = participant.IsConnected;
                 peer.Seen = true;
             }
@@ -314,7 +313,7 @@ namespace TopiaForge.ModManager
             nametagVersion++;
         }
 
-        private void DisposeAvatar(PresencePeer peer)
+        internal void DisposeAvatar(PresencePeer peer)
         {
             var avatar = peer.Avatar;
             peer.Avatar = null;

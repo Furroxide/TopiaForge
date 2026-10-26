@@ -2150,6 +2150,10 @@ of the packet's claimed position. No accepted pose yet, a stale pose, a lost lin
 there is no fallback to the packet. The resolver seam remains internal. Displacement speed, sender, epoch, permission
 and budget checks still apply.
 
+The first remote pose must establish a position near a host-trusted readiness spawn or land on a pending host
+placement. Merely sending a first pose near a distant body cannot unlock that body's motion range. A world or scene
+instance change invalidates the resolver immediately, including calls before presence's next receive stage.
+
 Bodies moved with `AcquireMotion` get ownership automatically. Host-authored changes continue through ordinary world
 snapshots. Arbitrary raw Unity rigidbody writes cannot be attributed reliably to a player's intent; tools should use
 the SDK lease. A future analyzer can flag direct transform/velocity writes in shared player tools and suggest that
@@ -2582,8 +2586,22 @@ The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in
   placements are accepted by their landing, and corrections return to the host's validated anchor within its budget.
   A short placement or correction therefore cannot suppress a later own teleport's flag.
 - **Placement.** The first pose within 2 m of the host's own placement, within ten seconds of it, is taken as it.
-  If arrival precedes the player's first pose, that first pose establishes its anchor without consuming the pending
-  placement; only the landing consumes it. A host placement spends none of the player's own teleport allowance.
+  If arrival precedes the player's first pose, a pose near the trusted readiness spawn can establish its anchor without
+  consuming the pending placement; only the landing consumes it. A host placement spends none of the player's own
+  teleport allowance. The deadline is inclusive; an expired placement gives no first-pose permission.
+- **First pose.** Until a pose is accepted, its teleport flag grants no permission. The host supplies the running
+  world's actual `Readiness.Spawn`, never the joining player's reported position. The first pose may be within 2 m of
+  that spawn plus travel at the speed limits since the host first supplied it for that player, capped at two seconds
+  (62 m running or climbing, 130 m falling). This accommodates movement while messages arrive without allowing the
+  region to grow across the world. A pending, unexpired host placement is a separate trusted landing. A refused first
+  pose creates no avatar, public pose or motion position; a correction to a trusted target does not itself validate it.
+  Without either trusted source, poses are ignored without strikes or corrections until readiness or a host placement
+  supplies one. Missing, non-finite, unrepresentable or invalid readiness never substitutes the origin.
+- **Restarts and links.** A host world or active scene-instance change clears accepted poses, interpolation, avatars,
+  old placements and readiness references before receiving new poses. Arrival alone does not restart validation;
+  repeating it does not replenish allowances. Running credit, teleport credit and strikes survive world restarts.
+  A link or stream return retains the last accepted anchor and those allowances, so ordinary movement during a short
+  interruption stands while a new arbitrary position does not. Disconnected and stale positions still fail motion.
 - **Corrections.** A pose that breaks a rule is dropped, and the player is sent back to its last accepted position under
   a new correction number (`Correct`), keeping the credit it had: a correction never refills the bank, so a cheat is
   struck again as soon as it runs past the limit. Poses still carrying the old number are ignored for a second, as they
@@ -2639,6 +2657,12 @@ there, facing the way the spawn faces, if it still runs that world. A player is 
 when its player leaves or arrives in another world; with no slot that fits, or no spawn known, the player stays where
 its world put it.
 
+That fallback uses the same readiness spawn for the first-pose check. Native Build Scenes and curated worlds resolve
+through their scene and checkpoint loaders, then `WorldPreparation` reads the native default and applies it through
+`ApplySpawn`, reading the actual transform back on a later frame. Open Sandbox uses the native bootstrap for a scene
+replacement, or the host's captured base placement for an additive arena, then retains the applied readiness spawn.
+No extra spawn declaration or networking code is needed from an author.
+
 ### Lookups and seams
 
 - **The session's lookups.** Presence is the session's avatar source (`SetAvatarSource`): `TryGetAvatar` answers the
@@ -2676,6 +2700,9 @@ its world put it.
   - `PresencePlausibilityTests`: the speed budget and its bank, a steady run past the limit caught as its bank runs dry,
     climbing and falling, the bounds and their margins, the teleport allowance, poses on their way, the fifth strike,
     forgiveness and honest spikes, placements, away, freshness, and the health rules with their catch-up.
+  - `PresenceFirstPoseTests`, `PresenceFirstPoseHostTests`: missing and invalid trust, bounded movement during delivery,
+    arrival ordering, expected landing deadlines with either teleport flag, a blocked or unrepresentable ring, world
+    and scene-instance changes before arrival, immediate motion invalidation and retained allowances on link return.
   - `PresenceWireTests`: seeded round trips within the quantization's stated errors, relays of 1 to 32 poses, and every
     payload cut, padded, bent or naming what it may not, refused whole.
   - `PresenceTests`, over the loopback network with a real composition root on each peer: three players placed on the
@@ -2722,6 +2749,10 @@ its world put it.
 - **No lag compensation.** An avatar shows the past by the interpolation delay, 80 ms at least, and on a joined player
   the relay's 50 ms more.
 - **The engine side is checked only in the game.**
+- **A native level outside a world session has no readiness spawn.** Until a host placement supplies a trusted start,
+  remote presence and motion remain unavailable there. No native-controller coordinate or default world position is
+  substituted. Live checks must confirm native loader placement timing and honest movement during join on each world
+  provider; deterministic harness evidence does not establish that timing.
 
 ### Choices
 

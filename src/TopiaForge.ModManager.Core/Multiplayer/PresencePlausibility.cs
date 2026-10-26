@@ -71,10 +71,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>The flags that stand for an accepted pose: a claim of being away while moving is cleared.</summary>
         public PresenceFlags Flags { get; }
 
-        /// <summary>Whether a correction names where to move the player: false while the host has no validated position for it.</summary>
+        /// <summary>Whether a correction names a trusted destination: a validated pose, pending placement or readiness spawn.</summary>
         public bool HasCorrection { get; }
 
-        /// <summary>Where the player goes back to: its last validated position.</summary>
+        /// <summary>Where the player goes back to; a trusted first-pose target is not itself an accepted pose.</summary>
         public NetQuantizedPosition CorrectTo { get; }
 
         /// <summary>The correction's number, which the player's poses carry once it took it.</summary>
@@ -104,6 +104,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private bool placementExpected;
         private NetQuantizedPosition placement;
         private long placementDeadlineMicros;
+        private bool hasInitialPosition;
+        private NetQuantizedPosition initialPosition;
+        private long initialMicros;
 
         public PresencePlausibility(PresencePolicy policy, long nowMicros)
         {
@@ -148,16 +151,23 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public bool IsFresh(long nowMicros) => HasAnchor && nowMicros - LastAcceptedMicros <= policy.StaleAfterMicros;
 
         /// <summary>
-        /// Starts measuring again from the next pose, keeping strikes and the teleport allowance: the player went into
-        /// another world, or rejoined.
+        /// Waits for a trusted start in a new world, keeping strikes and both movement allowances.
         /// </summary>
         public void Restart(long nowMicros)
         {
             HasAnchor = false;
             placementExpected = false;
-            credit = policy.BankUnits;
-            fallCredit = policy.FallBankUnits;
-            anchorMicros = nowMicros;
+            hasInitialPosition = false;
+            Accrue(nowMicros);
+        }
+
+        /// <summary>Supplies the host's readiness spawn once per world; this is not an accepted player pose.</summary>
+        public void SetInitialPosition(NetQuantizedPosition position, long nowMicros)
+        {
+            if (HasAnchor || hasInitialPosition) return;
+            hasInitialPosition = true;
+            initialPosition = position;
+            initialMicros = nowMicros;
         }
 
         /// <summary>The host placed the player at <paramref name="position"/>: the pose that lands there is taken as it.</summary>
@@ -177,6 +187,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             long nowMicros,
             in PresenceBounds bounds)
         {
+            if (placementExpected && nowMicros > placementDeadlineMicros) placementExpected = false;
+            // Without a trusted start there is no place to validate or correct to. Wait without spending any allowance.
+            if (!HasAnchor && !hasInitialPosition && !placementExpected)
+                return new PresenceCheck(PresenceVerdict.Ignored, PresenceViolation.None, PresenceFlags.None, false, default, Correction, Strikes);
             Forgive(nowMicros);
             if (correction != Correction)
             {
@@ -190,14 +204,19 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             }
 
             if (!bounds.Contains(position)) return Strike(PresenceViolation.Bounds, nowMicros);
-            if (placementExpected && Lands(position, nowMicros))
+            if (placementExpected && Lands(position))
             {
                 placementExpected = false;
                 return Accept(position, rotation, flags, nowMicros, resetCredit: true);
             }
 
-            // The arrival can precede the first pose. That pose anchors the player but does not consume a pending landing.
-            if (!HasAnchor) return Accept(position, rotation, flags, nowMicros, resetCredit: true);
+            // A pose in flight before the placement may still be near the readiness spawn. It must prove that start,
+            // even with a teleport flag, and must not consume the pending host landing.
+            if (!HasAnchor)
+            {
+                if (!hasInitialPosition || !NearInitialPosition(position, nowMicros)) return Strike(PresenceViolation.Speed, nowMicros);
+                return Accept(position, rotation, flags, nowMicros, resetCredit: false);
+            }
 
             Accrue(nowMicros);
             var dx = (long)position.X - Anchor.X;
@@ -220,16 +239,23 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return Accept(position, rotation, flags, nowMicros, resetCredit: true);
         }
 
-        private bool Lands(NetQuantizedPosition position, long nowMicros)
+        private bool Lands(NetQuantizedPosition position)
         {
-            if (nowMicros > placementDeadlineMicros)
-            {
-                placementExpected = false;
-                return false;
-            }
-
             var tolerance = (long)policy.PlacementToleranceUnits;
             return position.DistanceSquaredTo(placement) <= tolerance * tolerance;
+        }
+
+        private bool NearInitialPosition(NetQuantizedPosition position, long nowMicros)
+        {
+            // Allow honest movement during delivery, but never grow a first-pose region beyond two seconds of travel.
+            var elapsed = Math.Min(policy.SpeedBankMicros, Math.Max(0, nowMicros - initialMicros));
+            var dx = (long)position.X - initialPosition.X;
+            var dy = (long)position.Y - initialPosition.Y;
+            var dz = (long)position.Z - initialPosition.Z;
+            var up = Math.Max(dy, 0);
+            var run = NetIntegerMath.CeilingSqrt(dx * dx + dz * dz + up * up);
+            return run <= policy.PlacementToleranceUnits + policy.SpeedUnitsPerSecond * elapsed / 1_000_000
+                && Math.Max(-dy, 0) <= policy.PlacementToleranceUnits + policy.FallUnitsPerSecond * elapsed / 1_000_000;
         }
 
         private PresenceCheck Accept(NetQuantizedPosition position, uint rotation, PresenceFlags flags, long nowMicros, bool resetCredit)
@@ -277,7 +303,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
             // The player goes back to where it last stood within the rules, with the credit it had: a correction never refills
             // the bank, so a cheat corrected once is struck again as soon as it runs past the limit.
-            return new PresenceCheck(PresenceVerdict.Corrected, violation, PresenceFlags.None, HasAnchor, Anchor, Correction, Strikes);
+            var target = HasAnchor ? Anchor : placementExpected ? placement : initialPosition;
+            return new PresenceCheck(PresenceVerdict.Corrected, violation, PresenceFlags.None,
+                HasAnchor || placementExpected || hasInitialPosition, target, Correction, Strikes);
         }
 
         private void Forgive(long nowMicros)

@@ -103,6 +103,9 @@ namespace TopiaForge.ModManager.Tests
                 var player = rig.AddPlayer("p1");
                 var slot = SpawnSlotPlanner.SlotOffset(0);
                 player.Feet = new NetVector3(slot.X, slot.Y, slot.Z - distance);
+                rig.Host.Spawn = new TransformState(new Vec3(player.Feet.X, player.Feet.Y, player.Feet.Z), Quat.Identity, new Vec3(1f, 1f, 1f));
+                // Keep the requested landing independent of the readiness spawn to exercise both movement lengths.
+                rig.Host.Backend.Ground = _ => slot;
                 rig.Join(player);
                 That(player.Backend.Teleports.Count == 1 && Near(player.Feet, slot, 0.001f), "the host's placement reaches its slot");
                 That(rig.Host.Counters.Corrections == 0, "short and distant expected placements are accepted");
@@ -113,7 +116,7 @@ namespace TopiaForge.ModManager.Tests
         private static void AShortCorrectionPreservesLaterTeleports()
         {
             var rig = new PresenceRig();
-            rig.Host.Spawn = null;
+            rig.Host.Backend.Clear = _ => false;
             rig.HostWith(1);
             var player = rig.Players[0];
             var anchor = rig.Host.Presence.ValidatedPosition(player.Id)!.Value;

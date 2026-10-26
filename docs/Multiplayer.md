@@ -43,6 +43,10 @@ velocities to the host; another player may catch it during that window. Native h
 Offline behavior stays local. Raw Unity writes outside the SDK lease cannot be attributed automatically to a player.
 Remote range uses the host's last validated presence position, never the position claimed in a motion packet. A player
 with no validated pose yet, a stale pose, or a lost link cannot acquire a remote body until a fresh pose is accepted.
+The first pose must be near the running world's actual readiness spawn or land on a placement the host requested.
+World and scene restarts clear old positions; reconnects retain validation history and movement allowances. If no
+trusted spawn or placement is available, remote presence and motion wait for one. This includes native levels running
+outside a world session. Authors using world providers need no extra spawn or networking calls.
 The motion limits and integration notes are maintainer-internal, in the "Motion ownership" section of
 `docs/internal/MultiplayerRuntimeIntegration.md`.
 

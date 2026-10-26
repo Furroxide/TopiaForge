@@ -49,7 +49,6 @@ namespace TopiaForge.ModManager
             TakeOwnPose(nowMicros);
             var open = presence.Channel;
             if (open == null) return;
-            FollowStreams(open, nowMicros);
             if (presence.Roster.Version != rosterSent) BroadcastRoster(open);
             var all = presence.Peers;
             for (var index = 0; index < all.Count; index++)
@@ -89,8 +88,8 @@ namespace TopiaForge.ModManager
             if (sampler.TryTakeState(nowMicros)) own.SetState(sampler.Health, sampler.MaximumHealth, sampler.HeldItem);
         }
 
-        /// <summary>A stream that started or restarted owes its player the roster and every state; a player back on its link starts afresh.</summary>
-        private void FollowStreams(IInternalSystemChannel open, long nowMicros)
+        /// <summary>A stream that started or restarted owes its player the roster and every state; validation history stays.</summary>
+        private void FollowStreams(IInternalSystemChannel open)
         {
             var generation = open.Generation;
             if (generation == generationSeen) return;
@@ -106,7 +105,6 @@ namespace TopiaForge.ModManager
                 if (stream == 0) continue;
                 peer.NeedsCatchUp = true;
                 peer.Scheduler = new ReplicationScheduler(RelayBudgetBytesPerTick);
-                peer.Plausibility?.Restart(nowMicros);
             }
         }
 

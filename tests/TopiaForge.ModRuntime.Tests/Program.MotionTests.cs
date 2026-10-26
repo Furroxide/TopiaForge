@@ -27,7 +27,11 @@ namespace TopiaForge.ModRuntime.Tests
                 {
                     game.Game.Presence.HasPlayer = true;
                     game.Start();
+                    // These fake scenes have no orchestrator; provide their host-trusted readiness explicitly.
+                    game.Runtime.Presence.RunningWorld = () => "motion-world";
+                    game.Runtime.Presence.RunningSpawn = () => TransformState.Identity;
                 }
+                host.Game.Presence.Clear = _ => false;
                 host.LoadScene("Yard", true);
                 Assert(host.Runtime.Multiplayer.OpenToMultiplayer(new InternalHostSettings("Motion", 4)).Succeeded, "motion's host opens");
                 WorldFrames(games, clock, 3);

@@ -35,6 +35,14 @@ namespace TopiaForge.ModManager
 
         internal bool HasPose { get; private set; }
 
+        internal void ClearPose()
+        {
+            HasPose = false;
+            HasFed = false;
+            HasClockOffset = false;
+            Buffer?.Reset();
+        }
+
         /// <summary>Gets the pose's time on the host's clock, in microseconds.</summary>
         internal long PoseMicros { get; private set; }
 
