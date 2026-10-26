@@ -28,7 +28,65 @@ namespace TopiaForge.ModManager.Tests
             KitTextFieldsTakeTheKeyboard();
             AModsActionsYieldOnlyToWhatHoldsTheirControls();
             TheGamesNavigationKeysAreTakenWithTheKitsOwn();
+            TheMouseWorksOnTheKitsSurfacesAndNothingElseOfTheGamesChanges();
             Console.WriteLine("UiKitInputOwnershipConventionTests passed.");
+        }
+
+        /// <summary>
+        /// The kit keeps the mouse working on its surfaces only while one shows the cursor: it turns the UI module's own
+        /// pointer actions back on where the game left them off, never its navigate, submit or cancel, and puts back only
+        /// what it turned on; it scrolls only its own controls with the wheel; and its scroll views follow the selection.
+        /// UiKitInputOwnershipTests runs both against contract doubles.
+        /// </summary>
+        private static void TheMouseWorksOnTheKitsSurfacesAndNothingElseOfTheGamesChanges()
+        {
+            var pointer = Kit("Runtime", "TopiaForgePointer.cs");
+            Require(pointer, "var wanted = module != null && TopiaForgeCursor.ActiveLeases > 0;",
+                "only while a TopiaForge surface shows the cursor, so a HUD changes nothing");
+            foreach (var slot in new[] { "module.point", "module.leftClick", "module.rightClick", "module.middleClick", "module.scrollWheel" })
+            {
+                Require(pointer, slot, "the module's pointer actions are looked after");
+            }
+
+            foreach (var forbidden in new[]
+            {
+                "module.move", "module.submit", "module.cancel", "SwitchCurrentActionMap", "actionsAsset", "ApplyBindingOverride",
+                "currentInputModule =", ".point =", ".leftClick =", ".scrollWheel =", "InputActionMap", "AssignDefaultActions",
+            })
+            {
+                Assert(!pointer.Contains(forbidden, StringComparison.Ordinal),
+                    "the kit never touches the game's navigation, its maps or the module's own references ('" + forbidden + "')");
+            }
+
+            Assert(Regex.Matches(pointer, @"\.Enable\(\)").Count == 1 && Regex.Matches(pointer, @"\.Disable\(\)").Count == 1,
+                "an action is turned on or off in one place only, where the kit's own changes are told from the game's");
+            var change = Between(pointer, "private static void Change(InputAction action, bool enable)", "private static bool Holding()");
+            Require(change, "changing = true;", "the kit's own change is marked");
+            Require(change, "changing = false;", "and unmarked whatever happens");
+            var watch = Between(pointer, "private static void OnActionChange(", "private static void Scroll(");
+            Require(watch, "Holds[slot].Superseded();", "the game's own change to a held action or its map stands");
+            Require(watch, "ReferenceEquals(changed, action.actionMap)", "its map's change counts too, as the pause menu's does");
+            var scroll = Between(pointer, "private static void Scroll(", "\n    }\n}");
+            Require(scroll, "TopiaForgeInputOwnership.IsKitObject(top)", "the wheel scrolls only TopiaForge's own controls");
+            Require(scroll, "notches * module.scrollDeltaPerTick", "by as much as the module's own wheel would");
+            Require(Between(pointer, "internal static void Tick()", "internal static void Reset()"), "if (wanted && Actions[ScrollWheel] == null)",
+                "and only where the module has no wheel of its own");
+
+            var follow = Kit("Runtime", "TopiaForgeScrollFollow.cs");
+            Require(follow, "TopiaForgeInputOwnership.IsKitObject(selected)", "scroll views follow only the kit's own controls");
+            Require(follow, "!item.IsChildOf(scroll.content)", "inside a scroll view's content");
+
+            var runtime = Kit("Runtime", "TopiaForgeRuntime.cs");
+            var update = Between(runtime, "private void Update()", "TopiaForgeToasts.Tick(");
+            var navigation = update.IndexOf("TopiaForgeNavigation.Tick(", StringComparison.Ordinal);
+            Assert(navigation >= 0 && update.IndexOf("TopiaForgePointer.Tick();", StringComparison.Ordinal) > navigation
+                && update.IndexOf("TopiaForgeScrollFollow.Tick();", StringComparison.Ordinal) > navigation,
+                "the driver looks after the pointer and follows the selection every frame, after the kit navigates");
+            Require(Between(runtime, "private void OnDisable()", "private void OnApplicationFocus("), "TopiaForgePointer.Reset();",
+                "the driver stopping puts the game's pointer back");
+            var shutdown = Between(Kit("TopiaForgeUi.cs"), "public static void Shutdown()", "internal static void OnHostDisposed(");
+            Require(shutdown, "TopiaForgePointer.Reset();", "and so does the kit's teardown");
+            Require(shutdown, "TopiaForgeScrollFollow.Reset();", "which forgets the selection followed");
         }
 
         /// <summary>
@@ -325,7 +383,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void NoDeviceNameReachesALog()
         {
-            foreach (var source in new[] { Ownership(), Kit("Runtime", "TopiaForgeNavigateAction.cs") })
+            foreach (var source in new[] { Ownership(), Kit("Runtime", "TopiaForgeNavigateAction.cs"), Kit("Runtime", "TopiaForgePointer.cs") })
             {
                 var logs = 0;
                 for (var at = source.IndexOf("TopiaForgeLog.", StringComparison.Ordinal); at >= 0; at = source.IndexOf("TopiaForgeLog.", at + 1, StringComparison.Ordinal))

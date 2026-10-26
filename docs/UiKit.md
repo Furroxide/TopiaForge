@@ -154,8 +154,19 @@ Surfaces own the input they handle, with no code in the mod:
   Typing reaches the field and none of it the game; Escape cancels a capture without closing the
   window around it. A text field reached while a key is held, by navigation, a click or its surface
   opening, takes the keyboard only once every key is released, so a held key never types into it.
-- **Everything else passes through unchanged**: the mouse, every key no surface handles, and the
-  game's own controls.
+- **The mouse** works on every surface that shows the cursor, after the game's pause menu too.
+  Robotopia turns its whole menu map off as its pause menu closes, pointer and all. While a surface
+  shows the cursor, the kit turns the UI module's own pointer actions back on where the game left
+  them off, the position and the buttons only, never navigation, submit or cancel, and turns them off
+  again as the last such surface closes; what the game changes meanwhile stands, and at the game's
+  menus, where its pointer is on, nothing changes. The wheel scrolls the TopiaForge control under
+  the pointer, by as much as the module's own wheel would; the game's own menus never see it. A
+  surface that does not show the cursor, such as a HUD, changes nothing.
+- **Scroll views follow the selection.** A control the keyboard or a controller moves to inside a
+  kit scroll view scrolls into view, just far enough to show it in full. Disabled scroll views keep
+  their position and motion unchanged.
+- **Everything else passes through unchanged**: the mouse's own events, every key no surface
+  handles, and the game's own controls.
 
 A mod's action yields to the UI the same way, control by control (`suppressWhileUiFocused`, the
 default): to every control while a modal, a fullscreen tool, the manager, a key capture or a text
@@ -232,9 +243,12 @@ A kit surface says what it takes when it joins the dismiss stack:
 controller event before any Input System action does. It holds a claimed press at rest in that event,
 and in every later one until the control is released, and the kit reads the press itself. It changes
 no action map, UI module or binding of the game's, so nothing has to be restored, and with no claim
-every event passes at once. A surface whose root is destroyed or hidden claims nothing. A taken press
-never reaches the device, so first-party code that reads a key's press through the Input System also
-reads `TopiaForgeInputOwnership.KeyPressedThisFrame(key)`, as hotkeys and key captures do. Each
+every event passes at once. The one thing of the game's the kit turns on is the UI module's pointer
+actions, while a surface shows the cursor and only where the game left them off, and it puts back
+exactly what it turned on (`TopiaForgePointer`). A surface whose root is destroyed or hidden claims
+nothing. A taken press never reaches the device, so first-party code that reads a key's press
+through the Input System also reads `TopiaForgeInputOwnership.KeyPressedThisFrame(key)`, as hotkeys
+and key captures do. Each
 frame the kit follows the navigate action Unity's UI module reads, so navigation covers what the game
 binds to it, and whether the game's gameplay maps are on next to it, which tells a level from a menu.
 The control selected inside a surface carries a guard that undoes any move out of the surface, and,
@@ -244,8 +258,8 @@ the keyboard, since TextMesh Pro types from the window's own key messages, which
 filter sees. The game's own UI holds a mod's keys only while one of its text fields has the keyboard;
 the kit reads UI Toolkit's focus by reflection, so it takes no UIElements reference. The decisions
 live in the Unity-free `TopiaForgeInputGate`, `TopiaForgeDismissOrder`, `TopiaForgeNavigationDriver`,
-`TopiaForgeNavigationBindings`, `TopiaForgeTypingStart` and `TopiaForgeUiToolkitFocus`, covered by
-`UiKitInputOwnershipTests`.
+`TopiaForgeNavigationBindings`, `TopiaForgeTypingStart`, `TopiaForgePointerHold`,
+`TopiaForgeScrollReveal` and `TopiaForgeUiToolkitFocus`, covered by `UiKitInputOwnershipTests`.
 
 Every kit label comes from one TextMesh Pro factory, which turns on extra padding. Quicksand's
 stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops
