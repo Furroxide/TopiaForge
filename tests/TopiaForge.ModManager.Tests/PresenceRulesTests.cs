@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using static TopiaForge.ModManager.Tests.PresenceAssert;
 
 namespace TopiaForge.ModManager.Tests
@@ -17,6 +18,8 @@ namespace TopiaForge.ModManager.Tests
         {
             ASpeedHackIsCorrectedThenKicked();
             APlayerCorrectedOncePlaysOn();
+            PlacementsPreserveLaterTeleports();
+            AShortCorrectionPreservesLaterTeleports();
             Console.WriteLine("PresenceRulesTests passed.");
         }
 
@@ -89,6 +92,71 @@ namespace TopiaForge.ModManager.Tests
             var validated = host.Presence.ValidatedPosition(player.Id);
             That(validated.HasValue && Near(validated.Value, player.Feet, 0.5f), "the host vouches for where it walks");
             That(host.AvatarOf(player) != null && player.AvatarOf(host) != null, "and both still see each other");
+        }
+
+        private static void PlacementsPreserveLaterTeleports()
+        {
+            foreach (var distance in new[] { 0.5f, 200f })
+            {
+                var rig = new PresenceRig();
+                rig.OpenToMultiplayer();
+                var player = rig.AddPlayer("p1");
+                var slot = SpawnSlotPlanner.SlotOffset(0);
+                player.Feet = new NetVector3(slot.X, slot.Y, slot.Z - distance);
+                rig.Join(player);
+                That(player.Backend.Teleports.Count == 1 && Near(player.Feet, slot, 0.001f), "the host's placement reaches its slot");
+                That(rig.Host.Counters.Corrections == 0, "short and distant expected placements are accepted");
+                LaterTeleportsKeepTheirAllowance(rig, player, "placement " + distance);
+            }
+        }
+
+        private static void AShortCorrectionPreservesLaterTeleports()
+        {
+            var rig = new PresenceRig();
+            rig.Host.Spawn = null;
+            rig.HostWith(1);
+            var player = rig.Players[0];
+            var anchor = rig.Host.Presence.ValidatedPosition(player.Id)!.Value;
+            // The wire reports an impossible jump while the local controller is only half a metre from the anchor.
+            player.Step(0.5f, 0f, 0f);
+            var bits = new NetBitWriter(PresenceMessages.PoseBytes);
+            PresenceWire.WritePose(bits, new PresencePoseRecord
+            {
+                Millis = (uint)(rig.Clock.Now / 1000),
+                Position = NetQuantization.QuantizePosition(new NetVector3(900f, 0f, 0f)),
+                Rotation = NetQuantization.IdentityRotationBits,
+                EyeCentimeters = 160
+            });
+            That(player.Channel.SendDatagram(bits.AsSegment(), InternalSystemTarget.Host).Succeeded, "the bad report is sent");
+            player.Control.Flush();
+            rig.Frames(8);
+            That(rig.Host.Counters.Corrections == 1 && player.Backend.Teleports.Count == 1 &&
+                 player.Backend.Teleports[0].KeepFacing && Near(player.Feet, anchor, 0.001f), "one short correction returns to the validated anchor");
+            LaterTeleportsKeepTheirAllowance(rig, player, "short correction");
+        }
+
+        private static void LaterTeleportsKeepTheirAllowance(PresenceRig rig, PresenceNode player, string move)
+        {
+            // A short host move must not leave an expectation armed, even after several seconds at rest.
+            rig.Frames(300);
+            var corrections = rig.Host.Counters.Corrections;
+            for (var index = 0; index < 2; index++)
+            {
+                player.Step(200f, 0f, 0f);
+                rig.Frames(8);
+                That(rig.Host.Counters.Corrections == corrections &&
+                     Near(rig.Host.Presence.ValidatedPosition(player.Id)!.Value, player.Feet, 0.001f),
+                    "each of the next two own teleports keeps its flag and is accepted after a host move (" + move + ", teleport " + (index + 1) +
+                    ", corrections " + rig.Host.Counters.Corrections + " vs " + corrections + ", validated " +
+                    Show(rig.Host.Presence.ValidatedPosition(player.Id)!.Value) + ", local " + Show(player.Feet) + ")");
+            }
+
+            var anchor = player.Feet;
+            player.Step(200f, 0f, 0f);
+            rig.Frames(8);
+            That(rig.Host.Counters.Corrections == corrections + 1 && Near(player.Feet, anchor, 0.001f),
+                "a third rapid own teleport still exceeds the allowance and is corrected");
+            That(rig.Network.Kicks.Count == 0, "the player stays connected");
         }
     }
 }

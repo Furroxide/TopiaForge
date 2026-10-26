@@ -231,7 +231,6 @@ namespace TopiaForge.ModManager
         private void Place(string world, NetVector3 feet, float yawDegrees)
         {
             if (!string.Equals(world, presence.RunningWorld?.Invoke(), StringComparison.Ordinal)) return;
-            presence.Local.ExpectJump();
             if (presence.Backend.TeleportLocalPlayer(feet, yawDegrees, keepFacing: false)) presence.Counters.MovesTaken++;
         }
 
@@ -239,7 +238,6 @@ namespace TopiaForge.ModManager
         private void TakeCorrection(byte number, NetVector3 target)
         {
             correction = number;
-            presence.Local.ExpectJump();
             if (presence.Backend.TeleportLocalPlayer(target, 0f, keepFacing: true)) presence.Counters.MovesTaken++;
         }
     }

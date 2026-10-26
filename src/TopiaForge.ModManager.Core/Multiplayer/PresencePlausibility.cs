@@ -190,11 +190,14 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             }
 
             if (!bounds.Contains(position)) return Strike(PresenceViolation.Bounds, nowMicros);
-            if (!HasAnchor || (placementExpected && Lands(position, nowMicros)))
+            if (placementExpected && Lands(position, nowMicros))
             {
                 placementExpected = false;
                 return Accept(position, rotation, flags, nowMicros, resetCredit: true);
             }
+
+            // The arrival can precede the first pose. That pose anchors the player but does not consume a pending landing.
+            if (!HasAnchor) return Accept(position, rotation, flags, nowMicros, resetCredit: true);
 
             Accrue(nowMicros);
             var dx = (long)position.X - Anchor.X;

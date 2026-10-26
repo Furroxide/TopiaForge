@@ -223,6 +223,21 @@ namespace TopiaForge.ModManager.Tests
             Check(near, At(0f), 0);
             near.ExpectPlacement(At(900f), Tick);
             Equal(PresenceVerdict.Corrected, Check(near, At(904f), 2 * Tick).Verdict, "four metres off is not the placement");
+
+            foreach (var flags in new[] { PresenceFlags.None, PresenceFlags.Teleported })
+            {
+                var arriving = new PresencePlausibility(PresencePolicy.Default, 0);
+                arriving.ExpectPlacement(At(900f), 0);
+                Check(arriving, At(0f), Tick);
+                Equal(PresenceVerdict.Accepted, Check(arriving, At(900f), 2 * Tick, flags).Verdict,
+                    "a first pose before the landing does not consume the host's expected placement");
+                Equal(PresenceVerdict.Accepted, Check(arriving, At(1100f), 3 * Tick, PresenceFlags.Teleported).Verdict,
+                    "the first own teleport still has its allowance after the landing");
+                Equal(PresenceVerdict.Accepted, Check(arriving, At(1300f), 4 * Tick, PresenceFlags.Teleported).Verdict,
+                    "the second own teleport still has its allowance after the landing");
+                Equal(PresenceVerdict.Corrected, Check(arriving, At(1500f), 5 * Tick, PresenceFlags.Teleported).Verdict,
+                    "the third own teleport remains over the allowance");
+            }
         }
 
         private static void AwayWhileMovingIsCleared()

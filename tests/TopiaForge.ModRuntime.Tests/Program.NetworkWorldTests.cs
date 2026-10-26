@@ -319,7 +319,7 @@ namespace TopiaForge.ModRuntime.Tests
         /// loads fake bundles and spawns into them, as the Unity host's does, its entity service moves and destroys them, and
         /// its UI service records each toast.
         /// </summary>
-        private sealed class WorldGameHost : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource
+        private sealed class WorldGameHost : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource, IPresenceBackendSource
         {
             public event Action<GameTimeSample>? FixedUpdate;
 
@@ -328,6 +328,10 @@ namespace TopiaForge.ModRuntime.Tests
             internal FakeWorldScene Scene { get; } = new FakeWorldScene();
 
             internal MotionControls Motion { get; } = new MotionControls();
+
+            internal FakePresenceBackend Presence { get; } = new FakePresenceBackend { HasPlayer = false, RecordTrails = false };
+
+            public IPresenceBackend PresenceBackend => Presence;
 
             internal List<(string Owner, bool Scoped, FakeWorldAssets Assets)> Assets { get; } = new List<(string, bool, FakeWorldAssets)>();
 

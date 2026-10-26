@@ -69,6 +69,9 @@ namespace TopiaForge.ModRuntime.Tests
                 Assert(second.Runtime.Multiplayer.Join(new FakeJoinTarget(), new InternalJoinSettings()).Succeeded, "the second player joins");
                 PresenceFrames(games, clock, 12);
                 Assert(second.Backend.Teleports.Count == 1 && NearPoint(second.Backend.Teleports[0].Feet, SpawnSlotPlanner.SlotOffset(1)), "on the ring's next slot");
+                Assert(PresenceRunUntil(games, clock, () => games.All(viewer => games.All(other => ReferenceEquals(viewer, other) ||
+                    (viewer.AvatarOf(other) != null && NearPoint(viewer.AvatarOf(other)!.Feet, other.Backend.Feet)))), 30),
+                    "every avatar settles at its player's position within the interpolation window");
                 foreach (var viewer in games)
                 {
                     foreach (var other in games)

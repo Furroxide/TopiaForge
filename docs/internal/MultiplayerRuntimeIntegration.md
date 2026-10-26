@@ -2143,10 +2143,11 @@ well as at handback, so extrapolation cannot amplify a claimed velocity. A block
 motion body: `NetEntityService.AcquireMotion` refuses one on every peer, by the id its handle, a raycast's entity, a
 shadow and a joined player's replica share, and the host refuses a player's grab of one whatever its client sends.
 
-Until presence (3.10) is installed, range is measured against the sender's reported local avatar position. This is
-**not a trustworthy remote-location check** against a modified client. Displacement speed, sender and epoch checks
-remain host-enforced. Presence must install `NetworkWorldMotion.ParticipantPosition` from its validated avatar state;
-once installed, a missing avatar fails closed rather than falling back to the packet. This seam remains internal.
+ModRuntime installs `NetworkWorldMotion.ParticipantPosition` from presence's validated avatar state (section 20),
+after installing both the network world and presence. Remote grabs, samples and handbacks use that position instead
+of the packet's claimed position. No accepted pose yet, a stale pose, a lost link or a departed participant fails closed;
+there is no fallback to the packet. The resolver seam remains internal. Displacement speed, sender, epoch, permission
+and budget checks still apply.
 
 Bodies moved with `AcquireMotion` get ownership automatically. Host-authored changes continue through ordinary world
 snapshots. Arbitrary raw Unity rigidbody writes cannot be attributed reliably to a player's intent; tools should use
@@ -2543,9 +2544,13 @@ The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in
 - **Bounds.** Inside the box of the loaded scenes' solid colliders, widened by 64 m sideways and below and 256 m above,
   measured again only when the set of scenes changes, at most once a second. A host that cannot tell checks none.
 - **Teleports.** A player's own game flags a pose as teleported when one frame moved it farther than 30 m/s and a metre
-  allow, as a respawn or a level load does, unless the host's placement or correction moved it. The host allows two at
-  once and one more every ten seconds; a flagged pose that needed no teleport costs nothing; the flag is never relayed.
+  allow, as a respawn or a level load does. The host allows two at once and one more every ten seconds; a flagged pose
+  that needed no teleport costs nothing; the flag is never relayed. Host moves arm no local jump expectation: expected
+  placements are accepted by their landing, and corrections return to the host's validated anchor within its budget.
+  A short placement or correction therefore cannot suppress a later own teleport's flag.
 - **Placement.** The first pose within 2 m of the host's own placement, within ten seconds of it, is taken as it.
+  If arrival precedes the player's first pose, that first pose establishes its anchor without consuming the pending
+  placement; only the landing consumes it. A host placement spends none of the player's own teleport allowance.
 - **Corrections.** A pose that breaks a rule is dropped, and the player is sent back to its last accepted position under
   a new correction number (`Correct`), keeping the credit it had: a correction never refills the bank, so a cheat is
   struck again as soon as it runs past the limit. Poses still carrying the old number are ignored for a second, as they
@@ -2610,7 +2615,8 @@ its world put it.
   last vouched for a player: its own player as sampled, a joined player's last accepted pose while fresh, and null
   otherwise (not hosting, an unknown or departed participant, a lost link, no pose yet, or none accepted for 2.5
   seconds), so a range check that needs a position fails closed. Motion ownership takes it as
-  `NetworkWorldMotion.ParticipantPosition`, assigned where ModRuntime installs presence.
+  `NetworkWorldMotion.ParticipantPosition`, assigned where ModRuntime installs presence after the network world.
+  A raw player's rejected 900 m pose cannot make a distant motion grab pass; an honest nearby grab still succeeds.
 - **Nametags (WS5b).** `IPresenceNametagSource`, which `MultiplayerPresence` implements: each shown avatar's display name
   and the point above its head, with a version that moves when the set or a name changes. Reading allocates nothing, and
   a nametag carries nothing but the name and the place.
@@ -2644,7 +2650,8 @@ its world put it.
     the avatar everywhere; a lost link's grace, its return, and its end; a teleport snapping; a session at rest relaying
     nothing; the lookups, typing and talking; validated positions failing closed; and states with their checks.
   - `PresenceRulesTests`: a speed hack corrected four times, each correction moving it back, then kicked, with the
-    host never vouching for a position past the limit; a player corrected once playing on.
+    host never vouching for a position past the limit; a player corrected once playing on; short and distant placements
+    and a short correction preserving the next two own teleports, while a third rapid teleport is still refused.
   - `PresenceHostileTests`: a raw player forging flags, teleports, another player's pose, the host's messages, health,
     and bent payloads, none of which ends its connection; and a raw host unable to move a player through a relayed pose
     or half a datagram.
@@ -2659,12 +2666,17 @@ its world put it.
   ring, avatars that follow a walk smoothly, a third player seeing both others, a lost link's grace, a speed hack
   corrected and then kicked, and a leave; and `TestPresenceCostsNothingAtRest`: zero bytes offline, with a solo provider
   and online at rest with the clock running, and a frame's cost with a host and three players moving, printed.
+  `TestPresenceGatesMotionAcrossRuntimes` exercises ModRuntime's resolver installation: no pose and stale poses fail
+  closed, a raw 900 m pose leaves the anchor unchanged and its distant grab is out of range, while a nearby grab succeeds.
 - **Multiplayer harness** (`SystemDatagramTests`): the realtime lane both ways and only where it may go, the player's
   rate, the host dropping floods, stale and malformed datagrams without ending anything, the bounded queue, and a
   replacement dropping what waited.
 - **Mutation checks**, each applied, run and reverted byte for byte: skipping the speed check fails the rules suites,
   accepting a player's pose in the host's format fails the hostile suite, and leaving an avatar behind after a leave
-  fails the scenario suites.
+  fails the scenario suites. The integrated range tests also fail if the presence resolver is removed, missing poses
+  fall back to packet positions, or packet positions replace validated ones. Restoring either local jump expectation
+  fails the later-teleport regression; consuming a pending placement on the first pre-landing pose fails the placement
+  regression.
 - **In the game.** The engine side (`UnityPresenceBackend`, `UnityPresenceAvatar`) and RobotKit's bodies run over Unity,
   so the game checks them.
 

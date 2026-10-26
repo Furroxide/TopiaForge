@@ -5,10 +5,10 @@ namespace TopiaForge.ModManager
 {
     /// <summary>
     /// The local player's own presence: it samples the player every frame and says when a pose is due, 20 a second while
-    /// anything changes and one a second at rest. It flags a jump the speed limit cannot explain as a teleport, unless the
-    /// host asked for it; counts the player away after two minutes without moving or turning; and reads health and the held
-    /// item a few times a second, saying when they change. It owns the pose: the host only checks it. Nothing per frame
-    /// allocates. Main thread only.
+    /// anything changes and one a second at rest. It flags a jump the speed limit cannot explain as a teleport; the host
+    /// validates its own placements and corrections at the landing. It counts the player away after two minutes without
+    /// moving or turning, and reads health and the held item a few times a second, saying when they change. It owns the
+    /// pose: the host only checks it. Nothing per frame allocates. Main thread only.
     /// </summary>
     internal sealed class PresenceLocalPlayer
     {
@@ -51,7 +51,6 @@ namespace TopiaForge.ModManager
         private uint activityRotation;
         private long activityMicros;
         private bool teleportPending;
-        private bool expectJump;
         private bool hasStateRead;
         private long stateReadMicros;
         private long stateSentMicros;
@@ -96,15 +95,11 @@ namespace TopiaForge.ModManager
             hasSent = false;
             hasActivity = false;
             teleportPending = false;
-            expectJump = false;
             hasStateRead = false;
             stateDirty = false;
             stateSent = false;
             sentVelocity = default;
         }
-
-        /// <summary>The host is about to move the player itself, so the jump is not a teleport of the player's own.</summary>
-        internal void ExpectJump() => expectJump = true;
 
         /// <summary>Samples the player for this frame; <paramref name="talking"/> comes from the voice service.</summary>
         internal void Sample(long nowMicros, bool talking)
@@ -124,8 +119,7 @@ namespace TopiaForge.ModManager
                 var allowed = MaximumUnitsPerSecond * Math.Min(elapsed, 1_000_000) / 1_000_000 + JumpSlackUnits;
                 if (position.DistanceSquaredTo(previousPosition) > allowed * allowed)
                 {
-                    if (expectJump) expectJump = false;
-                    else teleportPending = true;
+                    teleportPending = true;
                 }
             }
 
