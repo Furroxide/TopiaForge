@@ -189,7 +189,6 @@ Custom kit compositions can call `root.PushDismissable(surface)` on their own wi
 uses the same selection-scoped navigation claim as a kit window; focused fields own typing separately.
 Use the root containing that composition's controls, not a shared HUD root. Remove the surface with
 `TopiaForgeDismissStack.Remove(surface)` when it closes. Inactive or destroyed roots take no input.
-See the [kit changelog](../src/TopiaForge.Mods.UnityUi/CHANGELOG.md) for additions.
 
 ## Accessibility
 
