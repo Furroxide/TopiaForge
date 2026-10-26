@@ -14,7 +14,8 @@ namespace TopiaForge.ModManager
     /// bundle or a crash report. The provider already keeps addresses inside its network layer; this is the runtime's
     /// second line, and it errs towards removing too much: a diagnostic that loses a file name or a mod id is better than
     /// one that keeps a host name. The multiplayer provider compiles this file too, so what it logs on its own, before a
-    /// runtime attaches or when the runtime fails, is redacted by the same rules.
+    /// runtime attaches or when the runtime fails, is redacted by the same rules. <see cref="Redact"/> also removes local
+    /// paths, by the manager log's rules; <see cref="RedactAddresses"/>, for labels, removes addresses only.
     /// </summary>
     /// <remarks>
     /// The text is split into tokens at white space, quotes, brackets of every kind, commas, semicolons and bars. A token
@@ -79,38 +80,93 @@ namespace TopiaForge.ModManager
             return text;
         }
 
-        /// <summary>Returns <paramref name="text"/> with every address-shaped token replaced; a text that defeats the patterns is withheld.</summary>
-        internal static string Redact(string? text)
+        /// <summary>
+        /// Returns <paramref name="text"/> with every local path and every address-shaped token replaced, as a log, the
+        /// diagnostics bundle or a launch record keeps it; a text that defeats the patterns is withheld. Paths and tokens are
+        /// both found in the text as it came, and one placeholder covers a path and a token that overlap, so removing a path
+        /// never cuts a token down to an address the token rule no longer sees, as in <c>myhost:27250=file:///x</c>.
+        /// </summary>
+        internal static string Redact(string? text) => Replace(text, paths: true);
+
+        /// <summary>
+        /// Returns <paramref name="text"/> with every address-shaped token replaced and its slashes kept, for words another
+        /// player wrote and a label shows, such as a server name or a kick message: there "EU / NA" or "/help" is
+        /// punctuation, not a path. A text that defeats the patterns is withheld.
+        /// </summary>
+        internal static string RedactAddresses(string? text) => Replace(text, paths: false);
+
+        private static string Replace(string? text, bool paths)
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
-            text = DiagnosticPathRedactor.Redact(text);
+            var value = text!;
             try
             {
-                StringBuilder? builder = null;
-                var copied = 0;
+                List<Span>? spans = null;
                 var index = 0;
-                while (index < text!.Length)
+                var quote = '\0';
+                while (paths && DiagnosticPathRedactor.TryFindPath(value, ref index, ref quote, out var pathStart, out var pathEnd))
+                    (spans ??= new List<Span>()).Add(new Span(pathStart, pathEnd, true));
+
+                index = 0;
+                while (index < value.Length)
                 {
-                    if (IsDelimiter(text[index]))
+                    if (IsDelimiter(value[index]))
                     {
                         index++;
                         continue;
                     }
 
                     var start = index;
-                    while (index < text.Length && !IsDelimiter(text[index])) index++;
-                    if (!HoldsAddress(text.Substring(start, index - start))) continue;
-                    builder ??= new StringBuilder(text.Length);
-                    builder.Append(text, copied, start - copied).Append(Replacement);
-                    copied = index;
+                    while (index < value.Length && !IsDelimiter(value[index])) index++;
+                    if (HoldsAddress(value.Substring(start, index - start))) (spans ??= new List<Span>()).Add(new Span(start, index, false));
                 }
 
-                return builder == null ? text : builder.Append(text, copied, text.Length - copied).ToString();
+                return spans == null ? value : Merge(value, spans);
             }
             catch (RegexMatchTimeoutException)
             {
                 return "[withheld: the text could not be checked for addresses]";
             }
+        }
+
+        /// <summary>Replaces each run of overlapping spans with one placeholder: a path's, when a path is among them.</summary>
+        private static string Merge(string text, List<Span> spans)
+        {
+            spans.Sort((left, right) => left.Start.CompareTo(right.Start));
+            var builder = new StringBuilder(text.Length);
+            var copied = 0;
+            for (var index = 0; index < spans.Count;)
+            {
+                var start = spans[index].Start;
+                var end = spans[index].End;
+                var path = spans[index].Path;
+                for (index++; index < spans.Count && spans[index].Start < end; index++)
+                {
+                    if (spans[index].End > end) end = spans[index].End;
+                    path |= spans[index].Path;
+                }
+
+                builder.Append(text, copied, start - copied).Append(path ? DiagnosticPathRedactor.Placeholder : Replacement);
+                copied = end;
+            }
+
+            return builder.Append(text, copied, text.Length - copied).ToString();
+        }
+
+        private readonly struct Span
+        {
+            internal Span(int start, int end, bool path)
+            {
+                Start = start;
+                End = end;
+                Path = path;
+            }
+
+            internal int Start { get; }
+
+            internal int End { get; }
+
+            internal bool Path { get; }
         }
 
         private static bool IsDelimiter(char character) => char.IsWhiteSpace(character) || Delimiters.IndexOf(character) >= 0;

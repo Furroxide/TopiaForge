@@ -20,16 +20,17 @@ namespace TopiaForge.ModManager.Sessions
         private static readonly Regex DottedQuad = new Regex(
             @"(?<![0-9])[0-9]{1,3}(?:\.[0-9]{1,3}){3}(?![0-9])", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
-        /// <summary>Redacts and bounds <paramref name="text"/> for display; empty stays empty.</summary>
+        /// <summary>Redacts addresses from <paramref name="text"/> and bounds it for display; empty stays empty.</summary>
+        /// <remarks>A label keeps the text's slashes, as in "EU / NA" or "/help": only diagnostics remove paths.</remarks>
         internal static string ForDisplay(string? text, int maximumChars = NameChars)
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
-            var redacted = MultiplayerDiagnosticRedactor.Redact(text);
+            var redacted = MultiplayerDiagnosticRedactor.RedactAddresses(text);
             var plain = TopiaForgePlainText.Sanitize(redacted, maximumChars);
             // Removing a direction control or splitting a token can reveal an address the original text did not contain.
             // Check the displayed form too, and keep the bound if its replacement is longer than the original token.
             return ReferenceEquals(plain, redacted) ? plain :
-                TopiaForgePlainText.Sanitize(MultiplayerDiagnosticRedactor.Redact(plain), maximumChars);
+                TopiaForgePlainText.Sanitize(MultiplayerDiagnosticRedactor.RedactAddresses(plain), maximumChars);
         }
 
         /// <summary>Attributes the host's own words to it, redacted; empty when it said nothing.</summary>

@@ -199,17 +199,22 @@ internal static class RuntimePrivacyTests
             ("0x0A.0x14.0x1E.0x28", "0x1E"),
             ("0x0A141E28", "0x0A141E28")
         };
+        // The address rules find every form; a diagnostic, which removes local paths as well, may hide a share as a path.
         foreach (var (text, secret) in forms)
         {
+            var addresses = MultiplayerDiagnosticRedactor.RedactAddresses(text);
+            That(!addresses.Contains(secret, StringComparison.OrdinalIgnoreCase) && addresses.Contains(MultiplayerDiagnosticRedactor.Replacement, StringComparison.Ordinal),
+                "'" + text + "' is redacted (" + addresses + ")");
             var redacted = MultiplayerDiagnosticRedactor.Redact(text);
-            That(!redacted.Contains(secret, StringComparison.OrdinalIgnoreCase) && redacted.Contains(MultiplayerDiagnosticRedactor.Replacement, StringComparison.Ordinal),
-                "'" + text + "' is redacted (" + redacted + ")");
+            That(!redacted.Contains(secret, StringComparison.OrdinalIgnoreCase) && (redacted.Contains(MultiplayerDiagnosticRedactor.Replacement, StringComparison.Ordinal)
+                    || redacted.Contains(DiagnosticPathRedactor.Placeholder, StringComparison.Ordinal)),
+                "'" + text + "' is redacted in a diagnostic (" + redacted + ")");
         }
 
-        // It errs towards removing too much: file names and mod ids read like host names and go too, while the stack
-        // frame's code names stay.
+        // It errs towards removing too much: file names and mod ids read like host names and go too, a stack frame's file
+        // goes with its path, and the frame's code names stay.
         var frame = MultiplayerDiagnosticRedactor.Redact("at TopiaForge.Multiplayer.Network.LiveSessions.Pump() in /_/mods/TopiaForge.Multiplayer/Network/LiveSessions.cs:line 218");
-        That(frame.StartsWith("at TopiaForge.Multiplayer.Network.LiveSessions.Pump() in " + MultiplayerDiagnosticRedactor.Replacement, StringComparison.Ordinal),
+        That(frame.StartsWith("at TopiaForge.Multiplayer.Network.LiveSessions.Pump() in " + DiagnosticPathRedactor.Placeholder, StringComparison.Ordinal),
             "a stack frame keeps its method and loses its file (" + frame + ")");
         foreach (var (text, name) in new[] { ("at Mod.Update () in Lobby.cs:42", "Lobby.cs"), ("io.example.sandbox 0.2.0 is missing.", "io.example.sandbox") })
         {
