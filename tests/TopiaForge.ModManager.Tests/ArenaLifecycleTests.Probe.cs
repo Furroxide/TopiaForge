@@ -12,11 +12,31 @@ namespace TopiaForge.ModManager.Tests
             using TopiaForge.Mods.GameBridge;
             namespace UnityEngine
             {
-                public class Object { public static List<string> Changes = new List<string>(); public bool DestroyScheduled; public static void Destroy(Object value) => value.DestroyScheduled = true; }
+                public class Object
+                {
+                    public static List<string> Changes = new List<string>();
+                    public bool DestroyScheduled;
+                    public bool Destroyed;
+                    public static void Destroy(Object value) => value.DestroyScheduled = true;
+                    // As in Unity, a destroyed object compares equal to null.
+                    public static bool operator ==(Object? left, Object? right) => Alive(left) ? Alive(right) && ReferenceEquals(left, right) : !Alive(right);
+                    public static bool operator !=(Object? left, Object? right) => !(left == right);
+                    public override bool Equals(object? other) => ReferenceEquals(this, other);
+                    public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+                    private static bool Alive(Object? value) => !ReferenceEquals(value, null) && !value!.Destroyed;
+                }
                 public struct Scene { public bool Valid; public bool IsValid() => Valid; }
                 public sealed class GameObject : Object { public Scene scene = new Scene { Valid = true }; public bool Active = true; public void SetActive(bool value) { Active = value; Changes.Add("inactive"); } }
                 public enum LightType { Directional, Point }
-                public sealed class Light : Object { public LightType type; private bool state = true; public bool enabled { get => state; set { state = value; Changes.Add("light:" + value); } } public GameObject gameObject = new GameObject(); }
+                public sealed class Light : Object
+                {
+                    public LightType type; private bool state = true; public GameObject gameObject = new GameObject();
+                    public bool enabled
+                    {
+                        get => state;
+                        set { if (Destroyed) throw new InvalidOperationException("The destroyed light was used."); state = value; Changes.Add("light:" + value); }
+                    }
+                }
                 public sealed class Transform { public object? GetComponent(Type type) => null; }
                 public struct Vector3 { public float X; }
                 public struct Quaternion { public float W; }
@@ -40,6 +60,7 @@ namespace TopiaForge.ModManager.Tests
                     public void TeleportTo(Vector3 position, Quaternion rotation) { throw new Exception("Wrong native overload."); }
                 }
                 public sealed class Missing { }
+                public sealed class NotReadyPlayer { public Movement? FPSController => null; }
                 public sealed class WrongPlayer { public WrongMovement FPSController { get; } = new WrongMovement(); }
                 public sealed class WrongMovement { public bool TeleportTo(Vector3 position, Quaternion? rotation) => true; }
                 public sealed class ThrowingPlayer { public ThrowingMovement FPSController { get; } = new ThrowingMovement(); }
@@ -74,6 +95,20 @@ namespace TopiaForge.ModManager.Tests
                     Require(sun.enabled, "partial acquisition restores borrowed light on failure");
                     using (var retry = new ArenaSunSuppression()) { retry.Apply(new[] { sun }); Require(!sun.enabled, "replacement suppresses the restored sun"); }
                     Require(sun.enabled, "replacement restores the sun");
+                    var unloaded = new Light();
+                    var kept = new Light();
+                    var held = new ArenaSunSuppression();
+                    held.Apply(new[] { unloaded, kept });
+                    unloaded.Destroyed = true;
+                    held.Dispose();
+                    Require(kept.enabled, "a light whose scene unloaded while held is skipped, and the others are restored");
+                    var reloaded = new Light();
+                    using (var next = new ArenaSunSuppression())
+                    {
+                        next.Apply(new[] { reloaded, unloaded });
+                        Require(!reloaded.enabled, "a later lease suppresses a reloaded scene's sun and skips the destroyed one");
+                    }
+                    Require(reloaded.enabled, "the later lease restores the reloaded sun");
                     var player = new Player();
                     NativePlayerTeleport.PlaceController(player, new Vector3 { X = 12 }, new Quaternion { W = 1 });
                     Require(player.FPSController.Calls == 1 && player.FPSController.Position.X == 12 && player.FPSController.Rotation?.W == 1,
@@ -81,7 +116,15 @@ namespace TopiaForge.ModManager.Tests
                     foreach (var invalid in new object[] { new Missing(), new WrongPlayer() })
                     {
                         try { NativePlayerTeleport.PlaceController(invalid, default, default); throw new Exception("Unsupported native movement was accepted."); }
-                        catch (InvalidOperationException) { }
+                        catch (InvalidOperationException error)
+                        {
+                            Require(error.Message == NativePlayerTeleport.Unsupported, "a game build without the contract asks for an update, not a retry: " + error.Message);
+                        }
+                    }
+                    try { NativePlayerTeleport.PlaceController(new NotReadyPlayer(), default, default); throw new Exception("A missing movement controller was accepted."); }
+                    catch (InvalidOperationException error)
+                    {
+                        Require(error.Message.Contains("Wait for the level to load", StringComparison.Ordinal), "a controller not set yet asks the player to wait: " + error.Message);
                     }
                     try { NativePlayerTeleport.PlaceController(new ThrowingPlayer(), default, default); throw new Exception("Native failure was swallowed."); }
                     catch (TargetInvocationException error) { Require(error.InnerException is ApplicationException, "native failures propagate"); }
