@@ -43,10 +43,13 @@ namespace TopiaForge.ModManager.Tests
                 rig.Test.Level = (_, _) => Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.NotFound, "Level unavailable."));
                 rig.Join();
                 rig.Announce(missing ? HostWorldState.Level("Downtown") : HostWorldState.Menu);
-                rig.Until(() => rig.Status.Stage == FollowStage.AtMenu, "the guest waits at the menu");
+
+                // The fallback menu for a level this game cannot load is waited at as that, never as a host at its menu.
+                var waiting = missing ? FollowStage.LevelUnavailable : FollowStage.AtMenu;
+                rig.Until(() => rig.Status.Stage == waiting, "the guest waits at the menu");
                 var menus = rig.Test.MenuLoads;
                 rig.Scene.Activated("Elsewhere");
-                rig.Until(() => rig.Test.MenuLoads == menus + 1 && rig.Scene.IsMainMenu && rig.Status.Stage == FollowStage.AtMenu,
+                rig.Until(() => rig.Test.MenuLoads == menus + 1 && rig.Scene.IsMainMenu && rig.Status.Stage == waiting,
                     "a native load while waiting returns to the menu");
                 That(rig.Follower.Refollows == 1 && rig.Runtime.Realm == NetRealm.Client,
                     "the correction is bounded and keeps the guest joined");
@@ -55,7 +58,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     rig.Scene.Activated("Elsewhere");
                     var expected = menus + correction;
-                    rig.Until(() => rig.Test.MenuLoads == expected && rig.Scene.IsMainMenu && rig.Status.Stage == FollowStage.AtMenu,
+                    rig.Until(() => rig.Test.MenuLoads == expected && rig.Scene.IsMainMenu && rig.Status.Stage == waiting,
                         "each allowed native escape returns to the waiting menu");
                 }
                 rig.Scene.Activated("Elsewhere");

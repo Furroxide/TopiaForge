@@ -94,7 +94,13 @@ namespace TopiaForge.ModManager.Sessions
             Failed,
 
             /// <summary>Following the host's world after the join: the host changed worlds, or this game left the host's world.</summary>
-            Following
+            Following,
+
+            /// <summary>
+            /// The host's level could not be loaded here, so the game waits at the main menu, still joined: Loading world shows not
+            /// done, and the view offers CLOSE.
+            /// </summary>
+            Stranded
         }
 
         /// <summary>Gets whether a join is being prepared or running, so no other may start.</summary>
@@ -188,6 +194,10 @@ namespace TopiaForge.ModManager.Sessions
                     break;
                 case Stage.Failed:
                     if (retryWait > 0d) CountDown(deltaTime);
+                    break;
+                case Stage.Stranded:
+                    // The view stands while the game waits at the menu; leaving, or any other move of the follow, ends it.
+                    if (FollowStatus.Stage != FollowStage.LevelUnavailable) Hide();
                     break;
             }
 

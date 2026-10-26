@@ -7,8 +7,10 @@ namespace TopiaForge.ModManager.Sessions
     /// steps: Loading world (the host's level, then its world), Synchronizing (the world arriving, n of m) and Spawning (this
     /// player's controls). A join the follow ends shows the follow's own failure, in this game's words. After the join, when
     /// the host changes worlds or this game leaves the host's world by itself, the overlay shows "Following the host" with
-    /// the first four steps done, says "Back in the host's world." once it is, and Cancel leaves the session. The follow's
-    /// notices show once each. A frame that changes nothing allocates nothing.
+    /// the first four steps done, says "Back in the host's world." once it is, and Cancel leaves the session. A follow, or a
+    /// join, that ends at the main menu because the host's level could not be loaded here shows Loading world not done,
+    /// with the follow's own words and CLOSE, as nothing runs that Cancel would stop. The follow's notices show once each.
+    /// A frame that changes nothing allocates nothing.
     /// </summary>
     internal sealed partial class ConnectingPresenter
     {
@@ -113,7 +115,7 @@ namespace TopiaForge.ModManager.Sessions
 
             var following = follow.IsRefollow && ((follow.Stage >= FollowStage.Preparing && follow.Stage <= FollowStage.Participant)
                 || follow.Stage == FollowStage.LoadingLevel || (follow.Stage == FollowStage.Failed && follow.Version != failedFollowShown));
-            if (stage != Stage.Hidden && stage != Stage.Succeeded) return;
+            if (stage != Stage.Hidden && stage != Stage.Succeeded && stage != Stage.Stranded) return;
             if (!following || cancelledFollowJoin == follow.JoinSerial) return;
             ShowFollowing();
         }
@@ -148,6 +150,10 @@ namespace TopiaForge.ModManager.Sessions
                     failedFollowShown = follow.Version;
                     if (!FollowEnded(context.Status.Status)) Hide();
                     return;
+                case FollowStage.LevelUnavailable:
+                    // The game waits at the menu, joined, without the host's level: nothing the follow set out to do is done.
+                    Strand();
+                    return;
                 case FollowStage.Running:
                 case FollowStage.InLevel:
                 case FollowStage.AtMenu:
@@ -181,6 +187,22 @@ namespace TopiaForge.ModManager.Sessions
 
             if (active == step) return;
             active = step;
+            Bump();
+        }
+
+        /// <summary>
+        /// The follow ended at the main menu because the host's level could not be loaded here: the view says so with Loading
+        /// world not done and offers CLOSE, as nothing runs that Cancel would stop. The player stays in the session; leaving
+        /// closes the view, and the host's next world takes it over.
+        /// </summary>
+        private void Strand()
+        {
+            stage = Stage.Stranded;
+            complete = false;
+            active = -1;
+            failed = (int)ConnectingStep.LoadingWorld;
+            linger = 0f;
+            statusText = FollowFailureWords.LevelNotLoaded;
             Bump();
         }
 

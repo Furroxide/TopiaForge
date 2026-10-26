@@ -40,7 +40,13 @@ namespace TopiaForge.ModManager.Sessions
         ReturningToMenu = 10,
 
         /// <summary>Following the host's world failed, so this game left the session.</summary>
-        Failed = 11
+        Failed = 11,
+
+        /// <summary>
+        /// The host's level could not be loaded here, so this game waits at the main menu, still joined, for the host's next
+        /// world: the follow did not get the player where the host is.
+        /// </summary>
+        LevelUnavailable = 12
     }
 
     /// <summary>Why following the host's world failed. Each has its own words (<see cref="FollowFailureWords"/>).</summary>

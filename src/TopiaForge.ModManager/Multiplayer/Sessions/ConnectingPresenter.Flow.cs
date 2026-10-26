@@ -327,6 +327,7 @@ namespace TopiaForge.ModManager.Sessions
             Bump();
             context.Notify(statusText, ScreenTone.Success);
             if (FollowsThisJoin && FollowStatus.Stage == FollowStage.AtMenu) context.Notify(HostAtMenu);
+            else if (FollowsThisJoin && FollowStatus.Stage == FollowStage.LevelUnavailable) Strand();
             RecordHistory(status.Server);
         }
 

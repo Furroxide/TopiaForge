@@ -72,7 +72,7 @@ namespace TopiaForge.ModManager
             if (other.Succeeded)
             {
                 if (!toMenu) Arrived(finished.Target, FollowStage.InLevel, "In the host's level");
-                else if (stranded) Arrived(finished.Target, FollowStage.AtMenu, FollowFailureWords.LevelNotLoaded);
+                else if (stranded) Arrived(finished.Target, FollowStage.LevelUnavailable, FollowFailureWords.LevelNotLoaded);
                 else Arrived(finished.Target, FollowStage.AtMenu, "The host is at the main menu");
                 return;
             }

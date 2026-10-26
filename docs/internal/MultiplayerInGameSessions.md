@@ -158,7 +158,12 @@ world." once it runs, and its Cancel leaves the session. The follow's notices, s
 so you left the session.", show once each. "Leave server?" says "You leave the session and return to the main menu."
 This also covers native-level follows after joining. A later follow failure shows its own words and RETRY where it
 helps, including a failure that happens between two frames after the original join overlay closed. Dismissing it
-keeps it closed, and a late failure from a cancelled follow does not reopen the overlay.
+keeps it closed, and a late failure from a cancelled follow does not reopen the overlay. A join or a follow that leaves
+the game at the main menu because the host's level could not be loaded here is shown as what it is: Loading world not
+done, "Your game could not load the level the host is in. You stay in the session and join the host's next world." in
+the status line and once as a toast, and CLOSE, since nothing runs that Cancel would stop. The view stays until it is
+closed, the player leaves, or the host's next world takes it over; a join there never says the host is at its menu.
+Whenever nothing runs that Cancel would stop, as while a finished join lingers, the overlay offers CLOSE in its place.
 
 Verifying mods is done once the host admits the player. A failure stops at its own step or at the step the join reached,
 whichever is later, and steps it never ran show skipped: mods that do not match this game's check fail at Verifying

@@ -244,7 +244,8 @@ namespace TopiaForge.ModManager.Tests
                 rig.Test.Level = (_, _) => Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.NotFound, "The native scene is unavailable: Downtown"));
                 rig.Join();
                 rig.Announce(HostWorldState.Level("Downtown"));
-                rig.Until(() => rig.Status.Stage == FollowStage.AtMenu, "a level this game cannot load leaves it at the menu");
+                rig.Until(() => rig.Status.Stage == FollowStage.LevelUnavailable, "a level this game cannot load leaves it at the menu");
+                That(rig.Status.Detail == FollowFailureWords.LevelNotLoaded, "waiting there as the level not loaded, never as a host at its menu");
                 That(rig.Test.Levels.Count == 1 && rig.Test.MenuLoads == 1, "having tried the level once and loaded the menu");
                 That(rig.Status.Notice == FollowFailureWords.LevelNotLoaded && rig.Runtime.Realm == NetRealm.Client && !rig.Follower.HoldsReadiness,
                     "joined, told why, and Ready there for the host's next world");

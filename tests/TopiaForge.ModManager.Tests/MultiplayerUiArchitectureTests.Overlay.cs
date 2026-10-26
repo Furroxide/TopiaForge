@@ -35,6 +35,26 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        /// <summary>
+        /// Seen in the game: a follow that left the player at the menu, as a level the game could not load does, showed a CANCEL
+        /// that cancelled nothing. The overlay's layout follows whether Cancel would stop anything, and the layout for when it
+        /// would not offers CLOSE, which dismisses the view, in CANCEL's place.
+        /// </summary>
+        private static void TheOverlayOffersCancelOnlyWhileItStopsSomething(string root)
+        {
+            var shape = OverlayMethod(root, "Shape");
+            That(shape.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(access => access.ToString() == "screen.CanCancel"),
+                "the overlay's layout follows whether Cancel would stop anything: " + shape);
+            var build = OverlayMethod(root, "BuildBody");
+            var running = build.Body!.Statements.OfType<IfStatementSyntax>().Single(statement => statement.Condition.ToString() == "shownShape != 2");
+            var buttons = running.Statement.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Where(call => call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText == "Button")
+                .Select(call => string.Join(", ", call.ArgumentList.Arguments.Take(2).Select(argument => argument.ToString())))
+                .ToArray();
+            That(buttons.Contains("\"CLOSE\", screen.Dismiss") && buttons.Contains("\"CANCEL\", screen.Cancel"),
+                "the running layouts offer CANCEL, and CLOSE once nothing runs (" + string.Join("; ", buttons) + ")");
+        }
+
         /// <summary>The connecting overlay's one method named <paramref name="name"/>, parsed from its source.</summary>
         private static MethodDeclarationSyntax OverlayMethod(string root, string name)
         {

@@ -6,8 +6,9 @@ namespace TopiaForge.ModManager.Sessions
     /// <summary>
     /// The connecting overlay: a Paper modal with the join's phase stepper (Resolving, Connecting, Authenticating, Verifying
     /// mods, Loading world, Synchronizing, Spawning), a password field when the session asks, and a failure view with Retry,
-    /// Open launcher and Copy details. Cancel, the close button and ESC all stop a running join. Its layout is rebuilt only
-    /// when it switches between running and failed; otherwise it binds through dirty-checked setters, the failure's own
+    /// Open launcher and Copy details. Cancel, the close button and ESC all stop a running join; once nothing runs that Cancel
+    /// would stop, as while a finished join lingers or a follow waits at the menu, CLOSE takes its place. Its layout is
+    /// rebuilt only when it switches between those; otherwise it binds through dirty-checked setters, the failure's own
     /// words included, so a failure that replaces another in the same layout never keeps the earlier one's.
     /// </summary>
     internal sealed class ConnectingOverlay
@@ -80,8 +81,8 @@ namespace TopiaForge.ModManager.Sessions
             opened.Show();
         }
 
-        /// <summary>Gets the overlay's layout: running, asking for a password, or failed.</summary>
-        private int Shape() => screen.HasFailed ? 2 : screen.NeedsPassword ? 1 : 0;
+        /// <summary>Gets the overlay's layout: running, asking for a password, failed, or settled with nothing Cancel would stop.</summary>
+        private int Shape() => screen.HasFailed ? 2 : screen.NeedsPassword ? 1 : screen.CanCancel ? 0 : 3;
 
         private void BuildBody()
         {
@@ -109,7 +110,10 @@ namespace TopiaForge.ModManager.Sessions
 
                 var actions = body!.Row(TopiaForgeGap.Sm);
                 actions.Spacer().Flex(1f, 0f);
-                actions.Button("CANCEL", screen.Cancel, TopiaForgeButtonStyle.Outline).Focus();
+
+                // No CANCEL that cancels nothing: a finished join, or a follow that waits at the menu, closes instead.
+                if (shownShape == 3) actions.Button("CLOSE", screen.Dismiss, TopiaForgeButtonStyle.Outline).Focus();
+                else actions.Button("CANCEL", screen.Cancel, TopiaForgeButtonStyle.Outline).Focus();
                 return;
             }
 

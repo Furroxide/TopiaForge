@@ -2202,8 +2202,9 @@ the host's: a player resolves its ids against its own packages and never shows a
   stage and once a second while it loads, but never while it only waits for the host's world to arrive, so the hold's
   60-second idle bound still ends a join whose host withholds its baseline (section 6).
 - **A level.** It loads the host's level by its scene name, with no session, as the host has none. A level this game
-  cannot load leaves it at the main menu, still joined and Ready there, and says "Your game could not load the level the
-  host is in. You stay in the session and join the host's next world."
+  cannot load leaves it at the main menu, still joined and Ready there, waiting as `LevelUnavailable` rather than as a
+  host at its menu, and says "Your game could not load the level the host is in. You stay in the session and join the
+  host's next world."
 - **The main menu.** A host at its menu leaves the player at its own, joined and Ready; a player in another world returns
   to the menu.
 - **The host moving on.** A follow on its way when a newer announcement arrives is cancelled, and the newest followed. A
@@ -2325,8 +2326,10 @@ Spawning ("Starting your controls"). A join the follow ends shows the follow's f
 can help. After the join, a change of worlds or a return to the host's world shows "Following the host", with the first
 four steps done, and its Cancel leaves the session. RETRY of a LAN join this game no longer hears, as once BROWSE has
 stopped listening, listens on the local network for the host first, for 15 seconds at most, and a host no longer there
-ends the join as "Session not found" in words that say so. [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md),
-section 5, has the rest.
+ends the join as "Session not found" in words that say so. A follow or a join that ends at the main menu because the
+host's level could not be loaded here shows Loading world not done, with the follow's words and CLOSE, since nothing
+runs that Cancel would stop; the player stays in the session, and the host's next world takes the view over.
+[MultiplayerInGameSessions.md](MultiplayerInGameSessions.md), section 5, has the rest.
 
 ### Privacy and cost
 
