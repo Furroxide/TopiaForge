@@ -11,7 +11,8 @@ namespace TopiaForge.ModManager.Sessions
     /// Runs a join the screens ask for and presents it on the connecting overlay. It asks the runtime's realm rules first,
     /// and joins only through the runtime: a game that is running is left only after "Leave current game?" is confirmed,
     /// and a game that is starting or stopping, the main menu loading after leaving a game included, is waited for on the
-    /// overlay until the rules let the join through. Then it follows the control's status onto the stepper
+    /// overlay until the rules let the join through; a LAN session this game does not hear now is listened for first
+    /// (ConnectingPresenter.Lan.cs). Then it follows the control's status onto the stepper
     /// (<see cref="ConnectingStepMap"/>), asks for a password when the session needs one, and on failure shows the failure
     /// view with Retry, Open launcher and Copy details. Cancel works throughout, and leaving is never refused.
     /// </summary>
@@ -85,13 +86,25 @@ namespace TopiaForge.ModManager.Sessions
 
             /// <summary>Waiting for a game that is starting or stopping to settle, before the join.</summary>
             Waiting,
+
+            /// <summary>Listening on the local network for a LAN session this game does not hear yet, before the join.</summary>
+            Listening,
             Joining,
             Succeeded,
-            Failed
+            Failed,
+
+            /// <summary>Following the host's world after the join: the host changed worlds, or this game left the host's world.</summary>
+            Following,
+
+            /// <summary>
+            /// The host's level could not be loaded here, so the game waits at the main menu, still joined: Loading world shows not
+            /// done, and the view offers CLOSE.
+            /// </summary>
+            Stranded
         }
 
         /// <summary>Gets whether a join is being prepared or running, so no other may start.</summary>
-        internal bool IsBusy => stage == Stage.Leaving || stage == Stage.Waiting || stage == Stage.Joining;
+        internal bool IsBusy => stage == Stage.Leaving || stage == Stage.Waiting || stage == Stage.Listening || stage == Stage.Joining;
 
         public bool IsVisible => stage != Stage.Hidden;
 
@@ -125,7 +138,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public bool CanTrust => HasFailed && failure != null && failure.CanTrust && changedServerId != null && request != null;
 
-        public bool CanCancel => IsBusy;
+        public bool CanCancel => IsBusy || stage == Stage.Following;
 
         public string DetailOf(int step) => step >= 0 && step < details.Length ? details[step] : string.Empty;
 
@@ -156,14 +169,21 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Main thread, every frame: follows the join, or what comes before it: the return to the menu, or a wait.</summary>
         internal void Tick(float deltaTime)
         {
+            WatchFollow();
             switch (stage)
             {
+                case Stage.Following:
+                    Refollow();
+                    break;
                 case Stage.Leaving:
                     // The menu may still load after the game ended; the runtime's rules say busy until it has.
                     if (menuReturned) Settle();
                     break;
                 case Stage.Waiting:
                     Settle();
+                    break;
+                case Stage.Listening:
+                    Listen(deltaTime);
                     break;
                 case Stage.Joining:
                     Follow();
@@ -175,7 +195,13 @@ namespace TopiaForge.ModManager.Sessions
                 case Stage.Failed:
                     if (retryWait > 0d) CountDown(deltaTime);
                     break;
+                case Stage.Stranded:
+                    // The view stands while the game waits at the menu; leaving, or any other move of the follow, ends it.
+                    if (FollowStatus.Stage != FollowStage.LevelUnavailable) Hide();
+                    break;
             }
+
+            KeepListening();
         }
 
         /// <summary>
@@ -260,6 +286,12 @@ namespace TopiaForge.ModManager.Sessions
 
         public void Cancel()
         {
+            if (stage == Stage.Following)
+            {
+                CancelFollowing();
+                return;
+            }
+
             if (stage == Stage.Joining)
             {
                 // Leaving is never refused: the runtime stops the join on its way, whatever the provider says.
@@ -267,7 +299,7 @@ namespace TopiaForge.ModManager.Sessions
                 context.Environment.Leave();
                 context.Status.RequestRefresh();
             }
-            else if (stage != Stage.Leaving && stage != Stage.Waiting)
+            else if (stage != Stage.Leaving && stage != Stage.Waiting && stage != Stage.Listening)
             {
                 return;
             }

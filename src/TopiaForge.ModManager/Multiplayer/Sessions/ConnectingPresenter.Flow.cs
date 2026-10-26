@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Sessions
                     Start(join);
                     return;
                 case RealmDecision.Busy:
-                    if (!fromWait) Wait(join);
+                    if (!fromWait || stage == Stage.Listening) Wait(join);
                     return;
                 case RealmDecision.ConfirmLeaveGame:
                     if (fromWait) Hide();
@@ -119,6 +119,7 @@ namespace TopiaForge.ModManager.Sessions
 
         private void Start(JoinRequest join)
         {
+            if (ListensFirst(join)) return;
             OperationResult<bool> result;
             try
             {
@@ -133,7 +134,7 @@ namespace TopiaForge.ModManager.Sessions
 
                 // The runtime asks the realm rules again before the provider hears of the join; a game that began to change
                 // meanwhile is waited for, never joined.
-                var change = context.Environment.Join(join.Target, settings);
+                var change = context.Environment.Join(join.Target, settings, LaunchedJoin(join));
                 if (change.Verdict == NetRealmTransitionVerdict.Busy)
                 {
                     Wait(join);
@@ -158,6 +159,7 @@ namespace TopiaForge.ModManager.Sessions
             }
 
             readsAtStart = context.Status.Reads;
+            FollowJoinStarted();
             join.Launch?.Started(readsAtStart);
             details[(int)ConnectingStep.Resolving] = ConnectingStepMap.FindingHost;
             statusText = "Joining " + title + "...";
@@ -208,6 +210,10 @@ namespace TopiaForge.ModManager.Sessions
             }
 
             var step = (int)ConnectingStepMap.StepOf(status.JoinPhase, tracker.Snapshot?.State, status.IsReadinessHeld);
+
+            // Once the follow prepares the host's world, its stages are the join's last steps, with its own lines (WS3.8).
+            var followed = status.JoinPhase == InternalJoinPhase.Synchronizing ? FollowStep() : -1;
+            if (followed >= 0) step = followed;
             if (step == (int)ConnectingStep.LoadingWorld) held = true;
             if (step == (int)ConnectingStep.Synchronizing && !held) skipped |= 1 << (int)ConnectingStep.LoadingWorld;
 
@@ -216,9 +222,12 @@ namespace TopiaForge.ModManager.Sessions
             reached = Math.Max(reached, step);
             var route = status.Internet.JoinRoute;
             var path = ConnectingStepMap.PathOf(request!.Target.Kind, request.AllowDirect, route);
-            details[step] = step == (int)ConnectingStep.Synchronizing && details[step].IndexOf('/') > 0
-                ? details[step]
-                : ConnectingStepMap.DetailOf(status.JoinPhase, (ConnectingStep)step, path);
+            if (followed < 0)
+            {
+                details[step] = step == (int)ConnectingStep.Synchronizing && details[step].IndexOf('/') > 0
+                    ? details[step]
+                    : ConnectingStepMap.DetailOf(status.JoinPhase, (ConnectingStep)step, path);
+            }
 
             // Once the link is up the status names its route, and the Connecting step says how it connected.
             if (route != InternalConnectionRoute.None) details[(int)ConnectingStep.Connecting] = path;
@@ -231,6 +240,7 @@ namespace TopiaForge.ModManager.Sessions
 
         private void Ended(InternalLiveStatus status)
         {
+            if (FollowEnded(status)) return;
             var reason = status.JoinFailure;
             if (reason == InternalLiveFailure.Left || (reason == InternalLiveFailure.Cancelled && cancelRequested))
             {
@@ -316,6 +326,8 @@ namespace TopiaForge.ModManager.Sessions
             statusText = "Joined " + title + ".";
             Bump();
             context.Notify(statusText, ScreenTone.Success);
+            if (FollowsThisJoin && FollowStatus.Stage == FollowStage.AtMenu) context.Notify(HostAtMenu);
+            else if (FollowsThisJoin && FollowStatus.Stage == FollowStage.LevelUnavailable) Strand();
             RecordHistory(status.Server);
         }
 

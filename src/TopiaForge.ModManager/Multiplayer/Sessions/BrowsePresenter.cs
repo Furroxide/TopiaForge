@@ -90,7 +90,7 @@ namespace TopiaForge.ModManager.Sessions
             if (control == null) return;
             try
             {
-                control.StartBrowsing();
+                if (!context.LanBrowsing.Start(LanBrowseUse.Browse)) return;
             }
             catch (Exception)
             {
@@ -110,7 +110,7 @@ namespace TopiaForge.ModManager.Sessions
             CancelQueries();
             try
             {
-                context.Environment.Control?.StopBrowsing();
+                context.LanBrowsing.Stop(LanBrowseUse.Browse);
             }
             catch (Exception)
             {

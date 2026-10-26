@@ -141,9 +141,33 @@ synchronizes. The stepper follows that order on the steps the plan names:
 | Resolving | Resolving ("Finding the host") |
 | Awaiting the password, preparing it, connecting, reconnecting | Connecting ("Password needed", "LAN", "Direct" or "Relay") |
 | Synchronizing, before the host accepts | Authenticating ("Waiting for the host") |
-| Synchronizing, with a readiness hold | Loading world (since WS3.6, the hold is the network world's while its baseline arrives) |
+| Synchronizing, while session follow prepares and loads the host's world | Loading world ("Getting your mods ready", "Loading the host's world", or for an arena "Loading the host's level (1/2)" and then "Building the host's arena (2/2)") |
+| Synchronizing, while session follow waits for the host's world to arrive | Synchronizing ("Receiving the world", then n/m as the network world reports it) |
+| Synchronizing, while session follow starts this player's controls | Spawning ("Starting your controls") |
+| Synchronizing, with a readiness hold | Loading world (the follow's hold and the network world's, while the follow waits for the host's announcement) |
 | Synchronizing | Synchronizing ("Receiving the world", or n/m once the network world reports it) |
 | In session | every step done; Spawning completes until avatars land (WS3.10) |
+
+Session follow (WS3.8, [MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md), section 19) runs the
+host's world on the joined player, and the join completes once the player is Ready in it. A join to a host at its main
+menu completes there, and adds "The host is at the main menu. You join their next world." A host that goes to its menu
+later has the game follow it there with the same toast. For as long as the game waits at a menu, MULTIPLAYER's status
+line, in place of the server joined, and SESSION, in place of "Playing on the host's session.", say why: those words,
+or "The host is in a level your game could not load. You join their next world." at the fallback menu. Both go back
+once the game follows the host's next world, and clear when it leaves. A join the follow ends shows
+the follow's own failure, in this game's words and at its own step, with RETRY where joining again can help; a failure
+of an earlier join never ends this one. After the join, when the host changes worlds or the game returns to the host's
+world after straying, the overlay shows "Following the host" with the first four steps done, says "Back in the host's
+world." once it runs, and its Cancel leaves the session. The follow's notices, such as "You returned to the main menu,
+so you left the session.", show once each. "Leave server?" says "You leave the session and return to the main menu."
+This also covers native-level follows after joining. A later follow failure shows its own words and RETRY where it
+helps, including a failure that happens between two frames after the original join overlay closed. Dismissing it
+keeps it closed, and a late failure from a cancelled follow does not reopen the overlay. A join or a follow that leaves
+the game at the main menu because the host's level could not be loaded here is shown as what it is: Loading world not
+done, "Your game could not load the level the host is in. You stay in the session and join the host's next world." in
+the status line and once as a toast, and CLOSE, since nothing runs that Cancel would stop. The view stays until it is
+closed, the player leaves, or the host's next world takes it over; a join there never says the host is at its menu.
+Whenever nothing runs that Cancel would stop, as while a finished join lingers, the overlay offers CLOSE in its place.
 
 Verifying mods is done once the host admits the player. A failure stops at its own step or at the step the join reached,
 whichever is later, and steps it never ran show skipped: mods that do not match this game's check fail at Verifying
@@ -154,12 +178,25 @@ record's sentences and add that next step. A service turning requests away with 
 overlay, a day at most, which then joins again by itself, once; without a named delay RETRY is offered at once. A
 server the service no longer lists leaves the recent servers, and a wrong or withdrawn invite offers no retry. RETRY
 after the host refused the password, or turned away too many wrong ones, joins again without it, so the overlay asks
-for the password in place instead of sending the refused one again. Once the link is up, the Connecting step says the
-route the status reports, Relay or Direct. The failure view offers Retry where trying again can help, Open launcher
-where the launcher can take the join over, Copy details, and Trust for a typed host that now serves a different server,
+for the password in place instead of sending the refused one again. The provider finds a LAN session only among those
+this game hears while it listens on the local network, and BROWSE stops listening when its tab closes, so a LAN join
+whose session this game does not hear now, such as RETRY while the player plays, listens first ("Listening on your
+network"), for 15 seconds at most as a launched LAN join does, and joins once the host is heard. A host no longer there
+ends the join as "Session not found": "The session was not heard on your local network. Check that its host is still
+hosting on this network, then try again." BROWSE, the overlay and a launched join share the browser, each releasing only
+its own use of it. The overlay releases its share once the provider has looked the session up; a search still needed
+by BROWSE or a launch keeps running, including when RETRY is cancelled. The last release stops a browser these screens
+started, never an external search. Ownership is checked at the action, not from a cached status. Hearing the host while
+the game is busy moves to Waiting and releases the overlay's share; once the game settles, a missing beacon gets a new
+bounded listen. Relay and direct joins never listen. Once the link is up, the
+Connecting step says the route the status reports, Relay or Direct. The failure view offers Retry where trying again
+can help, Open launcher where the launcher can take the join over, Copy details, and Trust for a typed host that now
+serves a different server,
 or whose server could not be checked because this game's record of earlier ones could not be read
 (`KnownHostsUnreadable`). CONNECT's check asks the same "Trust this server?" question for both, each with its own words.
-Cancel, the close button and ESC stop a running join at any step, and leaving is never refused.
+A failure that replaces another without the view closing, as a RETRY that fails at once does, shows its own heading and
+words, never the earlier failure's: the view binds them on every frame. Cancel, the close button and ESC stop a running
+join at any step, and leaving is never refused.
 
 The overlay and the prompts are persistent modals: joining from a running game returns to the main menu first, and a
 modal that is not persistent is destroyed with the scene it opened in, which in the game left the join running with no
@@ -189,7 +226,13 @@ has loaded, a native scene change, any other operation that holds the session, a
   starting or stopping, the main menu loading included, waits on the connecting overlay, with Cancel, until the rules
   allow it; a game that runs by then asks "Leave current game?" first. The runtime asks the rules again as the join
   starts, so a game that began to change meanwhile is waited for, never joined. A host or a joined player ends that
-  session first.
+  session first. A level the game's own menus loaded counts as a running game for a join, so it asks "Leave current
+  game?" too.
+- **A game started while a join resolves** is never replaced: when the join links up, session follow ends it with "You
+  started a game while joining", and the game runs on. RETRY asks "Leave current game?" first.
+- **A joined player** runs the host's world: a launch from GAMEMODES is refused while it is joined, since the world is
+  the host's to choose; a level the game's own buttons load takes it back to the host's world; Stop and Restart are the
+  host's; and the main menu leaves the session.
 - **Hosting** a running solo game opens it in place. At the main menu the chosen game starts first, and hosting opens
   it once the rules say the game runs; one that stops first opens nothing.
 - **Leaving** is never refused, busy or not: ending the session, leaving it and cancelling a join all go through the
@@ -251,6 +294,11 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
   the provider's status moves, its one result, and its session's end. Only a status read after the session began
   speaks for it, as on the connecting overlay; a session still running when a newer launch begins is followed to its
   end; and a live join whose session runs as the game closes ends as the player leaving it.
+- **The host's world in the records.** A launched join hands the realm its request as it joins, while its launch still
+  waits for its result, and session follow runs the host's world under it (WS3.8): the join's records then carry the
+  follow's phase and the host's world session, a success stands at Running with that session, and its end names it. A
+  live join's records take the follow's progress through `IMultiplayerSessionEnvironment.SubscribeSessionProgress`. A
+  join started in game, and RETRY after a launched join failed, hand no request, and their follow reports nothing.
 - **Said in game too.** The player is looking at the game, not the launcher: a launch this game cannot start says why
   in a toast, a launched host whose hosting fails before it opens says so in HOST's words, and a LAN session that is
   looked for says so, and what to do next when it is never heard.
@@ -264,7 +312,7 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
 | --- | --- |
 | `IMultiplayerVoiceSlot` in the VOICE sub-tab | The voice slice |
 | `HostPresenter.PendingPolicies` | The Sandbox host policy |
-| `ConnectingPresenter.ReportSynchronization(done, total)` | The network world's baseline: WS3.6 reports it as `NetworkWorld.Progress`, which nothing reads into the stepper yet |
+| `ConnectingPresenter.ReportSynchronization(done, total)` | Unused: session follow (WS3.8) carries the network world's n/m (`NetworkWorld.Progress`) to the Synchronizing step through its own status (`SessionFollowStatus`) |
 | The launcher's side of the handoff, live-join and journal channels this game writes and reads | The launcher's join and preference flows (WS6) |
 
 ## 11. Tests
@@ -285,7 +333,10 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
   session announces, a refused password asked for again rather than resent, the host's invite code copied without a
   toast repeating it, a named delay waited out at any frame rate and then joined again by itself, every failure saying
   what to do next, an invite's link pasted as its code, the game last hosted offered first, and settled frames, a
-  waiting question's included, allocating nothing with mods loaded.
+  waiting question's included, allocating nothing with mods loaded. Over session follow's status: the follow's steps
+  filling the stepper's last three, an arena's two loads, a host at its menu, a join the follow ends showing the
+  follow's words at its step with RETRY only where it helps, an earlier join's failure never ending this one,
+  "Following the host" after the join with its Cancel leaving, and the follow's notices once each.
 - **Launched sessions** (`MultiplayerSessionsTests`, over the recording control): a launched host waiting for its game,
   opened in place or at the menu, its password typed in game, and a stopped game or a missing provider failing at once;
   a launched join under its own privacy and name with no direct prompt, leaving a running game only when told, a LAN
@@ -293,14 +344,19 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
   handoffs to the launcher that owns the game; the preferences as the launcher's journal apply makes them; frames
   with a launch at rest allocating nothing; and each launch's records its own: a join started after a wait settled by
   its own status, a running session followed past a newer launch, a command failing while its launch waits, a live
-  join's end as the game closes, and a launch that cannot start saying so in game. Over the real runtime and provider
+  join's end as the game closes, and a launch that cannot start saying so in game; a launched join handing the realm
+  its request and RETRY after it failed handing none, and a live join's records taking its follow's progress under its
+  id, at Running with the host's world session once in session, until they end. Over the real runtime and provider
   (`LaunchedSessionTests`, in the multiplayer harness): a hosted launch on its own port and privacy, a join pinned to
   the descriptor the launcher checked and refused when it differs, re-signed, another server's, or replayed from
   another endpoint, relay-only never going direct, a live join from a running game, a join after an earlier session,
   the handoff, and a preference change reaching the journal, with no channel touched on the frame's thread and no
   address in any record, handoff, toast or log.
 - **Records** (`SessionLaunchRecordsTests`): every progress and outcome V2 fixture written byte for byte through the
-  runtime's publisher and the staging store.
+  runtime's publisher and the staging store; and over the real orchestrator, a launched join whose session follow runs
+  the host's world under its request: its own phase while it synchronizes, its success at Running with the host's world
+  session, the host's next world moving the phase on, a followed world's end withheld, the provider's end as its
+  terminal record, and a later join started in game writing nothing more.
 - **The frame boundary** (`MultiplayerFrameGuardTests`): a throwing presenter, prompt stage or tab neither breaks the
   frame nor logs an address, in its words or its stack; each failure is logged once, and the log is bounded.
 - **Wording** (`MultiplayerPrivacyTextTests`): the constants against the approved document, parsed.

@@ -194,6 +194,8 @@
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Cleanup.cs" Link="Runtime/GamemodeSessionOrchestrator.Cleanup.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Operations.cs" Link="Runtime/GamemodeSessionOrchestrator.Operations.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.MainMenu.cs" Link="Runtime/GamemodeSessionOrchestrator.MainMenu.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Follow.cs" Link="Runtime/GamemodeSessionOrchestrator.Follow.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/SessionFollowPlan.cs" Link="Runtime/SessionFollowPlan.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Participant.cs" Link="Runtime/GamemodeSessionOrchestrator.Participant.cs" />
     <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeKey.cs" Link="Runtime/TopiaForgeKey.cs" />
     <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/HotkeyRegistrationStore.cs" Link="Runtime/HotkeyRegistrationStore.cs" />
@@ -387,6 +389,11 @@
     <Compile Include="..\..\mods\TopiaForge.Chronos\ChronosNetBridge.cs" />
     <Compile Include="..\..\mods\TopiaForge.Chronos\ChronosNetRules.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/FakeGameClock.cs" Link="Multiplayer/FakeGameClock.cs" />
+  </ItemGroup>
+
+  <!-- Session follow (WS3.8) is Unity-free too: the host's announcements, their wire and the joined player's follower. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Follow/*.cs" Link="Runtime/Multiplayer/Follow/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- Intent tracking (WS3.4) is Unity-free too: the runtime's tracker, the decorators that feed it, the frame dispatch in

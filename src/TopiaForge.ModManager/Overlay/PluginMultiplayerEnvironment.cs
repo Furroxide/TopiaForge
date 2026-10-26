@@ -45,8 +45,8 @@ namespace TopiaForge.ModManager
         public MultiplayerRealmChange OpenToMultiplayer(InternalHostSettings settings) =>
             plugin.Multiplayer?.OpenToMultiplayer(settings) ?? Unavailable(NetRealm.ListenHost);
 
-        public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings) =>
-            plugin.Multiplayer?.Join(target, settings) ?? Unavailable(NetRealm.Client);
+        public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings, string? launchRequestId = null) =>
+            plugin.Multiplayer?.Join(target, settings, launchRequestId) ?? Unavailable(NetRealm.Client);
 
         public MultiplayerRealmChange Leave() =>
             plugin.Multiplayer?.Leave() ??
@@ -107,7 +107,11 @@ namespace TopiaForge.ModManager
 
         public SessionPhase LocalPhase => plugin.LocalPhase;
 
+        public SessionFollowStatus Follow => plugin.FollowStatus;
+
         public ILaunchedSession? TakeLaunchedSession() => plugin.TakeLaunchedSession();
+
+        public IDisposable SubscribeSessionProgress(string requestId, Action<LaunchProgress> progress) => plugin.SubscribeSessionProgress(requestId, progress);
 
         public long UnixSeconds => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 

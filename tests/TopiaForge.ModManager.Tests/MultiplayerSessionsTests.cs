@@ -36,6 +36,19 @@ namespace TopiaForge.ModManager.Tests
             AJoinDuringAMainMenuLoadWaits(root);
             LeavingIsNeverRefused();
             ConnectingWalksThePhases();
+            ConnectingShowsTheFollow();
+            AFollowFailureShowsItsOwnWords();
+            AFollowAfterTheJoinShowsFollowing();
+            ARefollowFailureShowsItsOwnWords();
+            ARetryThatFailsAtOnceShowsItsOwnWords();
+            RetryListensForALanHostFirst();
+            RetrySharesTheLaunchSearch();
+            RetryKeepsListeningWhenBrowseCloses();
+            LanSearchOwnershipSurvivesStaleStatus();
+            ALanSearchThatCannotStartHoldsNoShare();
+            HearingTheHostWhileBusyReleasesTheBrowser();
+            ALevelThisGameCannotLoadShowsAsNotLoaded();
+            AGuestWaitingAtTheMenuIsToldWhy();
             EveryFailureHasAClearMessage();
             FailuresStopAtTheirStep();
             CancelWorksThroughout();
@@ -70,6 +83,7 @@ namespace TopiaForge.ModManager.Tests
             LaunchedSessionsStart();
             LiveJoinsAndTheLauncher(root);
             LaunchesEndOnTheirOwnRecords();
+            LaunchedJoinsReportTheirFollows();
             SettledFramesAllocateNothing();
             VoiceSaysWhenTheSessionOffersNone();
             Console.WriteLine("MultiplayerSessionsTests passed.");

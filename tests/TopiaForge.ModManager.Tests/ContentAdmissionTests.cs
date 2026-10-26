@@ -288,10 +288,11 @@ namespace TopiaForge.ModManager.Tests
             public bool IsSceneBusy => inner.IsSceneBusy;
             public void SetSessionAdmissionGate(Func<bool> busy) => inner.SetSessionAdmissionGate(busy);
             public Task<NativeDrainResult> WaitForIdleAsync() => inner.WaitForIdleAsync();
-            public OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string id)
+            public OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string id,
+                SceneTransitionPriority priority = SceneTransitionPriority.UserInitiated)
             {
                 if (ThrowReserve) { ThrowReserve = false; throw new InvalidOperationException("reserve-fault"); }
-                var result = inner.TryReserve(owner, id);
+                var result = inner.TryReserve(owner, id, priority);
                 if ((!ThrowGrantCleanup && !ThrowClose && CloseBarrier == null) || !result.TryGetValue(out var value)) return result;
                 var wrapped = new FaultReservation(value, ThrowGrantCleanup, ThrowClose, CloseBarrier, () => CloseEntered = true);
                 ThrowGrantCleanup = false; ThrowClose = false; CloseBarrier = null;

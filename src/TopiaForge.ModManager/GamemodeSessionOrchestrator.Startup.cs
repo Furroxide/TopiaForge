@@ -93,7 +93,10 @@ namespace TopiaForge.ModManager
                 Commit(record, SessionPhase.Stopping);
             TryCleanup(record, record.Cancellation.Cancel);
             foreach (var scope in record.Scopes.Values) TryCleanup(record, scope.BeginStop);
-            if (record.Starting)
+            // A follow is no launch command of this game's own (WS3.8): its start ends without a launch outcome.
+            if (record.Starting && record.Follow != null)
+                record.Start.TrySetResult(launchFailure ?? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Session startup was cancelled."));
+            else if (record.Starting)
                 CompleteCommand(record.Start, record.Identity.RequestId, "launch-target", record.Identity.SessionId,
                     launchFailure ?? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Session startup was cancelled."));
         }

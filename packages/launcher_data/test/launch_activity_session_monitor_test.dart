@@ -150,6 +150,69 @@ void main() {
     expect(watcher.current.unconfirmed, isFalse);
   });
 
+  test('a join finishes after following the host into another world', () async {
+    final watcher = monitor('join-session');
+    addTearDown(watcher.dispose);
+    write(
+      'launch-outcome',
+      LaunchTransport.writeOutcome(
+        LaunchOutcome(
+          kind: 'launch',
+          requestId: 'request',
+          command: 'join-session',
+          sessionId: 'first-world',
+          sequence: 2,
+          status: 'succeeded',
+          phase: 'running',
+          multiplayer: join(),
+        ),
+      ),
+    );
+    await watcher.pollOnce();
+    write(
+      'launch-progress',
+      LaunchTransport.writeProgress(
+        LaunchProgress(
+          requestId: 'request',
+          sessionId: 'next-world',
+          sequence: 3,
+          phase: 'running',
+          session: LaunchProgressSession(
+            role: LaunchSessionRole.join,
+            intentId: 'intent-1',
+            state: LaunchSessionState.inSession,
+          ),
+        ),
+      ),
+    );
+    await watcher.pollOnce();
+    expect(watcher.current.progress!.sessionId, 'next-world');
+    expect(watcher.finished, isFalse);
+    write(
+      'session-outcome',
+      LaunchTransport.writeOutcome(
+        LaunchOutcome(
+          kind: 'session',
+          requestId: 'request',
+          sessionId: 'next-world',
+          sequence: 4,
+          status: 'succeeded',
+          phase: 'idle',
+          multiplayer: LaunchOutcomeMultiplayer(
+            role: LaunchSessionRole.join,
+            intentId: 'intent-1',
+            endReason: LaunchSessionEndReason.left,
+          ),
+        ),
+      ),
+    );
+    await watcher.pollOnce();
+    expect(watcher.finished, isTrue);
+    expect(watcher.current.sessionOutcome!.sessionId, 'next-world');
+    expect(watcher.current.unconfirmed, isFalse);
+    expect(processAlive, isTrue);
+  });
+
   test('a failed join finishes with its failure', () async {
     final watcher = monitor('join-session');
     addTearDown(watcher.dispose);

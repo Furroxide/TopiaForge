@@ -27,10 +27,12 @@ namespace TopiaForge.ModRuntime.Tests
             if (args.Length > 0)
                 return args.Length != 2 ? 2 : args[0] == "--binding-case" ? RunBindingCase(args[1])
                     : args[0] == "--generated-binding-case" ? RunGeneratedBindingCase(args[1])
-                    : args[0] == "--malformed-selection-case" ? RunMalformedSelectionCase(args[1]) : 2;
+                    : args[0] == "--malformed-selection-case" ? RunMalformedSelectionCase(args[1])
+                    : args[0] == "--follow-case" ? RunFollowCase(args[1]) : 2;
             TestProductionBindingsInFreshProcesses();
             TestGeneratedPackagesInFreshProcesses();
             TestMalformedSelectionInFreshProcesses();
+            TestSessionFollowInFreshProcesses();
             var root = Directory.CreateTempSubdirectory("TopiaForgeModRuntimeTests-").FullName;
             try
             {

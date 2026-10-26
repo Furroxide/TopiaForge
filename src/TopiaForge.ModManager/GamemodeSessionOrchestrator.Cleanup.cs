@@ -58,12 +58,15 @@ namespace TopiaForge.ModManager
             if (ReferenceEquals(current, record)) current = null;
             Commit(record, SessionPhase.Idle);
             record.TerminalPublished = true;
-            foreach (var error in record.Errors) Report(error);
+            foreach (var error in record.Errors) Report(error, record.Follow != null);
             var result = record.Errors.Count == 0 ? OperationResult<bool>.Success(true)
                 : OperationResult<bool>.Failure(ModErrorCode.External, Message(string.Join("; ", record.Errors.SelectMany(CleanupMessages).Distinct(StringComparer.Ordinal))));
-            Publish(Outcome, new LaunchOutcome("session", record.Identity.RequestId, NextSequence(), "idle",
-                result.Succeeded ? (record.ReachedRunning ? "succeeded" : "cancelled") : "failed", Array.Empty<LaunchBlock>(), record.Identity.SessionId,
-                error: result.Succeeded ? null : new LaunchExecutionError("external", result.ErrorMessage)));
+            if (record.Follow != null && !result.Succeeded)
+                result = OperationResult<bool>.Failure(result.ErrorCode, SessionFollower.Scrub(result.ErrorMessage));
+            if (ReportsToLauncher(record))
+                Publish(Outcome, new LaunchOutcome("session", record.Identity.RequestId, NextSequence(), "idle",
+                    result.Succeeded ? (record.ReachedRunning ? "succeeded" : "cancelled") : "failed", Array.Empty<LaunchBlock>(), record.Identity.SessionId,
+                    error: result.Succeeded ? null : new LaunchExecutionError("external", result.ErrorMessage)));
             if (!retainLease) lifecycle.Release(record.Lease);
             record.Stopped.TrySetResult(result);
         }

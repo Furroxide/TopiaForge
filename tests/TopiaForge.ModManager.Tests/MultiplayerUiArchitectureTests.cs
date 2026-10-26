@@ -43,6 +43,8 @@ namespace TopiaForge.ModManager.Tests
             LauncherChannelsAreCalledOffTheFrame();
             LaunchesShowBeforeTheOverlayOpens(root);
             TheOverlayFrameRunsThroughTheGuard(root);
+            TheOverlayShowsTheCurrentFailure(root);
+            TheOverlayOffersCancelOnlyWhileItStopsSomething(root);
             NothingLogs(root);
             UiFilesStayWithinTheirCap(root);
             Console.WriteLine("MultiplayerUiArchitectureTests passed.");

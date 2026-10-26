@@ -90,9 +90,7 @@ namespace TopiaForge.ModManager
             var refused = CheckDispatchState(grant, token);
             if (refused != null) return refused;
             var denied = coordinator.CheckAuthority(new SceneTransitionRequest(
-                grant.PackageId, request.SceneName,
-                request.Automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated,
-                request.Reason));
+                grant.PackageId, request.SceneName, PriorityFor(request.Automatic), request.Reason));
             if (denied != null) return Failure(ModErrorCode.NotAuthoritative, denied);
             // Authority is provider-backed code and may revoke or reenter this reservation.
             refused = CheckDispatchState(grant, token);
@@ -132,6 +130,14 @@ namespace TopiaForge.ModManager
             coordinator.Release(this);
             drained.TrySetResult(NativeDrainResult.Drained);
         }
+        /// <summary>
+        /// The priority a grant borrowed from this reservation acts with: a session follow's own, so the world provider a
+        /// joined player follows its host into dispatches as the follow, and otherwise the request's.
+        /// </summary>
+        private SceneTransitionPriority PriorityFor(bool automatic) => Info.Priority == SceneTransitionPriority.SessionFollow
+            ? SceneTransitionPriority.SessionFollow
+            : automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated;
+
         internal void ObserveScene(SceneSnapshot scene) => operation?.ObserveScene(scene);
         internal void CheckTimeout(DateTime nowUtc, TimeSpan timeout) => operation?.CheckTimeout(nowUtc, timeout);
         private static OperationResult<IInternalNativeSceneOperation> Failure(ModErrorCode code, string message) =>
@@ -163,7 +169,7 @@ namespace TopiaForge.ModManager
                 var refused = CheckAcquireState();
                 if (refused != null) return refused;
                 var denied = reservation.coordinator.CheckAuthority(new SceneTransitionRequest(PackageId, sceneName,
-                    automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated, reason));
+                    reservation.PriorityFor(automatic), reason));
                 if (denied != null)
                     return OperationResult<IInternalSceneTransitionLease>.Failure(ModErrorCode.NotAuthoritative, denied);
                 refused = CheckAcquireState();

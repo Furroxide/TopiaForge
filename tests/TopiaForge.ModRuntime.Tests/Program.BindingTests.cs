@@ -291,6 +291,8 @@ namespace TopiaForge.ModRuntime.Tests
             internal BoundEnvironment(RuntimeBindingRegistry registry) { this.registry = registry; }
             public RuntimeSessionSnapshot Capture() => registry.Capture();
             public Task<OperationResult<bool>> LoadMainMenuAsync(IInternalSceneTransitionService transitions, CancellationToken cancellationToken) => Task.FromResult(OperationResult<bool>.Success(true));
+            public Task<OperationResult<bool>> LoadSceneAsync(IInternalSceneTransitionService transitions, string sceneName, TransformState? spawn,
+                CancellationToken cancellationToken) => Task.FromResult(OperationResult<bool>.Success(true));
         }
     }
 }

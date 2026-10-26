@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager
         private readonly IModLoadObserver? loadObserver;
         private readonly MultiplayerRuntime multiplayer;
         private readonly NetworkWorld networkWorld;
+        private readonly MultiplayerSceneTransitionAuthorityPolicy sceneAuthority;
         private readonly List<LoadedMod> loadedMods = new List<LoadedMod>();
         private readonly List<string> loadedModIds = new List<string>();
         private readonly ReadOnlyCollection<string> loadedModIdsView;
@@ -87,6 +88,7 @@ namespace TopiaForge.ModManager
             // Manager-owned framework service: scene-transition arbitration is available to every mod from
             // the first OnLoad and cannot be shadowed or removed through the public mod registry.
             var authority = new MultiplayerSceneTransitionAuthorityPolicy(serviceRegistry);
+            sceneAuthority = authority;
             if (coreGameplayServices == null)
             {
                 nativeHost = NativeTransitionHost.GetOrCreate(logger.Info, authority);

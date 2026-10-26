@@ -85,6 +85,20 @@ namespace TopiaForge.ModManager.Tests
             if ((args.Length == 1 || args.Length == 2) && string.Equals(args[0], "--legacy-launch-discovery", StringComparison.Ordinal))
             { LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot(), args.Length == 2 ? args[1] : null).GetAwaiter().GetResult(); return 0; }
 
+            if (args.Length == 1 && string.Equals(args[0], "--session-follow", StringComparison.Ordinal))
+            {
+                var followRoot = Directory.CreateTempSubdirectory("TopiaForgeFollowTests-").FullName;
+                try
+                {
+                    SessionFollowTests.Run(followRoot);
+                    SessionFollowerTests.Run(Path.Combine(followRoot, "follower"));
+                    SessionFollowHostTests.Run(Path.Combine(followRoot, "host"));
+                    SessionLaunchRecordsTests.Run(FindRepoRoot(), Path.Combine(followRoot, "records"));
+                    return 0;
+                }
+                finally { TryDelete(followRoot); }
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--session-lifecycle", StringComparison.Ordinal))
             {
                 var sessionRoot = Directory.CreateTempSubdirectory("TopiaForgeSessionTests-").FullName;
@@ -94,6 +108,9 @@ namespace TopiaForge.ModManager.Tests
                     SessionLifecycleTests.Run(Path.Combine(sessionRoot, "state"));
                     GamemodeSessionOrchestratorTests.Run(sessionRoot);
                     GamemodeParticipantRealmTests.Run(Path.Combine(sessionRoot, "participant"));
+                    SessionFollowTests.Run(Path.Combine(sessionRoot, "follow"));
+                    SessionFollowerTests.Run(Path.Combine(sessionRoot, "follower"));
+                    SessionFollowHostTests.Run(Path.Combine(sessionRoot, "follow-host"));
                     SessionActivationTests.Run(sessionRoot);
                     ContentAdmissionTests.Run(Path.Combine(sessionRoot, "content-admission"));
                     WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
@@ -410,6 +427,9 @@ namespace TopiaForge.ModManager.Tests
                 SessionLifecycleTests.Run(root + "-state");
                 GamemodeSessionOrchestratorTests.Run(root + "-session");
                 GamemodeParticipantRealmTests.Run(root + "-participant");
+                SessionFollowTests.Run(Path.Combine(root, "session-follow"));
+                SessionFollowerTests.Run(Path.Combine(root, "session-follower"));
+                SessionFollowHostTests.Run(Path.Combine(root, "session-follow-host"));
                 SessionActivationTests.Run(root + "-activation");
                 ContentAdmissionTests.Run(root + "-content-admission");
                 RuntimeSessionSelectionTests.Run();

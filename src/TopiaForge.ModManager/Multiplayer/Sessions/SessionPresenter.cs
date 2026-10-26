@@ -40,6 +40,9 @@ namespace TopiaForge.ModManager.Sessions
         private string inviteText = string.Empty;
         private int titleVersion = -1;
 
+        // Why a joined game waits at the main menu, as SESSION last showed it; it moves with the follow alone.
+        private string shownWaiting = string.Empty;
+
         internal SessionPresenter(MultiplayerScreensContext context)
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));
@@ -164,10 +167,13 @@ namespace TopiaForge.ModManager.Sessions
             }, context.IsHosting));
         }
 
+        /// <summary>A joined player's game runs the host's world, which it cannot keep alone, so leaving returns it to the main menu (WS3.8).</summary>
+        internal const string LeaveBody = "You leave the session and return to the main menu.";
+
         public void Leave()
         {
             if (!CanLeave) return;
-            context.Ask(PrivacyPrompts.Destructive("Leave server?", "You leave the session and keep playing on your own.", "LEAVE", confirmed =>
+            context.Ask(PrivacyPrompts.Destructive("Leave server?", LeaveBody, "LEAVE", confirmed =>
             {
                 if (confirmed) context.LeaveOnline("You left the session.");
             }, context.IsJoined));
