@@ -65,6 +65,7 @@ namespace TopiaForge.ModManager.Tests
             That(rig.Test.Hosted.FollowedSessionId == host && rig.Test.Hosted.Current.Phase == SessionPhase.Running, "with the host's session id");
             That(rig.Guest.Holds == 0 && !rig.Follower.HoldsReadiness, "and the player is Ready once it runs");
             That(rig.Policy.IsFollowing, "the grant stays while joined, for the host's next world");
+            That(rig.Status.NoticeVersion == 0, "the first arrival belongs to the join, so it adds no re-follow toast");
             That(rig.Guest.ProgressReports >= 3, "each stage of the follow counts as progress on its hold (" + rig.Guest.ProgressReports + ")");
 
             var allocated = Allocated(() => rig.Follow.Run(0.016f));
@@ -225,6 +226,11 @@ namespace TopiaForge.ModManager.Tests
         {
             using (var rig = new FollowRig(root))
             {
+                rig.Test.Menu = _ =>
+                {
+                    rig.Scene.Activated(GameScenes.MainMenuSceneName);
+                    return Task.FromResult(OperationResult<bool>.Success(true));
+                };
                 rig.Test.Level = (scene, _) =>
                 {
                     rig.Scene.Activated(scene);
@@ -234,11 +240,16 @@ namespace TopiaForge.ModManager.Tests
                 rig.Announce(HostWorldState.Level("Downtown"));
                 rig.Until(() => rig.Status.Stage == FollowStage.InLevel, "the host's level loads here");
                 That(rig.Test.Levels.Single().Scene == "Downtown" && !rig.Follower.HoldsReadiness, "by its scene name, and the player is Ready in it");
+                var notices = rig.Status.NoticeVersion;
                 rig.Announce(HostWorldState.Menu);
                 rig.Until(() => rig.Status.Stage == FollowStage.AtMenu, "the host went to the main menu");
                 That(rig.Test.MenuLoads == 1 && rig.Runtime.Realm == NetRealm.Client, "this game loads it too, and stays joined");
                 That(rig.Status.Notice == FollowFailureWords.HostAtMenu && rig.Status.WaitingLine == FollowFailureWords.HostAtMenu,
                     "and the player is told the host is at its menu, once as a toast and for as long as the game waits there");
+                That(rig.Status.NoticeVersion == notices + 1, "the menu arrival adds exactly one notice");
+                rig.Announce(HostWorldState.Menu);
+                for (var frame = 0; frame < 20; frame++) rig.Frame();
+                That(rig.Status.NoticeVersion == notices + 1, "waiting and a repeated menu announcement add no further notice");
             }
 
             using (var rig = new FollowRig(root + "-missing"))

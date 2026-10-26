@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Sessions
                     Start(join);
                     return;
                 case RealmDecision.Busy:
-                    if (!fromWait) Wait(join);
+                    if (!fromWait || stage == Stage.Listening) Wait(join);
                     return;
                 case RealmDecision.ConfirmLeaveGame:
                     if (fromWait) Hide();

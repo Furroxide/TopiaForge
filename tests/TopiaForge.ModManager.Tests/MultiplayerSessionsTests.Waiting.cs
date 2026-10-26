@@ -77,6 +77,9 @@ namespace TopiaForge.ModManager.Tests
             That(settled.Presenter.StatusText == FollowFailureWords.HostAtMenu && settled.Presenter.Session.Subtitle == FollowFailureWords.HostAtMenu,
                 "a join to a host at its menu says so on MULTIPLAYER and SESSION too");
             Settled("joined, waiting at the host's menu", settled);
+            settled.Environment.Follow.Move(FollowStage.LevelUnavailable, FollowFailureWords.LevelNotLoaded);
+            settled.Frame();
+            Settled("joined, waiting for a level this game can load", settled);
         }
 
         /// <summary>
@@ -160,6 +163,18 @@ namespace TopiaForge.ModManager.Tests
                 "the join and why the game waits are toasted, and the host is never said to be at its menu");
             joining.Frame(60);
             That(view.IsVisible, "and the view stays until the player closes it");
+
+            // A real later failure replaces the settled view, and RETRY can start another join after it left.
+            var failure = FollowFailureWords.For(FollowFailureKind.WorldLoadFailed, ModErrorCode.External);
+            status.Refollowing();
+            status.Fail(failure);
+            joining.Status(InternalSessionRole.Solo, InternalJoinPhase.Ended, InternalLiveFailure.Left);
+            joining.Environment.SessionSnapshot = null;
+            joining.Frame();
+            That(view.HasFailed && view.FailureTitle == failure.Title && view.CanRetry, "a stranded view never hides a later failure");
+            var joins = Calls(joining, "Join:");
+            view.Retry();
+            That(Calls(joining, "Join:") == joins + 1 && view.CanCancel && !view.HasFailed, "the settled view does not block another join");
         }
     }
 }

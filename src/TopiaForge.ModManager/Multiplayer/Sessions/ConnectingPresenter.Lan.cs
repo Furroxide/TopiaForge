@@ -10,9 +10,9 @@ namespace TopiaForge.ModManager.Sessions
     /// on the local network, and BROWSE stops listening once its tab closes, as it does while the player plays. So a join
     /// whose LAN session this game does not hear now, as RETRY after a follow failed, listens for it on the overlay first,
     /// up to the 15 seconds a launched LAN join listens, and joins once it is heard. A host no longer on the network ends
-    /// it as "Session not found", in words that say so, with RETRY to listen again. Listening this overlay started stops
-    /// once the provider has looked the session up or the join has ended; one that BROWSE or a launch started is theirs to
-    /// stop. Relay and direct joins never listen.
+    /// it as "Session not found", in words that say so, with RETRY to listen again. Its share of the browser ends once the
+    /// provider has looked the session up or the join has ended; BROWSE and a launch keep their own shares until done.
+    /// Relay and direct joins never listen.
     /// </summary>
     internal sealed partial class ConnectingPresenter
     {
@@ -68,8 +68,8 @@ namespace TopiaForge.ModManager.Sessions
         }
 
         /// <summary>
-        /// Every frame: stops the listening this overlay started once nothing needs the host's beacon, that is, unless the
-        /// join listens, or has started and the provider may still be looking the session up.
+        /// Every frame: releases this overlay's share once its join no longer needs the host's beacon, that is, unless the
+        /// join listens, or has started and the provider may still be looking the session up. Other users keep listening.
         /// </summary>
         private void KeepListening()
         {
@@ -80,11 +80,10 @@ namespace TopiaForge.ModManager.Sessions
 
         private void StartListening()
         {
-            if (listeningForJoin || context.Status.Status.IsBrowsing) return;
+            if (listeningForJoin) return;
             try
             {
-                context.Environment.Control?.StartBrowsing();
-                listeningForJoin = true;
+                listeningForJoin = context.LanBrowsing.Start(LanBrowseUse.Join);
             }
             catch (Exception)
             {
@@ -98,7 +97,7 @@ namespace TopiaForge.ModManager.Sessions
             listeningForJoin = false;
             try
             {
-                context.Environment.Control?.StopBrowsing();
+                context.LanBrowsing.Stop(LanBrowseUse.Join);
             }
             catch (Exception)
             {

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -45,6 +46,26 @@ namespace TopiaForge.ModManager.Tests
             var shape = OverlayMethod(root, "Shape");
             That(shape.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(access => access.ToString() == "screen.CanCancel"),
                 "the overlay's layout follows whether Cancel would stop anything: " + shape);
+            var expression = shape.ExpressionBody!.Expression.ToString()
+                .Replace("screen.HasFailed", "failed", StringComparison.Ordinal)
+                .Replace("screen.NeedsPassword", "password", StringComparison.Ordinal)
+                .Replace("screen.CanCancel", "cancel", StringComparison.Ordinal);
+            var source = "public static class OverlayShape { public static int Get(bool failed, bool password, bool cancel) => " + expression + "; }";
+            var compilation = CSharpCompilation.Create("OverlayShapeCheck", new[] { CSharpSyntaxTree.ParseText(source) },
+                new[] { MetadataReference.CreateFromFile(typeof(object).Assembly.Location) },
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            using var bytes = new MemoryStream();
+            var emitted = compilation.Emit(bytes);
+            That(emitted.Success, "the overlay's actual shape expression compiles independently: " + string.Join("; ", emitted.Diagnostics));
+            var evaluate = (Func<bool, bool, bool, int>)Assembly.Load(bytes.ToArray()).GetType("OverlayShape")!.GetMethod("Get")!
+                .CreateDelegate(typeof(Func<bool, bool, bool, int>));
+            foreach (var cancel in new[] { false, true })
+            {
+                That(evaluate(true, false, cancel) == 2 && evaluate(true, true, cancel) == 2, "a failure always keeps its actions");
+                That(evaluate(false, true, cancel) == 1, "a password prompt keeps its entry field");
+            }
+            That(evaluate(false, false, true) == 0, "an active join or follow offers CANCEL");
+            That(evaluate(false, false, false) == 3, "a stranded or successful settled view offers CLOSE");
             var build = OverlayMethod(root, "BuildBody");
             var running = build.Body!.Statements.OfType<IfStatementSyntax>().Single(statement => statement.Condition.ToString() == "shownShape != 2");
             var buttons = running.Statement.DescendantNodes().OfType<InvocationExpressionSyntax>()
@@ -53,6 +74,11 @@ namespace TopiaForge.ModManager.Tests
                 .ToArray();
             That(buttons.Contains("\"CLOSE\", screen.Dismiss") && buttons.Contains("\"CANCEL\", screen.Cancel"),
                 "the running layouts offer CANCEL, and CLOSE once nothing runs (" + string.Join("; ", buttons) + ")");
+            var choice = running.Statement.DescendantNodes().OfType<IfStatementSyntax>()
+                .Single(statement => statement.Condition.ToString() == "shownShape == 3");
+            That(choice.Statement.ToString().Contains("Button(\"CLOSE\", screen.Dismiss", StringComparison.Ordinal)
+                && choice.Else!.Statement.ToString().Contains("Button(\"CANCEL\", screen.Cancel", StringComparison.Ordinal),
+                "only the settled shape binds CLOSE to Dismiss; active shapes bind CANCEL to Cancel");
         }
 
         /// <summary>The connecting overlay's one method named <paramref name="name"/>, parsed from its source.</summary>

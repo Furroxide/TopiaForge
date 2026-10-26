@@ -183,8 +183,12 @@ this game hears while it listens on the local network, and BROWSE stops listenin
 whose session this game does not hear now, such as RETRY while the player plays, listens first ("Listening on your
 network"), for 15 seconds at most as a launched LAN join does, and joins once the host is heard. A host no longer there
 ends the join as "Session not found": "The session was not heard on your local network. Check that its host is still
-hosting on this network, then try again." The overlay stops the listening it started once the provider has looked the
-session up, and leaves a search BROWSE runs alone. Relay and direct joins never listen. Once the link is up, the
+hosting on this network, then try again." BROWSE, the overlay and a launched join share the browser, each releasing only
+its own use of it. The overlay releases its share once the provider has looked the session up; a search still needed
+by BROWSE or a launch keeps running, including when RETRY is cancelled. The last release stops a browser these screens
+started, never an external search. Ownership is checked at the action, not from a cached status. Hearing the host while
+the game is busy moves to Waiting and releases the overlay's share; once the game settles, a missing beacon gets a new
+bounded listen. Relay and direct joins never listen. Once the link is up, the
 Connecting step says the route the status reports, Relay or Direct. The failure view offers Retry where trying again
 can help, Open launcher where the launcher can take the join over, Copy details, and Trust for a typed host that now
 serves a different server,

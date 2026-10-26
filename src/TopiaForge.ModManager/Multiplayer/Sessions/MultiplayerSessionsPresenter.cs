@@ -216,6 +216,7 @@ namespace TopiaForge.ModManager.Sessions
         {
             intake?.Dispose();
             launches.Stop();
+            context.LanBrowsing.Stop();
         }
 
         /// <summary>Main thread, every frame.</summary>

@@ -2329,7 +2329,11 @@ Spawning ("Starting your controls"). A join the follow ends shows the follow's f
 can help. After the join, a change of worlds or a return to the host's world shows "Following the host", with the first
 four steps done, and its Cancel leaves the session. RETRY of a LAN join this game no longer hears, as once BROWSE has
 stopped listening, listens on the local network for the host first, for 15 seconds at most, and a host no longer there
-ends the join as "Session not found" in words that say so. A follow or a join that ends at the main menu because the
+ends the join as "Session not found" in words that say so. BROWSE, the overlay and a launched join share one browser:
+each releases only its own share, so Cancel or a closed tab cannot stop another join's search. The last release stops
+only a browser these screens started; an external browser is checked at the action and left alone. A host heard while
+the game is busy moves the overlay to Waiting and releases its share, rather than listening for the duration of that
+busy game. A follow or a join that ends at the main menu because the
 host's level could not be loaded here shows Loading world not done, with the follow's words and CLOSE, since nothing
 runs that Cancel would stop; the player stays in the session, and the host's next world takes the view over.
 [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md), section 5, has the rest.

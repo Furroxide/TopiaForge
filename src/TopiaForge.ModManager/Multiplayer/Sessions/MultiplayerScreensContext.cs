@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Sessions
             Action<string, ScreenTone> notify)
         {
             Environment = environment ?? throw new ArgumentNullException(nameof(environment));
+            LanBrowsing = new LanBrowseLifetime(environment);
             Settings = settings ?? throw new ArgumentNullException(nameof(settings));
             Preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
             Status = status ?? throw new ArgumentNullException(nameof(status));
@@ -36,6 +37,8 @@ namespace TopiaForge.ModManager.Sessions
         }
 
         internal IMultiplayerSessionEnvironment Environment { get; }
+
+        internal LanBrowseLifetime LanBrowsing { get; }
 
         internal MultiplayerSettingsService Settings { get; }
 

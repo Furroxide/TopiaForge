@@ -355,11 +355,10 @@ namespace TopiaForge.ModManager.Sessions
 
         private void StartLanSearch()
         {
-            if (browsingForLaunch || context.Status.Status.IsBrowsing) return;
+            if (browsingForLaunch) return;
             try
             {
-                context.Environment.Control?.StartBrowsing();
-                browsingForLaunch = true;
+                browsingForLaunch = context.LanBrowsing.Start(LanBrowseUse.Launch);
             }
             catch (Exception)
             {
@@ -373,7 +372,7 @@ namespace TopiaForge.ModManager.Sessions
             browsingForLaunch = false;
             try
             {
-                context.Environment.Control?.StopBrowsing();
+                context.LanBrowsing.Stop(LanBrowseUse.Launch);
             }
             catch (Exception)
             {

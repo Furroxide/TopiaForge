@@ -42,6 +42,10 @@ namespace TopiaForge.ModManager.Tests
             ARefollowFailureShowsItsOwnWords();
             ARetryThatFailsAtOnceShowsItsOwnWords();
             RetryListensForALanHostFirst();
+            RetrySharesTheLaunchSearch();
+            RetryKeepsListeningWhenBrowseCloses();
+            LanSearchOwnershipSurvivesStaleStatus();
+            HearingTheHostWhileBusyReleasesTheBrowser();
             ALevelThisGameCannotLoadShowsAsNotLoaded();
             AGuestWaitingAtTheMenuIsToldWhy();
             EveryFailureHasAClearMessage();
