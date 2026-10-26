@@ -21,8 +21,11 @@ final _testFeatures = ManifestFeatureRequirements([
 // Tool discovery is independent of the command's package validation. The real
 // pack/check implementations and the built managed validator still run.
 class _Repository extends LocalDeveloperRepository {
-  _Repository(String root)
-    : super(dataRoot: p.join(root, 'data'), manifestFeatures: _testFeatures);
+  _Repository(String root, {ManifestFeatureRequirements? features})
+    : super(
+        dataRoot: p.join(root, 'data'),
+        manifestFeatures: features ?? _testFeatures,
+      );
 
   @override
   Future<EnvironmentReport> checkEnvironment() async =>
@@ -80,6 +83,86 @@ void main() {
   tearDown(() => temp.deleteSync(recursive: true));
 
   test(
+    'map floor is enforced by real pack and directory/archive checks',
+    () async {
+      repository = _Repository(
+        temp.path,
+        features: ManifestFeatureRequirements.current,
+      );
+      manifest['capabilities'] = ['world-service'];
+      manifest['dependencies'] = {'io.github.furroxide.topiaforge.worlds': '*'};
+      manifest['contributions'] = {
+        'worlds': [
+          {
+            'id': 'example.feature.map',
+            'name': 'Map',
+            'content': {'kind': 'map', 'map': 'Example'},
+          },
+        ],
+      };
+      writeManifest('>=0.1.0 <1.0.0');
+      await expectLater(
+        repository.packModDirectory(project.path),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'reason',
+            contains('TFPKG180'),
+          ),
+        ),
+      );
+      expect(
+        await cli.runCli([
+          'check',
+          'package',
+          project.path,
+        ], developerRepository: repository),
+        1,
+      );
+      final oldPackage = await LocalDeveloperRepository(
+        dataRoot: p.join(temp.path, 'fixture'),
+        manifestFeatures: const ManifestFeatureRequirements(),
+      ).packModDirectory(project.path, outputDir: p.join(temp.path, 'old'));
+      expect(
+        await cli.runCli([
+          'check',
+          'package',
+          oldPackage,
+        ], developerRepository: repository),
+        1,
+      );
+      writeManifest('>=0.2.0 <1.0.0');
+      final package = await repository.packModDirectory(
+        project.path,
+        outputDir: p.join(temp.path, 'new'),
+      );
+      expect(
+        await cli.runCli([
+          'check',
+          'package',
+          project.path,
+        ], developerRepository: repository),
+        0,
+      );
+      // The feature floor permits authoring, but the native checker still
+      // refuses a package whose minimum is newer than its own runtime.
+      final runtimeTooOld =
+          SemanticVersion.parse(
+            TopiaForgeRuntimeVersions.loaderVersion,
+          ).compareTo(SemanticVersion.parse('0.2.0')) <
+          0;
+      expect(
+        await cli.runCli([
+          'check',
+          'package',
+          package,
+        ], developerRepository: repository),
+        runtimeTooOld ? 1 : 0,
+      );
+    },
+  );
+
+  test(
     'pack refuses a feature below its loader floor before writing',
     () async {
       final output = p.join(temp.path, 'output');
@@ -119,7 +202,7 @@ void main() {
         ], developerRepository: repository),
         1,
       );
-      // The production table is empty. This packs the original manifest without
+      // This package does not use a production feature. Pack the original without
       // granting the injected test validator any special production switch.
       final package = await LocalDeveloperRepository(
         dataRoot: p.join(temp.path, 'plain'),
@@ -159,9 +242,5 @@ void main() {
       ], developerRepository: repository),
       0,
     );
-  });
-
-  test('the shipped feature table is empty', () {
-    expect(ManifestFeatureRequirements.current.features, isEmpty);
   });
 }

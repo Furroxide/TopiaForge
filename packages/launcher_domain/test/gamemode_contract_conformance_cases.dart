@@ -89,7 +89,14 @@ Map<String, Object?> normalizeContributions(Map<String, Object?> source) => {
 };
 
 Map<String, Object?> _normalize(Map source, String kind) {
-  final fields = contributionNormalizationFields[kind]!;
+  final fields = contributionNormalizationFields[kind]!
+      .where(
+        (field) =>
+            kind != 'content' ||
+            source['kind'] == 'map' ||
+            !const {'map', 'file', 'scene'}.contains(field),
+      )
+      .toList();
   for (final key in source.keys) {
     if (!fields.contains(key)) {
       throw StateError('Normalization is missing $kind.$key');
@@ -133,7 +140,16 @@ const contributionNormalizationFields = {
     'world',
     'transition',
   ],
-  'content': ['kind', 'bundle', 'prefab', 'implementation', 'sceneName'],
+  'content': [
+    'kind',
+    'bundle',
+    'prefab',
+    'implementation',
+    'sceneName',
+    'map',
+    'file',
+    'scene',
+  ],
   'implementation': ['assembly', 'type'],
   'spawn': ['kind', 'markerName'],
   'worldRequirements': ['transitions', 'spawn'],

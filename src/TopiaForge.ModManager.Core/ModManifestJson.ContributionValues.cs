@@ -29,7 +29,7 @@ namespace TopiaForge.ModManager.Core
 
             var contentPath = path + ".content";
             var content = ReadObject(contentPath, RequireRawProperty(fields, "content"));
-            var kind = RawEnum(content, contentPath, "kind", "bundle", "provider", "game-scene", "discovered");
+            var kind = RawEnum(content, contentPath, "kind", "bundle", "provider", "game-scene", "discovered", "map");
             // Reserve the dot and one nonempty suffix character for a legal 96-character instance id.
             if (kind == ModWorldContent.DiscoveredKind) RawText(fields, path, "id", 4, 94);
             RawPath(content, contentPath, "bundle", dll: false);
@@ -38,12 +38,25 @@ namespace TopiaForge.ModManager.Core
             RawBinding(content, contentPath, "implementation");
             var required = kind == "bundle" ? new[] { "bundle", "prefab" }
                 : kind == "game-scene" ? new[] { "sceneName" } : new[] { "implementation" };
-            foreach (var field in new[] { "bundle", "prefab", "sceneName", "implementation" })
+            if (kind == ModWorldContent.MapKind)
             {
-                if (required.Contains(field)) RawRequired(content, contentPath, field);
-                else RawForbidden(content, contentPath, field);
+                ValidateRawMap(content, contentPath, fields, path);
+            }
+            else
+            {
+                foreach (var field in new[] { "bundle", "prefab", "sceneName", "implementation", "map", "file", "scene" })
+                {
+                    if (required.Contains(field)) RawRequired(content, contentPath, field);
+                    else RawForbidden(content, contentPath, field);
+                }
             }
 
+            if (kind != ModWorldContent.MapKind)
+            {
+                RawRequired(fields, path, "transitions");
+                RawRequired(fields, path, "spawn");
+            }
+            else if (RawValue(fields, "spawn") == null) return;
             var spawnPath = path + ".spawn";
             var spawn = ReadObject(spawnPath, RequireRawProperty(fields, "spawn"));
             var spawnKind = RawEnum(spawn, spawnPath, "kind", "authored-marker", "provider-default");

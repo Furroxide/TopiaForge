@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Core
         };
         private static readonly HashSet<string> WorldContentFields = new HashSet<string>(StringComparer.Ordinal)
         {
-            "kind", "bundle", "prefab", "implementation", "sceneName"
+            "kind", "bundle", "prefab", "implementation", "sceneName", "map", "file", "scene"
         };
         private static readonly HashSet<string> SpawnFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -102,7 +102,7 @@ namespace TopiaForge.ModManager.Core
                     world.Path,
                     world.Raw,
                     WorldFields,
-                    new[] { "id", "name", "content", "transitions", "spawn" },
+                    new[] { "id", "name", "content" },
                     requireAtLeastOne: false);
                 var fields = ReadObject(world.Path, world.Raw);
                 ValidateNestedObject(

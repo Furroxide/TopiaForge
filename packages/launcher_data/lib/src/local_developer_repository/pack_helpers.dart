@@ -104,7 +104,15 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
         synchronizedFiles.add(_multiplayerContractLockName);
       }
     }
-    final synchronizedFileSet = synchronizedFiles.toSet();
+    final hashedFileSet = <String>{
+      ...synchronizedFiles,
+      for (final world
+          in manifestContract.contributions?.worlds ??
+              const <ModWorldDeclaration>[])
+        if (world.content?.kind == ModWorldContent.mapKind &&
+            world.content!.file.isNotEmpty)
+          world.content!.file,
+    };
     final added = <String>{};
     final exactAdded = <String>{};
     final packedFileHashes = <String, String>{};
@@ -134,7 +142,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
         );
       }
       expandedBytes += length;
-      if (synchronizedFileSet.contains(name)) {
+      if (hashedFileSet.contains(name)) {
         packedFileHashes[name] = sha256.convert(bytes).toString();
       }
       archive.addFile(ArchiveFile.bytes(name, bytes));
@@ -231,7 +239,12 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       addFile(p.join('bindings', '$modName.gamebindings.json'), bindingFile);
     }
 
-    final synchronizedHashes = <String, String>{};
+    final generatedHashes = _mapFileHashes(
+      root,
+      manifestContract,
+      packedFileHashes,
+      addFile,
+    );
     for (final path in synchronizedFiles) {
       final digest = packedFileHashes[path];
       if (digest == null) {
@@ -239,12 +252,12 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
           'multiplayer.synchronizedFiles entry was not included in the package: $path',
         );
       }
-      synchronizedHashes[path] = digest;
+      generatedHashes[path] = digest;
     }
     final packedManifest = _manifestWithBuildMetadata(
       root,
       manifest,
-      synchronizedHashes: synchronizedHashes,
+      generatedHashes: generatedHashes,
       synchronizedFiles: synchronizesContractLock ? synchronizedFiles : null,
     );
     final packedManifestIssues = packedManifest
@@ -410,54 +423,6 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       }
       addFile(relative, file);
     }
-  }
-
-  ModManifest _manifestWithBuildMetadata(
-    Directory root,
-    Map<String, Object?> source, {
-    Map<String, String> synchronizedHashes = const {},
-    List<String>? synchronizedFiles,
-  }) {
-    final lock = _readSdkLock(root.path);
-    final toolVersion = lock?.toolVersion.isNotEmpty == true
-        ? lock!.toolVersion
-        : _repositoryToolVersion();
-    final gameVersion =
-        lock?.gameVersion ?? TopiaForgeRuntimeVersions.gameVersion;
-    final packed = <String, Object?>{
-      ...source,
-      'builtWith': {
-        'sdkVersion': lock?.sdkVersion ?? TopiaForgeRuntimeVersions.sdkVersion,
-        'loaderVersion': TopiaForgeRuntimeVersions.loaderVersion,
-        'gameVersion': gameVersion,
-        if (toolVersion.isNotEmpty) 'toolVersion': toolVersion,
-      },
-    };
-    if (synchronizedFiles != null) {
-      final sourceMultiplayer = source['multiplayer'];
-      if (sourceMultiplayer is! Map) {
-        throw StateError(
-          'A session package must contain multiplayer manifest metadata.',
-        );
-      }
-      packed['multiplayer'] = <String, Object?>{
-        for (final entry in sourceMultiplayer.entries)
-          entry.key.toString(): entry.value,
-        'synchronizedFiles': List<String>.unmodifiable(synchronizedFiles),
-      };
-    }
-    if (synchronizedHashes.isNotEmpty) {
-      final hashes = <String, Object?>{};
-      final sourceHashes = source['hashes'];
-      if (sourceHashes is Map) {
-        for (final entry in sourceHashes.entries) {
-          hashes[entry.key.toString()] = entry.value;
-        }
-      }
-      hashes.addAll(synchronizedHashes);
-      packed['hashes'] = hashes;
-    }
-    return ModManifest.fromJson(packed);
   }
 
   String _sanitizePackageToken(String value) =>

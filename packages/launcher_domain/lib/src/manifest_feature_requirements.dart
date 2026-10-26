@@ -13,11 +13,22 @@ class ManifestFeatureRequirement {
   final bool Function(ModManifest manifest) isUsed;
 }
 
-/// Shared by packing and checking packages. No post-0.1 features ship yet.
+/// Shared by packing and checking packages; ranges must admit each feature floor.
 class ManifestFeatureRequirements {
   const ManifestFeatureRequirements([this.features = const []]);
 
-  static const current = ManifestFeatureRequirements();
+  static const current = ManifestFeatureRequirements([
+    ManifestFeatureRequirement(
+      name: 'map world content',
+      minimumLoaderVersion: '0.2.0',
+      isUsed: _usesMapWorlds,
+    ),
+  ]);
+  static bool _usesMapWorlds(ModManifest manifest) =>
+      manifest.contributions?.worlds.any(
+        (world) => world.content?.kind == ModWorldContent.mapKind,
+      ) ??
+      false;
   final List<ManifestFeatureRequirement> features;
 
   List<LauncherIssue> validate(ModManifest manifest) {

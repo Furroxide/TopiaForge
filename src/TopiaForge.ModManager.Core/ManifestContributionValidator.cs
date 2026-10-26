@@ -28,7 +28,7 @@ namespace TopiaForge.ModManager.Core
         private static readonly HashSet<string> ContentKinds = new HashSet<string>(StringComparer.Ordinal)
         {
             ModWorldContent.BundleKind, ModWorldContent.ProviderKind,
-            ModWorldContent.GameSceneKind, ModWorldContent.DiscoveredKind
+            ModWorldContent.GameSceneKind, ModWorldContent.DiscoveredKind, ModWorldContent.MapKind
         };
         private static readonly HashSet<string> SpawnKinds = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -210,7 +210,14 @@ namespace TopiaForge.ModManager.Core
         {
             if (!ContentKinds.Contains(content.Kind))
             {
-                errors.Add(path + ".kind must be bundle, provider, game-scene, or discovered.");
+                errors.Add(path + ".kind must be bundle, provider, game-scene, discovered, or map.");
+                return;
+            }
+
+            if (content.Kind == ModWorldContent.MapKind)
+            {
+                if (!manifest.Dependencies.Keys.Any(id => string.Equals(id, "io.github.furroxide.topiaforge.worlds", StringComparison.OrdinalIgnoreCase)))
+                    errors.Add(path + " requires the Worlds package in dependencies.");
                 return;
             }
 

@@ -137,6 +137,21 @@ _PackageInspection _inspectPackage(String packagePath) {
       }
     }
   }
+  final contributions = decoded['contributions'];
+  if (contributions is Map && contributions['worlds'] is List) {
+    final worlds = contributions['worlds'] as List;
+    if (worlds.length > 64) {
+      throw StateError('package world inventory is invalid');
+    }
+    for (final world in worlds) {
+      if (world is Map && world['content'] is Map) {
+        final content = world['content'] as Map;
+        if (content['kind'] == 'map' && content.containsKey('file')) {
+          addPath(content['file']);
+        }
+      }
+    }
+  }
   final sortedPaths = criticalPaths.toList()..sort();
   final criticalFiles = <LiveAcceptanceFileDigest>[];
   for (final path in sortedPaths) {

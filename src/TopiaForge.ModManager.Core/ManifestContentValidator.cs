@@ -27,16 +27,21 @@ namespace TopiaForge.ModManager.Core
 
             var errors = new List<string>();
             var synchronizedFiles = manifest.Multiplayer?.SynchronizedFiles ?? new List<string>();
-            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion) ||
-                !string.Equals(
-                    manifest.Multiplayer?.Mode,
-                    ModMultiplayerMetadata.SessionMode,
-                    StringComparison.Ordinal))
-            {
-                return errors;
-            }
+            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion)) return errors;
+            var requiredFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+            var maps = (manifest.Contributions?.Worlds ?? new List<ModWorldDeclaration>())
+                .Where(world => world.Content?.Kind == ModWorldContent.MapKind).ToList();
+            if (maps.Count > 0 && (!VersionUtil.TryGetMinimum(manifest.SupportedLoaderVersionRange, out var minimum, out _)
+                || minimum == null || !VersionUtil.IsAtLeast(minimum, "0.2.0")))
+                errors.Add("TFPKG180: map world content needs TopiaForge 0.2.0 or newer. Raise supportedLoaderVersionRange.");
+            foreach (var world in maps)
+                if (world.Content!.File != null) requiredFiles[world.Content.File] = "map world file";
+            var isSession = manifest.Multiplayer?.Mode == ModMultiplayerMetadata.SessionMode;
+            if (isSession)
+                foreach (var file in synchronizedFiles.Take(ModMultiplayerMetadata.MaxSynchronizedFiles + 1))
+                    requiredFiles[file] = "multiplayer.synchronizedFiles entry";
 
-            if (!synchronizedFiles.Contains(
+            if (isSession && !synchronizedFiles.Contains(
                     ModMultiplayerMetadata.ContractLockFileName,
                     StringComparer.Ordinal))
             {
@@ -46,9 +51,10 @@ namespace TopiaForge.ModManager.Core
             }
 
             var hashes = manifest.Hashes ?? new Dictionary<string, string>();
-            foreach (var rawPath in synchronizedFiles.Take(ModMultiplayerMetadata.MaxSynchronizedFiles + 1))
+            foreach (var required in requiredFiles)
             {
-                if (!PortablePackagePath.TryValidate(rawPath, out var portablePath, out _, out _))
+                var label = required.Value;
+                if (!PortablePackagePath.TryValidate(required.Key, out var portablePath, out _, out _))
                 {
                     // ManifestValidator owns the actionable path diagnostic.
                     continue;
@@ -58,7 +64,7 @@ namespace TopiaForge.ModManager.Core
                     string.IsNullOrWhiteSpace(expectedDigest))
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' is missing its pack-time SHA-256 in hashes.");
                     continue;
                 }
@@ -66,7 +72,7 @@ namespace TopiaForge.ModManager.Core
                 if (!TryResolveOrdinaryFile(packageRoot, portablePath, out var fullPath, out var pathError))
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' is not an ordinary package file (" + pathError + ").");
                     continue;
                 }
@@ -79,7 +85,7 @@ namespace TopiaForge.ModManager.Core
                 catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' could not be hashed (" + exception.Message + ").");
                     continue;
                 }
@@ -87,7 +93,7 @@ namespace TopiaForge.ModManager.Core
                 if (!string.Equals(actualDigest, expectedDigest, StringComparison.OrdinalIgnoreCase))
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' does not match its pack-time SHA-256.");
                 }
             }

@@ -40,12 +40,14 @@ namespace TopiaForge.ModManager.Tests
         private static object Normalize(JsonElement source, string kind)
         {
             var result = new Dictionary<string, object?>();
+            var fields = kind == "content" && source.TryGetProperty("kind", out var contentKind) && contentKind.GetString() == "map"
+                ? Fields[kind].Concat(new[] { "map", "file", "scene" }).ToArray() : Fields[kind];
             foreach (var property in source.EnumerateObject())
             {
-                if (!Fields[kind].Contains(property.Name, StringComparer.Ordinal))
+                if (!fields.Contains(property.Name, StringComparer.Ordinal))
                     throw new InvalidOperationException("Normalization is missing contribution field " + kind + "." + property.Name);
             }
-            foreach (var field in Fields[kind])
+            foreach (var field in fields)
             {
                 result[field] = !source.TryGetProperty(field, out var value) ? null
                     : value.ValueKind == JsonValueKind.Object && Fields.ContainsKey(field)

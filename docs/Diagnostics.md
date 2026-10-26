@@ -494,11 +494,11 @@ manifest exactly matches the indexed manifest; TopiaForge does not stage mismatc
 `topiaforge pack` and `topiaforge check package` compare each used manifest feature with the lower
 bound of `supportedLoaderVersionRange`. Raise that floor to the required release. The shared table
 is `ManifestFeatureRequirements.current` in
-`packages/launcher_domain/lib/src/manifest_feature_requirements.dart`. It is empty for the 0.1
-contract; tests inject a feature without adding a pretend production feature. When the `map` world
-content kind is introduced, add its predicate and first loader release (`0.2.0`) to that table alongside
-the schema and reader changes, whether it lands in V7 or a pre-release V6 amendment. An unknown kind
-still fails the existing schema validation.
+`packages/launcher_domain/lib/src/manifest_feature_requirements.dart`. Its map-world row
+requires stable `0.2.0` for `content.kind: "map"`; prerelease lower bounds still admit
+older loaders and are refused. The native package validator enforces the same floor.
+This is a pre-release V6 amendment, so existing V6 manifests keep their schema number.
+An unknown content kind still fails schema validation. See [Map worlds](ManifestV6.md#map-worlds-pre-release-v6-amendment).
 
 ### TFINBOX100–TFINBOX130
 
