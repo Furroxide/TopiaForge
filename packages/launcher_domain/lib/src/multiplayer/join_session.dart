@@ -124,6 +124,14 @@ abstract final class JoinSession {
       JoinFailureCode.directNotAllowed,
     },
     JoinStage.synchronizing: {
+      // The engine can refuse or end the session after link-up, before its
+      // world is ready. Its terminal result must still settle the join.
+      JoinFailureCode.timeout,
+      JoinFailureCode.serverFull,
+      JoinFailureCode.passwordRejected,
+      JoinFailureCode.kicked,
+      JoinFailureCode.protocolMismatch,
+      JoinFailureCode.admissionChanged,
       JoinFailureCode.snapshotFailed,
       JoinFailureCode.worldFollowFailed,
       JoinFailureCode.disconnected,

@@ -85,8 +85,14 @@ Future<(LauncherBloc, JoinFailure)> _failAt(
         (state) =>
             _flowOf(bloc)!.join!.replans == 1 && _flowOf(bloc)!.launch != null,
       );
-      repository.report(_activity(state: LaunchSessionState.connecting));
-      await _atStage(bloc, JoinStage.connecting);
+      repository.report(
+        _activity(
+          state: stage == JoinStage.synchronizing
+              ? LaunchSessionState.synchronizing
+              : LaunchSessionState.connecting,
+        ),
+      );
+      await _atStage(bloc, stage);
       repository.report(_activity(failure: failure, detail: 'Changed again.'));
     }
   }

@@ -157,6 +157,8 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
   `direct-not-allowed`, `snapshot-failed` and `world-follow-failed`. The game folds its own causes into them; `detail` and the admission
   report explain the rest. A host's are `port-in-use`, `identity-unavailable`, `network-stopped` and
   `service-unavailable`.
+  Link-up does not mean admission has finished: while synchronizing, the launcher also handles `timeout`, `server-full`,
+  `password-rejected`, `kicked`, `protocol-mismatch` and `admission-changed`. A changed admission re-plans once there too.
 - **Follow failures.** A failed follow keeps its fixed title and advice in `detail`, without provider text or addresses.
   Before the join succeeds it writes `failure: world-follow-failed`, which the launcher shows at Receiving the world even
   when it has not read the join's synchronizing progress yet; afterwards it writes a terminal
