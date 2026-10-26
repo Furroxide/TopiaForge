@@ -6,10 +6,10 @@ part of '../local_launcher_repository.dart';
 /// can hold files open in the game's and the launcher's folders, the
 /// install's staging lease among them, and write there. So [_close] waits for
 /// each one, work started while it waits included: a launch stops at its
-/// next step, and anything else finishes. Once the close completes, nothing
-/// started before then still runs or holds a file open, and the folders it
-/// used can be moved or deleted. Work started after that still runs, and
-/// nothing waits for it.
+/// next step, a join's downloads stop at once, and anything else finishes.
+/// Once the close completes, nothing started before then still runs or holds
+/// a file open, and the folders it used can be moved or deleted. Work started
+/// after that still runs, and nothing waits for it.
 extension _RepositoryWork on LocalLauncherRepository {
   /// Starts [operation], kept in [_inFlight] until it ends.
   Future<T> _tracked<T>(Future<T> Function() operation) {
@@ -22,8 +22,14 @@ extension _RepositoryWork on LocalLauncherRepository {
   /// Closes the repository once nothing it started still runs, then ends
   /// launch monitoring and the activity stream. A hook an operation calls
   /// must not wait for the close, which would then wait for that operation.
+  ///
+  /// A join's downloads are cancelled as the close begins, so it never waits
+  /// out a transfer: a cancelled download deletes its temporary file before
+  /// it returns, which keeps the close's promise that nothing stays open.
   Future<void> _close() async {
     _disposed = true;
+    _closing.cancel();
+    await _closeHandoffs();
     while (_inFlight.isNotEmpty) {
       // Each operation reports its outcome to its own caller; the close
       // needs only its end.
@@ -37,5 +43,19 @@ extension _RepositoryWork on LocalLauncherRepository {
     }
     _launchMonitors.clear();
     await _launchActivities.close();
+  }
+
+  /// A token that [caller]'s token and the repository's close both cancel,
+  /// with the registrations that link them; dispose those when the work
+  /// ends.
+  (CancellationToken, List<CancellationRegistration>) _linkedToClose(
+    CancellationToken? caller,
+  ) {
+    final linked = CancellationToken();
+    final registrations = [
+      ?caller?.register(linked.cancel),
+      _closing.register(linked.cancel),
+    ];
+    return (linked, registrations);
   }
 }

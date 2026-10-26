@@ -2,16 +2,18 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import 'session_link_inbox.dart';
 
+part 'launcher_multiplayer_join_state.dart';
 part 'launcher_multiplayer_settings_state.dart';
 
 /// The launcher's multiplayer state: the session link intake and link
-/// handling, Settings → Multiplayer and Diagnostics → Network. The browser
-/// and the join flow add their own fields here.
+/// handling, the join flow, Settings → Multiplayer and Diagnostics → Network.
+/// The browser adds its own fields here.
 final class MultiplayerViewState {
   const MultiplayerViewState({
     this.sessionLink = const SessionLinkIdle(),
     this.linkArrivals = 0,
     this.linkHandling,
+    this.join = const MultiplayerJoinView(),
     this.settings = const MultiplayerSettingsView(),
     this.network = const MultiplayerNetworkView(),
   });
@@ -28,6 +30,10 @@ final class MultiplayerViewState {
   /// until the launcher applies it, and where nothing handles links.
   final SessionLinkHandlingStatus? linkHandling;
 
+  /// The join flow: its questions, its consent sheet, its progress and its
+  /// outcome.
+  final MultiplayerJoinView join;
+
   /// Settings → Multiplayer: the player's preferences, and whether they can
   /// be changed now.
   final MultiplayerSettingsView settings;
@@ -39,12 +45,14 @@ final class MultiplayerViewState {
     SessionLinkIntake? sessionLink,
     int? linkArrivals,
     SessionLinkHandlingStatus? linkHandling,
+    MultiplayerJoinView? join,
     MultiplayerSettingsView? settings,
     MultiplayerNetworkView? network,
   }) => MultiplayerViewState(
     sessionLink: sessionLink ?? this.sessionLink,
     linkArrivals: linkArrivals ?? this.linkArrivals,
     linkHandling: linkHandling ?? this.linkHandling,
+    join: join ?? this.join,
     settings: settings ?? this.settings,
     network: network ?? this.network,
   );
@@ -60,15 +68,16 @@ final class SessionLinkIdle extends SessionLinkIntake {
   const SessionLinkIdle();
 }
 
-/// Placeholder for the multiplayer consent flow, which replaces it.
+/// A valid link opened the join flow ([JoinFlowOrigin.link]), or, in a
+/// launcher that cannot join, waits here with nothing joined.
 ///
-/// A valid link waits here, and nothing joins: the consent flow will plan
-/// the join from trusted manifests and ask the player before anything is
-/// installed or started. A direct [link] holds the host's address, and an
-/// invite [link] a code that lets anyone who holds it join, so it is never
-/// logged; its `toString` withholds both.
-final class SessionLinkConsentPlaceholder extends SessionLinkIntake {
-  const SessionLinkConsentPlaceholder({
+/// The link never joins by itself: the flow plans the join from trusted
+/// manifests and asks the player before anything is installed or started. A
+/// direct [link] holds the host's address, and an invite [link] a code that
+/// lets anyone who holds it join, so it is never logged; its `toString`
+/// withholds both.
+final class SessionLinkOpened extends SessionLinkIntake {
+  const SessionLinkOpened({
     required this.link,
     required this.source,
     required this.arrival,

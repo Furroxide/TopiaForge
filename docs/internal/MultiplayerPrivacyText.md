@@ -5,7 +5,8 @@ Status: Approved · Date: 2026-10-14 · Owner: maintainer
 The live-multiplayer plan makes the player-facing wording on address exposure and microphone use a release gate,
 approved by the maintainer as owner (hard constraint 5). This page holds that wording, approved as written on
 2026-10-14. The game's screens, the launcher and the player guides use these strings word for word. Any change to
-their meaning needs a fresh approval before it ships.
+their meaning needs a fresh approval before it ships. The last section, the consent sheet's developer-mode section, was
+approved as written on 2026-10-26.
 
 The rules behind the wording are in `PrivacyAndCapabilities.md` ("Peer address exposure in player-hosted sessions"),
 and the mechanics are in `MultiplayerLiveSessions.md` (sections 17 to 22).
@@ -60,3 +61,20 @@ One privacy line and one voice line, chosen by the session's settings.
 | Direct connection allowed for this session | Direct connection: the host will see your IP address. |
 | Voice chat off | Voice chat: off |
 | Voice chat on | Voice chat: on, so players in this session hear your microphone. |
+
+## Launcher consent sheet: mods only the host has
+
+Status: Approved · Date: 2026-10-26 · Drafted: 2026-10-25
+
+Shown in red on the consent sheet when a join in developer mode takes mods that only the host has from the host
+itself. Join stays off until the box is ticked, and only a ticked box lets the launcher ask the host for them.
+
+**Title:** Mods from the host (developer mode)
+
+> Only this host has the mods marked "Served by the host". Ticking the box lets the launcher download them from the
+> host itself. Each one is checked against the SHA-256 in the host's signed description, but no mod source has
+> reviewed what is inside. This is for developer mode only.
+
+**Checkbox:** Download these mods from the host
+
+**Until it is ticked:** Join stays off until you tick the box.

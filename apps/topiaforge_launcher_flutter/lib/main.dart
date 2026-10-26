@@ -84,9 +84,12 @@ void _runLauncher(
         setting: StoredSessionLinkSetting(multiplayerStore),
         registrar: platformSessionLinkRegistrar(dataRoot: dataRoot),
       ),
+      // The launcher repository answers the join stages that read and change
+      // the game's files and start the game.
       multiplayer: LocalMultiplayerRepository(
         dataRoot: repository.dataRoot,
         store: multiplayerStore,
+        content: repository,
       ),
     ),
   );

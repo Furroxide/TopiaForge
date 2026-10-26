@@ -80,12 +80,14 @@ part 'local_launcher_repository/join_content_install.dart';
 part 'local_launcher_repository/join_install_journal.dart';
 part 'local_launcher_repository/join_install_preflight.dart';
 part 'local_launcher_repository/join_server_profile.dart';
+part 'local_launcher_repository/join_session_launch.dart';
+part 'local_launcher_repository/join_session_handoffs.dart';
 part 'local_launcher_repository/server_content_view.dart';
 part 'local_launcher_repository/server_content_cleanup.dart';
 part 'local_launcher_repository/server_content_judging.dart';
 
 class LocalLauncherRepository
-    with _MultiplayerContentHosting
+    with _MultiplayerContentHosting, _JoinSessionHosting
     implements GameInstallDiscoveryRepository {
   LocalLauncherRepository({
     String? dataRoot,
@@ -191,6 +193,10 @@ class LocalLauncherRepository
   bool _disposed = false;
   Future<void>? _disposal;
   final Set<Future<Object?>> _inFlight = {};
+
+  /// Cancelled as the close begins, to stop the work it should not wait for:
+  /// a join's downloads ([_close]).
+  final CancellationToken _closing = CancellationToken();
   final _launchActivities = StreamController<LaunchActivity>.broadcast();
   @override
   Stream<LaunchActivity> get launchActivities => _launchActivities.stream;

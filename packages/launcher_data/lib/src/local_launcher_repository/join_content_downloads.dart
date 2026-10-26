@@ -149,9 +149,15 @@ extension _JoinContentDownloads on LocalLauncherRepository {
     return JoinFailed(JoinFailureCode.manifestMismatch, detail: mismatch);
   }
 
+  /// Logs why [package] did not download. [reason] can repeat what an
+  /// archive's author wrote, at any length, so only what the log keeps of
+  /// it is read.
   Future<void> _logJoinDownload(DescriptorPackage package, String reason) =>
       _appendLauncherLogBestEffort(
-        'Join download of ${package.id} ${package.version} failed: $reason',
+        withoutAddresses(
+          'Join download of ${package.id} ${package.version} failed: $reason',
+          maxLength: _maxLauncherLogMessageCharacters,
+        ),
       );
 
   /// Streams [item]'s archive from its source into [temp], hashing it.
@@ -342,9 +348,14 @@ extension _JoinContentDownloads on LocalLauncherRepository {
 /// A plan package's name for the player: the trusted manifest's display
 /// name and the version, or the id when there is no manifest, as for a
 /// package only the host serves.
-String _joinModName(JoinPlanPackage item) {
+String _joinModName(JoinPlanPackage item) =>
+    '${_joinModTitle(item)} ${item.package.version}';
+
+/// A plan package's mod for the player, at whatever version: the trusted
+/// manifest's display name, or the id when there is no manifest.
+String _joinModTitle(JoinPlanPackage item) {
   final name = item.manifest?.name.trim() ?? '';
-  return '${name.isEmpty ? item.package.id : name} ${item.package.version}';
+  return name.isEmpty ? item.package.id : name;
 }
 
 /// What a refused download means for the join, for the player.

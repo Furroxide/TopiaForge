@@ -178,6 +178,9 @@ extension _ProcessHelpers on LocalLauncherRepository {
       // process: its original receipt must remain available for owned cleanup.
       _ownedLaunchProcesses[identity] = process;
       _ownedLaunchRequests[process] = requestId;
+      // Where the game looks for the launcher's answers, and stages its own
+      // requests, such as a join it hands over.
+      _ownedLaunchInstalls[identity] = refreshed;
       if (acceptance != null) _acceptanceReceipts[requestId] = process;
     }
     final activity = LaunchActivity(

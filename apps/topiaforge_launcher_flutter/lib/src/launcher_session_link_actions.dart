@@ -2,10 +2,11 @@ part of 'launcher_bloc.dart';
 
 /// Session links and link handling.
 ///
-/// A link never joins on its own. The domain reads it; a valid link waits
-/// in [SessionLinkConsentPlaceholder] until the multiplayer section's
-/// consent flow takes it over, and a refused one says why without repeating
-/// the link. A newer link replaces a pending one. Nothing here logs a link.
+/// A link never joins on its own. The domain reads it; a valid link opens
+/// the join flow ([SessionLinkOpened]), which asks before it contacts anyone
+/// and joins nothing before the player consents, and a refused one says why
+/// without repeating the link. A newer link replaces one still waiting for
+/// consent. Nothing here logs a link.
 extension LauncherSessionLinkActions on LauncherBloc {
   FutureOr<void> _dispatchMultiplayerEvent(
     MultiplayerEvent event,
@@ -31,6 +32,7 @@ extension LauncherSessionLinkActions on LauncherBloc {
         event,
         emit,
       ),
+      MultiplayerJoinEvent() => _dispatchMultiplayerJoinEvent(event, emit),
     };
   }
 
@@ -66,18 +68,20 @@ extension LauncherSessionLinkActions on LauncherBloc {
       state.copyWith(
         multiplayer: multiplayer.copyWith(
           linkArrivals: arrival,
-          sessionLink: SessionLinkConsentPlaceholder(
+          sessionLink: SessionLinkOpened(
             link: link,
             source: source,
             arrival: arrival,
           ),
         ),
-        statusMessage:
-            'Received ${sessionLinkKindLabel(link.kind)}. Joining from a '
-            'link is not available in this build yet, so nothing was '
-            'joined.',
         clearError: true,
       ),
+    );
+    _openJoin(
+      emit,
+      JoinLinkTarget(link),
+      JoinFlowOrigin.link,
+      received: 'Received ${sessionLinkKindLabel(link.kind)}.',
     );
   }
 

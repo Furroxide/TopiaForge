@@ -14,10 +14,13 @@ import 'multiplayer_preferences_keeper.dart';
 import 'multiplayer_store.dart';
 import 'network_diagnostics.dart';
 
+part 'multiplayer_repository_joins.dart';
+
 /// What the launcher's bloc asks of multiplayer: the player's settings,
 /// favorites and history; their preferences and the game's copy of them
-/// ([MultiplayerGateway]); LAN and Internet browsing; the join stages these
-/// clients answer; and network diagnostics.
+/// ([MultiplayerGateway]); LAN and Internet browsing; every join stage the
+/// launcher answers, from resolving to starting the game
+/// ([MultiplayerJoinGateway]); and network diagnostics.
 ///
 /// Nothing it returns names an address. Listings, bookmarks, events and
 /// reports name servers by server id; where a LAN server was heard stays in
@@ -27,7 +30,8 @@ import 'network_diagnostics.dart';
 /// Every change to the settings, favorites or history throws
 /// [MultiplayerStoreException] when it cannot be written, and while the
 /// stored settings cannot be read, which are then left as they are.
-abstract interface class MultiplayerRepository implements MultiplayerGateway {
+abstract interface class MultiplayerRepository
+    implements MultiplayerJoinGateway {
   /// Reads the settings, recovering from damage. Never throws. While they
   /// cannot be read, [MultiplayerStore.unreadableSettings] stand in.
   Future<MultiplayerSettingsLoad> loadSettings();
@@ -47,6 +51,7 @@ abstract interface class MultiplayerRepository implements MultiplayerGateway {
   Future<MultiplayerSettings> removeFavorite(String serverId);
 
   /// Moves a joined server to the front of the history.
+  @override
   Future<MultiplayerSettings> recordJoin({
     required String serverId,
     required String name,
@@ -87,6 +92,8 @@ abstract interface class MultiplayerRepository implements MultiplayerGateway {
   /// [JoinSession.reduce] takes comes from one place:
   ///
   /// - resolving a target through the service, and fetching its descriptor;
+  /// - with a [MultiplayerSessionHost], checking: a plan from what [install]
+  ///   holds and the player's sources offer, with [developerMode];
   /// - with a [MultiplayerContentHost], downloading, installing into
   ///   [install], and preparing the server profile. Download and install
   ///   progress go to [onProgress] as the events the reducer takes for them,
@@ -95,14 +102,16 @@ abstract interface class MultiplayerRepository implements MultiplayerGateway {
   ///   reached it (`JoinHostPackages`), and a LAN host's browsing entry
   ///   stays alive until the downloading stage ends.
   ///
-  /// Null for any other stage, for a content stage when there is no content
-  /// host, and when [cancellation] stopped the work. The content stages need
-  /// [install]; without one they throw [ArgumentError].
+  /// Null for any other stage, for a stage whose host is missing, and when
+  /// [cancellation] stopped the work. The stages that read the game's files
+  /// need [install]; without one they throw [ArgumentError].
+  @override
   Future<JoinEvent?> answerJoin(
     JoinSessionState state, {
     CancellationToken? cancellation,
     GameInstall? install,
     void Function(JoinEvent progress)? onProgress,
+    bool developerMode = false,
   });
 
   /// Answers a join in [JoinStage.resolving]. Only targets the service
@@ -126,9 +135,10 @@ abstract interface class MultiplayerRepository implements MultiplayerGateway {
 /// reads and writes. The service is whatever this build was compiled with:
 /// a build that names one talks to it over HTTPS ([openControlPlane]), and a
 /// build without one contacts no service at all ([UnavailableControlPlane]).
-/// [content] answers the stages that need the game's files; the launcher
-/// passes its own launcher repository, which is a [MultiplayerContentHost].
-/// [gameProbe] tells whether the game runs; tests pass their own.
+/// [content] answers the stages that need the game's files, and, when it is a
+/// [MultiplayerSessionHost] as well, the plan and the game's start; the
+/// launcher passes its own launcher repository, which is both. [gameProbe]
+/// tells whether the game runs; tests pass their own.
 final class LocalMultiplayerRepository implements MultiplayerRepository {
   LocalMultiplayerRepository({
     required String dataRoot,
@@ -167,6 +177,10 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     this._content,
     GameProcessProbe? gameProbe,
   ) : _controlPlane = controlPlane ?? openControlPlane(service),
+      _serviceOrigin = service.origin?.toString(),
+      _sessions = _content is MultiplayerSessionHost
+          ? _content as MultiplayerSessionHost
+          : null,
       _lan = lan ?? LanDiscoveryClient(descriptors: descriptors),
       _preferences = MultiplayerPreferencesKeeper(
         _store,
@@ -187,11 +201,13 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   static const folderName = 'multiplayer';
 
   final ControlPlaneClient _controlPlane;
+  final String? _serviceOrigin;
   final MultiplayerStore _store;
   final LanDiscoveryClient _lan;
   final MultiplayerNetworkDiagnostics _diagnostics;
   final DateTime Function() _clock;
   final MultiplayerContentHost? _content;
+  final MultiplayerSessionHost? _sessions;
   final MultiplayerPreferencesKeeper _preferences;
   late final JoinDescriptorResolver _resolver;
 
@@ -351,6 +367,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     CancellationToken? cancellation,
     GameInstall? install,
     void Function(JoinEvent progress)? onProgress,
+    bool developerMode = false,
   }) async {
     GameInstall requireInstall() =>
         install ??
@@ -359,6 +376,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
           'install',
         ));
     final content = _content;
+    final sessions = _sessions;
     return switch (state.stage) {
       JoinStage.resolving => await resolveTarget(
         state.target,
@@ -368,6 +386,14 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
         state.descriptorRequest!,
         cancellation: cancellation,
       ),
+      // A plan is made from the newest catalog right before consent, so a
+      // version removed or added while the player read an earlier one counts.
+      JoinStage.checking when sessions != null =>
+        await sessions.planJoinContent(
+          requireInstall(),
+          state,
+          developerMode: developerMode,
+        ),
       JoinStage.downloading when content != null => await _download(
         content,
         requireInstall(),
@@ -388,42 +414,38 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     };
   }
 
-  /// Answers the downloading stage through [content], with the packages
-  /// only the host serves taken from the host as the descriptor fetch
-  /// reached it (`JoinHostPackages`). A LAN host stays heard until the
-  /// stage ends, however it ends: a stop asked for meanwhile waits for it,
-  /// and browsing it had to start stops after it.
-  Future<JoinEvent?> _download(
-    MultiplayerContentHost content,
+  @override
+  Future<JoinGameRunning> joinGameRunning(GameInstall install) async =>
+      await _sessions?.joinGameRunning(install) ?? JoinGameRunning.foreign;
+
+  @override
+  Future<JoinLaunch> launchJoin(
+    JoinSessionState state, {
+    required GameInstall install,
+    required String intentId,
+    bool developerMode = false,
+  }) => _launchJoin(
+    state,
+    install: install,
+    intentId: intentId,
+    developerMode: developerMode,
+  );
+
+  @override
+  Future<bool> withdrawJoinLaunch(
     GameInstall install,
-    JoinSessionState state,
-    void Function(JoinEvent progress)? onProgress,
-    CancellationToken? cancellation,
+    JoinLaunchStarted launch,
   ) async {
-    final request = state.downloadRequest;
-    final host = request == null || request.hostDownloads.isEmpty
-        ? null
-        : _resolver.hostPackagesFor(request, mayBrowse: _lanAllowed);
     try {
-      return await content.downloadJoinContent(
-        install,
-        state,
-        onProgress: onProgress,
-        cancellation: cancellation,
-        hostPackages: host,
-      );
-    } finally {
-      host?.release();
+      return await _sessions?.withdrawJoinLaunch(install, launch) ?? false;
+    } on Object {
+      return false;
     }
   }
 
-  /// Whether the stored settings let LAN browsing run: readable, with
-  /// discovery on, as [startLanBrowsing] reads them.
-  Future<bool> _lanAllowed() async {
-    final load = await _store.loadSettings();
-    return load.recovery != MultiplayerStoreRecovery.unreadable &&
-        load.settings.lanDiscoveryEnabled;
-  }
+  @override
+  Stream<JoinHandoffArrival> get handoffs =>
+      _sessions?.sessionHandoffs ?? const Stream.empty();
 
   @override
   Future<JoinEvent?> resolveTarget(

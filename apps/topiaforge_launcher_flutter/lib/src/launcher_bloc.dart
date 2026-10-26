@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 
+import 'join_activity.dart';
+import 'join_texts.dart';
 import 'launcher_event.dart';
 import 'launcher_build.dart';
 import 'launcher_multiplayer_state.dart';
@@ -26,6 +29,8 @@ part 'launcher_session_link_actions.dart';
 part 'launcher_multiplayer_settings_actions.dart';
 part 'launcher_multiplayer_network_actions.dart';
 part 'launcher_multiplayer_work.dart';
+part 'launcher_multiplayer_join_actions.dart';
+part 'launcher_multiplayer_join_steps.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(
@@ -99,6 +104,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   /// Whether the launcher handles `topiaforge://` links here.
   bool get hasLinkHandling => _sessionLinkHandling != null;
 
+  /// Whether the launcher can join multiplayer servers here.
+  bool get canJoin => _multiplayer is MultiplayerJoinGateway;
+
   @override
   void onChange(Change<LauncherState> change) {
     super.onChange(change);
@@ -142,6 +150,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     }
     if (event is LauncherStarted && _multiplayer != null) {
       add(const MultiplayerPreferencesRefreshRequested(checkGame: false));
+      _listenForJoinHandoffs();
     }
     await _guard(emit, 'Refreshed launcher state.', () async {
       final snapshot = await _repository.loadSnapshot();

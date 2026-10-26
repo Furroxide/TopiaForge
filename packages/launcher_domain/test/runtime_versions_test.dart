@@ -21,4 +21,24 @@ void main() {
       TopiaForgeRuntimeVersions.gameVersion,
     );
   });
+
+  // A join plan predicts the host's admission with the protocol the bundled
+  // runtime speaks, so it must be the one the game's contract declares.
+  test('the multiplayer protocol is the one the game speaks', () {
+    final module = [
+      File('src/TopiaForge.Mods.Multiplayer/MultiplayerIdentity.cs'),
+      File('../../src/TopiaForge.Mods.Multiplayer/MultiplayerIdentity.cs'),
+    ].firstWhere((file) => file.existsSync()).readAsStringSync();
+    String constant(String name) => RegExp(
+      'public const string $name = "([^"]+)";',
+    ).firstMatch(module)!.group(1)!;
+    expect(
+      TopiaForgeRuntimeVersions.multiplayerProtocolVersion,
+      constant('ProtocolVersion'),
+    );
+    expect(
+      TopiaForgeRuntimeVersions.multiplayerPeerVersionRange,
+      constant('PeerVersionRange'),
+    );
+  });
 }

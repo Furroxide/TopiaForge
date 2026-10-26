@@ -158,11 +158,16 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
 | `launcher-quit-<request key>.json` | Launcher to game | A request to quit, before an owned restart or a join's install: `requestId` (the process's launch request) and its own `quitId` |
 
 - **The handoff never carries an address.** A server typed by address in game goes to the launcher as a
-  `topiaforge://join/…` link. The launcher takes a handoff once and restarts into the server's profile through its
-  owned-restart path.
+  `topiaforge://join/…` link. The launcher looks for a handoff from each game it started once a second while the
+  desktop app watches, takes it once, and opens the join flow for its target: the consent sheet first, then a live
+  join or its owned restart into the server's profile. A `current` target names the join this launcher started that
+  process for; a launcher that no longer knows it says so. A handoff from a game in another install is refused.
 - **A live join never carries an address.** Its target is an invite or a listing; a direct target needs a launch
-  request. The game refuses a join whose package-set digest is not its own, and reports it under `joinId` as it would
-  a launch request. A newer join replaces one the game has not taken.
+  request. The launcher sends one only to a game it started and has just verified, when the plan's package-set digest
+  is the one that game runs; otherwise the join closes that game, as the player agreed on the consent sheet, and starts
+  it again. The game refuses a join whose package-set digest is not its own, and reports it under `joinId` as it would
+  a launch request. A newer join replaces one the game has not taken, and a join cancelled before the game takes it is
+  withdrawn (`withdrawSessionJoin`).
 - **A quit request reaches only the game the launcher started.** The launcher writes one only for a process it owns
   and has just verified, named by that process's launch request, which no other game knows. The manager looks for its
   own request twice a second, takes it once and quits as the game's **QUIT** button does, so mods unload and the clean
@@ -210,8 +215,12 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   Both readers refuse a journal without a valid epoch, and a projection whose `journalApplied` names no epoch.
 - **A long session never fills the journal.** The launcher takes the journal in only while no game runs from the
   install: at its own start or when another install is chosen, once a game it found running has closed, and after a
-  change in Settings. Writing the projection before a session launch comes with the join flow. Every edit of a session
-  therefore lands in one journal. Each change sets its whole preference, so when the game appends one
+  change in Settings. A join runs the same round as the last thing before it starts a session, once any game it
+  closed has exited, and stops as `launchBlocked` when the round cannot finish, since a projection left as it was
+  could still hold a voice consent the player has withdrawn. After that round the join rebuilds its launch request
+  from the synchronized settings, so a name or network choice saved as the game quits is not replaced by the earlier
+  request. A live join runs none, since the game runs. Every edit
+  of a session therefore lands in one journal. Each change sets its whole preference, so when the game appends one
   (`MultiplayerPreferencesJournal.Append`) it drops every earlier change of the same preference; an earlier disclosure
   goes only when the new one acknowledges at least as much. The launcher's result is the same either way.
 - **Read-only while the game runs.** Nothing records whether an edit in the launcher came before or after one in game,
@@ -384,12 +393,24 @@ launcher log, and neither ever names a URL or an address.
   passes its bound as soon as it does, and one that ends short once it ends. The SHA-256 must be the pinned one before
   anything is kept. Then the archive's `topiaforge.mod.json` must equal the trusted manifest the plan used, compared as
   package installs compare it. Verified archives stay in the cache by SHA-256, so a join tried again fetches nothing
-  twice.
+  twice. A launcher that closes stops a join's downloads at once, the host's own included, and the wait for a LAN
+  host's beacon: each download's token is linked to the repository's own, which closing cancels before it waits for
+  the work in flight, so the join answers `JoinCancelRequested` and no partial file is left.
 - **Packages only the host serves (developer mode).** A package none of the player's sources offers, from a host whose
   descriptor says `hostServesPackages`, is planned as `downloadFromHost` in developer mode, and the consent must
-  acknowledge it (`JoinSessionState.hostServedAcknowledged`). The downloading stage fetches it last, once every source
-  download is in the cache, from the host's own endpoint with `TFD1 package <sha256>` (`HostPackageClient`), through
-  a `JoinHostPackageSource` the multiplayer facade hands the content host.
+  acknowledge it (`JoinSessionState.hostServedAcknowledged`). The launcher's consent sheet shows such a package by its
+  id, version and SHA-256 as "Served by the host", says that what it may do is not known until it is checked, and adds
+  a red developer-mode section whose box Join waits for; only a ticked box sends
+  `JoinConsentGiven(hostServedAcknowledged: true)`, and the box counts only for the consent it was ticked on. The
+  checkbox and Join events carry the exact consent state displayed when they were created; an event from an earlier
+  sheet cannot acknowledge a retry or a changed plan. Cancel clears the box before showing its outcome. Host-written
+  ids, versions and error details use the same address scrubber on screen, in copied details and in download and
+  install failure logs; for a log line it reads only the words the line keeps, so a host's long text costs no more
+  than a short one, and it cuts between words, keeping address placeholders whole. Before a host archive's manifest
+  is validated, install refusals name it by its bounded descriptor identity. Longer dotted numbers that contain an
+  IPv4 address are withheld too, since a numeric suffix can disguise one. The downloading stage fetches such a package
+  last, once every source download is in the cache, from the host's own endpoint with `TFD1 package <sha256>`
+  (`HostPackageClient`), through a `JoinHostPackageSource` the multiplayer facade hands the content host.
   - **Gates the data layer checks itself.** Developer mode, as the launcher's settings say at that moment, and the
     acknowledgement, before anything is fetched, sources included, again before each of the host's packages, so that
     turning developer mode off asks the host for nothing more, and again before the install; settings that cannot be
@@ -491,8 +512,9 @@ launcher log, and neither ever names a URL or an address.
     never asked, and one that neither quits nor can be stopped ends the join as `gameRunning`, owned; a game found
     running once the launcher's own has ended is another copy, and ends it as `gameRunning`, foreign. A launcher that
     closes while it waits withdraws an untaken request, stops nothing and installs nothing. When this launcher started
-    no game, the install reads no journal; the join's launch, once it is built, has to. The consent sheet can
-    therefore acknowledge closing after saying that joining quits the game as its **QUIT** button does.
+    no game, the install reads no journal; the join's launch does, and refuses as `launchBlocked` a start that would
+    open in safe mode. The consent sheet can therefore acknowledge closing after saying that joining quits the game as
+    its **QUIT** button does.
 - **The staging lease.** Installs and cleanups take `acquireLaunchLease`, so no launch stages while they change the
   game's files. A lease another launch or install holds ends the install at once with a plain "try again".
 - **The server profile.** `mp-<sha16(serverId)>`, named `Server · <name>`, with `inheritManagerModState: false` and
