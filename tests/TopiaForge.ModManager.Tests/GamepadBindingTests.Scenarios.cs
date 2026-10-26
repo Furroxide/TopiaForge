@@ -65,7 +65,11 @@ namespace TopiaForge.ModManager.Tests
                 public static void MissingAndChangingPad()
                 {
                     var pad = Reset(); using var registry = new UnityInputRegistry(); using var action = Action(registry, InputGamepadAxis.RightTrigger);
-                    Gamepad.current = null; registry.Sample(); Equal(0, action.Value);
+                    // With no controller connected, every axis reads zero and yielding stick bindings still sample.
+                    using var left = Action(registry, InputGamepadAxis.LeftX); using var right = Action(registry, InputGamepadAxis.RightY);
+                    Gamepad.current = null; registry.Sample(); Equal(0, action.Value); Equal(0, left.Value); Equal(0, right.Value);
+                    foreach (InputGamepadAxis axis in Enum.GetValues<InputGamepadAxis>()) Equal(0, UnityGamepadAxes.Read(axis));
+                    Check(!TopiaForgeInputOwnership.StickTaken(false) && !TopiaForgeInputOwnership.StickTaken(true), "no controller, no taken stick");
                     Gamepad.current = pad; pad.rightTrigger.Value = .8f; registry.Sample(); Equal(.8f, action.Value); Check(action.WasPressed, "hotplug press");
                     Gamepad.current = null; registry.Sample(); Check(action.WasReleased && !action.IsHeld, "disconnect releases");
                     Gamepad.current = new Gamepad { deviceId = 43 }; Gamepad.current.rightTrigger.Value = .2f;
@@ -115,6 +119,11 @@ namespace TopiaForge.ModManager.Tests
                         // The surface closed before sampling; only the taken press remembers that this was UI input.
                         using var registry = new UnityInputRegistry(); using var action = Action(registry, pair.Item1);
                         registry.Sample(); Equal(0, action.Value); Check(!action.WasPressed, "taken stick stays with UI");
+                        // Only that stick stays with UI: the other stick and the triggers still reach yielding actions.
+                        using var otherStick = Action(registry, pair.Item2 == 3 ? InputGamepadAxis.RightX : InputGamepadAxis.LeftX);
+                        using var trigger = Action(registry, pair.Item2 == 3 ? InputGamepadAxis.LeftTrigger : InputGamepadAxis.RightTrigger);
+                        (pair.Item2 == 3 ? pad.rightStick : pad.leftStick).Value = new Vector2(.4f, 0); pad.leftTrigger.Value = pad.rightTrigger.Value = .3f;
+                        registry.Sample(); Equal(.4f, otherStick.Value); Equal(.3f, trigger.Value); Equal(0, action.Value);
                         using var rawRegistry = new UnityInputRegistry(); using var raw = Action(rawRegistry, pair.Item1, yields: false);
                         rawRegistry.Sample(); Equal(.6f, raw.Value);
                         Take(pad, pair.Item2, -.8f, -.8f); rawRegistry.Sample(); Equal(-.8f, raw.Value); registry.Sample(); Equal(0, action.Value);
@@ -129,7 +138,11 @@ namespace TopiaForge.ModManager.Tests
                     Equal(.9f, UnityGamepadAxes.Read(InputGamepadAxis.RightX)); Equal(-.7f, UnityGamepadAxes.Read(InputGamepadAxis.RightY));
                     var other = new Gamepad { deviceId = 43 }; Gamepad.current = other;
                     Equal(0, UnityGamepadAxes.Read(InputGamepadAxis.LeftX)); Check(!TopiaForgeInputOwnership.StickTaken(false), "other pad is free");
-                    Gamepad.current = pad; TopiaForgeInputOwnership.Gate.ForgetAll();
+                    // The left stick let go while the right stays taken: it reads the controller again, never its old direction.
+                    Gamepad.current = pad; TopiaForgeInputOwnership.Gate.Take(pad.deviceId, TopiaForgeInputDevice.Gamepad, 3, TopiaForgeInputRole.Direction, 0, 0, 0, 0, TopiaForgeInputClaim.None, 2);
+                    pad.leftStick.Value = new Vector2(.2f, 0); Equal(.2f, UnityGamepadAxes.Read(InputGamepadAxis.LeftX)); Equal(.9f, UnityGamepadAxes.Read(InputGamepadAxis.RightX));
+                    Check(!TopiaForgeInputOwnership.StickTaken(false) && TopiaForgeInputOwnership.StickTaken(true), "only the held stick stays taken"); pad.leftStick.Value = default;
+                    TopiaForgeInputOwnership.Gate.ForgetAll();
                     Equal(0, UnityGamepadAxes.Read(InputGamepadAxis.LeftX)); Check(!TopiaForgeInputOwnership.StickTaken(false), "reset frees stick");
                     var gate = TopiaForgeInputOwnership.Gate;
                     gate.Take(42, TopiaForgeInputDevice.Keyboard, 3, TopiaForgeInputRole.Submit, 1, 0, 1, 1, TopiaForgeInputClaim.Navigation, 1);
