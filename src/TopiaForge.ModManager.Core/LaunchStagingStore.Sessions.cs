@@ -42,10 +42,13 @@ namespace TopiaForge.ModManager.Core
         /// does, or V5 with the session to host or join. Either way the file is removed once read, so a direct target's
         /// address leaves staging with it.
         /// </summary>
-        public ConsumedLaunchRequest ConsumeLaunchRequest(string path)
+        public ConsumedLaunchRequest ConsumeLaunchRequest(string path) => ConsumeLaunchRequest(path, null);
+        private ConsumedLaunchRequest ConsumeLaunchRequest(string path, string? expectedHash)
         {
             var fullPath = ValidateChild(path);
             var json = Read(fullPath, LaunchTransportJson.MaxDocumentBytes);
+            if (expectedHash != null && AcceptanceIsolationJson.Hash(json) != expectedHash)
+                throw new InvalidDataException("The launch request changed after isolation admission.");
             var result = LaunchTransportJson.ReadLaunchRequest(json);
             if (!string.Equals(fullPath, RequestPath(result.Profile.RequestId), FileSystemComparison))
                 throw new InvalidDataException("The launch request identity does not match its owned filename.");

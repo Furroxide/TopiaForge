@@ -191,7 +191,9 @@ final class _Pair {
     if (!(peer == 'guest' && omitGuest)) {
       File(p.join(logs.path, 'manager.log')).writeAsStringSync(
         '${now.toIso8601String()} [INFO] [${MultiplayerAcceptanceSpec.packageId}] '
-        'TF-MP-ACCEPT|PASS|$challenge|$peer|multiplayer.lan|automatic\n',
+        'TF-MP-ACCEPT|PASS|$challenge|$peer|multiplayer.lan|automatic\n'
+        '${now.toIso8601String()} [INFO] [${MultiplayerAcceptanceSpec.packageId}] '
+        'TF-MP-SESSION|READY|$challenge|$peer\n',
       );
     }
     final receipt = readLiveAcceptancePackageReceipt(

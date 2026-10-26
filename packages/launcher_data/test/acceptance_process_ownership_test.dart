@@ -46,7 +46,10 @@ void main() {
         restart: true,
       );
       expect(result.started, isFalse);
-      expect(result.message, contains('Acceptance runs never host or join'));
+      expect(
+        result.message,
+        contains('Acceptance never replaces a running process'),
+      );
       expect(fixture.stopped, isEmpty);
       expect(fixture.probed, isEmpty);
       expect(fixture.alive, isTrue);

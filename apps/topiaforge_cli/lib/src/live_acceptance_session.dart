@@ -99,6 +99,8 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
     required Future<void> Function() dispose,
     DateTime Function()? clock,
     Future<void> Function(Duration)? delay,
+    this.expectedSession,
+    this.progress,
   }) : _context = context,
        _process = process,
        _acknowledgement = acknowledgement,
@@ -118,6 +120,8 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
   final Future<void> Function() _dispose;
   final DateTime Function() _clock;
   final Future<void> Function(Duration) _delay;
+  final LaunchSessionRequest? expectedSession;
+  final Future<LaunchProgress?> Function()? progress;
   AcceptanceIsolationAcknowledgement? _ack;
   bool _exitConfirmed = false;
   Future<void>? _closing;
@@ -126,8 +130,10 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
   Future<void> confirm(Duration timeout) async {
     final deadline = _clock().toUtc().add(timeout);
     while (_clock().toUtc().isBefore(deadline)) {
+      _context.verify();
       _ack ??= await _acknowledgement();
       final outcome = await _outcome();
+      final current = await progress?.call();
       if (outcome != null && outcome.status != 'succeeded') {
         throw StateError('The isolated runtime refused the acceptance launch.');
       }
@@ -136,10 +142,25 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
           'The owned acceptance process exited or became unverifiable; startup remains unconfirmed.',
         );
       }
-      if (_ack != null &&
-          outcome?.status == 'succeeded' &&
-          outcome?.command == 'launch-target' &&
-          outcome?.phase == 'running') {
+      final session = expectedSession;
+      final confirmed = session == null
+          ? outcome?.command == 'launch-target' && outcome?.phase == 'running'
+          : outcome?.schemaVersion == 2 &&
+                outcome?.requestId == _ack?.document['requestId'] &&
+                outcome?.command == session.role.command &&
+                outcome?.multiplayer?.intentId == session.intentId &&
+                outcome?.multiplayer?.role == session.role &&
+                current?.requestId == outcome?.requestId &&
+                current?.schemaVersion == 2 &&
+                current?.session?.intentId == session.intentId &&
+                current?.session?.role == session.role &&
+                current?.session?.serverId == outcome?.multiplayer?.serverId &&
+                current?.session?.serverId != null &&
+                current?.session?.state ==
+                    (session.role == LaunchSessionRole.host
+                        ? LaunchSessionState.hosting
+                        : LaunchSessionState.inSession);
+      if (_ack != null && outcome?.status == 'succeeded' && confirmed) {
         return;
       }
       await _delay(const Duration(milliseconds: 100));

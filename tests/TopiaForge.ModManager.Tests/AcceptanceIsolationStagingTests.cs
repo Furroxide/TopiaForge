@@ -14,7 +14,27 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             SuccessAndReplay(); DenialPreservesRequest(); InvalidCorrelation(); ChangedProfile(); ProbeFailure(); AckFailureAfterConsumption(); RacingAckAfterConsumption(); NativeProbe();
-            Console.WriteLine("Acceptance isolation staging: 8 checks passed.");
+            SessionAdmission("host"); SessionAdmission("join");
+            Console.WriteLine("Acceptance isolation staging: 10 checks passed.");
+        }
+        private static void SessionAdmission(string role)
+        {
+            using var f = new AcceptanceIsolationTests.Fixture();
+            var baseProfile = LaunchTransportJson.ReadProfile(f.Profile);
+            var session = new LaunchSessionRequest(role, "acceptance-intent", "Acceptance",
+                new LaunchSessionTransport("relay-only", null, 0, false, true),
+                host: role == "host" ? new LaunchHostOptions("Acceptance", 2, "lan", false, false, false) : null,
+                target: role == "join" ? LaunchSessionTarget.Direct("127.0.0.1", 12345, new string('a', 64), new string('b', 64), new string('c', 64)) : null);
+            var profile = new ProfileLaunchConfigurationV5(baseProfile.ProfileId, baseProfile.ProfileRevision, baseProfile.RequestId,
+                session.Command, baseProfile.Packages, baseProfile.Digest, false, baseProfile.EnabledMods, baseProfile.SelectedVersions, session);
+            f.Profile = LaunchTransportJson.WriteProfileV5(profile);
+            Check(f.Check().Count == 0, "Exact V5 " + role + " bytes are admitted.");
+            var changed = f.Request(); changed["profileRequestSha256"] = new string('f', 64);
+            Check(f.Check(changed).Count != 0, "V5 cannot substitute unbound session bytes.");
+            var (paths, store) = Prepare(f);
+            var admitted = store.AdmitAcceptance("Request-A", store.RequestPath("Request-A"), () => f.Observation, f.Now);
+            Check(admitted.SchemaVersion == 5 && admitted.Session?.Role == role, "Admission retains the V5 session for production startup.");
+            NoManagerEffects(paths);
         }
         private static void Check(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
         private static void Reject(Action action) { try { action(); } catch (InvalidDataException) { return; } throw new InvalidOperationException("Expected isolated admission refusal."); }
@@ -33,7 +53,7 @@ namespace TopiaForge.ModManager.Tests
         {
             using var f = new AcceptanceIsolationTests.Fixture(); var (paths, store) = Prepare(f);
             var request = store.AdmitAcceptance("Request-A", store.RequestPath("Request-A"), () => f.Observation, f.Now);
-            Check(request.RequestId == "Request-A" && !File.Exists(store.RequestPath("Request-A")), "Admitted exact request consumed once.");
+            Check(request.Profile.RequestId == "Request-A" && !File.Exists(store.RequestPath("Request-A")), "Admitted exact request consumed once.");
             var ack = File.ReadAllBytes(store.AcceptanceAckPath("Request-A"));
             using var json = JsonDocument.Parse(ack);
             Check(json.RootElement.GetProperty("status").GetString() == "admitted", "Admission ack must be explicit.");

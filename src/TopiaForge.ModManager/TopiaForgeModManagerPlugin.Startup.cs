@@ -63,10 +63,17 @@ namespace TopiaForge.ModManager
             launchStaging.SweepStaleClaims();
             var acceptanceRequest = Environment.GetEnvironmentVariable(AcceptanceIsolationGate.EnvironmentVariable);
             if (acceptanceRequest == null) return;
-            launchProfile = launchStaging.AdmitAcceptance(acceptanceRequest,
+            var consumed = launchStaging.AdmitAcceptance(acceptanceRequest,
                 Environment.GetEnvironmentVariable(ProfileLaunchConfigurationV4.EnvironmentVariable),
                 () => AcceptanceRuntimeProbe.Read(BepInEx.Paths.GameRootPath, BepInEx.Paths.BepInExRootPath,
                     paths.Root, UnityEngine.Application.persistentDataPath), DateTimeOffset.UtcNow);
+            launchProfile = consumed.Profile;
+            launchSession = consumed.SessionRequest;
+            if (launchSession != null)
+            {
+                launchSessionIdentity = LaunchSessionIdentity.Of(launchSession);
+                launchServiceOrigin = launchSession.Session.ServiceOrigin;
+            }
             acceptanceAdmitted = true;
             hasLauncherCommand = true;
         }

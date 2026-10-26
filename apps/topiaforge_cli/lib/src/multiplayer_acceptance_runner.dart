@@ -58,7 +58,7 @@ final class MultiplayerAcceptanceRunner {
     DateTime Function()? clock,
     Future<void> Function(Duration)? delay,
     this.admitPeer,
-  }) : launchPeer = launchPeer ?? launchMultiplayerAcceptancePeer,
+  }) : launchPeer = launchPeer ?? MultiplayerAcceptancePair().launch,
        clock = clock ?? DateTime.now,
        delay = delay ?? Future<void>.delayed;
 
@@ -151,8 +151,11 @@ final class MultiplayerAcceptanceRunner {
               'challenge': challenge,
               'peer': peer,
               'topology': 'listen-pair',
-              'controlRoot': host.outputRoot,
               'requiredCases': selected.map((c) => c.id).toList(),
+              'checks': selected
+                  .where((c) => c.peers.contains(peer))
+                  .map((c) => c.toJson())
+                  .toList(),
             },
           }),
           flush: true,
@@ -199,7 +202,7 @@ final class MultiplayerAcceptanceRunner {
           }
         }
         if (observations.failures.isNotEmpty ||
-            (observations.complete && results.length == 2)) {
+            (observations.settled && results.length == 2)) {
           break;
         }
         await delay(const Duration(milliseconds: 500));
@@ -241,6 +244,15 @@ final class MultiplayerAcceptanceRunner {
       'cases': selected.map((c) => c.toJson()).toList(),
       'missing': observations.missing,
       'failures': observations.failures,
+      'notRun': observations.notRun,
+      'notRunReasons': {
+        for (final entry in selected)
+          if (observations.notRun.any((key) => key.endsWith(':${entry.id}')))
+            entry.id: entry.requiresService
+                ? 'A configured service and its scenario driver are required.'
+                : 'A dedicated scenario driver is required; the base listen-pair probe does not perform this check.',
+      },
+      'bothInSession': observations.bothInSession,
       'receiptsMatch': receiptsMatch,
       'isolation': isolation,
       'processExitConfirmed':

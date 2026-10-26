@@ -9,7 +9,7 @@ namespace TopiaForge.ModManager.Core
     {
         internal string AcceptanceRequestPath(string requestId) => Child("acceptance-isolation-request-" + LaunchStorageKeys.Request(requestId) + ".json");
         internal string AcceptanceAckPath(string requestId) => Child("acceptance-isolation-ack-" + LaunchStorageKeys.Request(requestId) + ".json");
-        internal ProfileLaunchConfigurationV4 AdmitAcceptance(string requestId, string? configuredProfilePath,
+        internal ConsumedLaunchRequest AdmitAcceptance(string requestId, string? configuredProfilePath,
             Func<string> readObservation, DateTimeOffset now)
         {
             // Constructing the store and all reads below leave the existing layout untouched.
@@ -35,8 +35,8 @@ namespace TopiaForge.ModManager.Core
             var reasons = AcceptanceIsolationGate.Validate(requestText, profileText, requestId, observationText, now);
             if (requestText != Read(requestPath, AcceptanceIsolationJson.MaximumBytes))
                 throw new InvalidDataException("Acceptance sidecar changed during admission.");
-            ProfileLaunchConfigurationV4? profile = null;
-            if (reasons.Count == 0) profile = ConsumeRequest(expectedProfilePath, request.Digest("profileRequestSha256"));
+            ConsumedLaunchRequest? profile = null;
+            if (reasons.Count == 0) profile = ConsumeLaunchRequest(expectedProfilePath, request.Digest("profileRequestSha256"));
             var ack = AcceptanceIsolationJson.Object(("schemaVersion", "1"), ("requestId", JsonUtil.Serialize(requestId)),
                 ("challenge", JsonUtil.Serialize(challenge)), ("requestSha256", JsonUtil.Serialize(AcceptanceIsolationJson.Hash(requestText))),
                 ("status", JsonUtil.Serialize(profile == null ? "rejected" : "admitted")),
