@@ -124,6 +124,8 @@ namespace TopiaForge.ModManager
         internal RuntimeReplication Replication { get; }
 
         public UiAccessibilityPreferences Accessibility => inner.Accessibility;
+        public IUiWorldLabels Labels => inner.Labels;
+        public double ClockTime => inner.ClockTime;
 
         public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences) =>
             inner.ApplyAccessibility(preferences);

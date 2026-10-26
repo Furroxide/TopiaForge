@@ -42,6 +42,17 @@ namespace TopiaForge.ModManager.Tests
                 LaunchSessionStagingTests.Run(FindRepoRoot());
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--world-widgets")
+            { TestingKitTests.RunWorldWidgets(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-widget-regressions")
+            {
+                UiKitCoreTests.Run(); UiKitWindowMathTests.Run(); UiKitMultiplayerCoreTests.Run();
+                UiKitInputOwnershipTests.Run(); UiKitInputOwnershipConventionTests.Run();
+                UiKitSourceConventionTests.Run(); UiKitMultiplayerConventionTests.Run();
+                UiKitLayerLedgerTests.Run(); UiKitHudLayoutTests.Run();
+                UiSurfaceLifetimeTests.Run(); UiSurfaceLifetimeConventionTests.Run(); UiKitEventSystemTests.Run();
+                TestingKitTests.Run(); return 0;
+            }
             if (args.Length == 1 && args[0] == "--blockers")
             {
                 try { BlockerTests.Run(); return 0; }

@@ -133,6 +133,14 @@ namespace TopiaForge.Mods.Testing
 
             return snapshots.AsReadOnly();
         }
+        internal int ActiveInstanceId
+        {
+            get
+            {
+                foreach (var scene in loaded) if (scene.IsActive) return scene.SceneInstanceId;
+                return 0;
+            }
+        }
 
         /// <inheritdoc/>
         public bool TryGetCheckpoint(out CheckpointSnapshot? current)

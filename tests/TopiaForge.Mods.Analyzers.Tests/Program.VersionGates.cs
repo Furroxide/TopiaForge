@@ -58,6 +58,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
         private static void RunVersionGateTests()
         {
             BlockerVersionGate();
+            WorldWidgetVersionGate();
             var reference = VersionApiReference();
             var cases = new[] {
                 "void Run() { Api.Call(); }",

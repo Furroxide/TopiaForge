@@ -30,6 +30,7 @@ namespace TopiaForge.Mods.UnityUi
         private TopiaForgeNametagFalloff falloff = TopiaForgeNametagFalloff.Default;
         private float screenMargin = TopiaForgeNametagMath.DefaultScreenMargin;
         private Camera? cachedCamera;
+        private Camera[] cameraBuffer = Array.Empty<Camera>();
         private float nextCameraCheck;
         private int activeCount;
         private bool fullWarned;
@@ -200,17 +201,27 @@ namespace TopiaForge.Mods.UnityUi
                 }
 
                 var y = anchor.Y + slot.VerticalOffset;
+                var presentation = slot.Anchor as ITopiaForgeNametagPresentation;
                 var point = frame.Project(anchor.X, y, anchor.Z);
-                var placement = TopiaForgeNametagMath.Place(point, frame.DistanceTo(anchor.X, y, anchor.Z), viewport, falloff, screenMargin, minimumDepth);
+                var placement = TopiaForgeNametagMath.Place(point, frame.DistanceTo(anchor.X, y, anchor.Z), viewport,
+                    presentation?.Falloff ?? falloff, screenMargin, minimumDepth);
                 if (!placement.Visible
+                    || (presentation != null && !CanPresent(presentation, frame, new Vec3(anchor.X, y, anchor.Z)))
                     || !RectTransformUtility.ScreenPointToLocalPointInRectangle(Rect, new Vector2(placement.ScreenX, placement.ScreenY), null, out var local))
                 {
                     slot.Hide();
                     continue;
                 }
 
+                // The kit's canvas scaler already applies accessibility scale.
                 slot.Show(local, placement.Scale, placement.Alpha);
             }
+        }
+
+        private static bool CanPresent(ITopiaForgeNametagPresentation presentation, TopiaForgeCameraFrame frame, Vec3 anchor)
+        {
+            try { return presentation.CanShow(new Vec3(frame.CameraX, frame.CameraY, frame.CameraZ), anchor); }
+            catch (Exception) { return false; }
         }
 
         private bool TryReadAnchor(TopiaForgeNametagSlot slot, out Vec3 position)
@@ -285,12 +296,14 @@ namespace TopiaForge.Mods.UnityUi
             if (cachedCamera == null || !cachedCamera.isActiveAndEnabled)
             {
                 cachedCamera = null;
-                var all = Camera.allCameras;
-                for (var index = 0; index < all.Length; index++)
+                var count = Camera.allCamerasCount;
+                if (cameraBuffer.Length < count) cameraBuffer = new Camera[count];
+                count = Camera.GetAllCameras(cameraBuffer);
+                for (var index = 0; index < count; index++)
                 {
-                    if (all[index] != null && all[index].isActiveAndEnabled)
+                    if (cameraBuffer[index] != null && cameraBuffer[index].isActiveAndEnabled)
                     {
-                        cachedCamera = all[index];
+                        cachedCamera = cameraBuffer[index];
                         break;
                     }
                 }

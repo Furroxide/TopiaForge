@@ -688,11 +688,14 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, 
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeToast> Toasts { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeUiModal> Modals { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeUiSurface> Surfaces { get; }
+  property System.Double ClockTime { get [virtual,final,newslot]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Testing.FakeUiWorldLabels Labels { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiAccessibilityPreferences Accessibility { get [virtual,final,newslot]; }
 
 type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, System.IDisposable, TopiaForge.Mods.IUiSurface, TopiaForge.Mods.IUiSurfaceDismissalSource
   event System.Action? Dismissed { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
   method System.Boolean TryFindNode(System.String id, out TopiaForge.Mods.UiNode? node)
+  method System.Boolean TryGetCountdownSeconds(System.String id, out System.Int32 seconds) [requires-topiaforge="0.2.0"]
   method System.Boolean TryGetDropdownValue(System.String id, out System.String? value)
   method System.Boolean TryGetGraphViewport(System.String id, out TopiaForge.Mods.UiGraphViewport viewport)
   method System.Boolean TryGetSelectedGraphNode(System.String id, out System.String? nodeId)
@@ -723,6 +726,22 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, 
   property System.String Id { get [virtual,final,newslot]; }
   property TopiaForge.Mods.UiNode? Content { get; }
   property TopiaForge.Mods.UiSurfaceRequest Request { get; }
+
+type public sealed class TopiaForge.Mods.Testing.FakeUiWorldLabel : System.Object, System.IDisposable, TopiaForge.Mods.IUiWorldLabel [requires-topiaforge="0.2.0"]
+  method System.Boolean TryGetPosition(out TopiaForge.Mods.Vec3 position) [requires-topiaforge="0.2.0"]
+  method System.Single OpacityFrom(TopiaForge.Mods.Vec3 camera) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void SetPosition(TopiaForge.Mods.Vec3 position) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void SetText(System.String text) [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAlive { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean Occluded { get [requires-topiaforge="0.2.0"]; set [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Text { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.Testing.FakeUiWorldLabels : System.Object, System.IDisposable, TopiaForge.Mods.IUiWorldLabels [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiWorldLabel> Add(TopiaForge.Mods.UiWorldLabelRequest request) [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeUiWorldLabel> Active { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Int32 Count { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.Testing.FakeWorldPauseMenuService : System.Object, TopiaForge.Mods.IWorldPauseMenuService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)

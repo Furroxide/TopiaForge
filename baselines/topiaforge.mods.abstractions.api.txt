@@ -377,6 +377,8 @@ type public interface TopiaForge.Mods.IUiService
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.UiAccessibilityPreferences> ApplyAccessibility(TopiaForge.Mods.UiAccessibilityPreferences preferences)
+  property System.Double ClockTime { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.IUiWorldLabels Labels { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiAccessibilityPreferences Accessibility { get [abstract,virtual,newslot]; }
 
 type public interface TopiaForge.Mods.IUiSurface : System.IDisposable
@@ -389,6 +391,14 @@ type public interface TopiaForge.Mods.IUiSurface : System.IDisposable
 
 type public interface TopiaForge.Mods.IUiSurfaceDismissalSource
   event System.Action? Dismissed { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUiWorldLabel : System.IDisposable [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.Void SetPosition(TopiaForge.Mods.Vec3 position) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.Void SetText(System.String text) [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAlive { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public interface TopiaForge.Mods.IUiWorldLabels [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiWorldLabel> Add(TopiaForge.Mods.UiWorldLabelRequest request) [requires-topiaforge="0.2.0"]
 
 type public interface TopiaForge.Mods.IViewControls [requires-topiaforge="0.2.0"]
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Environment(System.String preset) [requires-topiaforge="0.2.0"]
@@ -723,6 +733,13 @@ type public sealed class TopiaForge.Mods.UiColumn : TopiaForge.Mods.UiLayoutNode
   constructor .ctor(System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiNode> children)
   constructor .ctor(params TopiaForge.Mods.UiNode[] children)
 
+type public sealed class TopiaForge.Mods.UiCountdown : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Double endsAt, System.String label = "", TopiaForge.Mods.UiTone tone = 0 (Neutral), System.String? id = null) [requires-topiaforge="0.2.0"]
+  method System.Int32 RemainingSeconds(System.Double clockTime) [requires-topiaforge="0.2.0"]
+  property System.Double EndsAt { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Label { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiTone Tone { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.UiDropdown : TopiaForge.Mods.UiNode
   constructor .ctor(System.String id, System.String label, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiChoice> choices, System.String selectedValue, System.Action<System.String> changed, System.Boolean enabled = true)
   property System.Action<System.String> Changed { get; }
@@ -844,6 +861,12 @@ type public sealed class TopiaForge.Mods.UiModalRequest : System.Object
 type public abstract class TopiaForge.Mods.UiNode : System.Object
   property System.String? Id { get; }
 
+type public sealed class TopiaForge.Mods.UiProgress : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Single fraction, System.String label = "", TopiaForge.Mods.UiTone tone = 0 (Neutral), System.String? id = null) [requires-topiaforge="0.2.0"]
+  property System.Single Fraction { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Label { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiTone Tone { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.UiRow : TopiaForge.Mods.UiLayoutNode
   constructor .ctor(System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiNode> children)
   constructor .ctor(params TopiaForge.Mods.UiNode[] children)
@@ -936,6 +959,16 @@ type public sealed class TopiaForge.Mods.UiVirtualList : TopiaForge.Mods.UiNode
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiListItem> Items { get; }
   property System.Int32 VisibleRows { get; }
   property System.String? SelectedItemId { get; }
+
+type public sealed class TopiaForge.Mods.UiWorldLabelRequest : System.Object [requires-topiaforge="0.2.0"]
+  method [static] TopiaForge.Mods.UiWorldLabelRequest At(TopiaForge.Mods.Vec3 position, System.String text, System.Single maximumDistance = 30, System.Boolean occlusion = true, TopiaForge.Mods.UiTone tone = 0 (Neutral)) [requires-topiaforge="0.2.0"]
+  method [static] TopiaForge.Mods.UiWorldLabelRequest For(TopiaForge.Mods.IEntity entity, System.String text, System.Single maximumDistance = 30, System.Boolean occlusion = true, TopiaForge.Mods.UiTone tone = 0 (Neutral)) [requires-topiaforge="0.2.0"]
+  property System.Boolean Occlusion { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single MaximumDistance { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Text { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.IEntity? Entity { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiTone Tone { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Vec3 Position { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public readonly struct TopiaForge.Mods.Vec2 : System.ValueType, System.IEquatable<TopiaForge.Mods.Vec2>
   constructor .ctor(System.Single x, System.Single y)

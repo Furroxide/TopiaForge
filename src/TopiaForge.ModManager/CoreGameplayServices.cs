@@ -100,6 +100,8 @@ namespace TopiaForge.ModManager
                 lifetime.StoppingToken, transitionAccess,
                 runtimeOwnershipId + ":" + (transitionAccess?.OwnershipId ?? ownerModId));
             var ownerScheduler = new OwnerScheduler(lifetime, scheduler, logger);
+            var ui = new OwnerUiService(ownerModId, dataPath, lifetime, logger, uiGameplay, hudPlacement);
+            ui.AttachWorldWidgets(entities);
             return new GameplayContextServices(
                 new OwnerInputService(ownerModId, lifetime, input),
                 new OwnerPlayerService(lifetime, player),
@@ -112,7 +114,7 @@ namespace TopiaForge.ModManager
                 new OwnerItemService(lifetime, entities, logger),
                 new OwnerAssetService(packagePath, lifetime, entities),
                 new OwnerAudioService(lifetime),
-                new OwnerUiService(ownerModId, dataPath, lifetime, logger, uiGameplay, hudPlacement),
+                ui,
                 new OwnerUnityInteropService(ownerModId, lifetime, entities),
                 sceneTransitions,
                 new OwnerWorldRuntimeService(lifetime, sceneTransitions, worlds, new WorldRuntimeClock(ownerScheduler), dispatcher));

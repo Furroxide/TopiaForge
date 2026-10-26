@@ -20,6 +20,8 @@ namespace TopiaForge.ModManager
                 parent.Label(text.Text, ToNativeTextStyle(text.Style)).Tone(ToNativeTone(text.Tone));
                 return;
             }
+            if (node is UiProgress progress) { RenderProgress(progress, parent); return; }
+            if (node is UiCountdown countdown) { RenderCountdown(countdown, parent, callbacks.Clock); return; }
 
             if (node is UiColumn column)
             {
@@ -216,6 +218,7 @@ namespace TopiaForge.ModManager
 
         private sealed class UiCallbackGate
         {
+            internal Func<double> Clock { get; set; } = () => 0;
             private readonly IModLifetime lifetime;
             private readonly IModLogger logger;
             private int active = 1;
