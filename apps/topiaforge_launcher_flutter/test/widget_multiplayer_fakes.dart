@@ -71,6 +71,7 @@ final class _FakeMultiplayerGateway implements MultiplayerGateway {
           preferences ??
           MultiplayerPreferences(
             settings: MultiplayerSettings(displayName: 'Sam'),
+            hosting: MultiplayerHostingDefaults.forPlayer('Sam'),
           );
 
   MultiplayerPreferences preferences;

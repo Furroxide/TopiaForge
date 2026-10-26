@@ -92,7 +92,7 @@ void main() {
         'server.zeta@1.0.0',
       });
       expect(result.removedProfiles.toSet(), {a, b});
-      expect(result.freedBytes, greaterThanOrEqualTo(plan.removableBytes));
+      expect(result.freedBytes, plan.removableBytes);
       for (final (id, version) in [
         ('own.alpha', '2.0.0'),
         ('own.beta', '1.5.0'),
@@ -114,7 +114,12 @@ void main() {
       final records = managerRecords(rig.game);
       expect(records.keys.toSet(), {'own.alpha', 'own.beta', 'own.gamma'});
       for (final archive in [...StandardJoin.downloads, zeta]) {
-        expect(cachedArchive(rig.dataRoot, archive).existsSync(), isFalse);
+        expect(
+          cachedArchive(rig.dataRoot, archive).readAsBytesSync(),
+          archive.bytes,
+          reason:
+              "a shared cache archive may still serve another install or host",
+        );
       }
       final after = await rig.playerView();
       expect(

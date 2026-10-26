@@ -97,6 +97,15 @@ void main() {
         expect(fresh.hosting.port, LanBeacon.defaultGamePort);
         expect(fresh.needsNetworkNotice, isTrue);
 
+        expect(fresh.hasHostingDefaults, isFalse);
+        await expectLater(
+          repo.changePreferences(
+            const MultiplayerPreferencesChange(hostingPort: 27300),
+          ),
+          throwsA(isA<MultiplayerPreferencesException>()),
+        );
+        await repo.syncWithGame(install);
+
         final changed = await repo.changePreferences(
           const MultiplayerPreferencesChange(
             displayName: 'Sam',

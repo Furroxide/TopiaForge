@@ -88,6 +88,14 @@ class _MultiplayerSettingsPaneState extends State<_MultiplayerSettingsPane> {
         _VoicePane(view: view, preferences: preferences),
         const SizedBox(height: 14),
         _LinksPane(state: state, preferences: preferences),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: bloc.canCleanServerContent && state.gameInstall != null
+              ? () => _openServerCleanup(context)
+              : null,
+          icon: const Icon(Icons.cleaning_services),
+          label: const Text('Manage server content…'),
+        ),
       ];
     }
     return FocusTraversalGroup(

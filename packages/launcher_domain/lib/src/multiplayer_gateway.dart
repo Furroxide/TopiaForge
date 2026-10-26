@@ -8,6 +8,8 @@
 /// network address.
 library;
 
+import 'dart:convert';
+
 import 'cancellation.dart';
 import 'launch_resolution.dart';
 import 'models.dart';
@@ -40,9 +42,11 @@ final class MultiplayerPreferences {
   MultiplayerPreferences({
     required this.settings,
     MultiplayerHostingDefaults? hosting,
+    bool? hasHostingDefaults,
     this.networkNotice = 0,
     this.health = MultiplayerPreferencesHealth.sound,
-  }) : hosting =
+  }) : hasHostingDefaults = hasHostingDefaults ?? (hosting != null),
+       hosting =
            hosting ??
            MultiplayerHostingDefaults.forPlayer(settings.displayName) {
     if (networkNotice < 0) {
@@ -66,6 +70,10 @@ final class MultiplayerPreferences {
   /// ([MultiplayerHostingDefaults.forPlayer]) until any are stored.
   final MultiplayerHostingDefaults hosting;
 
+  /// Whether hosting defaults have been saved or read from the game.
+  /// A port-only edit must not replace an unread game's other defaults.
+  final bool hasHostingDefaults;
+
   /// The newest network-check explanation the player read; 0 when never.
   final int networkNotice;
   final MultiplayerPreferencesHealth health;
@@ -88,6 +96,8 @@ final class MultiplayerPreferencesChange {
     this.displayName,
     this.acknowledgeDisclosure = false,
     this.hostingPort,
+    this.hostingDefaults,
+    this.expected,
     this.upnp,
     this.lanDiscovery,
     this.voiceConsent,
@@ -103,6 +113,10 @@ final class MultiplayerPreferencesChange {
 
   /// The port a hosted session uses; 0 picks any free one.
   final int? hostingPort;
+  final MultiplayerHostingDefaults? hostingDefaults;
+
+  /// Optional compare-and-set guard for a reviewed hosting confirmation.
+  final MultiplayerPreferences? expected;
   final bool? upnp;
   final bool? lanDiscovery;
 
@@ -123,6 +137,7 @@ final class MultiplayerPreferencesChange {
       displayName != null ||
       acknowledgeDisclosure ||
       hostingPort != null ||
+      hostingDefaults != null ||
       upnp != null ||
       lanDiscovery != null ||
       voiceConsent != null ||
@@ -132,6 +147,16 @@ final class MultiplayerPreferencesChange {
   /// [FormatException] for a value the preferences refuse, such as a display
   /// name outside the rule or a port outside 0 to 65535.
   MultiplayerPreferences applyTo(MultiplayerPreferences current) {
+    final reviewed = expected;
+    if (reviewed != null &&
+        (jsonEncode(reviewed.settings.toJson()) !=
+                jsonEncode(current.settings.toJson()) ||
+            jsonEncode(reviewed.hosting.toJson()) !=
+                jsonEncode(current.hosting.toJson()))) {
+      throw const FormatException(
+        'The reviewed preferences changed. Review hosting again.',
+      );
+    }
     var settings = current.settings;
     final name = displayName;
     if (name != null) settings = settings.withDisplayName(name);
@@ -148,7 +173,14 @@ final class MultiplayerPreferencesChange {
       null => settings,
     };
     if (voice case final enabled?) settings = settings.withVoice(enabled);
-    final hosting = current.hosting;
+    if (hostingPort != null &&
+        !current.hasHostingDefaults &&
+        hostingDefaults == null) {
+      throw const FormatException(
+        'Read the game hosting defaults before changing only the port.',
+      );
+    }
+    final hosting = hostingDefaults ?? current.hosting;
     final port = hostingPort;
     return MultiplayerPreferences(
       settings: settings,
@@ -168,6 +200,7 @@ final class MultiplayerPreferencesChange {
           ? MultiplayerPreferences.currentNetworkNotice
           : current.networkNotice,
       health: current.health,
+      hasHostingDefaults: current.hasHostingDefaults || hostingDefaults != null,
     );
   }
 }

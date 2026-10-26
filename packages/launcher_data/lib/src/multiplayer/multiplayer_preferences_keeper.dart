@@ -61,7 +61,9 @@ final class MultiplayerPreferencesKeeper {
         final kept = MultiplayerSettingsExtras(
           // Stored hosting defaults stay unstored until the player sets one,
           // so the projection keeps its own until then.
-          hosting: change.hostingPort == null ? extras.hosting : next.hosting,
+          hosting: change.hostingPort == null && change.hostingDefaults == null
+              ? extras.hosting
+              : next.hosting,
           networkNotice: next.networkNotice,
           revision: extras.revision,
           journalEpoch: extras.journalEpoch,

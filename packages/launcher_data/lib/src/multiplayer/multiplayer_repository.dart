@@ -13,8 +13,10 @@ import 'lan_discovery_client.dart';
 import 'multiplayer_preferences_keeper.dart';
 import 'multiplayer_store.dart';
 import 'network_diagnostics.dart';
+import 'hosting_service.dart';
 
 part 'multiplayer_repository_joins.dart';
+part 'multiplayer_repository_hosting.dart';
 
 /// What the launcher's bloc asks of multiplayer: the player's settings,
 /// favorites and history; their preferences and the game's copy of them
@@ -139,7 +141,9 @@ abstract interface class MultiplayerRepository
 /// [MultiplayerSessionHost] as well, the plan and the game's start; the
 /// launcher passes its own launcher repository, which is both. [gameProbe]
 /// tells whether the game runs; tests pass their own.
-final class LocalMultiplayerRepository implements MultiplayerRepository {
+final class LocalMultiplayerRepository
+    with _HostingRepository
+    implements MultiplayerRepository {
   LocalMultiplayerRepository({
     required String dataRoot,
     MultiplayerServiceConfiguration? service,
@@ -201,11 +205,13 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   static const folderName = 'multiplayer';
 
   final ControlPlaneClient _controlPlane;
+  @override
   final String? _serviceOrigin;
   final MultiplayerStore _store;
   final LanDiscoveryClient _lan;
   final MultiplayerNetworkDiagnostics _diagnostics;
   final DateTime Function() _clock;
+  @override
   final MultiplayerContentHost? _content;
   final MultiplayerSessionHost? _sessions;
   final MultiplayerPreferencesKeeper _preferences;

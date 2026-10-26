@@ -255,7 +255,7 @@ void main() {
       );
       expect(
         cachedArchive(rig.dataRoot, StandardJoin.serverAlpha).existsSync(),
-        isFalse,
+        isTrue, // Shared archives may still be used by another install.
       );
       final record = ServerContentRecord.read(
         serverContentFile(rig.game).readAsBytesSync(),

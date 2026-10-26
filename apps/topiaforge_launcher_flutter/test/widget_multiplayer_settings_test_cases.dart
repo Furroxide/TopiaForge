@@ -165,6 +165,29 @@ void registerMultiplayerSettingsWidgetTests() {
       );
     });
 
+    testWidgets('port-only edits wait until the game defaults have been read', (
+      tester,
+    ) async {
+      final gateway = _FakeMultiplayerGateway(
+        preferences: MultiplayerPreferences(
+          settings: MultiplayerSettings(displayName: 'Sam'),
+        ),
+      );
+      await _openMultiplayerSettings(tester, gateway);
+      expect(
+        tester.widget<TextField>(_field('multiplayer-hosting-port')).enabled,
+        isFalse,
+      );
+      expect(
+        find.textContaining('Read the game hosting defaults'),
+        findsOneWidget,
+      );
+      expect(
+        gateway.calls.where((call) => call.startsWith('change port')),
+        isEmpty,
+      );
+    });
+
     testWidgets('the disclosure reads again, and recording it needs its '
         'button', (tester) async {
       final gateway = _FakeMultiplayerGateway();

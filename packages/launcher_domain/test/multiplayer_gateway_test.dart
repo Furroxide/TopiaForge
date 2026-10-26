@@ -68,7 +68,10 @@ void main() {
     });
 
     test('sets each preference the settings page shows', () {
-      final before = preferences(MultiplayerSettings(displayName: 'Sam'));
+      final before = MultiplayerPreferences(
+        settings: MultiplayerSettings(displayName: 'Sam'),
+        hosting: MultiplayerHostingDefaults.forPlayer('Sam'),
+      );
       final after = const MultiplayerPreferencesChange(
         acknowledgeDisclosure: true,
         hostingPort: 0,
@@ -114,7 +117,10 @@ void main() {
     });
 
     test('refuses a name outside the rule and a port outside 0 to 65535', () {
-      final fresh = preferences();
+      final fresh = MultiplayerPreferences(
+        settings: MultiplayerSettings(),
+        hosting: MultiplayerHostingDefaults.forPlayer('Player'),
+      );
       for (final name in ['A', 'x' * 25, ' Sam', 'Sam￿']) {
         expect(
           () => MultiplayerPreferencesChange(displayName: name).applyTo(fresh),

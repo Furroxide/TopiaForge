@@ -38,9 +38,13 @@ final class _MultiplayerWork {
 
   /// The join flow's own bookkeeping.
   final join = _JoinWork();
+  final host = _HostingWork();
+  int cleanup = 0;
 
   void cancelAll() {
     round?.cancel();
+    host.stop();
+    cleanup++;
     check?.cancel();
     join.stop();
     join.handoffs?.cancel().ignore();
@@ -74,6 +78,7 @@ MultiplayerPreferences _withLinkHandling(
 ) => MultiplayerPreferences(
   settings: preferences.settings.withLinkHandling(enabled),
   hosting: preferences.hosting,
+  hasHostingDefaults: preferences.hasHostingDefaults,
   networkNotice: preferences.networkNotice,
   health: preferences.health,
 );

@@ -4,6 +4,7 @@ import 'session_link_inbox.dart';
 
 part 'launcher_multiplayer_join_state.dart';
 part 'launcher_multiplayer_settings_state.dart';
+part 'launcher_hosting_state.dart';
 
 /// The launcher's multiplayer state: the session link intake and link
 /// handling, the join flow, Settings → Multiplayer and Diagnostics → Network.
@@ -16,6 +17,8 @@ final class MultiplayerViewState {
     this.join = const MultiplayerJoinView(),
     this.settings = const MultiplayerSettingsView(),
     this.network = const MultiplayerNetworkView(),
+    this.hosting = const HostingView(),
+    this.cleanup = const ServerCleanupView(),
   });
 
   /// The newest session link and what became of it. A newer link replaces
@@ -40,6 +43,8 @@ final class MultiplayerViewState {
 
   /// Diagnostics → Network: the service, the ports and LAN discovery.
   final MultiplayerNetworkView network;
+  final HostingView hosting;
+  final ServerCleanupView cleanup;
 
   MultiplayerViewState copyWith({
     SessionLinkIntake? sessionLink,
@@ -48,6 +53,8 @@ final class MultiplayerViewState {
     MultiplayerJoinView? join,
     MultiplayerSettingsView? settings,
     MultiplayerNetworkView? network,
+    HostingView? hosting,
+    ServerCleanupView? cleanup,
   }) => MultiplayerViewState(
     sessionLink: sessionLink ?? this.sessionLink,
     linkArrivals: linkArrivals ?? this.linkArrivals,
@@ -55,6 +62,8 @@ final class MultiplayerViewState {
     join: join ?? this.join,
     settings: settings ?? this.settings,
     network: network ?? this.network,
+    hosting: hosting ?? this.hosting,
+    cleanup: cleanup ?? this.cleanup,
   );
 }
 

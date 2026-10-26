@@ -8,7 +8,20 @@ extension LauncherEventDispatch on LauncherBloc {
     LauncherEvent event,
     Emitter<LauncherState> emit,
   ) {
+    if (event is ProfileSelected ||
+        event is ProfileLaunchRequested ||
+        event is GameDirectorySelected ||
+        event is LaunchSelectionChanged ||
+        event is SafeModeToggled ||
+        event is DeveloperModeToggled) {
+      // Stop a pending host as soon as the player's selection changes, even
+      // when persisting that selection is still waiting on disk.
+      _multiplayerWork.host.stop();
+      if (_hosting.phase != HostingPhase.closed) add(const HostingClosed());
+    }
     return switch (event) {
+      HostingEvent() => _dispatchHosting(event, emit),
+      ServerCleanupEvent() => _dispatchCleanup(event, emit),
       LauncherStarted() ||
       LauncherRefreshRequested() ||
       PackageSourcesRefreshed() => _onLoad(event, emit),

@@ -141,6 +141,17 @@ class _HeroLaunchPane extends StatelessWidget {
                                 : null,
                           ),
                           TextButton.icon(
+                            onPressed:
+                                context.read<LauncherBloc>().canHost &&
+                                    !state.isBusy &&
+                                    profile != null &&
+                                    !safeMode
+                                ? () => _openHosting(context)
+                                : null,
+                            icon: const Icon(Icons.cell_tower),
+                            label: const Text('Host a session'),
+                          ),
+                          TextButton.icon(
                             style: TextButton.styleFrom(
                               foregroundColor: const Color(0xB3FFFFFF),
                             ),
