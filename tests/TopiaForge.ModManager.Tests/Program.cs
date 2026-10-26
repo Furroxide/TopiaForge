@@ -182,9 +182,16 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--gamepad-bindings", StringComparison.Ordinal))
+            {
+                GamepadBindingTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--ui-input-ownership", StringComparison.Ordinal))
             {
                 ChatViewContractTests.Run();
+                GamepadBindingTests.Run();
                 UiKitInputOwnershipTests.Run();
                 UiKitInputOwnershipConventionTests.Run();
                 UiKitIntentConventionTests.Run();
@@ -553,6 +560,7 @@ namespace TopiaForge.ModManager.Tests
                 UiKitCoreTests.Run();
                 UiKitWindowMathTests.Run();
                 UiKitMultiplayerCoreTests.Run();
+                GamepadBindingTests.Run();
                 UiKitInputOwnershipTests.Run();
                 UiKitInputOwnershipConventionTests.Run();
                 TopiaForgeStateFileTests.Run(root);

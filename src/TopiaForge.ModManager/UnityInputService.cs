@@ -250,6 +250,8 @@ namespace TopiaForge.ModManager
             private const int NotTakeable = -1;
             private const int TakeableBack = -2;
             private const int TakeableSubmit = -3;
+            private const int TakeableLeftStick = -4;
+            private const int TakeableRightStick = -5;
 
             private UnityInputRegistry? owner;
             private readonly string key;
@@ -387,7 +389,7 @@ namespace TopiaForge.ModManager
                 return Mathf.Clamp(value, -1f, 1f);
             }
 
-            // Whether TopiaForge took this binding's press from the game and still holds it: a key, or a controller's B or A.
+            // Whether TopiaForge took this binding's press from the game and still holds it.
             private bool TakenByTopiaForge(int index)
             {
                 var control = takeable[index];
@@ -396,10 +398,15 @@ namespace TopiaForge.ModManager
                     return TopiaForgeInputOwnership.KeyTaken(control);
                 }
 
+                if (control == TakeableLeftStick || control == TakeableRightStick)
+                {
+                    return TopiaForgeInputOwnership.StickTaken(control == TakeableRightStick);
+                }
+
                 return control != NotTakeable && TopiaForgeInputOwnership.PadButtonTaken(control == TakeableBack);
             }
 
-            // What TopiaForge's filter can take of each binding: a key's number, a controller's B or A, or nothing.
+            // What TopiaForge's filter can take of each binding: a key's number, a controller's B, A or stick, or nothing.
             private static int[] Takeable(IReadOnlyList<InputBinding> source)
             {
                 var result = new int[source.Count];
@@ -407,6 +414,7 @@ namespace TopiaForge.ModManager
                 {
                     var binding = source[index];
                     result[index] = binding.Kind == InputBindingKind.Key ? TopiaForgeInputOwnership.KeyNumber(binding.Control)
+                        : binding.Kind == InputBindingKind.GamepadAxis ? TakeableStick(binding.Control)
                         : binding.Kind != InputBindingKind.GamepadButton ? NotTakeable
                         : string.Equals(binding.Control, nameof(InputGamepadButton.East), StringComparison.OrdinalIgnoreCase) ? TakeableBack
                         : string.Equals(binding.Control, nameof(InputGamepadButton.South), StringComparison.OrdinalIgnoreCase) ? TakeableSubmit
@@ -414,6 +422,19 @@ namespace TopiaForge.ModManager
                 }
 
                 return result;
+            }
+
+            private static int TakeableStick(string control)
+            {
+                if (string.Equals(control, nameof(InputGamepadAxis.LeftX), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(control, nameof(InputGamepadAxis.LeftY), StringComparison.OrdinalIgnoreCase))
+                {
+                    return TakeableLeftStick;
+                }
+
+                return string.Equals(control, nameof(InputGamepadAxis.RightX), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(control, nameof(InputGamepadAxis.RightY), StringComparison.OrdinalIgnoreCase)
+                    ? TakeableRightStick : NotTakeable;
             }
 
             private static List<InputBinding> CopyBindings(IEnumerable<InputBinding> source)
@@ -454,7 +475,7 @@ namespace TopiaForge.ModManager
                                     : 0f;
                         case InputBindingKind.GamepadAxis:
                             return Enum.TryParse(binding.Control, true, out InputGamepadAxis gamepadAxis)
-                                ? Input.GetAxisRaw(GamepadAxisName(gamepadAxis)) * binding.Scale
+                                ? UnityGamepadAxes.Read(gamepadAxis) * binding.Scale
                                 : 0f;
                         default:
                             return 0f;
@@ -512,19 +533,6 @@ namespace TopiaForge.ModManager
                 }
             }
 
-            private static string GamepadAxisName(InputGamepadAxis axis)
-            {
-                switch (axis)
-                {
-                    case InputGamepadAxis.LeftX: return "Horizontal";
-                    case InputGamepadAxis.LeftY: return "Vertical";
-                    case InputGamepadAxis.RightX: return "RightStickHorizontal";
-                    case InputGamepadAxis.RightY: return "RightStickVertical";
-                    case InputGamepadAxis.LeftTrigger: return "LeftTrigger";
-                    case InputGamepadAxis.RightTrigger: return "RightTrigger";
-                    default: return string.Empty;
-                }
-            }
         }
     }
 }
