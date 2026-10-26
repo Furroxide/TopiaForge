@@ -286,8 +286,16 @@ void main() {
       'a lease another process holds ($mode) refuses until that process ends',
       () async {
         final holder = await fixture.holdLease(shared: shared);
+        final attempt = fixture.put(archive);
+        final settled = attempt.then<void>((_) {}, onError: (Object _) {});
+        addTearDown(() async {
+          await holder.dispose();
+          // A blocking-lock regression can finish only after the holder ends.
+          // Let it settle before the repository and its files are torn down.
+          await settled.timeout(const Duration(seconds: 10));
+        });
         await expectLater(
-          fixture.put(archive),
+          attempt.timeout(const Duration(seconds: 5)),
           throwsA(
             isA<StateError>().having(
               (error) => error.message,
@@ -305,6 +313,21 @@ void main() {
       },
     );
   }
+
+  test(
+    'lease holder disposal waits for process exit before deleting files',
+    () async {
+      final holder = await fixture.holdLease();
+      var exited = false;
+      unawaited(holder.exitCode.then((_) => exited = true));
+      await holder.dispose();
+      expect(exited, isTrue);
+      File(p.join(fixture.data.path, 'package-cache.lock')).deleteSync();
+      await holder.dispose();
+      await fixture.put(archive);
+      expect(fixture.cached(archive).readAsBytesSync(), archive.bytes);
+    },
+  );
 
   test(
     'incomplete rollback preserves both original archives',

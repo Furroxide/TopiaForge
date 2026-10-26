@@ -136,27 +136,60 @@ final class LocalCacheFixture {
       p.join(data.path, 'package-cache.lock'),
       shared ? 'shared' : 'exclusive',
     ]);
-    addTearDown(process.kill);
-    final said = await process.stdout
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .first;
-    expect(said, 'held');
-    return LeaseHolder._(process);
+    final holder = LeaseHolder._(process);
+    addTearDown(holder.dispose);
+    try {
+      final said = await process.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .first
+          .timeout(const Duration(seconds: 30));
+      expect(said, 'held');
+      return holder;
+    } on Object {
+      await holder.dispose();
+      rethrow;
+    }
   }
 }
 
 /// Another process holding the package cache lease.
 final class LeaseHolder {
-  LeaseHolder._(this._process);
+  LeaseHolder._(this._process) {
+    _exitCode = _process.exitCode.then((code) {
+      _exited = true;
+      return code;
+    });
+    _errors = _process.stderr.drain<void>();
+  }
 
   final Process _process;
+  late final Future<int> _exitCode;
+  late final Future<void> _errors;
+  Future<void>? _disposal;
+  bool _exited = false;
+
+  Future<int> get exitCode => _exitCode;
+
+  /// Reaps the child before fixture teardown can delete its locked files.
+  /// Also safe after [end], or when startup or an expectation failed.
+  Future<void> dispose() => _disposal ??= _dispose();
+
+  Future<void> _dispose() async {
+    if (!_exited) _process.kill(ProcessSignal.sigkill);
+    await _exitCode.timeout(const Duration(seconds: 10));
+    await _errors.timeout(const Duration(seconds: 10));
+  }
 
   /// Ends the holder without letting go of the lease, as a crash does, and
   /// returns its exit code.
   Future<int> end() async {
-    await _process.stdin.close();
-    return _process.exitCode;
+    try {
+      await _process.stdin.close().timeout(const Duration(seconds: 10));
+      return await _exitCode.timeout(const Duration(seconds: 10));
+    } finally {
+      await dispose();
+    }
   }
 }
 
