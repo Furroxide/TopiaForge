@@ -29,7 +29,7 @@ namespace TopiaForge.RobotKit
             {
                 return OperationResult<IInternalAvatarBody>.Failure(
                     ModErrorCode.External,
-                    "RobotKit could not make a robot body for a player's avatar (" + exception.GetType().Name + ").");
+                    "RobotKit could not make a robot body for a player's avatar (" + RobotKitLog.ExceptionType(exception) + ").");
             }
         }
     }
