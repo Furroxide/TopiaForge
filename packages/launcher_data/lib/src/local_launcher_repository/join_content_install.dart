@@ -254,6 +254,9 @@ final class _JoinInstall {
     final name = _joinModName(item);
     final _PackageReadResult read;
     try {
+      await _repository._withPackageCacheLock(
+        () => _repository._retainPackageCache(item.package.sha256),
+      );
       read = await _repository._readPackage(
         _repository._joinCacheFile(item.package.sha256).path,
         expectedSha256: item.package.sha256,
@@ -276,6 +279,7 @@ final class _JoinInstall {
     )..createSync(recursive: true)).createTempSync('launcher-join-');
     final staged = await _repository._stagePackageInstall(
       _PackageReadResult(
+        bytes: read.bytes,
         archive: read.archive,
         manifest: read.manifest,
         sha256Hex: read.sha256Hex,

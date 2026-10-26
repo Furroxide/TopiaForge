@@ -66,6 +66,14 @@ extension _JoinContentDownloads on LocalLauncherRepository {
         if (failure != null) return failure;
       } on OperationCancelledException {
         return null;
+      } on StateError {
+        return JoinFailed(
+          JoinFailureCode.downloadFailed,
+          detail:
+              'The package cache could not be used. Close other TopiaForge '
+              'install operations, check free disk space and cache folder '
+              'permissions, then join again.',
+        );
       }
       progress.complete(index);
     }
@@ -248,6 +256,15 @@ extension _JoinContentDownloads on LocalLauncherRepository {
     File cached,
     String expectedSha256,
     int? stated,
+  ) => _withPackageCacheLock(() async {
+    await _retainPackageCache(expectedSha256);
+    return _cachedArchiveLengthLocked(cached, expectedSha256, stated);
+  });
+
+  Future<int?> _cachedArchiveLengthLocked(
+    File cached,
+    String expectedSha256,
+    int? stated,
   ) async {
     if (FileSystemEntity.typeSync(cached.path, followLinks: false) !=
         FileSystemEntityType.file) {
@@ -269,8 +286,29 @@ extension _JoinContentDownloads on LocalLauncherRepository {
   }
 
   /// Moves a verified download into the cache. Another writer may have put
-  /// the same archive there meanwhile, which is as good.
+  /// the same archive there meanwhile, which is as good. A cache lease that
+  /// another process holds, or a retention that fails, throws [StateError],
+  /// so the join says what to close rather than to free disk space.
   Future<bool> _keepVerifiedDownload(
+    File temp,
+    File cached,
+    String sha256Hex,
+  ) async {
+    try {
+      return await _withPackageCacheLock(() async {
+        await _retainPackageCache(sha256Hex);
+        return _keepVerifiedDownloadLocked(temp, cached, sha256Hex);
+      });
+    } on StateError {
+      await _deleteFileBestEffort(temp);
+      rethrow;
+    } on Object {
+      await _deleteFileBestEffort(temp);
+      return false;
+    }
+  }
+
+  Future<bool> _keepVerifiedDownloadLocked(
     File temp,
     File cached,
     String sha256Hex,

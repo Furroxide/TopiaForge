@@ -75,10 +75,20 @@ game for a launch V5 cannot carry.
   verification also counts against the launcher's 15 seconds of silence: the largest archive, 512 MiB, needs at
   least 34 MiB/s of reading and hashing. Missing, unreadable, oversized or changed archives
   receive `TFD1 404`; a bounded warning says why without a path or address. No request text forms a filesystem path.
-  Packages installed from a local file, as `topiaforge dev` and `topiaforge install` install them, or copied unpacked,
-  have no cached original and cannot be shared: the game does not reconstruct a ZIP from installed files. The host's
-  warning says what works instead: give players the `.topiaforgemod` file, or reinstall the mod from its source so
-  the launcher keeps a copy.
+  Installs from a local file, including `topiaforge dev`, `topiaforge install <file>` and local dependencies, keep the
+  verified original in that same cache before committing the install. A cache write failure cancels the install with
+  retry advice. Reinstalling identical bytes reuses the entry; replacing a build or uninstalling removes its local
+  archive only after no installed receipt references it. Versions kept side by side, disabled mods and other game
+  installs sharing the data root retain their originals. Cleanup failure leaves the install successful, logs a
+  path-free warning and retries on a later install or uninstall. Unreadable receipts and linked mod folders
+  conservatively retain archives; a stray file among the mod folders, or a copied version folder without a receipt,
+  names no archive and does not stop cleanup.
+  HTTPS and join archives, including a local archive subsequently used by either flow, keep their existing retention
+  policy; eviction of those entries is out of scope. So when another game install sharing the data root, such as a
+  second install on the same PC, joins a host with the host's local archive, that install's server-content cleanup can
+  later remove the archive from the shared cache; the host then reinstalls the mod to share it again. Unpacked copies
+  and local installs made before caching was added still need reinstalling from the `.topiaforgemod` file: the game
+  does not reconstruct a ZIP from installed files.
 - **Display text** has no surrounding white space, no control characters, no unpaired surrogates, and neither U+FFFE
   nor U+FFFF, which the game's JSON reader refuses: a document holding one could never be read back.
 - **The service origin** is written one way: `https://`, a lowercase DNS name, and a port of 1 to 65535 in plain

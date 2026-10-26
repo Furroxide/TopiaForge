@@ -38,7 +38,10 @@ extension _ModStateMutations on LocalLauncherRepository {
     return _loadInstalledMods(install);
   }
 
-  Future<List<InstalledMod>> _uninstallMod(
+  Future<List<InstalledMod>> _uninstallMod(GameInstall install, String modId) =>
+      _withPackageCacheLock(() => _uninstallModLocked(install, modId));
+
+  Future<List<InstalledMod>> _uninstallModLocked(
     GameInstall install,
     String modId,
   ) async {
@@ -55,6 +58,7 @@ extension _ModStateMutations on LocalLauncherRepository {
     );
     state['mods'] = mods;
     await _saveManagerState(install, state);
+    await _pruneLocalPackageCache(install);
     await _appendLauncherLogBestEffort('Uninstalled $modId.');
     return _loadInstalledMods(install);
   }

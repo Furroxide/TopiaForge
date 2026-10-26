@@ -138,7 +138,7 @@ void main() {
     );
   });
 
-  test('repair uses only an integrity-verified cache fallback', () async {
+  test('repair uses the verified original cached by a local install', () async {
     final harness = await _RepairHarness.create(localSourceEnabled: false);
     addTearDown(harness.dispose);
     final package = harness.package('cache.mod', '1.0.0');
@@ -146,8 +146,9 @@ void main() {
     await harness.install(package);
     final cache = File(
       p.join(harness.data.path, 'package-cache', '$digest.topiaforgemod'),
-    )..createSync(recursive: true);
-    package.copySync(cache.path);
+    );
+    expect(cache.readAsBytesSync(), package.readAsBytesSync());
+    package.deleteSync();
     harness.tamper('cache.mod', '1.0.0', 'corrupt');
     final damaged =
         (await harness.repository.loadSnapshot()).installedMods.single;
@@ -208,6 +209,13 @@ void main() {
     addTearDown(harness.dispose);
     final package = harness.package('unavailable.mod', '1.0.0');
     await harness.install(package);
+    File(
+      p.join(
+        harness.data.path,
+        'package-cache',
+        '${_sha(package)}.topiaforgemod',
+      ),
+    ).deleteSync();
     harness.tamper('unavailable.mod', '1.0.0', 'keep-this-damage');
     final damaged =
         (await harness.repository.loadSnapshot()).installedMods.single;

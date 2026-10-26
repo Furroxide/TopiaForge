@@ -80,6 +80,22 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
     String expectedSha256 = '',
     String sourceId = '',
     String rootSourceKind = '',
+  }) => _withPackageCacheLock(
+    () => _installPackageLocked(
+      packagePath,
+      install,
+      expectedSha256: expectedSha256,
+      sourceId: sourceId,
+      rootSourceKind: rootSourceKind,
+    ),
+  );
+
+  Future<List<InstalledMod>> _installPackageLocked(
+    String packagePath,
+    GameInstall install, {
+    String expectedSha256 = '',
+    String sourceId = '',
+    String rootSourceKind = '',
   }) async {
     final currentInstall = await _validateGameDirectory(install.path);
     if (!currentInstall.canLaunch) {
@@ -171,6 +187,7 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
     };
     final staged = <_StagedPackageInstall>[];
     var stateSaved = false;
+    var rollbackComplete = true;
     try {
       for (final action in plan.installActions) {
         if (action.enableOnly) {
@@ -203,6 +220,9 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
           preserveExistingEnabled: action.root,
         );
       }
+      for (final verified in verifiedPackages.values) {
+        await _cacheLocalPackage(verified, commitInstall);
+      }
       for (var index = 0; index < staged.length; index++) {
         staged[index].commit();
         final hook = _packageInstallCommitHook;
@@ -222,6 +242,7 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
         }
       }
       if (rollbackError != null) {
+        rollbackComplete = false;
         Error.throwWithStackTrace(
           StateError(
             'Package install failed ($error), and rollback was incomplete '
@@ -235,6 +256,7 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       for (final install in staged) {
         install.clean(stateSaved: stateSaved);
       }
+      if (rollbackComplete) await _pruneLocalPackageCache(commitInstall);
     }
     await _appendLauncherLogBestEffort(
       'Installed ${plan.installActions.length} package(s) for ${package.manifest.id} from $packagePath.',
