@@ -2260,8 +2260,9 @@ the host's: a player resolves its ids against its own packages and never shows a
   a kick or a ban, the follow on its way is cancelled, the hold and the grant are released, and a game that followed the
   host returns to the main menu once that follow has ended. The player's own return to the menu loads no second one,
   and neither does shutdown.
-  Escape and the close button use the same cancellation path as Cancel during a re-follow, so the card stays closed
-  even if the cancelled operation later fails. Cleanup still waits for provider callbacks and native work to drain;
+  Cancel always leaves. During the first join, Escape and the close button also cancel once and keep the card closed
+  even if the cancelled operation later fails. During a re-follow they only hide that attempt's card; the follow and
+  the session continue. Cleanup after cancellation still waits for provider callbacks and native work to drain;
   a provider that ignores cancellation can delay the menu. Replacing its scene earlier would violate the lifecycle's
   ownership contract.
 
@@ -2370,7 +2371,13 @@ world ("Getting your mods ready", "Loading the host's world", or for an arena "L
 "Building the host's arena (2/2)"), Synchronizing ("Receiving the world", then n/m as the network world reports it) and
 Spawning ("Starting your controls"). A join the follow ends shows the follow's failure, with RETRY where joining again
 can help. After the join, a change of worlds or a return to the host's world shows "Following the host", with the first
-four steps done, and its Cancel leaves the session. RETRY of a LAN join this game no longer hears, as once BROWSE has
+four steps done, and its Cancel leaves the session. I use the follower's `IsRefollow` flag to distinguish this from the
+first join, even when the first join's card has not closed yet. Escape and the title-bar close hide the card for that
+re-follow, across progress updates and retries of the same announcement. A separate re-follow serial advances on a
+host world change or a native correction, so the next attempt shows again even if the overlay missed the arrival
+between frames. A hidden attempt that fails still shows its failure words and actions. The kit's modal dismiss stack
+consumes that Escape before the game's pause menu can use it; real-input confirmation remains an in-game check.
+RETRY of a LAN join this game no longer hears, as once BROWSE has
 stopped listening, listens on the local network for the host first, for 15 seconds at most, and a host no longer there
 ends the join as "Session not found" in words that say so. BROWSE, the overlay and a launched join share one browser:
 each releases only its own share, so Cancel or a closed tab cannot stop another join's search. The last release stops
@@ -2408,7 +2415,9 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     native and keep-controller, that spend none of them; the player's own way out; shutdown; unreadable announcements;
     the failure words; a launched join's follows reporting under its request, its follow status included, an
     in-game join's nothing; a busy game tried again and given up on after 30 seconds; and a world not found looked for
-    once before the join ends. `SessionFollowWireTests`: round trips and every refusal.
+    once before the join ends. Initial follows, including host replacements before first arrival, stay first joins;
+    host changes and same-level restarts each get one re-follow serial, stable across busy retries.
+    `SessionFollowWireTests`: round trips and every refusal.
   - `SessionFollowHostTests`: what a host announces, an arena's level and spawn, a full window caught up, and at rest
     sending and allocating nothing.
   - `MultiplayerSessionsTests`: the overlay's follow steps and failures, "Following the host", a launched join handing
@@ -2422,7 +2431,11 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     load shown with Loading world not done and nothing to cancel, after a follow and at a join's end, until it is
     closed, the player leaves or the host's next world takes it over; and MULTIPLAYER and SESSION saying why a joined
     game waits at the menu, from the follow alone, until it follows the host's next world or leaves, a settled frame of
-    it allocating nothing. `MultiplayerUiArchitectureTests` reads the connecting overlay's source as C#: it binds the
+    it allocating nothing. Dismissing a re-follow before, during or after the first join card's linger hides only that
+    attempt, through progress and retries; its failure still shows its words and actions, and the next attempt shows
+    even without an intervening presenter frame. CANCEL still leaves once; Escape, close and CANCEL on a first join
+    still cancel once and suppress late failures. `MultiplayerUiArchitectureTests` reads the connecting overlay's
+    source as C#: Escape and close route to Dismiss while CANCEL routes to Cancel; it binds the
     failure's words on every frame, offers CANCEL only while Cancel stops something and CLOSE otherwise, by its own
     layout expression for every combination, builds its body again whenever the layout changes, and sizes its scroll
     view, by the kit's sizes, to show a failure's advice or the password field beside the steps without scrolling.

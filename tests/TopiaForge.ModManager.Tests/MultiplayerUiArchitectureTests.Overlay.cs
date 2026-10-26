@@ -97,6 +97,12 @@ namespace TopiaForge.ModManager.Tests
         /// </summary>
         private static void TheOverlayOffersCancelOnlyWhileItStopsSomething(string root)
         {
+            var closed = OverlayMethod(root, "Open").DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                .Single(assignment => assignment.Left.ToString() == "opened.Closed");
+            var closeCalls = closed.Right.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Select(call => call.Expression.ToString()).ToArray();
+            That(closeCalls.Contains("screen.Dismiss") && !closeCalls.Contains("screen.Cancel"),
+                "Escape and the title-bar close use Dismiss, so only the first join is cancelled");
             var shape = OverlayMethod(root, "Shape");
             That(shape.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(access => access.ToString() == "screen.CanCancel"),
                 "the overlay's layout follows whether Cancel would stop anything: " + shape);

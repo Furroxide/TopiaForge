@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager.Tests
             rig.Join();
             rig.Announce(HostWorldState.Level("Downtown"));
             rig.Until(() => rig.Status.Stage == FollowStage.InLevel, "the native level runs");
+            That(!rig.Status.IsRefollow && rig.Status.RefollowSerial == 0, "the first native level is part of joining");
             rig.Scene.Activated("Downtown", instance);
             rig.Frame();
             That(rig.Follower.Refollows == 0, "duplicate events for the arrived instance do not re-follow");
@@ -32,6 +33,8 @@ namespace TopiaForge.ModManager.Tests
                     "each native restart into the same level re-follows");
                 That(rig.Follower.Refollows == 0 && rig.Runtime.Realm == NetRealm.Client,
                     "same-level restarts never spend the different-level escape allowance");
+                That(rig.Status.IsRefollow && rig.Status.RefollowSerial == restart,
+                    "each same-level restart is one new re-follow attempt");
             }
         }
 

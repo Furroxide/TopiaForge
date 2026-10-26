@@ -53,6 +53,9 @@ namespace TopiaForge.ModManager
         private string? launchRequestId;
         private HostWorldState? latest;
         private HostWorldState? applied;
+
+        // Unlike applied, this also identifies an attempt while it waits for a busy game or discovers its world.
+        private HostWorldState? following;
         private Pending? pending;
         private TaskCompletionSource<OperationResult<bool>>? arrival;
         private CancellationTokenRegistration arrivalCancel;
@@ -135,6 +138,7 @@ namespace TopiaForge.ModManager
             ending = false;
             latest = null;
             applied = null;
+            following = null;
             refollows = 0;
             discovered = false;
             loaded = false;
@@ -173,6 +177,7 @@ namespace TopiaForge.ModManager
             ending = false;
             latest = null;
             applied = null;
+            following = null;
             if (!wasJoined) return;
             var returnToMenu = !detaching && !leavingForMenu && loaded && (!scene.IsMainMenu || sessions.RunsFollowedSession);
             leavingForMenu = false;
@@ -253,7 +258,8 @@ namespace TopiaForge.ModManager
         private void Begin(HostWorldState target)
         {
             var refollow = applied != null || Status.IsRefollow;
-            if (refollow) Status.Refollowing();
+            if (refollow && !target.SameAs(following)) Status.Refollowing();
+            following = target;
             switch (target.Kind)
             {
                 case HostWorldKind.World:
@@ -334,6 +340,7 @@ namespace TopiaForge.ModManager
 
             log.Info("Multiplayer: this game left the host's world by itself, so it follows the host again.");
             Status.Refollowing();
+            following = target;
             if (stranded)
             {
                 // Correct a local load back to the waiting menu without retrying

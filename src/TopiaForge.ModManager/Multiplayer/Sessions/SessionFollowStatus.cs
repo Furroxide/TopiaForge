@@ -201,6 +201,9 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Gets whether this follow came after the join had completed: the host changed worlds, or this game left the host's world.</summary>
         internal bool IsRefollow { get; private set; }
 
+        /// <summary>Gets the re-follow attempt, unchanged by progress or retries of the same host announcement.</summary>
+        internal int RefollowSerial { get; private set; }
+
         /// <summary>Gets the line the connecting overlay shows under its step: this game's own words.</summary>
         internal string Detail { get; private set; } = string.Empty;
 
@@ -243,7 +246,11 @@ namespace TopiaForge.ModManager.Sessions
             Move(FollowStage.AwaitingHost, "Asking the host for its world", 0, 0);
         }
 
-        internal void Refollowing() => IsRefollow = true;
+        internal void Refollowing()
+        {
+            IsRefollow = true;
+            RefollowSerial++;
+        }
 
         /// <summary>Raised with each stage the follow moves to, even several in one frame, for diagnostics and tests.</summary>
         internal event Action<FollowStage>? Moved;

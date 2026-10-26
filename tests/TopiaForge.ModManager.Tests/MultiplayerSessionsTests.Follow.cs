@@ -96,7 +96,7 @@ namespace TopiaForge.ModManager.Tests
             That(!earlier.Presenter.Connecting.IsVisible, "a follow failure from an earlier join never ends this one");
         }
 
-        private static void AFollowAfterTheJoinShowsFollowing(bool dismiss)
+        private static void AFollowAfterTheJoinShowsFollowing()
         {
             var rig = JoiningRig();
             var follow = rig.Environment.Follow;
@@ -129,11 +129,11 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             That(overlay.IsVisible && overlay.Title == ConnectingPresenter.FollowingTitle, "the next follow shows again");
             var leaves = rig.Control.Calls.Count(call => call == "Leave");
-            if (dismiss) overlay.Dismiss();
-            else overlay.Cancel();
+            overlay.Cancel();
+            overlay.Dismiss(); // Closing the modal after CANCEL must not leave twice.
             rig.Frame();
             That(rig.Control.Calls.Count(call => call == "Leave") == leaves + 1 && !overlay.IsVisible && rig.Noticed(ConnectingPresenter.LeftWhileFollowing),
-                "Escape or close on it cancels the follow and leaves the session, which is never refused");
+                "CANCEL leaves the session exactly once, even when closing the modal also dismisses it");
             follow.Fail(FollowFailureWords.For(FollowFailureKind.SynchronizeFailed, ModErrorCode.TimedOut));
             rig.Frame();
             That(!overlay.IsVisible, "a late failure of the cancelled follow stays closed");

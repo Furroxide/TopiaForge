@@ -38,6 +38,7 @@ namespace TopiaForge.ModManager.Tests
             UnreadableAnnouncementsChangeNothing(root + "-unreadable");
             ALaunchedJoinsFollowsReportUnderItsRequest(root + "-launched");
             ABusyGameIsTriedAgainThenGivenUp(root + "-busy");
+            ARefollowKeepsItsIdentityAcrossRetries(root + "-refollow-retries");
             AWorldNotFoundIsLookedForOnce(root + "-not-found");
             NativeLoadsWhileWaitingAtTheMenuAreCorrected(root + "-waiting-native");
             KeepControllerWorldsStillFollowNativeLoads(root + "-keep-native");
@@ -66,6 +67,7 @@ namespace TopiaForge.ModManager.Tests
             That(rig.Guest.Holds == 0 && !rig.Follower.HoldsReadiness, "and the player is Ready once it runs");
             That(rig.Policy.IsFollowing, "the grant stays while joined, for the host's next world");
             That(rig.Status.NoticeVersion == 0, "the first arrival belongs to the join, so it adds no re-follow toast");
+            That(!rig.Status.IsRefollow && rig.Status.RefollowSerial == 0, "the initial follow remains the first join");
             That(rig.Guest.ProgressReports >= 3, "each stage of the follow counts as progress on its hold (" + rig.Guest.ProgressReports + ")");
 
             var allocated = Allocated(() => rig.Follow.Run(0.016f));
@@ -109,6 +111,8 @@ namespace TopiaForge.ModManager.Tests
             rig.Until(() => rig.Status.Stage == FollowStage.Running && rig.Test.Hosted.FollowedSessionId == second, "the host's newer world runs");
             That(disposed.SequenceEqual(new[] { "first" }), "the world the host left behind is disposed, and the newer one kept");
             That(!rig.Follower.HoldsReadiness && rig.Runtime.Realm == NetRealm.Client, "the player is Ready in the host's newer world, still joined");
+            That(!rig.Status.IsRefollow && rig.Status.RefollowSerial == 0,
+                "a host replacement before the first arrival is still the first join, not a re-follow");
         }
 
         private static void TheHostChangingWorldsAfterTheJoinIsFollowed(string root)
@@ -125,6 +129,7 @@ namespace TopiaForge.ModManager.Tests
                 "the host's next world is followed");
             That(rig.Status.NoticeVersion == notices + 1 && rig.Status.Notice == FollowFailureWords.Rejoined, "and the player is told it is back in the host's world");
             That(rig.Guest.Holds == 0 && rig.Runtime.Realm == NetRealm.Client, "the hold the re-follow took is released");
+            That(rig.Status.RefollowSerial == 1, "a host world change starts one re-follow attempt");
         }
 
         private static void LeavingWhileTheWorldLoadsReturnsToTheMenu(string root)

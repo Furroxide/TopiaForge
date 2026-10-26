@@ -6,7 +6,8 @@ namespace TopiaForge.ModManager.Sessions
     /// <summary>
     /// The connecting overlay: a Paper modal with the join's phase stepper (Resolving, Connecting, Authenticating, Verifying
     /// mods, Loading world, Synchronizing, Spawning), a password field when the session asks, and a failure view with Retry,
-    /// Open launcher and Copy details. Cancel, the close button and ESC all stop a running join; once nothing runs that Cancel
+    /// Open launcher and Copy details. Cancel, the close button and ESC all stop a first join; during a re-follow only Cancel
+    /// leaves, while the close button and ESC hide that attempt's card. Once nothing runs that Cancel
     /// would stop, as while a finished join lingers or a follow waits at the menu, CLOSE takes its place. Its layout is
     /// rebuilt only when it switches between those; otherwise it binds through dirty-checked setters, the failure's own
     /// words included, so a failure that replaces another in the same layout never keeps the earlier one's.
@@ -83,7 +84,7 @@ namespace TopiaForge.ModManager.Sessions
             actions = opened.Content.Row(TopiaForgeGap.Sm);
             BuildBody();
 
-            // ESC or any other close stops a running join, or dismisses the failure view.
+            // ESC and close dismiss through the presenter: cancel the first join, hide a re-follow or a settled view.
             opened.Closed += () =>
             {
                 if (ReferenceEquals(modal, opened)) modal = null;
