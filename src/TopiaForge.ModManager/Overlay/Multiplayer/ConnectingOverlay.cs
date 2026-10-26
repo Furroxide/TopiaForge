@@ -13,6 +13,13 @@ namespace TopiaForge.ModManager.Sessions
     /// </summary>
     internal sealed class ConnectingOverlay
     {
+        /// <summary>
+        /// The scroll view's height: the seven step rows, the status line and either the password field or a failure's
+        /// heading and two lines of its advice show without scrolling, and the dialog still fits an ultrawide screen at the
+        /// largest UI scale. MultiplayerUiArchitectureTests checks both against the kit's sizes.
+        /// </summary>
+        internal const float ScrollHeight = 420f;
+
         private readonly UiHost host;
         private readonly IConnectingScreen screen;
         private readonly StepperOperations operations = new StepperOperations();
@@ -67,7 +74,7 @@ namespace TopiaForge.ModManager.Sessions
             modal = opened;
             title = opened.Content.Label(screen.Title, TopiaForgeTextStyle.Title).PlainText().Ellipsis();
             var scroll = opened.Content.Scroll(TopiaForgeGap.Sm);
-            scroll.FixedHeight(360f);
+            scroll.FixedHeight(ScrollHeight);
             stepper = scroll.Content.VerticalPhaseStepper(ToArray(screen.StepLabels));
             operations.Stepper = stepper;
             appliedVersion = -1;

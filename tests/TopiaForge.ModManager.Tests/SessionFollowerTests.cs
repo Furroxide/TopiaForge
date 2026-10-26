@@ -397,7 +397,8 @@ namespace TopiaForge.ModManager.Tests
             That(rig.Runtime.Join(new FakeJoinTarget(), new InternalJoinSettings(), join).Succeeded && rig.Runtime.LaunchedJoin == join,
                 "a launched join hands the realm its request");
             rig.Frame();
-            That(rig.Follower.IsFollowing && rig.Follower.LaunchRequestId == join, "the follower takes it at link-up");
+            That(rig.Follower.IsFollowing && rig.Follower.LaunchRequestId == join && rig.Status.LaunchRequestId == join,
+                "the follower takes it at link-up, and so does its status, which the launch reads a failed follow from");
             var first = SessionFollowTests.NewSessionId();
             rig.Announce(rig.World(first));
             rig.Until(() => rig.Status.Stage == FollowStage.Running, "the host's world runs");
@@ -421,7 +422,8 @@ namespace TopiaForge.ModManager.Tests
             var ends = rig.Test.Outcomes.Count;
             That(rig.Runtime.Join(new FakeJoinTarget(), new InternalJoinSettings()).Succeeded && rig.Runtime.LaunchedJoin == null, "an in-game join names no request");
             rig.Frame();
-            That(rig.Follower.IsFollowing && rig.Follower.LaunchRequestId == null, "so its follower has none");
+            That(rig.Follower.IsFollowing && rig.Follower.LaunchRequestId == null && rig.Status.LaunchRequestId == null,
+                "so its follower has none, and its status no longer names the earlier launch");
             var third = SessionFollowTests.NewSessionId();
             rig.Announce(rig.World(third));
             rig.Until(() => rig.Status.Stage == FollowStage.Running && rig.Test.Hosted.FollowedSessionId == third, "the host's world runs again");

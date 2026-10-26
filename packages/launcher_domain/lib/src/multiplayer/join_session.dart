@@ -79,7 +79,6 @@ abstract final class JoinSession {
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
       JoinFailureCode.directNotAllowed,
-      JoinFailureCode.worldFollowFailed,
       JoinFailureCode.identityChanged,
     },
     JoinStage.checking: {

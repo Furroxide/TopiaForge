@@ -158,10 +158,12 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
   report explain the rest. A host's are `port-in-use`, `identity-unavailable`, `network-stopped` and
   `service-unavailable`.
 - **Follow failures.** A failed follow keeps its fixed title and advice in `detail`, without provider text or addresses.
-  Before the join succeeds it writes `failure: world-follow-failed`; afterwards it writes a terminal
+  Before the join succeeds it writes `failure: world-follow-failed`, which the launcher shows at Receiving the world even
+  when it has not read the join's synchronizing progress yet; afterwards it writes a terminal
   `endReason: world-follow-failed` and retains the last world session id even after cleanup reports Idle. The failure
   belongs only to the follow's launch request and wins over a later transport leave. Runtime and launcher ship this
-  closed vocabulary together; older readers reject the new value.
+  closed vocabulary together: a launcher from before it refuses such a record whole, as it refuses any unknown value,
+  and so shows the join as still running until the game exits.
 - **The launcher's monitor** reads both versions. A session launch owes a terminal record once it has started, so a
   process that exits without one leaves the activity unconfirmed.
 

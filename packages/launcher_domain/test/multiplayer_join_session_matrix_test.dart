@@ -34,7 +34,6 @@ void main() {
       // that serves another server than before is an identity change. Only
       // a typed address learns its server, so only its join can produce one.
       JoinFailureCode.directNotAllowed,
-      JoinFailureCode.worldFollowFailed,
       JoinFailureCode.identityChanged,
     },
     JoinStage.checking: {
@@ -88,6 +87,7 @@ void main() {
     },
     JoinStage.synchronizing: {
       JoinFailureCode.snapshotFailed,
+      // Following the host's world fails only once the link is up.
       JoinFailureCode.worldFollowFailed,
       JoinFailureCode.disconnected,
     },

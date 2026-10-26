@@ -2360,7 +2360,9 @@ request.
 ### The connecting overlay
 
 The seven steps use full-width vertical rows of equal height, with the active detail beneath its label. Progress and
-long failure advice sit in a bounded scroll view; Cancel and Close remain outside it. The layout keeps the load's
+long failure advice sit in a bounded scroll view; Cancel and Close remain outside it. By the kit's sizes the view holds
+the steps, the status line and either the password field or a failure's heading with two lines of advice without
+scrolling, and the dialog still fits a 3440x1440 screen at the largest UI scale. The layout keeps the load's
 `(1/2)` and `(2/2)` suffixes out of the former narrow columns; the rendered result still needs the desktop checks.
 
 While a join synchronizes, the follow's stages fill the stepper's last three steps with this game's own lines: Loading
@@ -2402,8 +2404,9 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     holds release, with no progress for a world that does not arrive; the host moving on mid-follow and after the join;
     leaving while the world loads; a failure in its own words with a scrubbed log; both of #224's rules; levels and the
     menu, the host's menu toasted and waited at with its line, and a level this game cannot load waited at as
-    `LevelUnavailable` with its own; straying, the eight re-follows and the menu; the player's own way out;
-    shutdown; unreadable announcements; the failure words; a launched join's follows reporting under its request, an
+    `LevelUnavailable` with its own; straying, the eight re-follows and the menu, and eleven restarts of the same level,
+    native and keep-controller, that spend none of them; the player's own way out; shutdown; unreadable announcements;
+    the failure words; a launched join's follows reporting under its request, its follow status included, an
     in-game join's nothing; a busy game tried again and given up on after 30 seconds; and a world not found looked for
     once before the join ends. `SessionFollowWireTests`: round trips and every refusal.
   - `SessionFollowHostTests`: what a host announces, an arena's level and spawn, a full window caught up, and at rest
@@ -2421,9 +2424,11 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     game waits at the menu, from the follow alone, until it follows the host's next world or leaves, a settled frame of
     it allocating nothing. `MultiplayerUiArchitectureTests` reads the connecting overlay's source as C#: it binds the
     failure's words on every frame, offers CANCEL only while Cancel stops something and CLOSE otherwise, by its own
-    layout expression for every combination, and builds its body again whenever the layout changes.
+    layout expression for every combination, builds its body again whenever the layout changes, and sizes its scroll
+    view, by the kit's sizes, to show a failure's advice or the password field beside the steps without scrolling.
     `SessionLaunchRecordsTests`: a launched join's records over the real orchestrator and publisher, with its follow
-    under its request.
+    under its request, and a failed follow's fixed words before and after the join, kept over a later transport leave
+    and never taken from another join's follow.
 - **ModRuntime harness** (`--follow-case follow`, in a fresh process): two real runtimes over the loopback network,
   loading the one installed package, whose gamemode gives every player a participant. The host opens its game to other
   players and starts the package's target; the player joins from its menu, runs the host's world under the host's
@@ -2462,7 +2467,10 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
 
 - **A level outside a session** is loaded by its scene name with no session, as the host has none, so only what the
   network world replicates is shared there.
-- **Eight re-follows in a join.** A game that keeps leaving the host's world more often than that leaves the session.
+- **Eight different-level re-follows in a join.** A game that keeps leaving the host's world for another level more
+  often than that leaves the session. A restart is told apart only by its scene name, so a load of another level built
+  in the same scene, or a mod that keeps reloading the level, never counts: the follower rebuilds the host's world each
+  time.
 - **The level loader is the game's.** `CoreGameplayServices.LoadLevelAsync` is checked only in the game.
 
 ### Choices
