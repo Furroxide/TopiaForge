@@ -2356,16 +2356,24 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     into the host's world with its hold, its grant and its progress, at rest allocating nothing; Ready only once both
     holds release, with no progress for a world that does not arrive; the host moving on mid-follow and after the join;
     leaving while the world loads; a failure in its own words with a scrubbed log; both of #224's rules; levels and the
-    menu, and a level this game cannot load; straying, the eight re-follows and the menu; the player's own way out;
+    menu, the host's menu toasted and waited at with its line, and a level this game cannot load waited at as
+    `LevelUnavailable` with its own; straying, the eight re-follows and the menu; the player's own way out;
     shutdown; unreadable announcements; the failure words; a launched join's follows reporting under its request, an
     in-game join's nothing; a busy game tried again and given up on after 30 seconds; and a world not found looked for
     once before the join ends. `SessionFollowWireTests`: round trips and every refusal.
   - `SessionFollowHostTests`: what a host announces, an arena's level and spawn, a full window caught up, and at rest
     sending and allocating nothing.
   - `MultiplayerSessionsTests`: the overlay's follow steps and failures, "Following the host", a launched join handing
-    the realm its request and RETRY none, and a live join's records taking its follow's progress.
-    `SessionLaunchRecordsTests`: a launched join's records over the real orchestrator and publisher, with its follow
-    under its request.
+    the realm its request and RETRY none, and a live join's records taking its follow's progress; RETRY of a LAN join
+    this game no longer hears listening first and joining once the host is heard, or ending as not heard after 15
+    seconds, with Cancel, never starting or stopping BROWSE's own search, while a heard LAN session and a direct join
+    join at once; a RETRY that fails at once giving its own words; a level this game cannot load shown with Loading
+    world not done and nothing to cancel, after a follow and at a join's end, until it is closed, the player leaves or
+    the host's next world takes it over; and MULTIPLAYER and SESSION saying why a joined game waits at the menu, from
+    the follow alone, until it follows the host's next world or leaves, a settled frame of it allocating nothing.
+    `MultiplayerUiArchitectureTests` reads the connecting overlay's source as C#: it binds the failure's words on every
+    frame, and offers CANCEL only while Cancel stops something, CLOSE otherwise. `SessionLaunchRecordsTests`: a launched
+    join's records over the real orchestrator and publisher, with its follow under its request.
 - **ModRuntime harness** (`--follow-case follow`, in a fresh process): two real runtimes over the loopback network,
   loading the one installed package, whose gamemode gives every player a participant. The host opens its game to other
   players and starts the package's target; the player joins from its menu, runs the host's world under the host's
@@ -2382,6 +2390,13 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
   realm the failed launch's request, when a live join's records ignore the follow's progress, and when leaving, or the
   joined session's end, keeps the launched join. The two-runtime case fails when leaving keeps the game in the
   background, when a joined player runs the server controller, and when the follow's session takes an id of its own.
+  After the in-game checks, the sessions suites also fail when RETRY joins a LAN target this game does not hear at once,
+  when the listening stops before the provider has looked the session up, or takes over BROWSE's own search; when a
+  level this game cannot load is drawn as a success after a follow or at a join's end, or its view keeps the host's next
+  world out or outlives the session; and when MULTIPLAYER or SESSION keep their joined lines while the game waits,
+  rebuild only on the control's status, or keep the line once the host's next world runs. The follower suites fail when
+  the fallback menu is waited at as the host's menu, or the host going to its menu is not toasted; and the architecture
+  check fails when the overlay stops binding the failure's words or offers CANCEL whatever it would stop.
 - **In the game.** Loading a level by its scene name (`CoreGameplayServices.LoadLevelAsync`, an arena's base level and a
   level outside a session) and the Worlds provider's loads run over Unity, so the game checks them.
 
