@@ -70,17 +70,19 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Func<long> clock;
         private readonly IPAddress? bindAddress;
         private readonly bool withoutIPv6;
+        private readonly bool loopbackOnly;
 
         /// <param name="bindAddress">
         /// The address the game socket binds, every local address by default. Tests bind a loopback address, as every test
         /// socket does.
         /// </param>
         /// <param name="withoutIPv6">Opens the game socket a system without IPv6 gets, on any system; tests use it.</param>
-        internal SocketNetworkFactory(Func<long> clock, IPAddress? bindAddress = null, bool withoutIPv6 = false)
+        internal SocketNetworkFactory(Func<long> clock, IPAddress? bindAddress = null, bool withoutIPv6 = false, bool loopbackOnly = false)
         {
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
-            this.bindAddress = bindAddress;
-            this.withoutIPv6 = withoutIPv6;
+            this.bindAddress = loopbackOnly ? IPAddress.Loopback : bindAddress;
+            this.withoutIPv6 = withoutIPv6 || loopbackOnly;
+            this.loopbackOnly = loopbackOnly;
         }
 
         public bool OpenedIPv4Only { get; private set; }
@@ -94,6 +96,7 @@ namespace TopiaForge.Multiplayer.Network
 
         public TraversalNetwork StartTraversal(int port, NetworkStack stack, NatAgentOptions options)
         {
+            if (loopbackOnly) throw new InvalidOperationException("Development peers do not use Internet traversal.");
             var nat = NatPlumbing.Wrap(OpenGameSocket(port), options, clock);
             var thread = new NetworkThread("TopiaForge multiplayer network", nat.Socket, stack, clock);
             thread.Attach(nat.Service);
@@ -104,9 +107,9 @@ namespace TopiaForge.Multiplayer.Network
         public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly, Func<string, CancellationToken, Stream?>? packages = null) =>
             new DescriptorEndpoint(port, packages, relayOnly: relayOnly, bindAddress: bindAddress, withoutIPv6: withoutIPv6);
 
-        public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => new LanAnnouncer(beacon);
+        public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => loopbackOnly ? null : new LanAnnouncer(beacon);
 
-        public LanBrowser? CreateBrowser(int discoveryPort) => new LanBrowser(discoveryPort);
+        public LanBrowser? CreateBrowser(int discoveryPort) => loopbackOnly ? null : new LanBrowser(discoveryPort);
 
         public string? SourceOf(TransportPath path) => UdpPaths.SourceOf(path);
 
@@ -340,7 +343,8 @@ namespace TopiaForge.Multiplayer.Network
             options.RelayOnly = !settings.AllowDirect;
             options.MaximumConnections = Math.Max(4, settings.MaxPlayers * 2);
             var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), options, clock());
-            var stack = new NetworkStack(endpoint, key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)), MaximumLinksPerSource, factory.SourceOf, factory.NetworkOf);
+            var stack = new NetworkStack(endpoint, key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)),
+                settings.LocalDevelopmentPeers ? 8 : MaximumLinksPerSource, factory.SourceOf, factory.NetworkOf);
             INetworkControl started;
             TraversalNetwork? shared = null;
             try

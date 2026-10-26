@@ -6,6 +6,11 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--dev-peers")
+            {
+                DeveloperPeerTests.Run();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--host-packages")
             {
                 HostPackageTests.Run();
@@ -28,6 +33,7 @@ internal static class Program
 
             HostPackageTests.Run();
             InSessionChatProviderTests.Run();
+            DeveloperPeerTests.Run();
             MultiplayerIdentityTests.SnapshotsRejectInvalidOrAmbiguousIdentityData();
             SdkContractCompletionTests.DeterministicRandomMatchesFrozenVectors();
             SdkContractCompletionTests.PresentationTargetsSelectExactRecipients();

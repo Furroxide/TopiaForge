@@ -57,6 +57,8 @@ namespace TopiaForge.Multiplayer.Network
         private readonly List<Task> endings = new List<Task>();
         private readonly Func<NatAgentOptions> natOptions;
         private bool disposed;
+        private readonly bool loopbackOnly;
+        private InternetServices? services;
 
         internal LiveSessions(
             SessionEngine engine,
@@ -68,7 +70,7 @@ namespace TopiaForge.Multiplayer.Network
             string providerModId,
             IJoinTargetResolver? resolver = null,
             Func<Transport.TransportOptions>? transportOptions = null,
-            Func<NatAgentOptions>? natOptions = null)
+            Func<NatAgentOptions>? natOptions = null, bool loopbackOnly = false)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.files = files ?? throw new ArgumentNullException(nameof(files));
@@ -79,11 +81,13 @@ namespace TopiaForge.Multiplayer.Network
             this.providerModId = providerModId ?? throw new ArgumentNullException(nameof(providerModId));
             this.transportOptions = transportOptions ?? (() => new Transport.TransportOptions());
             this.natOptions = natOptions ?? (() => new NatAgentOptions());
+            this.loopbackOnly = loopbackOnly;
             bans = new BanStore(files, clock);
             knownHosts = new KnownHostsStore(files, clock);
 
             // Invites and listed servers go to the TopiaForge service, while one is configured; every other target to the network.
-            this.resolver = new ServiceAwareResolver(resolver ?? new NetworkTargetResolver(() => browser, knownHosts, unixSeconds), () => Services);
+            var localResolver = resolver ?? new NetworkTargetResolver(() => browser, knownHosts, unixSeconds);
+            this.resolver = loopbackOnly ? new LoopbackPeerResolver(localResolver) : new ServiceAwareResolver(localResolver, () => Services);
             endHook = OnClientSessionEnded;
             engine.Options.AfterClientSessionEnds = endHook;
         }
@@ -114,7 +118,7 @@ namespace TopiaForge.Multiplayer.Network
         /// then nothing is contacted, invites and listed servers fail as not configured, and hosting is LAN or direct only.
         /// Set it before hosting or joining; a session already running keeps what it started with.
         /// </summary>
-        internal InternetServices? Services { get; set; }
+        internal InternetServices? Services { get => loopbackOnly ? null : services; set => services = loopbackOnly ? null : value; }
 
         /// <summary>Marks the known-hosts record for saving, from any thread; nothing is saved before its file was read.</summary>
         internal void MarkKnownHostsChanged() => knownHosts.MarkChanged();
@@ -126,6 +130,16 @@ namespace TopiaForge.Multiplayer.Network
         internal void StartHosting(HostSettings settings)
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
+            if (loopbackOnly)
+            {
+                if (settings.Visibility != ServerVisibility.Lan)
+                    throw new InvalidOperationException("Development peers cannot publish a session. Restart the dev loop.");
+                settings.AllowDirect = false;
+                settings.MapPorts = false;
+                settings.Voice = false;
+                settings.ServePackages = false;
+                settings.LocalDevelopmentPeers = true;
+            }
             ThrowIfDisposed();
             if (Host != null || pendingHost != null) throw new InvalidOperationException("The session is already hosted.");
             if (Join != null && Join.Phase != JoinPhase.Ended) throw new InvalidOperationException("Leave the joined session before hosting.");

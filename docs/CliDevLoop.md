@@ -18,7 +18,7 @@ and CI stop after installation. The complete command surface is:
 topiaforge dev [--project path] [--configuration name] [--game-dir path]
                [--launch|--no-launch] [--tail|--no-tail] [--profile id]
                [--target id [--world id] [--transition mode] | --main-menu]
-               [--no-wait | --wait-seconds 1..300]
+               [--no-wait | --wait-seconds 1..300] [--peers 2..8]
 ```
 
 Use `--project` outside the mod directory, `--configuration` for a bounded MSBuild configuration
@@ -30,7 +30,7 @@ The V1 development loop performs these stages in order:
 
 1. Seed the release-local SDK source and restore exact package/lock state.
 2. Build the mod with the pinned project-local .NET SDK.
-3. Run the generated test project.
+3. Synchronize the multiplayer contract lock, when declared, then run the generated test project.
 4. Pack a deterministic `.topiaforgemod` archive.
 5. Validate the manifest, managed entry assembly, package layout, and integrity.
 6. Install the validated package into the selected Robotopia development profile.
@@ -80,6 +80,29 @@ a new CLI invocation does not acquire another process's ownership from its name.
 Close an unowned game yourself before launching the replacement. On Linux, configure
 the full path to the Wine/Proton executable; detached startup without a verified
 creation receipt cannot enable owned restart.
+
+## Local multiplayer peers
+
+From a built TopiaForge checkout, `topiaforge dev --peers 2 --target example.my-mod.play`
+prepares a private game overlay and launcher profile for each peer. Use a declared
+multiplayer target or a profile that already selects one. Peer 0 hosts on an automatic
+port; the others join its verified descriptor over `127.0.0.1`. Discovery, Internet
+services, router forwarding, voice and package serving are disabled for this loop.
+
+Windows copies the executable and Unity player and junctions the large data and Mono
+directories. Linux uses symlinks; macOS requires APFS clones. Each peer has its own
+BepInEx, launcher data and `-logFile` destination. Windowed arguments request 2560x1440;
+Robotopia may override them through its native preferences, which this command does
+not edit. Linux/Proton data-root conversion and macOS clone behavior still need platform
+verification. Native game preferences remain shared by the operating system.
+
+`--peers` explicitly launches even with redirected output and cannot combine with
+`--no-launch` or `--no-wait`. `--no-tail` hides streaming output but still reports a crash
+with its last log lines. Ctrl+C stops every process owned by the run before cleanup.
+An unconfirmed process keeps its directory for manual recovery. Cleanup accepts only
+the unchanged, owned run below `dev-instances`, removing directory links first.
+The stages print elapsed milliseconds; initial host and join confirmation each allow
+two minutes. The source installation is never installed into by this peer command.
 
 ## Generated project state
 

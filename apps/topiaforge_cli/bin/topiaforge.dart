@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:topiaforge/src/map_world_authoring.dart';
@@ -14,6 +15,7 @@ import 'package:topiaforge/src/cli_terminal.dart';
 import 'package:topiaforge/src/cli_join_options.dart';
 import 'package:topiaforge/src/cli_join_workflow.dart';
 import 'package:topiaforge/src/cli_servers.dart';
+import 'package:topiaforge/src/dev_peer_supervisor.dart';
 import 'package:topiaforge/src/multiplayer_acceptance_spec.dart';
 import 'package:topiaforge/src/multiplayer_acceptance_runner.dart';
 import 'package:launcher_data/launcher_data.dart';
@@ -46,6 +48,7 @@ part 'topiaforge_compat_commands.dart';
 part 'topiaforge_acceptance_commands.dart';
 part 'topiaforge_dev_commands.dart';
 part 'topiaforge_dev_stages.dart';
+part 'topiaforge_dev_peers.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
 part 'topiaforge_launcher_commands.dart';

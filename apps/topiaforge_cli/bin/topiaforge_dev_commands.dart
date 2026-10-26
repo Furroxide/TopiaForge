@@ -7,13 +7,13 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
       'Usage: topiaforge dev [--project path] [--configuration name] '
       '[--game-dir path] [--profile id] [--target id | --main-menu] '
       '[--world id] [--transition name] [--wait-seconds n | --no-wait] '
-      '[--launch | --no-launch] [--tail | --no-tail]';
+      '[--launch | --no-launch] [--tail | --no-tail] [--peers 2..8]';
 
   Future<int> _dev(List<String> args) async {
     _validateDevArguments(args);
     final launchOptions = _parseLaunchOptions(
       args,
-      extraValues: const {'--project', '--configuration'},
+      extraValues: const {'--project', '--configuration', '--peers'},
       extraSwitches: const {
         '--help',
         '--no-launch',
@@ -55,6 +55,21 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
         args.contains('--tail') ||
         (interactive && launch && !args.contains('--no-tail'));
     final gameDir = _option(args, '--game-dir');
+    final peersText = _option(args, '--peers');
+    final peers = peersText == null ? null : int.tryParse(peersText);
+    if (peersText != null &&
+        (peers == null ||
+            peers < 2 ||
+            peers > 8 ||
+            args.where((arg) => arg == '--peers').length != 1)) {
+      throw UsageError('--peers requires one count from 2 through 8.');
+    }
+    if (peers != null &&
+        (args.contains('--no-launch') || args.contains('--no-wait'))) {
+      throw UsageError(
+        '--peers owns its processes until Ctrl+C; omit --no-launch and --no-wait.',
+      );
+    }
 
     try {
       final workspace = await _runDevStage(_DevStage.restore, () async {
@@ -97,6 +112,16 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
           '--no-restore',
           '--nologo',
         ], projectRoot);
+      });
+
+      await _runDevStage(_DevStage.contract, () async {
+        final manifest = await developerRepository.readModManifest(projectRoot);
+        if (manifest.multiplayerIsPresent && manifest.multiplayer != null) {
+          await developerRepository.synchronizeMultiplayerContractLock(
+            projectRoot,
+            configuration: configuration,
+          );
+        }
       });
 
       await _runDevStage(_DevStage.test, () async {
@@ -153,6 +178,18 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
           throw StateError(assemblyErrors.join(' '));
         }
       });
+
+      if (peers != null) {
+        return await _runDevPeers(
+          peers,
+          projectRoot,
+          configuration,
+          packagePath,
+          gameDir,
+          launchOptions,
+          !args.contains('--no-tail'),
+        );
+      }
 
       final launcher = LocalLauncherRepository(
         acceptanceIsolation: acceptanceIsolation,
@@ -289,6 +326,7 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
     const valueOptions = {
       '--project',
       '--configuration',
+      '--peers',
       ...CliLaunchOptions.valueOptions,
     };
     const switches = {

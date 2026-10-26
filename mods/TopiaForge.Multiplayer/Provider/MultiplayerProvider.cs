@@ -43,8 +43,8 @@ namespace TopiaForge.Multiplayer
             reserved = engine.CreateFacade(providerModId);
             if (live != null)
             {
-                Live = new LiveSessions(engine, live.Files, live.Content, live.Factory ?? new SocketNetworkFactory(this.clockMicros), this.clockMicros,
-                    () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver, live.TransportOptions, live.NatOptions);
+                Live = new LiveSessions(engine, live.Files, live.Content, live.Factory ?? new SocketNetworkFactory(this.clockMicros, loopbackOnly: live.LoopbackOnly), this.clockMicros,
+                    () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver, live.TransportOptions, live.NatOptions, live.LoopbackOnly);
                 if (live.JoinTimings != null) Live.JoinTimings = live.JoinTimings;
                 Live.Services = live.Services;
             }
@@ -248,6 +248,7 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets or sets the network factory; null uses real sockets.</summary>
         internal INetworkFactory? Factory { get; set; }
+        internal bool LoopbackOnly { get; set; }
 
         /// <summary>Gets or sets the target resolver; null resolves over real networks.</summary>
         internal IJoinTargetResolver? Resolver { get; set; }
