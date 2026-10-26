@@ -1,9 +1,8 @@
 {
-  "capturedUtc": "2026-10-09T18:58:04.2844332Z",
+  "capturedUtc": "2026-10-26T23:04:57.5358345Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
-  "gameVersion": "0.0.2545",
-  "gameVersionLabel": "build 2545",
+  "gameVersionLabel": "",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -252,7 +251,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "587e6101c7260caa0796947f1474723ce9ffbb598d4566e8c02c42cf4f9ba73d",
+  "surfaceContentHash": "148c3a39837da9eea441368239dd5ad478dfb3f018ee9bd7735e663884465258",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",

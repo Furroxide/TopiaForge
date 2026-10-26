@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--gamecompat")
+            { GameCompatTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--blockers")
             {
                 try { BlockerTests.Run(); return 0; }
