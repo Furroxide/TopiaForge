@@ -14,7 +14,8 @@ namespace TopiaForge.ModManager
     /// the player's own is a request the host validates, one on the player's intent to anything else the network world
     /// holds is refused, and a scripted one leaves the host's objects to the host's own run of the same script. An entity
     /// the network world does not hold is the game's, as offline. Online <c>AcquireMotion</c> wraps a known body in an
-    /// optimistic ownership lease; the runtime streams it and retains a thrown body's simulation tail after disposal.
+    /// optimistic ownership lease; the runtime streams it and retains a thrown body's simulation tail after disposal. A
+    /// blocker is the one exception in every realm: a move keeps the size it was made with, and nothing acquires its motion.
     /// </summary>
     internal sealed class NetEntityService : IEntityService
     {
@@ -36,6 +37,7 @@ namespace TopiaForge.ModManager
 
         public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform)
         {
+            transform = KeepBlockerSize(entity, transform);
             var authority = Replication.JoinedAuthority;
             if (authority == null) return inner.SetTransform(entity, transform);
             var route = Replication.RouteCurrentIntent();
@@ -54,8 +56,23 @@ namespace TopiaForge.ModManager
             return authority.RouteDestroy(entity, route == InternalRoute.Shadow) ?? inner.Destroy(entity);
         }
 
-        public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) =>
-            Replication.Services.Motion?.Acquire(Replication, entity, inner) ?? inner.AcquireMotion(entity);
+        public OperationResult<IEntityMotion> AcquireMotion(IEntity entity)
+        {
+            // A blocker stays where its code puts it: no tool holds or throws one, whichever handle to it the tool has.
+            if (IsBlocker(entity)) return OperationResult<IEntityMotion>.Failure(ModErrorCode.NotAuthoritative, NetPhysicsService.NotHeld);
+            return Replication.Services.Motion?.Acquire(Replication, entity, inner) ?? inner.AcquireMotion(entity);
+        }
+
+        private static readonly Vec3 Unit = new Vec3(1f, 1f, 1f);
+
+        private bool IsBlocker(IEntity? entity) => entity != null && (entity is IBlocker || Replication.Services.IsBlocker(entity));
+
+        /// <summary>
+        /// A blocker keeps the size it was made with, as <c>BlockerRequest.Box</c> ignores a placement's scale: a scale here
+        /// would take the host's box past its bounds while every player's copy, built from its description, kept its size.
+        /// </summary>
+        private TransformState KeepBlockerSize(IEntity? entity, TransformState transform) =>
+            transform.Scale == Unit || !IsBlocker(entity) ? transform : new TransformState(transform.Position, transform.Rotation, Unit);
     }
 
     /// <summary>

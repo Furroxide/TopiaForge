@@ -217,6 +217,15 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
+        /// Records a runtime box with the scope that owns it, including boxes placed before hosting starts.
+        /// </summary>
+        internal void RecordBlocker(IBlocker blocker, InternalSpawnDescriptor descriptor)
+        {
+            if (!TrackRelease()) throw new ObjectDisposedException(nameof(RuntimeReplication));
+            services.Runtime.Spawns.Record(blocker, Describe(descriptor), this, CanonicalShadowKey(), 0);
+        }
+
+        /// <summary>
         /// Records an asset spawn for a later promotion, described by its prefab's bundle and asset name rather than by the
         /// request, whose prefab handle belongs to the spawning scope. A failure is reported, never thrown at the mod whose
         /// spawn succeeded.

@@ -8,6 +8,8 @@ namespace TopiaForge.ModManager
         private HostedMotion? FindHost(MotionTarget target)
         {
             if (!world.Host.TryBindMotion(target, out var entity) || !(entity.Object is INetworkMotionBody body)) return null;
+            // A blocker is the host's wall: no player holds or throws one, whatever its client sends.
+            if (entity.Kind == BlockerDescriptor.Kind) return null;
             if (hosted.TryGetValue(entity.Id.Value, out var known)) return known;
             if (hosted.Count >= MotionRules.MaximumTrackedBodies || !body.TryReadMotion(out _, out _)) return null;
             var state = new HostedMotion(entity, body);

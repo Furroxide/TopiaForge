@@ -204,6 +204,7 @@ namespace TopiaForge.ModManager
                 return;
             }
 
+            UnityBlockerPreview.Draw();
             var sample = time.Update(
                 GameLoopPhase.Late,
                 UnityEngine.Time.deltaTime,
@@ -223,6 +224,7 @@ namespace TopiaForge.ModManager
 
             disposed = true;
             hudPlacement.Dispose();
+            UnityBlockerPreview.Reset();
             input.Dispose();
             scheduler.Dispose();
             sceneCoordinator.RevokeOwnership(runtimeOwnershipId);

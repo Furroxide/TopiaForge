@@ -55,7 +55,8 @@ dotnet test --configuration Release
   `GamemodeSessionRole.SinglePlayer`, `Host` or `Client`: the server controller first where the server runs,
   then the player's participant controller, which is all a joined player starts. Failures end the session
   as they do in the game, and stopping disposes the participant before the server. The server and the
-  participant each get a `FakeModContext` of their own, as their scopes do in the game.
+  participant each get a `FakeModContext` of their own, as their scopes do in the game. As in the game, a
+  participant controller's context refuses `Physics.AddBlocker` in every role: place blockers from the server.
 - `FakeTimeControlService` and `FakePromptOverrideRegistry` provide deterministic specialist-module
   behavior and leak-observable handles.
 - `ControlledOperation<T>` lets a test choose when asynchronous work completes, fails, or cancels.

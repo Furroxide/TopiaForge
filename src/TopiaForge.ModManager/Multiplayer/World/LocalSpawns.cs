@@ -97,7 +97,7 @@ namespace TopiaForge.ModManager
             if (!string.Equals(Kind, kind, StringComparison.Ordinal)) return false;
 
             // A provider's description may carry what changes from one run to the next; its kind is what it is.
-            if (!string.Equals(kind, MultiplayerSpawnKinds.AssetPrefab, StringComparison.Ordinal)) return true;
+            if (!string.Equals(kind, MultiplayerSpawnKinds.AssetPrefab, StringComparison.Ordinal) && kind != BlockerDescriptor.Kind) return true;
             if (description.Length != Description.Length) return false;
             for (var index = 0; index < description.Length; index++)
             {

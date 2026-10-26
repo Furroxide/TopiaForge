@@ -50,6 +50,7 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\UnityMainThreadGuard.cs" Link="Runtime\UnityMainThreadGuard.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\World\*.cs" Link="Runtime\World\%(Filename)%(Extension)" />
     <Compile Include="..\TopiaForge.ModRuntime.Tests\FakeWorldScene.cs" Link="World\FakeWorldScene.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/FakeWorldBlocker.cs" Link="World/FakeWorldBlocker.cs" />
     <!-- The in-game sessions' presenters and the launch records they report into are Unity-free too, so a session the
          launcher planned starts here over the real runtime and provider, as the game starts it. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Sessions\*.cs" Link="Runtime\Sessions\%(Filename)%(Extension)" />

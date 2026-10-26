@@ -217,7 +217,8 @@ namespace TopiaForge.ModRuntime.Tests
             public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) => FakeEntityMotion.Acquire(entity);
 
             private static FakeWorldObject? ObjectOf(IEntity entity) =>
-                entity is FakeSpawnedEntity spawned ? spawned.Object : entity is FakeWorldEntity fake ? fake.Object : null;
+                entity is FakeSpawnedEntity spawned ? spawned.Object : entity is FakeWorldEntity fake ? fake.Object :
+                entity is FakeWorldBlocker blocker ? blocker.Object : null;
         }
     }
 }

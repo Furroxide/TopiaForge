@@ -96,7 +96,7 @@ namespace TopiaForge.ModManager
             LocalPlayer = new LifetimePlayerService(gameplay.LocalPlayer, Lifetime);
             Scenes = gameplay.Scenes;
             Entities = new LifetimeEntityService(new NetEntityService(gameplay.Entities, replication), Lifetime);
-            Physics = gameplay.Physics;
+            Physics = new NetPhysicsService(gameplay.Physics, replication, Lifetime);
             Interactions = new NetInteractionService(gameplay.Interactions, replication);
             Items = new NetItemService(gameplay.Items, replication);
             Assets = new NetAssetService(gameplay.Assets, replication);

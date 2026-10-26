@@ -14,8 +14,10 @@ namespace TopiaForge.ModManager
     /// roots are the root game objects the runtime's entity registry resolves. The local player's hierarchy is never
     /// touched. Main thread only.
     /// </summary>
-    internal sealed partial class UnityNetworkWorldBackend : INetworkWorldBackend, INetworkMotionBackend
+    internal sealed partial class UnityNetworkWorldBackend : INetworkWorldBackend, INetworkMotionBackend, IBlockerBackend
     {
+        public OperationResult<IBlocker> CreateBlocker(BlockerRequest request) => UnityBlocker.Create(entities, request);
+
         /// <summary>The primary component every rigidbody root is keyed by.</summary>
         internal const string RigidbodyComponent = "UnityEngine.Rigidbody";
 

@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager
         // A V5 request's session until it is offered: its target can be an address, so from then on only the offer holds it,
         // and the provider's plan after the offer is taken.
         private ProfileLaunchConfigurationV5? launchSession;
+        internal bool BlockerDeveloperMode { get; private set; }
         private LaunchSessionIdentity? launchSessionIdentity;
         private string? launchServiceOrigin;
         private SessionLaunch? sessionLaunch;
@@ -81,6 +82,7 @@ namespace TopiaForge.ModManager
                 var consumed = launchStaging.ConsumeLaunchRequest(configuredPath!);
                 var request = consumed.Profile;
                 launchSession = consumed.SessionRequest;
+                BlockerDeveloperMode = consumed.Session?.DeveloperMode == true;
                 if (launchSession != null)
                 {
                     launchSessionIdentity = LaunchSessionIdentity.Of(launchSession);

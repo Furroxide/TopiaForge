@@ -158,6 +158,10 @@ namespace TopiaForge.Mods
     /// <summary>Performs engine-independent world physics queries.</summary>
     public interface IPhysicsService
     {
+        /// <summary>Adds an invisible blocker owned by this context's lifetime. Place it in host code.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        OperationResult<IBlocker> AddBlocker(BlockerRequest request);
+
         /// <summary>Raycasts against ordinary collision layers while ignoring trigger volumes.</summary>
         /// <param name="ray">The normalized world ray.</param>
         /// <param name="maximumDistance">The positive query distance.</param>

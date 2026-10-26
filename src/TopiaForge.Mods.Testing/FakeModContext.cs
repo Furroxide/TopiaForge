@@ -31,7 +31,7 @@ namespace TopiaForge.Mods.Testing
             Scheduler = new DeterministicModScheduler(Lifetime, Logger);
             LocalPlayer = new FakeLocalPlayerService(Lifetime);
             Entities = new FakeEntityService(Lifetime);
-            Physics = new FakePhysicsService();
+            Physics = new FakePhysicsService(Lifetime, Entities);
             Interactions = new FakeInteractionService(Lifetime);
             Items = new FakeItemService(Entities);
             Assets = new FakeAssetService(Lifetime);

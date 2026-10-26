@@ -6,6 +6,50 @@ namespace TopiaForge.Mods.Testing
     /// <summary>Deterministic physics service that returns an explicitly configured next hit.</summary>
     public sealed class FakePhysicsService : IPhysicsService
     {
+        internal const string NotHeld = "A blocker cannot be held or thrown. Move it with Context.Entities.SetTransform from the code that placed it.";
+        private const string NotAuthoritative = "Only the host places blockers. Place them in the gamemode's server controller.";
+        private readonly List<FakeBlocker> blockers = new List<FakeBlocker>();
+        private readonly IModLifetime? lifetime;
+        private readonly FakeEntityService? entities;
+        private int nextBlocker;
+
+        /// <summary>Creates independently disposable test blockers and configurable physics queries.</summary>
+        public FakePhysicsService() { }
+
+        internal FakePhysicsService(IModLifetime lifetime, FakeEntityService entities)
+        { this.lifetime = lifetime; this.entities = entities; }
+
+        /// <summary>Gets the recorded blockers, including disposed handles, for assertions.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public IReadOnlyList<FakeBlocker> Blockers => blockers.AsReadOnly();
+
+        /// <summary>
+        /// Gets or sets whether this service belongs to a participant controller's context, where the game refuses blockers in
+        /// every role; a <see cref="FakeGamemodeParticipantSession"/> sets it on its context.
+        /// </summary>
+        internal bool RefusesBlockers { get; set; }
+
+        /// <inheritdoc/>
+        [RequiresTopiaForge("0.2.0")]
+        public OperationResult<IBlocker> AddBlocker(BlockerRequest request)
+        {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            if (lifetime?.IsStopping == true) return OperationResult<IBlocker>.Failure(ModErrorCode.Cancelled,
+                "The part of the mod that asked for this is stopping. Place the blocker after a new scope starts.");
+            if (RefusesBlockers) return OperationResult<IBlocker>.Failure(ModErrorCode.NotAuthoritative, NotAuthoritative);
+            var count = 0;
+            foreach (var existing in blockers) if (existing.IsAlive) count++;
+            if (count >= 1024) return OperationResult<IBlocker>.Failure(ModErrorCode.RateLimited,
+                "A mod can keep at most 1,024 blockers. Dispose of an existing blocker before adding another.");
+            var entity = entities?.Create("Blocker", request.Placement.Position) ??
+                new FakeEntity("blocker-" + (++nextBlocker), "Blocker", request.Placement.Position);
+            entity.IsBlocker = true;
+            var blocker = new FakeBlocker(entity, request);
+            if (lifetime != null) blocker.Track(lifetime.Track(blocker));
+            blockers.Add(blocker);
+            return OperationResult<IBlocker>.Success(blocker);
+        }
+
         /// <summary>Gets or sets the hit returned by subsequent raycasts; <see langword="null"/> means no hit.</summary>
         public PhysicsHit? RaycastHit { get; set; }
 
@@ -107,6 +151,11 @@ namespace TopiaForge.Mods.Testing
                 }
             }
 
+            foreach (var blocker in blockers)
+            {
+                if (found.Count >= maximumResults) break;
+                if (blocker.IsAlive && blocker.BlocksSight && blocker.Overlaps(bounds) && !found.Contains(blocker)) found.Add(blocker);
+            }
             return found.AsReadOnly();
         }
 

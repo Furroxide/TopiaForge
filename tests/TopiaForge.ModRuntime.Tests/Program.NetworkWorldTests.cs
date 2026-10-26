@@ -352,6 +352,7 @@ namespace TopiaForge.ModRuntime.Tests
             {
                 if (transitionAccess != null) ScopeCreated?.Invoke(lifetime);
                 var assets = new FakeWorldAssets(Scene, lifetime);
+                Motion.BlockerBackend = Scene;
                 Assets.Add((ownerModId, transitionAccess != null, assets));
                 var other = GameplayContextServices.Unavailable(lifetime);
                 return new GameplayContextServices(Motion, Motion, new WorldEntities(), Motion, other.Time, other.Scheduler,

@@ -17,6 +17,13 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--blockers")
+            {
+                var blockerRoot = Directory.CreateTempSubdirectory("TopiaForgeBlockerTests-").FullName;
+                try { TestBlockersAcrossRuntimes(blockerRoot); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+                finally { TryDelete(blockerRoot); }
+            }
             if (args.Length == 1 && args[0] == "--loader-version")
             {
                 var versionRoot = Directory.CreateTempSubdirectory("TopiaForgeVersionTests-").FullName;
@@ -67,6 +74,7 @@ namespace TopiaForge.ModRuntime.Tests
                 TestMultiplayerRuntime(root);
                 TestMultiplayerIntent(root);
                 TestPauseAndTime(root);
+                TestBlockersAcrossRuntimes(root);
                 Console.WriteLine("ModRuntime synthetic-assembly integration tests passed.");
                 return 0;
             }
