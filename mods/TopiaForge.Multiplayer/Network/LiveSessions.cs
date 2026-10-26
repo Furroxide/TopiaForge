@@ -37,7 +37,7 @@ namespace TopiaForge.Multiplayer.Network
         private readonly string providerModId;
         private readonly Func<Transport.TransportOptions> transportOptions;
 
-        /// <summary>How long closing waits for the last saves, and the listing's deletion, to land.</summary>
+        /// <summary>How long the last saves, and the listing's deletion, are given to land, as the runtime detaches and at closing.</summary>
         private const int SaveFlushMilliseconds = 2_000;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         private readonly Func<ClientSessionEnd, SoloSessionStart?> endHook;
@@ -311,6 +311,33 @@ namespace TopiaForge.Multiplayer.Network
             Persist();
         }
 
+        /// <summary>
+        /// Saves now what closing would: a change not yet saved, and a save that failed, or fails meanwhile, once more, and
+        /// waits up to <see cref="SaveFlushMilliseconds"/> for them to land. The provider calls it when TopiaForge's
+        /// runtime detaches, as shutdown begins and before any mod stops. It has to: a stopping mod's files refuse every
+        /// operation, so nothing these sessions write as they close can land.
+        /// </summary>
+        internal void SaveBeforeClosing()
+        {
+            if (disposed) return;
+            bansWrite = bans.SaveOnClose(bansWrite);
+            knownHostsWrite = knownHosts.SaveOnClose(knownHostsWrite);
+            AwaitBriefly(new List<Task> { bansWrite, knownHostsWrite });
+        }
+
+        /// <summary>Gives the last saves, and the listing's deletion, up to <see cref="SaveFlushMilliseconds"/> to land.</summary>
+        private static void AwaitBriefly(List<Task> work)
+        {
+            try
+            {
+                Task.WaitAll(work.ToArray(), SaveFlushMilliseconds);
+            }
+            catch (AggregateException)
+            {
+                // A save that failed leaves the previous file; there is nothing more to do while closing.
+            }
+        }
+
         public void Dispose()
         {
             if (disposed) return;
@@ -321,20 +348,13 @@ namespace TopiaForge.Multiplayer.Network
             StopBrowsing();
             if (ReferenceEquals(engine.Options.AfterClientSessionEnds, endHook)) engine.Options.AfterClientSessionEnds = null;
 
-            // Whatever changed is saved before the game closes, a save that failed is tried once more, and the saves, and
-            // the listing's deletion, get a moment to land.
+            // Closing saves what is left, and everything when no runtime saved it first as it detached: a change not yet
+            // saved, and a save that failed, once more. The saves, and the listing's deletion, get a moment to land.
             bansWrite = bans.SaveOnClose(bansWrite);
             knownHostsWrite = knownHosts.SaveOnClose(knownHostsWrite);
-            try
-            {
-                var waits = new List<Task> { bansWrite, knownHostsWrite };
-                waits.AddRange(endings);
-                Task.WaitAll(waits.ToArray(), SaveFlushMilliseconds);
-            }
-            catch (AggregateException)
-            {
-                // A save that failed leaves the previous file; there is nothing more to do while closing.
-            }
+            var waits = new List<Task> { bansWrite, knownHostsWrite };
+            waits.AddRange(endings);
+            AwaitBriefly(waits);
 
             lifetime.Cancel();
             identity?.Dispose();

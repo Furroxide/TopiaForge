@@ -297,6 +297,7 @@ internal static class Program
             LiveSessionFailureTests.ClosingSavesAKnownHostRecordedOffTheMainThread();
             SaveRetryTests.AFailedSaveIsTriedAgainAfterAPause();
             SaveRetryTests.AFailedSaveIsTriedOnceMoreAtClose();
+            SaveOnCloseTests.TheLastSavesLandBeforeTheModsFilesStop();
             SaveFailureObservationTests.RetriedAndLateSaveFailuresAreObserved();
             IdentityLoadObservationTests.AFailedIdentityLoadIsObservedHoweverItIsLetGo();
             KnownHostsFailClosedTests.AnUnreadableRecordRefusesAndWritesNothing();

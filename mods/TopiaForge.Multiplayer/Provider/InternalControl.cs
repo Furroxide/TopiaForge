@@ -95,6 +95,11 @@ namespace TopiaForge.Multiplayer
             this.runtime = null;
             content.Runtime = null;
             diagnostics.Runtime = null;
+
+            // The runtime detaches as shutdown begins, before any mod stops, while this mod's files still take writes:
+            // once it stops they refuse every one, so the bans and known hosts are saved now. A detach as this control
+            // closes leaves that to the provider's own closing.
+            if (!disposed) live?.SaveBeforeClosing();
         }
 
         public void Pump()
