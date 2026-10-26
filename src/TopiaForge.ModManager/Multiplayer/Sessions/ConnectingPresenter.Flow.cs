@@ -119,6 +119,7 @@ namespace TopiaForge.ModManager.Sessions
 
         private void Start(JoinRequest join)
         {
+            if (ListensFirst(join)) return;
             OperationResult<bool> result;
             try
             {

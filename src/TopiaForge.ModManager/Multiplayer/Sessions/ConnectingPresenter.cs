@@ -11,7 +11,8 @@ namespace TopiaForge.ModManager.Sessions
     /// Runs a join the screens ask for and presents it on the connecting overlay. It asks the runtime's realm rules first,
     /// and joins only through the runtime: a game that is running is left only after "Leave current game?" is confirmed,
     /// and a game that is starting or stopping, the main menu loading after leaving a game included, is waited for on the
-    /// overlay until the rules let the join through. Then it follows the control's status onto the stepper
+    /// overlay until the rules let the join through; a LAN session this game does not hear now is listened for first
+    /// (ConnectingPresenter.Lan.cs). Then it follows the control's status onto the stepper
     /// (<see cref="ConnectingStepMap"/>), asks for a password when the session needs one, and on failure shows the failure
     /// view with Retry, Open launcher and Copy details. Cancel works throughout, and leaving is never refused.
     /// </summary>
@@ -85,6 +86,9 @@ namespace TopiaForge.ModManager.Sessions
 
             /// <summary>Waiting for a game that is starting or stopping to settle, before the join.</summary>
             Waiting,
+
+            /// <summary>Listening on the local network for a LAN session this game does not hear yet, before the join.</summary>
+            Listening,
             Joining,
             Succeeded,
             Failed,
@@ -94,7 +98,7 @@ namespace TopiaForge.ModManager.Sessions
         }
 
         /// <summary>Gets whether a join is being prepared or running, so no other may start.</summary>
-        internal bool IsBusy => stage == Stage.Leaving || stage == Stage.Waiting || stage == Stage.Joining;
+        internal bool IsBusy => stage == Stage.Leaving || stage == Stage.Waiting || stage == Stage.Listening || stage == Stage.Joining;
 
         public bool IsVisible => stage != Stage.Hidden;
 
@@ -172,6 +176,9 @@ namespace TopiaForge.ModManager.Sessions
                 case Stage.Waiting:
                     Settle();
                     break;
+                case Stage.Listening:
+                    Listen(deltaTime);
+                    break;
                 case Stage.Joining:
                     Follow();
                     break;
@@ -183,6 +190,8 @@ namespace TopiaForge.ModManager.Sessions
                     if (retryWait > 0d) CountDown(deltaTime);
                     break;
             }
+
+            KeepListening();
         }
 
         /// <summary>
@@ -280,7 +289,7 @@ namespace TopiaForge.ModManager.Sessions
                 context.Environment.Leave();
                 context.Status.RequestRefresh();
             }
-            else if (stage != Stage.Leaving && stage != Stage.Waiting)
+            else if (stage != Stage.Leaving && stage != Stage.Waiting && stage != Stage.Listening)
             {
                 return;
             }

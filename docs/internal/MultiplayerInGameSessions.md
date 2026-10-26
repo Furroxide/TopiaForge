@@ -169,9 +169,16 @@ record's sentences and add that next step. A service turning requests away with 
 overlay, a day at most, which then joins again by itself, once; without a named delay RETRY is offered at once. A
 server the service no longer lists leaves the recent servers, and a wrong or withdrawn invite offers no retry. RETRY
 after the host refused the password, or turned away too many wrong ones, joins again without it, so the overlay asks
-for the password in place instead of sending the refused one again. Once the link is up, the Connecting step says the
-route the status reports, Relay or Direct. The failure view offers Retry where trying again can help, Open launcher
-where the launcher can take the join over, Copy details, and Trust for a typed host that now serves a different server,
+for the password in place instead of sending the refused one again. The provider finds a LAN session only among those
+this game hears while it listens on the local network, and BROWSE stops listening when its tab closes, so a LAN join
+whose session this game does not hear now, such as RETRY while the player plays, listens first ("Listening on your
+network"), for 15 seconds at most as a launched LAN join does, and joins once the host is heard. A host no longer there
+ends the join as "Session not found": "The session was not heard on your local network. Check that its host is still
+hosting on this network, then try again." The overlay stops the listening it started once the provider has looked the
+session up, and leaves a search BROWSE runs alone. Relay and direct joins never listen. Once the link is up, the
+Connecting step says the route the status reports, Relay or Direct. The failure view offers Retry where trying again
+can help, Open launcher where the launcher can take the join over, Copy details, and Trust for a typed host that now
+serves a different server,
 or whose server could not be checked because this game's record of earlier ones could not be read
 (`KnownHostsUnreadable`). CONNECT's check asks the same "Trust this server?" question for both, each with its own words.
 A failure that replaces another without the view closing, as a RETRY that fails at once does, shows its own heading and

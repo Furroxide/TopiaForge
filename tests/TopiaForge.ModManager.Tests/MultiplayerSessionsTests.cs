@@ -41,6 +41,7 @@ namespace TopiaForge.ModManager.Tests
             AFollowAfterTheJoinShowsFollowing();
             ARefollowFailureShowsItsOwnWords();
             ARetryThatFailsAtOnceShowsItsOwnWords();
+            RetryListensForALanHostFirst();
             EveryFailureHasAClearMessage();
             FailuresStopAtTheirStep();
             CancelWorksThroughout();

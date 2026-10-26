@@ -2323,7 +2323,9 @@ world ("Getting your mods ready", "Loading the host's world", or for an arena "L
 "Building the host's arena (2/2)"), Synchronizing ("Receiving the world", then n/m as the network world reports it) and
 Spawning ("Starting your controls"). A join the follow ends shows the follow's failure, with RETRY where joining again
 can help. After the join, a change of worlds or a return to the host's world shows "Following the host", with the first
-four steps done, and its Cancel leaves the session. [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md),
+four steps done, and its Cancel leaves the session. RETRY of a LAN join this game no longer hears, as once BROWSE has
+stopped listening, listens on the local network for the host first, for 15 seconds at most, and a host no longer there
+ends the join as "Session not found" in words that say so. [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md),
 section 5, has the rest.
 
 ### Privacy and cost
