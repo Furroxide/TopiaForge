@@ -91,12 +91,15 @@ extension _JoinInstallPreflight on _JoinInstall {
       final folder = folders[key];
       final name = _joinModName(item);
       if (folder != null && folder != manifest.id) {
-        // A host archive's display name is not validated until staging.
-        // Use the plan's bounded identity in this earlier refusal.
+        // A host archive's display name is not validated until staging, so
+        // this earlier refusal names the mod as the plan does. The folder
+        // under another casing of its id can hold any version: the
+        // server's is left out.
+        final mod = _joinModTitle(item);
         throw _JoinInstallRefused(
-          'You have $name installed under a folder named '
+          'You have $mod installed under a folder named '
           'differently than the server version needs, so it cannot be added '
-          'beside it. Uninstall $name in Mods, then join again.',
+          'beside it. Uninstall $mod in Mods, then join again.',
         );
       }
       final target = Directory(

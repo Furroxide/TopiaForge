@@ -204,6 +204,32 @@ void main() {
     );
   });
 
+  test('a mod under another casing of its id is named without the server '
+      'version, which that copy need not be', () async {
+    final rig = await JoinRig.create();
+    await rig.installOwn(TestArchive('Own.Alpha', '1.0.0', name: 'Alpha'));
+    final server = await verifiedServer([StandardJoin.serverAlpha.package]);
+    final plan = planJoin(server, {
+      StandardJoin.serverAlpha.sha256Hex: StandardJoin.serverAlpha.offeredAt(
+        'https://packages.example/alpha.topiaforgemod',
+      ),
+    });
+    rig.cache([StandardJoin.serverAlpha]);
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    final failure = event as JoinFailed;
+    expect(failure.code, JoinFailureCode.installFailed);
+    expect(
+      failure.detail,
+      contains('You have Alpha installed under a folder named differently'),
+    );
+    expect(failure.detail, contains('Uninstall Alpha in Mods'));
+    expect(failure.detail, isNot(contains('2.0.0')));
+    expect(joinFolders(rig.game), isEmpty);
+  });
+
   test('another server\'s build of a version says to remove that server\'s '
       'content, never to uninstall the player\'s mod', () async {
     final rig = await JoinRig.create();

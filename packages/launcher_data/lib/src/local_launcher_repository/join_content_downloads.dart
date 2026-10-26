@@ -348,9 +348,14 @@ extension _JoinContentDownloads on LocalLauncherRepository {
 /// A plan package's name for the player: the trusted manifest's display
 /// name and the version, or the id when there is no manifest, as for a
 /// package only the host serves.
-String _joinModName(JoinPlanPackage item) {
+String _joinModName(JoinPlanPackage item) =>
+    '${_joinModTitle(item)} ${item.package.version}';
+
+/// A plan package's mod for the player, at whatever version: the trusted
+/// manifest's display name, or the id when there is no manifest.
+String _joinModTitle(JoinPlanPackage item) {
   final name = item.manifest?.name.trim() ?? '';
-  return '${name.isEmpty ? item.package.id : name} ${item.package.version}';
+  return name.isEmpty ? item.package.id : name;
 }
 
 /// What a refused download means for the join, for the player.

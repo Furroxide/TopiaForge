@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
@@ -38,8 +40,15 @@ void main() {
       'one,::1;two',
     ]) {
       final complete = withoutAddresses(text);
-      final limit = text.length + complete.length + 1;
-      expect(withoutAddresses(text, maxLength: limit), complete);
+      // Exactly the room the text and its replacements need, and far more.
+      final fits = math.max(1, math.max(text.length, complete.length));
+      for (final limit in [fits, text.length + complete.length + 1]) {
+        expect(
+          withoutAddresses(text, maxLength: limit),
+          complete,
+          reason: '$text at $limit',
+        );
+      }
     }
   });
 }

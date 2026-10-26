@@ -33,7 +33,14 @@ void main() {
       final failure = (await join.drive(installing)).outcome!.failure!;
       expect(failure.code, JoinFailureCode.installFailed);
       expect(failure.detail.length, lessThan(512));
-      expect(failure.detail, contains('example.hosted 1.0.0'));
+      // The descriptor's id, not the host's unvalidated name; and no
+      // version, since the folder under another casing can hold any.
+      expect(
+        failure.detail,
+        contains('You have example.hosted installed under a folder named'),
+      );
+      expect(failure.detail, contains('Uninstall example.hosted in Mods'));
+      expect(failure.detail, isNot(contains('1.0.0')));
       expect(failure.detail, isNot(contains('2:')));
     },
   );
