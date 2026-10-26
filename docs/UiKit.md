@@ -163,7 +163,8 @@ Surfaces own the input they handle, with no code in the mod:
   the pointer, by as much as the module's own wheel would; the game's own menus never see it. A
   surface that does not show the cursor, such as a HUD, changes nothing.
 - **Scroll views follow the selection.** A control the keyboard or a controller moves to inside a
-  kit scroll view scrolls into view, just far enough to show it in full.
+  kit scroll view scrolls into view, just far enough to show it in full. Disabled scroll views keep
+  their position and motion unchanged.
 - **Everything else passes through unchanged**: the mouse's own events, every key no surface
   handles, and the game's own controls.
 

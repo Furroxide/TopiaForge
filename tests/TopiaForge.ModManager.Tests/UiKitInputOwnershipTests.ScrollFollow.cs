@@ -22,7 +22,7 @@ namespace TopiaForge.ModManager.Tests
                 },
                 "AControlBelowTheFoldScrollsIntoView", "AControlAboveScrollsBackDown", "AControlShownInFullMovesNothing",
                 "OnlyAMoveOfTheSelectionScrolls", "NothingOfTheGamesAndNothingOutsideTheContentScrolls", "NestedScrollViewsBothFollow",
-                "FollowingASelectionAllocatesNothing");
+                "DisabledScrollViewsDoNotFollow", "FollowingASelectionAllocatesNothing");
         }
 
         // A contract double, not Unity's code: rect transforms are boxes laid out by an offset from their parent, with no
@@ -39,7 +39,11 @@ namespace TopiaForge.ModManager.Tests
                     public GameObject gameObject = null!;
                     public Transform transform => gameObject.transform;
                 }
-                public class Behaviour : Component { }
+                public class Behaviour : Component
+                {
+                    public bool enabled { get; set; } = true;
+                    public bool isActiveAndEnabled => enabled && gameObject.activeInHierarchy;
+                }
                 public class MonoBehaviour : Behaviour { }
                 public struct Vector2
                 {
@@ -281,6 +285,20 @@ namespace TopiaForge.ModManager.Tests
                     var top = rows[8].transform.World().y;
                     var view = outerView.transform.World().y;
                     Check(top <= view && top - 40f >= view - 200f, "the inner list scrolls row 8 into its view, and the outer view scrolls the list into its own (" + top + ", " + view + ")");
+                }
+
+                public static void DisabledScrollViewsDoNotFollow()
+                {
+                    Start();
+                    scroll.enabled = false;
+                    Select(rows[8]);
+                    Check(content.anchoredPosition.y == 0f && scroll.Stopped == 0,
+                        "a disabled scroll view keeps its content position and velocity when a control is selected");
+                    scroll.enabled = true;
+                    Select(rows[0]);
+                    Select(rows[8]);
+                    Check(content.anchoredPosition.y > 0f && scroll.Stopped == 1,
+                        "an enabled scroll view follows the next selection normally");
                 }
 
                 // A held direction moves the selection every few frames: following it allocates nothing, and a frame at rest

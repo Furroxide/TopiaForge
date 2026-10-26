@@ -8,8 +8,8 @@ namespace TopiaForge.Mods.UnityUi
     /// Keeps the control the keyboard or a controller moves to in view, once a frame as the kit's driver runs. A move could
     /// select a control a kit scroll view had scrolled out of sight, and nothing showed. When the EventSystem selection moves
     /// to a TopiaForge control inside a scroll view's content that does not show in full, the content moves just enough to
-    /// show it (TopiaForgeScrollReveal), in each scroll view around it, innermost first. A control the mouse clicks already
-    /// shows, so the mouse never scrolls anything this way. Nothing here allocates. Main thread only.
+    /// show it (TopiaForgeScrollReveal), in each enabled scroll view around it, innermost first. A partly visible control
+    /// selected by the mouse can also move the content until it shows in full. Nothing here allocates. Main thread only.
     /// </summary>
     internal static class TopiaForgeScrollFollow
     {
@@ -44,7 +44,8 @@ namespace TopiaForge.Mods.UnityUi
         {
             for (var at = item.parent; at != null; at = at.parent)
             {
-                if (!at.TryGetComponent(out ScrollRect scroll) || scroll.content == null || !item.IsChildOf(scroll.content))
+                if (!at.TryGetComponent(out ScrollRect scroll) || !scroll.isActiveAndEnabled
+                    || scroll.content == null || !item.IsChildOf(scroll.content))
                 {
                     continue;
                 }
