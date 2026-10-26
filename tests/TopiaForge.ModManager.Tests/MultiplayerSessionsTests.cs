@@ -43,6 +43,7 @@ namespace TopiaForge.ModManager.Tests
             ARetryThatFailsAtOnceShowsItsOwnWords();
             RetryListensForALanHostFirst();
             ALevelThisGameCannotLoadShowsAsNotLoaded();
+            AGuestWaitingAtTheMenuIsToldWhy();
             EveryFailureHasAClearMessage();
             FailuresStopAtTheirStep();
             CancelWorksThroughout();

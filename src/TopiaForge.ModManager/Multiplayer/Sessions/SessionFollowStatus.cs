@@ -109,6 +109,12 @@ namespace TopiaForge.ModManager.Sessions
         internal const string MenuLeft = "You returned to the main menu, so you left the session.";
         internal const string Rejoined = "Back in the host's world.";
 
+        /// <summary>Why a joined game waits at the main menu, for as long as it does: the host is at its own.</summary>
+        internal const string HostAtMenu = "The host is at the main menu. You join their next world.";
+
+        /// <summary>Why a joined game waits at the main menu, for as long as it does: the host's level could not be loaded here.</summary>
+        internal const string HostLevelUnavailable = "The host is in a level your game could not load. You join their next world.";
+
         internal static FollowFailure For(FollowFailureKind kind, ModErrorCode code)
         {
             switch (kind)
@@ -179,9 +185,9 @@ namespace TopiaForge.ModManager.Sessions
     }
 
     /// <summary>
-    /// Where following the host's world stands, for the connecting overlay. The session follower owns it and changes it only
-    /// when the follow moves, and <see cref="Version"/> moves with every change, so a view that reads it each frame
-    /// allocates nothing. Main thread only.
+    /// Where following the host's world stands, for the connecting overlay, and why a joined game waits at the main menu, for
+    /// MULTIPLAYER and SESSION. The session follower owns it and changes it only when the follow moves, and
+    /// <see cref="Version"/> moves with every change, so a view that reads it each frame allocates nothing. Main thread only.
     /// </summary>
     internal sealed class SessionFollowStatus
     {
@@ -197,6 +203,16 @@ namespace TopiaForge.ModManager.Sessions
 
         /// <summary>Gets the line the connecting overlay shows under its step: this game's own words.</summary>
         internal string Detail { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// Gets why this joined game waits at the main menu, for the screens to show for as long as it does: the host is at
+        /// its own (<see cref="FollowFailureWords.HostAtMenu"/>), or the host's level could not be loaded here
+        /// (<see cref="FollowFailureWords.HostLevelUnavailable"/>). Empty in the host's world or level, while a follow runs
+        /// and once the game leaves, so the line clears by itself. A constant, so reading it each frame allocates nothing.
+        /// </summary>
+        internal string WaitingLine => Stage == FollowStage.AtMenu ? FollowFailureWords.HostAtMenu
+            : Stage == FollowStage.LevelUnavailable ? FollowFailureWords.HostLevelUnavailable
+            : string.Empty;
 
         /// <summary>Gets the step of a two-step load, the host's level then its world, or zero.</summary>
         internal int Step { get; private set; }

@@ -40,6 +40,9 @@ namespace TopiaForge.ModManager.Sessions
         private string inviteText = string.Empty;
         private int titleVersion = -1;
 
+        // Why a joined game waits at the main menu, as SESSION last showed it; it moves with the follow alone.
+        private string shownWaiting = string.Empty;
+
         internal SessionPresenter(MultiplayerScreensContext context)
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));

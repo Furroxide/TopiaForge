@@ -150,7 +150,11 @@ synchronizes. The stepper follows that order on the steps the plan names:
 
 Session follow (WS3.8, [MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md), section 19) runs the
 host's world on the joined player, and the join completes once the player is Ready in it. A join to a host at its main
-menu completes there, and adds "The host is at the main menu. You join their next world." A join the follow ends shows
+menu completes there, and adds "The host is at the main menu. You join their next world." A host that goes to its menu
+later has the game follow it there with the same toast. For as long as the game waits at a menu, MULTIPLAYER's status
+line, in place of the server joined, and SESSION, in place of "Playing on the host's session.", say why: those words,
+or "The host is in a level your game could not load. You join their next world." at the fallback menu. Both go back
+once the game follows the host's next world, and clear when it leaves. A join the follow ends shows
 the follow's own failure, in this game's words and at its own step, with RETRY where joining again can help; a failure
 of an earlier join never ends this one. After the join, when the host changes worlds or the game returns to the host's
 world after straying, the overlay shows "Following the host" with the first four steps done, says "Back in the host's

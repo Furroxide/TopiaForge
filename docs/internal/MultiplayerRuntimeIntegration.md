@@ -2206,7 +2206,10 @@ the host's: a player resolves its ids against its own packages and never shows a
   host at its menu, and says "Your game could not load the level the host is in. You stay in the session and join the
   host's next world."
 - **The main menu.** A host at its menu leaves the player at its own, joined and Ready; a player in another world returns
-  to the menu.
+  to the menu and is told "The host is at the main menu. You join their next world." For as long as the game waits at a
+  menu, `SessionFollowStatus.WaitingLine` says why, and MULTIPLAYER's status line and SESSION show it: those words, or
+  "The host is in a level your game could not load. You join their next world." at the fallback menu. It clears once
+  the game follows the host's next world or leaves.
 - **The host moving on.** A follow on its way when a newer announcement arrives is cancelled, and the newest followed. A
   world the host left behind is disposed before the next one loads. After the join, the host's next world replaces the
   one followed, as a launch replaces a session, and the player is told "Back in the host's world." once it runs.

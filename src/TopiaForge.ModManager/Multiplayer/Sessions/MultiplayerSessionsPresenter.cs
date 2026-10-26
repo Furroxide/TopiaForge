@@ -46,6 +46,7 @@ namespace TopiaForge.ModManager.Sessions
         private string statusText = string.Empty;
         private ScreenTone statusTone;
         private int statusVersion = -1;
+        private string statusWaiting = string.Empty;
         private InternalSessionRole statusRole;
         private bool shown;
 
@@ -251,7 +252,9 @@ namespace TopiaForge.ModManager.Sessions
             connect.Tick();
             session.Tick();
             if (shown || browse.IsSearching) browse.Tick();
-            if (status.Version != statusVersion) RebuildStatus();
+
+            // Why a joined game waits at the main menu moves with the follow alone, not with the control's status.
+            if (status.Version != statusVersion || !string.Equals(environment.Follow.WaitingLine, statusWaiting, StringComparison.Ordinal)) RebuildStatus();
             WithdrawStale();
         }
 
@@ -283,6 +286,7 @@ namespace TopiaForge.ModManager.Sessions
         private void RebuildStatus()
         {
             statusVersion = status.Version;
+            statusWaiting = environment.Follow.WaitingLine;
             var current = status.Status;
             var wasJoined = statusRole == InternalSessionRole.Client;
             statusRole = status.Role;
@@ -305,9 +309,12 @@ namespace TopiaForge.ModManager.Sessions
                     statusTone = ScreenTone.Success;
                     break;
                 case InternalSessionRole.Client:
+                    // A joined game that waits at the main menu says why, for as long as it waits (session follow).
                     statusText = current.JoinPhase == InternalJoinPhase.Reconnecting ? "Reconnecting to the host..."
+                        : statusWaiting.Length > 0 ? statusWaiting
                         : server.Length == 0 ? "Joined a session." : "Joined " + server + ".";
-                    statusTone = current.JoinPhase == InternalJoinPhase.Reconnecting ? ScreenTone.Warning : ScreenTone.Success;
+                    statusTone = current.JoinPhase == InternalJoinPhase.Reconnecting ? ScreenTone.Warning
+                        : statusWaiting.Length > 0 ? ScreenTone.Neutral : ScreenTone.Success;
                     break;
                 default:
                     statusText = MultiplayerStatusTracker.IsInFlight(current) ? "Starting multiplayer..." : "Playing on your own.";

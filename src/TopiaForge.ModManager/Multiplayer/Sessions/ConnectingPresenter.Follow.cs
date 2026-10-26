@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Sessions
     internal sealed partial class ConnectingPresenter
     {
         internal const string FollowingTitle = "Following the host";
-        internal const string HostAtMenu = "The host is at the main menu. You join their next world.";
+        internal const string HostAtMenu = FollowFailureWords.HostAtMenu;
         internal const string LeftWhileFollowing = "You left the session.";
 
         /// <summary>The steps a join has done before a follow after it begins: Resolving to Verifying mods.</summary>
@@ -161,7 +161,8 @@ namespace TopiaForge.ModManager.Sessions
                     active = -1;
                     stage = Stage.Succeeded;
                     linger = 0f;
-                    statusText = follow.Stage == FollowStage.Running ? FollowFailureWords.Rejoined : follow.Detail;
+                    statusText = follow.Stage == FollowStage.Running ? FollowFailureWords.Rejoined
+                        : follow.Stage == FollowStage.AtMenu ? HostAtMenu : follow.Detail;
                     Bump();
                     return;
                 case FollowStage.Preparing:

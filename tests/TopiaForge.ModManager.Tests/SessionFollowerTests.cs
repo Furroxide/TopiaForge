@@ -237,6 +237,8 @@ namespace TopiaForge.ModManager.Tests
                 rig.Announce(HostWorldState.Menu);
                 rig.Until(() => rig.Status.Stage == FollowStage.AtMenu, "the host went to the main menu");
                 That(rig.Test.MenuLoads == 1 && rig.Runtime.Realm == NetRealm.Client, "this game loads it too, and stays joined");
+                That(rig.Status.Notice == FollowFailureWords.HostAtMenu && rig.Status.WaitingLine == FollowFailureWords.HostAtMenu,
+                    "and the player is told the host is at its menu, once as a toast and for as long as the game waits there");
             }
 
             using (var rig = new FollowRig(root + "-missing"))
@@ -249,10 +251,12 @@ namespace TopiaForge.ModManager.Tests
                 That(rig.Test.Levels.Count == 1 && rig.Test.MenuLoads == 1, "having tried the level once and loaded the menu");
                 That(rig.Status.Notice == FollowFailureWords.LevelNotLoaded && rig.Runtime.Realm == NetRealm.Client && !rig.Follower.HoldsReadiness,
                     "joined, told why, and Ready there for the host's next world");
+                That(rig.Status.WaitingLine == FollowFailureWords.HostLevelUnavailable, "and why it waits is there for as long as it waits");
                 for (var frame = 0; frame < 20; frame++) rig.Frame();
                 That(rig.Test.Levels.Count == 1 && rig.Runtime.Realm == NetRealm.Client, "it does not try the level again, nor leave");
                 rig.Announce(rig.World(SessionFollowTests.NewSessionId()));
                 rig.Until(() => rig.Status.Stage == FollowStage.Running, "and follows the host's next world");
+                That(rig.Status.WaitingLine.Length == 0, "which clears why it waited");
             }
 
             using (var rig = new FollowRig(root + "-menu"))
@@ -262,6 +266,8 @@ namespace TopiaForge.ModManager.Tests
                 rig.Frame();
                 That(rig.Status.Stage == FollowStage.AtMenu && rig.Test.MenuLoads == 0 && !rig.Follower.HoldsReadiness,
                     "a host at the main menu, joined from it, loads nothing and the player is Ready at once");
+                That(rig.Status.NoticeVersion == 0 && rig.Status.WaitingLine == FollowFailureWords.HostAtMenu,
+                    "the join's own toast says the host is at its menu, so the follow adds none, and why the game waits stays");
             }
         }
 
@@ -433,7 +439,8 @@ namespace TopiaForge.ModManager.Tests
                 }
             }
 
-            foreach (var notice in new[] { FollowFailureWords.LevelNotLoaded, FollowFailureWords.MenuLeft, FollowFailureWords.Rejoined })
+            var notices = new[] { FollowFailureWords.LevelNotLoaded, FollowFailureWords.MenuLeft, FollowFailureWords.Rejoined, FollowFailureWords.HostAtMenu, FollowFailureWords.HostLevelUnavailable };
+            foreach (var notice in notices)
                 That(!notice.Contains("Caller:") && notice.EndsWith(".", StringComparison.Ordinal), "each notice is a plain sentence: " + notice);
             That(SessionFollower.Scrub("Caller: External: C:\\Games\\x.unity /srv/games/levels at 192.0.2.4 and host.example.com:27250 failed")
                     == "Caller: External: [path] [path] at [address] and [address] failed",

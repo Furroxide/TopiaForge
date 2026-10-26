@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.Mods;
@@ -6,9 +7,78 @@ using static TopiaForge.ModManager.Tests.SessionAssert;
 
 namespace TopiaForge.ModManager.Tests
 {
-    /// <summary>A joined player whose game waits at the main menu: what the overlay shows of it.</summary>
+    /// <summary>A joined player whose game waits at the main menu: what the overlay, MULTIPLAYER and SESSION show of it.</summary>
     internal static partial class MultiplayerSessionsTests
     {
+        /// <summary>
+        /// Seen in the game: a guest whose host went to its menu, or who was left at the menu because the host's level could
+        /// not load here, was told nothing after the first toast, while MULTIPLAYER and SESSION still read "Joined Follow Host"
+        /// and "Playing on the host's session.". Both now say why the game waits, for as long as it does, from the follow alone,
+        /// and go back once the guest follows the host's next world; leaving clears it. A settled frame of it allocates nothing.
+        /// </summary>
+        private static void AGuestWaitingAtTheMenuIsToldWhy()
+        {
+            var rig = JoiningRig();
+            var follow = rig.Environment.Follow;
+            follow.Joined();
+            follow.Move(FollowStage.Running, "In the host's world");
+            rig.Status(InternalSessionRole.Client, InternalJoinPhase.InSession);
+            rig.Environment.SessionSnapshot = SessionsRig.ClientSnapshot(MultiplayerSessionState.Ready, "s-ready", "p1");
+            rig.Frame(40);
+            var presenter = rig.Presenter;
+            var joined = presenter.StatusText;
+            const string Playing = "Playing on the host's session.";
+            That(joined.StartsWith("Joined ", StringComparison.Ordinal) && presenter.StatusTone == ScreenTone.Success && presenter.Session.Subtitle == Playing,
+                "in the host's world, MULTIPLAYER and SESSION say the player is joined (" + joined + ")");
+
+            // The host goes to its menu, and the follow takes the game there: only the follow moves, the control's status does not.
+            var version = presenter.Context.Status.Version;
+            follow.Refollowing();
+            follow.Move(FollowStage.ReturningToMenu, "The host went to the main menu");
+            rig.Frame();
+            follow.Move(FollowStage.AtMenu, "The host is at the main menu");
+            rig.Frame();
+            That(presenter.Context.Status.Version == version, "the control's status did not move");
+            That(presenter.StatusText == FollowFailureWords.HostAtMenu && presenter.StatusTone == ScreenTone.Neutral && presenter.Session.Subtitle == FollowFailureWords.HostAtMenu,
+                "MULTIPLAYER and SESSION say the host is at its menu and the player joins its next world (" + presenter.StatusText + " / " + presenter.Session.Subtitle + ")");
+            rig.Frame(100);
+            That(presenter.StatusText == FollowFailureWords.HostAtMenu && presenter.Session.Subtitle == FollowFailureWords.HostAtMenu, "for as long as the game waits");
+
+            // The host's next world clears it.
+            follow.Move(FollowStage.Preparing, "Getting your mods ready");
+            rig.Frame();
+            That(presenter.StatusText == joined && presenter.Session.Subtitle == Playing, "following the host's next world clears it");
+
+            // A level this game cannot load leaves the game at the menu: both say that instead.
+            follow.Move(FollowStage.LevelUnavailable, FollowFailureWords.LevelNotLoaded);
+            rig.Frame();
+            That(presenter.StatusText == FollowFailureWords.HostLevelUnavailable && presenter.Session.Subtitle == FollowFailureWords.HostLevelUnavailable,
+                "a guest left at the menu because the host's level could not load here is told so for as long as it waits");
+            follow.Move(FollowStage.Running, "In the host's world");
+            rig.Frame();
+            That(presenter.StatusText == joined && presenter.Session.Subtitle == Playing, "and back in the host's world it clears");
+
+            // Leaving clears it with the session.
+            follow.Move(FollowStage.AtMenu, "The host is at the main menu");
+            rig.Frame();
+            rig.Status(InternalSessionRole.Solo);
+            rig.Environment.SessionSnapshot = null;
+            follow.Ended();
+            rig.Frame();
+            That(presenter.StatusText == "Playing on your own." && presenter.Session.Subtitle.Length == 0 && follow.WaitingLine.Length == 0, "leaving clears it");
+
+            // Waiting at the host's menu, settled, allocates nothing.
+            var settled = JoiningRig();
+            settled.Environment.Follow.Joined();
+            settled.Environment.Follow.Move(FollowStage.AtMenu, "The host is at the main menu");
+            settled.Status(InternalSessionRole.Client, InternalJoinPhase.InSession);
+            settled.Environment.SessionSnapshot = SessionsRig.ClientSnapshot(MultiplayerSessionState.Ready, "s-menu", "p1");
+            settled.Frame(40);
+            That(settled.Presenter.StatusText == FollowFailureWords.HostAtMenu && settled.Presenter.Session.Subtitle == FollowFailureWords.HostAtMenu,
+                "a join to a host at its menu says so on MULTIPLAYER and SESSION too");
+            Settled("joined, waiting at the host's menu", settled);
+        }
+
         /// <summary>
         /// Seen in the game: "Your game could not load the level the host is in…" was drawn as a success, every step ticked
         /// and a CANCEL that cancelled nothing, as the overlay counted the menu the game waits at as the follow's end. Now

@@ -107,7 +107,12 @@ namespace TopiaForge.ModManager
             busyTotal = 0f;
             ReleaseHold();
             Status.Move(stage, detail);
-            if (Status.IsRefollow && target.Kind == HostWorldKind.World) Status.Notify(FollowFailureWords.Rejoined);
+            if (!Status.IsRefollow) return;
+
+            // A follow after the join says where it took the player: back in the host's world, or to the main menu the host
+            // went to, which this game loaded by itself.
+            if (target.Kind == HostWorldKind.World) Status.Notify(FollowFailureWords.Rejoined);
+            else if (stage == FollowStage.AtMenu) Status.Notify(FollowFailureWords.HostAtMenu);
         }
 
         private void Busy(string reason)

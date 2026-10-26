@@ -13,9 +13,11 @@ namespace TopiaForge.ModManager.Sessions
         {
             var tracker = context.Status;
             var listed = ListsPlayers(tracker);
-            if (tracker.Version != titleVersion || tracker.Role != shownRole)
+            var waiting = context.Environment.Follow.WaitingLine;
+            if (tracker.Version != titleVersion || tracker.Role != shownRole || !string.Equals(waiting, shownWaiting, StringComparison.Ordinal))
             {
                 titleVersion = tracker.Version;
+                shownWaiting = waiting;
                 RebuildTitle(tracker);
             }
 
@@ -126,7 +128,10 @@ namespace TopiaForge.ModManager.Sessions
                     break;
                 case InternalSessionRole.Client:
                     title = name.Length == 0 ? "Joined a session" : "Joined " + name;
-                    subtitle = status.JoinPhase == InternalJoinPhase.Reconnecting ? "Reconnecting to the host..." : "Playing on the host's session.";
+
+                    // A joined game that waits at the main menu says why, for as long as it waits (session follow).
+                    subtitle = status.JoinPhase == InternalJoinPhase.Reconnecting ? "Reconnecting to the host..."
+                        : shownWaiting.Length > 0 ? shownWaiting : "Playing on the host's session.";
                     break;
                 default:
                     title = "Not in a session";
