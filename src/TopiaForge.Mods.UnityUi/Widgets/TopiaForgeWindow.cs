@@ -162,7 +162,7 @@ namespace TopiaForge.Mods.UnityUi
             deferredClamp.enabled = !TryClampToScreen();
             TopiaForgeMotion.WindowIn(this);
             cursorLease.Acquire();
-            TopiaForgeDismissStack.Push(this);
+            TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.NavigationWhileSelected, Go);
             BringToFront();
         }
 

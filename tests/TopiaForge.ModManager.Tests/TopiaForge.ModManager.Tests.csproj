@@ -210,6 +210,8 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Scopes.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.ScopedPersistence.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\MultiplayerSceneTransitionAuthorityPolicy.cs" />
+    <!-- Which of a mod's input bindings yield to the UI is Unity-free, and tested against the kit's claims. -->
+    <Compile Include="..\..\src\TopiaForge.ModManager\InputActionYield.cs" />
     <!-- Compiling the menu census here both unit-tests it and mechanically keeps it Unity-free, so the
          reporting that explains a missing main-menu entry point cannot regain a UnityEngine dependency. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\MenuSurfaceCensus.cs" />

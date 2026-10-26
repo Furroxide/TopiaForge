@@ -160,6 +160,15 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--ui-input-ownership", StringComparison.Ordinal))
+            {
+                UiKitInputOwnershipTests.Run();
+                UiKitInputOwnershipConventionTests.Run();
+                UiKitIntentConventionTests.Run();
+                UiKitSourceConventionTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--testing-kit", StringComparison.Ordinal))
             {
                 TestingKitTests.Run();
@@ -511,6 +520,8 @@ namespace TopiaForge.ModManager.Tests
                 UiKitCoreTests.Run();
                 UiKitWindowMathTests.Run();
                 UiKitMultiplayerCoreTests.Run();
+                UiKitInputOwnershipTests.Run();
+                UiKitInputOwnershipConventionTests.Run();
                 TopiaForgeStateFileTests.Run(root);
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();
