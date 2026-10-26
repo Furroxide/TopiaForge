@@ -94,6 +94,8 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeDismissStack.Reset();
             TopiaForgeInputOwnership.Reset();
             TopiaForgeNavigation.Reset();
+            TopiaForgePointer.Reset();
+            TopiaForgeScrollFollow.Reset();
             TopiaForgeHotkeys.Reset();
             TopiaForgeIntent.Reset();
             TopiaForgeCursor.Reset();

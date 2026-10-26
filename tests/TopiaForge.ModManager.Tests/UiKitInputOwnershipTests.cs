@@ -80,6 +80,10 @@ namespace TopiaForge.ModManager.Tests
             TheSdkKeyNamesMapToTheInputSystemsKeys();
             OnlyAGameTextFieldWithTheKeyboardHoldsTheKeys();
             TheGamesUiToolkitHasWhatTheKitReads();
+            TheKitTurnsTheGamesPointerBackOnOnlyWhileASurfaceShowsTheCursor();
+            TheMouseKeepsWorkingOnTheKitsSurfaces();
+            AScrollViewShowsTheControlTheKeyboardSelects();
+            AKitScrollViewFollowsTheSelection();
             NothingIsAllocatedAtRestOrWhileHeld();
             Console.WriteLine("UiKitInputOwnershipTests passed.");
         }
