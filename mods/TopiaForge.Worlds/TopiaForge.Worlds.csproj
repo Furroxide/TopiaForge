@@ -30,6 +30,7 @@
   <!-- Shared clean-room game-reflection helpers (source-linked so the request shape lives in one place). -->
   <ItemGroup>
     <Compile Include="..\Shared\UgcNoOpLaunchRequest.cs" Link="Shared\UgcNoOpLaunchRequest.cs" />
+    <Compile Include="..\Shared\NativePlayerTeleport.cs" Link="Shared\NativePlayerTeleport.cs" />
     <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
     <Compile Remove="SceneClaimMatcher.cs" />
   </ItemGroup>

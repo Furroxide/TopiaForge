@@ -33,6 +33,7 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--overlay-refresh") { OverlayRefreshTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--arena-lifecycle") { ArenaLifecycleTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit-event-systems")
             {
                 try { UiKitEventSystemTests.Run(); return 0; }
@@ -503,6 +504,7 @@ namespace TopiaForge.ModManager.Tests
                 WorldDiscoveryIdentityTests.Run();
                 WorldResourceScopeTests.Run();
                 WorldPlayerPlacementTests.Run();
+                ArenaLifecycleTests.Run();
                 GeneratedArenaGeometryTests.Run();
                 WorldProviderLoaderTests.Run();
                 LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();

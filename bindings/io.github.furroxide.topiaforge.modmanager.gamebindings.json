@@ -655,6 +655,58 @@
       "isPublic": true,
       "isStatic": false,
       "genericArity": 0
+    },
+    {
+      "id": "modmanager.placement.player",
+      "kind": "Type",
+      "declaringType": "PlayerController",
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native world player placement",
+      "sourceRef": "mods/Shared/NativePlayerTeleport.cs"
+    },
+    {
+      "id": "modmanager.placement.controller",
+      "kind": "Property",
+      "declaringType": "PlayerController",
+      "member": "FPSController",
+      "returnType": "FirstPersonController",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0,
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native world player placement",
+      "sourceRef": "mods/Shared/NativePlayerTeleport.cs"
+    },
+    {
+      "id": "modmanager.placement.teleport",
+      "kind": "Method",
+      "declaringType": "FirstPersonController",
+      "member": "TeleportTo",
+      "returnType": "System.Void",
+      "isPublic": true,
+      "isStatic": false,
+      "exactParameters": true,
+      "genericArity": 0,
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "System.Nullable<UnityEngine.Quaternion>",
+          "constrained": true
+        }
+      ],
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native world player placement",
+      "sourceRef": "mods/Shared/NativePlayerTeleport.cs"
     }
   ]
 }

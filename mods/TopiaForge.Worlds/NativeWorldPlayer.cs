@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using TopiaForge.Mods.GameBridge;
 using UnityEngine;
 
 namespace TopiaForge.Worlds
@@ -16,10 +17,7 @@ namespace TopiaForge.Worlds
         }
         public static void Place(Transform player, Vector3 position, Quaternion rotation)
         {
-            var controller = player.GetComponent<CharacterController>();
-            if (controller == null) { player.SetPositionAndRotation(position, rotation); return; }
-            WorldPlayerPlacement.PreserveControllerState(() => controller.enabled, value => controller.enabled = value,
-                () => player.SetPositionAndRotation(position, rotation));
+            NativePlayerTeleport.Place(player, position, rotation);
         }
     }
 }

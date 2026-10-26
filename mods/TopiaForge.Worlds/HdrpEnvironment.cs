@@ -42,6 +42,10 @@ namespace TopiaForge.Worlds
         }
         private static void ConfigureSun(GameObject root, WorldResourceScope resources)
         {
+            // Each participant gets the same arena sun, independent of the inherited level's lighting.
+            // Track the lease before mutation, and restore borrowed lights only after our sun is inactive.
+            var inherited = resources.Add(new ArenaSunSuppression());
+            inherited.Apply(UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None));
             var sun = UnityWorldResources.Own(resources, new GameObject("Sandbox Sun"));
             sun.transform.SetParent(root.transform, false);
             sun.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
