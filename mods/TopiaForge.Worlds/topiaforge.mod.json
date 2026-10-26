@@ -26,6 +26,7 @@
     "LICENSE"
   ],
   "capabilities": [
+    "network",
     "scene-management",
     "world-service",
     "hud"

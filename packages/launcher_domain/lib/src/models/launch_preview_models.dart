@@ -60,6 +60,7 @@ final class LaunchPreview {
     Iterable<String> transitions = const [],
     this.allowWorldOverride = false,
     this.allowTransitionOverride = false,
+    this.publishedMapDisclosure,
   }) : packages = List.unmodifiable(
          packages.map((item) => PackageIdentity.fromJson(item.toJson())),
        ),
@@ -81,6 +82,7 @@ final class LaunchPreview {
   final List<String> transitions;
   final bool allowWorldOverride;
   final bool allowTransitionOverride;
+  final String? publishedMapDisclosure;
   List<LaunchBlock> get blocks => resolution?.blocks ?? const [];
   bool get canLaunch =>
       !issues.any((issue) => issue.isBlocking) &&

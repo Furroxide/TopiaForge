@@ -37,6 +37,7 @@ extension LauncherEventDispatch on LauncherBloc {
       KnownInstallDetected() => _onKnownInstallDetected(event, emit),
       GameDirectorySelected() => _onGameDirectorySelected(event, emit),
       RuntimeRepaired() => _onRuntimeRepaired(event, emit),
+      DownloadedMapsClearRequested() => _onDownloadedMapsClear(emit),
       PackagePreviewRequested() => _onPackagePreviewRequested(event, emit),
       PreviewedPackageInstalled() => _onPreviewedPackageInstalled(event, emit),
       InboxPackagesInstalled() => _onInboxPackagesInstalled(event, emit),

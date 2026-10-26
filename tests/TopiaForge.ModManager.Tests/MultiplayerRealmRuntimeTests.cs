@@ -29,6 +29,24 @@ namespace TopiaForge.ModManager.Tests
             CensusFailuresAreIsolated();
             NetworkClassesComeFromEffectiveManifests();
             StandaloneRefusalsNameTheMods();
+            MapWorldCannotPromote();
+        }
+
+        private static void MapWorldCannotPromote()
+        {
+            var (runtime, control, log) = Runtime(() => SessionPhase.Running);
+            runtime.CanHostWorld = () => false;
+            runtime.Connect();
+            var verdict = runtime.EvaluateRealmChange(NetRealm.ListenHost);
+            That(verdict.Verdict == NetRealmTransitionVerdict.WorldRefused && !verdict.IsAllowed,
+                "A single-player map cannot be promoted into a multiplayer session.");
+            That(TopiaForge.ModManager.Sessions.SessionRealmGate.ForHost(verdict) == TopiaForge.ModManager.Sessions.RealmDecision.WorldRefused,
+                "The host screen must show the same map refusal.");
+            That(runtime.EvaluateRealmChange(NetRealm.Offline).Verdict == NetRealmTransitionVerdict.Unchanged,
+                "Map admission never prevents staying offline.");
+            var opened = runtime.OpenToMultiplayer(new InternalHostSettings("Map", 4));
+            That(!opened.Succeeded && opened.Verdict == NetRealmTransitionVerdict.WorldRefused && control.RealmCalls.Count == 0,
+                "The actual host command refuses before touching the network provider.");
         }
 
         private static void TheRealmFollowsTheProvidersRole()

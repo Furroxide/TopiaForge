@@ -22,6 +22,8 @@ namespace TopiaForge.ModManager
         internal const string AlreadyHosting = "This game is already open to other players.";
         internal const string AlreadyJoined = "This game is already in a joined session; leave it before joining another.";
         internal const string SessionBusy = "A game is starting or stopping; try again once it has settled.";
+        internal const string MapWorldSinglePlayer = "Map worlds currently support single player. Leave this map before hosting another world.";
+        internal Func<bool> CanHostWorld { get; set; } = () => true;
 
         private static readonly Func<SessionPhase> IdleSession = () => SessionPhase.Idle;
         private static readonly Func<bool> NoNativeWorld = () => false;
@@ -123,6 +125,8 @@ namespace TopiaForge.ModManager
         internal NetRealmTransition EvaluateRealmChange(NetRealm target)
         {
             var phase = ReadSessionPhase();
+            if (target == NetRealm.ListenHost && Realm == NetRealm.Offline && !CanHostWorld())
+                return new NetRealmTransition(NetRealmTransitionVerdict.WorldRefused, NetRealmTransitionEffect.None);
             if (target == NetRealm.Client && phase == SessionPhase.Idle && Realm == NetRealm.Offline && ReadNativeWorld()) phase = SessionPhase.Running;
             return NetRealms.EvaluateTransition(Realm, target, phase, HasStandaloneMod());
         }
@@ -311,6 +315,10 @@ namespace TopiaForge.ModManager
                 case NetRealmTransitionVerdict.Busy:
                     code = ModErrorCode.Conflict;
                     message = SessionBusy;
+                    break;
+                case NetRealmTransitionVerdict.WorldRefused:
+                    code = ModErrorCode.Unavailable;
+                    message = MapWorldSinglePlayer;
                     break;
                 default:
                     message = StandaloneRefusal(StandaloneMods, target == NetRealm.ListenHost ? "host" : "join");

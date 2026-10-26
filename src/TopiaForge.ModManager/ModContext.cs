@@ -15,7 +15,7 @@ using TopiaForge.Mods.Interop.Unity;
 namespace TopiaForge.ModManager
 {
     internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext, IInternalWorldRuntimeContext,
-        IInternalReplicationContext, IInternalPlayerContext
+        IInternalReplicationContext, IInternalPlayerContext, IInternalMapStorageContext
     {
         private readonly OwnerModLifetime ownerLifetime;
         private readonly ModEvents modEvents;
@@ -61,6 +61,7 @@ namespace TopiaForge.ModManager
             if (serviceRegistry == null) throw new ArgumentNullException(nameof(serviceRegistry));
 
             this.packagePath = packagePath;
+            MapCacheDirectory = Path.Combine(managerPaths.Root, "cache", "maps");
             this.gameplayFactory = gameplayFactory;
             this.serviceRegistry = serviceRegistry;
             this.replicationServices = replicationServices ?? MultiplayerReplication.Offline();
@@ -151,6 +152,8 @@ namespace TopiaForge.ModManager
         }
 
         public ModIdentity Identity { get; }
+        string IInternalMapStorageContext.MapCacheDirectory => MapCacheDirectory;
+        private string MapCacheDirectory { get; }
         public IRuntimeInfo Runtime { get; }
         public IModLogger Logger { get; }
         public IModLifetime Lifetime { get; }

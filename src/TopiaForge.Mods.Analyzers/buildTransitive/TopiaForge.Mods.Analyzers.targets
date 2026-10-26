@@ -1,4 +1,15 @@
 <Project>
+  <Target Name="TopiaForgeMapFileInventory" BeforeTargets="GenerateMSBuildEditorConfigFile">
+    <ItemGroup>
+      <_TopiaForgeMapCandidates Include="@(Content);@(None)" />
+      <AdditionalFiles Include="%(_TopiaForgeMapCandidates.FullPath)"
+                       Condition="Exists('%(_TopiaForgeMapCandidates.FullPath)') and ('%(_TopiaForgeMapCandidates.CopyToOutputDirectory)' == 'Always' or '%(_TopiaForgeMapCandidates.CopyToOutputDirectory)' == 'PreserveNewest' or '%(_TopiaForgeMapCandidates.CopyToOutputDirectory)' == 'IfDifferent')">
+        <TopiaForgeMapPackedPath Condition="'%(_TopiaForgeMapCandidates.TargetPath)' != ''">%(_TopiaForgeMapCandidates.TargetPath)</TopiaForgeMapPackedPath>
+        <TopiaForgeMapPackedPath Condition="'%(_TopiaForgeMapCandidates.TargetPath)' == '' and '%(_TopiaForgeMapCandidates.Link)' != ''">%(_TopiaForgeMapCandidates.Link)</TopiaForgeMapPackedPath>
+        <TopiaForgeMapPackedPath Condition="'%(_TopiaForgeMapCandidates.TargetPath)' == '' and '%(_TopiaForgeMapCandidates.Link)' == ''">%(_TopiaForgeMapCandidates.Identity)</TopiaForgeMapPackedPath>
+      </AdditionalFiles>
+    </ItemGroup>
+  </Target>
   <!-- Reference-only SDK packages have no lib/ runtime asset. A copied TopiaForge SDK DLL therefore
        means a project added a loose/private reference that would fight the loader-owned runtime. -->
   <Target Name="TopiaForgeRejectCopiedSdkAssemblies"

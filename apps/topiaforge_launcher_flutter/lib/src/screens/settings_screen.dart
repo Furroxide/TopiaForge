@@ -77,6 +77,8 @@ class _GeneralSettings extends StatelessWidget {
           const SizedBox(height: 14),
           _LauncherDataSettings(state: state),
           const SizedBox(height: 14),
+          _DownloadedMapSettings(state: state),
+          const SizedBox(height: 14),
           _LauncherUpdateSettings(state: state),
           const SizedBox(height: 14),
           _DeveloperModeSettings(state: state),

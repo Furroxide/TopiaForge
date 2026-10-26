@@ -1,0 +1,2978 @@
+{
+  "version": 1,
+  "name": "Synthetic Courtyard",
+  "modified": "2026-01-01T00:00:00Z",
+  "scenes": {
+    "courtyard": {
+      "id": "courtyard",
+      "name": "Courtyard",
+      "entities": {
+        "entry": {
+          "id": "entry",
+          "name": "Entry",
+          "parent": null,
+          "components": {
+            "spawn-location": {},
+            "transform": {
+              "position": [
+                2,
+                0,
+                4
+              ]
+            }
+          }
+        },
+        "prop-000": {
+          "id": "prop-000",
+          "name": "Prop 0",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-001": {
+          "id": "prop-001",
+          "name": "Prop 1",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-002": {
+          "id": "prop-002",
+          "name": "Prop 2",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-003": {
+          "id": "prop-003",
+          "name": "Prop 3",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-004": {
+          "id": "prop-004",
+          "name": "Prop 4",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-005": {
+          "id": "prop-005",
+          "name": "Prop 5",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-006": {
+          "id": "prop-006",
+          "name": "Prop 6",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-007": {
+          "id": "prop-007",
+          "name": "Prop 7",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-008": {
+          "id": "prop-008",
+          "name": "Prop 8",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-009": {
+          "id": "prop-009",
+          "name": "Prop 9",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-010": {
+          "id": "prop-010",
+          "name": "Prop 10",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-011": {
+          "id": "prop-011",
+          "name": "Prop 11",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-012": {
+          "id": "prop-012",
+          "name": "Prop 12",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-013": {
+          "id": "prop-013",
+          "name": "Prop 13",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-014": {
+          "id": "prop-014",
+          "name": "Prop 14",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-015": {
+          "id": "prop-015",
+          "name": "Prop 15",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-016": {
+          "id": "prop-016",
+          "name": "Prop 16",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-017": {
+          "id": "prop-017",
+          "name": "Prop 17",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-018": {
+          "id": "prop-018",
+          "name": "Prop 18",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-019": {
+          "id": "prop-019",
+          "name": "Prop 19",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-020": {
+          "id": "prop-020",
+          "name": "Prop 20",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-021": {
+          "id": "prop-021",
+          "name": "Prop 21",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-022": {
+          "id": "prop-022",
+          "name": "Prop 22",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-023": {
+          "id": "prop-023",
+          "name": "Prop 23",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-024": {
+          "id": "prop-024",
+          "name": "Prop 24",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-025": {
+          "id": "prop-025",
+          "name": "Prop 25",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-026": {
+          "id": "prop-026",
+          "name": "Prop 26",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-027": {
+          "id": "prop-027",
+          "name": "Prop 27",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-028": {
+          "id": "prop-028",
+          "name": "Prop 28",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-029": {
+          "id": "prop-029",
+          "name": "Prop 29",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-030": {
+          "id": "prop-030",
+          "name": "Prop 30",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-031": {
+          "id": "prop-031",
+          "name": "Prop 31",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-032": {
+          "id": "prop-032",
+          "name": "Prop 32",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-033": {
+          "id": "prop-033",
+          "name": "Prop 33",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-034": {
+          "id": "prop-034",
+          "name": "Prop 34",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-035": {
+          "id": "prop-035",
+          "name": "Prop 35",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-036": {
+          "id": "prop-036",
+          "name": "Prop 36",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-037": {
+          "id": "prop-037",
+          "name": "Prop 37",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-038": {
+          "id": "prop-038",
+          "name": "Prop 38",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-039": {
+          "id": "prop-039",
+          "name": "Prop 39",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-040": {
+          "id": "prop-040",
+          "name": "Prop 40",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-041": {
+          "id": "prop-041",
+          "name": "Prop 41",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-042": {
+          "id": "prop-042",
+          "name": "Prop 42",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-043": {
+          "id": "prop-043",
+          "name": "Prop 43",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-044": {
+          "id": "prop-044",
+          "name": "Prop 44",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-045": {
+          "id": "prop-045",
+          "name": "Prop 45",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-046": {
+          "id": "prop-046",
+          "name": "Prop 46",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-047": {
+          "id": "prop-047",
+          "name": "Prop 47",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-048": {
+          "id": "prop-048",
+          "name": "Prop 48",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-049": {
+          "id": "prop-049",
+          "name": "Prop 49",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-050": {
+          "id": "prop-050",
+          "name": "Prop 50",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-051": {
+          "id": "prop-051",
+          "name": "Prop 51",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-052": {
+          "id": "prop-052",
+          "name": "Prop 52",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-053": {
+          "id": "prop-053",
+          "name": "Prop 53",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-054": {
+          "id": "prop-054",
+          "name": "Prop 54",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-055": {
+          "id": "prop-055",
+          "name": "Prop 55",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-056": {
+          "id": "prop-056",
+          "name": "Prop 56",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-057": {
+          "id": "prop-057",
+          "name": "Prop 57",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-058": {
+          "id": "prop-058",
+          "name": "Prop 58",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-059": {
+          "id": "prop-059",
+          "name": "Prop 59",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-060": {
+          "id": "prop-060",
+          "name": "Prop 60",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-061": {
+          "id": "prop-061",
+          "name": "Prop 61",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-062": {
+          "id": "prop-062",
+          "name": "Prop 62",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-063": {
+          "id": "prop-063",
+          "name": "Prop 63",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-064": {
+          "id": "prop-064",
+          "name": "Prop 64",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-065": {
+          "id": "prop-065",
+          "name": "Prop 65",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-066": {
+          "id": "prop-066",
+          "name": "Prop 66",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-067": {
+          "id": "prop-067",
+          "name": "Prop 67",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-068": {
+          "id": "prop-068",
+          "name": "Prop 68",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-069": {
+          "id": "prop-069",
+          "name": "Prop 69",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-070": {
+          "id": "prop-070",
+          "name": "Prop 70",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-071": {
+          "id": "prop-071",
+          "name": "Prop 71",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-072": {
+          "id": "prop-072",
+          "name": "Prop 72",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-073": {
+          "id": "prop-073",
+          "name": "Prop 73",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-074": {
+          "id": "prop-074",
+          "name": "Prop 74",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-075": {
+          "id": "prop-075",
+          "name": "Prop 75",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-076": {
+          "id": "prop-076",
+          "name": "Prop 76",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-077": {
+          "id": "prop-077",
+          "name": "Prop 77",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-078": {
+          "id": "prop-078",
+          "name": "Prop 78",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-079": {
+          "id": "prop-079",
+          "name": "Prop 79",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-080": {
+          "id": "prop-080",
+          "name": "Prop 80",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-081": {
+          "id": "prop-081",
+          "name": "Prop 81",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-082": {
+          "id": "prop-082",
+          "name": "Prop 82",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-083": {
+          "id": "prop-083",
+          "name": "Prop 83",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-084": {
+          "id": "prop-084",
+          "name": "Prop 84",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-085": {
+          "id": "prop-085",
+          "name": "Prop 85",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-086": {
+          "id": "prop-086",
+          "name": "Prop 86",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-087": {
+          "id": "prop-087",
+          "name": "Prop 87",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-088": {
+          "id": "prop-088",
+          "name": "Prop 88",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-089": {
+          "id": "prop-089",
+          "name": "Prop 89",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-090": {
+          "id": "prop-090",
+          "name": "Prop 90",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-091": {
+          "id": "prop-091",
+          "name": "Prop 91",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-092": {
+          "id": "prop-092",
+          "name": "Prop 92",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-093": {
+          "id": "prop-093",
+          "name": "Prop 93",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-094": {
+          "id": "prop-094",
+          "name": "Prop 94",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-095": {
+          "id": "prop-095",
+          "name": "Prop 95",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-096": {
+          "id": "prop-096",
+          "name": "Prop 96",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-097": {
+          "id": "prop-097",
+          "name": "Prop 97",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-098": {
+          "id": "prop-098",
+          "name": "Prop 98",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-099": {
+          "id": "prop-099",
+          "name": "Prop 99",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-100": {
+          "id": "prop-100",
+          "name": "Prop 100",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-101": {
+          "id": "prop-101",
+          "name": "Prop 101",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-102": {
+          "id": "prop-102",
+          "name": "Prop 102",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-103": {
+          "id": "prop-103",
+          "name": "Prop 103",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-104": {
+          "id": "prop-104",
+          "name": "Prop 104",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-105": {
+          "id": "prop-105",
+          "name": "Prop 105",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-106": {
+          "id": "prop-106",
+          "name": "Prop 106",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-107": {
+          "id": "prop-107",
+          "name": "Prop 107",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-108": {
+          "id": "prop-108",
+          "name": "Prop 108",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-109": {
+          "id": "prop-109",
+          "name": "Prop 109",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-110": {
+          "id": "prop-110",
+          "name": "Prop 110",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-111": {
+          "id": "prop-111",
+          "name": "Prop 111",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-112": {
+          "id": "prop-112",
+          "name": "Prop 112",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-113": {
+          "id": "prop-113",
+          "name": "Prop 113",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-114": {
+          "id": "prop-114",
+          "name": "Prop 114",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-115": {
+          "id": "prop-115",
+          "name": "Prop 115",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-116": {
+          "id": "prop-116",
+          "name": "Prop 116",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-117": {
+          "id": "prop-117",
+          "name": "Prop 117",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-118": {
+          "id": "prop-118",
+          "name": "Prop 118",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-119": {
+          "id": "prop-119",
+          "name": "Prop 119",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-120": {
+          "id": "prop-120",
+          "name": "Prop 120",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-121": {
+          "id": "prop-121",
+          "name": "Prop 121",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-122": {
+          "id": "prop-122",
+          "name": "Prop 122",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-123": {
+          "id": "prop-123",
+          "name": "Prop 123",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-124": {
+          "id": "prop-124",
+          "name": "Prop 124",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-125": {
+          "id": "prop-125",
+          "name": "Prop 125",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-126": {
+          "id": "prop-126",
+          "name": "Prop 126",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-127": {
+          "id": "prop-127",
+          "name": "Prop 127",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-128": {
+          "id": "prop-128",
+          "name": "Prop 128",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-129": {
+          "id": "prop-129",
+          "name": "Prop 129",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-130": {
+          "id": "prop-130",
+          "name": "Prop 130",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-131": {
+          "id": "prop-131",
+          "name": "Prop 131",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-132": {
+          "id": "prop-132",
+          "name": "Prop 132",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-133": {
+          "id": "prop-133",
+          "name": "Prop 133",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-134": {
+          "id": "prop-134",
+          "name": "Prop 134",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-135": {
+          "id": "prop-135",
+          "name": "Prop 135",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-136": {
+          "id": "prop-136",
+          "name": "Prop 136",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-137": {
+          "id": "prop-137",
+          "name": "Prop 137",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-138": {
+          "id": "prop-138",
+          "name": "Prop 138",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-139": {
+          "id": "prop-139",
+          "name": "Prop 139",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-140": {
+          "id": "prop-140",
+          "name": "Prop 140",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-141": {
+          "id": "prop-141",
+          "name": "Prop 141",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-142": {
+          "id": "prop-142",
+          "name": "Prop 142",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-143": {
+          "id": "prop-143",
+          "name": "Prop 143",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-144": {
+          "id": "prop-144",
+          "name": "Prop 144",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-145": {
+          "id": "prop-145",
+          "name": "Prop 145",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-146": {
+          "id": "prop-146",
+          "name": "Prop 146",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-147": {
+          "id": "prop-147",
+          "name": "Prop 147",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-148": {
+          "id": "prop-148",
+          "name": "Prop 148",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-149": {
+          "id": "prop-149",
+          "name": "Prop 149",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-150": {
+          "id": "prop-150",
+          "name": "Prop 150",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-151": {
+          "id": "prop-151",
+          "name": "Prop 151",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-152": {
+          "id": "prop-152",
+          "name": "Prop 152",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-153": {
+          "id": "prop-153",
+          "name": "Prop 153",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-154": {
+          "id": "prop-154",
+          "name": "Prop 154",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-155": {
+          "id": "prop-155",
+          "name": "Prop 155",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-156": {
+          "id": "prop-156",
+          "name": "Prop 156",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-157": {
+          "id": "prop-157",
+          "name": "Prop 157",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-158": {
+          "id": "prop-158",
+          "name": "Prop 158",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-159": {
+          "id": "prop-159",
+          "name": "Prop 159",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-160": {
+          "id": "prop-160",
+          "name": "Prop 160",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-161": {
+          "id": "prop-161",
+          "name": "Prop 161",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-162": {
+          "id": "prop-162",
+          "name": "Prop 162",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-163": {
+          "id": "prop-163",
+          "name": "Prop 163",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-164": {
+          "id": "prop-164",
+          "name": "Prop 164",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-165": {
+          "id": "prop-165",
+          "name": "Prop 165",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-166": {
+          "id": "prop-166",
+          "name": "Prop 166",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-167": {
+          "id": "prop-167",
+          "name": "Prop 167",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-168": {
+          "id": "prop-168",
+          "name": "Prop 168",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-169": {
+          "id": "prop-169",
+          "name": "Prop 169",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-170": {
+          "id": "prop-170",
+          "name": "Prop 170",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-171": {
+          "id": "prop-171",
+          "name": "Prop 171",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-172": {
+          "id": "prop-172",
+          "name": "Prop 172",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-173": {
+          "id": "prop-173",
+          "name": "Prop 173",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-174": {
+          "id": "prop-174",
+          "name": "Prop 174",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-175": {
+          "id": "prop-175",
+          "name": "Prop 175",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-176": {
+          "id": "prop-176",
+          "name": "Prop 176",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-177": {
+          "id": "prop-177",
+          "name": "Prop 177",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-178": {
+          "id": "prop-178",
+          "name": "Prop 178",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-179": {
+          "id": "prop-179",
+          "name": "Prop 179",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-180": {
+          "id": "prop-180",
+          "name": "Prop 180",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-181": {
+          "id": "prop-181",
+          "name": "Prop 181",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-182": {
+          "id": "prop-182",
+          "name": "Prop 182",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-183": {
+          "id": "prop-183",
+          "name": "Prop 183",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-184": {
+          "id": "prop-184",
+          "name": "Prop 184",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-185": {
+          "id": "prop-185",
+          "name": "Prop 185",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-186": {
+          "id": "prop-186",
+          "name": "Prop 186",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-187": {
+          "id": "prop-187",
+          "name": "Prop 187",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-188": {
+          "id": "prop-188",
+          "name": "Prop 188",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-189": {
+          "id": "prop-189",
+          "name": "Prop 189",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-190": {
+          "id": "prop-190",
+          "name": "Prop 190",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-191": {
+          "id": "prop-191",
+          "name": "Prop 191",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-192": {
+          "id": "prop-192",
+          "name": "Prop 192",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-193": {
+          "id": "prop-193",
+          "name": "Prop 193",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-194": {
+          "id": "prop-194",
+          "name": "Prop 194",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-195": {
+          "id": "prop-195",
+          "name": "Prop 195",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-196": {
+          "id": "prop-196",
+          "name": "Prop 196",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-197": {
+          "id": "prop-197",
+          "name": "Prop 197",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-198": {
+          "id": "prop-198",
+          "name": "Prop 198",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-199": {
+          "id": "prop-199",
+          "name": "Prop 199",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-200": {
+          "id": "prop-200",
+          "name": "Prop 200",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-201": {
+          "id": "prop-201",
+          "name": "Prop 201",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-202": {
+          "id": "prop-202",
+          "name": "Prop 202",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-203": {
+          "id": "prop-203",
+          "name": "Prop 203",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-204": {
+          "id": "prop-204",
+          "name": "Prop 204",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-205": {
+          "id": "prop-205",
+          "name": "Prop 205",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-206": {
+          "id": "prop-206",
+          "name": "Prop 206",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-207": {
+          "id": "prop-207",
+          "name": "Prop 207",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-208": {
+          "id": "prop-208",
+          "name": "Prop 208",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-209": {
+          "id": "prop-209",
+          "name": "Prop 209",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-210": {
+          "id": "prop-210",
+          "name": "Prop 210",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-211": {
+          "id": "prop-211",
+          "name": "Prop 211",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-212": {
+          "id": "prop-212",
+          "name": "Prop 212",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-213": {
+          "id": "prop-213",
+          "name": "Prop 213",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-214": {
+          "id": "prop-214",
+          "name": "Prop 214",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-215": {
+          "id": "prop-215",
+          "name": "Prop 215",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-216": {
+          "id": "prop-216",
+          "name": "Prop 216",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-217": {
+          "id": "prop-217",
+          "name": "Prop 217",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-218": {
+          "id": "prop-218",
+          "name": "Prop 218",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-219": {
+          "id": "prop-219",
+          "name": "Prop 219",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-220": {
+          "id": "prop-220",
+          "name": "Prop 220",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-221": {
+          "id": "prop-221",
+          "name": "Prop 221",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-222": {
+          "id": "prop-222",
+          "name": "Prop 222",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-223": {
+          "id": "prop-223",
+          "name": "Prop 223",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-224": {
+          "id": "prop-224",
+          "name": "Prop 224",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-225": {
+          "id": "prop-225",
+          "name": "Prop 225",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-226": {
+          "id": "prop-226",
+          "name": "Prop 226",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-227": {
+          "id": "prop-227",
+          "name": "Prop 227",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-228": {
+          "id": "prop-228",
+          "name": "Prop 228",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-229": {
+          "id": "prop-229",
+          "name": "Prop 229",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-230": {
+          "id": "prop-230",
+          "name": "Prop 230",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-231": {
+          "id": "prop-231",
+          "name": "Prop 231",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-232": {
+          "id": "prop-232",
+          "name": "Prop 232",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-233": {
+          "id": "prop-233",
+          "name": "Prop 233",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-234": {
+          "id": "prop-234",
+          "name": "Prop 234",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-235": {
+          "id": "prop-235",
+          "name": "Prop 235",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-236": {
+          "id": "prop-236",
+          "name": "Prop 236",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-237": {
+          "id": "prop-237",
+          "name": "Prop 237",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-238": {
+          "id": "prop-238",
+          "name": "Prop 238",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-239": {
+          "id": "prop-239",
+          "name": "Prop 239",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-240": {
+          "id": "prop-240",
+          "name": "Prop 240",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-241": {
+          "id": "prop-241",
+          "name": "Prop 241",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-242": {
+          "id": "prop-242",
+          "name": "Prop 242",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-243": {
+          "id": "prop-243",
+          "name": "Prop 243",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-244": {
+          "id": "prop-244",
+          "name": "Prop 244",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-245": {
+          "id": "prop-245",
+          "name": "Prop 245",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-246": {
+          "id": "prop-246",
+          "name": "Prop 246",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-247": {
+          "id": "prop-247",
+          "name": "Prop 247",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-248": {
+          "id": "prop-248",
+          "name": "Prop 248",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-249": {
+          "id": "prop-249",
+          "name": "Prop 249",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-250": {
+          "id": "prop-250",
+          "name": "Prop 250",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-251": {
+          "id": "prop-251",
+          "name": "Prop 251",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-252": {
+          "id": "prop-252",
+          "name": "Prop 252",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-253": {
+          "id": "prop-253",
+          "name": "Prop 253",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-254": {
+          "id": "prop-254",
+          "name": "Prop 254",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-255": {
+          "id": "prop-255",
+          "name": "Prop 255",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-256": {
+          "id": "prop-256",
+          "name": "Prop 256",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-257": {
+          "id": "prop-257",
+          "name": "Prop 257",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-258": {
+          "id": "prop-258",
+          "name": "Prop 258",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-259": {
+          "id": "prop-259",
+          "name": "Prop 259",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-260": {
+          "id": "prop-260",
+          "name": "Prop 260",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-261": {
+          "id": "prop-261",
+          "name": "Prop 261",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-262": {
+          "id": "prop-262",
+          "name": "Prop 262",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-263": {
+          "id": "prop-263",
+          "name": "Prop 263",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-264": {
+          "id": "prop-264",
+          "name": "Prop 264",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-265": {
+          "id": "prop-265",
+          "name": "Prop 265",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-266": {
+          "id": "prop-266",
+          "name": "Prop 266",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-267": {
+          "id": "prop-267",
+          "name": "Prop 267",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-268": {
+          "id": "prop-268",
+          "name": "Prop 268",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-269": {
+          "id": "prop-269",
+          "name": "Prop 269",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-270": {
+          "id": "prop-270",
+          "name": "Prop 270",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-271": {
+          "id": "prop-271",
+          "name": "Prop 271",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-272": {
+          "id": "prop-272",
+          "name": "Prop 272",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-273": {
+          "id": "prop-273",
+          "name": "Prop 273",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-274": {
+          "id": "prop-274",
+          "name": "Prop 274",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-275": {
+          "id": "prop-275",
+          "name": "Prop 275",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-276": {
+          "id": "prop-276",
+          "name": "Prop 276",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-277": {
+          "id": "prop-277",
+          "name": "Prop 277",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-278": {
+          "id": "prop-278",
+          "name": "Prop 278",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-279": {
+          "id": "prop-279",
+          "name": "Prop 279",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-280": {
+          "id": "prop-280",
+          "name": "Prop 280",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-281": {
+          "id": "prop-281",
+          "name": "Prop 281",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-282": {
+          "id": "prop-282",
+          "name": "Prop 282",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-283": {
+          "id": "prop-283",
+          "name": "Prop 283",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-284": {
+          "id": "prop-284",
+          "name": "Prop 284",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-285": {
+          "id": "prop-285",
+          "name": "Prop 285",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-286": {
+          "id": "prop-286",
+          "name": "Prop 286",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-287": {
+          "id": "prop-287",
+          "name": "Prop 287",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-288": {
+          "id": "prop-288",
+          "name": "Prop 288",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-289": {
+          "id": "prop-289",
+          "name": "Prop 289",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-290": {
+          "id": "prop-290",
+          "name": "Prop 290",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-291": {
+          "id": "prop-291",
+          "name": "Prop 291",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-292": {
+          "id": "prop-292",
+          "name": "Prop 292",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-293": {
+          "id": "prop-293",
+          "name": "Prop 293",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        },
+        "prop-294": {
+          "id": "prop-294",
+          "name": "Prop 294",
+          "parent": null,
+          "components": {
+            "model-renderer": {
+              "model": "kit/floor"
+            }
+          }
+        }
+      }
+    }
+  }
+}

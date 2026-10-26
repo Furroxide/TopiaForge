@@ -9651,6 +9651,197 @@
       "status": "Resolved",
       "typeKey": "GameCode|SettingsScreen"
     },
+    "GameCode|UgcCatalogLoreLoader": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": [
+            "UgcRuntimeAssetConfig"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "RequestTimeout",
+          "type": "System.TimeSpan"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "catalogBaseUrl",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "catalogFiles",
+          "type": "System.Collections.Generic.Dictionary<System.String, UgcCatalogLoreLoader+CachedJson>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loreCache",
+          "type": "System.Collections.Generic.Dictionary<System.ValueTuple<System.String, System.String>, Newtonsoft.Json.Linq.JToken>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "prefabSceneMap",
+          "type": "UgcPrefabSceneMap"
+        }
+      ],
+      "fullName": "UgcCatalogLoreLoader",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "AddMissingLoreAsync",
+          "parameters": [
+            "UgcExportProject",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Exception>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "AddMissingLoreOrThrowAsync",
+          "parameters": [
+            "UgcExportProject",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CollectEntityLoreUris",
+          "parameters": [
+            "UgcExportProject",
+            "UgcExportEntity",
+            "UgcPrefabSceneMap",
+            "System.Collections.Generic.List<System.String>"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "CollectReferencedLoreUris",
+          "parameters": [
+            "UgcExportProject",
+            "UgcPrefabSceneMap"
+          ],
+          "returnType": "System.Collections.Generic.IReadOnlyList<System.String>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "FetchLoreAsync",
+          "parameters": [
+            "System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
+            "System.String",
+            "System.String",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<Newtonsoft.Json.Linq.JToken>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "GetRevalidatedJsonAsync",
+          "parameters": [
+            "System.Uri",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.ValueTuple<Newtonsoft.Json.Linq.JToken, System.Boolean>>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "LoadManifestAsync",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "MergeManifest",
+          "parameters": [
+            "System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
+            "System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "NonBlank",
+          "parameters": [
+            "System.Collections.Generic.IEnumerable<System.String>"
+          ],
+          "returnType": "System.Collections.Generic.IEnumerable<System.String>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ReadJsonAsync",
+          "parameters": [
+            "System.Net.Http.HttpResponseMessage",
+            "System.Uri"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<Newtonsoft.Json.Linq.JToken>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ResolveAssetUri",
+          "parameters": [
+            "System.Uri",
+            "System.Collections.Generic.IReadOnlyDictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
+            "System.String",
+            "System.String"
+          ],
+          "returnType": "System.Uri"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ResolveBaseUri",
+          "parameters": [],
+          "returnType": "System.Uri"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcCatalogLoreLoader",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcCatalogLoreLoader"
+    },
     "GameCode|UgcEnvironmentPrefabMap": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -9948,6 +10139,66 @@
       "simpleName": "UgcExportProject",
       "status": "Resolved",
       "typeKey": "GameCode|UgcExportProject"
+    },
+    "GameCode|UgcExportScene": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "created",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "entities",
+          "type": "System.Collections.Generic.Dictionary<System.String, UgcExportEntity>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "environment",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "id",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "modified",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "name",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcExportScene",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcExportScene",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcExportScene"
     },
     "GameCode|UgcImportFileIndex": {
       "assembly": "GameCode",
@@ -10865,6 +11116,96 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcImportPlayBootstrap"
     },
+    "GameCode|UgcImportedEntity": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entityId",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "sourceAssetId",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "unresolvedAsset",
+          "type": "System.Boolean"
+        }
+      ],
+      "fullName": "UgcImportedEntity",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Initialize",
+          "parameters": [
+            "System.String",
+            "System.String",
+            "System.Boolean"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "EntityId",
+          "setterIsPublic": false,
+          "type": "System.String"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "SourceAssetId",
+          "setterIsPublic": false,
+          "type": "System.String"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "UnresolvedAsset",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
+        }
+      ],
+      "simpleName": "UgcImportedEntity",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcImportedEntity"
+    },
     "GameCode|UgcPlayLaunchRequest": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -11263,6 +11604,344 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcPrefabAssetMap+Entry"
     },
+    "GameCode|UgcPublishedProjectLoader": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DefaultPublicBaseUri",
+          "type": "System.Uri"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "DefaultPublicBaseUrl",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DownloadTimeout",
+          "type": "System.TimeSpan"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "LocalStackWebsiteHost",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "MapPathSegment",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ProjectFileName",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "RobotopiaUgcHost",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "RobotopiaUgcUrlExample",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "RobotopiaUrlPrefix",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "SiteEnvQueryParameter",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "SiteHost",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "StagingSiteHost",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcPublishedProjectLoader",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "BuildDefaultProjectUrl",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "BuildProjectUrl",
+          "parameters": [
+            "System.String",
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "BuildPublicBaseUrl",
+          "parameters": [
+            "System.Uri",
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "BuildRobotopiaUrl",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DecodeQueryValue",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ExtractEnvQueryValue",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ExtractRobotopiaUgcId",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "GetQueryParameter",
+          "parameters": [
+            "System.Uri",
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsLocalTestingPublicUri",
+          "parameters": [
+            "System.Uri"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsLocalTestingPublicUrl",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsRobotopiaUgcPath",
+          "parameters": [
+            "System.String[]"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsSiteHost",
+          "parameters": [
+            "System.Uri"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsTrustedPublicUgcHost",
+          "parameters": [
+            "System.Uri"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsUgcId",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "LoadProjectAsync",
+          "parameters": [
+            "System.String",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<UgcPublishedProjectLoadResult>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ResolveDefaultPublicBaseUrl",
+          "parameters": [],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ResolvePublicBaseUrl",
+          "parameters": [
+            "System.String",
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "Succeed",
+          "parameters": [
+            "System.String",
+            "System.String",
+            "System.String&",
+            "System.String&",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "TryExtractMapPageUgcId",
+          "parameters": [
+            "System.Uri",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "TryExtractRobotopiaUgcId",
+          "parameters": [
+            "System.String",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "TryExtractUgcIdFromPath",
+          "parameters": [
+            "System.Uri",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "TryResolveEnvPublicBaseUrl",
+          "parameters": [
+            "System.String",
+            "System.String&",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "TryResolveProjectUrl",
+          "parameters": [
+            "System.String",
+            "System.String&",
+            "System.String&",
+            "System.String&",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcPublishedProjectLoader",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcPublishedProjectLoader"
+    },
     "GameCode|UgcRuntimeAssetConfig": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -11482,6 +12161,79 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcRuntimeAssetConfig"
     },
+    "GameCode|UgcRuntimeSpawnPointFactory": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "PRIVATE_INSTANCE",
+          "type": "System.Reflection.BindingFlags"
+        }
+      ],
+      "fullName": "UgcRuntimeSpawnPointFactory",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "CreateOrUpdateSpawnPoint",
+          "parameters": [
+            "UnityEngine.Vector3",
+            "UnityEngine.Quaternion",
+            "UnityEngine.GameObject",
+            "UnityEngine.Transform"
+          ],
+          "returnType": "Checkpoint"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CreateSpawnPoint",
+          "parameters": [
+            "UnityEngine.SceneManagement.Scene",
+            "UnityEngine.GameObject",
+            "UnityEngine.Transform"
+          ],
+          "returnType": "Checkpoint"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "FindExistingSpawnPoint",
+          "parameters": [
+            "UnityEngine.SceneManagement.Scene"
+          ],
+          "returnType": "Checkpoint"
+        },
+        {
+          "genericArity": 2,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "SetPrivateField",
+          "parameters": [
+            "TTarget",
+            "System.String",
+            "TValue"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcRuntimeSpawnPointFactory",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcRuntimeSpawnPointFactory"
+    },
     "GameCode|UgcSceneRoot": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -11567,6 +12319,33 @@
       "simpleName": "UgcSceneRoot",
       "status": "Resolved",
       "typeKey": "GameCode|UgcSceneRoot"
+    },
+    "GameCode|UgcSceneSpawnLocation": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [],
+      "fullName": "UgcSceneSpawnLocation",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcSceneSpawnLocation",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcSceneSpawnLocation"
     },
     "GameCode|WalkSession": {
       "assembly": "GameCode",

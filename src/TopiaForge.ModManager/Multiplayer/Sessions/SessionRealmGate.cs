@@ -27,7 +27,8 @@ namespace TopiaForge.ModManager.Sessions
         StandaloneRefused = 6,
 
         /// <summary>Already in the realm asked for, as when hosting again.</summary>
-        AlreadyThere = 7
+        AlreadyThere = 7,
+        WorldRefused = 8
     }
 
     /// <summary>
@@ -62,6 +63,8 @@ namespace TopiaForge.ModManager.Sessions
         {
             switch (transition.Verdict)
             {
+                case NetRealmTransitionVerdict.WorldRefused:
+                    return RealmDecision.WorldRefused;
                 case NetRealmTransitionVerdict.Allowed:
                     return transition.Effect == NetRealmTransitionEffect.PromoteInPlace ? RealmDecision.PromoteInPlace : RealmDecision.StartAsHost;
                 case NetRealmTransitionVerdict.Busy:

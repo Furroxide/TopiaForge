@@ -9,6 +9,7 @@ extension _TopiaForgeCheckCommands on _TopiaForgeCli {
 
   Future<int> _check(List<String> args) async {
     return switch (args.firstOrNull) {
+      'world' => _checkWorld(args.skip(1).toList()),
       'project' => _checkProject(
         _option(args, '--project') ?? args.skip(1).firstOrNull,
       ),

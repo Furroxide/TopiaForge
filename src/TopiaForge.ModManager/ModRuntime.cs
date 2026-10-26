@@ -126,7 +126,8 @@ namespace TopiaForge.ModManager
                     this.coreGameplayServices as IMultiplayerPlatform),
                 multiplayerLog)
             {
-                SessionPhaseSource = CurrentSessionPhase
+                SessionPhaseSource = CurrentSessionPhase,
+                CanHostWorld = () => activeSessions?.CanHostCurrentWorld ?? true
             };
             networkWorld = InstallNetworkWorld();
             presence = InstallPresence();

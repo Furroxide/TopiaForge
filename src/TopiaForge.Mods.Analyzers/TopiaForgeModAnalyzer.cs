@@ -129,7 +129,8 @@ namespace TopiaForge.Mods.Analyzers
                 LoaderOwnedUiReference,
                 BlockingWaitOnSdkTask,
                 InputEdgeInFixedUpdate,
-                SdkVersionRequired);
+                SdkVersionRequired,
+                InvalidMapWorld);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -137,6 +138,7 @@ namespace TopiaForge.Mods.Analyzers
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.EnableConcurrentExecution();
             context.RegisterCompilationStartAction(StartCompilation);
+            context.RegisterCompilationAction(AnalyzeMapWorlds);
         }
 
         private static void StartCompilation(CompilationStartAnalysisContext context)

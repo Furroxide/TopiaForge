@@ -1,5 +1,7 @@
 library;
 
+export 'src/map_world_document.dart';
+
 export 'src/dependency_planner.dart';
 export 'src/developer_project_resolver.dart';
 export 'src/models.dart';

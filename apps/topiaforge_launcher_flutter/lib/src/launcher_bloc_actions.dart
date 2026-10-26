@@ -1,6 +1,26 @@
 part of 'launcher_bloc.dart';
 
 extension LauncherBlocActions on LauncherBloc {
+  Future<void> _onDownloadedMapsClear(Emitter<LauncherState> emit) async {
+    final install = state.gameInstall;
+    final repository = _repository;
+    if (install == null || repository is! DownloadedMapRepository) {
+      emit(
+        state.copyWith(
+          status: 'Select a game installation with map cache support first.',
+        ),
+      );
+      return;
+    }
+    await _guard(
+      emit,
+      'Downloaded maps cleared. Published maps download again when you next play.',
+      () async {
+        await repository.clearDownloadedMaps(install);
+      },
+    );
+  }
+
   Future<void> _onPackageSourceAdded(
     PackageSourceAdded event,
     Emitter<LauncherState> emit,

@@ -15,6 +15,7 @@ export default defineConfig({
     '/diagnostics/TF1008': '/reference/diagnostics/#tf1008',
     '/diagnostics/TF1009': '/reference/diagnostics/#tf1009',
     '/diagnostics/TF1010': '/reference/diagnostics/#tf1010',
+    '/diagnostics/TF1011': '/reference/diagnostics/#tf1011',
     '/diagnostics/TFPKG180': '/reference/diagnostics/#tfpkg180',
     '/diagnostics/TF1101': '/reference/diagnostics/#tf1101',
     '/diagnostics/TF1102': '/reference/diagnostics/#tf1102',

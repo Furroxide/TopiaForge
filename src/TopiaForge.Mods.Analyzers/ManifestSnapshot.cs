@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace TopiaForge.Mods.Analyzers
 {
-    internal sealed class ManifestSnapshot
+    internal sealed partial class ManifestSnapshot
     {
         private const int MaximumManifestCharacters = 1024 * 1024;
         private readonly ImmutableHashSet<string> capabilities;
@@ -87,7 +87,7 @@ namespace TopiaForge.Mods.Analyzers
         private static ManifestSnapshot Empty(bool exists) =>
             new ManifestSnapshot(string.Empty, Array.Empty<string>(), Array.Empty<string>(), exists: exists);
 
-        private sealed class ManifestParser
+        private sealed partial class ManifestParser
         {
             private const int MaximumDepth = 64;
             private const int MaximumTrackedEntries = 4096;
@@ -135,7 +135,11 @@ namespace TopiaForge.Mods.Analyzers
                         else if (string.Equals(propertyName, "dependencies", StringComparison.Ordinal)
                             || string.Equals(propertyName, "optionalDependencies", StringComparison.Ordinal))
                         {
-                            ReadDependencyMap();
+                            ReadDependencyMap(propertyName == "dependencies");
+                        }
+                        else if (propertyName == "contributions")
+                        {
+                            ReadContributions();
                         }
                         else
                         {
@@ -158,7 +162,14 @@ namespace TopiaForge.Mods.Analyzers
                 }
 
                 return new ManifestSnapshot(packageId, capabilities, dependencies,
-                    loaderRange, sdkRange, loaderSpan, sdkSpan, hasDuplicateKeys: hasDuplicateKeys);
+                    loaderRange, sdkRange, loaderSpan, sdkSpan, hasDuplicateKeys: hasDuplicateKeys)
+                {
+                    MapWorlds = mapWorlds.ToImmutableArray(),
+                    RequiredWorlds = requiredWorlds,
+                    DependencyInsertion = dependencyInsertion,
+                    DependencyCount = dependencyCount,
+                    RootInsertion = json.LastIndexOf('}')
+                };
             }
 
             // A range that is not a string is invalid, which pack and load report; TF1010 then sees no floor.
@@ -228,23 +239,28 @@ namespace TopiaForge.Mods.Analyzers
                 }
             }
 
-            private void ReadDependencyMap()
+            private void ReadDependencyMap(bool required)
             {
                 SkipWhitespace();
                 if (!TryConsume('{'))
                 {
+                    if (required) hasDuplicateKeys = true; // Do not offer an insertion beside a malformed existing property.
                     SkipValue(1);
                     return;
                 }
 
                 if (TryConsume('}'))
                 {
+                    if (required) dependencyInsertion = position - 1;
                     return;
                 }
 
+                var seenDependencies = new HashSet<string>(StringComparer.Ordinal);
                 while (true)
                 {
                     var dependencyId = ReadString();
+                    if (!seenDependencies.Add(dependencyId)) hasDuplicateKeys = true;
+                    if (required) { dependencyCount++; if (dependencyId == WorldsDependency) requiredWorlds = true; }
                     if (dependencies.Count < MaximumTrackedEntries)
                     {
                         dependencies.Add(dependencyId);
@@ -254,6 +270,7 @@ namespace TopiaForge.Mods.Analyzers
                     SkipValue(2);
                     if (TryConsume('}'))
                     {
+                        if (required) dependencyInsertion = position - 1;
                         return;
                     }
 

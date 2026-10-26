@@ -43,6 +43,10 @@ extension _NewCommands on _TopiaForgeCli {
     final name = _option(args, '--name') ?? id;
     final parent = _option(args, '--dir') ?? Directory.current.path;
     final options = _parseModScaffoldOptions(args);
+    final map = _option(args, '--map');
+    if (map != null && options.template != 'gamemode') {
+      throw UsageError('--map requires --template gamemode.');
+    }
     final workspace = await developerRepository.createModProject(
       parentDirectory: parent,
       id: id,
@@ -50,6 +54,17 @@ extension _NewCommands on _TopiaForgeCli {
       options: options,
     );
     stdout.writeln('Created ${workspace.projectRoot}');
+    if (map != null) {
+      await _worldAddMap([
+        'map',
+        map,
+        '--project',
+        workspace.projectRoot,
+        for (final flag in ['--scene', '--name', '--spawn'])
+          if (_option(args, flag) case final value?) ...[flag, value],
+        if (args.contains('--offline')) '--offline',
+      ]);
+    }
     stdout.writeln(
       'Next: edit topiaforge.mod.json (or use `topiaforge mod set|add|remove`), then validate with '
       '`topiaforge check package ${workspace.projectRoot}`.',

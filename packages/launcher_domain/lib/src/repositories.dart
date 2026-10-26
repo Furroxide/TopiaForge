@@ -4,6 +4,11 @@ import 'join_host_packages.dart';
 import 'models.dart';
 import 'multiplayer.dart';
 
+/// Optional local capability; clearing maps requires an idle game installation.
+abstract interface class DownloadedMapRepository {
+  Future<int> clearDownloadedMaps(GameInstall install);
+}
+
 abstract interface class LauncherRepository {
   String get dataRoot;
 

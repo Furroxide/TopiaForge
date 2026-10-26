@@ -264,6 +264,10 @@ class DataFolderOpened extends LauncherEvent {
   const DataFolderOpened();
 }
 
+class DownloadedMapsClearRequested extends LauncherEvent {
+  const DownloadedMapsClearRequested();
+}
+
 /// Toggles opt-in developer mode (shows/hides the Developer tab). Off by default for consumers.
 class DeveloperModeToggled extends LauncherEvent {
   const DeveloperModeToggled(this.enabled);
