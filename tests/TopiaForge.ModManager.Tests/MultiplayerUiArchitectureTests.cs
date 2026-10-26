@@ -260,14 +260,18 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>
         /// Nothing the interface throws may reach Unity's frame, where the game's crash reporter takes it: the overlay runs
         /// its multiplayer stages through the frame (<see cref="MultiplayerOverlayFrame"/>), the tab builds and hides through
-        /// the guard, and the game's later answers to a launch or a return to the menu reach the screens through it too.
+        /// the guard, and the game's later answers to a launch or a return to the menu reach the screens through it too. Besides
+        /// those stages the frame only counts the status line's feedback down (ManagerStatus, arithmetic that cannot throw) and
+        /// puts the normal status back on the overlay's own label when it expires.
         /// </summary>
         private static void TheOverlayFrameRunsThroughTheGuard(string root)
         {
             var overlay = File.ReadAllText(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "ManagerOverlay.cs"));
             var tick = Regex.Match(overlay, @"public void Tick\(\)\s*\{(?<body>[^}]*)\}", RegexOptions.CultureInvariant);
-            That(tick.Success && Regex.Replace(Regex.Replace(tick.Groups["body"].Value, @"//[^\n]*", string.Empty), @"\s+", string.Empty) == "multiplayerFrame.Tick(Time.unscaledDeltaTime);",
-                "the overlay's frame runs the multiplayer stages only through the guarded frame (" + tick.Value.Trim() + ")");
+            That(tick.Success && Regex.Replace(Regex.Replace(tick.Groups["body"].Value, @"//[^\n]*", string.Empty), @"\s+", string.Empty)
+                    == "multiplayerFrame.Tick(Time.unscaledDeltaTime);if(status.Tick(Time.unscaledDeltaTime))statusLabel?.SetText(status.Text);",
+                "the overlay's frame runs the multiplayer stages only through the guarded frame, and otherwise only counts its status down ("
+                + tick.Value.Trim() + ")");
             That(Regex.IsMatch(overlay, @"multiplayerGuard\.Run\(MultiplayerOverlayFrame\.StartStage, multiplayer\.Start\)", RegexOptions.CultureInvariant) &&
                  Regex.IsMatch(overlay, @"multiplayerGuard\.Run\(MultiplayerOverlayFrame\.TeardownStage,", RegexOptions.CultureInvariant),
                 "the overlay starts and closes the multiplayer interface through the guard");

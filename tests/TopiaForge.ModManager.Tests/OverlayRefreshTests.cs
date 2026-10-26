@@ -14,7 +14,7 @@ namespace TopiaForge.ModManager.Tests
         {
             StatusExpiresAndNewFeedbackGetsItsOwnTime();
             TargetControlsAreMeasuredAsAColumn();
-            GalleryWindowsSurviveSceneLoads();
+            GallerySurfacesSurviveSceneLoads();
             ViewportResizeRebindsTheProductionWatcher();
             Console.WriteLine("OverlayRefreshTests passed: status lifetime, target layout, gallery lifetime, viewport resize.");
         }
@@ -33,9 +33,18 @@ namespace TopiaForge.ModManager.Tests
             Check(!status.Tick(1) && status.Text == "New result", "a new result gets its own lifetime");
             Check(!status.Tick(float.NaN) && !status.Tick(float.PositiveInfinity) && !status.Tick(-1), "invalid elapsed values do not poison the clock");
             Check(status.Tick(7) && status.Text == ManagerStatus.Default, "replacement eventually expires");
+            // The overlay counts the feedback down every frame, shown or not, on unscaled time, which runs while the game is
+            // paused: the whole condition of one of Tick's own statements, which puts the label back when it expires.
             var tick = Method("src/TopiaForge.ModManager/Overlay/ManagerOverlay.cs", "Tick");
-            Check(PluginSourceSyntax.CallsOn(tick, "status", "Tick") && tick.ToString().Contains("Time.unscaledDeltaTime", StringComparison.Ordinal),
-                "status ticks outside tab visibility with unscaled time");
+            var countdown = tick.DescendantNodes().OfType<InvocationExpressionSyntax>().SingleOrDefault(call =>
+                call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "Tick"
+                && member.Expression is IdentifierNameSyntax { Identifier.ValueText: "status" });
+            Check(countdown != null && countdown.ArgumentList.Arguments.Count == 1
+                && countdown.ArgumentList.Arguments[0].Expression.ToString() == "Time.unscaledDeltaTime",
+                "status counts down on unscaled time, which runs while the game is paused");
+            Check(countdown!.Parent is IfStatementSyntax expiry && expiry.Condition == countdown && expiry.Parent == tick.Body
+                && PluginSourceSyntax.CallsOn(expiry.Statement, "statusLabel", "SetText"),
+                "status counts down every frame, whether the overlay shows or not, and its label follows when it expires");
         }
 
         private static void TargetControlsAreMeasuredAsAColumn()
@@ -47,13 +56,38 @@ namespace TopiaForge.ModManager.Tests
             Check(PluginSourceSyntax.CallsOn(build, "card", "Label") && PluginSourceSyntax.CallsOn(build, "card", "Row"), "title and launch controls share that column");
         }
 
-        private static void GalleryWindowsSurviveSceneLoads()
+        // A scene load destroyed the gallery's window while the mod kept it, so every F8 threw ObjectDisposedException. Each
+        // surface the gallery keeps for later lives as long as the mod, as the SDK's own surfaces do: both scheme windows,
+        // the demo and shop windows its pages reopen, and the demo HUD. Only the name tags stay with their scene: every
+        // spawn makes them afresh at points in it, and a tag whose canvas a load destroyed is no longer tracked.
+        private static void GallerySurfacesSurviveSceneLoads()
         {
-            var build = Method("mods/TopiaForge.UiGallery/GalleryWindow.cs", "Build");
-            var window = build.DescendantNodes().OfType<InvocationExpressionSyntax>().Single(call =>
-                call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "Window");
-            Check(window.ArgumentList.Arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "persistent" &&
-                argument.Expression.IsKind(SyntaxKind.TrueLiteralExpression)), "both gallery schemes use persistent windows");
+            var factories = new[] { "Window", "ShopWindow", "FullscreenTool", "HudLayer", "Layer" };
+            var folder = Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.UiGallery");
+            var kept = 0;
+            var sceneBound = 0;
+            foreach (var file in Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal))
+            {
+                var source = Path.GetRelativePath(folder, file).Replace('\\', '/');
+                if (source.StartsWith("bin/", StringComparison.Ordinal) || source.StartsWith("obj/", StringComparison.Ordinal)) continue;
+                foreach (var call in CSharpSyntaxTree.ParseText(File.ReadAllText(file)).GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    if (!(call.Expression is MemberAccessExpressionSyntax member) || !factories.Contains(member.Name.Identifier.ValueText)) continue;
+                    if (call.ArgumentList.Arguments.FirstOrDefault()?.Expression is LiteralExpressionSyntax { Token.ValueText: "gallery-nametags" })
+                    {
+                        sceneBound++;
+                        continue;
+                    }
+
+                    kept++;
+                    Check(call.ArgumentList.Arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "persistent" &&
+                        argument.Expression.IsKind(SyntaxKind.TrueLiteralExpression)),
+                        source + " makes a " + member.Name.Identifier.ValueText + " that a scene load destroys while the gallery keeps it: " + call);
+                }
+            }
+
+            Check(kept == 4 && sceneBound == 1, "the gallery makes its scheme windows, the demo and shop windows, the demo HUD and the name tags, "
+                + "one call each; found " + kept + " kept and " + sceneBound + " scene-bound");
         }
 
         private static void ViewportResizeRebindsTheProductionWatcher()
@@ -63,6 +97,10 @@ namespace TopiaForge.ModManager.Tests
                 call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "Initialize" &&
                 member.Expression.ToString().Contains("TopiaForgeListViewRuntime", StringComparison.Ordinal));
             Check(initialize != null && PluginSourceSyntax.Calls(initialize, "Refresh"), "each list wires viewport changes to its real refresh");
+            Check(initialize!.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax { Identifier.ValueText: "viewportRect" }
+                && list.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(assignment =>
+                    assignment.Left.ToString() == "scrollRect.viewport" && assignment.Right.ToString() == "viewportRect"),
+                "each list watches the viewport its scroll view clips to, whose height layout resolves, not the content it sizes");
 
             // Run the production MonoBehaviour against a minimal dimensions contract, without a game or renderer.
             var sources = new[]
