@@ -1,8 +1,8 @@
 part of '../screens.dart';
 
 /// The consent sheet's red developer-mode section, for the mods only the
-/// host has: what ticking its box allows, in the wording drafted for
-/// approval ([JoinHostServedText]), and the box, which Join waits for. The
+/// host has: what ticking its box allows, in the approved wording
+/// ([JoinHostServedText]), and the box, which Join waits for. The
 /// box starts clear on every consent, and the bloc keeps it
 /// ([JoinFlow.hostServedTicked]).
 class _HostServedSection extends StatelessWidget {

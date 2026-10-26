@@ -383,12 +383,19 @@ void registerJoinHostServedTests() {
         (line) => line.startsWith('## '),
         heading + 1,
       );
-      final draft = lines.sublist(heading + 1, next < 0 ? lines.length : next);
-      expect(draft, contains('**Title:** ${JoinHostServedText.title}'));
-      expect(draft, contains(JoinHostServedText.warning));
-      expect(draft, contains('**Checkbox:** ${JoinHostServedText.checkbox}'));
+      final section = lines.sublist(
+        heading + 1,
+        next < 0 ? lines.length : next,
+      );
       expect(
-        draft,
+        section,
+        contains('Status: Approved · Date: 2026-10-26 · Drafted: 2026-10-25'),
+      );
+      expect(section, contains('**Title:** ${JoinHostServedText.title}'));
+      expect(section, contains(JoinHostServedText.warning));
+      expect(section, contains('**Checkbox:** ${JoinHostServedText.checkbox}'));
+      expect(
+        section,
         contains('**Until it is ticked:** ${JoinHostServedText.untickedHint}'),
       );
     });

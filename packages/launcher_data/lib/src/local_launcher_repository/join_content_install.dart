@@ -471,6 +471,7 @@ final class _JoinInstall {
     }
   }
 
-  Future<void> _log(String message) =>
-      _repository._appendLauncherLogBestEffort(withoutAddresses(message));
+  Future<void> _log(String message) => _repository._appendLauncherLogBestEffort(
+    withoutAddresses(message, maxLength: _maxLauncherLogMessageCharacters),
+  );
 }

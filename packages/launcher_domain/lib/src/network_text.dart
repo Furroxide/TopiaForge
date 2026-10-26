@@ -33,6 +33,12 @@ String _wholeWords(String text, int maxLength) {
   while (end > 0 && !_isDelimiter(text.codeUnitAt(end))) {
     end--;
   }
+  // Brackets delimit host text, but a replacement is one whole marker.
+  // A cut just before its closing bracket must leave it out entirely.
+  final markerStart = end - withheldAddress.length + 1;
+  if (markerStart >= 0 && text.startsWith(withheldAddress, markerStart)) {
+    end = markerStart;
+  }
   return text.substring(0, end);
 }
 
