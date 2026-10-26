@@ -107,10 +107,11 @@ namespace TopiaForge.Multiplayer.Network
                 warnings.Enqueue("Cannot share " + entry.Name + ": " + reason + ". Give its .topiaforgemod file to players who lack it, or reinstall it from its mod source so the launcher keeps a copy.");
         }
 
-        /// <summary>Follows the launcher's data_root.dart; a configured root is inherited by the game process.</summary>
+        /// <summary>Uses the launcher's explicit root, translated by Wine when the launcher runs on Unix.</summary>
         internal static string? LauncherCache() => CacheFor(Environment.GetEnvironmentVariable, Environment.OSVersion.Platform == PlatformID.Win32NT, Environment.CurrentDirectory);
 
-        internal static string? CacheFor(Func<string, string?> environment, bool windows, string currentDirectory)
+        internal static string? CacheFor(Func<string, string?> environment, bool windows, string currentDirectory,
+            Func<string, string?>? winePath = null)
         {
             try
             {
@@ -119,6 +120,13 @@ namespace TopiaForge.Multiplayer.Network
                 var root = !string.IsNullOrEmpty(configured) ? configured
                     : windows && !string.IsNullOrEmpty(roaming) ? Path.Combine(roaming, "TopiaForgeLauncher")
                     : Path.Combine(environment("HOME") ?? environment("USERPROFILE") ?? currentDirectory, ".topiaforge_launcher");
+                if (windows && !string.IsNullOrEmpty(configured) && configured![0] == '/' && !configured.StartsWith("//", StringComparison.Ordinal))
+                {
+                    root = (winePath ?? WineDataRoot.Translate)(configured);
+                    // Never reinterpret an untranslated Unix root under the current Windows drive,
+                    // or quietly switch to the prefix's unrelated roaming folder.
+                    if (!WineDataRoot.IsWindowsAbsolute(root)) return null;
+                }
                 return Path.GetFullPath(Path.Combine(currentDirectory, root!, "package-cache"));
             }
             catch (Exception exception) when (exception is ArgumentException || exception is IOException || exception is NotSupportedException || exception is System.Security.SecurityException)

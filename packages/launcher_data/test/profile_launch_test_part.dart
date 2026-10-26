@@ -115,6 +115,10 @@ void _registerProfileLaunchTests({
         expect(request.arguments, contains('--profile-test'));
         expect(request.environment['TOPIAFORGE_PROFILE_TEST'], 'isolated');
         expect(
+          request.environment['TOPIAFORGE_DATA_ROOT'],
+          dataRoot().absolute.path,
+        );
+        expect(
           request.environment[ProfileLaunchConfigurationV4.environmentVariable],
           launchFilePath,
         );
@@ -271,44 +275,48 @@ void _registerProfileLaunchTests({
       },
     );
 
-    test('profile environment cannot replace the one-shot contract', () async {
-      var processStarted = false;
-      final prepared = await _prepareProfileLaunchRepository(
-        dataRoot: dataRoot(),
-        repositoryRoot: repositoryRoot(),
-        gameRoot: gameRoot(),
-        starter: (_) async {
-          processStarted = true;
-          return 1;
-        },
-      );
+    for (final reservedKey in [
+      ProfileLaunchConfigurationV4.environmentVariable,
+      'TOPIAFORGE_DATA_ROOT',
+      'topiaforge_data_root',
+    ]) {
+      test('profile environment cannot replace $reservedKey', () async {
+        var processStarted = false;
+        final prepared = await _prepareProfileLaunchRepository(
+          dataRoot: dataRoot(),
+          repositoryRoot: repositoryRoot(),
+          gameRoot: gameRoot(),
+          starter: (_) async {
+            processStarted = true;
+            return 1;
+          },
+        );
 
-      final result = await prepared.$1.launch(
-        prepared.$2,
-        LauncherProfile(
-          id: 'reserved-environment',
-          name: 'Reserved environment',
-          launchSettings: LaunchSettings(
-            environment: {
-              ProfileLaunchConfigurationV4.environmentVariable: 'forged.json',
-            },
+        final result = await prepared.$1.launch(
+          prepared.$2,
+          LauncherProfile(
+            id: 'reserved-environment',
+            name: 'Reserved environment',
+            launchSettings: LaunchSettings(
+              environment: {reservedKey: 'forged.json'},
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(result.started, isFalse);
-      expect(result.message, contains('cannot replace required variable'));
-      expect(processStarted, isFalse);
-      final staging = Directory(
-        p.join(gameRoot().path, 'BepInEx', 'TopiaForge', 'staging'),
-      );
-      expect(
-        staging.listSync().where(
-          (entry) => p.basename(entry.path).startsWith('launch-profile-'),
-        ),
-        isEmpty,
-      );
-    });
+        expect(result.started, isFalse);
+        expect(result.message, contains('cannot replace required variable'));
+        expect(processStarted, isFalse);
+        final staging = Directory(
+          p.join(gameRoot().path, 'BepInEx', 'TopiaForge', 'staging'),
+        );
+        expect(
+          staging.listSync().where(
+            (entry) => p.basename(entry.path).startsWith('launch-profile-'),
+          ),
+          isEmpty,
+        );
+      });
+    }
 
     test('a retired world id fails the launch instead of starting the game', () async {
       var processStarted = false;
