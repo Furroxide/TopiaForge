@@ -45,6 +45,7 @@ namespace TopiaForge.ModManager.Tests
             RetrySharesTheLaunchSearch();
             RetryKeepsListeningWhenBrowseCloses();
             LanSearchOwnershipSurvivesStaleStatus();
+            ALanSearchThatCannotStartHoldsNoShare();
             HearingTheHostWhileBusyReleasesTheBrowser();
             ALevelThisGameCannotLoadShowsAsNotLoaded();
             AGuestWaitingAtTheMenuIsToldWhy();

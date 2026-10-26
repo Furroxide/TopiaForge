@@ -2371,13 +2371,18 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     the realm its request and RETRY none, and a live join's records taking its follow's progress; RETRY of a LAN join
     this game no longer hears listening first and joining once the host is heard, or ending as not heard after 15
     seconds, with Cancel, never starting or stopping BROWSE's own search, while a heard LAN session and a direct join
-    join at once; a RETRY that fails at once giving its own words; a level this game cannot load shown with Loading
-    world not done and nothing to cancel, after a follow and at a join's end, until it is closed, the player leaves or
-    the host's next world takes it over; and MULTIPLAYER and SESSION saying why a joined game waits at the menu, from
-    the follow alone, until it follows the host's next world or leaves, a settled frame of it allocating nothing.
-    `MultiplayerUiArchitectureTests` reads the connecting overlay's source as C#: it binds the failure's words on every
-    frame, and offers CANCEL only while Cancel stops something, CLOSE otherwise. `SessionLaunchRecordsTests`: a launched
-    join's records over the real orchestrator and publisher, with its follow under its request.
+    join at once; BROWSE, RETRY and a launched join sharing one browser in either order, each releasing only its own
+    share, a launch keeping it until it settles, the last release stopping only a browser these screens started, and a
+    start that failed holding no share; a host heard while the game is busy waiting with the browser released, then
+    listening afresh once the game settles; a RETRY that fails at once giving its own words; a level this game cannot
+    load shown with Loading world not done and nothing to cancel, after a follow and at a join's end, until it is
+    closed, the player leaves or the host's next world takes it over; and MULTIPLAYER and SESSION saying why a joined
+    game waits at the menu, from the follow alone, until it follows the host's next world or leaves, a settled frame of
+    it allocating nothing. `MultiplayerUiArchitectureTests` reads the connecting overlay's source as C#: it binds the
+    failure's words on every frame, offers CANCEL only while Cancel stops something and CLOSE otherwise, by its own
+    layout expression for every combination, and builds its body again whenever the layout changes.
+    `SessionLaunchRecordsTests`: a launched join's records over the real orchestrator and publisher, with its follow
+    under its request.
 - **ModRuntime harness** (`--follow-case follow`, in a fresh process): two real runtimes over the loopback network,
   loading the one installed package, whose gamemode gives every player a participant. The host opens its game to other
   players and starts the package's target; the player joins from its menu, runs the host's world under the host's
@@ -2400,7 +2405,15 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
   world out or outlives the session; and when MULTIPLAYER or SESSION keep their joined lines while the game waits,
   rebuild only on the control's status, or keep the line once the host's next world runs. The follower suites fail when
   the fallback menu is waited at as the host's menu, or the host going to its menu is not toasted; and the architecture
-  check fails when the overlay stops binding the failure's words or offers CANCEL whatever it would stop.
+  check fails when the overlay stops binding the failure's words or offers CANCEL whatever it would stop. With the
+  browser shared, the sessions suites fail when one user's release, or BROWSE closing, stops another's search; when an
+  external search is claimed or stopped; when a release is not idempotent, the last one leaves the browser running, or
+  the screens' stop or a start that threw leaves a share behind; when a launch lets go of the browser before it settles;
+  when a listen outlasts its 15 seconds or ignores Cancel, or a relay or direct join listens; and when a host heard
+  while the game is busy keeps the overlay listening or holding its share, or shows the wait again each frame. The
+  architecture check also fails when the layout is inverted or not built again as it changes, and the follower suites
+  when the menu arrival is toasted twice, the menu is followed again on a repeated announcement, or a first arrival is
+  toasted as a return.
 - **In the game.** Loading a level by its scene name (`CoreGameplayServices.LoadLevelAsync`, an arena's base level and a
   level outside a session) and the Worlds provider's loads run over Unity, so the game checks them.
 

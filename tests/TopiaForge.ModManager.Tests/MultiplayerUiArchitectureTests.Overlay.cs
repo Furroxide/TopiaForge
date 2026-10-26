@@ -39,7 +39,8 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>
         /// Seen in the game: a follow that left the player at the menu, as a level the game could not load does, showed a CANCEL
         /// that cancelled nothing. The overlay's layout follows whether Cancel would stop anything, and the layout for when it
-        /// would not offers CLOSE, which dismisses the view, in CANCEL's place.
+        /// would not offers CLOSE, which dismisses the view, in CANCEL's place. An open overlay builds its body again whenever
+        /// its layout changes, so the layout a view reaches while it shows is the one it offers.
         /// </summary>
         private static void TheOverlayOffersCancelOnlyWhileItStopsSomething(string root)
         {
@@ -79,6 +80,9 @@ namespace TopiaForge.ModManager.Tests
             That(choice.Statement.ToString().Contains("Button(\"CLOSE\", screen.Dismiss", StringComparison.Ordinal)
                 && choice.Else!.Statement.ToString().Contains("Button(\"CANCEL\", screen.Cancel", StringComparison.Ordinal),
                 "only the settled shape binds CLOSE to Dismiss; active shapes bind CANCEL to Cancel");
+            var tick = OverlayMethod(root, "Tick").Body!.Statements.Select(statement => statement.ToString()).ToArray();
+            That(tick.Contains("if (Shape() != shownShape) BuildBody();", StringComparer.Ordinal),
+                "an open overlay builds its body again whenever its layout changes, so a join that settles or fails while it shows gets CLOSE or its failure view");
         }
 
         /// <summary>The connecting overlay's one method named <paramref name="name"/>, parsed from its source.</summary>

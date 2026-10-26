@@ -158,7 +158,14 @@ namespace TopiaForge.ModManager.Tests
             return query;
         }
 
-        public void StartBrowsing() => Calls.Add("StartBrowsing");
+        /// <summary>Gets or sets what starting to listen on the local network throws, as a failing provider might; null to listen.</summary>
+        internal Exception? ThrowOnStartBrowsing { get; set; }
+
+        public void StartBrowsing()
+        {
+            Calls.Add("StartBrowsing");
+            if (ThrowOnStartBrowsing != null) throw ThrowOnStartBrowsing;
+        }
 
         public void StopBrowsing() => Calls.Add("StopBrowsing");
 
