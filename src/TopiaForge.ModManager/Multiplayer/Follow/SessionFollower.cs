@@ -14,7 +14,8 @@ namespace TopiaForge.ModManager
     /// through the multiplayer authority policy. It applies the host's newest announcement: the host's world session,
     /// through the orchestrator's follow; the level the host is in outside a session, by its scene name; or the main menu.
     /// When the host moves on mid-follow, the follow is cancelled and the new world followed. When this game leaves the
-    /// host's world by itself, it follows it again, eight times in a join at most; at the main menu, it leaves the session.
+    /// host's world by itself, it follows it again, eight different-level escapes in a join at most; a native restart of
+    /// the same level still rebuilds the host's world without spending that allowance. At the main menu, it leaves the session.
     /// A failure ends the join with its own words (<see cref="FollowFailureWords"/>) and returns the game to the main menu;
     /// the reason the runtime, a provider or a mod gave goes to the manager log alone, without addresses or paths. A join the
     /// launcher planned has its follows report to the launcher under that join's request; any other join's report nothing.
@@ -66,6 +67,7 @@ namespace TopiaForge.ModManager
         private bool ending;
         private int arrivalShown = -1;
         private int arrivedScene;
+        private string? arrivedSceneName;
 
         internal SessionFollower(GamemodeSessionOrchestrator sessions, FollowedScene scene, Func<IInternalSystemChannel?> channel,
             Func<IDisposable> grantFollow, Action leave, Func<NetworkWorldProgress> world, Func<CancellationToken, Task>? discover,
@@ -96,7 +98,7 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the announcement this game is in now, as followed; null before the first follow ends.</summary>
         internal HostWorldState? Applied => applied;
 
-        /// <summary>Gets how many times this game followed the host again in this join after leaving its world by itself.</summary>
+        /// <summary>Gets this join's different-level corrections; native restarts of the same level do not spend the allowance.</summary>
         internal int Refollows => refollows;
 
         /// <summary>Gets the announcements that could not be read, for tests and diagnostics.</summary>
@@ -118,7 +120,7 @@ namespace TopiaForge.ModManager
         {
             if (joined == null) throw new ArgumentNullException(nameof(joined));
             if (IsJoined) return;
-            Status.Joined();
+            Status.Joined(launchedJoin);
             if (sessions.Current.Phase != SessionPhase.Idle || scene.IsGameplay)
             {
                 log.Warn("Multiplayer: a game started here while the join resolved, so the join stopped and that game kept running.");
@@ -322,7 +324,9 @@ namespace TopiaForge.ModManager
                 ? string.Equals(sessions.FollowedSessionId, target.SessionId, StringComparison.Ordinal) && sessions.Current.Phase == SessionPhase.Running
                 : !scene.IsGameplay || (string.Equals(scene.Name, target.Scene, StringComparison.OrdinalIgnoreCase) && scene.Version == arrivedScene));
             if (inWorld) return;
-            if (++refollows > MaximumRefollows)
+            var sameLevelRestart = !waitingAtMenu && scene.IsGameplay && scene.Version != arrivedScene
+                && string.Equals(scene.Name, arrivedSceneName, StringComparison.OrdinalIgnoreCase);
+            if (!sameLevelRestart && ++refollows > MaximumRefollows)
             {
                 Fail(FollowFailureKind.KeepsLeaving, ModErrorCode.InvalidState, "This game left the host's world " + refollows + " times.");
                 return;

@@ -315,7 +315,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public void Dismiss()
         {
-            if (IsBusy) Cancel();
+            if (CanCancel) Cancel();
             else Hide();
         }
 

@@ -222,6 +222,9 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Gets which join this status speaks for: it moves each time this game links up to a host.</summary>
         internal int JoinSerial { get; private set; }
 
+        /// <summary>Gets the launch whose follow this is, retained through failure until another join starts.</summary>
+        internal string? LaunchRequestId { get; private set; }
+
         /// <summary>Gets the failure that ended the join of <see cref="JoinSerial"/>, or null.</summary>
         internal FollowFailure? Failure { get; private set; }
 
@@ -231,9 +234,10 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Gets a number that moves with each notice, so a view shows each once.</summary>
         internal int NoticeVersion { get; private set; }
 
-        internal void Joined()
+        internal void Joined(string? launchRequestId = null)
         {
             JoinSerial++;
+            LaunchRequestId = launchRequestId;
             Failure = null;
             IsRefollow = false;
             Move(FollowStage.AwaitingHost, "Asking the host for its world", 0, 0);

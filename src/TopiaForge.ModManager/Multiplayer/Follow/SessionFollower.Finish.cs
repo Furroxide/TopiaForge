@@ -104,6 +104,7 @@ namespace TopiaForge.ModManager
         {
             applied = target;
             arrivedScene = scene.Version;
+            arrivedSceneName = scene.Name;
             busyTotal = 0f;
             ReleaseHold();
             Status.Move(stage, detail);

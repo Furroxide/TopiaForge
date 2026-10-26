@@ -27,6 +27,7 @@ namespace TopiaForge.ModManager
         private LaunchProgressSession? block;
         private string? joinPhase;
         private LaunchProgress? followed;
+        private string? lastWorldSessionId;
         private int sequence = -1;
         private LaunchOutcomeMultiplayer? succeededBlock;
         private bool ended;
@@ -72,6 +73,7 @@ namespace TopiaForge.ModManager
             if (progress == null || finished || !string.Equals(progress.RequestId, identity.RequestId, StringComparison.Ordinal)) return;
             if (followed != null && progress.Sequence <= followed.Sequence) return;
             followed = progress;
+            if (progress.SessionId != null) lastWorldSessionId = progress.SessionId;
             if (block != null && joinPhase == null) WriteProgress();
         }
 
@@ -95,7 +97,7 @@ namespace TopiaForge.ModManager
             if (block == null) throw new ArgumentNullException(nameof(block));
             if (succeededBlock == null || ended) return;
             ended = true;
-            var sessionId = followed?.SessionId;
+            var sessionId = followed?.SessionId ?? (block.EndReason == "world-follow-failed" ? lastWorldSessionId : null);
             Finish();
             Write(new LaunchOutcome("session", identity.RequestId, ++sequence, "idle", clean ? "succeeded" : "failed", Array.Empty<LaunchBlock>(),
                 sessionId, null, clean ? null : new LaunchExecutionError("external", "The runtime did not stop cleanly."), block), 1);

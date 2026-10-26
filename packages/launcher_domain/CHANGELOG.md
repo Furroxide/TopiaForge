@@ -1,3 +1,8 @@
+## 0.2.0
+
+- Preserve world-follow failures in launch results and session ends, including
+  their fixed advice and the last followed world identity.
+
 ## 0.1.0-rc.1
 
 - Added the strict manifest V5, SemVer, dependency, compatibility, capability,

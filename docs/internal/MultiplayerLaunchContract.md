@@ -148,14 +148,20 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
   `failure`; only a failure may carry the host's `admission` report (its `code` and up to 64 `problems`).
 - **A terminal outcome** is Idle, names no command and says why the session ended in `endReason`: `left`,
   `host-ended`, `kicked`, `banned`, `timed-out`, `replaced`, `admission-rejected`, `protocol-mismatch` or
-  `transport-failed`, the game's `MultiplayerSessionEndReason`. Only `admission-rejected` carries a report. Its status
+  `transport-failed` (the game's `MultiplayerSessionEndReason`), or `world-follow-failed` when following the host's
+  world fails after joining. Only `admission-rejected` carries a report. Its status
   says whether the runtime tore down cleanly.
 - **Failures.** A join's are the launcher's `JoinFailureCode`s of the same name that the connecting and synchronizing
   stages accept, so every one moves the join reducer: `timeout`, `nat-traversal-failed`, `relay-unavailable`,
   `server-full`, `password-rejected`, `kicked`, `protocol-mismatch`, `admission-changed`, `disconnected`,
-  `direct-not-allowed` and `snapshot-failed`. The game folds its own causes into them; `detail` and the admission
+  `direct-not-allowed`, `snapshot-failed` and `world-follow-failed`. The game folds its own causes into them; `detail` and the admission
   report explain the rest. A host's are `port-in-use`, `identity-unavailable`, `network-stopped` and
   `service-unavailable`.
+- **Follow failures.** A failed follow keeps its fixed title and advice in `detail`, without provider text or addresses.
+  Before the join succeeds it writes `failure: world-follow-failed`; afterwards it writes a terminal
+  `endReason: world-follow-failed` and retains the last world session id even after cleanup reports Idle. The failure
+  belongs only to the follow's launch request and wins over a later transport leave. Runtime and launcher ship this
+  closed vocabulary together; older readers reject the new value.
 - **The launcher's monitor** reads both versions. A session launch owes a terminal record once it has started, so a
   process that exits without one leaves the activity unconfirmed.
 

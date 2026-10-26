@@ -24,10 +24,15 @@ namespace TopiaForge.ModManager.Tests
             rig.Scene.Activated("Downtown", instance);
             rig.Frame();
             That(rig.Follower.Refollows == 0, "duplicate events for the arrived instance do not re-follow");
-            rig.Scene.Activated("Downtown", ++instance);
-            rig.Until(() => rig.Test.Levels.Count == 2 && rig.Status.Stage == FollowStage.InLevel,
-                "a native restart into a different instance of the same level re-follows");
-            That(rig.Follower.Refollows == 1, "the native restart counts against the correction bound");
+            for (var restart = 1; restart <= SessionFollower.MaximumRefollows + 3; restart++)
+            {
+                rig.Scene.Activated("Downtown", ++instance);
+                var expected = restart + 1;
+                rig.Until(() => rig.Test.Levels.Count == expected && rig.Status.Stage == FollowStage.InLevel,
+                    "each native restart into the same level re-follows");
+                That(rig.Follower.Refollows == 0 && rig.Runtime.Realm == NetRealm.Client,
+                    "same-level restarts never spend the different-level escape allowance");
+            }
         }
 
         private static void NativeLoadsWhileWaitingAtTheMenuAreCorrected(string root)
@@ -90,6 +95,17 @@ namespace TopiaForge.ModManager.Tests
                 "native replacement re-follows a keep-controller world too");
             That(rig.Test.Hosted.FollowedSessionId == host && rig.Follower.Refollows == 1,
                 "the same host world resumes after one correction");
+            for (var restart = 1; restart <= SessionFollower.MaximumRefollows + 3; restart++)
+            {
+                rig.Scene.Activated("World", 100 + restart);
+                rig.Test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(100 + restart, "World", SceneLifecyclePhase.Activated,
+                    SceneLoadMode.Single, isActive: true));
+                var expected = restart + 1;
+                rig.Until(() => loads == expected && rig.Status.Stage == FollowStage.Running,
+                    "each same-level restart rebuilds the keep-controller world");
+                That(rig.Follower.Refollows == 1 && rig.Runtime.Realm == NetRealm.Client,
+                    "same-level restarts preserve the previous different-level count and stay joined");
+            }
         }
     }
 }

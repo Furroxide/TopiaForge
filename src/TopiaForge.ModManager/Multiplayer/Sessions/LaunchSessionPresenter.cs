@@ -93,13 +93,13 @@ namespace TopiaForge.ModManager.Sessions
             var before = earlier;
             if (before != null)
             {
-                before.Follow(status.Status, status.Version, status.Reads);
+                before.Follow(status.Status, status.Version, status.Reads, context.Environment.Follow);
                 if (before.IsFinished) earlier = null;
             }
 
             var launch = current;
             if (launch == null) return;
-            launch.Follow(status.Status, status.Version, status.Reads);
+            launch.Follow(status.Status, status.Version, status.Reads, context.Environment.Follow);
             switch (stage)
             {
                 case Stage.Waiting:

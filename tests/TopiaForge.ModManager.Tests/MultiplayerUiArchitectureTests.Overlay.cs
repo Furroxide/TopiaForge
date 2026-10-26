@@ -16,6 +16,17 @@ namespace TopiaForge.ModManager.Tests
     /// </summary>
     internal static partial class MultiplayerUiArchitectureTests
     {
+        private static void TheOverlayKeepsLongStepsReadable(string root)
+        {
+            var open = OverlayMethod(root, "Open").ToString();
+            That(open.Contains("scroll.Content.VerticalPhaseStepper(ToArray(screen.StepLabels))", StringComparison.Ordinal),
+                "seven full step names and progress details use full-width rows, not narrow columns");
+            That(open.Contains("scroll.FixedHeight(360f)", StringComparison.Ordinal)
+                && open.Contains("body = scroll.Content.Column", StringComparison.Ordinal)
+                && open.Contains("actions = opened.Content.Row", StringComparison.Ordinal),
+                "long progress and failures scroll within a bounded view while cancellation stays outside it");
+        }
+
         /// <summary>
         /// Seen in the game: a RETRY that failed at once kept the earlier failure's heading and advice under the new failure's
         /// status line, because the failure body was built only when the overlay's layout changed, and a failure that

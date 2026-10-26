@@ -60,6 +60,76 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
+  for (final started in [false, true]) {
+    test('a world-follow failure is confirmed (started: $started)', () async {
+      final watcher = monitor('join-session');
+      addTearDown(watcher.dispose);
+      const detail = "The host's world could not be loaded. Try joining again.";
+      if (started) {
+        write(
+          'launch-outcome',
+          LaunchTransport.writeOutcome(
+            LaunchOutcome(
+              kind: 'launch',
+              requestId: 'request',
+              command: 'join-session',
+              sessionId: 'session-1',
+              sequence: 2,
+              status: 'succeeded',
+              phase: 'running',
+              multiplayer: join(),
+            ),
+          ),
+        );
+        await watcher.pollOnce();
+      }
+      write(
+        started ? 'session-outcome' : 'launch-outcome',
+        LaunchTransport.writeOutcome(
+          LaunchOutcome(
+            kind: started ? 'session' : 'launch',
+            requestId: 'request',
+            command: started ? null : 'join-session',
+            sessionId: started ? 'session-1' : null,
+            sequence: 3,
+            status: started ? 'succeeded' : 'failed',
+            phase: started ? 'idle' : 'synchronizing',
+            multiplayer: LaunchOutcomeMultiplayer(
+              role: LaunchSessionRole.join,
+              intentId: 'intent-1',
+              failure: started
+                  ? null
+                  : LaunchMultiplayerFailure.worldFollowFailed,
+              endReason: started
+                  ? LaunchSessionEndReason.worldFollowFailed
+                  : null,
+              detail: detail,
+            ),
+          ),
+        ),
+      );
+      await watcher.pollOnce();
+      expect(watcher.finished, isTrue);
+      expect(watcher.current.unconfirmed, isFalse);
+      final outcome = started
+          ? watcher.current.sessionOutcome!
+          : watcher.current.launchOutcome!;
+      expect(outcome.multiplayer!.detail, detail);
+      if (started) {
+        expect(outcome.sessionId, 'session-1');
+        expect(
+          outcome.multiplayer!.endReason!.joinEndReason,
+          JoinSessionEndReason.worldFollowFailed,
+        );
+      } else {
+        expect(
+          outcome.multiplayer!.failure!.joinFailureCode,
+          JoinFailureCode.worldFollowFailed,
+        );
+      }
+    });
+  }
+
   test('a join reads its V2 progress and success', () async {
     final watcher = monitor('join-session');
     addTearDown(watcher.dispose);

@@ -2244,12 +2244,13 @@ the host's: a player resolves its ids against its own packages and never shows a
   world the host left behind is disposed before the next one loads. After the join, the host's next world replaces the
   one followed, as a launch replaces a session, and the player is told "Back in the host's world." once it runs.
 - **Straying.** At rest the follower checks that the game is still in the host's world. A native load that took it
-  elsewhere, such as a level exit or the game's own load buttons, follows the host again, eight times in a join at most;
+  elsewhere, such as a level exit or the game's own load buttons, follows the host again, eight different-level corrections in a join at most;
   the next one ends the join as "Your game keeps leaving the host's world". A return to the main menu by itself leaves
   the session, with "You returned to the main menu, so you left the session."
   A followed world uses this rule even when its gamemode keeps its controller across scene changes. Native levels
-  are tracked by scene instance as well as name, so a restart into the same named level is a correction too; duplicate
-  events for the same instance are ignored. A native load while waiting at the host's menu, or at the fallback menu
+  are tracked by scene instance as well as name, so a restart into the same named level rebuilds the world too but
+  does not spend the different-level allowance; duplicate events for the same instance are ignored. This also applies
+  to keep-controller worlds. A native load while waiting at the host's menu, or at the fallback menu
   for an unavailable level, returns to that menu under the same eight-correction bound without retrying the missing level.
 - **Busy.** A follow the orchestrator turns away while another operation or native change runs is tried again every
   quarter second, for 30 seconds at most.
@@ -2259,6 +2260,10 @@ the host's: a player resolves its ids against its own packages and never shows a
   a kick or a ban, the follow on its way is cancelled, the hold and the grant are released, and a game that followed the
   host returns to the main menu once that follow has ended. The player's own return to the menu loads no second one,
   and neither does shutdown.
+  Escape and the close button use the same cancellation path as Cancel during a re-follow, so the card stays closed
+  even if the cancelled operation later fails. Cleanup still waits for provider callbacks and native work to drain;
+  a provider that ignores cancellation can delay the menu. Replacing its scene earlier would violate the lifecycle's
+  ownership contract.
 
 ### The orchestrator's follow
 
@@ -2333,9 +2338,11 @@ request.
 - **Where it lands.** For the launched join, the runtime's publisher moves the records' phase under the join's block:
   while the join synchronizes, its own phase stands; once it is in session, the launch succeeds at Running with the
   host's world session; the host's next world moves the phase on; and a followed world's end is withheld, since the
-  join's end is the provider's ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md), sections 4, 5 and 8). A
+  join's end comes from the provider or a failed follow ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md), sections 4, 5 and 8). A
   live join's records take the same progress under its join id, through
   `IMultiplayerSessionEnvironment.SubscribeSessionProgress`, by the same rules, until they end.
+  A follow failure under that request writes `world-follow-failed` with its fixed title and advice, before a generic
+  transport leave can replace the cause. After joining, its terminal record retains the last followed world id.
 - **Nothing else.** A follow of a join started in game publishes nothing to the launcher, neither progress nor an end,
   from its start to its end.
 
@@ -2351,6 +2358,10 @@ request.
   asks "Leave current game?" first. Hosting from it is unchanged.
 
 ### The connecting overlay
+
+The seven steps use full-width vertical rows of equal height, with the active detail beneath its label. Progress and
+long failure advice sit in a bounded scroll view; Cancel and Close remain outside it. The layout keeps the load's
+`(1/2)` and `(2/2)` suffixes out of the former narrow columns; the rendered result still needs the desktop checks.
 
 While a join synchronizes, the follow's stages fill the stepper's last three steps with this game's own lines: Loading
 world ("Getting your mods ready", "Loading the host's world", or for an arena "Loading the host's level (1/2)" and then

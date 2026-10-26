@@ -79,6 +79,7 @@ abstract final class JoinSession {
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
       JoinFailureCode.directNotAllowed,
+      JoinFailureCode.worldFollowFailed,
       JoinFailureCode.identityChanged,
     },
     JoinStage.checking: {
@@ -125,6 +126,7 @@ abstract final class JoinSession {
     },
     JoinStage.synchronizing: {
       JoinFailureCode.snapshotFailed,
+      JoinFailureCode.worldFollowFailed,
       JoinFailureCode.disconnected,
     },
     JoinStage.inSession: {},

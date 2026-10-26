@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
     /// the publisher keeps one sequence for both sources, takes a success only from the provider, lets a failed command
     /// settle the launch, and writes the session's end as the process exits.
     /// </summary>
-    internal static class SessionLaunchRecordsTests
+    internal static partial class SessionLaunchRecordsTests
     {
         private const string RequestId = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
         private const string IntentId = "intent-7d3e1f20";
@@ -65,6 +65,7 @@ namespace TopiaForge.ModManager.Tests
             AFailedCommandIsTheLaunchsOutcome(fixture, Path.Combine(root, "failed"));
             AnUncleanExitEndsTheSessionAsFailed(fixture, Path.Combine(root, "unclean"));
             ALaunchedJoinsFollowWritesItsRecords(Path.Combine(root, "follow"));
+            FollowFailuresKeepTheirReason(fixture, Path.Combine(root, "follow-failures"));
 
             var noIPv6 = SessionLaunchRecords.Result(new LaunchSessionIdentity(RequestId, "join", IntentId),
                 new InternalLiveStatus { JoinPhase = InternalJoinPhase.Ended, JoinFailure = InternalLiveFailure.NoIPv6 });
@@ -178,6 +179,21 @@ namespace TopiaForge.ModManager.Tests
                 run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.Synchronizing; s.Server = Server(JoinServer); });
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.Ended; s.JoinFailure = InternalLiveFailure.Cancelled; });
+            }),
+            ["join-world-follow-failed"] = Join(run =>
+            {
+                run.Runtime(8, "loading-world", GameSession);
+                run.Started();
+                run.Status(s => s.JoinPhase = InternalJoinPhase.Synchronizing);
+                run.FollowFailure();
+            }),
+            ["join-world-follow-ended"] = Join(run =>
+            {
+                run.Runtime(8, "running", GameSession);
+                run.Started();
+                run.Status(s => s.JoinPhase = InternalJoinPhase.InSession);
+                run.Runtime(41, "idle");
+                run.FollowFailure();
             }),
             ["host-error"] = Host(run =>
             {
@@ -402,6 +418,14 @@ namespace TopiaForge.ModManager.Tests
 
             /// <summary>The session begins, as the screens start it, after the status reads so far.</summary>
             internal void Started() => Launch.Started(reads);
+
+            internal void FollowFailure()
+            {
+                var follow = new SessionFollowStatus();
+                follow.Joined(RequestId);
+                follow.Fail(FollowFailureWords.For(FollowFailureKind.WorldLoadFailed, ModErrorCode.External));
+                Launch.Follow(new InternalLiveStatus(), ++version, ++reads, follow);
+            }
 
             /// <summary>The provider's status moves in a new read, and the launch follows it.</summary>
             internal void Status(Action<InternalLiveStatus> change)

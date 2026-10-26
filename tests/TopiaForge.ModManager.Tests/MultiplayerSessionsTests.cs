@@ -38,7 +38,8 @@ namespace TopiaForge.ModManager.Tests
             ConnectingWalksThePhases();
             ConnectingShowsTheFollow();
             AFollowFailureShowsItsOwnWords();
-            AFollowAfterTheJoinShowsFollowing();
+            AFollowAfterTheJoinShowsFollowing(dismiss: false);
+            AFollowAfterTheJoinShowsFollowing(dismiss: true);
             ARefollowFailureShowsItsOwnWords();
             ARetryThatFailsAtOnceShowsItsOwnWords();
             RetryListensForALanHostFirst();
