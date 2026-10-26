@@ -7,7 +7,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
 
-import 'join_texts.dart';
 import 'launcher_bloc.dart';
 import 'launcher_build.dart';
 import 'launcher_event.dart';

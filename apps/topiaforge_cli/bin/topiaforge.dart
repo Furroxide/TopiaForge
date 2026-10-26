@@ -10,6 +10,9 @@ import 'package:topiaforge/src/cli_launch_options.dart';
 import 'package:topiaforge/src/cli_launch_workflow.dart';
 import 'package:topiaforge/src/cli_host_options.dart';
 import 'package:topiaforge/src/cli_host_workflow.dart';
+import 'package:topiaforge/src/cli_terminal.dart';
+import 'package:topiaforge/src/cli_join_options.dart';
+import 'package:topiaforge/src/cli_join_workflow.dart';
 import 'package:topiaforge/src/cli_servers.dart';
 import 'package:topiaforge/src/multiplayer_acceptance_spec.dart';
 import 'package:topiaforge/src/multiplayer_acceptance_runner.dart';
@@ -48,6 +51,7 @@ part 'topiaforge_help.dart';
 part 'topiaforge_launcher_commands.dart';
 part 'topiaforge_launch_commands.dart';
 part 'topiaforge_multiplayer_commands.dart';
+part 'topiaforge_join_commands.dart';
 part 'topiaforge_multiplayer_acceptance_commands.dart';
 part 'topiaforge_mod_commands.dart';
 part 'topiaforge_manifest_migration_commands.dart';
@@ -131,6 +135,7 @@ class _TopiaForgeCli {
       'restart' => _launch(rest, restart: true),
       'servers' => _servers(rest),
       'host' => _host(rest),
+      'join' => _join(rest),
       'dev-install' => _devInstall(rest),
       'doctor' => _doctor(rest),
       'compat' => _compat(rest),

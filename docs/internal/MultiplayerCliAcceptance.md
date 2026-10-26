@@ -143,3 +143,39 @@ runtime isolation acknowledgements. Do not publish it or raw game logs; use
 reviewed hashes. Source-only tests exercise synthetic peers and cannot prove
 the multiplayer transport or the missing probe. Internet, real input, rendered
 state and microphone checks still need a live run.
+
+## Joining
+
+`topiaforge join <code|link|host:port>` uses the same join reducer, verified descriptor planner, exact-archive
+installer, server profiles and V5 launch gateway as the launcher. It prints the same consent facts and warnings:
+mods, source, full SHA-256, size, capabilities, privacy, voice, password handling and profile changes.
+
+- Without an interactive input console, `--yes` is required. With one, `--yes` never skips disclosure or consent.
+  A detached Windows character handle that cannot answer a console-mode query is noninteractive too.
+- `--allow-direct` asks the approved direct-connection prompt and applies to this request only. A public address
+  or non-local hostname is refused before contact without that flag; Hide my IP stays on for other sessions.
+- `--allow-host-packages` requires developer mode and the separate host-served warning and acknowledgement.
+  It does not make packages from a service-resolved host eligible; the shared planner still governs them.
+- `--game-dir` selects an install. `--wait-seconds 1..300` bounds the runtime-confirmation wait (default 300 seconds,
+  including time for a password entered only in Robotopia). No password is accepted on the command line.
+- Cancellation waits for an install or profile transaction to settle. A live join not yet taken may be withdrawn;
+  a spawned game remains running. Timeout is unconfirmed, never success, and tells the player to check the game.
+- An admission change replans once. Identical consent is reused; changed packages require fresh consent.
+- No provider error, observed address or local path is printed. The command follows only its returned process
+  receipt and intent. It does not print an invite or a target supplied by the service.
+
+| Stage | Meaning |
+| --- | --- |
+| `TFJOIN100` | Options, consent requirement or local setup could not be used. |
+| `TFJOIN110` | Preferences, target resolution or descriptor verification. |
+| `TFJOIN120` | Exact-package and admission planning. |
+| `TFJOIN130` | Consent, host-package acknowledgement or changed preferences. |
+| `TFJOIN140` | Downloading and validating exact archives. |
+| `TFJOIN150` | Installing or rolling back server packages. |
+| `TFJOIN160` | Saving the derived server profile. |
+| `TFJOIN170` | Preparing or starting the game. |
+| `TFJOIN180` | Connecting, receiving the world, confirmation or an unconfirmed wait. |
+
+Exit codes are 0 for confirmed join, 1 for a refusal or failed step, 2 for invalid options or missing consent flags,
+3 for an unconfirmed started game, and 130 for cancellation. Each failure carries a next step. `servers --json`
+remains the machine-readable discovery interface; join consent is human-readable text.
