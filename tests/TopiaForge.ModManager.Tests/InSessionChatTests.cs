@@ -236,6 +236,9 @@ namespace TopiaForge.ModManager.Tests
             }
             public bool TryReceive(out InternalSystemMessage message)
             { if (Inbox.Count > 0) { message = Inbox.Dequeue(); return true; } message = default; return false; }
+            public OperationResult<int> SendDatagram(ArraySegment<byte> payload, InternalSystemTarget target) => throw new NotSupportedException();
+            public bool TryReceiveDatagram(out InternalSystemDatagram datagram)
+            { datagram = default; return false; }
             public InternalSystemChannelStatistics GetStatistics() => new InternalSystemChannelStatistics(Kind, Sent.Count, 0, 0, Inbox.Count, 0);
             public void Dispose() { IsOpen = false; Inbox.Clear(); }
         }
