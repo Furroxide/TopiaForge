@@ -45,7 +45,7 @@ namespace TopiaForge.ModManager.Tests
             var hostile = "'" + paths[0] + new string('x', 200000) + "'";
             Check(DiagnosticPathRedactor.Redact(hostile) == "'[path]'", "long input");
             var checks = 43 + ApostrophesBelongToThePath(paths[0]) + PathsNeverExposeAnAddress() + LabelsKeepTheirSlashes()
-                + PluginWritesGoThroughTheFilter();
+                + PluginWritesGoThroughTheFilter() + AmbiguousPathCharactersStayPrivate() + SpansKeepTheirSourceOrder();
             Console.WriteLine("DiagnosticPathRedactorTests passed: " + checks + " checks.");
         }
 
@@ -71,6 +71,59 @@ namespace TopiaForge.ModManager.Tests
 
             Check(DiagnosticPathRedactor.Redact("Could not find file '" + plain + "'.") == "Could not find file '[path]'.", "a closing quote ends the path");
             return named.Length * 3 + 1;
+        }
+
+        private static int AmbiguousPathCharactersStayPrivate()
+        {
+            var checks = 0;
+            foreach (var name in new[] { "Sam'-private", "Sam' private", "Sam'_private", "Sam'.private", "Sam'", "Sam'\u0301private" })
+            {
+                foreach (var path in new[] { "Q:" + '\\' + "Users" + '\\' + name + '\\' + "secret", "/" + "home/" + name + "/secret" })
+                {
+                    var quoted = "Cannot read '" + path + "'; try again.";
+                    var expected = "Cannot read '[path]'; try again.";
+                    Check(DiagnosticPathRedactor.Redact(quoted) == expected, "punctuation after an interior quote stays private");
+                    Check(MultiplayerDiagnosticRedactor.Redact(quoted) == expected, "multiplayer keeps the whole quoted path private");
+                    Check(DiagnosticPathRedactor.Redact("Cannot read " + path) == "Cannot read [path]", "an unquoted path keeps every quote private");
+                    Check(DiagnosticPathRedactor.Redact("The mod's file " + path) == "The mod's file [path]", "a prose apostrophe does not quote the path");
+                    checks += 4;
+                }
+            }
+
+            foreach (var slash in new[] { '/', '\\' })
+            {
+                var text = "Cannot read '" + slash + " private" + slash + "secret'; try again.";
+                Check(DiagnosticPathRedactor.Redact(text) == "Cannot read '[path]'; try again.", "a quoted root can start with whitespace");
+                Check(MultiplayerDiagnosticRedactor.Redact(text) == "Cannot read '[path]'; try again.", "multiplayer hides a quoted root with whitespace");
+                checks += 2;
+            }
+
+            Check(DiagnosticPathRedactor.Redact("'Wave 3 / 10'") == "'Wave 3 / 10'", "a quoted sentence keeps its lone slash");
+            Check(DiagnosticPathRedactor.Redact("Read '/one' or '/two'; retry.") == "Read '[path]'; retry.", "ambiguous quoted fragments are withheld together");
+            return checks + 2;
+        }
+
+        private static int SpansKeepTheirSourceOrder()
+        {
+            var cases = new[]
+            {
+                ("peer myhost:27250 then '/secret'\npeer play.example.org", "peer [address] then '[path]'\npeer [address]"),
+                ("file:///secret", "[path]"),
+                ("prefix-myhost:27250=file:///secret", "[path]"),
+                ("myhost:27250:Q:" + '/' + "secret", "[address][path]"),
+                ("peer myhost:27250\"" + '\\' + " private" + '\\' + "secret\"", "peer [address]\"[path]\""),
+                ("peer myhost:27250'" + '\\' + " private" + '\\' + "secret'", "peer [address]'[path]'"),
+                ("peer myhost:27250\"file:///secret\"" + '\\' + " private", "peer [address]\"[path]\"[path]"),
+                ("`" + '\\' + " private`" + '\\' + " private", "`[path]`[path]"),
+                ("'/secret'\nplain\nmyhost:27250", "'[path]'\nplain\n[address]"),
+                ("[path] then [address]", "[path] then [address]")
+            };
+            foreach (var (input, expected) in cases)
+            {
+                Check(MultiplayerDiagnosticRedactor.Redact(input) == expected, "ordered spans merge without splitting placeholders");
+                Check(MultiplayerDiagnosticRedactor.Redact(expected) == expected, "merged placeholders and newly exposed prefixes are stable");
+            }
+            return cases.Length * 2;
         }
 
         // Paths and addresses are both found in the text as it came: removing a path never leaves part of an address

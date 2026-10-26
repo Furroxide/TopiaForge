@@ -106,6 +106,7 @@ namespace TopiaForge.ModManager
                 var quote = '\0';
                 while (paths && DiagnosticPathRedactor.TryFindPath(value, ref index, ref quote, out var pathStart, out var pathEnd))
                     (spans ??= new List<Span>()).Add(new Span(pathStart, pathEnd, true));
+                var pathCount = spans?.Count ?? 0;
 
                 index = 0;
                 while (index < value.Length)
@@ -121,7 +122,11 @@ namespace TopiaForge.ModManager
                     if (HoldsAddress(value.Substring(start, index - start))) (spans ??= new List<Span>()).Add(new Span(start, index, false));
                 }
 
-                return spans == null ? value : Merge(value, spans);
+                if (spans == null) return value;
+                var redacted = Merge(value, spans, pathCount);
+                // Removing a path can also reveal an address-shaped prefix the original token did not match, such as
+                // myhost:27250: followed by a drive root. Check those remaining tokens without changing placeholders.
+                return paths ? RedactAddresses(redacted) : redacted;
             }
             catch (RegexMatchTimeoutException)
             {
@@ -130,27 +135,38 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>Replaces each run of overlapping spans with one placeholder: a path's, when a path is among them.</summary>
-        private static string Merge(string text, List<Span> spans)
+        private static string Merge(string text, List<Span> spans, int pathCount)
         {
-            spans.Sort((left, right) => left.Start.CompareTo(right.Start));
+            // Each scanner already emits spans in source order. Merge the two runs in linear time, without sorting.
             var builder = new StringBuilder(text.Length);
             var copied = 0;
-            for (var index = 0; index < spans.Count;)
+            var start = 0;
+            var end = 0;
+            var path = false;
+            for (int pathIndex = 0, addressIndex = pathCount; pathIndex < pathCount || addressIndex < spans.Count;)
             {
-                var start = spans[index].Start;
-                var end = spans[index].End;
-                var path = spans[index].Path;
-                for (index++; index < spans.Count && spans[index].Start < end; index++)
+                var next = pathIndex < pathCount && (addressIndex == spans.Count || spans[pathIndex].Start <= spans[addressIndex].Start)
+                    ? spans[pathIndex++] : spans[addressIndex++];
+                if (next.Start < end)
                 {
-                    if (spans[index].End > end) end = spans[index].End;
-                    path |= spans[index].Path;
+                    if (next.End > end) end = next.End;
+                    path |= next.Path;
+                    continue;
                 }
 
-                builder.Append(text, copied, start - copied).Append(path ? DiagnosticPathRedactor.Placeholder : Replacement);
-                copied = end;
+                if (end > start)
+                {
+                    builder.Append(text, copied, start - copied).Append(path ? DiagnosticPathRedactor.Placeholder : Replacement);
+                    copied = end;
+                }
+
+                start = next.Start;
+                end = next.End;
+                path = next.Path;
             }
 
-            return builder.Append(text, copied, text.Length - copied).ToString();
+            builder.Append(text, copied, start - copied).Append(path ? DiagnosticPathRedactor.Placeholder : Replacement);
+            return builder.Append(text, end, text.Length - end).ToString();
         }
 
         private readonly struct Span

@@ -49,17 +49,27 @@ namespace TopiaForge.Mods.Internal
                 if (value == '\'' || value == '"' || value == '`')
                 {
                     if (quote == value) quote = '\0';
-                    else if (quote == '\0') quote = value;
+                    if (quote == '\0' && OpensQuote(text, index, home)) quote = value;
                     continue;
                 }
 
-                if (!StartsPath(text, index) && !StartsHome(text, index, home)) continue;
+                if (!StartsPath(text, index, quote) && !StartsHome(text, index, home)) continue;
                 start = index;
                 end = index;
                 // Unquoted paths may contain spaces. With no reliable end marker, withhold the rest of the
                 // line rather than leaking the account or directory after its first space. Stack frames on
                 // subsequent lines remain useful; quoted paths retain the surrounding failure explanation.
-                while (end < text.Length && text[end] != '\r' && text[end] != '\n' && !EndsPath(text, end, quote)) end++;
+                // An interior quote can precede any filename character, including spaces and punctuation. Use the last
+                // matching quote on the line; multiple quoted fragments may be withheld together. Unquoted paths have
+                // no reliable terminator. No matching quote remains in the suffix, so each quote style scans once.
+                var closingQuote = -1;
+                while (end < text.Length && text[end] != '\r' && text[end] != '\n')
+                {
+                    if (quote != '\0' && text[end] == quote) closingQuote = end;
+                    end++;
+                }
+
+                if (closingQuote >= 0) end = closingQuote;
                 index = end;
                 return true;
             }
@@ -69,7 +79,12 @@ namespace TopiaForge.Mods.Internal
             return false;
         }
 
-        private static bool StartsPath(string text, int index)
+        // Only a quote immediately before a path opens its quoted form, even if it also closes an earlier path.
+        // Punctuation in prose, or replacing an earlier address, must not change where an unquoted path ends.
+        private static bool OpensQuote(string text, int index, string home) => index + 1 < text.Length &&
+            (StartsPath(text, index + 1, text[index]) || StartsHome(text, index + 1, home));
+
+        private static bool StartsPath(string text, int index, char quote)
         {
             var value = text[index];
             if (index + 2 < text.Length && IsLetter(value) && text[index + 1] == ':' && IsSlash(text[index + 2]) &&
@@ -77,23 +92,14 @@ namespace TopiaForge.Mods.Internal
             if (index + 7 <= text.Length && string.Compare(text, index, "file://", 0, 7, StringComparison.OrdinalIgnoreCase) == 0) return true;
             if (!IsSlash(value)) return false;
             // A slash on its own, as in "Wave 3 / 10", is punctuation: a root that names nothing reveals nothing.
-            if (index + 1 == text.Length || char.IsWhiteSpace(text[index + 1])) return false;
+            // A root immediately inside quotes can instead name a component beginning with whitespace.
+            var quotedRoot = quote != '\0' && index > 0 && text[index - 1] == quote;
+            if (!quotedRoot && (index + 1 == text.Length || char.IsWhiteSpace(text[index + 1]))) return false;
             if (index == 0) return true;
             var previous = text[index - 1];
             // A web URL is not a filesystem root. Address redaction is the multiplayer boundary's job.
             if (value == '/' && previous == ':' && index > 1 && IsLetter(text[index - 2])) return false;
             return char.IsWhiteSpace(previous) || "\"'`([{=,:;".IndexOf(previous) >= 0;
-        }
-
-        /// <summary>
-        /// A quote ends a path (a quoted path ends at its own closing quote), unless a letter or digit follows it: an
-        /// apostrophe inside a name, as in an account or folder named Sam's, belongs to the path.
-        /// </summary>
-        private static bool EndsPath(string text, int index, char quote)
-        {
-            var value = text[index];
-            if (quote == '\0' ? value != '\'' && value != '"' && value != '`' : value != quote) return false;
-            return index + 1 == text.Length || !char.IsLetterOrDigit(text[index + 1]);
         }
 
         private static bool StartsHome(string text, int index, string home)

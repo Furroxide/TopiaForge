@@ -192,7 +192,10 @@ namespace TopiaForge.ModManager
             {
                 // Never recurse through the file/BepInEx logger while reporting a logging failure. Console is
                 // the final independent sink available during early startup and late shutdown.
-                FallbackToConsole("TopiaForge logging failed (" + level + "): " + ex.Message + ". Original: " + message);
+                // Redact the failure before joining it to the already filtered entry, so an ambiguous quote in either
+                // fragment cannot withhold the other fragment's useful explanation.
+                var failure = DiagnosticPathRedactor.Redact(ex.Message);
+                FallbackToConsole("TopiaForge logging failed (" + level + "): " + failure + ". Original: " + message);
             }
         }
 
