@@ -38,13 +38,23 @@ namespace TopiaForge.Mods.UnityUi
         /// Undoes a move that took the selection out of the surface taking navigation, whoever sent it: the guard on the
         /// control that had the selection calls it after that control's own move handler picked the next one. The surface is
         /// the one that control was selected in at the last frame: a window takes navigation only while one of its controls
-        /// is selected, so once the move has taken the selection out, it claims nothing any more.
+        /// is selected, so once the move has taken the selection out, it claims nothing any more. While the keys the game's
+        /// menus share with its gameplay reach the game, as W, A, S and D do under a window in a level, Unity's UI module
+        /// moves on them too: then a move the kit did not send is undone inside the surface as well, so walking never moves a
+        /// window's selection, nor carries it onto a text field.
         /// </summary>
-        internal static void Contain(GameObject moved)
+        internal static void Contain(GameObject moved, AxisEventData? eventData)
         {
             var root = ReferenceEquals(moved, guarded) && guardedRoot != null ? guardedRoot : TopiaForgeDismissStack.FocusRoot;
             var system = EventSystem.current;
-            if (root != null && system != null && IsInside(moved, root) && !IsInside(system.currentSelectedGameObject, root))
+            if (root == null || system == null || !IsInside(moved, root))
+            {
+                return;
+            }
+
+            var now = system.currentSelectedGameObject;
+            if (!IsInside(now, root)
+                || (!ReferenceEquals(now, moved) && !ReferenceEquals(eventData, move) && TopiaForgeInputOwnership.SharedKeysReachTheGame))
             {
                 system.SetSelectedGameObject(moved);
             }
@@ -204,10 +214,10 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     internal sealed class TopiaForgeMoveGuard : MonoBehaviour, IMoveHandler
     {
-        /// <summary>Undoes the move if it left the surface.</summary>
+        /// <summary>Undoes the move if it left the surface, or if it came from a key the window leaves to gameplay.</summary>
         public void OnMove(AxisEventData eventData)
         {
-            TopiaForgeNavigation.Contain(gameObject);
+            TopiaForgeNavigation.Contain(gameObject, eventData);
         }
     }
 }

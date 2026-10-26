@@ -266,6 +266,8 @@ namespace TopiaForge.Mods
         /// Whether the action yields to UI that holds its controls: every control while a dialog, a fullscreen tool, the
         /// manager or a key capture holds the focus or a text field has the keyboard, the keys and buttons an open window
         /// handles, and mouse controls while the pointer is over UI. Other controls still reach it, over the mod's own window too.
+        /// A press keeps the owner it began with until it is released: a key still held as the UI lets go of it fires nothing
+        /// until it is pressed again.
         /// </param>
         public InputActionDefinition(
             string name,

@@ -256,6 +256,23 @@ namespace TopiaForge.ModManager.Tests
                 return Event(GamepadId, TopiaForgeInputDevice.Gamepad, control, TopiaForgeInputRole.Direction, (float)Math.Sqrt((x * x) + (y * y)), x, y);
             }
 
+            /// <summary>
+            /// A controller event in which the right stick points somewhere: the filter looks at it only while the game's
+            /// navigation binds it, or while a press of it is taken, and it plays the part the followed bindings give it.
+            /// </summary>
+            public bool RightStick(float x, float y)
+            {
+                var magnitude = (float)Math.Sqrt((x * x) + (y * y));
+                if (!Navigation.RightStickMoves && !Gate.IsTaken(GamepadId, RightStickControl))
+                {
+                    var before = seen[GamepadId, RightStickControl];
+                    seen[GamepadId, RightStickControl] = magnitude;
+                    return before < TopiaForgeInputGate.PressThreshold && magnitude >= TopiaForgeInputGate.PressThreshold;
+                }
+
+                return Event(GamepadId, TopiaForgeInputDevice.Gamepad, RightStickControl, Navigation.FollowedRole, magnitude, x, y);
+            }
+
             /// <summary>Ends a frame as the kit's driver does; returns the surface Back dismissed, if any.</summary>
             public ITopiaForgeDismissable? EndFrame(bool legacyHeld = false, bool legacyPressed = false)
             {

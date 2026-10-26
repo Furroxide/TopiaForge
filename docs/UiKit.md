@@ -142,13 +142,18 @@ Surfaces own the input they handle, with no code in the mod:
   the first press with none of them selected selects the first. A move never leaves the surface,
   whoever sends it, Unity's UI module included: past its last control, the selection stays where it
   is. A window takes navigation only while one of its controls is selected, so gameplay keeps Space
-  and the stick otherwise. An unselected window does not block the overlay or another selected
-  window's navigation, but nothing beneath a modal or a key capture moves or presses.
-  A direction held while opening or dismissing a modal does not navigate the next
-  surface; release it and press again.
+  and the stick otherwise. Even then, a window never takes the keys the game's menus share with its
+  gameplay while that gameplay listens: in a level, W, A, S and D always walk and the right stick
+  always turns the camera while a window is open, and the window's selection never moves on them,
+  whatever the game's menu map is doing. At the game's menus, the main menu and the pause menu, a
+  window with its control selected takes them as it takes the arrows. An unselected window does not
+  block the overlay or another selected window's navigation, but nothing beneath a modal or a key
+  capture moves or presses. A direction held while opening or dismissing a modal does not navigate
+  the next surface; release it and press again.
 - **The keyboard** belongs to a text field while it has focus, and to a key capture while it waits.
   Typing reaches the field and none of it the game; Escape cancels a capture without closing the
-  window around it.
+  window around it. A text field reached while a key is held, by navigation, a click or its surface
+  opening, takes the keyboard only once every key is released, so a held key never types into it.
 - **Everything else passes through unchanged**: the mouse, every key no surface handles, and the
   game's own controls.
 
@@ -160,8 +165,11 @@ pointer is over UI. A game control that is merely selected holds nothing, so a m
 reaches it at the main menu, over its own window, and in a level after a click on the game's menus.
 While a window navigates with the game's bindings, mod actions yield to those same keys and to a
 bound right stick. Rebinding updates both the claimed keys and their directions, even when the set
-of resolved controls stays the same. When the game's navigate action is disabled, those extra
-controls stay available to gameplay and mods.
+of resolved controls stays the same. When the game's navigate action is disabled, or its gameplay
+listens too, as in a level, those extra controls stay available to gameplay and mods. A press keeps
+the owner it began with until it is released: the key a capture takes, or one held while the window
+it navigated closes, fires no mod action until it is pressed again, and a key a mod's action had
+before a surface took it keeps reaching that action until it is released.
 
 TopiaForge takes these presses from the Input System, which the game's menus, pause and navigation
 read. Code that reads Unity's legacy input still sees every key.
@@ -228,11 +236,16 @@ every event passes at once. A surface whose root is destroyed or hidden claims n
 never reaches the device, so first-party code that reads a key's press through the Input System also
 reads `TopiaForgeInputOwnership.KeyPressedThisFrame(key)`, as hotkeys and key captures do. Each
 frame the kit follows the navigate action Unity's UI module reads, so navigation covers what the game
-binds to it, and the control selected inside a surface carries a guard that undoes any move out of
-the surface. The game's own UI holds a mod's keys only while one of its text fields has the keyboard;
+binds to it, and whether the game's gameplay maps are on next to it, which tells a level from a menu.
+The control selected inside a surface carries a guard that undoes any move out of the surface, and,
+while the keys the game's menus share with its gameplay reach the game, any move inside a window the
+kit did not send. Kit text fields are TextMesh Pro fields that wait for held keys before they take
+the keyboard, since TextMesh Pro types from the window's own key messages, which no Input System
+filter sees. The game's own UI holds a mod's keys only while one of its text fields has the keyboard;
 the kit reads UI Toolkit's focus by reflection, so it takes no UIElements reference. The decisions
 live in the Unity-free `TopiaForgeInputGate`, `TopiaForgeDismissOrder`, `TopiaForgeNavigationDriver`,
-`TopiaForgeNavigationBindings` and `TopiaForgeUiToolkitFocus`, covered by `UiKitInputOwnershipTests`.
+`TopiaForgeNavigationBindings`, `TopiaForgeTypingStart` and `TopiaForgeUiToolkitFocus`, covered by
+`UiKitInputOwnershipTests`.
 
 Every kit label comes from one TextMesh Pro factory, which turns on extra padding. Quicksand's
 stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops

@@ -105,7 +105,11 @@ namespace TopiaForge.Mods.UnityUi
             return surface;
         }
 
-        /// <summary>Gets what the live surfaces take from the game now, resolved: Back, Navigation and Keyboard only.</summary>
+        /// <summary>
+        /// Gets what the live surfaces take from the game now, resolved: Back, Navigation, SharedNavigation and Keyboard only.
+        /// A surface that takes navigation whatever is selected also takes the keys the game's menus share with its gameplay;
+        /// a window takes navigation only while one of its controls is selected, and never those keys.
+        /// </summary>
         public TopiaForgeInputClaim Claims()
         {
             var result = TopiaForgeInputClaim.None;
@@ -172,6 +176,11 @@ namespace TopiaForge.Mods.UnityUi
         {
             var claim = claims[index];
             var resolved = TopiaForgeInputClaim.Back | (claim & (TopiaForgeInputClaim.Navigation | TopiaForgeInputClaim.Keyboard));
+            if ((claim & TopiaForgeInputClaim.Navigation) != 0)
+            {
+                resolved |= TopiaForgeInputClaim.SharedNavigation;
+            }
+
             var root = roots[index];
             if ((claim & TopiaForgeInputClaim.NavigationWhileSelected) != 0 && root != null && holdsSelection(root))
             {

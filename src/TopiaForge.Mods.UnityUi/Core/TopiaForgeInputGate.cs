@@ -28,6 +28,7 @@ namespace TopiaForge.Mods.UnityUi
         private const int NoFrame = int.MinValue;
 
         private readonly int[] deviceIds = new int[DeviceSlots];
+        private readonly TopiaForgeInputDevice[] kinds = new TopiaForgeInputDevice[DeviceSlots];
         private readonly int[] heldPerSlot = new int[DeviceSlots];
         private readonly bool[] taken = new bool[DeviceSlots * ControlsPerDevice];
         private readonly TopiaForgeInputRole[] roles = new TopiaForgeInputRole[DeviceSlots * ControlsPerDevice];
@@ -126,6 +127,7 @@ namespace TopiaForge.Mods.UnityUi
                 return false;
             }
 
+            kinds[slot] = device;
             Hold(slot, (slot * ControlsPerDevice) + control, role, x, y);
             if (role == TopiaForgeInputRole.Back)
             {
@@ -158,6 +160,43 @@ namespace TopiaForge.Mods.UnityUi
         {
             var slot = SlotOf(deviceId);
             return slot >= 0 && control >= 0 && control < ControlsPerDevice && taken[(slot * ControlsPerDevice) + control];
+        }
+
+        /// <summary>
+        /// Gets whether a press of <paramref name="control"/> taken from any device of kind <paramref name="device"/> is
+        /// still held: a keyboard key by its number, or a controller's control by the filter's index. A mod's binding of that
+        /// control waits for its release too, as the game does.
+        /// </summary>
+        public bool HeldOn(TopiaForgeInputDevice device, int control)
+        {
+            if (control < 0 || control >= ControlsPerDevice)
+            {
+                return false;
+            }
+
+            for (var slot = 0; slot < DeviceSlots; slot++)
+            {
+                if (heldPerSlot[slot] > 0 && kinds[slot] == device && taken[(slot * ControlsPerDevice) + control])
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>Gets whether any press taken from a device of kind <paramref name="device"/> is still held.</summary>
+        public bool HoldsAnyOn(TopiaForgeInputDevice device)
+        {
+            for (var slot = 0; slot < DeviceSlots; slot++)
+            {
+                if (heldPerSlot[slot] > 0 && kinds[slot] == device)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>Gets the direction the taken, held direction controls point, each axis between -1 and 1.</summary>
@@ -244,7 +283,7 @@ namespace TopiaForge.Mods.UnityUi
             {
                 backHeld++;
             }
-            else if (role == TopiaForgeInputRole.Direction && directionCount < MaxDirections)
+            else if (TopiaForgeInputClaims.IsDirection(role) && directionCount < MaxDirections)
             {
                 directions[directionCount++] = index;
             }
@@ -259,7 +298,7 @@ namespace TopiaForge.Mods.UnityUi
             {
                 backHeld--;
             }
-            else if (roles[index] == TopiaForgeInputRole.Direction)
+            else if (TopiaForgeInputClaims.IsDirection(roles[index]))
             {
                 for (var at = 0; at < directionCount; at++)
                 {

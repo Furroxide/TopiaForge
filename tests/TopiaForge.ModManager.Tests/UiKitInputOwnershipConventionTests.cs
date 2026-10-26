@@ -53,9 +53,23 @@ namespace TopiaForge.ModManager.Tests
                 "the overlay, a modal, a fullscreen tool, a key capture or a kit text field hold every control");
             Require(focus, "TopiaForgeDismissStack.Claims", "and the open windows hold what they claim");
             Require(focus, "TopiaForgeNavigateAction.Bindings", "mod actions yield to the same navigation bindings as the game's event filter");
-            Require(service, "value = ReadBindings(bindings, definition.SuppressWhileUiFocused ? focus : default);",
+            Require(service, "value = ReadBindings(definition.SuppressWhileUiFocused, focus);",
                 "an action that opted out of yielding reads every binding");
-            Require(service, "if (!InputActionYield.Yields(bindings[index], focus))", "each binding yields on its own");
+            var read = Between(service, "private float ReadBindings(bool yielding, UiInputFocus focus)", "private bool TakenByTopiaForge(int index)");
+            Require(read, "value += InputActionYield.Read(ref owners[index], binding, ReadBinding(binding), focus, yielding,",
+                "each binding yields on its own, and its press keeps the owner it began with until its release");
+            Require(read, "yielding && TakenByTopiaForge(index));", "a press TopiaForge took from the game stays TopiaForge's for mods too");
+            var taken = Between(service, "private bool TakenByTopiaForge(int index)", "private static int[] Takeable(");
+            Require(taken, "TopiaForgeInputOwnership.KeyTaken(control)", "a key TopiaForge took is looked up by the filter's own number");
+            Require(taken, "TopiaForgeInputOwnership.PadButtonTaken(control == TakeableBack)", "and a controller's B or A");
+            Require(Between(service, "private static int[] Takeable(", "private static List<InputBinding> CopyBindings("),
+                "TopiaForgeInputOwnership.KeyNumber(binding.Control)", "each key binding is numbered once, as the filter numbers keys");
+            var rebind = Between(service, "public OperationResult<bool> Rebind(", "public OperationResult<bool> ResetBindings()");
+            Require(rebind, "owners = new InputPressOwner[copy.Count];", "a rebind starts every binding afresh");
+            Require(rebind, "takeable = Takeable(copy);", "and numbers its keys again");
+            Require(Between(Ownership(), "internal static int KeyNumber(string name)", "internal static bool SharedKeysReachTheGame"),
+                "Enum.TryParse(TopiaForgeNavigationBindings.InputSystemName(name), true, out InputSystemKey key)",
+                "an SDK key name is numbered through the Input System's own name for it");
             Assert(!service.Contains("uiFocused ? 0f", StringComparison.Ordinal), "no action yields as a whole any more");
 
             var kitObject = Between(Ownership(), "internal static bool IsKitObject(GameObject target)", "internal static bool KitTextFieldHasKeyboard()");
@@ -81,9 +95,15 @@ namespace TopiaForge.ModManager.Tests
             var examine = Between(filter, "private static void Examine(Keyboard keyboard", "private static void FilterGamepad(");
             Require(examine, "bindings.Direction(code, out var x, out var y);", "each moves the way the game's binding points");
             Require(examine, "bindings.RoleOf(code)", "and plays a direction's part");
-            Require(Between(filter, "private static void FilterGamepad(", "private static void Examine(Gamepad gamepad, ButtonControl"),
-                "if (TopiaForgeNavigateAction.Bindings.RightStickMoves || Gate.IsTaken(gamepad.deviceId, RightStick))",
+            var pad = Between(filter, "private static void FilterGamepad(", "private static void Examine(Gamepad gamepad, ButtonControl");
+            Require(pad, "if (bindings.RightStickMoves || Gate.IsTaken(gamepad.deviceId, RightStick))",
                 "the right stick is examined while the game's navigation binds it, and until its release once taken, so it never stays held");
+            Require(pad, "Examine(gamepad, gamepad.rightStick, RightStick, bindings.FollowedRole, eventPtr, claims, frame);",
+                "and plays the part the followed bindings give it, so over gameplay a window leaves it to the camera");
+            var shared = Between(filter, "internal static bool SharedKeysReachTheGame", "internal static void Install()");
+            Require(shared, "bindings.Listening && bindings.Gameplay", "the shared keys reach the game while its menus and its gameplay both listen");
+            Require(shared, "(TopiaForgeDismissStack.Claims & (TopiaForgeInputClaim.SharedNavigation | TopiaForgeInputClaim.Keyboard)) == 0",
+                "and no surface takes them");
             Require(Between(filter, "internal static void Reset()", "internal static void ForgetHeld()"), "TopiaForgeNavigateAction.Reset();",
                 "the kit's teardown forgets the game's navigation");
 
@@ -94,12 +114,15 @@ namespace TopiaForge.ModManager.Tests
             var follower = Kit("Runtime", "TopiaForgeNavigateAction.cs");
             Require(follower, "events.currentInputModule as InputSystemUIInputModule", "the action is the one Unity's UI module moves with");
             Require(follower, "Bindings.Listening = current != null && current.enabled;", "and only while it is enabled");
+            Require(follower, "Bindings.Gameplay = current != null && GameplayListens(current);",
+                "whether the game's gameplay listens too is read every frame, from its gameplay maps, never from its menu map");
             Assert(!Between(filter, "private static void OnEvent(", "private static void OnDeviceChange(").Contains("TopiaForgeNavigateAction.Follow", StringComparison.Ordinal),
                 "the filter never reads the game's actions while an event passes");
 
             var navigation = Kit("Runtime", "TopiaForgeNavigation.cs");
             Require(navigation, "selected.AddComponent<TopiaForgeMoveGuard>();", "the control selected inside a surface carries the move guard");
             Require(navigation, "internal sealed class TopiaForgeMoveGuard : MonoBehaviour, IMoveHandler", "which sees every move sent to it");
+            Require(navigation, "TopiaForgeNavigation.Contain(gameObject, eventData);", "and tells the kit who sent it");
         }
 
         private static void SurfacesPushWhatTheyTake()
@@ -340,6 +363,10 @@ namespace TopiaForge.ModManager.Tests
         private static void KitTextFieldsTakeTheKeyboard()
         {
             Require(Kit("Widgets", "TopiaForgeInputField.cs"), "Go.AddComponent<TopiaForgeTextEntry>();", "every kit text field is marked");
+            Require(Kit("Widgets", "TopiaForgeInputField.cs"), "input = Go.AddComponent<TopiaForgeTextInput>();",
+                "and starts typing only once the keys held as it was reached are released");
+            Require(Between(Ownership(), "internal static bool AnyKeyHeld", "internal static bool KeyTaken("),
+                "Gate.HoldsAnyOn(TopiaForgeInputDevice.Keyboard)", "a key TopiaForge took, which the device reads at rest, counts as held");
             var focus = Between(Ownership(), "internal static bool KitTextFieldHasKeyboard()", "private static void Stop(");
             Require(focus, "TryGetComponent<TopiaForgeTextEntry>(out _)", "only a kit text field takes the keyboard, never the game's own");
             Require(focus, "selectionText.isFocused", "and only while it has the keyboard");

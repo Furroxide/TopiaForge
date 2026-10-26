@@ -240,10 +240,16 @@ namespace TopiaForge.ModManager
 
         internal sealed class UnityInputAction : IInputAction
         {
+            private const int NotTakeable = -1;
+            private const int TakeableBack = -2;
+            private const int TakeableSubmit = -3;
+
             private UnityInputRegistry? owner;
             private readonly string key;
             private readonly InputActionDefinition definition;
             private IReadOnlyList<InputBinding> bindings;
+            private InputPressOwner[] owners;
+            private int[] takeable;
             private float value;
             private bool held;
             private bool pressed;
@@ -262,6 +268,8 @@ namespace TopiaForge.ModManager
                 OwnerModId = ownerModId;
                 this.definition = definition;
                 bindings = CopyBindings(definition.DefaultBindings).AsReadOnly();
+                owners = new InputPressOwner[bindings.Count];
+                takeable = Takeable(bindings);
             }
 
             public string OwnerModId { get; }
@@ -284,10 +292,11 @@ namespace TopiaForge.ModManager
                     return;
                 }
 
-                // A binding yields only to UI that holds its control, so a mod's own key still works over its window.
+                // A binding yields only to UI that holds its control, so a mod's own key still works over its window, and a
+                // press keeps the owner it began with until it is released.
                 var previous = held;
-                value = ReadBindings(bindings, definition.SuppressWhileUiFocused ? focus : default);
-                held = Math.Abs(value) > 0.0001f;
+                value = ReadBindings(definition.SuppressWhileUiFocused, focus);
+                held = Math.Abs(value) > InputActionYield.ReleasedBelow;
                 pressed = held && !previous;
                 released = !held && previous;
             }
@@ -314,6 +323,8 @@ namespace TopiaForge.ModManager
                 }
 
                 bindings = copy.AsReadOnly();
+                owners = new InputPressOwner[copy.Count];
+                takeable = Takeable(copy);
                 return OperationResult<bool>.Success(true);
             }
 
@@ -354,18 +365,48 @@ namespace TopiaForge.ModManager
                 Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
 
-            private static float ReadBindings(IReadOnlyList<InputBinding> bindings, UiInputFocus focus)
+            private float ReadBindings(bool yielding, UiInputFocus focus)
             {
                 var value = 0f;
                 for (var index = 0; index < bindings.Count; index++)
                 {
-                    if (!InputActionYield.Yields(bindings[index], focus))
-                    {
-                        value += ReadBinding(bindings[index]);
-                    }
+                    // Who a press belongs to is decided as it begins: the UI that holds its control, or a press TopiaForge
+                    // took from the game, keeps it until its release, however the claims change meanwhile.
+                    var binding = bindings[index];
+                    value += InputActionYield.Read(ref owners[index], binding, ReadBinding(binding), focus, yielding,
+                        yielding && TakenByTopiaForge(index));
                 }
 
                 return Mathf.Clamp(value, -1f, 1f);
+            }
+
+            // Whether TopiaForge took this binding's press from the game and still holds it: a key, or a controller's B or A.
+            private bool TakenByTopiaForge(int index)
+            {
+                var control = takeable[index];
+                if (control >= 0)
+                {
+                    return TopiaForgeInputOwnership.KeyTaken(control);
+                }
+
+                return control != NotTakeable && TopiaForgeInputOwnership.PadButtonTaken(control == TakeableBack);
+            }
+
+            // What TopiaForge's filter can take of each binding: a key's number, a controller's B or A, or nothing.
+            private static int[] Takeable(IReadOnlyList<InputBinding> source)
+            {
+                var result = new int[source.Count];
+                for (var index = 0; index < source.Count; index++)
+                {
+                    var binding = source[index];
+                    result[index] = binding.Kind == InputBindingKind.Key ? TopiaForgeInputOwnership.KeyNumber(binding.Control)
+                        : binding.Kind != InputBindingKind.GamepadButton ? NotTakeable
+                        : string.Equals(binding.Control, nameof(InputGamepadButton.East), StringComparison.OrdinalIgnoreCase) ? TakeableBack
+                        : string.Equals(binding.Control, nameof(InputGamepadButton.South), StringComparison.OrdinalIgnoreCase) ? TakeableSubmit
+                        : NotTakeable;
+                }
+
+                return result;
             }
 
             private static List<InputBinding> CopyBindings(IEnumerable<InputBinding> source)

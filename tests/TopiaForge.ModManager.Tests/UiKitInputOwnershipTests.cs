@@ -35,6 +35,7 @@ namespace TopiaForge.ModManager.Tests
         private const int South = 1;
         private const int Dpad = 2;
         private const int LeftStick = 3;
+        private const int RightStickControl = 4;
 
         private const int KeyboardId = 1;
         private const int GamepadId = 2;
@@ -51,6 +52,8 @@ namespace TopiaForge.ModManager.Tests
             WindowsTakeNavigationOnlyWhileTheirControlIsSelected();
             AKeyCaptureTakesTheKeyboardAndBackCancelsOnlyIt();
             TypingInAKitTextFieldReachesNoGameKey();
+            AKitTextFieldStartsOnceTheKeysHeldAsItIsReachedAreReleased();
+            TheKitsTextInputTypesNothingFromAKeyHeldAsItIsReached();
             AControllerBehavesLikeTheKeyboard();
             RapidTogglesNeverStrandAKey();
             DevicesThatGoAwayLetGo();
@@ -61,12 +64,20 @@ namespace TopiaForge.ModManager.Tests
             NothingBeneathAModalNavigates();
             TheKitsNavigationStaysInsideItsSurface();
             TheGamesNavigationKeysAreTheSurfacesToo();
+            AWindowOverGameplayLeavesTheSharedKeysToThePlayer();
+            TheGamesMenuMapInALevelChangesNothingForThePlayer();
+            AtTheGamesMenusAWindowTakesTheSharedKeys();
             TheNavigationBindingsFollowWhatTheGameBinds();
             TheKitFollowsTheGamesNavigateAction();
             TheKitsKeyNumbersAreTheInputSystems();
             DeviceAndControlBoundsDoNotStealOtherInput();
             AModsOwnKeyStillReachesItsAction();
             AModsNavigationBindingsYieldWithTheGame();
+            ACapturesKeyHeldIntoTheNextFrameFiresNoBinding();
+            AHeldKeyCarriedAcrossASurfacesCloseFiresNoPress();
+            APressKeepsTheOwnerItBeganWith();
+            TakenPressesAreToldApartByDevice();
+            TheSdkKeyNamesMapToTheInputSystemsKeys();
             OnlyAGameTextFieldWithTheKeyboardHoldsTheKeys();
             TheGamesUiToolkitHasWhatTheKitReads();
             NothingIsAllocatedAtRestOrWhileHeld();
@@ -301,7 +312,8 @@ namespace TopiaForge.ModManager.Tests
             var voice = new Surface(TopiaForgeLayerBand.Modal);
             rig.Order.Push(window, TopiaForgeInputClaim.NavigationWhileSelected, new Root());
             rig.Order.Push(modal, TopiaForgeInputClaim.Navigation, modalRoot);
-            AssertEqual(rig.Claims, TopiaForgeInputClaim.Back | TopiaForgeInputClaim.Navigation, "a modal takes navigation while it shows");
+            AssertEqual(rig.Claims, TopiaForgeInputClaim.Back | TopiaForgeInputClaim.Navigation | TopiaForgeInputClaim.SharedNavigation,
+                "a modal takes navigation while it shows, the keys the game's menus share with its gameplay included");
 
             modalRoot.Live = false;
             AssertEqual(rig.Claims, TopiaForgeInputClaim.Back, "a modal whose canvas went with a scene takes nothing");

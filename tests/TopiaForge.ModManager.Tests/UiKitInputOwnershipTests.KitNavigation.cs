@@ -43,8 +43,8 @@ namespace TopiaForge.ModManager.Tests
             foreach (var name in new[]
             {
                 "AMoveStopsAtTheSurfacesEdge", "ASubmitWithAMovePressesOnlyTheSurfacesControl", "AHeldDirectionStaysWithItsSurface",
-                "AModuleMoveStaysInsideTheSurface", "AModuleMoveStaysInsideAWindowToo", "AModuleMoveIsFreeWithNoSurfaceTakingNavigation",
-                "AClickAndAMoveInOneFrameStayInside",
+                "AModuleMoveStaysInsideTheSurface", "AModuleMoveStaysInsideAWindowToo", "AModuleMoveNeverMovesAWindowOverGameplay",
+                "AModuleMoveIsFreeWithNoSurfaceTakingNavigation", "AClickAndAMoveInOneFrameStayInside",
             })
             {
                 try
@@ -248,6 +248,7 @@ namespace TopiaForge.ModManager.Tests
                     internal static float X;
                     internal static float Y;
                     internal static bool SubmitPressedThisFrame;
+                    internal static bool SharedKeysReachTheGame;
                     internal static void Direction(out float x, out float y) { x = X; y = Y; }
                 }
             }
@@ -276,6 +277,7 @@ namespace TopiaForge.ModManager.Tests
                 private static void Start()
                 {
                     TopiaForgeNavigation.Reset();
+                    TopiaForgeInputOwnership.SharedKeysReachTheGame = false;
                     Selectable.All.Clear();
                     system = new GameObject("EventSystem").AddComponent<EventSystem>();
                     system.currentInputModule = system.gameObject.AddComponent<InputSystemUIInputModule>();
@@ -377,6 +379,25 @@ namespace TopiaForge.ModManager.Tests
                     ModuleMove(notNow, MoveDirection.Down);
                     Check(system.currentSelectedGameObject == notNow.gameObject,
                         "a module move off a window's control stays in the window, though its claim ends with the move");
+                }
+
+                // In a level a window leaves W, A, S and D to the player, and Unity's module moves the selection on them too
+                // while the game's menu map is on: no move the kit did not send moves the window's selection then, so walking
+                // never carries it, onto a text field least of all.
+                public static void AModuleMoveNeverMovesAWindowOverGameplay()
+                {
+                    Start();
+                    TopiaForgeInputOwnership.SharedKeysReachTheGame = true;
+                    ModuleMove(notNow, MoveDirection.Up);
+                    Check(system.currentSelectedGameObject == notNow.gameObject, "Unity's module moving Up on W leaves the window's selection where it was");
+                    Frame(0f, 1f, false);
+                    Check(system.currentSelectedGameObject == turnOn.gameObject, "the kit's own move, on an arrow, still moves inside the window");
+                    Frame(0f, 0f, false);
+                    ModuleMove(turnOn, MoveDirection.Down);
+                    Check(system.currentSelectedGameObject == turnOn.gameObject, "and the control it reached keeps still against the module too");
+                    TopiaForgeInputOwnership.SharedKeysReachTheGame = false;
+                    ModuleMove(turnOn, MoveDirection.Down);
+                    Check(system.currentSelectedGameObject == notNow.gameObject, "at the menus, where the window takes those keys, a module move inside it still moves");
                 }
 
                 public static void AModuleMoveIsFreeWithNoSurfaceTakingNavigation()

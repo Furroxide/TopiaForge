@@ -144,7 +144,7 @@ namespace TopiaForge.ModManager.Tests
                     ("Tab", TopiaForgeNavigationBindings.Tab), ("Escape", TopiaForgeNavigationBindings.Escape),
                     ("LeftArrow", TopiaForgeNavigationBindings.LeftArrow), ("RightArrow", TopiaForgeNavigationBindings.RightArrow),
                     ("UpArrow", TopiaForgeNavigationBindings.UpArrow), ("DownArrow", TopiaForgeNavigationBindings.DownArrow),
-                    ("NumpadEnter", TopiaForgeNavigationBindings.NumpadEnter), ("A", A), ("B", B), ("D", D), ("E", E), ("S", S),
+                    ("NumpadEnter", TopiaForgeNavigationBindings.NumpadEnter), ("A", A), ("B", B), ("D", D), ("E", E), ("K", K), ("S", S),
                     ("V", V), ("W", W), ("F10", F10),
                 })
                 {
@@ -186,7 +186,7 @@ namespace TopiaForge.ModManager.Tests
                     NavigateActionContract,
                     NavigateScenarios,
                 },
-                "TheGamesNavigationKeysAreFollowed", "NothingMovesWhileTheActionIsDisabled", "ARebindIsFollowed",
+                "TheGamesNavigationKeysAreFollowed", "TheGameplayInputIsFollowed", "NothingMovesWhileTheActionIsDisabled", "ARebindIsFollowed",
                 "OnlyTheInputSystemsModuleIsFollowed", "AFailureStopsTheFollowingOnce", "FollowingAnUnchangedActionAllocatesNothing");
         }
 
@@ -282,6 +282,16 @@ namespace TopiaForge.ModManager.Tests
                     public string name { get; set; }
                     public bool isPartOfComposite { get; set; }
                 }
+                public class InputActionAsset : UnityEngine.ScriptableObject
+                {
+                    public InputActionMap[] Maps = new InputActionMap[0];
+                    public ReadOnlyArray<InputActionMap> actionMaps => new ReadOnlyArray<InputActionMap>(Maps);
+                }
+                public class InputActionMap
+                {
+                    public bool enabled { get; set; }
+                    public InputActionAsset? asset { get; set; }
+                }
                 public class InputAction
                 {
                     public InputControl[] Controls = new InputControl[0];
@@ -289,8 +299,15 @@ namespace TopiaForge.ModManager.Tests
                     public InputBinding[] Bindings = new InputBinding[0];
                     public bool Throws;
                     public bool enabled { get; set; } = true;
+                    public InputActionMap? actionMap { get; set; }
                     public ReadOnlyArray<InputControl> controls => Throws ? throw new InvalidOperationException("The controls of a device named Sam could not resolve.") : new ReadOnlyArray<InputControl>(Controls);
                     public ReadOnlyArray<InputBinding> bindings => new ReadOnlyArray<InputBinding>(Bindings);
+                }
+                public class PlayerInput : UnityEngine.MonoBehaviour
+                {
+                    public static PlayerInput[] All = new PlayerInput[0];
+                    public static ReadOnlyArray<PlayerInput> all => new ReadOnlyArray<PlayerInput>(All);
+                    public InputActionMap? currentActionMap { get; set; }
                 }
                 public static class InputActionRebindingExtensions
                 {
@@ -343,15 +360,23 @@ namespace TopiaForge.ModManager.Tests
             {
                 private static InputAction action = null!;
                 private static Keyboard keyboard = null!;
+                private static InputActionMap menus = null!;
+                private static InputActionMap gameplay = null!;
 
                 private static TopiaForgeNavigationBindings Bindings => TopiaForgeNavigateAction.Bindings;
 
                 // A navigate action as Unity's UI module holds it: a keyboard composite of W, A, S, D and the arrows, which the
-                // game's binds, and the left stick, the right stick's up part and the D-pad.
+                // game's binds, and the left stick, the right stick's up part and the D-pad. It is in the game's menu map, in
+                // the same input asset as its gameplay map, which is off as at the main menu.
                 private static void Start()
                 {
                     TopiaForgeNavigateAction.Reset();
                     TopiaForgeLog.Warnings = 0;
+                    PlayerInput.All = new PlayerInput[0];
+                    var asset = new InputActionAsset();
+                    gameplay = new InputActionMap { asset = asset };
+                    menus = new InputActionMap { asset = asset, enabled = true };
+                    asset.Maps = new[] { gameplay, menus };
                     keyboard = new Keyboard();
                     var gamepad = new Gamepad();
                     var controls = new List<InputControl>();
@@ -373,7 +398,7 @@ namespace TopiaForge.ModManager.Tests
                     controls.Add(gamepad.dpad);
                     bindingOf.Add(bindings.Count);
                     bindings.Add(new InputBinding { name = string.Empty });
-                    action = new InputAction { Controls = controls.ToArray(), BindingOf = bindingOf.ToArray(), Bindings = bindings.ToArray() };
+                    action = new InputAction { Controls = controls.ToArray(), BindingOf = bindingOf.ToArray(), Bindings = bindings.ToArray(), actionMap = menus };
                     EventSystem.current = new EventSystem
                     {
                         currentInputModule = new InputSystemUIInputModule { move = new InputActionReference { action = action } },
@@ -403,6 +428,45 @@ namespace TopiaForge.ModManager.Tests
                     Check(Bindings.RoleOf((int)Key.W) == TopiaForgeInputRole.Direction, "W moves while the game's menus listen");
                     Check(Bindings.Moves("W"), "the same key is followed by name for mod input actions");
                     Check(Bindings.RightStickMoves, "and so does the right stick, which the action binds by a part");
+                }
+
+                // Robotopia keeps its menu map enabled next to its gameplay map from a level's start until its first pause, so
+                // the gameplay map, never the menu map, tells a level from the game's menus.
+                public static void TheGameplayInputIsFollowed()
+                {
+                    Start();
+                    TopiaForgeNavigateAction.Follow();
+                    Check(Bindings.Listening && !Bindings.Gameplay, "at the main menu only the menu map is on: W, A, S and D only navigate");
+                    Check(Bindings.RoleOf((int)Key.W) == TopiaForgeInputRole.Direction, "so W plays a plain direction");
+                    gameplay.enabled = true;
+                    TopiaForgeNavigateAction.Follow();
+                    Check(Bindings.Listening && Bindings.Gameplay, "in a level the gameplay map is on next to the menu map");
+                    Check(Bindings.RoleOf((int)Key.W) == TopiaForgeInputRole.SharedDirection && Bindings.RoleOf("W") == TopiaForgeInputRole.SharedDirection,
+                        "so W is shared with gameplay, for the filter and for mod actions alike");
+                    Check(Bindings.FollowedRole == TopiaForgeInputRole.SharedDirection, "and so is the right stick the action binds");
+                    menus.enabled = false;
+                    action.enabled = false;
+                    TopiaForgeNavigateAction.Follow();
+                    Check(!Bindings.Listening && Bindings.Gameplay, "after the first pause the menu map is off and gameplay still listens");
+                    gameplay.enabled = false;
+                    menus.enabled = true;
+                    action.enabled = true;
+                    TopiaForgeNavigateAction.Follow();
+                    Check(Bindings.Listening && !Bindings.Gameplay, "in the pause menu only the menu map is on");
+
+                    PlayerInput.All = new[] { new PlayerInput { currentActionMap = new InputActionMap { enabled = true } } };
+                    TopiaForgeNavigateAction.Follow();
+                    Check(Bindings.Gameplay, "a player's own gameplay map counts, whichever input asset it is in");
+                    PlayerInput.All[0].currentActionMap = menus;
+                    TopiaForgeNavigateAction.Follow();
+                    Check(!Bindings.Gameplay, "a player on the menu map itself does not");
+                    PlayerInput.All = new PlayerInput[0];
+
+                    action.actionMap = null;
+                    TopiaForgeNavigateAction.Follow();
+                    Check(Bindings.Gameplay, "an action outside any input asset tells nothing, so its shared keys stay the player's under a window");
+                    TopiaForgeNavigateAction.Reset();
+                    Check(!Bindings.Gameplay && !Bindings.Listening, "the kit's teardown forgets it");
                 }
 
                 public static void NothingMovesWhileTheActionIsDisabled()

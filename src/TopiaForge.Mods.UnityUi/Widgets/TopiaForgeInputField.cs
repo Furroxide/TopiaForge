@@ -48,8 +48,9 @@ namespace TopiaForge.Mods.UnityUi
             placeholderComponent.fontStyle = FontStyles.Italic;
             textComponent = CreateTmp(areaGo.transform, "Text", string.Empty);
 
-            input = Go.AddComponent<TMP_InputField>();
-            // While the field has the keyboard, the game sees none of the typing.
+            // It starts typing only once every key held as it was reached is released (TopiaForgeTextInput), and while it
+            // has the keyboard, the game sees none of the typing.
+            input = Go.AddComponent<TopiaForgeTextInput>();
             Go.AddComponent<TopiaForgeTextEntry>();
             input.targetGraphic = fill;
             input.textViewport = areaRect;

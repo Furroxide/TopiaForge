@@ -15,7 +15,10 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Back: Escape, and a controller's B. Every surface on the dismiss stack claims it.</summary>
         Back = 1,
 
-        /// <summary>Menu navigation: the arrows, Tab, Enter and Space, and a controller's left stick, D-pad, A and B.</summary>
+        /// <summary>
+        /// Menu navigation: the arrows, Tab, Enter and Space, and a controller's left stick, D-pad, A and B, and the other keys
+        /// the game's navigate action binds while only its menus listen to them (TopiaForgeNavigationBindings).
+        /// </summary>
         Navigation = 2,
 
         /// <summary>
@@ -26,6 +29,14 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Every keyboard key: a key capture, or typing in a kit text field.</summary>
         Keyboard = 8,
+
+        /// <summary>
+        /// The keys and the stick the game's menu navigation shares with its gameplay (W, A, S and D in a level), as a
+        /// surface that takes navigation whatever is selected does: the manager overlay, a kit modal and a fullscreen tool.
+        /// Resolved claims only: the dismiss order adds it for a surface pushed with <see cref="Navigation"/>, never for a
+        /// window, so over gameplay a window leaves those keys to the player.
+        /// </summary>
+        SharedNavigation = 16,
     }
 
     /// <summary>The part a control plays in what TopiaForge can take from the game.</summary>
@@ -45,6 +56,13 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Tab.</summary>
         Tab,
+
+        /// <summary>
+        /// A key or stick the game's navigate action binds besides the kit's own while its gameplay input is on as well, as
+        /// W, A, S and D are in a level: it walks or turns as well as moving the game's menus. Only a surface that takes
+        /// navigation whatever is selected takes it (<see cref="TopiaForgeInputClaim.SharedNavigation"/>).
+        /// </summary>
+        SharedDirection,
     }
 
     /// <summary>The kind of device an input event comes from, as far as TopiaForge's claims go.</summary>
@@ -88,9 +106,17 @@ namespace TopiaForge.Mods.UnityUi
                 case TopiaForgeInputRole.Submit:
                 case TopiaForgeInputRole.Tab:
                     return (claims & TopiaForgeInputClaim.Navigation) != 0;
+                case TopiaForgeInputRole.SharedDirection:
+                    return (claims & TopiaForgeInputClaim.SharedNavigation) != 0;
                 default:
                     return false;
             }
+        }
+
+        /// <summary>Gets whether a control playing <paramref name="role"/> steers the kit's navigation once it is taken.</summary>
+        public static bool IsDirection(TopiaForgeInputRole role)
+        {
+            return role == TopiaForgeInputRole.Direction || role == TopiaForgeInputRole.SharedDirection;
         }
     }
 }

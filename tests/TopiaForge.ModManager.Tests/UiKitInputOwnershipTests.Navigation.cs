@@ -113,6 +113,8 @@ namespace TopiaForge.ModManager.Tests
             rig.Stick(LeftStick, 0f, -0.9f);
             var mouse = 0;
             var steered = 0f;
+            var owners = new TopiaForge.ModManager.InputPressOwner[2];
+            var heldByAMod = 0f;
 
             [MethodImpl(MethodImplOptions.NoInlining)]
             long Held(int count)
@@ -132,6 +134,12 @@ namespace TopiaForge.ModManager.Tests
                     // The input service's focus read with the overlay open, and a mod's W while a window navigates with it.
                     TopiaForge.ModManager.InputActionYield.Yields(KeyReturn, new TopiaForge.ModManager.UiInputFocus(claims, rig.Order.HoldsFocus(), false, true));
                     TopiaForge.ModManager.InputActionYield.Yields(KeyW, new TopiaForge.ModManager.UiInputFocus(claims, false, false, true, rig.Navigation));
+                    // A mod's held bindings, each keeping the owner its press began with, and the presses TopiaForge took.
+                    var modFocus = new TopiaForge.ModManager.UiInputFocus(claims, false, false, true, rig.Navigation);
+                    heldByAMod += TopiaForge.ModManager.InputActionYield.Read(ref owners[0], KeyW, 1f, modFocus, true,
+                        rig.Gate.HeldOn(TopiaForgeInputDevice.Keyboard, W));
+                    heldByAMod += TopiaForge.ModManager.InputActionYield.Read(ref owners[1], PadRightX, 0.8f, modFocus, true,
+                        rig.Gate.HoldsAnyOn(TopiaForgeInputDevice.Keyboard));
                     driver.Tick(rig.Order.FocusRoot() != null, true, false, x, y, rig.Gate.SubmitPressedIn(index), FrameTime, ModuleDelay, ModuleRate);
                 }
 
@@ -139,6 +147,7 @@ namespace TopiaForge.ModManager.Tests
             }
 
             AssertEqual(Fewest(Held), 0L, "while keys are held, every event and frame allocates nothing");
+            AssertEqual(heldByAMod, 0f, "a mod's W and right stick, pressed under the overlay, stayed the overlay's throughout");
             AssertEqual(mouse, 0, "and a mouse moving while the overlay shows still passes at once");
             Assert(steered > 0f, "the game's navigation keys were looked up throughout, W pointing up");
             Assert(rig.Gate.IsTaken(KeyboardId, DownArrow) && rig.Gate.IsTaken(GamepadId, LeftStick), "the held presses stayed TopiaForge's throughout");

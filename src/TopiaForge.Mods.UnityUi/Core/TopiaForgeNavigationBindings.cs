@@ -6,9 +6,12 @@ namespace TopiaForge.Mods.UnityUi
     /// Which keys and sticks navigate, Unity-free, by Input System key number. The kit's own keys always do: Escape is Back,
     /// the arrows move, Enter, the keypad's Enter and Space submit, and Tab is Tab. The game's navigate action, which Unity's
     /// UI module and Robotopia's menus both read, binds more: W, A, S and D as well as the arrows, and it may bind the right
-    /// stick as well as the left. While that action listens, each key it binds moves the way its binding points, so a
-    /// surface that claims navigation takes it from the game as it takes the arrows, and so does the right stick. While it
-    /// does not, as in a level, those keys stay gameplay's unless a keyboard claim takes them.
+    /// stick as well as the left. While that action listens, each key it binds moves the way its binding points. While only
+    /// the game's menus listen to them, as at the main menu and in the pause menu, any surface that claims navigation takes
+    /// them from the game as it takes the arrows, and so the right stick. While the game's gameplay input is on as well, as
+    /// in a level, they walk and turn too: only a surface that takes navigation outright (the overlay, a modal, a
+    /// fullscreen tool) takes them, and a window leaves them to the player. While the action does not listen at all, those
+    /// keys stay gameplay's unless a keyboard claim takes them.
     /// </summary>
     internal sealed class TopiaForgeNavigationBindings
     {
@@ -53,11 +56,23 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets or sets whether the game's navigate action is enabled, so its bindings move its menus.</summary>
         public bool Listening { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether the game's gameplay input is on next to its menu navigation, as in a level, so the keys the
+        /// navigate action binds besides the kit's own, and the right stick it binds, walk and turn the player too.
+        /// </summary>
+        public bool Gameplay { get; set; }
+
         /// <summary>Gets how many keys of the game's navigate action move its menus now: none while it does not listen.</summary>
         public int KeyCount => Listening ? count : 0;
 
         /// <summary>Gets whether the right stick moves the game's menus now.</summary>
         public bool RightStickMoves => Listening && rightStick;
+
+        /// <summary>
+        /// Gets the part a followed key or the right stick plays now: a direction while only the game's menus listen to it, a
+        /// shared one while its gameplay listens too, which only a surface holding navigation outright takes.
+        /// </summary>
+        public TopiaForgeInputRole FollowedRole => Gameplay ? TopiaForgeInputRole.SharedDirection : TopiaForgeInputRole.Direction;
 
         /// <summary>Gets the part one of the kit's own keys plays; every other key is <see cref="TopiaForgeInputRole.Key"/>.</summary>
         public static TopiaForgeInputRole KitRole(int key)
@@ -105,11 +120,37 @@ namespace TopiaForge.Mods.UnityUi
             return false;
         }
 
-        /// <summary>Gets the part <paramref name="key"/> plays now: its own as one of the kit's keys, else a direction while it moves the game's menus.</summary>
+        /// <summary>
+        /// Gets the part <paramref name="key"/> plays now: its own as one of the kit's keys, else the followed part
+        /// (<see cref="FollowedRole"/>) while it moves the game's menus.
+        /// </summary>
         public TopiaForgeInputRole RoleOf(int key)
         {
             var role = KitRole(key);
-            return role == TopiaForgeInputRole.Key && Moves(key) ? TopiaForgeInputRole.Direction : role;
+            return role == TopiaForgeInputRole.Key && Moves(key) ? FollowedRole : role;
+        }
+
+        /// <summary>
+        /// Gets the part the key an SDK key name names plays now among the followed bindings: the followed part while it
+        /// moves the game's menus, else <see cref="TopiaForgeInputRole.Key"/>.
+        /// </summary>
+        public TopiaForgeInputRole RoleOf(string name)
+        {
+            return Moves(name) ? FollowedRole : TopiaForgeInputRole.Key;
+        }
+
+        /// <summary>
+        /// Gets the Input System's name for an SDK key name, which follows Unity's legacy key codes, matched whatever its
+        /// case: Alpha1 is Digit1, Keypad1 is Numpad1, Return is Enter, LeftControl is LeftCtrl. Other names are the same.
+        /// </summary>
+        public static string InputSystemName(string name)
+        {
+            if (name.StartsWith("Alpha", StringComparison.OrdinalIgnoreCase)) return "Digit" + name.Substring(5);
+            if (name.StartsWith("Keypad", StringComparison.OrdinalIgnoreCase)) return "Numpad" + name.Substring(6);
+            if (Is(name, "Return")) return "Enter";
+            if (Is(name, "LeftControl")) return "LeftCtrl";
+            if (Is(name, "RightControl")) return "RightCtrl";
+            return Is(name, "Print") ? "PrintScreen" : Is(name, "Menu") ? "ContextMenu" : name;
         }
 
         /// <summary>Gets the way <paramref name="key"/> moves, each axis -1, 0 or 1: an arrow's own, or its binding's while it moves the game's menus.</summary>

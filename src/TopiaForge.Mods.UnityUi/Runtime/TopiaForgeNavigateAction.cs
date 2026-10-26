@@ -10,9 +10,12 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>
     /// Follows the game's navigate action, the one Unity's UI module moves its selection with and Robotopia's menus read,
     /// once a frame as the kit's driver runs (TopiaForgeNavigationBindings): whether it is enabled, the keys it binds with
-    /// the way each points, and whether it binds the right stick. Reading it changes nothing of the game's, and allocates
-    /// nothing unless the action, its controls or their binding directions changed. A failure stops the following until the game restarts, logged
-    /// once, and surfaces take only the kit's own navigation keys from the game again. Main thread only.
+    /// the way each points, whether it binds the right stick, and whether the game's gameplay input is on next to it, as in
+    /// a level, so those keys walk too. Robotopia keeps its menu map enabled next to its gameplay map from a level's start
+    /// until its first pause, so the gameplay map is what tells a level from a menu, never the menu map. Reading it changes
+    /// nothing of the game's, and allocates nothing unless the action, its controls or their binding directions changed. A
+    /// failure stops the following until the game restarts, logged once, and surfaces take only the kit's own navigation
+    /// keys from the game again. Main thread only.
     /// </summary>
     internal static class TopiaForgeNavigateAction
     {
@@ -39,6 +42,7 @@ namespace TopiaForge.Mods.UnityUi
                 var reference = module != null ? module.move : null;
                 var current = reference != null ? reference.action : null;
                 Bindings.Listening = current != null && current.enabled;
+                Bindings.Gameplay = current != null && GameplayListens(current);
                 if (current != null && !(ReferenceEquals(current, action) && Unchanged(current)))
                 {
                     Read(current);
@@ -48,6 +52,7 @@ namespace TopiaForge.Mods.UnityUi
             {
                 failed = true;
                 Bindings.Listening = false;
+                Bindings.Gameplay = false;
 
                 // Only the failure's type: an Input System message can carry a device's name, which can carry a person's.
                 TopiaForgeLog.Warn("TopiaForge stopped following the game's menu navigation keys after a failure ("
@@ -65,6 +70,43 @@ namespace TopiaForge.Mods.UnityUi
             Parts.Clear();
             Bindings.Clear();
             Bindings.Listening = false;
+            Bindings.Gameplay = false;
+        }
+
+        /// <summary>
+        /// Gets whether the game's gameplay input is on next to its navigate action: another action map of the action's own
+        /// input asset, or a player's current map, is enabled. At the game's menus only the menu map is. An action outside any
+        /// asset tells nothing, so it counts as gameplay: the keys it shares then stay the player's under a window.
+        /// </summary>
+        private static bool GameplayListens(InputAction navigate)
+        {
+            var own = navigate.actionMap;
+            var asset = own != null ? own.asset : null;
+            if (asset == null)
+            {
+                return true;
+            }
+
+            var maps = asset.actionMaps;
+            for (var index = 0; index < maps.Count; index++)
+            {
+                if (!ReferenceEquals(maps[index], own) && maps[index].enabled)
+                {
+                    return true;
+                }
+            }
+
+            var players = PlayerInput.all;
+            for (var index = 0; index < players.Count; index++)
+            {
+                var map = players[index] != null ? players[index].currentActionMap : null;
+                if (map != null && !ReferenceEquals(map, own) && map.enabled)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void Read(InputAction navigate)

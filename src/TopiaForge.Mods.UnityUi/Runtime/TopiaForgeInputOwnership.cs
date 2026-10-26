@@ -16,11 +16,12 @@ namespace TopiaForge.Mods.UnityUi
     /// the surfaces claim (through the dismiss stack, or a kit text field with the keyboard) that begins while the claim
     /// holds is held at rest in that event and every later one until the control is released (TopiaForgeInputGate), and the
     /// kit reads the press itself. Navigation covers the kit's own keys and whatever else the game's navigate action binds
-    /// while it listens, W, A, S and D among them (TopiaForgeNavigateAction). Nothing the game owns is changed, no action
-    /// map, module or binding, so there is nothing to restore and nothing to fight the game's own action-map switches: with
-    /// no claim and no taken press, every event passes at once, untouched. Unity's legacy input cannot be filtered this way
-    /// and still sees every key. A failure stops the filtering until the game restarts and is logged once, so the game
-    /// always keeps its input. Main thread only.
+    /// while it listens, W, A, S and D among them (TopiaForgeNavigateAction); while the game's gameplay listens to those
+    /// too, as in a level, only a surface that takes navigation outright takes them, never a window. Nothing the game owns
+    /// is changed, no action map, module or binding, so there is nothing to restore and nothing to fight the game's own
+    /// action-map switches: with no claim and no taken press, every event passes at once, untouched. Unity's legacy input
+    /// cannot be filtered this way and still sees every key. A failure stops the filtering until the game restarts and is
+    /// logged once, so the game always keeps its input. Main thread only.
     /// </summary>
     internal static class TopiaForgeInputOwnership
     {
@@ -52,6 +53,57 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Gets the direction the held presses TopiaForge took point.</summary>
         internal static void Direction(out float x, out float y) => Gate.Direction(out x, out y);
+
+        /// <summary>
+        /// Gets whether any keyboard key is held, those TopiaForge took from the game included: a taken press never reaches
+        /// the device. A kit text field waits for every key to be released before it takes the keyboard.
+        /// </summary>
+        internal static bool AnyKeyHeld
+        {
+            get
+            {
+                var keyboard = Keyboard.current;
+                return (keyboard != null && keyboard.anyKey.isPressed) || Gate.HoldsAnyOn(TopiaForgeInputDevice.Keyboard);
+            }
+        }
+
+        /// <summary>Gets whether a press of keyboard key number <paramref name="key"/> that TopiaForge took is still held.</summary>
+        internal static bool KeyTaken(int key) => Gate.HeldOn(TopiaForgeInputDevice.Keyboard, key);
+
+        /// <summary>Gets whether a controller's B press (<paramref name="back"/>), or its A press, that TopiaForge took is still held.</summary>
+        internal static bool PadButtonTaken(bool back) => Gate.HeldOn(TopiaForgeInputDevice.Gamepad, back ? EastButton : SouthButton);
+
+        /// <summary>
+        /// Gets the number TopiaForge's filter knows the key an SDK key name names by, or -1 for a name it never takes, such
+        /// as a mouse button's. It allocates: a binding reads it once.
+        /// </summary>
+        internal static int KeyNumber(string name)
+        {
+            if (string.IsNullOrEmpty(name) || !char.IsLetter(name[0]))
+            {
+                return -1;
+            }
+
+            return Enum.TryParse(TopiaForgeNavigationBindings.InputSystemName(name), true, out InputSystemKey key)
+                && (int)key > 0 && (int)key < TopiaForgeInputGate.ControlsPerDevice
+                ? (int)key
+                : -1;
+        }
+
+        /// <summary>
+        /// Gets whether the keys the game's menu navigation shares with its gameplay reach the game now: its navigate action
+        /// listens, its gameplay input listens too, and no surface takes them. Unity's UI module then moves the selection on
+        /// them as well, so a window keeps its selection against every move the kit did not send (TopiaForgeNavigation).
+        /// </summary>
+        internal static bool SharedKeysReachTheGame
+        {
+            get
+            {
+                var bindings = TopiaForgeNavigateAction.Bindings;
+                return bindings.Listening && bindings.Gameplay
+                    && (TopiaForgeDismissStack.Claims & (TopiaForgeInputClaim.SharedNavigation | TopiaForgeInputClaim.Keyboard)) == 0;
+            }
+        }
 
         /// <summary>Starts filtering, once, as the kit's driver starts.</summary>
         internal static void Install()
@@ -243,13 +295,15 @@ namespace TopiaForge.Mods.UnityUi
         {
             Examine(gamepad, gamepad.buttonEast, EastButton, TopiaForgeInputRole.Back, eventPtr, claims, frame);
             Examine(gamepad, gamepad.buttonSouth, SouthButton, TopiaForgeInputRole.Submit, eventPtr, claims, frame);
-            Examine(gamepad, gamepad.dpad, Dpad, eventPtr, claims, frame);
-            Examine(gamepad, gamepad.leftStick, LeftStick, eventPtr, claims, frame);
+            Examine(gamepad, gamepad.dpad, Dpad, TopiaForgeInputRole.Direction, eventPtr, claims, frame);
+            Examine(gamepad, gamepad.leftStick, LeftStick, TopiaForgeInputRole.Direction, eventPtr, claims, frame);
 
-            // The right stick while the game's navigation binds it, and until its release once taken, however that changes.
-            if (TopiaForgeNavigateAction.Bindings.RightStickMoves || Gate.IsTaken(gamepad.deviceId, RightStick))
+            // The right stick while the game's navigation binds it, and until its release once taken, however that changes. It
+            // turns the camera in a level, so only a surface that takes navigation outright takes it there, as W, A, S and D.
+            var bindings = TopiaForgeNavigateAction.Bindings;
+            if (bindings.RightStickMoves || Gate.IsTaken(gamepad.deviceId, RightStick))
             {
-                Examine(gamepad, gamepad.rightStick, RightStick, eventPtr, claims, frame);
+                Examine(gamepad, gamepad.rightStick, RightStick, bindings.FollowedRole, eventPtr, claims, frame);
             }
         }
 
@@ -268,7 +322,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        private static void Examine(Gamepad gamepad, Vector2Control direction, int control, InputEventPtr eventPtr, TopiaForgeInputClaim claims, int frame)
+        private static void Examine(Gamepad gamepad, Vector2Control direction, int control, TopiaForgeInputRole role, InputEventPtr eventPtr, TopiaForgeInputClaim claims, int frame)
         {
             if (!direction.ReadValueFromEvent(eventPtr, out Vector2 value))
             {
@@ -276,7 +330,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             var before = direction.ReadValue().magnitude;
-            if (Gate.Take(gamepad.deviceId, TopiaForgeInputDevice.Gamepad, control, TopiaForgeInputRole.Direction, value.magnitude, before, value.x, value.y, claims, frame))
+            if (Gate.Take(gamepad.deviceId, TopiaForgeInputDevice.Gamepad, control, role, value.magnitude, before, value.x, value.y, claims, frame))
             {
                 direction.ResetToDefaultStateInEvent(eventPtr);
             }
