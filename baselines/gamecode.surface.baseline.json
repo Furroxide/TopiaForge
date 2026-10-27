@@ -1,8 +1,9 @@
 {
-  "capturedUtc": "2026-10-26T23:04:57.5358345Z",
+  "capturedUtc": "2026-10-27T00:53:11.0650281Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
-  "gameVersionLabel": "",
+  "gameVersion": "0.0.2545",
+  "gameVersionLabel": "build 2545",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
