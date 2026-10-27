@@ -67,7 +67,8 @@ extension _MultiplayerCommands on _TopiaForgeCli {
       );
       return 2;
     }
-    if (!stdin.hasTerminal && !options.yes) {
+    final interactive = hasInteractiveInput();
+    if (!interactive && !options.yes) {
       stderr.writeln(
         'TFHOST110: Hosting needs consent. Read topiaforge host --help and rerun with --yes when there is no terminal.',
       );
@@ -105,7 +106,7 @@ extension _MultiplayerCommands on _TopiaForgeCli {
         profile: profile,
         developerMode: snapshot.developerMode,
         options: options,
-        hasTerminal: stdin.hasTerminal,
+        hasTerminal: interactive,
         confirm: (prompt) async {
           stdout.writeln(prompt);
           return stdin.readLineSync()?.trim().toLowerCase() == 'y';

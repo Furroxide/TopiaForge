@@ -28,3 +28,7 @@ export 'src/network_text.dart';
 export 'src/authored_map.dart';
 export 'src/map_anchors.dart';
 export 'src/published_map_sources.dart';
+
+export 'src/join_activity.dart';
+export 'src/join_texts.dart';
+export 'src/join_consent_text.dart';

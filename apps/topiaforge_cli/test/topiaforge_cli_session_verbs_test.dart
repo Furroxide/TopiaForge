@@ -9,13 +9,14 @@ void main() {
     [p.join('bin', 'topiaforge.dart'), ...args],
     environment: {'DART_SUPPRESS_ANALYTICS': 'true'},
   );
-  test('main help exposes both verbs', () async {
+  test('main help exposes all multiplayer verbs', () async {
     final help = await cli(['help']);
     expect(help.exitCode, 0);
     expect(help.stdout, contains('topiaforge servers'));
     expect(help.stdout, contains('topiaforge host'));
+    expect(help.stdout, contains('topiaforge join'));
   });
-  for (final verb in ['host', 'servers']) {
+  for (final verb in ['host', 'servers', 'join']) {
     test('$verb help exposes command usage', () async {
       final result = await cli([verb, '--help']);
       expect(result.exitCode, 0);
@@ -107,9 +108,21 @@ void main() {
       expect(result.exitCode, 2);
     },
   );
-  test('join stays deferred', () async {
-    final result = await cli(['join', '--help']);
+  test('nonterminal join refuses before discovery', () async {
+    final result = await cli(['join', '0123456789']);
     expect(result.exitCode, 2);
-    expect(result.stderr, contains('Unknown command: join'));
+    expect(result.stderr, contains('TFJOIN100:'));
+    expect(result.stderr, contains('--yes'));
+  });
+  test('invalid join options have stable 100 and no raw target', () async {
+    final result = await cli([
+      'join',
+      '203.0.113.99:27250',
+      '--unknown-option',
+    ]);
+    expect(result.exitCode, 2);
+    expect(result.stderr, contains('TFJOIN100:'));
+    expect(result.stderr, isNot(contains('203.0.113.99')));
+    expect(result.stderr, isNot(contains('--unknown-option')));
   });
 }

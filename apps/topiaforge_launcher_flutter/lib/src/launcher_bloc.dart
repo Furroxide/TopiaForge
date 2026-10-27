@@ -5,8 +5,6 @@ import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 
-import 'join_activity.dart';
-import 'join_texts.dart';
 import 'launcher_event.dart';
 import 'launcher_build.dart';
 import 'launcher_multiplayer_state.dart';

@@ -21,6 +21,7 @@ const _commands = [
   'restart',
   'servers',
   'host',
+  'join',
   'dev-install',
   'doctor',
   'compat',
@@ -183,6 +184,7 @@ extension _HelpCommand on _TopiaForgeCli {
       '      --no-wait reports process creation only; it never confirms session startup.',
     );
     stdout.writeln(
+      '  topiaforge join <code|link|host:port> [--yes] [--allow-direct] [--allow-host-packages]\n'
       '  topiaforge servers [--source all|internet|lan] [--game-build build] [--json]',
     );
     stdout.writeln(
