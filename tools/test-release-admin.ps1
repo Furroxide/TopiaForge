@@ -211,12 +211,12 @@ $releasePolicy = Get-Content -LiteralPath (
 Assert-True (
     $releasePolicy.publication.PSObject.Properties.Name -cnotcontains
         "codeSigningException" -and
-    [string]$releasePolicy.versioning.productVersion -ceq "0.1.0-rc.1" -and
+    [string]$releasePolicy.versioning.productVersion -ceq "0.2.0" -and
     @($releasePolicy.signingIdentities.PSObject.Properties).Count -eq 1 -and
     $releasePolicy.signingIdentities.PSObject.Properties.Name -ccontains
         "windowsDistribution" -and
     $releasePolicy.signingIdentities.windowsDistribution -ceq "unsigned"
-) "Release policy must record the authorized unsigned 0.1.0-rc.1 with no certificate pin or code-signing exception."
+) "Release policy must record the unsigned 0.2.0 target with no certificate pin or code-signing exception."
 Assert-True (
     [string]$releasePolicy.toolchains.node -ceq "24.18.0" -and
     $releasePolicy.toolchains.PSObject.Properties.Name -cnotcontains
@@ -477,13 +477,26 @@ exit 0
     try {
         $testIsolationRecord = Join-Path $testRoot 'isolation-provisioning.json'
         [System.IO.File]::WriteAllText($testIsolationRecord, '{"fixture":"synthetic admin inputs"}')
-        . $scriptPath -Command preflight `
+        # The staging/dispatch scenarios below are historical RC1 fixtures,
+        # independent of the current stable target and its publication blockers.
+        $historicalVersion = "0.1.0-rc.1"
+        . $scriptPath -Command preflight -Version $historicalVersion `
             -StateRoot $testRoot `
             -GameDirectory (Join-Path $testRoot "Robotopia") `
             -AcceptanceIsolationRecord $testIsolationRecord `
             -ProtonExecutable "/opt/proton-10.0-4/proton" `
             -SteamRoot "/mnt/c/Program Files (x86)/Steam" `
             -CompatDataRoot "/var/tmp/topiaforge-compat"
+        # Pin only the imported, in-memory fixture policy; never rewrite the
+        # repository policy or make the stable target eligible for publication.
+        $policy.versioning.productVersion = $historicalVersion
+        $historicalRelease = Get-ReleaseCatalogEntry
+        Assert-True (
+            $Version -ceq $historicalVersion -and
+            $tag -ceq "v0.1.0-rc.1" -and
+            $historicalRelease.version -ceq $policy.versioning.productVersion -and
+            $historicalRelease.prerelease
+        ) "Historical release-admin fixtures must use the matching RC1 policy and catalog identity."
         $firstReleaseLock = Enter-ReleaseLock
         try {
             Assert-ThrowsMatch -Action {
