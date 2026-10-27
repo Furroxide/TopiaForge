@@ -5,6 +5,34 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
+  test('Unix roots cannot acquire UNC syntax at the game boundary', () {
+    for (final entry in {
+      '//data/Sam/cache é': '/data/Sam/cache é',
+      '///data/Sam/cache é': '/data/Sam/cache é',
+      '////': '/',
+      '/': '/',
+      '/data/Sam/cache é': '/data/Sam/cache é',
+      '///data/link/../cache é': '/data/link/../cache é',
+      '//data//cache é/': '/data//cache é/',
+    }.entries) {
+      expect(
+        gameDataRootEnvironmentValue(entry.key, isWindows: false),
+        entry.value,
+      );
+    }
+  });
+
+  test('Windows drive and UNC roots retain their explicit spelling', () {
+    for (final value in [
+      '//server/share/cache',
+      r'\\server\share\cache',
+      r'Q:\cache é',
+      'Q:/cache é',
+    ]) {
+      expect(gameDataRootEnvironmentValue(value, isWindows: true), value);
+    }
+  });
+
   late Directory root;
   setUp(() {
     root = Directory.systemTemp.createTempSync('topiaforge-wine-setting-');

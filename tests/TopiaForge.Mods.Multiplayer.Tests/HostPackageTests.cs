@@ -16,9 +16,10 @@ internal static class HostPackageTests
         HostingRequiresBothLaunchOptions();
         TheAllowlistAndArchiveBytesStayPinned();
         CacheRootsMatchTheLauncher();
+        WineDataRootTests.Run();
         EachPackageWarnsOnce();
         HostPackageEndpointTests.Run();
-        Console.WriteLine("Host packages: 9 test groups passed (including all 4 launch-option combinations).");
+        Console.WriteLine("Host packages: 10 test groups passed (including all 4 launch-option combinations).");
     }
 
     private static void HostingRequiresBothLaunchOptions()
@@ -125,7 +126,7 @@ internal static class HostPackageTests
         values["HOME"] = files.Root.FullName;
         That(HostPackageArchives.CacheFor(Read, false, files.Root.FullName) == Path.Combine(files.Root.FullName, ".topiaforge_launcher", "package-cache"), "other platforms use the launcher's home root");
         values["TOPIAFORGE_DATA_ROOT"] = "  " + files.Root.FullName + "  ";
-        That(HostPackageArchives.CacheFor(Read, true, files.Root.FullName) == Path.Combine(files.Root.FullName, "package-cache"), "a configured root wins and is trimmed");
+        That(HostPackageArchives.CacheFor(Read, OperatingSystem.IsWindows(), files.Root.FullName) == Path.Combine(files.Root.FullName, "package-cache"), "a configured root wins and is trimmed");
     }
 
     private static void EachPackageWarnsOnce()

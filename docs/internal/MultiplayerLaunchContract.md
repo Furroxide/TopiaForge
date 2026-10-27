@@ -68,8 +68,15 @@ game for a launch V5 cannot carry.
   The game applies both options to hosting: only their conjunction installs an archive source and signs
   `hostServesPackages: true`. The source fixes its allowlist to the descriptor's package hashes when hosting starts.
   It opens `<sha256>.topiaforgemod` from the launcher's `package-cache`, following `TOPIAFORGE_DATA_ROOT` when set,
-  otherwise the launcher's usual platform data root. A custom root must reach the game in its inherited environment;
-  use an absolute value because the game has its own working directory.
+  otherwise the launcher's usual platform data root. Every ordinary launcher launch explicitly passes its resolved
+  absolute data root; profile environment overrides cannot replace it. Under Wine or Proton the game translates a
+  POSIX root with Wine's own active-prefix path mapping, without assuming a drive letter or using the prefix's
+  unrelated `APPDATA`. A failed conversion leaves the archive cache unavailable instead of selecting another root.
+  The launcher collapses repeated leading Unix slashes before passing the root, so they cannot be mistaken for
+  Windows UNC syntax. Windows roots keep their spelling; interior Unix components are not normalized.
+  Manual launches can still set `TOPIAFORGE_DATA_ROOT`; use an absolute value because the game has its own working
+  directory. Use one leading slash for a manual POSIX root; two leading slashes denote a Windows UNC path.
+  Native Windows cannot use a POSIX override.
   Each request checks developer mode and verifies the same open archive handle it will stream, on a worker with
   cancellation and the endpoint's existing two-minute deadline. The status line follows verification, so
   verification also counts against the launcher's 15 seconds of silence: the largest archive, 512 MiB, needs at
