@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Core
                 ["TopiaForge.Multiplayer.dll"] = "io.github.furroxide.topiaforge.multiplayer",
                 ["TopiaForge.Prompts.dll"] = "io.github.furroxide.topiaforge.prompts",
                 ["TopiaForge.RobotKit.dll"] = "io.github.furroxide.topiaforge.robotkit",
+                ["TopiaForge.UiGallery.dll"] = "io.github.furroxide.topiaforge.uigallery",
                 ["TopiaForge.Worlds.dll"] = "io.github.furroxide.topiaforge.worlds"
             };
 

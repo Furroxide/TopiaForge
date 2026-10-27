@@ -35,6 +35,11 @@ namespace TopiaForge.ModManager.Tests
                 try { MultiplayerPresentationTests.Run(); PresentationRuntimeTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
+            if (args.Length == 1 && args[0] == "--scoreboard")
+            {
+                try { ScoreboardTests.Run(); MultiplayerUiArchitectureTests.Run(); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+            }
             if (args.Length == 1 && args[0] == "--blockers")
             {
                 try { BlockerTests.Run(); return 0; }
@@ -658,6 +663,7 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerContentIdentificationTests.Run(root);
             MultiplayerPrivacyTextTests.Run();
             MultiplayerSessionsTests.Run(Path.Combine(root, "multiplayer-sessions"));
+            ScoreboardTests.Run();
             InSessionChatTests.Run();
             VoiceChatTests.Run(Path.Combine(root, "voice-chat"));
             MultiplayerFrameGuardTests.Run();

@@ -131,6 +131,35 @@ void main() {
         [text.indexOf('<Import Project="b"')],
       );
     });
+
+    test('resumes after readable tags but recovers inside broken ones', () {
+      const first = '<Import A="a > b" />';
+      const broken = '<Import A="broken';
+      const last = "<Import B='ok'/>";
+      const text = 'x$first$broken$last';
+      final tags = startTags(text, 'Import').toList();
+      expect(
+        [for (final found in tags) found.start],
+        [1, 1 + first.length + broken.length],
+      );
+      expect(
+        [for (final found in tags) _attributes(text, found.tag)],
+        [
+          ['A="a > b"'],
+          ["B='ok'"],
+        ],
+      );
+      final tag = tags.first.tag;
+      expect((tag.nameEnd, tag.attributesEnd, tag.end), (8, 18, 21));
+      expect(tag.attributes, [
+        (leading: 8, start: 9, nameEnd: 10, valueStart: 11, end: 18),
+      ]);
+      expect(tags.last.tag.end, text.length);
+      expect(
+        startTags(text, 'Import', start: 1 + first.length).single.start,
+        tags.last.start,
+      );
+    });
   });
 
   group('packageReferences', () {
@@ -147,6 +176,66 @@ void main() {
       ];
       expect(items, [closed, '$outer$inner$end', inner, closed]);
       expect(packageReferences(text, start: text.indexOf(inner)), hasLength(2));
+    });
+
+    test('filters end candidates without changing recovery or sections', () {
+      const open = '<PackageReference Update="A">';
+      const close = '</pAcKaGeReFeReNcE\u00A0>';
+      for (final body in const [
+        '<Other Label="a > b"/><Other>',
+        '<Other Label="',
+        '<Other Label="<!-- </PackageReference> -->',
+        '<<Other><',
+        '<!OTHER <Other/>',
+        '<?instruction?><Other/>',
+        '<Other/></PackageReferences></PackageReference/>'
+            '</PackageReference x></PackageReference\u0085>',
+        '<Other/></Pac\u212AageReference>',
+        '<Other/><!-- </PackageReference> <![CDATA[ -->'
+            '<![CDATA[</PackageReference> <!-- ]]>',
+        '<Other/><!-- --><!-- </PackageReference> -->'
+            '<![CDATA[]]><![CDATA[</PackageReference>]]>',
+      ]) {
+        final text = 'x$open$body$close';
+        final item = packageReferences(text, start: 1).single;
+        expect(
+          (item.start, item.end, item.tag.end),
+          (1, text.length, 1 + open.length),
+          reason: body,
+        );
+      }
+      for (final section in const ['<!--', '<![CDATA[']) {
+        expect(packageReferences('$open<Other/>$section$close'), isEmpty);
+      }
+      for (final body in const ['<', '<Other/><']) {
+        expect(packageReferences('$open$body'), isEmpty);
+      }
+    });
+
+    test('keeps nested starts and independent lazy traversals', () {
+      const open = '<PackageReference>';
+      const inner = '<packagereference/>';
+      const close = '</PackageReference>';
+      const tail = '<PackageReference Update="tail"/>';
+      const text = '$open$inner$close$tail<!--';
+      final items = packageReferences(text);
+      final first = items.iterator;
+      final second = items.iterator;
+      expect(first.moveNext(), isTrue);
+      expect(first.current.end, open.length + inner.length + close.length);
+      expect(second.moveNext(), isTrue);
+      expect(
+        (second.current.start, second.current.end),
+        (first.current.start, first.current.end),
+      );
+      expect(first.moveNext(), isTrue);
+      expect(
+        (first.current.start, first.current.end),
+        (open.length, open.length + inner.length),
+      );
+      expect(second.current.start, 0);
+      expect(items.last.end, text.length - '<!--'.length);
+      expect(packageReferences('$open$inner'), hasLength(1));
     });
 
     test('finishes nested or unclosed items within the budget', () {

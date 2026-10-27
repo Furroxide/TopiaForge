@@ -242,19 +242,32 @@ namespace TopiaForge.ModManager.Tests
             foreach (var name in names)
             {
                 var package = CreateFixturePackage(root, "internals-" + name.Replace('.', '-'));
-                File.WriteAllText(Path.Combine(package, name + ".dll"), "an assembly TopiaForge trusts");
+                WriteSyntheticAssembly(
+                    Path.Combine(package, name + ".dll"), name, "Synthetic.TrustedMod",
+                    CompatibleSdkVersion, ".NETStandard,Version=v2.1", SdkAssemblyName,
+                    addCompatibleSdkReference: false);
                 var errors = ManagedModAssemblyValidator.Validate(package, NewManifest(FixtureAssembly, "TopiaForge.ValidTestMod.ValidMod"));
                 AssertContains(errors, name + ".dll");
                 AssertContains(errors, "must not bundle");
+                AssertNotContains(errors, "not a valid PE image", "Friendship fixtures must contain valid managed assemblies");
+                AssertNotContains(errors, "does not match file name", "Friendship fixtures must use their real assembly identities");
             }
 
-            // The first-party package that ships an assembly may bundle it.
-            var owned = CreateFixturePackage(root, "internals-owner");
-            File.WriteAllText(Path.Combine(owned, "TopiaForge.Multiplayer.dll"), "the provider");
-            var ownerManifest = NewManifest(FixtureAssembly, "TopiaForge.ValidTestMod.ValidMod");
-            ownerManifest.Id = "io.github.furroxide.topiaforge.multiplayer";
-            Assert(!ManagedModAssemblyValidator.Validate(owned, ownerManifest).Any(error => error.Contains("must not bundle", StringComparison.Ordinal)),
-                "The multiplayer package bundles its own assembly.");
+            // Real first-party identities pass admission only in their owning packages.
+            foreach (var name in new[] { "Multiplayer", "UiGallery" })
+            {
+                var owned = CreateEmptyPackage(root, "internals-owner-" + name);
+                var assemblyName = "TopiaForge." + name;
+                WriteSyntheticAssembly(
+                    Path.Combine(owned, assemblyName + ".dll"), assemblyName, "Synthetic.TrustedMod",
+                    CompatibleSdkVersion, ".NETStandard,Version=v2.1", SdkAssemblyName,
+                    addCompatibleSdkReference: false);
+                var ownerManifest = NewManifest(assemblyName + ".dll", "Synthetic.TrustedMod");
+                ownerManifest.Id = "io.github.furroxide.topiaforge." + name.ToLowerInvariant();
+                var errors = ManagedModAssemblyValidator.Validate(owned, ownerManifest);
+                Assert(errors.Count == 0,
+                    "The " + name + " package must pass validation with its own assembly: " + string.Join("; ", errors));
+            }
         }
 
         private static string CreateFixturePackage(string root, string name)
