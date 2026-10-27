@@ -38,6 +38,8 @@ namespace TopiaForge.ModManager.Voice
         /// <summary>Gets how many speakers play now.</summary>
         internal int Count => playing.Count;
 
+        internal VoiceVolumeBook Volumes { get; } = new VoiceVolumeBook();
+
         /// <summary>Gets or sets the voices' volume, from 0 to 1.</summary>
         internal float Volume
         {
@@ -47,7 +49,7 @@ namespace TopiaForge.ModManager.Voice
                 var next = float.IsNaN(value) ? 1f : Math.Max(0f, Math.Min(1f, value));
                 if (next == volume) return;
                 volume = next;
-                foreach (var entry in playing) entry.Value.Emitter.SetVolume(next);
+                foreach (var entry in playing) entry.Value.Emitter.SetVolume(next * entry.Value.Gain);
             }
         }
 
@@ -75,8 +77,9 @@ namespace TopiaForge.ModManager.Voice
                 if (!voice.IsSpeaking(participant.Id)) continue;
                 if (!voice.TryGetPlaybackStream(participant.Id, out var stream) || stream == null || stream.IsEnded) continue;
                 var emitter = emitters.Rent();
-                emitter.Play(stream, volume);
-                playing.Add(participant.Id, new Playing(emitter, stream));
+                var gain = Volumes.Get(participant, snapshot.Id);
+                emitter.Play(stream, volume * gain);
+                playing.Add(participant.Id, new Playing(emitter, stream, gain));
             }
 
             var positions = Positions;
@@ -90,6 +93,17 @@ namespace TopiaForge.ModManager.Voice
 
                 if (positions != null && positions.TryGetPosition(entry.Key, out var position)) entry.Value.Emitter.Place(position);
                 else entry.Value.Emitter.Unplace();
+                for (var index = 0; index < participants.Count; index++)
+                {
+                    if (!participants[index].Id.Equals(entry.Key)) continue;
+                    var gain = Volumes.Get(participants[index], snapshot.Id);
+                    if (gain != entry.Value.Gain)
+                    {
+                        entry.Value.Gain = gain;
+                        entry.Value.Emitter.SetVolume(volume * gain);
+                    }
+                    break;
+                }
             }
 
             for (var index = 0; index < ending.Count; index++) Stop(ending[index]);
@@ -124,17 +138,19 @@ namespace TopiaForge.ModManager.Voice
             return false;
         }
 
-        private readonly struct Playing
+        private sealed class Playing
         {
-            internal Playing(IVoiceEmitter emitter, IVoicePlaybackStream stream)
+            internal Playing(IVoiceEmitter emitter, IVoicePlaybackStream stream, float gain)
             {
                 Emitter = emitter;
                 Stream = stream;
+                Gain = gain;
             }
 
             internal IVoiceEmitter Emitter { get; }
 
             internal IVoicePlaybackStream Stream { get; }
+            internal float Gain { get; set; }
         }
     }
 }

@@ -92,6 +92,7 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceTalkStatus.cs" Link="Runtime\Voice\VoiceTalkStatus.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceCapture.cs" Link="Runtime\Voice\VoiceCapture.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoicePlayback.cs" Link="Runtime\Voice\VoicePlayback.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Voice/VoiceVolumeBook.cs" Link="Runtime/Voice/VoiceVolumeBook.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceMuteBook.cs" Link="Runtime\Voice\VoiceMuteBook.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceDevices.cs" Link="Runtime\Voice\VoiceDevices.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceEmitterReader.cs" Link="Runtime\Voice\VoiceEmitterReader.cs" />

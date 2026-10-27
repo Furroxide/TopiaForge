@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager
         private readonly Action outside;
         private readonly Action tab;
         private readonly Action? voiceTick;
+        private readonly Action? scoreboard;
         private float deltaTime;
 
         /// <param name="guard">Where a stage's failure is caught and logged.</param>
@@ -37,8 +38,9 @@ namespace TopiaForge.ModManager
         /// <param name="outside">Shows the prompts, the toasts and the connecting overlay.</param>
         /// <param name="tab">Ticks the MULTIPLAYER tab while it shows.</param>
         /// <param name="voice">Voice chat, which ticks every frame with the frame's seconds, overlay open or not; null for none.</param>
-        internal MultiplayerOverlayFrame(MultiplayerFrameGuard guard, MultiplayerSessionsPresenter presenter, Action outside, Action tab, Action<float>? voice = null)
+        internal MultiplayerOverlayFrame(MultiplayerFrameGuard guard, MultiplayerSessionsPresenter presenter, Action outside, Action tab, Action<float>? voice = null, Action? scoreboard = null)
         {
+            this.scoreboard = scoreboard;
             this.guard = guard ?? throw new ArgumentNullException(nameof(guard));
             if (presenter == null) throw new ArgumentNullException(nameof(presenter));
             this.outside = outside ?? throw new ArgumentNullException(nameof(outside));
@@ -53,6 +55,7 @@ namespace TopiaForge.ModManager
             deltaTime = frameSeconds;
             guard.Run(PresenterStage, presenterTick);
             if (voiceTick != null) guard.Run(VoiceStage, voiceTick);
+            if (scoreboard != null) guard.Run("the scoreboard and nametags", scoreboard);
             guard.Run(OutsideStage, outside);
             guard.Run(TabStage, tab);
         }

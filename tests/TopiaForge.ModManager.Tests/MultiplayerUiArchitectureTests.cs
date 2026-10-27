@@ -37,6 +37,7 @@ namespace TopiaForge.ModManager.Tests
             var root = Program.FindRepoRoot();
             PresentersCarryNoAddress();
             ViewsUseTheKitOnly(root);
+            ScoreboardUsesCanonicalInputsAndKit(root);
             OtherPlayersTextRendersPlain(root);
             ChatUsesPlainTextAndReleasesFocus(root);
             ModalsSurviveSceneLoadsAndRowsKeepTheirHeight(root);
@@ -86,6 +87,7 @@ namespace TopiaForge.ModManager.Tests
             files.Add(Path.Combine(overlay, "PluginMultiplayerEnvironment.cs"));
             files.Add(Path.Combine(overlay, "ManagerTabLookup.cs"));
             files.Add(Path.Combine(overlay, "InSessionOverlay.cs"));
+            files.Add(Path.Combine(overlay, "ScoreboardOverlay.cs"));
             files.AddRange(Directory.EnumerateFiles(Path.Combine(root, "mods", "TopiaForge.UiGallery", "Pages"), "SessionsPage*.cs"));
             That(files.Count >= 30 && files.All(File.Exists), "the scan covers the whole interface (" + files.Count + " files)");
             return files;

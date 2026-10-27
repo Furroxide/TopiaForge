@@ -12,6 +12,9 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the runtime's multiplayer composition root, for the in-game sessions interface; null before the runtime.</summary>
         internal MultiplayerRuntime? Multiplayer => runtime?.Multiplayer;
 
+        internal MultiplayerPlayers? Players => runtime?.Replication.Players;
+        internal IPresenceNametagSource? Nametags => runtime?.Presence;
+
         internal CoreGameplayServices? Gameplay => runtime?.GameplayHost as CoreGameplayServices;
         internal IWorldPauseMenuService? GetPauseMenu() => runtime?.GetService<IWorldPauseMenuService>();
         internal bool ExecuteChatCommand(string name, IReadOnlyList<string> arguments, out OperationResult<string>? result)

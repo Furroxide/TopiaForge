@@ -76,6 +76,9 @@ namespace TopiaForge.ModManager.Sessions
 
         internal InSessionPresenter InSession { get; }
 
+        internal ScoreboardPresenter CreateScoreboard(Func<System.Collections.Generic.IReadOnlyList<ScoreboardData>> scores, Func<Voice.VoiceChatRuntime?> voice) =>
+            new ScoreboardPresenter(() => context.Environment.Control, scores, voice, context.Ask, context.Notify);
+
         private static bool NoCommand(string name, IReadOnlyList<string> arguments, out OperationResult<string>? result) { result = null; return false; }
 
         public string AvailabilityText => environment.Control == null ? NotInstalled : status.IsLiveAvailable ? string.Empty : SwitchedOff;

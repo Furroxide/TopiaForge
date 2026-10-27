@@ -40,6 +40,7 @@ namespace TopiaForge.ModManager.Voice
 
         /// <summary>Gets what the VOICE page shows.</summary>
         internal IVoiceScreen Screen => presenter;
+        internal VoiceChatRuntime Runtime => runtime;
 
         /// <summary>Reads the player's choices, so voice chat works before VOICE ever opens.</summary>
         internal void Start() => presenter.Start();

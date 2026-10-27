@@ -19,6 +19,7 @@ internal static class Program
                 Console.WriteLine("Players engine: join generations, reconnect, solo and pre-flush cancellation passed.");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--scoreboard") { ScoreboardProviderTests.Run(); return 0; }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {
@@ -27,6 +28,7 @@ internal static class Program
             }
 
             HostPackageTests.Run();
+            ScoreboardProviderTests.Run();
             InSessionChatProviderTests.Run();
             MultiplayerIdentityTests.SnapshotsRejectInvalidOrAmbiguousIdentityData();
             SdkContractCompletionTests.DeterministicRandomMatchesFrozenVectors();
