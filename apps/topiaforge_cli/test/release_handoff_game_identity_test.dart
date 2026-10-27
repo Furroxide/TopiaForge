@@ -20,7 +20,7 @@ void main() {
 
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-game-identity-');
-    root = writeSignedReleaseHandoffRoot(temp);
+    root = writeSignedReleaseHandoffRoot(temp, version: version);
     for (final platform in const ['windows-x64']) {
       File(
         p.join(temp.path, releaseArchiveForPlatform(platform)),

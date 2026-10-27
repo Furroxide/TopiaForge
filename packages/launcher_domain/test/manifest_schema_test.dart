@@ -206,9 +206,24 @@ void main() {
         final schemaValid = schema.validate(json).isValid;
         var domainValid = false;
         try {
-          domainValid = ModManifest.fromJson(
-            json,
-          ).validate().every((issue) => !issue.isBlocking);
+          final manifest = ModManifest.fromJson(json);
+          domainValid = manifest.validate().every((issue) => !issue.isBlocking);
+          if (expectedValid) {
+            expect(
+              manifest.loaderVersionRange.allows(
+                TopiaForgeRuntimeVersions.loaderVersion,
+              ),
+              isTrue,
+              reason: '$fixtureName must admit the current loader',
+            );
+            expect(
+              manifest.sdkVersionRange.allows(
+                TopiaForgeRuntimeVersions.sdkVersion,
+              ),
+              isTrue,
+              reason: '$fixtureName must admit the current SDK',
+            );
+          }
         } on FormatException {
           domainValid = false;
         } on TypeError {

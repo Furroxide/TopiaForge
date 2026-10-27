@@ -19,7 +19,7 @@ void main() {
 
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-handoff-test-');
-    root = writeSignedReleaseHandoffRoot(temp);
+    root = writeSignedReleaseHandoffRoot(temp, version: version);
     _writeArchives(temp);
     writeReleaseQaFixtures(
       repositoryRoot: root,

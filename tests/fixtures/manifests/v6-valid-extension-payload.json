@@ -7,8 +7,8 @@
   "entryAssembly": "Fixture.dll",
   "entryType": "Fixtures.V6Mod",
   "supportedGameVersionRange": ">=0.0.2545 <0.0.2600",
-  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
-  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "x-fixture": {
     "vendorOwnsThisShape": true,
     "nested": [{ "future": "metadata" }]

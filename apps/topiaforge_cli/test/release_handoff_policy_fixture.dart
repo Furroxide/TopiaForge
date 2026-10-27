@@ -5,7 +5,10 @@ import 'package:path/path.dart' as p;
 
 /// Keeps signed handoff assertions independent of the selected release mode.
 /// The policy pin is synthetic; these tests do not create real signatures.
-String writeSignedReleaseHandoffRoot(Directory parent) {
+String writeSignedReleaseHandoffRoot(
+  Directory parent, {
+  required String version,
+}) {
   var source = Directory.current.absolute;
   while (!File(p.join(source.path, 'TopiaForge.slnx')).existsSync()) {
     if (source.parent.path == source.path) {
@@ -34,6 +37,7 @@ String writeSignedReleaseHandoffRoot(Directory parent) {
             ).readAsStringSync(),
           )
           as Map<String, Object?>;
+  (policy['versioning'] as Map)['productVersion'] = version;
   policy['signingIdentities'] = {
     'windowsDistribution': 'signed',
     'windowsCertificateSha256': 'a' * 64,

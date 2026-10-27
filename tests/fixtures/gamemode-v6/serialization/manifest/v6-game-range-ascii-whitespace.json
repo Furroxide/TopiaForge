@@ -24,8 +24,8 @@
       "fixtures.later"
     ],
     "supportedGameVersionRange": " \t\r\n",
-    "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
-    "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+    "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+    "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
     "capabilities": [
       "input"
     ],
