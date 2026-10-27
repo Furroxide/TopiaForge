@@ -9,6 +9,7 @@ part 'launcher_map_source_event.dart';
 part 'launcher_multiplayer_event.dart';
 part 'launcher_multiplayer_join_event.dart';
 part 'launcher_multiplayer_settings_event.dart';
+part 'launcher_hosting_event.dart';
 
 sealed class LauncherEvent {
   const LauncherEvent();

@@ -613,7 +613,8 @@ launcher log, and neither ever names a URL or an address.
   `applyServerContentCleanup` applies exactly that plan, checked by its fingerprint, and refuses one gone stale, a
   running game, and a held lease. It moves every version out of the packages folder first, undoing the moves if one
   fails, then removes the manager records of mods left with no version that a join added or whose uninstall is
-  pending, as an uninstall does, then the profiles, then the downloaded archives no installed version names. An added
+  pending, as an uninstall does, then the profiles. Downloaded archives remain in the shared cache: an install-local
+  lease and receipts cannot prove that another install or running host no longer needs them. An added
   record goes once its mod has neither a manager record nor an installed version, as an uninstall leaves it; while a
   version is installed it stays, since it is what starts that mod disabled again. Versions no server profile pins any
   more, such as the ones a re-join replaced, are removed after each profile save on their own, so the player only ever

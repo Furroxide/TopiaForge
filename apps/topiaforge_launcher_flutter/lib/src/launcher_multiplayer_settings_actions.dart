@@ -419,6 +419,19 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
   /// launcher started and the section on screen. The launch actions and the
   /// shell stay as they are; this watches what they change.
   void _multiplayerStateChanged(LauncherState previous, LauncherState next) {
+    if (previous.gameInstall?.path != next.gameInstall?.path ||
+        previous.selectedProfile?.id != next.selectedProfile?.id ||
+        previous.selectedProfile?.revision != next.selectedProfile?.revision ||
+        previous.developerMode != next.developerMode) {
+      _multiplayerWork.host.stop();
+      if (next.multiplayer.hosting.phase != HostingPhase.closed) {
+        add(const HostingClosed());
+      }
+    }
+    if (previous.gameInstall?.path != next.gameInstall?.path) {
+      _multiplayerWork.cleanup++;
+      add(const ServerCleanupClosed());
+    }
     if (_multiplayer == null || isClosed) return;
     // The first snapshot says which install there is, if any.
     var check = !previous.snapshotLoaded && next.snapshotLoaded;

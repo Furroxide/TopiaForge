@@ -35,7 +35,7 @@ class _HostingPane extends StatelessWidget {
           key: const Key('multiplayer-hosting-port'),
           label: 'Port',
           stored: '${preferences.hosting.port}',
-          enabled: editable,
+          enabled: editable && preferences.hasHostingDefaults,
           problem: hostingPortProblem,
           numeric: true,
           helper:
@@ -45,6 +45,10 @@ class _HostingPane extends StatelessWidget {
             MultiplayerPreferencesChange(hostingPort: int.parse(text)),
           ),
         ),
+        if (!preferences.hasHostingDefaults)
+          const Text(
+            'Select a game install and let its settings finish loading before changing the hosting port.',
+          ),
         SwitchListTile(
           key: const Key('multiplayer-upnp'),
           contentPadding: EdgeInsets.zero,

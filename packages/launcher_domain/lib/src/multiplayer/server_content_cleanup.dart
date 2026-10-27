@@ -185,8 +185,8 @@ final class ServerContentCleanupResult {
   /// The ids of the removed server profiles.
   final List<String> removedProfiles;
 
-  /// The bytes the removed versions held, their downloaded archives
-  /// included.
+  /// The bytes the removed versions held. Shared downloaded archives stay
+  /// cached because another install or host may still need them.
   final int freedBytes;
 
   bool get applied => refusal == null;

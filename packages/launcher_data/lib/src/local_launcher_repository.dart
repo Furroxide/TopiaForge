@@ -96,7 +96,8 @@ class LocalLauncherRepository
     implements
         GameInstallDiscoveryRepository,
         DownloadedMapRepository,
-        PublishedMapSourceRepository {
+        PublishedMapSourceRepository,
+        MultiplayerHostingHost {
   LocalLauncherRepository({
     String? dataRoot,
     AcceptanceIsolationContext? acceptanceIsolation,
@@ -413,20 +414,24 @@ class LocalLauncherRepository
   /// restart never stops the running game for it: Safe Mode, a join from a
   /// profile that inherits the manager's mod state, and acceptance runs.
   ///
-  /// Not on [LauncherRepository] yet: the multiplayer slices consume the
-  /// concrete type, and widening the interface breaks external fakes.
+  /// Available through the optional [MultiplayerHostingHost] capability.
+  @override
   Future<LaunchResult> launchSession(
     GameInstall install,
     LauncherProfile profile,
     LaunchSessionRequest session, {
     LaunchSelection? selectionOverride,
     bool restart = false,
+    CancellationToken? cancellation,
+    String? expectedPackageDigest,
   }) => _launchSession(
     install,
     profile,
     session,
     selectionOverride: selectionOverride,
     restart: restart,
+    cancellation: cancellation,
+    expectedPackageDigest: expectedPackageDigest,
   );
 
   /// The exact archives installed in [install] and offered by the player's

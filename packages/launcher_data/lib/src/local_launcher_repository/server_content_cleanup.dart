@@ -340,11 +340,11 @@ extension _ServerContentCleanup on LocalLauncherRepository {
         'them in Profiles; joining a server again sets its profile up anew.',
       );
     }
-    var freed = work.plan.removableBytes;
+    final freed = work.plan.removableBytes;
     _deleteJoinFolder(trash);
-    freed += await _deleteUnusedCachedArchives(install, {
-      for (final entry in work.removable) entry.sha256,
-    });
+    // The cache is shared by every install. An install-local lease and its
+    // receipts cannot prove that another host no longer serves an archive.
+    // Retain these until a shared cache lease and reference index exist.
     await _appendLauncherLogBestEffort(
       'Removed ${work.removable.length} version(s) of server content and '
       '${removedProfiles.length} server profile(s).',
@@ -427,43 +427,5 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       });
     });
     return removed;
-  }
-
-  /// Deletes the cached archives of [sha256s] that no installed version
-  /// still names; returns the bytes freed.
-  Future<int> _deleteUnusedCachedArchives(
-    GameInstall install,
-    Set<String> sha256s,
-  ) async {
-    final inUse = <String>{};
-    try {
-      for (final idFolder in _packagesRoot(
-        install,
-      ).listSync(followLinks: false)) {
-        if (idFolder is! Directory) continue;
-        for (final versionFolder in idFolder.listSync(followLinks: false)) {
-          if (versionFolder is! Directory) continue;
-          final sha = await _receiptArchiveSha256(versionFolder);
-          if (sha != null) inUse.add(sha);
-        }
-      }
-    } on FileSystemException {
-      return 0;
-    }
-    var freed = 0;
-    for (final sha in sha256s.difference(inUse)) {
-      final cached = _joinCacheFile(sha);
-      try {
-        if (FileSystemEntity.typeSync(cached.path, followLinks: false) ==
-            FileSystemEntityType.file) {
-          final length = await cached.length();
-          await cached.delete();
-          freed += length;
-        }
-      } on FileSystemException {
-        // A cached archive kept is only disk space.
-      }
-    }
-    return freed;
   }
 }

@@ -3,6 +3,7 @@ part of '../local_launcher_repository.dart';
 final Map<String, Future<void>> _profileMutationTails = {};
 final Expando<Map<String, String>> _profileRemovalWitness =
     Expando<Map<String, String>>();
+final Expando<Set<String>> _observedProfileIds = Expando<Set<String>>();
 
 LauncherProfile _requireValidLauncherProfile(LauncherProfile profile) {
   LaunchStorageKeys.request(profile.id);
@@ -266,6 +267,11 @@ extension _ProfilePersistence on LocalLauncherRepository {
   }
 
   void _recordProfileWitness(List<LauncherProfile> profiles) {
+    // Saving or reloading the current list must not let an older launch
+    // request treat a deleted, previously observed profile as an unsaved one.
+    (_observedProfileIds[this] ??= <String>{}).addAll(
+      profiles.map((profile) => profile.id),
+    );
     _profileRemovalWitness[this] = Map.unmodifiable({
       for (final profile in profiles)
         profile.id: _canonicalProfileValue(profile.toJson()),
@@ -278,7 +284,7 @@ extension _ProfilePersistence on LocalLauncherRepository {
     final (stored, _) = await _readProfileStore();
     final current = stored.where((item) => item.id == profile.id).firstOrNull;
     if (current == null &&
-        (_profileRemovalWitness[this]?.containsKey(profile.id) ?? false)) {
+        (_observedProfileIds[this]?.contains(profile.id) ?? false)) {
       throw StateError(
         'Profile ${profile.id} was removed on disk during preflight. Reload before launching.',
       );

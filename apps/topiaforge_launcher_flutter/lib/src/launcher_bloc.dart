@@ -32,6 +32,8 @@ part 'launcher_multiplayer_network_actions.dart';
 part 'launcher_multiplayer_work.dart';
 part 'launcher_multiplayer_join_actions.dart';
 part 'launcher_multiplayer_join_steps.dart';
+part 'launcher_hosting_actions.dart';
+part 'launcher_cleanup_actions.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(
@@ -107,6 +109,8 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
 
   /// Whether the launcher can join multiplayer servers here.
   bool get canJoin => _multiplayer is MultiplayerJoinGateway;
+  bool get canHost => _multiplayer is MultiplayerHostingGateway;
+  bool get canCleanServerContent => _repository is MultiplayerContentHost;
 
   @override
   void onChange(Change<LauncherState> change) {

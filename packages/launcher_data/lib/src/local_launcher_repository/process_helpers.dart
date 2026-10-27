@@ -6,9 +6,12 @@ extension _ProcessHelpers on LocalLauncherRepository {
     LauncherProfile profile, {
     LaunchSelection? selectionOverride,
     LaunchSessionRequest? session,
+    CancellationToken? cancellation,
+    String? expectedPackageDigest,
     required String message,
   }) async {
     final acceptance = _acceptanceIsolation;
+    cancellation?.throwIfCancelled();
     if (acceptance != null && session != null) {
       throw StateError('Acceptance runs never host or join a session.');
     }
@@ -61,6 +64,13 @@ extension _ProcessHelpers on LocalLauncherRepository {
       selectionOverride: selectionOverride,
     );
     if (!preview.canLaunch) return _previewLaunchFailure(preview);
+    if (expectedPackageDigest != null &&
+        preview.packageDigest != expectedPackageDigest) {
+      return const LaunchResult(
+        started: false,
+        message: 'The reviewed host packages changed. Review hosting again.',
+      );
+    }
     final requestId = _newLaunchRequestId();
     final configuration = ProfileLaunchConfigurationV4(
       profileId: profile.id,
@@ -140,11 +150,11 @@ extension _ProcessHelpers on LocalLauncherRepository {
       await store.deleteLaunchRequest(request);
       rethrow;
     }
-    if (_disposed) {
+    if (_disposed || (cancellation?.isCancelled ?? false)) {
       await store.deleteLaunchRequest(request);
       return const LaunchResult(
         started: false,
-        message: 'The launcher repository closed before process creation.',
+        message: 'The launch stopped before process creation.',
       );
     }
     final LaunchProcessReceipt receipt;

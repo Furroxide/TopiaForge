@@ -46,6 +46,8 @@ extension _LaunchAdmission on LocalLauncherRepository {
     LaunchSessionRequest session, {
     required LaunchSelection? selectionOverride,
     required bool restart,
+    CancellationToken? cancellation,
+    String? expectedPackageDigest,
   }) {
     if (session.role == LaunchSessionRole.join &&
         selectionOverride != null &&
@@ -81,6 +83,8 @@ extension _LaunchAdmission on LocalLauncherRepository {
           : selectionOverride,
       restart: restart,
       session: session,
+      cancellation: cancellation,
+      expectedPackageDigest: expectedPackageDigest,
     );
   }
 
@@ -90,6 +94,8 @@ extension _LaunchAdmission on LocalLauncherRepository {
     LaunchSelection? selectionOverride,
     required bool restart,
     LaunchSessionRequest? session,
+    CancellationToken? cancellation,
+    String? expectedPackageDigest,
   }) => _tracked(
     () => _admitLaunch(
       install,
@@ -97,6 +103,8 @@ extension _LaunchAdmission on LocalLauncherRepository {
       selectionOverride: selectionOverride,
       restart: restart,
       session: session,
+      cancellation: cancellation,
+      expectedPackageDigest: expectedPackageDigest,
     ),
   );
 
@@ -109,6 +117,8 @@ extension _LaunchAdmission on LocalLauncherRepository {
     LaunchSelection? selectionOverride,
     required bool restart,
     LaunchSessionRequest? session,
+    CancellationToken? cancellation,
+    String? expectedPackageDigest,
   }) async {
     if (_disposed) {
       return const LaunchResult(
@@ -127,6 +137,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
     LaunchStagingLease? lease;
     ReplacedGame? replaced;
     try {
+      cancellation?.throwIfCancelled();
       final profile = _requireValidLauncherProfile(
         LauncherProfile.fromJson(
           jsonDecode(jsonEncode(source.toJson())) as Map<String, Object?>,
@@ -157,6 +168,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
         );
       }
       final prepared = await _prepareRuntimeForLaunch(install);
+      cancellation?.throwIfCancelled();
       if (prepared.failure != null) return prepared.failure!;
       final current = prepared.install!;
       final preview = await _previewLaunch(
@@ -165,6 +177,13 @@ extension _LaunchAdmission on LocalLauncherRepository {
         selectionOverride: selectionOverride,
       );
       if (!preview.canLaunch) return _previewLaunchFailure(preview);
+      if (expectedPackageDigest != null &&
+          preview.packageDigest != expectedPackageDigest) {
+        return const LaunchResult(
+          started: false,
+          message: 'The reviewed host packages changed. Review hosting again.',
+        );
+      }
       await _requireCurrentProfileRevision(profile);
       final running = await _runningForLaunch(current);
       if (_disposed) {
@@ -232,6 +251,8 @@ extension _LaunchAdmission on LocalLauncherRepository {
         profile,
         selectionOverride: selectionOverride,
         session: session,
+        cancellation: cancellation,
+        expectedPackageDigest: expectedPackageDigest,
         message: profile.launchSettings.safeMode
             ? 'Started TopiaForge process in Safe Mode for this run only.'
             : restart

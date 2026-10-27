@@ -268,6 +268,7 @@ extension LauncherLaunchActions on LauncherBloc {
     Emitter<LauncherState> emit,
   ) async {
     final activity = event.activity;
+    _followHosting(emit, activity);
     // A join's launch reports to the join flow, whatever profile is selected.
     if (_followsJoin(activity)) return _followJoinActivity(emit, activity);
     final profile = state.selectedProfile;
