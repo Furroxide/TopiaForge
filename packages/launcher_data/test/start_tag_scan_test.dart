@@ -163,6 +163,31 @@ void main() {
   });
 
   group('packageReferences', () {
+    test('after a missing end tag only real self-closing items yield', () {
+      const open = '<PackageReference Include="A">';
+      const later = '<packagereference Include="B"/>';
+      const prefix = 'x$open<PackageReference Label="/>">';
+      const hidden = '<!-- $later --><![CDATA[$later]]>';
+      const text = '$prefix$hidden$open$later';
+      final item = packageReferences(text).single;
+      expect((item.start, item.end), (text.length - later.length, text.length));
+      expect(_attributes(text, item.tag), ['Include="B"']);
+      expect(packageReferences('$open$open</PackageReferenc>'), isEmpty);
+      expect(packageReferences('$open$hidden'), isEmpty);
+    });
+
+    test('literal name fast path still checks boundaries and ASCII case', () {
+      const exact = '<PackageReference/>';
+      const mixed = '<pAcKaGeReFeReNcE/>';
+      const rejected = '<PackageReferences/><Pac\u212AageReference/>';
+      const text = '$rejected$exact$mixed';
+      expect(
+        [for (final item in packageReferences(text)) item.start],
+        [rejected.length, rejected.length + exact.length],
+      );
+      expect(startTags('<import/><Import/>', 'Import').single.start, 9);
+    });
+
     test('bounds each item from a start, skipping unclosed ones', () {
       const closed = '<PackageReference Update="A" />';
       const outer = '<PackageReference Include="B">';
