@@ -13,8 +13,15 @@ abstract final class LaunchTransport {
       );
   static LaunchProgress readProgress(String json) =>
       LaunchProgress.fromJson(_decodeContract(json, maxDocumentBytes));
-  static LaunchOutcome readOutcome(String json) =>
-      LaunchOutcome.fromJson(_decodeContract(json, maxDocumentBytes));
+  static LaunchOutcome readOutcome(String json) {
+    try {
+      return LaunchOutcome.fromJson(_decodeContract(json, maxDocumentBytes));
+    } on FormatException {
+      // Decoder errors can retain their source, including private reason text.
+      throw const FormatException('Invalid launch outcome.');
+    }
+  }
+
   static LaunchObservationEnvelope readObservation(String json) =>
       LaunchObservationEnvelope.fromJson(
         _decodeContract(json, maxObservationBytes),

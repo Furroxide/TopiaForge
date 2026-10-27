@@ -207,9 +207,9 @@ final class LaunchStagingStore {
   }) async {
     try {
       final prefix = session ? 'session-outcome' : 'launch-outcome';
-      final raw = await _read(_channel(prefix, requestId), documentLimit);
+      final raw = await _readText(_channel(prefix, requestId), documentLimit);
       if (raw == null) return null;
-      final value = LaunchOutcome.fromJson(raw);
+      final value = LaunchTransport.readOutcome(raw);
       return value.requestId == requestId &&
               value.kind == (session ? 'session' : 'launch')
           ? value

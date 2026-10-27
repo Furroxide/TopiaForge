@@ -72,6 +72,7 @@ void main() {
       JoinFailureCode.startFailed,
     },
     JoinStage.connecting: {
+      JoinFailureCode.other,
       JoinFailureCode.timeout,
       JoinFailureCode.natTraversalFailed,
       JoinFailureCode.relayUnavailable,
@@ -86,6 +87,7 @@ void main() {
       JoinFailureCode.directNotAllowed,
     },
     JoinStage.synchronizing: {
+      JoinFailureCode.other,
       // A link is not admission: the host can refuse it or remove the
       // player before the world arrives, including after content changes.
       JoinFailureCode.timeout,

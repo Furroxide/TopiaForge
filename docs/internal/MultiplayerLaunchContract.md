@@ -170,9 +170,23 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
   Before the join succeeds it writes `failure: world-follow-failed`, which the launcher shows at Receiving the world even
   when it has not read the join's synchronizing progress yet; afterwards it writes a terminal
   `endReason: world-follow-failed` and retains the last world session id even after cleanup reports Idle. The failure
-  belongs only to the follow's launch request and wins over a later transport leave. Runtime and launcher ship this
-  closed vocabulary together: a launcher from before it refuses such a record whole, as it refuses any unknown value,
-  and so shows the join as still running until the game exits.
+  belongs only to the follow's launch request and wins over a later transport leave.
+- **Unknown reasons (0.2.0 reader boundary).** In outcome V2 only, an unknown string in `failure` or `endReason`
+  reads as the canonical `other` for either role. Known failure strings for the wrong role remain invalid.
+  The reader validates any supplied `detail` before replacing it with the fixed advice: "The multiplayer session
+  could not continue. Try again; if it keeps failing, update TopiaForge." Neither the unknown reason nor its detail
+  survives in the model, a rewritten record, or parser errors. Writers accept canonical values only, including
+  `other`; existing known-value records keep their bytes. The staging reader does not rewrite the producer's file.
+  A generic failed launch ends monitoring even if it carries a world session id. The join ends at Connecting if
+  no synchronizing progress was observed, or at Receiving the world if it was. A generic end after joining says
+  "The session ended. Try again; if it keeps failing, update TopiaForge."
+  This tolerance does not apply to schemas, types, duplicate or unknown fields, identities, roles, phases, statuses,
+  commands, admission codes or reports, requests, consent or privacy settings. A report on an unknown end remains
+  invalid: only `admission-rejected` may carry one. A valid report on a failed join remains intact and never triggers
+  an admission re-plan unless the failure is the known `admission-changed`.
+  Already shipped readers cannot gain this behavior retroactively. Readers from before this change reject an
+  unknown reason's whole record and can show the join as running until the game exits; update the launcher and
+  runtime together. This change neither raises the schema version nor enables live publication.
 - **The launcher's monitor** reads both versions. A session launch owes a terminal record once it has started, so a
   process that exits without one leaves the activity unconfirmed.
 

@@ -56,6 +56,9 @@ namespace TopiaForge.ModManager.Core
     /// </summary>
     public sealed class LaunchOutcomeMultiplayer
     {
+        /// <summary>Fixed advice when the reader cannot interpret a newer outcome's reason.</summary>
+        public const string OtherDetail = "The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.";
+
         public LaunchOutcomeMultiplayer(string role, string intentId, string? serverId = null, string? failure = null, string? detail = null,
             LaunchAdmissionReport? admission = null, string? endReason = null)
         {

@@ -63,11 +63,15 @@ enum LaunchMultiplayerFailure {
   networkStopped,
 
   /// The control plane would not list or register the session.
-  serviceUnavailable;
+  serviceUnavailable,
+
+  /// A failure whose cause this reader cannot interpret. Both roles.
+  other;
 
   String get wireName => _kebab(this);
 
   bool allows(LaunchSessionRole role) =>
+      this == other ||
       (role == LaunchSessionRole.host) == (index >= portInUse.index);
 
   /// The join reducer's failure, for a join's failures; null for a host's.
@@ -84,6 +88,7 @@ enum LaunchMultiplayerFailure {
     directNotAllowed => JoinFailureCode.directNotAllowed,
     snapshotFailed => JoinFailureCode.snapshotFailed,
     worldFollowFailed => JoinFailureCode.worldFollowFailed,
+    other => JoinFailureCode.other,
     portInUse ||
     identityUnavailable ||
     networkStopped ||
@@ -104,7 +109,8 @@ enum LaunchSessionEndReason {
   admissionRejected,
   protocolMismatch,
   transportFailed,
-  worldFollowFailed;
+  worldFollowFailed,
+  other;
 
   String get wireName => _kebab(this);
 
@@ -257,6 +263,11 @@ final class LaunchProgressSession {
 /// Outcome V2's `multiplayer` block: how a session launch went, or how its
 /// session ended. It names no address and no port.
 final class LaunchOutcomeMultiplayer {
+  /// Fixed advice for a reason this reader cannot interpret.
+  static const otherDetail =
+      'The multiplayer session could not continue. Try again; if it keeps '
+      'failing, update TopiaForge.';
+
   LaunchOutcomeMultiplayer({
     required this.role,
     required String intentId,
@@ -288,32 +299,42 @@ final class LaunchOutcomeMultiplayer {
       },
       {'intentId', 'role'},
     );
+    final failure = json.containsKey('failure')
+        ? _outcomeReason(
+            json['failure'],
+            LaunchMultiplayerFailure.values,
+            (item) => item.wireName,
+            LaunchMultiplayerFailure.other,
+          )
+        : null;
+    final endReason = json.containsKey('endReason')
+        ? _outcomeReason(
+            json['endReason'],
+            LaunchSessionEndReason.values,
+            (item) => item.wireName,
+            LaunchSessionEndReason.other,
+          )
+        : null;
+    // Validate even discarded detail; a new reason cannot hide a bad field.
+    final detail = json.containsKey('detail')
+        ? _displayText(json['detail'], 1024)
+        : null;
     return LaunchOutcomeMultiplayer(
       role: _named(json['role'], LaunchSessionRole.values, (item) => item.name),
       intentId: _token(json['intentId']),
       serverId: json.containsKey('serverId')
           ? _sha256Hex(json['serverId'])
           : null,
-      failure: json.containsKey('failure')
-          ? _named(
-              json['failure'],
-              LaunchMultiplayerFailure.values,
-              (item) => item.wireName,
-            )
-          : null,
-      detail: json.containsKey('detail')
-          ? _displayText(json['detail'], 1024)
-          : null,
+      failure: failure,
+      detail:
+          failure == LaunchMultiplayerFailure.other ||
+              endReason == LaunchSessionEndReason.other
+          ? otherDetail
+          : detail,
       admission: json.containsKey('admission')
           ? LaunchAdmissionReport.fromJson(json['admission'])
           : null,
-      endReason: json.containsKey('endReason')
-          ? _named(
-              json['endReason'],
-              LaunchSessionEndReason.values,
-              (item) => item.wireName,
-            )
-          : null,
+      endReason: endReason,
     );
   }
 
@@ -336,4 +357,19 @@ final class LaunchOutcomeMultiplayer {
     'role': role.name,
     if (serverId != null) 'serverId': serverId,
   };
+}
+
+/// Only outcome reasons accept unknown strings. Types and all other values
+/// remain strict, and the raw text never leaves the reader.
+T _outcomeReason<T>(
+  Object? value,
+  List<T> values,
+  String Function(T) name,
+  T other,
+) {
+  if (value is! String) throw const FormatException('Invalid outcome reason.');
+  for (final item in values) {
+    if (name(item) == value) return item;
+  }
+  return other;
 }

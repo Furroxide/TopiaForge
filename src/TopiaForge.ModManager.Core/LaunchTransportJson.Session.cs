@@ -194,8 +194,19 @@ namespace TopiaForge.ModManager.Core
                 admission = new LaunchAdmissionReport(report.String("code"), Strings(report.Required("problems")));
             }
 
+            // Only unknown reason strings are tolerant. Look across both roles first so a known
+            // reason for the wrong role still fails the constructor's validation.
+            var failure = block.OptionalString("failure");
+            if (failure != null && !LaunchContractValues.JoinFailures.Contains(failure, StringComparer.Ordinal)
+                && !LaunchContractValues.HostFailures.Contains(failure, StringComparer.Ordinal)) failure = "other";
+            var endReason = block.OptionalString("endReason");
+            if (endReason != null && !LaunchContractValues.EndReasons.Contains(endReason, StringComparer.Ordinal)) endReason = "other";
+            var words = block.OptionalString("detail");
+            // Validate even discarded detail: tolerance must not hide a malformed field.
+            if (words != null) LaunchSessionValues.DisplayText(words, "detail", 1, LaunchSessionValues.MaximumDetailLength);
+            if (failure == "other" || endReason == "other") words = LaunchOutcomeMultiplayer.OtherDetail;
             var multiplayer = new LaunchOutcomeMultiplayer(block.String("role"), block.String("intentId"), block.OptionalString("serverId"),
-                block.OptionalString("failure"), block.OptionalString("detail"), admission, block.OptionalString("endReason"));
+                failure, words, admission, endReason);
             return new LaunchOutcome(value.String("kind"), value.String("requestId"), value.Integer("sequence"), value.String("phase"),
                 value.String("status"), ParseBlocks(value.Required("blocks")), value.OptionalString("sessionId"), value.OptionalString("command"),
                 error, multiplayer);

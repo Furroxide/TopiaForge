@@ -123,18 +123,16 @@ void main() {
       }
     });
 
-    test('the failure codes are the closed set the fixture lists', () {
+    test('the writers use the canonical failure codes the fixture lists', () {
       final codes = asObject(fixture['failureCodes']);
-      String role(LaunchMultiplayerFailure failure) =>
-          failure.allows(LaunchSessionRole.host) ? 'host' : 'join';
       expect({
         'join': [
           for (final item in LaunchMultiplayerFailure.values)
-            if (role(item) == 'join') item.wireName,
+            if (item.allows(LaunchSessionRole.join)) item.wireName,
         ],
         'host': [
           for (final item in LaunchMultiplayerFailure.values)
-            if (role(item) == 'host') item.wireName,
+            if (item.allows(LaunchSessionRole.host)) item.wireName,
         ],
       }, codes);
       expect([
