@@ -25,3 +25,4 @@ export 'src/join_host_packages.dart';
 export 'src/network_text.dart';
 export 'src/authored_map.dart';
 export 'src/map_anchors.dart';
+export 'src/published_map_sources.dart';

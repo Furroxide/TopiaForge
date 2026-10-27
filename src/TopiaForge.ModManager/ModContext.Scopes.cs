@@ -69,6 +69,7 @@ namespace TopiaForge.ModManager
             scopeParent = parent;
             packagePath = parent.packagePath;
             MapCacheDirectory = parent.MapCacheDirectory;
+            PublishedMapLibraryPath = parent.PublishedMapLibraryPath;
             dataPath = parent.dataPath;
             gameplayFactory = parent.gameplayFactory;
             serviceRegistry = parent.serviceRegistry;

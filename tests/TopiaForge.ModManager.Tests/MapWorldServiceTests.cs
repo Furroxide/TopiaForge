@@ -200,7 +200,7 @@ namespace TopiaForge.ModManager.Tests
                 return Task.FromResult(new MapResponse(200, new MemoryStream(bytes), bytes.Length));
             }
         }
-        private sealed class Backend : IMapNativeBackend, IMapImportTransaction
+        internal sealed class Backend : IMapNativeBackend, IMapImportTransaction
         {
             internal static readonly TransformState Spawn = new TransformState(new Vec3(7, 2, 9), Quat.Identity, new Vec3(1, 1, 1));
             internal int Imported, ContentDisposals; internal string? Spawned, SceneArgument, Label;

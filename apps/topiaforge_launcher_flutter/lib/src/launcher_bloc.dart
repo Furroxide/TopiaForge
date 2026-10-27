@@ -15,6 +15,7 @@ import 'launcher_state.dart';
 import 'session_link_inbox.dart';
 
 part 'launcher_bloc_actions.dart';
+part 'launcher_map_source_actions.dart';
 part 'launcher_launch_actions.dart';
 part 'launcher_event_dispatch.dart';
 part 'launcher_game_install_actions.dart';
@@ -161,6 +162,8 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
           'Ready.',
         ).copyWith(reachabilityProbe: probeSettings),
       );
+      final mapSources = await _loadSavedMaps();
+      emit(state.copyWith(publishedMapSources: mapSources));
       _queueLaunchPreviews();
       if (event is LauncherStarted &&
           snapshot.launcherUpdates.enabled &&

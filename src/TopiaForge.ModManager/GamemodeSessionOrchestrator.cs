@@ -36,7 +36,8 @@ namespace TopiaForge.ModManager
         }
 
         internal SessionStateSnapshot Current => lifecycle.Current;
-        internal bool CanHostCurrentWorld => !(current?.World is MapWorldImplementation);
+        internal bool CanHostCurrentWorld => !(current?.World is MapWorldImplementation)
+            && !(current?.Instance is TopiaForge.Mods.Internal.IInternalMapWorldInstance);
 
         /// <summary>
         /// Gets the local session's phase as the multiplayer realm rules read it. An idle session still counts as stopping

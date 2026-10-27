@@ -29,6 +29,7 @@ part 'widget_test_install_fake.dart';
 part 'widget_lifecycle_test_cases.dart';
 part 'widget_install_test_cases.dart';
 part 'widget_map_cache_test_cases.dart';
+part 'widget_published_map_test_cases.dart';
 part 'widget_mod_repair_test_cases.dart';
 part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
@@ -48,19 +49,13 @@ part 'widget_multiplayer_privacy_test_cases.dart';
 part 'widget_multiplayer_race_test_cases.dart';
 part 'widget_multiplayer_golden_test_cases.dart';
 
-Finder _devScrollable() => find
-    .descendant(
-      of: find.byKey(const Key('developer-scroll')),
-      matching: find.byType(Scrollable),
-    )
-    .first;
-
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   registerLauncherLifecycleTests();
   _registerLaunchActivityTests();
   registerInstallConfirmationWidgetTests();
   registerDownloadedMapCacheTests();
+  registerPublishedMapTests();
   registerModRepairTests();
   registerAccessibilityWidgetTests();
   registerLauncherUpdateWidgetTests();

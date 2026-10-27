@@ -33,6 +33,8 @@ namespace TopiaForge.Worlds.Maps
         public async Task<OperationResult<IWorldInstance>> LoadAsync(IWorldLoadContext context, InternalMapWorldRequest request, CancellationToken token)
         {
             if (disposed) return OperationResult<IWorldInstance>.Failure(ModErrorCode.Cancelled, "Map loading stopped.");
+            if (context.Context is IInternalReplicationContext network && network.Replication.Realm != InternalNetRealm.Offline)
+                return OperationResult<IWorldInstance>.Failure(ModErrorCode.Unavailable, "Map worlds currently support single player. Leave the multiplayer session before playing this map.");
             using var progress = new MapLoadProgress(context.Context.Ui);
             string? safeFailure = null;
             OperationResult<WorldReadiness> Failure(ModErrorCode code, string? message)
@@ -115,11 +117,18 @@ namespace TopiaForge.Worlds.Maps
                     // replace failed native cleanup with an ordinary cancelled result.
                     catch (Exception) { throw new InvalidOperationException("The map could not be built or cleaned up."); }
                 });
-            return result.Succeeded ? result : OperationResult<IWorldInstance>.Failure(result.ErrorCode,
+            return result.TryGetValue(out var instance) ? OperationResult<IWorldInstance>.Success(new MapInstance(instance)) : OperationResult<IWorldInstance>.Failure(result.ErrorCode,
                 result.ErrorCode == ModErrorCode.External && result.ErrorMessage != safeFailure
                     ? "The map could not be built or cleaned up. Update TopiaForge or restart the game."
                 : result.ErrorCode == ModErrorCode.Cancelled ? "Map loading was cancelled."
                 : safeFailure ?? "The game's map loading service could not prepare this world. Update TopiaForge or try again.");
+        }
+        private sealed class MapInstance : IInternalMapWorldInstance
+        {
+            private readonly IWorldInstance inner;
+            internal MapInstance(IWorldInstance inner) { this.inner = inner; }
+            public WorldReadiness Readiness => inner.Readiness;
+            public void Dispose() => inner.Dispose();
         }
         public void Dispose()
         {

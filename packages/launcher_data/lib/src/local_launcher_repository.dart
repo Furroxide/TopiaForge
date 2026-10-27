@@ -35,6 +35,7 @@ import 'multiplayer/multiplayer_store.dart'
     show ServerContentLoad, ServerContentStore;
 import 'atomic_file_writes.dart';
 import 'atomic_files.dart';
+import 'published_map_source_store.dart';
 
 part 'local_launcher_repository/game_layout.dart';
 part 'local_launcher_repository/game_install_discovery_helpers.dart';
@@ -61,6 +62,7 @@ part 'local_launcher_repository/profile_launch_helpers.dart';
 part 'local_launcher_repository/effective_launch_selection.dart';
 part 'local_launcher_repository/launch_preview.dart';
 part 'local_launcher_repository/map_cache_cleanup.dart';
+part 'local_launcher_repository/published_map_sources.dart';
 part 'local_launcher_repository/launch_admission.dart';
 part 'local_launcher_repository/profile_persistence.dart';
 part 'local_launcher_repository/process_helpers.dart';
@@ -91,7 +93,10 @@ part 'local_launcher_repository/server_content_judging.dart';
 
 class LocalLauncherRepository
     with _MultiplayerContentHosting, _JoinSessionHosting
-    implements GameInstallDiscoveryRepository, DownloadedMapRepository {
+    implements
+        GameInstallDiscoveryRepository,
+        DownloadedMapRepository,
+        PublishedMapSourceRepository {
   LocalLauncherRepository({
     String? dataRoot,
     AcceptanceIsolationContext? acceptanceIsolation,
@@ -224,6 +229,19 @@ class LocalLauncherRepository
 
   @override
   Future<LauncherSnapshot> loadSnapshot() => _tracked(_loadSnapshot);
+
+  @override
+  Future<List<PublishedMapSource>> loadPublishedMapSources() =>
+      _tracked(() => _publishedMapSources.read());
+  @override
+  Future<List<PublishedMapSource>> savePublishedMapSource(
+    PublishedMapSource source,
+  ) => _tracked(() => _publishedMapSources.save(source));
+  @override
+  Future<List<PublishedMapSource>> removePublishedMapSource(
+    String map,
+    String scene,
+  ) => _tracked(() => _publishedMapSources.remove(map, scene));
 
   @override
   Future<int> clearDownloadedMaps(GameInstall install) =>

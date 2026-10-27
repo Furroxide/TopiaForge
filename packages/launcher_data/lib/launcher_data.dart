@@ -43,3 +43,4 @@ export 'src/multiplayer/lan_discovery_state.dart';
 export 'src/multiplayer/multiplayer_repository.dart';
 export 'src/multiplayer/multiplayer_store.dart';
 export 'src/multiplayer/network_diagnostics.dart';
+export 'src/published_map_source_store.dart';

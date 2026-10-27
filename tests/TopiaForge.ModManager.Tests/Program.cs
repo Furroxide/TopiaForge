@@ -26,6 +26,8 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && args[0] == "--authored-maps")
             { AuthoredMapTests.Run(FindRepoRoot()); AuthoredMapImportTests.RunAsync().GetAwaiter().GetResult(); return 0; }
+            if (args.Length == 1 && args[0] == "--published-maps")
+            { PublishedMapDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult(); return 0; }
             if (args.Length == 1 && args[0] == "--gamecompat")
             { GameCompatTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--blockers")
@@ -560,6 +562,7 @@ namespace TopiaForge.ModManager.Tests
                 MapWorldServiceTests.AuthoredReadinessAsync().GetAwaiter().GetResult();
                 MapStoreTests.RunAsync().GetAwaiter().GetResult();
                 MapWorldServiceTests.RunAsync().GetAwaiter().GetResult();
+                PublishedMapDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
                 MapWorldBindingTests.RunAsync().GetAwaiter().GetResult();
                 AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult();
                 LocalImportOperationTests.RunAsync().GetAwaiter().GetResult();

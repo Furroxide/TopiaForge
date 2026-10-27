@@ -317,6 +317,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/WorldPreparation.cs" Link="Runtime/WorldPreparation.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/GeneratedArenaGeometry.cs" Link="Worlds/GeneratedArenaGeometry.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/WorldDiscoveryIdentity.cs" Link="Worlds/WorldDiscoveryIdentity.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/PublishedMapDiscoverySource.cs" Link="Worlds/PublishedMapDiscoverySource.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/WorldResourceScope.cs" Link="Worlds/WorldResourceScope.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/ScopedWorldInstance.cs" Link="Worlds/ScopedWorldInstance.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/WorldProviderLoader.cs" Link="Worlds/WorldProviderLoader.cs" />

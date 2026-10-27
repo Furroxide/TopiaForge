@@ -62,6 +62,7 @@ namespace TopiaForge.ModManager
 
             this.packagePath = packagePath;
             MapCacheDirectory = Path.Combine(managerPaths.Root, "cache", "maps");
+            PublishedMapLibraryPath = Path.Combine(managerPaths.Root, "published-map-sources-v1.json");
             this.gameplayFactory = gameplayFactory;
             this.serviceRegistry = serviceRegistry;
             this.replicationServices = replicationServices ?? MultiplayerReplication.Offline();
@@ -155,6 +156,8 @@ namespace TopiaForge.ModManager
         public ModIdentity Identity { get; }
         string IInternalMapStorageContext.MapCacheDirectory => MapCacheDirectory;
         private string MapCacheDirectory { get; }
+        string IInternalMapStorageContext.PublishedMapLibraryPath => PublishedMapLibraryPath;
+        private string PublishedMapLibraryPath { get; }
         public IRuntimeInfo Runtime { get; }
         public IModLogger Logger { get; }
         public IModLifetime Lifetime { get; }

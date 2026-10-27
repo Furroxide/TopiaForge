@@ -5,6 +5,7 @@ import 'launcher_section.dart';
 import 'session_link_inbox.dart';
 
 part 'launcher_developer_event.dart';
+part 'launcher_map_source_event.dart';
 part 'launcher_multiplayer_event.dart';
 part 'launcher_multiplayer_join_event.dart';
 part 'launcher_multiplayer_settings_event.dart';

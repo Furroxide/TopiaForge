@@ -16,6 +16,7 @@ class LauncherState {
     required this.packageSources,
     required this.sourceStatuses,
     this.previewsByProfile = const {},
+    this.publishedMapSources = const [],
     this.launchActivity,
     required this.recentLog,
     required this.launcherLog,
@@ -81,6 +82,7 @@ class LauncherState {
   final List<PackageSource> packageSources;
   final List<PackageSourceStatus> sourceStatuses;
   final Map<String, LaunchPreview> previewsByProfile;
+  final List<PublishedMapSource> publishedMapSources;
   final LaunchActivity? launchActivity;
   final String recentLog;
   final String launcherLog;
@@ -220,6 +222,7 @@ class LauncherState {
     List<PackageSource>? packageSources,
     List<PackageSourceStatus>? sourceStatuses,
     Map<String, LaunchPreview>? previewsByProfile,
+    List<PublishedMapSource>? publishedMapSources,
     LaunchActivity? launchActivity,
     bool clearLaunchActivity = false,
     String? recentLog,
@@ -272,6 +275,7 @@ class LauncherState {
       packageSources: packageSources ?? this.packageSources,
       sourceStatuses: sourceStatuses ?? this.sourceStatuses,
       previewsByProfile: previewsByProfile ?? this.previewsByProfile,
+      publishedMapSources: publishedMapSources ?? this.publishedMapSources,
       launchActivity: clearLaunchActivity
           ? null
           : launchActivity ?? this.launchActivity,
