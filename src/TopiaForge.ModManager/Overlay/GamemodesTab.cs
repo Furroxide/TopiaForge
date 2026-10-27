@@ -58,7 +58,8 @@ namespace TopiaForge.ModManager
         private void BuildTarget(TopiaForgeContainer content, ManagerTabContext context, LaunchTargetPreview target,
             LaunchSelection saved, LaunchSelectionResolution remembered)
         {
-            var card = content.Panel(TopiaForgePanelStyle.Plain);
+            // A panel only draws chrome; a column measures and stacks the target's controls and reserves their height.
+            var card = content.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
             card.Label(target.Title, TopiaForgeTextStyle.Heading).FixedHeight(28f);
             card.Label(target.Description ?? target.Id, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).FixedHeight(40f);
             if (!drafts.TryGetValue(target.Id, out var chosen))

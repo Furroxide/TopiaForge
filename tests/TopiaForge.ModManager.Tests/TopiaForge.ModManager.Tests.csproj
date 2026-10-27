@@ -386,6 +386,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Screens/*.cs" Link="Runtime/Multiplayer/Screens/%(Filename)%(Extension)" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Sessions/*.cs" Link="Runtime/Multiplayer/Sessions/%(Filename)%(Extension)" />
     <Compile Include="../../src/TopiaForge.ModManager/Overlay/ManagerTabLookup.cs" Link="Runtime/ManagerTabLookup.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Overlay/ManagerStatus.cs" Link="Runtime/ManagerStatus.cs" />
   </ItemGroup>
 
   <!-- Pause and time (WS3.13) are Unity-free too: the session's time, its wire and the pause guard, beside Chronos' rules

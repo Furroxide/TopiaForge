@@ -24,6 +24,15 @@ namespace TopiaForge.ModManager.Tests
                 try { InSessionChatTests.Run(); MultiplayerUiArchitectureTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
+            if (args.Length == 1 && args[0] == "--ui-kit")
+            {
+                UiKitCoreTests.Run(); UiKitWindowMathTests.Run(); UiKitMultiplayerCoreTests.Run();
+                UiKitSourceConventionTests.Run(); UiKitMultiplayerConventionTests.Run();
+                UiKitLayerLedgerTests.Run(); UiKitHudLayoutTests.Run(); UiSurfaceLifetimeTests.Run();
+                UiSurfaceLifetimeConventionTests.Run(); UiKitEventSystemTests.Run(); OverlayRefreshTests.Run();
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--overlay-refresh") { OverlayRefreshTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit-event-systems")
             {
                 try { UiKitEventSystemTests.Run(); return 0; }
@@ -555,6 +564,7 @@ namespace TopiaForge.ModManager.Tests
                 UiSurfaceLifetimeTests.Run();
                 UiSurfaceLifetimeConventionTests.Run();
                 UiKitEventSystemTests.Run();
+                OverlayRefreshTests.Run();
                 LaunchSessionFixtureTests.Run(FindRepoRoot());
                 ServerContentFixtureTests.Run(FindRepoRoot());
                 LaunchSessionContractTests.Run(FindRepoRoot());

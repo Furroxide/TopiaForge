@@ -49,7 +49,7 @@ namespace TopiaForge.UiGallery.Pages
 
         private static TopiaForgeWindow BuildDemoWindow(UiHost host)
         {
-            var window = host.Window("gallery-demo", "DRAG ME", width: 340f);
+            var window = host.Window("gallery-demo", "DRAG ME", width: 340f, persistent: true);
             window.Content.Label("This window remembers where you left it (data-dir state store, not the registry).", TopiaForgeTextStyle.Body);
             window.Content.Button("CLOSE", window.Close, TopiaForgeButtonStyle.Ghost);
             return window;

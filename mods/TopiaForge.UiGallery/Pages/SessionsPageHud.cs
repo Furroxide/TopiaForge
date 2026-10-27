@@ -23,7 +23,7 @@ namespace TopiaForge.UiGallery.Pages
             status.Button("CONNECTED", () => { fake.IsAvailable = true; fake.ConnectionText = "Connected"; fake.IsReconnecting = false; }, TopiaForgeButtonStyle.Ghost);
             status.Button("RECONNECTING", () => { fake.IsAvailable = true; fake.ConnectionText = "Reconnecting..."; fake.IsReconnecting = true; }, TopiaForgeButtonStyle.Ghost);
             status.Button("LEFT SESSION", () => { fake.Close(); fake.IsAvailable = false; fake.Revision++; }, TopiaForgeButtonStyle.Ghost);
-            var hud = page.Host.Layer("gallery-chat-" + Demos.Count, TopiaForgeLayerBand.Hud, TopiaForgeScheme.Hud, interactive: true);
+            var hud = page.Host.Layer("gallery-chat-" + Demos.Count, TopiaForgeLayerBand.Hud, TopiaForgeScheme.Hud, interactive: true, persistent: true);
             var panel = hud.Panel(TopiaForgePanelStyle.Card).Dock(TopiaForgeCorner.BottomLeft).Size(600f, 330f);
             var column = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Sm);
             column.Stretch();

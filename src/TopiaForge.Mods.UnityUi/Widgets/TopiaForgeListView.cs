@@ -61,6 +61,9 @@ namespace TopiaForge.Mods.UnityUi
             scrollRect.movementType = ScrollRect.MovementType.Clamped;
             scrollRect.scrollSensitivity = 28f;
             scrollRect.onValueChanged.AddListener(_ => Refresh(force: false));
+            // SetItems can run before the parent's layout settles. A later viewport growth must reveal the
+            // remaining rows even when neither the scroll offset nor the data set changes.
+            Go.AddComponent<TopiaForgeListViewRuntime>().Initialize(viewportRect, () => Refresh(force: false));
 
             this.Flex(1f, 1f);
         }
