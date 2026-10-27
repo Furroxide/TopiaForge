@@ -15,6 +15,12 @@ export const pages = [
   page('docs/RobotKit.md', 'guides/robotkit.md'),
   page('docs/Zombies.md', 'guides/zombies.md'),
   page('docs/CustomWorlds.md', 'guides/custom-worlds.md'),
+  page(
+    'docs/MapWorlds.md',
+    'guides/map-worlds.md',
+    true,
+    generatedFrontmatter('Map worlds', 'Declare, verify, and play published or bundled maps for Robotopia.'),
+  ),
   page('docs/TestingMods.md', 'guides/testing.md'),
   page('docs/CliDevLoop.md', 'guides/cli-dev.md'),
   page('docs/UnityInterop.md', 'guides/interop.md', false),

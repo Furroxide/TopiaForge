@@ -19,8 +19,8 @@ namespace TopiaForge.ModManager.Tests
         private static readonly Uri Project = new Uri(Origin, "map/example/project.roboworld");
         internal static async Task RunAsync()
         {
-            var root = Path.Combine(Path.GetTempPath(), "map-store-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            var owned = Directory.CreateTempSubdirectory("map-store-");
+            var root = owned.FullName;
             try
             {
                 References();
@@ -32,7 +32,7 @@ namespace TopiaForge.ModManager.Tests
                 await Loopback(Path.Combine(root, "http"));
                 Console.WriteLine("MapStoreTests passed (trust, cache, revalidation, offline, gone, cancellation and loopback bounds).");
             }
-            finally { Directory.Delete(root, true); }
+            finally { owned.Delete(true); }
         }
         private static void References()
         {

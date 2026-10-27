@@ -14,8 +14,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task RunAsync()
         {
-            var root = Path.Combine(Path.GetTempPath(), "map-binding-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            var owned = Directory.CreateTempSubdirectory("map-binding-");
+            var root = owned.FullName;
             try
             {
                 var bytes = Project(); var file = Path.Combine(root, "courtyard.roboworld"); File.WriteAllBytes(file, bytes);
@@ -56,7 +56,7 @@ namespace TopiaForge.ModManager.Tests
                     "wrong transition refuses before any source access");
                 Console.WriteLine("Map production binding tests passed (7 cases).");
             }
-            finally { Directory.Delete(root, true); }
+            finally { owned.Delete(true); }
         }
         private sealed class Service : IInternalMapWorldService
         {

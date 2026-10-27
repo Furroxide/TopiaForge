@@ -22,6 +22,26 @@ test('creator guides are published and discoverable in the public sidebar', () =
   assert.match(configSource, /slug: 'guides\/sandbox'/u);
 });
 
+test('map world guidance connects manifest and diagnostics links to the author sidebar', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  const route = sourceToRoute.get('docs/MapWorlds.md');
+  assert.equal(route, '/guides/map-worlds/');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  for (const source of ['docs/ManifestV6.md', 'docs/Diagnostics.md']) {
+    const content = readFileSync(new URL(`../../${source}`, import.meta.url), 'utf8');
+    assert.ok(content.includes('(MapWorlds.md)'), source);
+    assert.ok(links.rewrite(source, content).includes(`](${route})`), source);
+  }
+  assert.deepEqual(failures, []);
+  const authorGuides = /label: 'Build mods',\s*items: \[([\s\S]*?)\],/u.exec(configSource);
+  assert.ok(authorGuides?.[1].includes(`slug: '${route.slice(1, -1)}'`),
+    'map world guide is discoverable in the author sidebar');
+});
+
 test('Players guide publication connects incoming links and the author sidebar', () => {
   const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
   const preparation = spawnSync(

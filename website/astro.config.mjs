@@ -91,6 +91,7 @@ export default defineConfig({
             { label: 'RobotKit', slug: 'guides/robotkit' },
             { label: 'Zombies worked example', slug: 'guides/zombies' },
             { label: 'Custom worlds and modes', slug: 'guides/custom-worlds' },
+            { label: 'Map worlds', slug: 'guides/map-worlds' },
             { label: 'Test a mod', slug: 'guides/testing' },
             { label: 'Development loop', slug: 'guides/cli-dev' },
             { label: 'Advanced interop', slug: 'guides/interop' },
