@@ -43,22 +43,25 @@ void main() {
     expect(rig.messages.join('\n'), isNot(contains('203.0.113.99')));
   });
 
-  test('admission refusal prints the session reason below the advice', () async {
-    rig.plan = await planJoin(
-      const [],
-      protocolVersion: '0.9.0',
-      runtimeVersion: '0.1.0',
-    );
-    expect(rig.plan.blockers.single.code, JoinBlockerCode.admissionBlocked);
+  test(
+    'admission refusal prints the session reason below the advice',
+    () async {
+      rig.plan = await planJoin(
+        const [],
+        protocolVersion: '0.9.0',
+        runtimeVersion: '0.1.0',
+      );
+      expect(rig.plan.blockers.single.code, JoinBlockerCode.admissionBlocked);
 
-    expect(await rig.run(), 1);
-    expectStoppedBeforeConsent();
-    expect(rig.messages.last.split('\n'), [
-      startsWith('TFJOIN120: The server\'s rules would refuse'),
-      'Mod (session): The server runs TopiaForge 0.1.0, '
-          'whose multiplayer protocol this install cannot use.',
-    ]);
-  });
+      expect(await rig.run(), 1);
+      expectStoppedBeforeConsent();
+      expect(rig.messages.last.split('\n'), [
+        startsWith('TFJOIN120: The server\'s rules would refuse'),
+        'Mod (session): The server runs TopiaForge 0.1.0, '
+            'whose multiplayer protocol this install cannot use.',
+      ]);
+    },
+  );
 
   test('admission mod identity and message both redact addresses', () async {
     final plan = rig.plan;
@@ -89,25 +92,31 @@ void main() {
   });
 
   for (final throws in [false, true]) {
-    test('raw provider ${throws ? 'exceptions' : 'details'} stay withheld',
-        () async {
-      const private = r'provider-secret 203.0.113.99 C:\private\archive.zip';
-      if (throws) {
-        rig.beforeAnswer = (_) async => throw StateError(private);
-      } else {
-        rig
-          ..failureStage = JoinStage.checking
-          ..failure = JoinFailed(
-            JoinFailureCode.admissionBlocked,
-            detail: private,
-          );
-      }
+    test(
+      'raw provider ${throws ? 'exceptions' : 'details'} stay withheld',
+      () async {
+        const private = r'provider-secret 203.0.113.99 C:\private\archive.zip';
+        if (throws) {
+          rig.beforeAnswer = (_) async => throw StateError(private);
+        } else {
+          rig
+            ..failureStage = JoinStage.checking
+            ..failure = JoinFailed(
+              JoinFailureCode.admissionBlocked,
+              detail: private,
+            );
+        }
 
-      expect(await rig.run(), 1);
-      expect(rig.launches, 0);
-      for (final value in ['provider-secret', '203.0.113.99', r'C:\private']) {
-        expect(rig.messages.join('\n'), isNot(contains(value)));
-      }
-    });
+        expect(await rig.run(), 1);
+        expect(rig.launches, 0);
+        for (final value in [
+          'provider-secret',
+          '203.0.113.99',
+          r'C:\private',
+        ]) {
+          expect(rig.messages.join('\n'), isNot(contains(value)));
+        }
+      },
+    );
   }
 }

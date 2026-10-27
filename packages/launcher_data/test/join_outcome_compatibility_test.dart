@@ -1,16 +1,24 @@
-// Exercise the application's pure Dart mapper with the production domain and data
-// tests. These two libraries currently live in the Flutter application.
+// Exercise the shared mapper and text with the production domain and data tests.
+// The old Flutter application facades must keep forwarding the same identities.
 // ignore_for_file: avoid_relative_lib_imports
 
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
-import '../../../apps/topiaforge_launcher_flutter/lib/src/join_activity.dart';
-import '../../../apps/topiaforge_launcher_flutter/lib/src/join_texts.dart';
+import '../../../apps/topiaforge_launcher_flutter/lib/src/join_activity.dart'
+    as flutter_activity;
+import '../../../apps/topiaforge_launcher_flutter/lib/src/join_texts.dart'
+    as flutter_texts;
 import '../../launcher_domain/test/multiplayer_fixtures.dart';
 import '../../launcher_domain/test/multiplayer_join_support.dart';
 
 void main() {
+  test('Flutter facades forward the shared domain identities', () {
+    expect(flutter_activity.joinEventsFor, same(joinEventsFor));
+    expect(flutter_texts.JoinFailureText, same(JoinFailureText));
+    expect(flutter_texts.joinStatusOf, same(joinStatusOf));
+  });
+
   late JoinSessionState launching;
   setUpAll(() async {
     final plan = await planJoin([]);

@@ -1,7 +1,6 @@
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
-import 'multiplayer_fixtures.dart';
 import 'multiplayer_join_support.dart';
 
 void main() {
