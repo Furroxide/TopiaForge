@@ -39,6 +39,7 @@ part 'screens/mod_version_status.dart';
 part 'screens/profile_mod_selection.dart';
 part 'screens/setup_screen.dart';
 part 'screens/settings_screen.dart';
+part 'screens/settings_map_cache.dart';
 part 'screens/settings_launcher_update_pane.dart';
 part 'screens/settings_multiplayer_pane.dart';
 part 'screens/settings_multiplayer_sections.dart';

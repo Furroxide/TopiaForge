@@ -2,6 +2,7 @@ using System;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.UnityUi;
+using TopiaForge.Worlds.Maps;
 
 namespace TopiaForge.Worlds
 {
@@ -22,12 +23,18 @@ namespace TopiaForge.Worlds
             var local = new LocalWorldService(Context.Logger,
                 () => new UgcImportHostBridge(Context.Logger), config.EnableLocalWorlds, config.LocalWorldFolder);
             Context.Lifetime.Track(local);
+            if (!(Context is IInternalMapStorageContext storage))
+                throw new InvalidOperationException("The loader did not provide map storage. Update TopiaForge.");
+            var maps = new MapWorldService(new MapCache(storage.MapCacheDirectory), new MapHttpTransport(),
+                () => new UgcImportHostBridge(Context.Logger));
+            Context.Lifetime.Track(maps);
             var ui = TopiaForgeUi.For(Context);
             Context.Lifetime.Track(ui);
             pauseBridge = new PauseMenuBridge(runtime.Sessions, Context.Logger, ui, config.InterceptPauseMenu);
             Context.Lifetime.Track(pauseBridge);
             RegisterExtension<IWorldSessionService>(new WorldSessionServiceForwarder(runtime.Sessions));
             RegisterExtension<ILocalWorldService>(local);
+            RegisterExtension<IInternalMapWorldService>(maps);
             RegisterExtension<IWorldPauseMenuService>(pauseBridge);
             Context.Events.SubscribeUpdate(delta => pauseBridge?.Update(delta));
             Context.Logger.Info("TopiaForge Worlds loaded; declarations and sessions are managed by the loader.");

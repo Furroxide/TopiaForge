@@ -87,6 +87,8 @@ namespace TopiaForge.ModManager.Sessions
             {
                 switch (Decision())
                 {
+                    case RealmDecision.WorldRefused:
+                        return MultiplayerRuntime.MapWorldSinglePlayer;
                     case RealmDecision.PromoteInPlace:
                         return "Open this game to other players. It keeps running as it is.";
                     case RealmDecision.StartAsHost:

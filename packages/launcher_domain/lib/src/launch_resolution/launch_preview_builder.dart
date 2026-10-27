@@ -53,6 +53,16 @@ abstract final class LaunchPreviewBuilder {
         }
       }
     }
+    final selectedWorldId =
+        result?.plan?.worldId ??
+        request?.worldOverride ??
+        target?.declaration.world?.defaultWorldId;
+    final selectedWorld = selectedWorldId == null
+        ? null
+        : _lookupWorld(index, selectedWorldId, observed, [])?.declaration;
+    final publishedMap =
+        selectedWorld?.content?.kind == ModWorldContent.mapKind &&
+        (selectedWorld?.content?.map.isNotEmpty ?? false);
     return LaunchPreview(
       profileId: profile.profileId,
       profileRevision: profile.revision,
@@ -68,6 +78,9 @@ abstract final class LaunchPreviewBuilder {
       transitions: transitions,
       allowWorldOverride: worldOverride,
       allowTransitionOverride: transitionOverride,
+      publishedMapDisclosure: publishedMap
+          ? 'Plays the published map ${selectedWorld!.name} from robotopia.gg, downloaded when you play.'
+          : null,
     );
   }
 }

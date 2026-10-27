@@ -5,6 +5,7 @@
   <ItemGroup>
     <CompilerVisibleProperty Include="TopiaForgeSafeProject" />
     <CompilerVisibleProperty Include="IsTestProject" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="TopiaForgeMapPackedPath" />
   </ItemGroup>
   <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)/topiaforge.mod.json')">
     <AdditionalFiles Include="$(MSBuildProjectDirectory)/topiaforge.mod.json"

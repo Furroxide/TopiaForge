@@ -448,9 +448,9 @@ bytes; install receipts classify the map as critical content. Ship your own map
 files or obtain the creator's permission.
 
 `TFPKG180` requires a loader range whose minimum is stable `0.2.0` or later.
-A wildcard, a 0.1 floor or `0.2.0-rc.1` is insufficient. This amendment adds
-manifest and package support; map retrieval, import, spawn readiness and the
-`world add map` / `check world` commands belong to the map runtime follow-up.
+A wildcard, a 0.1 floor or `0.2.0-rc.1` is insufficient. See [Map worlds](MapWorlds.md)
+for retrieval, import, spawn readiness, cache controls and the
+`world add map` / `check world` commands.
 The 0.1 runtime and its native package checker still refuse packages requiring
 0.2.0. End-to-end loading needs the map runtime and a compatible release.
-This amendment performs no map fetch or native game import by itself.
+The manifest reader itself performs no map fetch or native game import.

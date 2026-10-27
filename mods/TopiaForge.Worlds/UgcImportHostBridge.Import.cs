@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Worlds.Maps;
 using UnityEngine;
 
 namespace TopiaForge.Worlds
@@ -30,10 +31,13 @@ namespace TopiaForge.Worlds
             { return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "Local import ownership bindings are unavailable: " + Unwrap(error).Message); }
         }
 
-        private sealed class ImportTransaction : ILocalImportTransaction
+        private sealed class ImportTransaction : IMapImportTransaction
         {
             private readonly Component host;
-            private readonly RoboWorldImportPlan plan;
+            private readonly RoboWorldImportPlan? plan;
+            private readonly string? mapScene;
+            private readonly string? mapLabel;
+            private Transform? importedRoot;
             private readonly WorldSceneIdentity scene;
             private readonly object sceneRoot;
             private readonly PropertyInfo activeRoot;
@@ -41,17 +45,19 @@ namespace TopiaForge.Worlds
             private readonly object project;
             private readonly MethodInfo configureFolder;
             private readonly MethodInfo importProject;
-            private readonly NativeImportSelection selection;
+            private readonly NativeImportSelection? selection;
             private readonly List<(string Id, GameObject Prefab, Vector3? Offset)> overrides = new List<(string, GameObject, Vector3?)>();
             private readonly object? assetConfig;
             private readonly MethodInfo? setOverride;
             private readonly IDictionary? overrideTable;
             private LocalImportOwnership? temporary;
             private bool used;
-            internal ImportTransaction(Component host, RoboWorldImportPlan plan,
-                IReadOnlyList<WorldAssetOverride> values, WorldSceneIdentity scene, object project, Type projectType)
+            internal ImportTransaction(Component host, RoboWorldImportPlan? plan,
+                IReadOnlyList<WorldAssetOverride> values, WorldSceneIdentity scene, object project, Type projectType,
+                string? mapScene = null, string? mapLabel = null)
             {
                 this.host = host; this.plan = plan; this.scene = scene; this.project = project;
+                this.mapScene = mapScene; this.mapLabel = mapLabel;
                 var type = host.GetType();
                 var rootProperty = RequireProperty(type, "SceneRoot", "UgcSceneRoot");
                 sceneRoot = rootProperty.GetValue(host) ?? throw new InvalidOperationException("The native import scene root is missing.");
@@ -62,7 +68,7 @@ namespace TopiaForge.Worlds
                 // result. ImportProject, which 2478 already exposed, takes the project parsed in Prepare and returns
                 // the scene it imported.
                 importProject = RequireMethod(type, "ImportProject", "UgcExportScene", projectType, typeof(string), typeof(string));
-                selection = new NativeImportSelection(host, type, plan);
+                selection = plan == null ? null : new NativeImportSelection(host, type, plan);
                 if (values.Count == 0) return;
                 assetConfig = RequireProperty(type, "RuntimeAssetConfig", "UgcRuntimeAssetConfig").GetValue(host)
                     ?? throw new InvalidOperationException("The native runtime asset config is missing.");
@@ -80,6 +86,8 @@ namespace TopiaForge.Worlds
             }
             public bool NativeEntered { get; private set; }
             public bool NativeReturned { get; private set; }
+            public string SceneId => mapScene ?? string.Empty;
+            public OperationResult<TransformState> PlaceRespawn(string entityId) => MapNativeSpawn.Place(importedRoot, entityId);
             public OperationResult<IDisposable> Import()
             {
                 if (used) throw new InvalidOperationException("A local import transaction can run only once.");
@@ -91,21 +99,22 @@ namespace TopiaForge.Worlds
                 temporary = new LocalImportOwnership(() => { }, () =>
                 {
                     previousOverrides?.Restore();
-                }, selection.Restore);
+                }, () => selection?.Restore());
                 IDisposable? content = null;
                 OperationResult<IDisposable>? result = null;
                 var failures = new List<Exception>();
                 try
                 {
-                    selection.Apply();
+                    selection?.Apply();
                     foreach (var value in overrides) setOverride!.Invoke(assetConfig, new object?[] { value.Id, value.Prefab, value.Offset });
-                    configureFolder.Invoke(host, new object[] { plan.FolderPath });
+                    if (plan != null) configureFolder.Invoke(host, new object[] { plan.FolderPath });
                     NativeEntered = true;
                     // A null scene id requests the project's own default scene, as UgcExportProject.ResolveScene's
                     // optional parameter of the same name declares. The label is the file name, never the full path.
-                    var data = importProject.Invoke(host, new object?[] { project, null, plan.FileName });
+                    var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName });
                     NativeReturned = true;
                     var root = activeRoot.GetValue(sceneRoot) as Transform;
+                    importedRoot = root;
                     if (root != null && !ReferenceEquals(previousRoot, root)) content = OwnRoot(root);
                     if (data == null || content == null || !UnityWorldScene.ContainsRoot(scene, root!.gameObject))
                         result = OperationResult<IDisposable>.Failure(ModErrorCode.External, "The native importer did not produce fresh owned content in the session scene.");

@@ -212,6 +212,12 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge world link --project <p> --mod <m> [--world id] Pair a declared bundle world.',
     );
     stdout.writeln(
+      '  topiaforge world add map <link-or-id> [--scene id] [--name text] [--offline] Add a map world.',
+    );
+    stdout.writeln(
+      '  topiaforge check world <link-or-id> [--scene id] [--spawn name] Verify a published map.',
+    );
+    stdout.writeln(
       '  topiaforge world build [--project p]   Build the world asset bundle via Unity.',
     );
     stdout.writeln(

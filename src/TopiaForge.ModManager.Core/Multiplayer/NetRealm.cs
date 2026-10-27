@@ -33,7 +33,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         Busy = 3,
 
         /// <summary>An enabled standalone mod refuses every multiplayer session.</summary>
-        StandaloneRefused = 4
+        StandaloneRefused = 4,
+
+        /// <summary>The active world has no multiplayer loading contract yet.</summary>
+        WorldRefused = 5
     }
 
     /// <summary>What an allowed realm change does to the local session.</summary>

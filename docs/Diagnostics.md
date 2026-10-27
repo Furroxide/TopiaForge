@@ -487,6 +487,21 @@ bundled-framework finding. Validation reads metadata only and never loads mod co
 package source and retry. Source maintainers must publish immutable bytes whose canonical V6
 manifest exactly matches the indexed manifest; TopiaForge does not stage mismatched packages.
 
+### TF1011
+
+**Map world declaration is invalid.**
+
+Declare exactly one published map id or package-relative `.roboworld`, `.json` or
+`.json.gz` file, a required `io.github.furroxide.topiaforge.worlds` dependency, and
+only `scene-replacement` transitions. A file must be a project item copied to its
+declared package path; packing must include its SHA-256 in `hashes`. Scene ids use
+1–128 ASCII letters, digits, underscores or hyphens.
+
+The code fixes normalize a robotopia.gg map page link to its id or insert the
+required Worlds dependency. Ambiguous or malformed manifests need a manual edit.
+Use `topiaforge world add map <link-or-id>` and `topiaforge check world <link-or-id>`
+to author and verify declarations. See [Map worlds](MapWorlds.md).
+
 ### TFPKG180
 
 **Manifest feature needs a newer loader.**

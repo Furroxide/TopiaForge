@@ -133,6 +133,10 @@ class _LaunchTargetControls extends StatelessWidget {
           ),
         ],
         if (preview != null) ...[
+          if (preview.publishedMapDisclosure case final disclosure?) ...[
+            const SizedBox(height: 10),
+            Text(disclosure, key: const Key('published-map-disclosure')),
+          ],
           for (final issue in preview.issues) _issueTile(issue),
           for (final block
               in preview.resolution?.blocks ?? const <LaunchBlock>[])

@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--gamecompat")
+            { GameCompatTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--blockers")
             {
                 try { BlockerTests.Run(); return 0; }
@@ -247,6 +249,8 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--map-worlds", StringComparison.Ordinal))
             { MapWorldManifestTests.Run(); GamemodeContractConformanceTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--map-store")
+            { MapDocumentTests.Run(FindRepoRoot()); MapStoreTests.RunAsync().GetAwaiter().GetResult(); MapWorldServiceTests.RunAsync().GetAwaiter().GetResult(); MapWorldBindingTests.RunAsync().GetAwaiter().GetResult(); return 0; }
             if (args.Length == 1 && string.Equals(args[0], "--gamemode-contract", StringComparison.Ordinal))
             {
                 GamemodeContractConformanceTests.Run();
@@ -536,6 +540,10 @@ namespace TopiaForge.ModManager.Tests
                 LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
                 GamemodeConsumerRegressionTests.Run();
                 WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
+                MapDocumentTests.Run(FindRepoRoot());
+                MapStoreTests.RunAsync().GetAwaiter().GetResult();
+                MapWorldServiceTests.RunAsync().GetAwaiter().GetResult();
+                MapWorldBindingTests.RunAsync().GetAwaiter().GetResult();
                 AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult();
                 LocalImportOperationTests.RunAsync().GetAwaiter().GetResult();
                 WorldLaunchArmingTests.Run();

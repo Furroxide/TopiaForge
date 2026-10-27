@@ -1,5 +1,7 @@
 library;
 
+export 'src/map_project_reader.dart';
+
 export 'src/bounded_process.dart';
 export 'src/dotnet_sdk.dart';
 export 'src/game_install_discovery.dart';

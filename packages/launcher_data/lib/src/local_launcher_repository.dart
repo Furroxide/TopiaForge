@@ -60,6 +60,7 @@ part 'local_launcher_repository/path_helpers.dart';
 part 'local_launcher_repository/profile_launch_helpers.dart';
 part 'local_launcher_repository/effective_launch_selection.dart';
 part 'local_launcher_repository/launch_preview.dart';
+part 'local_launcher_repository/map_cache_cleanup.dart';
 part 'local_launcher_repository/launch_admission.dart';
 part 'local_launcher_repository/profile_persistence.dart';
 part 'local_launcher_repository/process_helpers.dart';
@@ -90,7 +91,7 @@ part 'local_launcher_repository/server_content_judging.dart';
 
 class LocalLauncherRepository
     with _MultiplayerContentHosting, _JoinSessionHosting
-    implements GameInstallDiscoveryRepository {
+    implements GameInstallDiscoveryRepository, DownloadedMapRepository {
   LocalLauncherRepository({
     String? dataRoot,
     AcceptanceIsolationContext? acceptanceIsolation,
@@ -223,6 +224,10 @@ class LocalLauncherRepository
 
   @override
   Future<LauncherSnapshot> loadSnapshot() => _tracked(_loadSnapshot);
+
+  @override
+  Future<int> clearDownloadedMaps(GameInstall install) =>
+      _tracked(() => _clearDownloadedMaps(install));
 
   @override
   Future<void> setDeveloperMode(bool enabled) => _tracked(

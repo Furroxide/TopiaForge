@@ -8,7 +8,7 @@ using TopiaForge.Mods.Testing;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IDisposable
+    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IInternalSceneTransitionContext, IDisposable
     {
         internal readonly FakeModContext Fake = new FakeModContext();
         internal readonly NativeFixture Native = new NativeFixture();
@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
         public WorldSpawnPolicy SpawnPolicy { get; set; } = new WorldSpawnPolicy(WorldSpawnKind.AuthoredMarker, "Spawn");
         public IModContext Context => this;
         public IInternalWorldRuntimeService WorldRuntime => Native;
+        public IInternalSceneTransitionService SceneTransitions { get; set; } = null!;
         public ModIdentity Identity => Fake.Identity;
         public IRuntimeInfo Runtime => Fake.Runtime;
         internal IModLifetime? LifetimeOverride;
@@ -57,6 +58,8 @@ namespace TopiaForge.ModManager.Tests
             internal bool ThrowOnDispose;
             internal CancellationToken PrepareToken;
             internal CancellationToken FinishToken;
+            internal TransformState? ProviderSpawn;
+            internal Action? OnPrepare;
             public WorldSceneIdentity Scene { get; } = new WorldSceneIdentity(42, "ActualLoadedScene");
             public TransformState? NativeDefaultSpawn => TransformState.Identity;
             public Task<OperationResult<IReadOnlyList<NativeWorldEntry>>> DiscoverAsync(NativeWorldSource source, int maximumResults, CancellationToken cancellationToken) =>
@@ -64,12 +67,13 @@ namespace TopiaForge.ModManager.Tests
             public Task<OperationResult<IInternalWorldPreparation>> PrepareAsync(NativeWorldLoadRequest request, CancellationToken cancellationToken)
             {
                 Request = request; PrepareToken = cancellationToken;
+                OnPrepare?.Invoke();
                 return Task.FromResult(OperationResult<IInternalWorldPreparation>.Success(this));
             }
             public Task<OperationResult<WorldReadiness>> FinishAsync(WorldSpawnPolicy policy, IEntity? contentRoot,
                 TransformState? providerSpawn, CancellationToken cancellationToken)
             {
-                Content = contentRoot; Policy = policy; FinishToken = cancellationToken;
+                Content = contentRoot; Policy = policy; FinishToken = cancellationToken; ProviderSpawn = providerSpawn;
                 return Completion.Task;
             }
             internal void Succeed() => Completion.SetResult(OperationResult<WorldReadiness>.Success(new WorldReadiness(Scene,

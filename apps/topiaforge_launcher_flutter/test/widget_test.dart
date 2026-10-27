@@ -28,6 +28,7 @@ part 'widget_test_developer_fake_helpers.dart';
 part 'widget_test_install_fake.dart';
 part 'widget_lifecycle_test_cases.dart';
 part 'widget_install_test_cases.dart';
+part 'widget_map_cache_test_cases.dart';
 part 'widget_mod_repair_test_cases.dart';
 part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
@@ -59,6 +60,7 @@ void main() {
   registerLauncherLifecycleTests();
   _registerLaunchActivityTests();
   registerInstallConfirmationWidgetTests();
+  registerDownloadedMapCacheTests();
   registerModRepairTests();
   registerAccessibilityWidgetTests();
   registerLauncherUpdateWidgetTests();

@@ -11,6 +11,7 @@ This package is included automatically by the TopiaForge V1 SDK. It reports acti
 - references the loader-owned `TopiaForge.Mods.UnityUi` renderer instead of `Context.Ui`; or
 - calls a retired pre-V1 authoring API.
 - uses an SDK API newer than its manifest's minimum loader version (TF1010).
+- declares an invalid map world, an unpacked file or a missing required Worlds dependency (TF1011).
 
 TF1010 reads `RequiresTopiaForge` from shipped SDK metadata. Its code fix raises both the loader and
 SDK floors in simple `>=A <B` manifest ranges without widening their ceilings. Other ranges need an

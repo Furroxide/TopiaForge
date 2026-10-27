@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Worlds.Maps;
 
 namespace TopiaForge.Worlds
 {
@@ -30,7 +31,7 @@ namespace TopiaForge.Worlds
     /// gets a reason, but nothing in Worlds throws. Main thread only — it reads live scene objects.
     /// </para>
     /// </remarks>
-    internal sealed partial class UgcImportHostBridge : ILocalWorldImportHost
+    internal sealed partial class UgcImportHostBridge : ILocalWorldImportHost, IMapNativeBackend
     {
         private const BindingFlags PublicStatic = BindingFlags.Public | BindingFlags.Static;
         private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;

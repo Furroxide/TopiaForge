@@ -32,6 +32,11 @@ namespace TopiaForge.ModManager
                     }
                     else if (world.Content?.Kind == ModWorldContent.ProviderKind)
                         BindOne(package, identity, "world", world.Id, world.Content.Implementation, worlds, failures);
+                    else if (world.Content?.Kind == ModWorldContent.MapKind)
+                    {
+                        try { worlds.Add(new MapWorldImplementation(package, identity, world)); }
+                        catch (Exception) { failures.Add(new RuntimeBindingFailure(identity, "world", world.Id, RuntimeBindingFailureCode.InvalidType, "The map world declaration is incomplete.")); }
+                    }
                     else if (world.Content?.Kind == ModWorldContent.BundleKind || world.Content?.Kind == ModWorldContent.GameSceneKind)
                     {
                         try { worlds.Add(new BuiltinWorldImplementation(identity, world)); }
