@@ -72,6 +72,8 @@ final class PeerSessionFixture extends LocalLauncherRepository {
     LaunchSessionRequest request, {
     LaunchSelection? selectionOverride,
     bool restart = false,
+    CancellationToken? cancellation,
+    String? expectedPackageDigest,
   }) async {
     sessionRequest = request;
     final script = File(p.join(gameRoot, 'inert peer.dart'));
