@@ -58,7 +58,7 @@ namespace TopiaForge.ModManager.Tests
 
         // A scene load destroyed the gallery's window while the mod kept it, so every F8 threw ObjectDisposedException. Each
         // surface the gallery keeps for later lives as long as the mod, as the SDK's own surfaces do: both scheme windows,
-        // the demo and shop windows its pages reopen, and the demo HUD. Only the name tags stay with their scene: every
+        // the demo and shop windows its pages reopen, the demo HUD, and the chat layer. Only the name tags stay with their scene: every
         // spawn makes them afresh at points in it, and a tag whose canvas a load destroyed is no longer tracked.
         private static void GallerySurfacesSurviveSceneLoads()
         {
@@ -86,7 +86,7 @@ namespace TopiaForge.ModManager.Tests
                 }
             }
 
-            Check(kept == 4 && sceneBound == 1, "the gallery makes its scheme windows, the demo and shop windows, the demo HUD and the name tags, "
+            Check(kept == 5 && sceneBound == 1, "the gallery makes its scheme windows, the demo and shop windows, the demo HUD, the chat layer and the name tags, "
                 + "one call each; found " + kept + " kept and " + sceneBound + " scene-bound");
         }
 
