@@ -258,7 +258,12 @@ Iterable<({int start, StartTag tag})> startTags(
     if (_isNameAt(text, open + 1, name, anyCase)) {
       // _isNameAt already checked this exact name and its boundary.
       final tag = _readStartTagAttributes(text, open + 1 + name.length);
-      if (tag != null) yield (start: open, tag: tag);
+      if (tag != null) {
+        yield (start: open, tag: tag);
+        // A readable tag cannot contain `<`, even inside a value.
+        open = text.indexOf('<', tag.end);
+        continue;
+      }
     }
     open = text.indexOf('<', open + 1);
   }
@@ -314,6 +319,9 @@ Iterable<({int start, int end, StartTag tag})> packageReferences(
     if (endTag == null || tag.end > endTag.start) {
       endTag = _endTag(text, name, tag.end);
       if (endTag == null) {
+        // Only self-closing items can still yield. Without even their
+        // literal terminator, no later tag needs parsing or allocating.
+        if (text.indexOf('/>', tag.end) < 0) return;
         endTagMissing = true;
         continue;
       }
@@ -329,14 +337,17 @@ Iterable<({int start, int end, StartTag tag})> packageReferences(
 ({int start, int end})? _endTag(String text, String name, int index) {
   var open = text.indexOf('<', index);
   while (open >= 0) {
-    final unparsedEnd = unparsedSectionEnd(text, open);
-    if (unparsedEnd != null) {
-      if (unparsedEnd < 0) return null;
-      open = text.indexOf('<', unparsedEnd);
-      continue;
+    if (open + 1 == text.length) return null;
+    final marker = text.codeUnitAt(open + 1);
+    if (marker == 0x21) {
+      final unparsedEnd = unparsedSectionEnd(text, open);
+      if (unparsedEnd != null) {
+        if (unparsedEnd < 0) return null;
+        open = text.indexOf('<', unparsedEnd);
+        continue;
+      }
     }
-    if (text.startsWith('/', open + 1) &&
-        _isNameAt(text, open + 2, name, true)) {
+    if (marker == _slash && _isNameAt(text, open + 2, name, true)) {
       final end = _skipWhitespace(text, open + 2 + name.length);
       if (end < text.length && text.codeUnitAt(end) == _greaterThan) {
         return (start: open, end: end + 1);
@@ -355,9 +366,10 @@ bool _isNameAt(String text, int index, String name, bool anyCase) {
       end < text.length && !_endsName(text.codeUnitAt(end))) {
     return false;
   }
-  return anyCase
-      ? _equalsIgnoringAsciiCase(text, index, name)
-      : text.startsWith(name, index);
+  // The usual spelling needs no per-code-unit ASCII folding. Keep the
+  // boundary check above and the same fallback for every other spelling.
+  return text.startsWith(name, index) ||
+      anyCase && _equalsIgnoringAsciiCase(text, index, name);
 }
 
 /// Whether [text] holds [other] at [index], ignoring the case of ASCII
