@@ -258,7 +258,12 @@ Iterable<({int start, StartTag tag})> startTags(
     if (_isNameAt(text, open + 1, name, anyCase)) {
       // _isNameAt already checked this exact name and its boundary.
       final tag = _readStartTagAttributes(text, open + 1 + name.length);
-      if (tag != null) yield (start: open, tag: tag);
+      if (tag != null) {
+        yield (start: open, tag: tag);
+        // A readable tag cannot contain `<`, even inside a value.
+        open = text.indexOf('<', tag.end);
+        continue;
+      }
     }
     open = text.indexOf('<', open + 1);
   }
@@ -327,6 +332,10 @@ Iterable<({int start, int end, StartTag tag})> packageReferences(
 ///
 /// [name] matches in any ASCII case, and white space may come before `>`.
 ({int start, int end})? _endTag(String text, String name, int index) {
+  // Only end tags and unparsed sections can affect this search. This fixed
+  // two-code-unit pattern has no repetition or backtracking choices; skip
+  // ordinary start tags in the search engine rather than visiting each one.
+  RegExp? markup;
   var open = text.indexOf('<', index);
   while (open >= 0) {
     final unparsedEnd = unparsedSectionEnd(text, open);
@@ -342,7 +351,12 @@ Iterable<({int start, int end, StartTag tag})> packageReferences(
         return (start: open, end: end + 1);
       }
     }
-    open = text.indexOf('<', open + 1);
+    // Keep runs of comments and end tags on the literal search path. Only
+    // switch to the filtered search when ordinary markup needs skipping.
+    final marker = open + 1 < text.length ? text.codeUnitAt(open + 1) : -1;
+    open = marker == _slash || marker == 0x21
+        ? text.indexOf('<', open + 1)
+        : text.indexOf(markup ??= RegExp('<[!/]'), open + 1);
   }
   return null;
 }
