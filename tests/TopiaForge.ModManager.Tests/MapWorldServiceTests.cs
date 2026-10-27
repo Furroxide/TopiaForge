@@ -17,8 +17,11 @@ namespace TopiaForge.ModManager.Tests
             foreach (var phase in new[] { "prepare", "read", "lore", "import", "spawn", "readiness" }) await CancelledPhase(phase);
             await InvalidSpawn();
             await PrivateNativeFailure();
+            await CacheFailureRecovery();
+            await PendingPreparationDrains();
+            await CleanupFailureAfterCancellation();
             await LoreAwaiter();
-            Console.WriteLine("Map world service passed: readiness, ownership, six cancellation phases, ambiguous spawn and native failure privacy.");
+            Console.WriteLine("Map world service passed: readiness, ownership, six cancellation phases, pending preparation drain, failed cleanup, cache recovery, ambiguous spawn and native failure privacy.");
         }
         private static async Task LoreAwaiter()
         {
@@ -101,11 +104,70 @@ namespace TopiaForge.ModManager.Tests
             Assert(!result.Succeeded && !result.ErrorMessage.Contains("private") && !result.ErrorMessage.Contains("://"), "native details stay private");
             Assert(fixture.Native.DisposeCount == 1, "native prepare fault cleans scene");
         }
+        private static async Task CacheFailureRecovery()
+        {
+            var directory = Directory.CreateTempSubdirectory("map-recovery-");
+            try
+            {
+                var cachePath = Path.Combine(directory.FullName, "cache");
+                File.WriteAllText(cachePath, "A file cannot be used as a cache directory.");
+                foreach (var cleanupFails in new[] { false, true })
+                {
+                    using var fixture = Fixture(); var backend = new Backend();
+                    fixture.Native.ThrowOnDispose = cleanupFails;
+                    using var service = new MapWorldService(new MapCache(cachePath), new PublishedBytes(), () => backend);
+                    var result = await service.LoadAsync(fixture, new InternalMapWorldRequest("example", "scene", null), default);
+                    Assert(result.ErrorCode == ModErrorCode.External && backend.Imported == 0 && fixture.Native.DisposeCount == 1,
+                        "cache failure refuses before import and attempts cleanup");
+                    Assert(cleanupFails
+                        ? result.ErrorMessage.Contains("cleaned up") && result.ErrorMessage.Contains("restart")
+                        : result.ErrorMessage.Contains("disk space"),
+                        "cache failure retains disk recovery unless cleanup also fails");
+                    Assert(!result.ErrorMessage.Contains("native cleanup failed") && !result.ErrorMessage.Contains(cachePath),
+                        "recovery guidance hides native and local filesystem details");
+                }
+            }
+            finally { directory.Delete(true); }
+        }
+        private static async Task PendingPreparationDrains()
+        {
+            using var fixture = Fixture(); using var cancellation = new CancellationTokenSource();
+            var completion = new TaskCompletionSource<OperationResult<IMapImportTransaction>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var backend = new Backend { PendingPreparation = completion.Task }; using var service = Service(backend);
+            var pending = service.LoadAsync(fixture, Request(), cancellation.Token);
+            cancellation.Cancel();
+            Assert(!pending.IsCompleted && fixture.Native.DisposeCount == 0, "cancellation waits for pending native preparation before cleanup");
+            completion.SetResult(OperationResult<IMapImportTransaction>.Success(backend));
+            var result = await pending;
+            Assert(result.ErrorCode == ModErrorCode.Cancelled && fixture.Native.DisposeCount == 1 && backend.Imported == 0,
+                "drained preparation cannot import or publish a cancelled map");
+        }
+        private static async Task CleanupFailureAfterCancellation()
+        {
+            using var fixture = Fixture(); using var cancellation = new CancellationTokenSource();
+            var backend = new Backend { OnImport = cancellation.Cancel, ThrowContentCleanup = true };
+            using var service = Service(backend);
+            var result = await service.LoadAsync(fixture, Request(), cancellation.Token);
+            Assert(result.ErrorCode == ModErrorCode.External && result.ErrorMessage.Contains("restart"),
+                "a failed import cleanup must not be reported as ordinary cancellation");
+            Assert(backend.ContentDisposals == 1 && fixture.Native.DisposeCount == 1 && !result.ErrorMessage.Contains("private"),
+                "failed cleanup attempts every owned resource and hides native details");
+        }
+        private sealed class PublishedBytes : IMapTransport
+        {
+            public Task<MapResponse> FetchAsync(Uri uri, MapCacheRecord? cached, CancellationToken token)
+            {
+                var bytes = Project();
+                return Task.FromResult(new MapResponse(200, new MemoryStream(bytes), bytes.Length));
+            }
+        }
         private sealed class Backend : IMapNativeBackend, IMapImportTransaction
         {
             internal static readonly TransformState Spawn = new TransformState(new Vec3(7, 2, 9), Quat.Identity, new Vec3(1, 1, 1));
             internal int Imported, ContentDisposals; internal string? Spawned, SceneArgument, Label;
             internal Action? OnPrepare, OnImport, OnSpawn; internal bool Throw;
+            internal bool ThrowContentCleanup;
+            internal Task<OperationResult<IMapImportTransaction>>? PendingPreparation;
             public Uri PublicBase => new Uri("https://maps.example.test/");
             public Uri ResolvePublished(string id) => new Uri(PublicBase, id);
             public Task<OperationResult<IMapImportTransaction>> PrepareAsync(MapDocument document, string? sceneId, string label,
@@ -113,13 +175,20 @@ namespace TopiaForge.ModManager.Tests
             {
                 if (Throw) throw new InvalidOperationException("private native reply https://maps.example.test/secret");
                 OnPrepare?.Invoke(); SceneArgument = sceneId; Label = label;
-                return Task.FromResult(OperationResult<IMapImportTransaction>.Success(this));
+                return PendingPreparation ?? Task.FromResult(OperationResult<IMapImportTransaction>.Success(this));
             }
             public string SceneId => "scene";
             public bool NativeEntered => Imported != 0;
             public bool NativeReturned => Imported != 0;
             public OperationResult<IDisposable> Import()
-            { Imported++; OnImport?.Invoke(); return OperationResult<IDisposable>.Success(new Owned(() => ContentDisposals++)); }
+            {
+                Imported++; OnImport?.Invoke();
+                return OperationResult<IDisposable>.Success(new Owned(() =>
+                {
+                    ContentDisposals++;
+                    if (ThrowContentCleanup) throw new IOException("private native cleanup diagnostic");
+                }));
+            }
             public OperationResult<TransformState> PlaceRespawn(string entityId)
             { OnSpawn?.Invoke(); Spawned = entityId; return OperationResult<TransformState>.Success(Spawn); }
             public void Dispose() { }

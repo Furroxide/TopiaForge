@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
                 References();
                 await RevalidationAndTrust(Path.Combine(root, "cache"));
                 CacheBound(Path.Combine(root, "bound"));
+                SharedContentRetention(Path.Combine(root, "shared"));
                 await DownloadFailures(Path.Combine(root, "failures"));
                 await TransportHeaders();
                 await Loopback(Path.Combine(root, "http"));
@@ -104,6 +105,19 @@ namespace TopiaForge.ModManager.Tests
             cache.Put("second", second, null, null);
             Assert(cache.Read("first") == null && cache.Read("second") != null, "least recently played content is evicted");
             Assert(Directory.EnumerateFiles(root, "*.map").Sum(p => new FileInfo(p).Length) <= Math.Max(first.Packed.Length, second.Packed.Length), "cache byte bound");
+        }
+        private static void SharedContentRetention(string root)
+        {
+            var cache = new MapCache(root);
+            var document = new MapDocument(MapDocumentTests.Project());
+            cache.Put("first", document, null, null);
+            cache.Put("second", document, null, null);
+            Assert(Directory.EnumerateFiles(root, "*.map").Count() == 1, "identical publications share a content-addressed blob");
+            cache.Remove("first");
+            Assert(cache.Read("first") == null && cache.Read("second")?.Record.Sha256 == document.Sha256,
+                "removing one publication preserves another publication with identical bytes");
+            cache.Remove("second");
+            Assert(!Directory.EnumerateFiles(root).Any(), "removing the last publication releases its unreferenced blob and metadata");
         }
         private static async Task DownloadFailures(string root)
         {

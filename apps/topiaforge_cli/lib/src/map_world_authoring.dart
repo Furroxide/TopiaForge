@@ -65,9 +65,15 @@ Map<String, dynamic> addMapWorld(
     );
   }
   final mode = selectedModes.single as Map;
-  final requirements =
-      (mode['worldRequirements'] ??= <String, dynamic>{}) as Map;
-  requirements['transitions'] = ['scene-replacement'];
+  final requirements = mode['worldRequirements'] as Map?;
+  final transitions = requirements?['transitions'] as List?;
+  // Missing requirements already allow either transition. Keep every
+  // existing choice for other targets that use this gamemode.
+  if (transitions != null &&
+      transitions.isNotEmpty &&
+      !transitions.contains('scene-replacement')) {
+    transitions.add('scene-replacement');
+  }
   worlds.add({
     'id': id,
     'name': name,

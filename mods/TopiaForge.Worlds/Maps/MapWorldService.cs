@@ -105,10 +105,13 @@ namespace TopiaForge.Worlds.Maps
                     catch (OperationCanceledException) { return Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }
                     catch (MapProblem error) { return Failure(error.Code, error.Message); }
                     catch (FormatException error) { return Failure(ModErrorCode.InvalidArgument, error.Message); }
-                    catch (Exception) { return Failure(ModErrorCode.External, "The map could not be built. Update TopiaForge or try another map."); }
+                    // Propagate a sanitized fault so a concurrent cancellation cannot
+                    // replace failed native cleanup with an ordinary cancelled result.
+                    catch (Exception) { throw new InvalidOperationException("The map could not be built or cleaned up."); }
                 });
             return result.Succeeded ? result : OperationResult<IWorldInstance>.Failure(result.ErrorCode,
-                result.ErrorCode == ModErrorCode.External ? "The map could not be built or cleaned up. Update TopiaForge or restart the game."
+                result.ErrorCode == ModErrorCode.External && result.ErrorMessage != safeFailure
+                    ? "The map could not be built or cleaned up. Update TopiaForge or restart the game."
                 : result.ErrorCode == ModErrorCode.Cancelled ? "Map loading was cancelled."
                 : safeFailure ?? "The game's map loading service could not prepare this world. Update TopiaForge or try again.");
         }

@@ -29,6 +29,76 @@ Map<String, dynamic> plan(Map<String, dynamic> manifest) => addMapWorld(
 );
 
 void main() {
+  for (final transitions in [
+    null,
+    ['additive-arena'],
+    ['scene-replacement', 'additive-arena'],
+  ]) {
+    test('adding a map preserves shared gamemode transitions $transitions', () {
+      final original = source();
+      final contributions = original['contributions'] as Map;
+      final mode = (contributions['gamemodes'] as List).single as Map;
+      if (transitions != null) {
+        mode['worldRequirements'] = {'transitions': transitions};
+      }
+      final world = (contributions['worlds'] as List).single as Map;
+      world['content'] = {'kind': 'game-scene', 'sceneName': 'UgcPlay'};
+      world['transitions'] = ['additive-arena'];
+      world['spawn'] = {'kind': 'provider-default'};
+      final targets = contributions['launchTargets'] as List;
+      final selected = targets.single as Map;
+      selected['transition'] = 'additive-arena';
+      final other = jsonDecode(jsonEncode(selected)) as Map;
+      other['id'] = '${original['name']}.other';
+      targets.add(other);
+      List<LaunchBlockCode> transitionBlocks(Map<String, dynamic> json) {
+        final manifest = ModManifest.fromJson(json);
+        final profile = EffectiveProfile(
+          profileId: 'example',
+          revision: 1,
+          packages: [
+            ResolvedPackage(
+              id: manifest.id,
+              version: manifest.version,
+              manifest: manifest,
+            ),
+          ],
+        );
+        return LaunchResolver.resolve(
+              profile,
+              LaunchRequest(targetId: other['id'] as String),
+              RuntimeObservation.none,
+            ).blocks
+            .map((block) => block.code)
+            .where(
+              (code) =>
+                  code == LaunchBlockCode.transitionUnsatisfiable ||
+                  code == LaunchBlockCode.transitionNotOffered,
+            )
+            .toList();
+      }
+
+      expect(transitionBlocks(original), isEmpty);
+      final result = addMapWorld(
+        original,
+        reference: MapReference.parse('ExampleMap'),
+        scene: 'courtyard',
+        name: 'Courtyard',
+        targetId: selected['id'] as String,
+      );
+      expect(transitionBlocks(result), isEmpty);
+      expect(result['contributions']['launchTargets'].last, other);
+      final requirements =
+          result['contributions']['gamemodes'].single['worldRequirements']
+              as Map?;
+      expect(
+        requirements?['transitions'],
+        transitions?.isNotEmpty == true
+            ? containsAll(['additive-arena', 'scene-replacement'])
+            : transitions,
+      );
+    });
+  }
   test(
     'map authoring preserves extensions and retargets one mode at stable floors',
     () {
@@ -49,10 +119,7 @@ void main() {
         'policy': 'fixed',
         'default': '${result['name']}.map',
       });
-      expect(
-        contributions['gamemodes'].single['worldRequirements']['transitions'],
-        ['scene-replacement'],
-      );
+      expect(contributions['gamemodes'].single['worldRequirements'], isNull);
       expect(contributions['worlds'].last['content'], {
         'kind': 'map',
         'map': 'ExampleMap',
