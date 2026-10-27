@@ -117,6 +117,8 @@ Cleanup attempts both original receipts even if one fails. Unconfirmed cleanup
 prevents success. Acceptance never replaces an already running process, and
 profile arguments or environment overrides remain forbidden. Ordinary single-instance
 acceptance still writes V4. No guest config names the host's evidence root.
+The original process receipts must remain live during collection and at the final
+evidence check; an exited or unverifiable peer cannot be replaced by later markers.
 
 ### Game-side prerequisite
 
@@ -131,7 +133,8 @@ The runner owns those operations through the production launcher and V5 pipeline
   Sandbox. The guest starts at the main menu and follows through normal joining.
   The runner confirms matching outcome V2 and hosting progress V2, verifies the
   signed descriptor against the confirmed server identity, then launches the guest
-  with an exact loopback target and confirms its outcome and in-session progress.
+  with an exact loopback target and confirms its outcome and in-session progress
+  against that target's server identity.
   The local port is selected before launch; a race for that port fails explicitly.
 - Schema-1 config `value`: `challenge`, `peer` (`host` or `guest`), `topology`
   (`listen-pair`), `requiredCases`, and `checks` containing that peer's case ids,
@@ -153,7 +156,9 @@ The runner owns those operations through the production launcher and V5 pipeline
 - The harness requires each case's listed peers, rejects replayed challenges,
   wrong logger sources and wrong manual/automatic modes, and keeps any failure.
   Both fresh `last-run.json` records must show the exact installed archive and
-  critical-file receipts loaded, with no root startup error.
+  critical-file receipts loaded, with no root startup error. A previous startup
+  identity or a completion timestamp outside the current run cannot qualify.
+  Log polling reads at most 64 KiB at a time and refuses lines over 8 KiB.
 
 `multiplayer-acceptance-result.json` is private QA evidence, including both
 runtime isolation acknowledgements. Do not publish it or raw game logs; use

@@ -284,6 +284,8 @@ Map<String, Object?> _receiptJson(
 }
 
 final class FixtureAcceptanceSession implements LiveAcceptanceSession {
+  @override
+  Future<void> verifyAlive() async {}
   bool confirmed = false;
   bool closed = false;
   @override

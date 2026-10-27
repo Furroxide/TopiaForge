@@ -3,18 +3,18 @@
   "schemaVersion": 6,
   "name": "dev.topiaforge.multiplayer-acceptance",
   "displayName": "Multiplayer Acceptance",
-  "version": "0.1.0-rc.1",
+  "version": "0.2.0",
   "author": { "name": "TopiaForge" },
   "description": "Non-distributable session observations and manual checks for isolated test hosts.",
   "entryAssembly": "TopiaForge.MultiplayerAcceptanceMod.dll",
   "entryType": "TopiaForge.MultiplayerAcceptance.MultiplayerAcceptanceMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.multiplayer": "0.1.0-rc.1",
-    "io.github.furroxide.topiaforge.worlds": ">=0.1.0-rc.1 <0.2.0"
+    "io.github.furroxide.topiaforge.multiplayer": "0.2.0",
+    "io.github.furroxide.topiaforge.worlds": ">=0.2.0 <0.3.0"
   },
   "supportedGameVersionRange": ">=0.0.2545 <0.0.2600",
-  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
-  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "platforms": ["windows"],
   "architectures": ["x64"],
   "contentTargets": ["code"],

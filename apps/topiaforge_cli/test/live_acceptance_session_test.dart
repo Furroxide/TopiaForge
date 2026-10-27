@@ -64,6 +64,8 @@ void main() {
 }
 
 final class _Session implements LiveAcceptanceSession {
+  @override
+  Future<void> verifyAlive() async {}
   _Session({this.failConfirm = false, this.failClose = false});
   final bool failConfirm;
   final bool failClose;

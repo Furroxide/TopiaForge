@@ -160,6 +160,9 @@ final class _PeerSession implements LiveAcceptanceSession {
   }
 
   @override
+  Future<void> verifyAlive() => inner.verifyAlive();
+
+  @override
   Future<void> close() => inner.close();
   @override
   Map<String, Object?> get isolationEvidence => inner.isolationEvidence;

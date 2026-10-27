@@ -106,6 +106,12 @@ final class MultiplayerAcceptanceRunner {
       guest.outputRoot,
     ]);
     final contexts = {'host': host, 'guest': guest};
+    // Retain the previous startup identities before preparing or launching
+    // either peer. A plausible timestamp alone cannot establish a fresh run.
+    final previousRuns = {
+      for (final peer in contexts.keys)
+        peer: _readLastRun(contexts[peer]!)?.sessionId,
+    };
     for (final context in contexts.values) {
       context.verify();
       for (final args in [
@@ -178,6 +184,7 @@ final class MultiplayerAcceptanceRunner {
       while (clock().toUtc().isBefore(deadline)) {
         for (final peer in contexts.keys) {
           contexts[peer]!.verify();
+          await sessions[peer]!.verifyAlive();
           for (final line in await readers[peer]!.readNewLines()) {
             final parsed = tryParseLiveAcceptanceManagerLine(line);
             if (parsed != null) {
@@ -189,16 +196,14 @@ final class MultiplayerAcceptanceRunner {
               );
             }
           }
-          final file = File(
-            p.join(contexts[peer]!.managerRoot, 'logs', 'last-run.json'),
-          );
-          if (file.existsSync() && file.lengthSync() <= 16 * 1024 * 1024) {
-            final result = LiveAcceptanceLastRun.tryParse(
-              readBoundedTextFileSync(file, maxBytes: 16 * 1024 * 1024),
-            );
-            if (result != null && !result.completedAtUtc.isBefore(started)) {
-              results[peer] = result;
-            }
+          final result = _readLastRun(contexts[peer]!);
+          if (result != null &&
+              result.sessionId != previousRuns[peer] &&
+              !result.completedAtUtc.isBefore(started) &&
+              !result.completedAtUtc.isAfter(clock().toUtc())) {
+            results[peer] = result;
+          } else {
+            results.remove(peer);
           }
         }
         if (observations.failures.isNotEmpty ||
@@ -206,6 +211,11 @@ final class MultiplayerAcceptanceRunner {
           break;
         }
         await delay(const Duration(milliseconds: 500));
+      }
+      // Evidence read during a process replacement cannot attest to the
+      // original receipt, even if every marker and package digest matches.
+      for (final session in sessions.values) {
+        await session.verifyAlive();
       }
     } finally {
       // Try both even if the first cleanup fails. Never stop by a found PID.
@@ -273,6 +283,15 @@ final class MultiplayerAcceptanceRunner {
     }
     return evidence;
   }
+}
+
+LiveAcceptanceLastRun? _readLastRun(AcceptanceIsolationContext context) {
+  context.verify();
+  final file = File(p.join(context.managerRoot, 'logs', 'last-run.json'));
+  if (!file.existsSync() || file.lengthSync() > 16 * 1024 * 1024) return null;
+  return LiveAcceptanceLastRun.tryParse(
+    readBoundedTextFileSync(file, maxBytes: 16 * 1024 * 1024),
+  );
 }
 
 void requireSeparateMultiplayerRoots(List<String> roots) {

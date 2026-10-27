@@ -9,6 +9,7 @@ import 'live_acceptance_models.dart';
 /// An isolation acknowledgement is distinct from the Running launch outcome.
 abstract interface class LiveAcceptanceSession {
   Future<void> confirm(Duration timeout);
+  Future<void> verifyAlive();
   Future<void> close();
   Map<String, Object?> get isolationEvidence;
 }
@@ -137,11 +138,7 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
       if (outcome != null && outcome.status != 'succeeded') {
         throw StateError('The isolated runtime refused the acceptance launch.');
       }
-      if (await _processLiveness(_process) != true) {
-        throw StateError(
-          'The owned acceptance process exited or became unverifiable; startup remains unconfirmed.',
-        );
-      }
+      await verifyAlive();
       final session = expectedSession;
       final confirmed = session == null
           ? outcome?.command == 'launch-target' && outcome?.phase == 'running'
@@ -156,6 +153,8 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
                 current?.session?.role == session.role &&
                 current?.session?.serverId == outcome?.multiplayer?.serverId &&
                 current?.session?.serverId != null &&
+                (session.role != LaunchSessionRole.join ||
+                    current?.session?.serverId == session.target?.serverId) &&
                 current?.session?.state ==
                     (session.role == LaunchSessionRole.host
                         ? LaunchSessionState.hosting
@@ -168,6 +167,15 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
     throw StateError(
       'Acceptance isolation/session acknowledgement is unknown or unconfirmed.',
     );
+  }
+
+  @override
+  Future<void> verifyAlive() async {
+    if (await _processLiveness(_process) != true) {
+      throw StateError(
+        'The owned acceptance process exited or became unverifiable; acceptance remains unconfirmed.',
+      );
+    }
   }
 
   @override
