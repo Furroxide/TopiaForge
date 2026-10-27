@@ -17,5 +17,10 @@ String cliJoinStage(JoinStage stage) => switch (stage) {
 String cliJoinFailure(JoinFailure failure, {required bool started}) {
   final text = JoinFailureText.of(failure, startedGame: started);
   // Never repeat provider details: they can include private addresses or paths.
-  return '${text.sentence} ${text.nextStep ?? 'Review the server and Multiplayer settings, then try again.'}';
+  return [
+    '${text.sentence} ${text.nextStep ?? 'Review the server and Multiplayer settings, then try again.'}',
+    for (final blocker in failure.blockers)
+      'Mod ${blocker.modId.isEmpty ? '(session)' : withoutAddresses(blocker.modId)}: '
+          '${withoutAddresses(blocker.message)}',
+  ].join('\n');
 }
