@@ -9,17 +9,19 @@ void main() {
     [p.join('bin', 'topiaforge.dart'), ...args],
     environment: {'DART_SUPPRESS_ANALYTICS': 'true'},
   );
-  test('help and command-specific help expose both verbs', () async {
+  test('main help exposes both verbs', () async {
     final help = await cli(['help']);
     expect(help.exitCode, 0);
     expect(help.stdout, contains('topiaforge servers'));
     expect(help.stdout, contains('topiaforge host'));
-    for (final verb in ['host', 'servers']) {
+  });
+  for (final verb in ['host', 'servers']) {
+    test('$verb help exposes command usage', () async {
       final result = await cli([verb, '--help']);
       expect(result.exitCode, 0);
       expect(result.stdout, contains('Usage: topiaforge $verb'));
-    }
-  });
+    });
+  }
   test('nonterminal host refuses before discovery', () async {
     final result = await cli(['host']);
     expect(result.exitCode, 2);

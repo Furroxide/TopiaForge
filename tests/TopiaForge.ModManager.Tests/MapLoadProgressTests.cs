@@ -61,7 +61,8 @@ namespace TopiaForge.ModManager.Tests
             {
                 try { if (dispose) progress.Dispose(); else progress.Building(); }
                 catch (Exception error) { failure = error; }
-            }) { IsBackground = true };
+            })
+            { IsBackground = true };
             var waitedForSetter = false;
             ui.Surface.BeforeBody = () =>
             {
