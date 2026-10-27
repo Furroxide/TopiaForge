@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Worlds.Maps
 {
