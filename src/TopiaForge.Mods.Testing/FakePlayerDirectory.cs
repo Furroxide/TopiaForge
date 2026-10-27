@@ -5,6 +5,7 @@ using TopiaForge.Mods.Internal;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Deterministic player directory with the runtime's handle lifetime rules and one local player by default.</summary>
+    [RequiresTopiaForge("0.2.0")]
     public sealed partial class FakePlayerDirectory : IPlayerDirectory, IDisposable
     {
         private readonly FakeModLifetime lifetime = new FakeModLifetime();

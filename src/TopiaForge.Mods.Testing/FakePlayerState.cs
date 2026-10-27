@@ -4,6 +4,7 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>One fake player's configurable state and captured presentation.</summary>
+    [RequiresTopiaForge("0.2.0")]
     public sealed class FakePlayerState
     {
         internal FakePlayerState(FakeModLifetime lifetime)
@@ -22,6 +23,7 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Per-player input edges for a deterministic canonical tick.</summary>
+    [RequiresTopiaForge("0.2.0")]
     public sealed class FakePlayerInput : IPlayerInput
     {
         private readonly Dictionary<string, State> actions = new Dictionary<string, State>(StringComparer.Ordinal);
