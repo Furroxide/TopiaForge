@@ -159,7 +159,11 @@ StartTag? readStartTag(String text, int start) {
   while (cursor < text.length && !_endsName(text.codeUnitAt(cursor))) {
     cursor++;
   }
-  final nameEnd = cursor;
+  return _readStartTagAttributes(text, cursor);
+}
+
+StartTag? _readStartTagAttributes(String text, int nameEnd) {
+  var cursor = nameEnd;
   final attributes = <TagAttribute>[];
   while (true) {
     final leading = cursor;
@@ -217,13 +221,15 @@ StartTag? readStartTag(String text, int start) {
 /// in [text], whose text is not markup, -1 when it does not close, which
 /// hides the rest of [text], or null when neither opens there.
 int? unparsedSectionEnd(String text, int open) {
-  for (final (opener, closer) in const [
-    ('<!--', '-->'),
-    ('<![CDATA[', ']]>'),
-  ]) {
-    if (!text.startsWith(opener, open)) continue;
-    final close = text.indexOf(closer, open + opener.length);
-    return close < 0 ? -1 : close + closer.length;
+  // Avoid a delimiter iterator for every tag or section, including the
+  // repeated comment budget case. Keep the same prefix checks and searches.
+  if (text.startsWith('<!--', open)) {
+    final close = text.indexOf('-->', open + 4);
+    return close < 0 ? -1 : close + 3;
+  }
+  if (text.startsWith('<![CDATA[', open)) {
+    final close = text.indexOf(']]>', open + 9);
+    return close < 0 ? -1 : close + 3;
   }
   return null;
 }
@@ -250,7 +256,8 @@ Iterable<({int start, StartTag tag})> startTags(
       continue;
     }
     if (_isNameAt(text, open + 1, name, anyCase)) {
-      final tag = readStartTag(text, open);
+      // _isNameAt already checked this exact name and its boundary.
+      final tag = _readStartTagAttributes(text, open + 1 + name.length);
       if (tag != null) yield (start: open, tag: tag);
     }
     open = text.indexOf('<', open + 1);
