@@ -84,6 +84,10 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Play',
+          items: [{ label: 'Saved published maps', slug: 'guides/saved-published-maps' }],
+        },
+        {
           label: 'Build mods',
           items: [
             { label: 'Core services', slug: 'guides/core-services' },

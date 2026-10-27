@@ -21,6 +21,12 @@ export const pages = [
     true,
     generatedFrontmatter('Map worlds', 'Declare, verify, and play published or bundled maps for Robotopia.'),
   ),
+  page(
+    'docs/CreatorCloud.md',
+    'guides/saved-published-maps.md',
+    true,
+    generatedFrontmatter('Saved published maps', 'Save and play published maps for Robotopia with TopiaForge Worlds.'),
+  ),
   page('docs/TestingMods.md', 'guides/testing.md'),
   page('docs/CliDevLoop.md', 'guides/cli-dev.md'),
   page('docs/UnityInterop.md', 'guides/interop.md', false),
