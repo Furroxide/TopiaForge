@@ -21,6 +21,7 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static void TestPlayersAcrossRuntimes(string root)
         {
+            TestFirstPosePlayersAcrossRuntimes(root);
             var network = new LoopbackNetPair(); var clock = new WorldTestClock();
             var host = new PresenceGame(NewFixture(Path.Combine(root, "players-host"), "players", PresenceModEntry), network.Host, clock, "Host");
             var first = new PresenceGame(NewFixture(Path.Combine(root, "players-first"), "players", PresenceModEntry), network.AddPlayer("p1"), clock, "Sam");

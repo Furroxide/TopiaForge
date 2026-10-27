@@ -14,11 +14,22 @@ namespace TopiaForge.ModManager
             get
             {
                 var state = lifecycle.Current;
-                return state.Phase == SessionPhase.Running ? state.Identity?.SessionId : null;
+                return state.Phase == SessionPhase.Running && current?.PresenceInvalidated == false ? state.Identity?.SessionId : null;
             }
         }
 
         /// <summary>Gets where the running world session put its player as it became ready, which the spawn ring is around.</summary>
-        internal TransformState? RunningSpawn => lifecycle.Current.Phase == SessionPhase.Running ? current?.Readiness?.Spawn : null;
+        internal TransformState? RunningSpawn => lifecycle.Current.Phase == SessionPhase.Running && current?.PresenceInvalidated == false
+            ? current.Readiness?.Spawn : null;
+
+        // Keeping a controller alive does not make its old scene's readiness valid in a replacement scene.
+        private static bool InvalidatesPresenceReadiness(SessionRecord record, SceneLifecycleEvent scene)
+        {
+            var owned = record.Readiness!.Scene;
+            var sameInstance = scene.SceneInstanceId == owned.InstanceId;
+            return (sameInstance && scene.Phase == SceneLifecyclePhase.Unloaded)
+                || (!sameInstance && scene.IsActive && (scene.Phase == SceneLifecyclePhase.Activated
+                    || (scene.Phase == SceneLifecyclePhase.Loaded && scene.Mode == SceneLoadMode.Single)));
+        }
     }
 }

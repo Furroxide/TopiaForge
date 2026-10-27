@@ -41,7 +41,7 @@ namespace TopiaForge.ModManager
             Writer.WriteSingle(position.X); Writer.WriteSingle(position.Y); Writer.WriteSingle(position.Z);
             Writer.WriteByte(yaw.HasValue ? (byte)1 : (byte)0); Writer.WriteSingle(yaw ?? 0);
             var sent = Send(id);
-            if (sent.Succeeded && Presence.TryGetPeer(id, out var peer)) peer!.Plausibility?.ExpectPlacement(NetQuantization.QuantizePosition(feet), Now);
+            if (sent.Succeeded && Presence.TryGetPeer(id, out var peer)) Presence.Host.ExpectPlacement(peer!, NetQuantization.QuantizePosition(feet), Now);
             return sent;
         }
 

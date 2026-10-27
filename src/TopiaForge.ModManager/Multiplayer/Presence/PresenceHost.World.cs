@@ -12,6 +12,13 @@ namespace TopiaForge.ModManager
         internal bool IsCurrentWorld => string.Equals(worldSeen, presence.RunningWorld?.Invoke(), StringComparison.Ordinal)
             && sceneSeen == (presence.SceneVersion?.Invoke() ?? 0);
 
+        /// <summary>Synchronizes native/world transitions before recording a successful host action in the current scene.</summary>
+        internal void ExpectPlacement(PresencePeer peer, NetQuantizedPosition position, long nowMicros)
+        {
+            FollowWorld(nowMicros);
+            peer.Plausibility?.ExpectPlacement(position, nowMicros);
+        }
+
         /// <summary>Host world changes invalidate every old pose before any new packet is used, including before arrival.</summary>
         private void FollowWorld(long nowMicros)
         {

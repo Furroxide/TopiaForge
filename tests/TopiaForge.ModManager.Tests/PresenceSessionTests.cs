@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using static TopiaForge.ModManager.Tests.PresenceAssert;
 
@@ -19,6 +20,8 @@ namespace TopiaForge.ModManager.Tests
             try
             {
                 TheRunningWorldNamesItsSessionAndSpawn(root.FullName);
+                foreach (var change in new[] { SceneLifecyclePhase.Activated, SceneLifecyclePhase.Loaded, SceneLifecyclePhase.Unloaded })
+                    ReplacedScenesCannotReuseReadiness(root.FullName, change);
             }
             finally
             {
@@ -57,6 +60,49 @@ namespace TopiaForge.ModManager.Tests
             var menu = SessionFixture.ModeSession!.ReturnToMainMenuAsync();
             test.Wait(menu);
             That(menu.Result.Succeeded && test.Hosted.RunningWorldId == null && test.Hosted.RunningSpawn == null, "back at the menu, nothing runs");
+        }
+
+        private static void ReplacedScenesCannotReuseReadiness(string root, SceneLifecyclePhase change)
+        {
+            using var test = new SessionFixture(root);
+            var spawn = new TransformState(new Vec3(900, 0, 0), Quat.Identity, new Vec3(1, 1, 1));
+            SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new SpawnWorld(spawn)));
+            test.Launch();
+            var rig = new PresenceRig();
+            var scene = new FollowedScene();
+            scene.Activated("World", -12);
+            rig.Host.Presence.RunningWorld = () => test.Hosted.RunningWorldId;
+            rig.Host.Presence.RunningSpawn = () => test.Hosted.RunningSpawn;
+            rig.Host.Presence.SceneVersion = () => scene.Version;
+            rig.OpenToMultiplayer();
+            var raw = rig.AddRawPlayer("raw");
+            rig.Frames(3);
+            raw.SendPose(new NetVector3(900, 0, 0));
+            rig.Frames(3);
+            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue, "real running readiness establishes the original pose");
+            test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-14, "Background", SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Additive, isActive: false));
+            test.Host.Drain();
+            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue, "unrelated additive loading retains current readiness");
+            if (change != SceneLifecyclePhase.Unloaded) scene.Activated("World", -13);
+            test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(change == SceneLifecyclePhase.Unloaded ? -12 : -13, "World", change,
+                SceneLoadMode.Single, isActive: change != SceneLifecyclePhase.Unloaded));
+            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null, "scene evidence invalidates range before queued policy handling");
+            test.Host.Drain();
+            That(test.Hosted.Current.Phase == Core.SessionPhase.Running, "keep-controller policy retains the session across native replacement");
+            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null, "replacement invalidates range before receive");
+            raw.SendPose(new NetVector3(900, 0, 0), PresenceFlags.Teleported);
+            rig.Frames(3);
+            Console.WriteLine("Retained readiness " + change + ": avatar=" + rig.Host.Presence.TryGetAvatar(raw.Id, out _) +
+                ", validated=" + rig.Host.Presence.ValidatedPosition(raw.Id).HasValue);
+            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null && !rig.Host.Presence.TryGetAvatar(raw.Id, out _) &&
+                !rig.Host.Presence.TryGetPose(raw.Id, out _), "a retained session cannot reuse old-scene readiness to validate a late first pose");
+            var restart = SessionFixture.ModeSession!.RestartAsync();
+            test.Wait(restart);
+            rig.Frames(1);
+            raw.SendPose(new NetVector3(900, 0, 0));
+            rig.Frames(3);
+            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue, "new world readiness restores trust without changing keep-controller policy");
         }
 
         /// <summary>A world whose readiness puts the player at a spawn of the test's choosing.</summary>

@@ -2602,6 +2602,9 @@ The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in
   repeating it does not replenish allowances. Running credit, teleport credit and strikes survive world restarts.
   A link or stream return retains the last accepted anchor and those allowances, so ordinary movement during a short
   interruption stands while a new arbitrary position does not. Disconnected and stale positions still fail motion.
+  A keep-controller session retains its controller after native replacement, but its old readiness no longer supplies
+  a trusted world or spawn. Fresh world readiness or a host placement is required. Host Players placements synchronize
+  scene invalidation before recording their landing, including actions issued before the next presence receive stage.
 - **Corrections.** A pose that breaks a rule is dropped, and the player is sent back to its last accepted position under
   a new correction number (`Correct`), keeping the credit it had: a correction never refills the bank, so a cheat is
   struck again as soon as it runs past the limit. Poses still carrying the old number are ignored for a second, as they

@@ -136,16 +136,15 @@ namespace TopiaForge.ModManager
             var observed = lifecycle.Current;
             if (observed.Phase != SessionPhase.Running || scene.IsInitial) return;
             var owner = observed.Identity;
+            // Invalidate before queued stop handling and independently of the controller's scene-change policy.
+            if (current != null && ReferenceEquals(current.Identity, owner) && InvalidatesPresenceReadiness(current, scene))
+                current.PresenceInvalidated = true;
             dispatcher.Post(() =>
             {
                 var record = current;
                 if (record == null || !ReferenceEquals(record.Identity, owner) || lifecycle.Current.Phase != SessionPhase.Running
                     || (record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy)) return;
-                var owned = record.Readiness!.Scene;
-                var sameInstance = scene.SceneInstanceId == owned.InstanceId;
-                if ((sameInstance && scene.Phase == SceneLifecyclePhase.Unloaded)
-                    || (!sameInstance && scene.IsActive && (scene.Phase == SceneLifecyclePhase.Activated
-                        || (scene.Phase == SceneLifecyclePhase.Loaded && scene.Mode == SceneLoadMode.Single))))
+                if (InvalidatesPresenceReadiness(record, scene))
                     RequestBoundStop(record.Identity.SessionId);
             });
         }
