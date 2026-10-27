@@ -130,9 +130,10 @@ namespace TopiaForge.ModManager.Tests
             That(overlay.IsVisible && overlay.Title == ConnectingPresenter.FollowingTitle, "the next follow shows again");
             var leaves = rig.Control.Calls.Count(call => call == "Leave");
             overlay.Cancel();
+            overlay.Dismiss(); // Closing the modal after CANCEL must not leave twice.
             rig.Frame();
             That(rig.Control.Calls.Count(call => call == "Leave") == leaves + 1 && !overlay.IsVisible && rig.Noticed(ConnectingPresenter.LeftWhileFollowing),
-                "Cancel on it leaves the session, which is never refused");
+                "CANCEL leaves the session exactly once, even when closing the modal also dismisses it");
             follow.Fail(FollowFailureWords.For(FollowFailureKind.SynchronizeFailed, ModErrorCode.TimedOut));
             rig.Frame();
             That(!overlay.IsVisible, "a late failure of the cancelled follow stays closed");

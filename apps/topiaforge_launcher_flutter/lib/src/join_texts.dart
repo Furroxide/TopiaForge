@@ -155,6 +155,8 @@ String sessionEndMessage(JoinSessionEndReason reason) => switch (reason) {
     "The server's multiplayer version changed, so the session ended.",
   JoinSessionEndReason.transportFailed =>
     'The connection to the session failed.',
+  JoinSessionEndReason.worldFollowFailed =>
+    "Robotopia could not follow the host's world, so it left the session.",
   JoinSessionEndReason.gameExited => 'Robotopia closed, so the session ended.',
 };
 
@@ -408,6 +410,14 @@ const _texts = <JoinFailureCode, JoinFailureText>{
     title: 'The world could not be loaded',
     sentence: "Robotopia could not take in the server's world.",
     nextStep: 'Try again.',
+    retry: true,
+  ),
+  // The game's own words, which say what to do, stand in the sentence's place.
+  JoinFailureCode.worldFollowFailed: JoinFailureText(
+    title: "The host's world could not be followed",
+    sentence:
+        'Robotopia joined the server but could not follow the host into its '
+        'world. Try again; if it keeps failing, check your mods.',
     retry: true,
   ),
   JoinFailureCode.disconnected: JoinFailureText(

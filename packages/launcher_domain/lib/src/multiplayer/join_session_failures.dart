@@ -104,6 +104,7 @@ enum JoinFailureCode {
   /// re-plan did not settle it.
   admissionChanged,
   snapshotFailed,
+  worldFollowFailed,
   disconnected,
 }
 
@@ -136,6 +137,7 @@ enum JoinSessionEndReason {
   admissionRejected,
   protocolMismatch,
   transportFailed,
+  worldFollowFailed,
 
   /// The game process exited.
   gameExited,

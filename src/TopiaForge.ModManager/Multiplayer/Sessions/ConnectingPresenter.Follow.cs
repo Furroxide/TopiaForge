@@ -29,6 +29,9 @@ namespace TopiaForge.ModManager.Sessions
         // Cancel leaves the session; until the follow it cancelled has ended, the overlay does not show it again.
         private int cancelledFollowJoin = -1;
 
+        // Escape and close hide only this re-follow; a failure or the next attempt must still show.
+        private int dismissedRefollow = -1;
+
         private SessionFollowStatus FollowStatus => context.Environment.Follow;
 
         /// <summary>
@@ -117,6 +120,7 @@ namespace TopiaForge.ModManager.Sessions
                 || follow.Stage == FollowStage.LoadingLevel || (follow.Stage == FollowStage.Failed && follow.Version != failedFollowShown));
             if (stage != Stage.Hidden && stage != Stage.Succeeded && stage != Stage.Stranded) return;
             if (!following || cancelledFollowJoin == follow.JoinSerial) return;
+            if (dismissedRefollow == follow.RefollowSerial && follow.Stage != FollowStage.Failed) return;
             ShowFollowing();
         }
 

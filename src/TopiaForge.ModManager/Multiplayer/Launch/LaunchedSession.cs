@@ -73,7 +73,7 @@ namespace TopiaForge.ModManager
             startedReads = reads;
         }
 
-        public void Follow(InternalLiveStatus status, int version, int reads)
+        public void Follow(InternalLiveStatus status, int version, int reads, SessionFollowStatus? follow = null)
         {
             if (status == null) throw new ArgumentNullException(nameof(status));
             if (IsFinished) return;
@@ -84,6 +84,25 @@ namespace TopiaForge.ModManager
             {
                 IsSettled = true;
                 IsFinished = true;
+                return;
+            }
+
+            // The follower leaves the transport after a world failure. Keep its own reason ahead of the provider's
+            // generic Left/Cancelled status, even when the provider has not changed since the previous frame.
+            if (!IsHost && HasStarted && follow?.Stage == FollowStage.Failed && follow.Failure != null
+                && string.Equals(follow.LaunchRequestId, RequestId, StringComparison.Ordinal))
+            {
+                var failure = follow.Failure;
+                var detail = failure.Title + ". " + failure.Message;
+                IsFinished = true;
+                if (succeeded)
+                    sink.Ended(new LaunchOutcomeMultiplayer(Identity.Role, Identity.IntentId, block.ServerId,
+                        detail: detail, endReason: "world-follow-failed"), clean: failure.Kind != FollowFailureKind.CleanupFailed);
+                else if (!IsSettled)
+                {
+                    IsSettled = true;
+                    sink.Result(SessionLaunchRecords.Failure(Identity, "world-follow-failed", detail), reachedPhase);
+                }
                 return;
             }
 

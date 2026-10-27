@@ -39,6 +39,10 @@ namespace TopiaForge.ModManager.Tests
             ConnectingShowsTheFollow();
             AFollowFailureShowsItsOwnWords();
             AFollowAfterTheJoinShowsFollowing();
+            DismissingARefollowHidesOnlyThatAttempt();
+            AHiddenRefollowStillShowsItsFailure();
+            ClosingTheFirstJoinStillCancelsOnce();
+            CancellingARefollowBeforeTheJoinCardClosesStillLeavesOnce();
             ARefollowFailureShowsItsOwnWords();
             ARetryThatFailsAtOnceShowsItsOwnWords();
             RetryListensForALanHostFirst();

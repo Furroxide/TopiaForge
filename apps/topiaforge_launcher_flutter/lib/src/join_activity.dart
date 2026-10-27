@@ -64,7 +64,12 @@ List<JoinEvent> joinEventsFor(JoinSessionState join, LaunchActivity activity) {
     );
   } else if (multiplayer?.failure?.joinFailureCode case final code?
       when failed && reached < 3) {
-    if (code == JoinFailureCode.snapshotFailed) advanceTo(2);
+    // Both happen only once the link is up, and the game can settle the join
+    // before the launcher has read its synchronizing progress.
+    if (code == JoinFailureCode.snapshotFailed ||
+        code == JoinFailureCode.worldFollowFailed) {
+      advanceTo(2);
+    }
     events.add(
       JoinFailed(code, detail: withoutAddresses(multiplayer!.detail ?? '')),
     );

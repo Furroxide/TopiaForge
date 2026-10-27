@@ -286,7 +286,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public void Cancel()
         {
-            if (stage == Stage.Following)
+            if (stage == Stage.Following || (stage == Stage.Joining && FollowsThisJoin && FollowStatus.IsRefollow))
             {
                 CancelFollowing();
                 return;
@@ -315,7 +315,12 @@ namespace TopiaForge.ModManager.Sessions
 
         public void Dismiss()
         {
-            if (IsBusy) Cancel();
+            if (FollowsThisJoin && FollowStatus.IsRefollow && !HasFailed)
+            {
+                dismissedRefollow = FollowStatus.RefollowSerial;
+                Hide();
+            }
+            else if (CanCancel) Cancel();
             else Hide();
         }
 

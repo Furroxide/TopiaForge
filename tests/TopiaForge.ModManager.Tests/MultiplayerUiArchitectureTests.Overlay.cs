@@ -1,10 +1,14 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using TopiaForge.ModManager.Sessions;
+using TopiaForge.Mods.UnityUi;
 using static TopiaForge.ModManager.Tests.SessionAssert;
 
 namespace TopiaForge.ModManager.Tests
@@ -16,6 +20,55 @@ namespace TopiaForge.ModManager.Tests
     /// </summary>
     internal static partial class MultiplayerUiArchitectureTests
     {
+        private static void TheOverlayKeepsLongStepsReadable(string root)
+        {
+            var open = OverlayMethod(root, "Open").ToString();
+            That(open.Contains("scroll.Content.VerticalPhaseStepper(ToArray(screen.StepLabels))", StringComparison.Ordinal),
+                "seven full step names and progress details use full-width rows, not narrow columns");
+            That(open.Contains("scroll.FixedHeight(ScrollHeight)", StringComparison.Ordinal)
+                && open.Contains("body = scroll.Content.Column", StringComparison.Ordinal)
+                && open.Contains("actions = opened.Content.Row", StringComparison.Ordinal),
+                "long progress and failures scroll within a bounded view while cancellation stays outside it");
+        }
+
+        /// <summary>
+        /// By the kit's own sizes, the seven rail rows take 304 units, so a 360-unit scroll view left the status line at its
+        /// edge and a failure's advice, and most of the password field, below it. The view holds the rail, the status line
+        /// and either the password row or a failure's heading with two lines of advice, each line of text counted at one and
+        /// a half times its size, which no face of the kit needs; and the whole dialog still fits a 3440x1440 screen at the
+        /// largest UI scale, inside the kit's safe margins.
+        /// </summary>
+        private static void TheOverlayShowsItsWordsWithoutScrolling(string root)
+        {
+            var kit = Path.Combine(root, "src", "TopiaForge.Mods.UnityUi");
+            var rail = File.ReadAllText(Path.Combine(kit, "Widgets", "TopiaForgePhaseStepper.Layout.cs"));
+            var profile = File.ReadAllText(Path.Combine(kit, "Core", "TopiaForgeAccessibilityProfile.cs"));
+            var overlay = File.ReadAllText(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer", "ConnectingOverlay.cs"));
+            static float Read(string source, string pattern)
+            {
+                var match = Regex.Match(source, pattern, RegexOptions.CultureInvariant);
+                That(match.Success, "the source still declares " + pattern);
+                return float.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+            }
+
+            static float Line(int size) => size * 1.5f;
+            const float Gap = (float)TopiaForgeGap.Sm;
+            var height = Read(overlay, @"const float ScrollHeight = ([0-9.]+)f;");
+            var rows = ConnectingSteps.Count * Read(rail, @"RowHeight = ([0-9.]+)f;") + (ConnectingSteps.Count - 1) * Read(rail, @"RowSpacing = ([0-9.]+)f;");
+            var failure = Line(TopiaForgeTokens.HeadingSize) + Gap + 2 * Line(TopiaForgeTokens.BodySize);
+            var password = TopiaForgeTokens.ControlHeight + (float)TopiaForgeGap.Xs + Line(TopiaForgeTokens.CaptionSize);
+            var needed = rows + Gap + Line(TopiaForgeTokens.BodySize) + Gap + Math.Max(failure, password);
+            That(height >= needed,
+                "the rail, the status line and a failure's advice or the password field show without scrolling (" + needed + " of " + height + ")");
+
+            var largest = Read(profile, @"ClampFinite\(uiScale, [0-9.]+f, ([0-9.]+)f");
+            var screen = (float)(Math.Sqrt(1440.0 / 3440.0) * Math.Sqrt(TopiaForgeTokens.ReferenceWidth * TopiaForgeTokens.ReferenceHeight) / largest);
+            var dialog = 2 * (float)TopiaForgeGap.Xl + Line(TopiaForgeTokens.TitleSize) + 2 * (float)TopiaForgeGap.Md + height
+                + TopiaForgeTokens.ControlHeight;
+            That(dialog + 2 * TopiaForgeTokens.SafeMargin <= screen,
+                "and the dialog fits an ultrawide screen at UI scale " + largest + " (" + dialog + " of " + screen + ")");
+        }
+
         /// <summary>
         /// Seen in the game: a RETRY that failed at once kept the earlier failure's heading and advice under the new failure's
         /// status line, because the failure body was built only when the overlay's layout changed, and a failure that
@@ -44,6 +97,12 @@ namespace TopiaForge.ModManager.Tests
         /// </summary>
         private static void TheOverlayOffersCancelOnlyWhileItStopsSomething(string root)
         {
+            var closed = OverlayMethod(root, "Open").DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                .Single(assignment => assignment.Left.ToString() == "opened.Closed");
+            var closeCalls = closed.Right.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Select(call => call.Expression.ToString()).ToArray();
+            That(closeCalls.Contains("screen.Dismiss") && !closeCalls.Contains("screen.Cancel"),
+                "Escape and the title-bar close use Dismiss, so only the first join is cancelled");
             var shape = OverlayMethod(root, "Shape");
             That(shape.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(access => access.ToString() == "screen.CanCancel"),
                 "the overlay's layout follows whether Cancel would stop anything: " + shape);

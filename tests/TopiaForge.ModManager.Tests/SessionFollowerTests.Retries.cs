@@ -15,6 +15,28 @@ namespace TopiaForge.ModManager.Tests
     /// </summary>
     internal static partial class SessionFollowerTests
     {
+        private static void ARefollowKeepsItsIdentityAcrossRetries(string root)
+        {
+            using var rig = new FollowRig(root);
+            rig.Join();
+            rig.Announce(rig.World(SessionFollowTests.NewSessionId()));
+            rig.Until(() => rig.Status.Stage == FollowStage.Running, "the first world runs");
+            var held = HoldTheScene(rig);
+            rig.Announce(rig.World(SessionFollowTests.NewSessionId()));
+            rig.Until(() => rig.Status.Stage == FollowStage.Preparing, "the next world waits for the busy game");
+            var attempt = rig.Status.RefollowSerial;
+            var version = rig.Status.Version;
+            for (var frame = 0; frame < 90; frame++) rig.Frame();
+            That(rig.Status.IsRefollow && attempt == 1 && rig.Status.RefollowSerial == attempt && rig.Status.Version > version,
+                "busy retries move progress without changing the re-follow attempt");
+            rig.Announce(rig.World(SessionFollowTests.NewSessionId()));
+            rig.Until(() => rig.Status.RefollowSerial != attempt, "a newer host announcement starts another attempt");
+            That(rig.Status.RefollowSerial == attempt + 1, "the replacement has exactly one new identity");
+            held.Dispose();
+            rig.Until(() => rig.Status.Stage == FollowStage.Running, "the replacement world runs once the game is free");
+            That(rig.Status.RefollowSerial == attempt + 1, "arrival keeps the attempt identity");
+        }
+
         private static void ABusyGameIsTriedAgainThenGivenUp(string root)
         {
             using (var rig = new FollowRig(root))

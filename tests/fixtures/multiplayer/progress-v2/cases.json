@@ -13,7 +13,8 @@
       "admission-changed",
       "disconnected",
       "direct-not-allowed",
-      "snapshot-failed"
+      "snapshot-failed",
+      "world-follow-failed"
     ],
     "host": [
       "port-in-use",
@@ -31,7 +32,8 @@
     "replaced",
     "admission-rejected",
     "protocol-mismatch",
-    "transport-failed"
+    "transport-failed",
+    "world-follow-failed"
   ],
   "progress": {
     "valid": [
@@ -405,6 +407,50 @@
         },
         "bytes": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\"},\"phase\":\"synchronizing\",\"requestId\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"schemaVersion\":2,\"sequence\":7,\"status\":\"cancelled\"}",
         "reordered": "{\n  \"status\": \"cancelled\",\n  \"sequence\": 7,\n  \"schemaVersion\": 2,\n  \"requestId\": \"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\n  \"phase\": \"synchronizing\",\n  \"multiplayer\": {\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\"\n  },\n  \"kind\": \"launch\",\n  \"command\": \"join-session\",\n  \"blocks\": []\n}"
+      },
+      {
+        "id": "join-world-follow-failed",
+        "about": "Following failed before the join finished, with fixed advice.",
+        "document": {
+          "schemaVersion": 2,
+          "kind": "launch",
+          "requestId": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "sequence": 10,
+          "status": "failed",
+          "phase": "synchronizing",
+          "blocks": [],
+          "multiplayer": {
+            "role": "join",
+            "intentId": "intent-7d3e1f20",
+            "failure": "world-follow-failed",
+            "detail": "The host's world could not be loaded. Your game could not load the host's world. Join again; if it keeps failing, check your mods."
+          },
+          "command": "join-session"
+        },
+        "bytes": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The host's world could not be loaded. Your game could not load the host's world. Join again; if it keeps failing, check your mods.\",\"failure\":\"world-follow-failed\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\"},\"phase\":\"synchronizing\",\"requestId\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"schemaVersion\":2,\"sequence\":10,\"status\":\"failed\"}",
+        "reordered": "{\n  \"status\": \"failed\",\n  \"sequence\": 10,\n  \"schemaVersion\": 2,\n  \"requestId\": \"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\n  \"phase\": \"synchronizing\",\n  \"multiplayer\": {\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"failure\": \"world-follow-failed\",\n    \"detail\": \"The host's world could not be loaded. Your game could not load the host's world. Join again; if it keeps failing, check your mods.\"\n  },\n  \"kind\": \"launch\",\n  \"command\": \"join-session\",\n  \"blocks\": []\n}"
+      },
+      {
+        "id": "join-world-follow-ended",
+        "about": "Following failed after the join, retaining the last world and advice.",
+        "document": {
+          "schemaVersion": 2,
+          "kind": "session",
+          "requestId": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "sequence": 42,
+          "status": "succeeded",
+          "phase": "idle",
+          "blocks": [],
+          "multiplayer": {
+            "role": "join",
+            "intentId": "intent-7d3e1f20",
+            "endReason": "world-follow-failed",
+            "detail": "The host's world could not be loaded. Your game could not load the host's world. Join again; if it keeps failing, check your mods."
+          },
+          "sessionId": "session-0a1b2c3d"
+        },
+        "bytes": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The host's world could not be loaded. Your game could not load the host's world. Join again; if it keeps failing, check your mods.\",\"endReason\":\"world-follow-failed\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\"},\"phase\":\"idle\",\"requestId\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"schemaVersion\":2,\"sequence\":42,\"sessionId\":\"session-0a1b2c3d\",\"status\":\"succeeded\"}",
+        "reordered": "{\n  \"status\": \"succeeded\",\n  \"sessionId\": \"session-0a1b2c3d\",\n  \"sequence\": 42,\n  \"schemaVersion\": 2,\n  \"requestId\": \"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\n  \"phase\": \"idle\",\n  \"multiplayer\": {\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"endReason\": \"world-follow-failed\",\n    \"detail\": \"The host's world could not be loaded. Your game could not load the host's world. Join again; if it keeps failing, check your mods.\"\n  },\n  \"kind\": \"session\",\n  \"blocks\": []\n}"
       },
       {
         "id": "host-error",

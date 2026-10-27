@@ -195,8 +195,10 @@ serves a different server,
 or whose server could not be checked because this game's record of earlier ones could not be read
 (`KnownHostsUnreadable`). CONNECT's check asks the same "Trust this server?" question for both, each with its own words.
 A failure that replaces another without the view closing, as a RETRY that fails at once does, shows its own heading and
-words, never the earlier failure's: the view binds them on every frame. Cancel, the close button and ESC stop a running
-join at any step, and leaving is never refused.
+words, never the earlier failure's: the view binds them on every frame. Cancel, the close button and ESC stop a first
+join at any step, and leaving is never refused. During a re-follow, ESC and the close button only hide that attempt's
+card; Cancel still leaves. Progress does not reopen a hidden card, but a failure still shows its words and actions,
+and the next re-follow shows again. The modal consumes ESC before the game's pause menu can use it.
 
 The overlay and the prompts are persistent modals: joining from a running game returns to the main menu first, and a
 modal that is not persistent is destroyed with the scene it opened in, which in the game left the join running with no

@@ -1,6 +1,7 @@
 using System.Linq;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Sessions;
+using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using static TopiaForge.ModManager.Tests.SessionAssert;
 
@@ -19,6 +20,34 @@ namespace TopiaForge.ModManager.Tests
         {
             ALaunchedJoinHandsTheRealmItsRequest();
             ALiveJoinsRecordsTakeItsFollowsProgress();
+            LiveJoinFollowFailuresReachTheLauncher();
+        }
+
+        private static void LiveJoinFollowFailuresReachTheLauncher()
+        {
+            foreach (var started in new[] { false, true })
+            {
+                const string join = "join-follow-failed";
+                var rig = Owned();
+                rig.Control.Lan = new[] { Listing('1', "LAN game") };
+                Offer(rig, LiveJoin(join));
+                rig.Frame();
+                rig.Status(InternalSessionRole.Client, started ? InternalJoinPhase.InSession : InternalJoinPhase.Synchronizing);
+                rig.Environment.ReportSessionProgress(new LaunchProgress(join, 1, "running", "session-a1"));
+                rig.Frame(2);
+                rig.Environment.Follow.Joined(join);
+                var words = FollowFailureWords.For(FollowFailureKind.WorldLoadFailed, ModErrorCode.External);
+                rig.Environment.Follow.Fail(words);
+                rig.Environment.ReportSessionProgress(new LaunchProgress(join, 2, "idle"));
+                rig.Status(InternalSessionRole.Solo, InternalJoinPhase.Ended, InternalLiveFailure.Left);
+                rig.Frame(3);
+                var outcome = rig.Launcher.Outcomes.Last();
+                That(outcome.Multiplayer!.Failure == (started ? null : "world-follow-failed") && outcome.Multiplayer.Detail == words.Title + ". " + words.Message,
+                    "the live join presenter forwards the follow's fixed reason before generic transport cancellation");
+                That(started ? outcome.Kind == "session" && outcome.SessionId == "session-a1"
+                    && outcome.Multiplayer.EndReason == "world-follow-failed" : outcome.Kind == "launch" && outcome.Status == "failed",
+                    "live join failure uses the right record and keeps the previous world after cleanup");
+            }
         }
 
         private static void ALaunchedJoinHandsTheRealmItsRequest()

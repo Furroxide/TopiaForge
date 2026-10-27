@@ -67,7 +67,7 @@ namespace TopiaForge.ModManager.Sessions
         /// <paramref name="reads"/> is the status tracker's count of reads, which says whether <paramref name="status"/> was
         /// read after the session began.
         /// </summary>
-        void Follow(InternalLiveStatus status, int version, int reads);
+        void Follow(InternalLiveStatus status, int version, int reads, SessionFollowStatus? follow = null);
 
         /// <summary>
         /// The game closes while this session runs. A live join's own records end it as the player leaving it, since nothing

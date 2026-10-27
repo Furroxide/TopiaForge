@@ -45,6 +45,8 @@ namespace TopiaForge.ModManager.Tests
             LaunchesShowBeforeTheOverlayOpens(root);
             TheOverlayFrameRunsThroughTheGuard(root);
             TheOverlayShowsTheCurrentFailure(root);
+            TheOverlayKeepsLongStepsReadable(root);
+            TheOverlayShowsItsWordsWithoutScrolling(root);
             TheOverlayOffersCancelOnlyWhileItStopsSomething(root);
             NothingLogs(root);
             UiFilesStayWithinTheirCap(root);

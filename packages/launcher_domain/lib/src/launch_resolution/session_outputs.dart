@@ -51,6 +51,7 @@ enum LaunchMultiplayerFailure {
   disconnected,
   directNotAllowed,
   snapshotFailed,
+  worldFollowFailed,
 
   /// The host could not bind its port.
   portInUse,
@@ -82,6 +83,7 @@ enum LaunchMultiplayerFailure {
     disconnected => JoinFailureCode.disconnected,
     directNotAllowed => JoinFailureCode.directNotAllowed,
     snapshotFailed => JoinFailureCode.snapshotFailed,
+    worldFollowFailed => JoinFailureCode.worldFollowFailed,
     portInUse ||
     identityUnavailable ||
     networkStopped ||
@@ -101,7 +103,8 @@ enum LaunchSessionEndReason {
   replaced,
   admissionRejected,
   protocolMismatch,
-  transportFailed;
+  transportFailed,
+  worldFollowFailed;
 
   String get wireName => _kebab(this);
 

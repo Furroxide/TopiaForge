@@ -85,8 +85,14 @@ Future<(LauncherBloc, JoinFailure)> _failAt(
         (state) =>
             _flowOf(bloc)!.join!.replans == 1 && _flowOf(bloc)!.launch != null,
       );
-      repository.report(_activity(state: LaunchSessionState.connecting));
-      await _atStage(bloc, JoinStage.connecting);
+      repository.report(
+        _activity(
+          state: stage == JoinStage.synchronizing
+              ? LaunchSessionState.synchronizing
+              : LaunchSessionState.connecting,
+        ),
+      );
+      await _atStage(bloc, stage);
       repository.report(_activity(failure: failure, detail: 'Changed again.'));
     }
   }
@@ -164,6 +170,46 @@ void registerJoinFailureTests() {
       expect(
         other.state.statusMessage,
         'Robotopia closed, so the session ended.',
+      );
+    });
+
+    test("a follow that fails ends the join in the game's words, even before "
+        'the launcher read the world arriving, or ends the session', () async {
+      // The game settles the join as soon as following fails, which can be
+      // before the launcher has read its synchronizing progress.
+      final (bloc, _, repository) = await _atConsent();
+      bloc.add(_consent(bloc));
+      await _launched(bloc);
+      repository.report(_activity(state: LaunchSessionState.connecting));
+      await _atStage(bloc, JoinStage.connecting);
+      const said = "The host's world could not be loaded. Join again.";
+      repository.report(
+        _activity(
+          state: LaunchSessionState.connecting,
+          failure: LaunchMultiplayerFailure.worldFollowFailed,
+          detail: said,
+        ),
+      );
+      final failure = await _failed(bloc);
+      expect(failure.code, JoinFailureCode.worldFollowFailed);
+      expect(failure.stage, JoinStage.synchronizing);
+      expect(JoinFailureText.of(failure).bodyFor(failure), said);
+
+      final (other, _, again) = await _atConsent();
+      other.add(_consent(other));
+      await _launched(other);
+      again.report(_activity(succeeded: true));
+      await _atStage(other, JoinStage.inSession);
+      again.report(
+        _activity(
+          succeeded: true,
+          ended: LaunchSessionEndReason.worldFollowFailed,
+        ),
+      );
+      await _until(other, (state) => state.multiplayer.join.flow == null);
+      expect(
+        other.state.statusMessage,
+        "Robotopia could not follow the host's world, so it left the session.",
       );
     });
 

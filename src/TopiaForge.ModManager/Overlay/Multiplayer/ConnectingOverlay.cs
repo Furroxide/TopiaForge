@@ -6,13 +6,21 @@ namespace TopiaForge.ModManager.Sessions
     /// <summary>
     /// The connecting overlay: a Paper modal with the join's phase stepper (Resolving, Connecting, Authenticating, Verifying
     /// mods, Loading world, Synchronizing, Spawning), a password field when the session asks, and a failure view with Retry,
-    /// Open launcher and Copy details. Cancel, the close button and ESC all stop a running join; once nothing runs that Cancel
+    /// Open launcher and Copy details. Cancel, the close button and ESC all stop a first join; during a re-follow only Cancel
+    /// leaves, while the close button and ESC hide that attempt's card. Once nothing runs that Cancel
     /// would stop, as while a finished join lingers or a follow waits at the menu, CLOSE takes its place. Its layout is
     /// rebuilt only when it switches between those; otherwise it binds through dirty-checked setters, the failure's own
     /// words included, so a failure that replaces another in the same layout never keeps the earlier one's.
     /// </summary>
     internal sealed class ConnectingOverlay
     {
+        /// <summary>
+        /// The scroll view's height: the seven step rows, the status line and either the password field or a failure's
+        /// heading and two lines of its advice show without scrolling, and the dialog still fits an ultrawide screen at the
+        /// largest UI scale. MultiplayerUiArchitectureTests checks both against the kit's sizes.
+        /// </summary>
+        internal const float ScrollHeight = 420f;
+
         private readonly UiHost host;
         private readonly IConnectingScreen screen;
         private readonly StepperOperations operations = new StepperOperations();
@@ -21,6 +29,7 @@ namespace TopiaForge.ModManager.Sessions
         private TopiaForgeLabel? title;
         private TopiaForgeLabel? status;
         private TopiaForgeContainer? body;
+        private TopiaForgeContainer? actions;
         private TopiaForgeContainer? passwordRow;
         private TopiaForgeInputField? password;
         private TopiaForgeLabel? passwordError;
@@ -65,14 +74,17 @@ namespace TopiaForge.ModManager.Sessions
             var opened = host.Modal.Custom(string.Empty, TopiaForgeScheme.Paper, 680f, persistent: true);
             modal = opened;
             title = opened.Content.Label(screen.Title, TopiaForgeTextStyle.Title).PlainText().Ellipsis();
-            stepper = opened.Content.PhaseStepper(ToArray(screen.StepLabels));
+            var scroll = opened.Content.Scroll(TopiaForgeGap.Sm);
+            scroll.FixedHeight(ScrollHeight);
+            stepper = scroll.Content.VerticalPhaseStepper(ToArray(screen.StepLabels));
             operations.Stepper = stepper;
             appliedVersion = -1;
-            status = opened.Content.Label(string.Empty, TopiaForgeTextStyle.Body).PlainText();
-            body = opened.Content.Column(TopiaForgeGap.Sm);
+            status = scroll.Content.Label(string.Empty, TopiaForgeTextStyle.Body).PlainText();
+            body = scroll.Content.Column(TopiaForgeGap.Sm);
+            actions = opened.Content.Row(TopiaForgeGap.Sm);
             BuildBody();
 
-            // ESC or any other close stops a running join, or dismisses the failure view.
+            // ESC and close dismiss through the presenter: cancel the first join, hide a re-follow or a settled view.
             opened.Closed += () =>
             {
                 if (ReferenceEquals(modal, opened)) modal = null;
@@ -88,6 +100,7 @@ namespace TopiaForge.ModManager.Sessions
         {
             shownShape = Shape();
             host.Clear(body!);
+            host.Clear(actions!);
             passwordRow = null;
             password = null;
             passwordError = null;
@@ -108,8 +121,7 @@ namespace TopiaForge.ModManager.Sessions
                     passwordError = passwordRow.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
                 }
 
-                var actions = body!.Row(TopiaForgeGap.Sm);
-                actions.Spacer().Flex(1f, 0f);
+                actions!.Spacer().Flex(1f, 0f);
 
                 // No CANCEL that cancels nothing: a finished join, or a follow that waits at the menu, closes instead.
                 if (shownShape == 3) actions.Button("CLOSE", screen.Dismiss, TopiaForgeButtonStyle.Outline).Focus();
@@ -121,7 +133,7 @@ namespace TopiaForge.ModManager.Sessions
             failureMessage = body.Label(screen.FailureMessage, TopiaForgeTextStyle.Body).PlainText();
             lines = body.Label(string.Empty, TopiaForgeTextStyle.Caption).PlainText();
             hostSays = body.Label(screen.HostSays, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).PlainText();
-            var buttons = body.Row(TopiaForgeGap.Sm);
+            var buttons = actions!;
             retry = buttons.Button("RETRY", screen.Retry);
             launcher = buttons.Button("OPEN LAUNCHER", screen.OpenLauncher, TopiaForgeButtonStyle.Outline);
             copy = buttons.Button("COPY DETAILS", screen.CopyDetails, TopiaForgeButtonStyle.Ghost);

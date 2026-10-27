@@ -2244,12 +2244,13 @@ the host's: a player resolves its ids against its own packages and never shows a
   world the host left behind is disposed before the next one loads. After the join, the host's next world replaces the
   one followed, as a launch replaces a session, and the player is told "Back in the host's world." once it runs.
 - **Straying.** At rest the follower checks that the game is still in the host's world. A native load that took it
-  elsewhere, such as a level exit or the game's own load buttons, follows the host again, eight times in a join at most;
+  elsewhere, such as a level exit or the game's own load buttons, follows the host again, eight different-level corrections in a join at most;
   the next one ends the join as "Your game keeps leaving the host's world". A return to the main menu by itself leaves
   the session, with "You returned to the main menu, so you left the session."
   A followed world uses this rule even when its gamemode keeps its controller across scene changes. Native levels
-  are tracked by scene instance as well as name, so a restart into the same named level is a correction too; duplicate
-  events for the same instance are ignored. A native load while waiting at the host's menu, or at the fallback menu
+  are tracked by scene instance as well as name, so a restart into the same named level rebuilds the world too but
+  does not spend the different-level allowance; duplicate events for the same instance are ignored. This also applies
+  to keep-controller worlds. A native load while waiting at the host's menu, or at the fallback menu
   for an unavailable level, returns to that menu under the same eight-correction bound without retrying the missing level.
 - **Busy.** A follow the orchestrator turns away while another operation or native change runs is tried again every
   quarter second, for 30 seconds at most.
@@ -2259,6 +2260,11 @@ the host's: a player resolves its ids against its own packages and never shows a
   a kick or a ban, the follow on its way is cancelled, the hold and the grant are released, and a game that followed the
   host returns to the main menu once that follow has ended. The player's own return to the menu loads no second one,
   and neither does shutdown.
+  Cancel always leaves. During the first join, Escape and the close button also cancel once and keep the card closed
+  even if the cancelled operation later fails. During a re-follow they only hide that attempt's card; the follow and
+  the session continue. Cleanup after cancellation still waits for provider callbacks and native work to drain;
+  a provider that ignores cancellation can delay the menu. Replacing its scene earlier would violate the lifecycle's
+  ownership contract.
 
 ### The orchestrator's follow
 
@@ -2333,9 +2339,11 @@ request.
 - **Where it lands.** For the launched join, the runtime's publisher moves the records' phase under the join's block:
   while the join synchronizes, its own phase stands; once it is in session, the launch succeeds at Running with the
   host's world session; the host's next world moves the phase on; and a followed world's end is withheld, since the
-  join's end is the provider's ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md), sections 4, 5 and 8). A
+  join's end comes from the provider or a failed follow ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md), sections 4, 5 and 8). A
   live join's records take the same progress under its join id, through
   `IMultiplayerSessionEnvironment.SubscribeSessionProgress`, by the same rules, until they end.
+  A follow failure under that request writes `world-follow-failed` with its fixed title and advice, before a generic
+  transport leave can replace the cause. After joining, its terminal record retains the last followed world id.
 - **Nothing else.** A follow of a join started in game publishes nothing to the launcher, neither progress nor an end,
   from its start to its end.
 
@@ -2352,12 +2360,24 @@ request.
 
 ### The connecting overlay
 
+The seven steps use full-width vertical rows of equal height, with the active detail beneath its label. Progress and
+long failure advice sit in a bounded scroll view; Cancel and Close remain outside it. By the kit's sizes the view holds
+the steps, the status line and either the password field or a failure's heading with two lines of advice without
+scrolling, and the dialog still fits a 3440x1440 screen at the largest UI scale. The layout keeps the load's
+`(1/2)` and `(2/2)` suffixes out of the former narrow columns; the rendered result still needs the desktop checks.
+
 While a join synchronizes, the follow's stages fill the stepper's last three steps with this game's own lines: Loading
 world ("Getting your mods ready", "Loading the host's world", or for an arena "Loading the host's level (1/2)" and then
 "Building the host's arena (2/2)"), Synchronizing ("Receiving the world", then n/m as the network world reports it) and
 Spawning ("Starting your controls"). A join the follow ends shows the follow's failure, with RETRY where joining again
 can help. After the join, a change of worlds or a return to the host's world shows "Following the host", with the first
-four steps done, and its Cancel leaves the session. RETRY of a LAN join this game no longer hears, as once BROWSE has
+four steps done, and its Cancel leaves the session. I use the follower's `IsRefollow` flag to distinguish this from the
+first join, even when the first join's card has not closed yet. Escape and the title-bar close hide the card for that
+re-follow, across progress updates and retries of the same announcement. A separate re-follow serial advances on a
+host world change or a native correction, so the next attempt shows again even if the overlay missed the arrival
+between frames. A hidden attempt that fails still shows its failure words and actions. The kit's modal dismiss stack
+consumes that Escape before the game's pause menu can use it; real-input confirmation remains an in-game check.
+RETRY of a LAN join this game no longer hears, as once BROWSE has
 stopped listening, listens on the local network for the host first, for 15 seconds at most, and a host no longer there
 ends the join as "Session not found" in words that say so. BROWSE, the overlay and a launched join share one browser:
 each releases only its own share, so Cancel or a closed tab cannot stop another join's search. The last release stops
@@ -2391,10 +2411,13 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     holds release, with no progress for a world that does not arrive; the host moving on mid-follow and after the join;
     leaving while the world loads; a failure in its own words with a scrubbed log; both of #224's rules; levels and the
     menu, the host's menu toasted and waited at with its line, and a level this game cannot load waited at as
-    `LevelUnavailable` with its own; straying, the eight re-follows and the menu; the player's own way out;
-    shutdown; unreadable announcements; the failure words; a launched join's follows reporting under its request, an
+    `LevelUnavailable` with its own; straying, the eight re-follows and the menu, and eleven restarts of the same level,
+    native and keep-controller, that spend none of them; the player's own way out; shutdown; unreadable announcements;
+    the failure words; a launched join's follows reporting under its request, its follow status included, an
     in-game join's nothing; a busy game tried again and given up on after 30 seconds; and a world not found looked for
-    once before the join ends. `SessionFollowWireTests`: round trips and every refusal.
+    once before the join ends. Initial follows, including host replacements before first arrival, stay first joins;
+    host changes and same-level restarts each get one re-follow serial, stable across busy retries.
+    `SessionFollowWireTests`: round trips and every refusal.
   - `SessionFollowHostTests`: what a host announces, an arena's level and spawn, a full window caught up, and at rest
     sending and allocating nothing.
   - `MultiplayerSessionsTests`: the overlay's follow steps and failures, "Following the host", a launched join handing
@@ -2408,11 +2431,17 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
     load shown with Loading world not done and nothing to cancel, after a follow and at a join's end, until it is
     closed, the player leaves or the host's next world takes it over; and MULTIPLAYER and SESSION saying why a joined
     game waits at the menu, from the follow alone, until it follows the host's next world or leaves, a settled frame of
-    it allocating nothing. `MultiplayerUiArchitectureTests` reads the connecting overlay's source as C#: it binds the
+    it allocating nothing. Dismissing a re-follow before, during or after the first join card's linger hides only that
+    attempt, through progress and retries; its failure still shows its words and actions, and the next attempt shows
+    even without an intervening presenter frame. CANCEL still leaves once; Escape, close and CANCEL on a first join
+    still cancel once and suppress late failures. `MultiplayerUiArchitectureTests` reads the connecting overlay's
+    source as C#: Escape and close route to Dismiss while CANCEL routes to Cancel; it binds the
     failure's words on every frame, offers CANCEL only while Cancel stops something and CLOSE otherwise, by its own
-    layout expression for every combination, and builds its body again whenever the layout changes.
+    layout expression for every combination, builds its body again whenever the layout changes, and sizes its scroll
+    view, by the kit's sizes, to show a failure's advice or the password field beside the steps without scrolling.
     `SessionLaunchRecordsTests`: a launched join's records over the real orchestrator and publisher, with its follow
-    under its request.
+    under its request, and a failed follow's fixed words before and after the join, kept over a later transport leave
+    and never taken from another join's follow.
 - **ModRuntime harness** (`--follow-case follow`, in a fresh process): two real runtimes over the loopback network,
   loading the one installed package, whose gamemode gives every player a participant. The host opens its game to other
   players and starts the package's target; the player joins from its menu, runs the host's world under the host's
@@ -2451,7 +2480,10 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
 
 - **A level outside a session** is loaded by its scene name with no session, as the host has none, so only what the
   network world replicates is shared there.
-- **Eight re-follows in a join.** A game that keeps leaving the host's world more often than that leaves the session.
+- **Eight different-level re-follows in a join.** A game that keeps leaving the host's world for another level more
+  often than that leaves the session. A restart is told apart only by its scene name, so a load of another level built
+  in the same scene, or a mod that keeps reloading the level, never counts: the follower rebuilds the host's world each
+  time.
 - **The level loader is the game's.** `CoreGameplayServices.LoadLevelAsync` is checked only in the game.
 
 ### Choices

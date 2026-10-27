@@ -86,7 +86,17 @@ void main() {
       JoinFailureCode.directNotAllowed,
     },
     JoinStage.synchronizing: {
+      // A link is not admission: the host can refuse it or remove the
+      // player before the world arrives, including after content changes.
+      JoinFailureCode.timeout,
+      JoinFailureCode.serverFull,
+      JoinFailureCode.passwordRejected,
+      JoinFailureCode.kicked,
+      JoinFailureCode.protocolMismatch,
+      JoinFailureCode.admissionChanged,
       JoinFailureCode.snapshotFailed,
+      // Following the host's world fails only once the link is up.
+      JoinFailureCode.worldFollowFailed,
       JoinFailureCode.disconnected,
     },
     JoinStage.inSession: {},
