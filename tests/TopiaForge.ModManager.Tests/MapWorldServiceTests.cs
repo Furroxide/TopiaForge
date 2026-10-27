@@ -13,11 +13,17 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task AuthoredReadinessAsync()
         {
+            var owned = Directory.CreateTempSubdirectory("map-service-");
+            try { await AuthoredReadinessAsync(owned.FullName); }
+            finally { owned.Delete(true); }
+        }
+        private static async Task AuthoredReadinessAsync(string root)
+        {
             foreach (var cancel in new[] { false, true })
             {
                 using var failedFixture = Fixture(); using var cancellation = new CancellationTokenSource();
                 var failedBackend = new Backend { ThrowIndex = !cancel, OnIndex = cancel ? cancellation.Cancel : null };
-                using var failedService = Service(failedBackend);
+                using var failedService = Service(root, failedBackend);
                 var failed = await failedService.LoadAsync(failedFixture, Request(), cancellation.Token);
                 Assert(failed.ErrorCode == (cancel ? ModErrorCode.Cancelled : ModErrorCode.External),
                     "index failure and cancellation refuse readiness with their proper result");
@@ -25,7 +31,7 @@ namespace TopiaForge.ModManager.Tests
                     "index failure and cancellation clean up before player placement");
                 if (cancel) Assert(!failedBackend.Map!.IsAlive, "cancelled index cannot stay live");
             }
-            using var fixture = Fixture(); var backend = new Backend(); using var service = Service(backend);
+            using var fixture = Fixture(); var backend = new Backend(); using var service = Service(root, backend);
             var pending = service.LoadAsync(fixture, Request(), default);
             Assert(!pending.IsCompleted && backend.Map != null, "authored index exists while native readiness is pending");
             backend.MapAlive = false;
