@@ -2893,8 +2893,11 @@ to 32 and retired after playback ends or two seconds (the current framework synt
 presentation only from its authenticated host, validates the whole baseline before applying it, rejects interactive
 HUD nodes, and renders received strings through the existing plain-text UI receiver. A refused local HUD render is
 retried at most once a second from the bounded latest state, without asking the author to resend. Incoming traffic is bounded
-independently of host-side limits. Disconnect clears remote HUDs and audio. This does not change microphone consent,
-voice transport, targeted UI authorization or the Players API's optional-mod and input-tick limitations.
+independently of host-side limits. The same bounded latest state recreates a lost guest canvas, including a hidden
+one; a lost host canvas retires its shared slot. Visibility callbacks preserve their most recent author write, and
+solo HUDs that exceed the shared bounds retain local Show/Hide after promotion. Disconnect clears remote HUDs and
+audio. This does not change microphone consent, voice transport, targeted UI authorization or the Players API's
+optional-mod and input-tick limitations.
 
 ### Tests and cost contract
 

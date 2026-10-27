@@ -79,10 +79,13 @@ opens to players. Windows, tools and modals remain on the host; use `IPlayer.Ui`
 confirmation. Participant and ordinary process UI stays local.
 
 Shared HUDs allow 32 surfaces and 28 KiB of encoded content in total, with text fields up to 4,096 characters and
-dimensions from 80 by 80 to 1,920 by 1,440 scaled units. Oversized solo HUDs continue locally when hosting begins.
+dimensions from 80 by 80 to 1,920 by 1,440 scaled units. Oversized solo HUDs continue locally when hosting begins,
+including Show/Hide even when no shared slot is available.
 Online calls that exceed the shared limits fail without replacing the previous content. Guests receive the latest
 HUD and active audio loops on join or reconnect; old toasts and one-shot cues are not replayed. Scope disposal removes
-its HUDs and stops its loops. Guest text is displayed literally, and shared HUDs cannot capture input or run callbacks.
+its HUDs and stops its loops. A destroyed host canvas retires its mirror; a destroyed guest canvas is recreated from
+the latest state within the once-per-second retry cadence. Guest text is displayed literally, and shared HUDs cannot
+capture input or run callbacks.
 
 See [presentation routing](internal/MultiplayerRuntimeIntegration.md#scoreboard-seam-and-later-presentation) for
 the budgets and transport behavior.

@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager
         private string body;
         private UiNode? content;
         private bool shown = true, disposed;
+        private ulong revision;
         internal byte[]? Payload;
         internal IDisposable? Tracking;
         internal int Bytes => (Payload?.Length ?? 0) + 4;
@@ -42,6 +43,7 @@ namespace TopiaForge.ModManager
         }
         public string Id => inner.Id;
         public bool IsVisible => !disposed && inner.IsVisible;
+        internal bool IsAlive => !disposed && MultiplayerPresentation.SurfaceAlive(inner);
         public event Action? Dismissed
         {
             add { if (inner is IUiSurfaceDismissalSource source) source.Dismissed += value; }
@@ -54,21 +56,30 @@ namespace TopiaForge.ModManager
         }
         public void Show()
         {
-            RequireActive();
-            if (shown) { inner.Show(); return; }
-            var payload = Encode(body, content, true);
-            if (!shown && !owner.Change(this, payload, false)) throw TooLarge();
-            inner.Show();
-            if (!disposed && !shown) { shown = true; owner.Change(this, payload); }
+            SetVisible(true);
         }
         public void Hide()
         {
+            SetVisible(false);
+        }
+        private void SetVisible(bool visible)
+        {
             RequireActive();
-            if (!shown) { inner.Hide(); return; }
-            var payload = Encode(body, content, false);
-            if (shown && !owner.Change(this, payload, false)) throw TooLarge();
-            inner.Hide();
-            if (!disposed && shown) { shown = false; owner.Change(this, payload); }
+            if (shown == visible) { if (visible) inner.Show(); else inner.Hide(); return; }
+            var payload = Encode(body, content, visible);
+            // A solo HUD outside the shared bounds still owns a fully usable local surface.
+            if (!owner.ChangeVisibility(this, payload, false)) throw TooLarge();
+            var previous = shown;
+            var operation = ++revision;
+            shown = visible;
+            try { if (visible) inner.Show(); else inner.Hide(); }
+            catch
+            {
+                if (!disposed && revision == operation) shown = previous;
+                throw;
+            }
+            // Dismissed may reopen, rewrite or dispose this surface. Its newer state wins.
+            if (!disposed && revision == operation) owner.ChangeVisibility(this, payload);
         }
         public void SetBody(string value)
         {
@@ -77,7 +88,7 @@ namespace TopiaForge.ModManager
             var payload = Encode(value, content, shown);
             if (!owner.Change(this, payload, false)) throw TooLarge();
             inner.SetBody(value);
-            if (!disposed) { body = value; owner.Change(this, payload); }
+            if (!disposed) { body = value; revision++; owner.Change(this, payload); }
         }
         public OperationResult<bool> SetContent(UiNode value)
         {
@@ -89,7 +100,7 @@ namespace TopiaForge.ModManager
             if (owner.Hosting && payload == null) return MultiplayerPresentation.Limit<bool>();
             if (!owner.Change(this, payload, false)) return MultiplayerPresentation.Limit<bool>();
             var result = inner.SetContent(value);
-            if (result.Succeeded && !disposed) { content = value; owner.Change(this, payload); }
+            if (result.Succeeded && !disposed) { content = value; revision++; owner.Change(this, payload); }
             return result;
         }
         public void Dispose()

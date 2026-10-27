@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager
         private TokenBucket incomingBaselines = new TokenBucket(10, 10, 0);
         private ulong receivedVersion;
         private readonly List<ulong> removed = new List<ulong>();
-        private List<HudState>? retryHuds;
+        private List<HudState>? latestHuds;
         private long retryAt;
 
         internal bool Receive(ParticipantId sender, byte kind, WorldWireReader r)
@@ -55,10 +55,8 @@ namespace TopiaForge.ModManager
             removed.Clear();
             foreach (var entry in received) if (!tokens.Contains(entry.Key)) removed.Add(entry.Key);
             for (var i = 0; i < removed.Count; i++) { received[removed[i]].Surface.Dispose(); received.Remove(removed[i]); }
-            retryHuds = null;
-            var complete = true;
-            for (var i = 0; i < updates.Count; i++) complete &= TryApply(updates[i]);
-            if (!complete) { retryHuds = updates; retryAt = Now + 1_000_000; }
+            for (var i = 0; i < updates.Count; i++) updates[i].Retry = !TryApply(updates[i]);
+            latestHuds = updates; retryAt = Now + 1_000_000;
             ApplyLoops(audio);
             receivedVersion = next;
             return true;
@@ -66,12 +64,18 @@ namespace TopiaForge.ModManager
 
         internal void RetryReceived()
         {
-            if (retryHuds == null || Now < retryAt) return;
-            var complete = true;
-            for (var i = 0; i < retryHuds.Count; i++) complete &= TryApply(retryHuds[i]);
-            if (complete) retryHuds = null;
+            if (latestHuds == null || Now < retryAt) return;
+            for (var i = 0; i < latestHuds.Count; i++)
+            {
+                var state = latestHuds[i];
+                if (state.Retry || !received.TryGetValue(state.Token, out var current) || !SurfaceAlive(current.Surface))
+                    state.Retry = !TryApply(state);
+            }
             retryAt = Now + 1_000_000;
         }
+
+        internal static bool SurfaceAlive(IUiSurface surface) =>
+            !(surface is IPresentationSurfaceState state) || state.IsAlive;
 
         private bool TryApply(HudState state)
         {
@@ -83,6 +87,10 @@ namespace TopiaForge.ModManager
         private bool Apply(HudState state)
         {
             var request = state.Request;
+            if (received.TryGetValue(state.Token, out var lost) && !SurfaceAlive(lost.Surface))
+            {
+                lost.Surface.Dispose(); received.Remove(state.Token);
+            }
             if (!received.TryGetValue(state.Token, out var current))
             {
                 var ui = Receiver.Ui;
@@ -103,7 +111,7 @@ namespace TopiaForge.ModManager
         private void ClearReceived()
         {
             foreach (var hud in received.Values) hud.Surface.Dispose();
-            received.Clear(); receivedVersion = 0; retryHuds = null;
+            received.Clear(); receivedVersion = 0; latestHuds = null;
             incomingBytes = new TokenBucket(128 * 1024, 64 * 1024, Now);
             incomingCount = new TokenBucket(32, 20, Now);
             incomingBaselines = new TokenBucket(10, 10, Now);
@@ -120,6 +128,7 @@ namespace TopiaForge.ModManager
             internal readonly ulong Token;
             internal readonly UiSurfaceRequest Request;
             internal readonly bool Visible;
+            internal bool Retry;
             internal HudState(ulong token, UiSurfaceRequest request, bool visible) { Token = token; Request = request; Visible = visible; }
         }
     }

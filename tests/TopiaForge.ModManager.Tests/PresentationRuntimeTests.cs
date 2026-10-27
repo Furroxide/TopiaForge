@@ -20,7 +20,8 @@ namespace TopiaForge.ModManager.Tests
             RestingPresentationAllocatesNothing();
             BoundsAndLifetime();
             ExactContextScopes();
-            Console.WriteLine("PresentationRuntimeTests: 9 groups passed.");
+            ReviewRegressions();
+            Console.WriteLine("PresentationRuntimeTests: 20 groups passed.");
         }
 
         private static void RoutesAndPromotes()

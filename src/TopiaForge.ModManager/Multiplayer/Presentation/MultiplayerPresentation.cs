@@ -77,11 +77,14 @@ namespace TopiaForge.ModManager
             surfaceBytes -= hud.Bytes; version++;
         }
 
+        internal bool ChangeVisibility(MirroredHudPresenter hud, byte[]? payload, bool commit = true) =>
+            !surfaces.Contains(hud) || Change(hud, payload, commit);
+
         internal void Send()
         {
             if (!Hosting) return;
             for (var i = surfaces.Count - 1; i >= 0; i--)
-                if (surfaces[i].Context.Lifetime.IsStopping) surfaces[i].Dispose();
+                if (surfaces[i].Context.Lifetime.IsStopping || !surfaces[i].IsAlive) surfaces[i].Dispose();
             ReconcileAudio();
             if (coalescer.Offer(version, Now) == HudMirrorDecision.SendNow || coalescer.TryFlush(Now, out _))
                 PublishBaseline();

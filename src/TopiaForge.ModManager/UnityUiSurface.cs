@@ -8,7 +8,7 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class OwnerUiService
     {
-        private sealed partial class UnityUiSurface : IUiSurface, IUiSurfaceDismissalSource
+        private sealed partial class UnityUiSurface : IUiSurface, IUiSurfaceDismissalSource, IPresentationSurfaceState
         {
             private TopiaForgeWidget? widget;
             private TopiaForgeWindow? window;
@@ -75,6 +75,8 @@ namespace TopiaForge.ModManager
             internal bool FollowsGameplay => presence.FollowsGameplay;
 
             public bool IsVisible => presence.IsVisible;
+
+            bool IPresentationSurfaceState.IsAlive => presence.IsLive;
 
             public event Action? Dismissed;
 
