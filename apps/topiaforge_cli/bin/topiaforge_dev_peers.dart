@@ -29,12 +29,14 @@ extension _TopiaForgeDevPeers on _TopiaForgeCli {
     final sessions = <DevPeerSession>[];
     final handles = <DevPeerHandle>[];
     final stopped = Completer<void>();
+    final cancellation = CancellationToken();
     String? runRoot;
     StreamSubscription<ProcessSignal>? signal;
     var cancelled = false;
     try {
       signal = ProcessSignal.sigint.watch().listen((_) {
         cancelled = true;
+        cancellation.cancel();
         if (!stopped.isCompleted) stopped.complete();
       });
       final source = await discovery.detectKnownInstall();
@@ -50,16 +52,26 @@ extension _TopiaForgeDevPeers on _TopiaForgeCli {
         (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
       ).join();
       await _runDevStage(_DevStage.overlays, () async {
-        final peers = await overlays.create(source.path, count);
+        final peers = await overlays.create(
+          source.path,
+          count,
+          cancellation: cancellation,
+        );
         runRoot = overlays.runRoot(peers.first);
         final packages = await _packAllMods(
           outputDir: p.join(runRoot!, 'packages'),
           configuration: configuration,
+          cancellation: cancellation,
         );
         packages.add(packagePath);
         for (final peer in peers) {
           if (cancelled) return;
-          final session = DevPeerSession(peer, runId, repoRoot);
+          final session = DevPeerSession(
+            peer,
+            runId,
+            repoRoot,
+            cancellation: cancellation,
+          );
           sessions.add(session);
           handles.add(
             DevPeerHandle(
@@ -145,6 +157,9 @@ extension _TopiaForgeDevPeers on _TopiaForgeCli {
         });
       }
       return cancelled ? 130 : 0;
+    } on _DevStageFailure {
+      if (cancelled) return 130;
+      rethrow;
     } finally {
       if (!stopped.isCompleted) stopped.complete();
       await signal?.cancel();

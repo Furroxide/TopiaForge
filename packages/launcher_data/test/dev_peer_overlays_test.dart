@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('peer requests satisfy V5 and keep local transport private', () async {
-    for (final count in [2, 8]) {
+    for (var count = 2; count <= 8; count++) {
       final session = DevPeerSession(
         const DevPeerOverlay(0, 'unused-game', 'unused-data'),
         'a' * 32,
@@ -171,6 +171,31 @@ void main() {
     }
     expect(overlays.root.existsSync(), isFalse);
   });
+
+  test(
+    'eight quoted overlays preserve shared data and cancelled setup creates nothing',
+    () async {
+      final token = CancellationToken()..cancel();
+      await expectLater(
+        overlays.create(source.path, 8, cancellation: token),
+        throwsA(isA<OperationCancelledException>()),
+      );
+      expect(overlays.root.existsSync(), isFalse);
+      source = source.renameSync(p.join(temporary.path, "source ['& café]"));
+      overlays = DevPeerOverlays(p.join(temporary.path, "developer ['& café]"));
+      final peers = await overlays.create(source.path, 8);
+      expect(peers.map((peer) => peer.gameRoot).toSet(), hasLength(8));
+      expect(peers.map((peer) => peer.launcherRoot).toSet(), hasLength(8));
+      overlays.cleanup(overlays.runRoot(peers.first));
+      expect(
+        File(
+          p.join(source.path, 'Robotopia_Data', 'sentinel'),
+        ).readAsStringSync(),
+        'shared',
+      );
+    },
+    skip: Platform.isMacOS,
+  );
 
   test('partial setup failure removes its owned run', () async {
     File(p.join(source.path, 'UnityPlayer.dll')).deleteSync();

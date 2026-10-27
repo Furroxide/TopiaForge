@@ -70,6 +70,11 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
         '--peers owns its processes until Ctrl+C; omit --no-launch and --no-wait.',
       );
     }
+    if (peers != null && !Platform.isWindows) {
+      throw UsageError(
+        '--peers currently requires Windows process ownership support. No peer was started.',
+      );
+    }
 
     try {
       final workspace = await _runDevStage(_DevStage.restore, () async {

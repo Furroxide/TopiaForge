@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
 /// One private game and launcher root. Native game content is shared read-only
@@ -22,7 +23,12 @@ final class DevPeerOverlays {
   final Set<String> _owned = {};
   String? _identity;
 
-  Future<List<DevPeerOverlay>> create(String sourceGame, int count) async {
+  Future<List<DevPeerOverlay>> create(
+    String sourceGame,
+    int count, {
+    CancellationToken? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
     if (count < 2 || count > 8) {
       throw ArgumentError('Use from 2 through 8 development peers.');
     }
@@ -38,6 +44,7 @@ final class DevPeerOverlays {
     final peers = <DevPeerOverlay>[];
     try {
       for (var index = 0; index < count; index++) {
+        cancellation?.throwIfCancelled();
         final peer = Directory(p.join(run.path, 'peer-$index'))..createSync();
         final game = Directory(
           p.join(peer.path, Platform.isMacOS ? 'Robotopia.app' : 'game'),
@@ -88,6 +95,7 @@ final class DevPeerOverlays {
               );
             }
             await createDevDirectoryLink(p.join(game.path, name), target.path);
+            cancellation?.throwIfCancelled();
           }
         }
         final launcher = Directory(p.join(peer.path, 'launcher'))..createSync();
@@ -179,7 +187,7 @@ Future<void> createDevDirectoryLink(String link, String target) async {
       '-WindowStyle',
       'Hidden',
       '-Command',
-      r'New-Item -ItemType Junction -Path $env:TOPIAFORGE_DEV_LINK -Target $env:TOPIAFORGE_DEV_TARGET -ErrorAction Stop | Out-Null',
+      r'New-Item -ItemType Junction -Path $env:TOPIAFORGE_DEV_LINK -Target ([WildcardPattern]::Escape($env:TOPIAFORGE_DEV_TARGET)) -ErrorAction Stop | Out-Null',
     ],
     environment: {'TOPIAFORGE_DEV_LINK': link, 'TOPIAFORGE_DEV_TARGET': target},
   );

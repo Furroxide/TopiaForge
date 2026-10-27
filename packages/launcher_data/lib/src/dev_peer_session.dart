@@ -12,16 +12,24 @@ import 'multiplayer/descriptor_client.dart';
 
 /// Owns one process receipt and its isolated repository throughout a dev run.
 final class DevPeerSession {
-  DevPeerSession(this.overlay, this.runId, String repositoryRoot)
-    : repository = LocalLauncherRepository(
-        dataRoot: overlay.launcherRoot,
-        knownGamePath: overlay.gameRoot,
-        repositoryRoot: repositoryRoot,
-      );
+  DevPeerSession(
+    this.overlay,
+    this.runId,
+    String repositoryRoot, {
+    LocalLauncherRepository? repository,
+    this.cancellation,
+  }) : repository =
+           repository ??
+           LocalLauncherRepository(
+             dataRoot: overlay.launcherRoot,
+             knownGamePath: overlay.gameRoot,
+             repositoryRoot: repositoryRoot,
+           );
 
   final DevPeerOverlay overlay;
   final String runId;
   final LocalLauncherRepository repository;
+  final CancellationToken? cancellation;
   GameInstall? _install;
   LauncherProfile? _profile;
   LaunchResult? _launch;
@@ -32,12 +40,14 @@ final class DevPeerSession {
     String modId,
     LaunchSelection? selection,
   ) async {
+    cancellation?.throwIfCancelled();
     final install = await repository.detectKnownInstall();
     if (install == null) {
       throw StateError(
         'The development game overlay is incomplete. Repair the source installation.',
       );
     }
+    cancellation?.throwIfCancelled();
     final repair = await repository.installOrRepairRuntime(install);
     if (!repair.ok) {
       throw StateError(
@@ -45,8 +55,10 @@ final class DevPeerSession {
       );
     }
     for (final package in packages) {
+      cancellation?.throwIfCancelled();
       await repository.installPackage(package, install);
     }
+    cancellation?.throwIfCancelled();
     final snapshot = await repository.loadSnapshot();
     final enabled = <String>{
       if (source.inheritManagerModState)
@@ -112,6 +124,12 @@ final class DevPeerSession {
   }
 
   Future<void> launch(int count, {LaunchSessionTarget? target}) async {
+    cancellation?.throwIfCancelled();
+    if (!Platform.isWindows) {
+      throw UnsupportedError(
+        'Development peers require Windows process creation receipts. No peer was started.',
+      );
+    }
     final request = requestFor(count, target: target);
     final result = await repository.launchSession(
       _install!,
@@ -162,16 +180,28 @@ final class DevPeerSession {
   }
 
   Future<bool?> isAlive() async => _launch?.process == null
-      ? false
+      ? (_launch?.processStarted == true ? null : false)
       : isLaunchProcessAlive(_launch!.process!);
 
   Future<bool> isReady() async {
     final request = _launch?.requestId;
     if (request == null) return false;
-    final progress = await LaunchStagingStore(
-      overlay.gameRoot,
-    ).readProgress(request);
+    final store = LaunchStagingStore(overlay.gameRoot);
+    final outcome = await store.readOutcome(request, session: false);
+    final ended = await store.readOutcome(request, session: true);
+    if (ended != null || (outcome != null && outcome.status != 'succeeded')) {
+      throw StateError(
+        'The development peer reported a failed, cancelled or ended session. Inspect its log and retry.',
+      );
+    }
+    final progress = await store.readProgress(request);
     final state = progress?.session?.state;
+    if (state == LaunchSessionState.stopped ||
+        state == LaunchSessionState.ended) {
+      throw StateError(
+        'The development peer session ended before startup completed.',
+      );
+    }
     return state == LaunchSessionState.hosting ||
         state == LaunchSessionState.inSession;
   }
@@ -215,6 +245,7 @@ final class DevPeerSession {
       port,
       allowDirect: false,
       expectedServerId: decoded['serverId'] as String,
+      cancellation: cancellation,
     );
     if (fetched is! DescriptorFetched) return null;
     final descriptor = fetched.descriptor;
@@ -236,6 +267,11 @@ final class DevPeerSession {
   Future<void> close() async {
     try {
       final process = _launch?.process;
+      if (_launch?.processStarted == true && process == null) {
+        throw StateError(
+          'A started peer has no ownership receipt; its files are retained for manual cleanup.',
+        );
+      }
       if (process != null) {
         final alive = await isLaunchProcessAlive(process);
         if (alive == null) {

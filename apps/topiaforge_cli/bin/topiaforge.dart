@@ -320,6 +320,7 @@ class _TopiaForgeCli {
     String outputDir = '',
     String configuration = 'Release',
     bool includeDevMods = false,
+    CancellationToken? cancellation,
   }) async {
     final repoRoot = _findRepoRoot();
     if (repoRoot == null) {
@@ -348,6 +349,7 @@ class _TopiaForgeCli {
     }
     final packed = <String>[];
     for (final dir in projectDirs) {
+      cancellation?.throwIfCancelled();
       final manifest = readBoundedJsonObjectSync(
         File(p.join(dir, 'topiaforge.mod.json')),
         maxBytes: CliFileLimits.manifest,

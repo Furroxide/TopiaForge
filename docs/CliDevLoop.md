@@ -89,8 +89,12 @@ multiplayer target or a profile that already selects one. Peer 0 hosts on an aut
 port; the others join its verified descriptor over `127.0.0.1`. Discovery, Internet
 services, router forwarding, voice and package serving are disabled for this loop.
 
+The command currently requires Windows, where original process creation receipts
+allow owned teardown. Linux and macOS refuse before preparation or process creation;
+their process ownership and native acceptance remain pending. The overlay helper
+uses Linux symlinks and macOS APFS clones for future platform qualification.
 Windows copies the executable and Unity player and junctions the large data and Mono
-directories. Linux uses symlinks; macOS requires APFS clones. Each peer has its own
+directories. Each peer has its own
 BepInEx, launcher data and `-logFile` destination. Windowed arguments request 2560x1440;
 Robotopia may override them through its native preferences, which this command does
 not edit. Linux/Proton data-root conversion and macOS clone behavior still need platform
@@ -99,7 +103,9 @@ verification. Native game preferences remain shared by the operating system.
 `--peers` explicitly launches even with redirected output and cannot combine with
 `--no-launch` or `--no-wait`. `--no-tail` hides streaming output but still reports a crash
 with its last log lines. Ctrl+C stops every process owned by the run before cleanup.
-An unconfirmed process keeps its directory for manual recovery. Cleanup accepts only
+An unconfirmed process, including a started process with no receipt, keeps its directory
+for manual recovery. Failed or cancelled startup outcomes stop waiting immediately,
+and Ctrl+C cancels a pending descriptor fetch. Cleanup accepts only
 the unchanged, owned run below `dev-instances`, removing directory links first.
 The stages print elapsed milliseconds; initial host and join confirmation each allow
 two minutes. The source installation is never installed into by this peer command.

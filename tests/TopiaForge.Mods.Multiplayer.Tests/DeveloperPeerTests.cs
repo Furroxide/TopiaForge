@@ -49,6 +49,7 @@ internal static class DeveloperPeerTests
         That(settings.LocalDevelopmentPeers && !settings.AllowDirect && !settings.MapPorts && !settings.Voice && !settings.ServePackages,
             "local development cannot enable publication, forwarding, voice or package serving");
         Console.WriteLine("Development peers: socket binding, discovery refusal, resolver isolation and host privacy passed.");
+        DeveloperPeerSocketTests.Run();
     }
 
     private static object Field(object value, string name) => value.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(value)!;
