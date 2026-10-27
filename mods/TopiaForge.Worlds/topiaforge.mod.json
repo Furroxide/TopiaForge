@@ -87,6 +87,24 @@
           "kind": "provider-default"
         },
         "openToAnyCompatible": true
+      },
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.map",
+        "name": "Saved Published Maps",
+        "description": "Saved public map scenes, downloaded on play and cached for offline use.",
+        "content": {
+          "kind": "discovered",
+          "implementation": {
+            "type": "TopiaForge.Worlds.PublishedMapDiscoverySource"
+          }
+        },
+        "transitions": [
+          "scene-replacement"
+        ],
+        "spawn": {
+          "kind": "provider-default"
+        },
+        "openToAnyCompatible": true
       }
     ],
     "gamemodes": [

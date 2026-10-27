@@ -62,6 +62,7 @@ part 'topiaforge_update_commands.dart';
 part 'topiaforge_ui_bundle_commands.dart';
 part 'topiaforge_unity_commands.dart';
 part 'topiaforge_world_commands.dart';
+part 'topiaforge_map_source_commands.dart';
 part 'topiaforge_map_commands.dart';
 part 'topiaforge_map_survey_commands.dart';
 

@@ -226,6 +226,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
         await entry.value.dispose();
         _launchMonitors.remove(entry.key);
       }
+      await _stagePublishedMapSources(current);
       final started = await _startGame(
         current,
         profile,

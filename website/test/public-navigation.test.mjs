@@ -22,6 +22,19 @@ test('creator guides are published and discoverable in the public sidebar', () =
   assert.match(configSource, /slug: 'guides\/sandbox'/u);
 });
 
+test('saved map guidance is published and discoverable for players', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]));
+  const route = sourceToRoute.get('docs/CreatorCloud.md');
+  assert.equal(route, '/guides/saved-published-maps/');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const source = readFileSync(new URL('../../docs/MapWorlds.md', import.meta.url), 'utf8');
+  assert.ok(links.rewrite('docs/MapWorlds.md', source).includes(`](${route})`));
+  assert.deepEqual(failures, []);
+  assert.match(configSource, /label: 'Play',[\s\S]*?slug: 'guides\/saved-published-maps'/u);
+});
+
 test('map world guidance connects manifest and diagnostics links to the author sidebar', () => {
   const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
   const sourceToRoute = new Map(

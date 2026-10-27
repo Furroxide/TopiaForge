@@ -18,9 +18,9 @@ void main() {
   );
   final worlds = read('Worlds');
 
-  test('Open Sandbox uses generated provider and both discovery sources', () {
+  test('Open Sandbox and the three discovery families are declared', () {
     final declarations = worlds.contributions?.worlds ?? [];
-    expect(declarations, hasLength(3));
+    expect(declarations, hasLength(4));
     final byId = {for (final world in declarations) world.id: world};
     final sandbox = byId['$_worlds.open_sandbox']!;
     expect(sandbox.content!.kind, 'provider');
@@ -32,6 +32,7 @@ void main() {
     for (final entry in {
       'level': 'CuratedLevelDiscoverySource',
       'first-party': 'BuildSceneDiscoverySource',
+      'map': 'PublishedMapDiscoverySource',
     }.entries) {
       final family = byId['$_worlds.${entry.key}']!;
       expect(family.content!.kind, 'discovered');
@@ -41,6 +42,8 @@ void main() {
       );
       expect(family.openToAnyCompatible, isTrue);
     }
+    expect(byId['$_worlds.map']!.transitions, ['scene-replacement']);
+    expect(byId['$_worlds.map']!.spawn!.kind, 'provider-default');
     expect(sandbox.spawn!.kind, 'provider-default');
     expect(sandbox.openToAnyCompatible, isTrue);
   });

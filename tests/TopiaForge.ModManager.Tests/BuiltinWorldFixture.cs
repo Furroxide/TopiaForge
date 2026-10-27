@@ -8,15 +8,18 @@ using TopiaForge.Mods.Testing;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IInternalSceneTransitionContext,
-        IInternalWorldSessionContext, IInternalSessionContentContext, IDisposable
+    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IInternalSceneTransitionContext, IInternalWorldSessionContext, IInternalSessionContentContext, IDisposable, IWorldDiscoveryContext, IInternalMapStorageContext
     {
         internal readonly FakeModContext Fake = new FakeModContext();
         internal readonly NativeFixture Native = new NativeFixture();
         public string SessionId => "session-built-in";
         public string TargetId => "example.worlds.target";
         public string WorldId { get; set; } = "example.worlds.world";
-        public string? WorldFamilyId => null;
+        public string? WorldFamilyId { get; set; }
+        public string FamilyId { get; set; } = "io.github.furroxide.topiaforge.worlds.map";
+        public int MaximumResults { get; set; } = 4096;
+        public string MapCacheDirectory { get; set; } = string.Empty;
+        public string PublishedMapLibraryPath { get; set; } = string.Empty;
         public WorldLoadTransition Transition { get; set; } = WorldLoadTransition.SceneReplacement;
         public WorldSpawnPolicy SpawnPolicy { get; set; } = new WorldSpawnPolicy(WorldSpawnKind.AuthoredMarker, "Spawn");
         public IModContext Context => this;

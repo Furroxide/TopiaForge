@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Text;
 
 namespace TopiaForge.Worlds.Maps
 {
@@ -49,6 +50,7 @@ namespace TopiaForge.Worlds.Maps
             Atomic(Blob(document.Sha256), document.Packed);
             var record = new MapCacheRecord
             {
+                MapId = id,
                 Sha256 = document.Sha256,
                 Etag = SafeValidator(etag),
                 LastModified = SafeValidator(modified),
@@ -83,12 +85,13 @@ namespace TopiaForge.Worlds.Maps
             var json = MapJson.Read(ReadOrdinary(path, 4096));
             var record = new MapCacheRecord
             {
+                MapId = MapDocument.Text(json, "mapId", 64),
                 Sha256 = MapDocument.Text(json, "sha256", 64),
                 Etag = SafeValidator(MapDocument.Text(json, "etag", 1024)),
                 LastModified = SafeValidator(MapDocument.Text(json, "lastModified", 1024)),
                 SavedUtc = MapDocument.Text(json, "savedUtc", 128),
             };
-            return IsHash(record.Sha256) ? record : null;
+            return record.MapId == id && IsHash(record.Sha256) ? record : null;
         }
         private void Trim(string retained)
         {
@@ -116,10 +119,17 @@ namespace TopiaForge.Worlds.Maps
             try { return ReadRecord(id); }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException || error is FormatException) { return null; }
         }
-        private IEnumerable<string> IndexIds() => Directory.Exists(root)
-            ? Directory.EnumerateFiles(root, "*.json", SearchOption.TopDirectoryOnly).Select(Path.GetFileNameWithoutExtension)
-                .Where(name => name != null && name.StartsWith("id-", StringComparison.Ordinal))
-                .Select(name => name!.Substring(3)).Where(id => MapDocument.IsId(id, 64)) : Array.Empty<string>();
+        private IEnumerable<string> IndexIds()
+        {
+            if (!Directory.Exists(root)) yield break;
+            foreach (var path in Directory.EnumerateFiles(root, "id-*.json", SearchOption.TopDirectoryOnly))
+            {
+                string id;
+                try { id = MapDocument.Text(MapJson.Read(ReadOrdinary(path, 4096)), "mapId", 64); }
+                catch (Exception error) when (error is IOException || error is UnauthorizedAccessException || error is FormatException) { continue; }
+                if (MapDocument.IsId(id, 64) && Path.GetFileName(path) == Path.GetFileName(Index(id))) yield return id;
+            }
+        }
 
         internal static byte[] ReadOrdinary(string path, int maximum)
         {
@@ -172,8 +182,11 @@ namespace TopiaForge.Worlds.Maps
             !value.Any(c => c < ' ' || c == 127) ? value : null;
         private static bool IsHash(string value) => value.Length == 64 && value.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
         private string Blob(string hash) => Path.Combine(root, hash + ".map");
-        private string Index(string id) => Path.Combine(root, "id-" + id + ".json");
-        private string Tombstone(string id) => Path.Combine(root, "id-" + id + ".gone");
+        // Published ids are case-sensitive even on case-insensitive filesystems.
+        // Records also retain the exact id; ambiguous legacy indexes are never replayed.
+        private static string Key(string id) => MapDocument.Hash(Encoding.UTF8.GetBytes(id));
+        private string Index(string id) => Path.Combine(root, "id-" + Key(id) + ".json");
+        private string Tombstone(string id) => Path.Combine(root, "id-" + Key(id) + ".gone");
         private static void RequireId(string id)
         { if (!MapDocument.IsId(id, 64)) throw new ArgumentException("A published map id is required."); }
     }
@@ -181,6 +194,7 @@ namespace TopiaForge.Worlds.Maps
     [DataContract]
     internal sealed class MapCacheRecord
     {
+        [DataMember(Name = "mapId")] internal string MapId = string.Empty;
         [DataMember(Name = "sha256")] internal string Sha256 = string.Empty;
         [DataMember(Name = "etag")] internal string? Etag;
         [DataMember(Name = "lastModified")] internal string? LastModified;

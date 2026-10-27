@@ -1,5 +1,7 @@
 # Map worlds
 
+For a player's saved map list and Free Play discovery, see [Saved published maps](CreatorCloud.md).
+
 A map declaration lets a gamemode play a published robotopia.gg map without loading code.
 Map worlds use manifest V6 and require stable TopiaForge 0.2.0 or later. The 0.1
 loader refuses that floor before running the package. Existing V6 packages are unchanged.
