@@ -42,6 +42,10 @@ namespace TopiaForge.ModManager.Tests
 
         public static void Run()
         {
+            VoiceConsentSubmitPressesNothingBeneathIt();
+            VoiceCaptureKeepsItsKeyUntilRelease();
+            VoiceCaptureEscapeLeavesTheOverlayAndGameAlone();
+            TypingDuringVoiceCaptureReachesNeitherGameNorBinding();
             ClaimsCoverTheContractsControls();
             OneBackPressDismissesOneSurfaceAndNothingElse();
             AHeldBackNeverRepeatsIntoTheGame();

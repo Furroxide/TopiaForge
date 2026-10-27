@@ -21,6 +21,7 @@ namespace TopiaForge.UiGallery.Pages
             HostFake = new FakeHost(this);
             ConnectFake = new FakeConnect(this);
             SessionFake = new FakeSession(this);
+            VoiceFake = new FakeVoice(this);
         }
 
         internal FakeContent ContentFake { get; }
@@ -34,6 +35,8 @@ namespace TopiaForge.UiGallery.Pages
         internal FakeSession SessionFake { get; }
 
         internal FakeConnecting ConnectingFake { get; }
+
+        internal FakeVoice VoiceFake { get; }
 
         public bool IsAvailable { get; set; } = true;
 
@@ -121,7 +124,11 @@ namespace TopiaForge.UiGallery.Pages
 
         internal void Notify(string text, ScreenTone tone = ScreenTone.Neutral) => notices.Enqueue(new ScreenNotice(text, tone));
 
-        internal void Tick(float deltaTime) => ConnectingFake.Tick(deltaTime);
+        internal void Tick(float deltaTime)
+        {
+            ConnectingFake.Tick(deltaTime);
+            VoiceFake.Tick(deltaTime);
+        }
     }
 
     /// <summary>The readiness strip in its three states.</summary>

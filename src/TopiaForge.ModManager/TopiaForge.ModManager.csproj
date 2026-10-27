@@ -75,5 +75,9 @@
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextRenderingModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="false" />
+    <!-- Voice chat: push-to-talk reads the Input System when the game has no legacy input, and its census reads the game's
+         PlayerInput bindings; a focused TextMeshPro field means the player types. -->
+    <Reference Include="Unity.InputSystem" HintPath="$(RobotopiaManagedDir)\Unity.InputSystem.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(RobotopiaManagedDir)\Unity.TextMeshPro.dll" Private="false" />
   </ItemGroup>
 </Project>

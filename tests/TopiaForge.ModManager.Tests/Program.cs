@@ -326,6 +326,13 @@ namespace TopiaForge.ModManager.Tests
                 finally { multiplayerRoot.Delete(true); }
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--multiplayer-voice", StringComparison.Ordinal))
+            {
+                var voiceRoot = Directory.CreateTempSubdirectory("TopiaForgeVoiceChat-");
+                try { VoiceChatTests.Run(voiceRoot.FullName); return 0; }
+                finally { voiceRoot.Delete(true); }
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--network-world", StringComparison.Ordinal))
             {
                 NetworkWorldTests.Run();
@@ -605,6 +612,7 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerPrivacyTextTests.Run();
             MultiplayerSessionsTests.Run(Path.Combine(root, "multiplayer-sessions"));
             InSessionChatTests.Run();
+            VoiceChatTests.Run(Path.Combine(root, "voice-chat"));
             MultiplayerFrameGuardTests.Run();
             ManagerTabLookupTests.Run();
             MultiplayerUiArchitectureTests.Run();
