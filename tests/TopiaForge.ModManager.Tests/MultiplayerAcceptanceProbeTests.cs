@@ -81,21 +81,23 @@ namespace TopiaForge.ModManager.Tests
             var guest = rig.AddRemoteClient("guest");
             rig.Advance(8);
             foreach (var peer in new[] { "host", "guest" })
-            foreach (var server in new[] { true, false })
-            {
-                using var context = new FakeModContext();
-                context.Config.Seed(1, new AcceptanceConfig
+                foreach (var server in new[] { true, false })
                 {
-                    Challenge = new string('b', 64), Peer = peer, Topology = "listen-pair"
-                });
-                context.Extensions.Register(server ? rig.Server.Session : guest.Session);
-                using var runner = ModLifecycleRunner.Create<MultiplayerAcceptanceMod>(context);
-                runner.Load();
-                var ready = context.Logger.Entries.Count(e => e.Message == "TF-MP-SESSION|READY|" + new string('b', 64) + "|" + peer);
-                Check(ready == (server == (peer == "host") ? 1 : 0), "The config role must match the actual public session role.");
-                runner.Unload();
-                context.AssertNoLeaks();
-            }
+                    using var context = new FakeModContext();
+                    context.Config.Seed(1, new AcceptanceConfig
+                    {
+                        Challenge = new string('b', 64),
+                        Peer = peer,
+                        Topology = "listen-pair"
+                    });
+                    context.Extensions.Register(server ? rig.Server.Session : guest.Session);
+                    using var runner = ModLifecycleRunner.Create<MultiplayerAcceptanceMod>(context);
+                    runner.Load();
+                    var ready = context.Logger.Entries.Count(e => e.Message == "TF-MP-SESSION|READY|" + new string('b', 64) + "|" + peer);
+                    Check(ready == (server == (peer == "host") ? 1 : 0), "The config role must match the actual public session role.");
+                    runner.Unload();
+                    context.AssertNoLeaks();
+                }
             using var ordinary = new FakeModContext();
             ordinary.Extensions.Register(rig.Server.Session);
             using var unconfigured = ModLifecycleRunner.Create<MultiplayerAcceptanceMod>(ordinary);
