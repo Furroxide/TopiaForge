@@ -451,7 +451,7 @@ manifest, managed assembly, or archive finding.
 ### TFDEV152
 
 Private development overlays could not be prepared. Repair the source installation
-and built runtime, check directory permissions, and retry. Existing source game data
+and built runtime, check directory access, and retry. Existing source game data
 is shared through links and is never a cleanup target.
 
 ### TFDEV160
