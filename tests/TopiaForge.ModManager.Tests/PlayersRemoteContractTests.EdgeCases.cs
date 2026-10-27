@@ -50,10 +50,11 @@ namespace TopiaForge.ModManager.Tests
             foreach (var flags in new[] { PresenceFlags.None, PresenceFlags.Teleported })
             {
                 var policy = new PresencePlausibility(PresencePolicy.Default, 0);
+                policy.SetInitialPosition(NetQuantization.QuantizePosition(NetVector3.Zero), 0);
                 PresenceCheck Pose(float x, PresenceFlags mark, long time) => policy.Check(
                     NetQuantization.QuantizePosition(new NetVector3(x, 0, 0)), NetQuantization.IdentityRotationBits,
                     mark, policy.Correction, time, PresenceBounds.Everywhere);
-                Pose(0, PresenceFlags.None, 0);
+                That(Pose(0, PresenceFlags.None, 0).Verdict == PresenceVerdict.Accepted, "trusted initial pose establishes the placement baseline");
                 policy.ExpectPlacement(NetQuantization.QuantizePosition(new NetVector3(500, 0, 0)), 0);
                 That(Pose(500, flags, 50_000).Verdict == PresenceVerdict.Accepted, "placement accepts either flag");
                 That(Pose(-500, PresenceFlags.Teleported, 100_000).Verdict == PresenceVerdict.Accepted, "placement costs no teleport");
@@ -61,10 +62,11 @@ namespace TopiaForge.ModManager.Tests
                 That(Pose(-500, PresenceFlags.Teleported, 200_000).Violation == PresenceViolation.Teleport, "third own teleport is refused");
             }
             var miss = new PresencePlausibility(PresencePolicy.Default, 0);
+            miss.SetInitialPosition(NetQuantization.QuantizePosition(NetVector3.Zero), 0);
             PresenceCheck Miss(float x, PresenceFlags mark, long time) => miss.Check(
                 NetQuantization.QuantizePosition(new NetVector3(x, 0, 0)), NetQuantization.IdentityRotationBits,
                 mark, miss.Correction, time, PresenceBounds.Everywhere);
-            Miss(0, PresenceFlags.None, 0);
+            That(Miss(0, PresenceFlags.None, 0).Verdict == PresenceVerdict.Accepted, "trusted initial pose establishes the missed-placement baseline");
             miss.ExpectPlacement(NetQuantization.QuantizePosition(new NetVector3(100, 0, 0)), 0);
             That(Miss(500, PresenceFlags.Teleported, 50_000).Verdict == PresenceVerdict.Accepted, "missed placement uses own allowance");
             That(Miss(-500, PresenceFlags.Teleported, 100_000).Verdict == PresenceVerdict.Accepted, "second own teleport fits");
