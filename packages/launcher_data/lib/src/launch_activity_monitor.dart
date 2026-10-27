@@ -70,7 +70,10 @@ final class LaunchActivityMonitor {
           processExited: true,
           unconfirmed:
               next.launchOutcome == null ||
-              next.expectsTerminalOutcome && next.sessionOutcome == null,
+              next.expectsTerminalOutcome &&
+                  next.sessionOutcome == null &&
+                  next.launchOutcome?.multiplayer?.failure !=
+                      LaunchMultiplayerFailure.other,
         );
         _finished = true;
       }
@@ -79,7 +82,9 @@ final class LaunchActivityMonitor {
         next.command == 'main-menu' && next.launchOutcome != null ||
         next.launchOutcome?.status != null &&
             next.launchOutcome!.status != 'succeeded' &&
-            next.launchOutcome!.sessionId == null) {
+            (next.launchOutcome!.sessionId == null ||
+                next.launchOutcome!.multiplayer?.failure ==
+                    LaunchMultiplayerFailure.other)) {
       _finished = true;
     }
     if (!identical(next, current)) {

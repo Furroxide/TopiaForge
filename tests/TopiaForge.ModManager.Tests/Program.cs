@@ -35,6 +35,13 @@ namespace TopiaForge.ModManager.Tests
                 try { MultiplayerPresentationTests.Run(); PresentationRuntimeTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
+            if (args.Length == 1 && args[0] == "--launch-session-contract")
+            {
+                LaunchSessionFixtureTests.Run(FindRepoRoot());
+                LaunchSessionContractTests.Run(FindRepoRoot());
+                LaunchSessionStagingTests.Run(FindRepoRoot());
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--blockers")
             {
                 try { BlockerTests.Run(); return 0; }

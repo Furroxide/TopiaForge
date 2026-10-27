@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run(string repositoryRoot)
         {
+            LaunchOutcomeCompatibilityTests.Run(repositoryRoot);
             var failures = new List<Exception>();
             var root = Path.Combine(repositoryRoot, "tests", "fixtures", "multiplayer");
             using var launch = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "launch-v5", "cases.json")));

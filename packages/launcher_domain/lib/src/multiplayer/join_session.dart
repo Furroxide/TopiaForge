@@ -112,6 +112,7 @@ abstract final class JoinSession {
       JoinFailureCode.startFailed,
     },
     JoinStage.connecting: {
+      JoinFailureCode.other,
       JoinFailureCode.timeout,
       JoinFailureCode.natTraversalFailed,
       JoinFailureCode.relayUnavailable,
@@ -124,6 +125,7 @@ abstract final class JoinSession {
       JoinFailureCode.directNotAllowed,
     },
     JoinStage.synchronizing: {
+      JoinFailureCode.other,
       // The engine can refuse or end the session after link-up, before its
       // world is ready. Its terminal result must still settle the join.
       JoinFailureCode.timeout,

@@ -14,13 +14,15 @@
       "disconnected",
       "direct-not-allowed",
       "snapshot-failed",
-      "world-follow-failed"
+      "world-follow-failed",
+      "other"
     ],
     "host": [
       "port-in-use",
       "identity-unavailable",
       "network-stopped",
-      "service-unavailable"
+      "service-unavailable",
+      "other"
     ]
   },
   "endReasons": [
@@ -33,7 +35,8 @@
     "admission-rejected",
     "protocol-mismatch",
     "transport-failed",
-    "world-follow-failed"
+    "world-follow-failed",
+    "other"
   ],
   "progress": {
     "valid": [
@@ -602,11 +605,6 @@
         "id": "multiplayer-address",
         "about": "The multiplayer block never names an address.",
         "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"address\":\"192.168.77.31\",\"admission\":{\"code\":\"password-wrong\",\"problems\":[]},\"detail\":\"The password was wrong.\",\"failure\":\"password-rejected\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"},\"phase\":\"connecting\",\"requestId\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"schemaVersion\":2,\"sequence\":10,\"status\":\"failed\"}"
-      },
-      {
-        "id": "unknown-failure",
-        "about": "Failures are a closed set.",
-        "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"admission\":{\"code\":\"password-wrong\",\"problems\":[]},\"detail\":\"The password was wrong.\",\"failure\":\"wrong-password\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"},\"phase\":\"connecting\",\"requestId\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"schemaVersion\":2,\"sequence\":10,\"status\":\"failed\"}"
       },
       {
         "id": "v2-without-multiplayer",

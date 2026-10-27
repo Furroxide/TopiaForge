@@ -158,9 +158,16 @@ String sessionEndMessage(JoinSessionEndReason reason) => switch (reason) {
   JoinSessionEndReason.worldFollowFailed =>
     "Robotopia could not follow the host's world, so it left the session.",
   JoinSessionEndReason.gameExited => 'Robotopia closed, so the session ended.',
+  JoinSessionEndReason.other =>
+    'The session ended. Try again; if it keeps failing, update TopiaForge.',
 };
 
 const _texts = <JoinFailureCode, JoinFailureText>{
+  JoinFailureCode.other: JoinFailureText(
+    title: 'The join could not finish',
+    sentence: LaunchOutcomeMultiplayer.otherDetail,
+    retry: true,
+  ),
   JoinFailureCode.invalidLink: JoinFailureText(
     title: 'This link cannot be joined',
     sentence: 'The link does not lead to a server this launcher can join.',

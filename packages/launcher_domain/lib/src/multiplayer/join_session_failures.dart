@@ -106,6 +106,9 @@ enum JoinFailureCode {
   snapshotFailed,
   worldFollowFailed,
   disconnected,
+
+  /// The game reported a failure this launcher cannot interpret.
+  other,
 }
 
 /// Who owns a game process that blocks a launch or an install. An install
@@ -138,6 +141,9 @@ enum JoinSessionEndReason {
   protocolMismatch,
   transportFailed,
   worldFollowFailed,
+
+  /// The game reported an end reason this launcher cannot interpret.
+  other,
 
   /// The game process exited.
   gameExited,

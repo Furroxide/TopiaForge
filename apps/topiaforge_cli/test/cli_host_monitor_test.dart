@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:test/test.dart';
 import 'package:topiaforge/src/cli_host_monitor.dart';
 import 'package:launcher_domain/launcher_domain.dart';
@@ -22,6 +24,60 @@ void main() {
       latestActivity: rig.base(),
     ),
   );
+  LaunchActivity unknown({
+    bool terminal = false,
+    String intent = 'intent-one',
+    String request = 'request-one',
+  }) => rig.base().applyOutcome(
+    LaunchTransport.readOutcome(
+      jsonEncode({
+        'schemaVersion': 2,
+        'requestId': request,
+        'sequence': 3,
+        'kind': terminal ? 'session' : 'launch',
+        if (!terminal) 'command': 'host-session',
+        'phase': 'idle',
+        'status': terminal ? 'succeeded' : 'failed',
+        'blocks': [],
+        'multiplayer': {
+          'role': 'host',
+          'intentId': intent,
+          terminal ? 'endReason' : 'failure': 'private-203.0.113.77:47819',
+          'detail': 'secret provider detail; token=fixture-secret',
+        },
+      }),
+    ),
+  );
+  for (final terminal in [false, true]) {
+    test('unknown host result finishes safely (terminal: $terminal)', () async {
+      bind();
+      monitor.accept(unknown(terminal: terminal));
+      expect(await monitor.completed.future, 1);
+      expect(
+        rig.messages.single,
+        terminal
+            ? 'TFHOST140: Hosting ended before confirmation. Start a new hosted session.'
+            : 'TFHOST140: The game refused hosting. Check the in-game status and repair the selected profile before retrying.',
+      );
+    });
+    test(
+      'unknown host result cannot overtake cancellation (terminal: $terminal)',
+      () async {
+        bind();
+        monitor.cancel();
+        monitor.accept(unknown(terminal: terminal));
+        expect(await monitor.completed.future, 130);
+        expect(rig.messages.length, 1);
+      },
+    );
+    test('unknown foreign result is ignored (terminal: $terminal)', () {
+      bind();
+      monitor.accept(unknown(terminal: terminal, intent: 'foreign'));
+      monitor.accept(unknown(terminal: terminal, request: 'foreign'));
+      expect(monitor.completed.isCompleted, isFalse);
+      expect(rig.messages, isEmpty);
+    });
+  }
   test('fast invite before receipt is printed exactly once', () async {
     monitor.accept(rig.success());
     monitor.accept(rig.success(sequence: 3));

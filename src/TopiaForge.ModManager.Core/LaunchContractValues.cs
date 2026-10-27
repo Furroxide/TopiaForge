@@ -51,13 +51,13 @@ namespace TopiaForge.ModManager.Core
         internal static readonly string[] JoinFailures =
         {
             "timeout", "nat-traversal-failed", "relay-unavailable", "server-full", "password-rejected", "kicked",
-            "protocol-mismatch", "admission-changed", "disconnected", "direct-not-allowed", "snapshot-failed", "world-follow-failed"
+            "protocol-mismatch", "admission-changed", "disconnected", "direct-not-allowed", "snapshot-failed", "world-follow-failed", "other"
         };
-        internal static readonly string[] HostFailures = { "port-in-use", "identity-unavailable", "network-stopped", "service-unavailable" };
+        internal static readonly string[] HostFailures = { "port-in-use", "identity-unavailable", "network-stopped", "service-unavailable", "other" };
         internal static readonly string[] EndReasons =
         {
             "left", "host-ended", "kicked", "banned", "timed-out", "replaced", "admission-rejected", "protocol-mismatch",
-            "transport-failed", "world-follow-failed"
+            "transport-failed", "world-follow-failed", "other"
         };
         internal static readonly string[] AdmissionCodes =
             { "other", "full", "protocol", "password-required", "password-wrong", "too-many-attempts", "banned", "content" };

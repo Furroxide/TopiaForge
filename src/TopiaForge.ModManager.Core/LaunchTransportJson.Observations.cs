@@ -11,7 +11,12 @@ namespace TopiaForge.ModManager.Core
         public static string WriteProgress(LaunchProgress progress) => Bounded(ProgressJson(progress), MaxDocumentBytes);
         public static LaunchProgress ReadProgress(string json) => Read(json, MaxDocumentBytes, ParseProgress);
         public static string WriteOutcome(LaunchOutcome outcome) => Bounded(OutcomeJson(outcome), MaxDocumentBytes);
-        public static LaunchOutcome ReadOutcome(string json) => Read(json, MaxDocumentBytes, ParseOutcome);
+        public static LaunchOutcome ReadOutcome(string json)
+        {
+            try { return Read(json, MaxDocumentBytes, ParseOutcome); }
+            // A parser exception can quote input. Outcome reasons and details are untrusted.
+            catch (System.IO.InvalidDataException) { throw Invalid("Invalid launch outcome."); }
+        }
 
         private static string ObservationJson(RuntimeObservationEnvelope observation)
         {
