@@ -23,7 +23,7 @@ namespace TopiaForge.ModManager
             if (sessionOwner != null) throw new InvalidOperationException("A context already has a session authority.");
             sessionOwner = owner ?? throw new ArgumentNullException(nameof(owner));
             contentOperations = new ContextContentOperations(owner, this);
-            sessionService = new ContextWorldSessionService(owner, Lifetime);
+            sessionService = new ContextWorldSessionService(owner, this);
         }
         public IWorldSessionService Sessions => sessionService ?? throw new InvalidOperationException("Session authority is unavailable.");
         public IInternalWorldSessionOperations ContentOperations => contentOperations

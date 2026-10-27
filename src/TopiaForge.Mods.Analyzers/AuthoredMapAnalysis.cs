@@ -118,7 +118,7 @@ namespace TopiaForge.Mods.Analyzers
                     foreach (var reference in type.DeclaringSyntaxReferences)
                     {
                         var declaration = reference.GetSyntax(token); var semantic = compilation.GetSemanticModel(declaration.SyntaxTree);
-                        foreach (var node in declaration.DescendantNodes().Where(n => n is ObjectCreationExpressionSyntax || n is InvocationExpressionSyntax))
+                        foreach (var node in declaration.DescendantNodes().Where(n => n is BaseObjectCreationExpressionSyntax || n is InvocationExpressionSyntax))
                         {
                             var called = semantic.GetSymbolInfo(node, token).Symbol?.ContainingType;
                             if (called != null && called.DeclaringSyntaxReferences.Length > 0 && SymbolEqualityComparer.Default.Equals(called.ContainingAssembly, compilation.Assembly))

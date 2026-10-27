@@ -14,6 +14,10 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--authored-readiness")
+            { MapWorldServiceTests.AuthoredReadinessAsync().GetAwaiter().GetResult(); return 0; }
+            if (args.Length == 2 && args[0] == "--authored-review")
+            { AuthoredMapReviewTests.Run(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "--authored-maps")
             { AuthoredMapTests.Run(FindRepoRoot()); AuthoredMapImportTests.RunAsync().GetAwaiter().GetResult(); return 0; }
             if (args.Length == 1 && args[0] == "--gamecompat")
@@ -545,6 +549,8 @@ namespace TopiaForge.ModManager.Tests
                 MapDocumentTests.Run(FindRepoRoot());
                 AuthoredMapTests.Run(FindRepoRoot());
                 AuthoredMapImportTests.RunAsync().GetAwaiter().GetResult();
+                AuthoredMapReviewTests.Run("all");
+                MapWorldServiceTests.AuthoredReadinessAsync().GetAwaiter().GetResult();
                 MapStoreTests.RunAsync().GetAwaiter().GetResult();
                 MapWorldServiceTests.RunAsync().GetAwaiter().GetResult();
                 MapWorldBindingTests.RunAsync().GetAwaiter().GetResult();

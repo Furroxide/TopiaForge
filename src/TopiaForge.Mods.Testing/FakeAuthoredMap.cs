@@ -19,7 +19,8 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Creates an empty synthetic map. Add parents before children, before reading the index.</summary>
         public FakeAuthoredMap(string mapId = "test-map", string sceneId = "scene", string sceneName = "Test map", string environment = "")
         {
-            AuthoredText.RequireId(mapId, "mapId"); AuthoredText.RequireId(sceneId, "sceneId");
+            AuthoredText.RequireId(mapId, "mapId");
+            if (!AuthoredText.IsId(sceneId, 128)) throw new ArgumentException("sceneId must be a bounded ASCII id.");
             AuthoredText.RequireText(sceneName, 128, "sceneName"); AuthoredText.RequireText(environment, 128, "environment");
             MapId = mapId; SceneId = sceneId; SceneName = sceneName; Environment = environment;
             Revision = new MapRevision(new string('0', 64), 1, string.Empty);

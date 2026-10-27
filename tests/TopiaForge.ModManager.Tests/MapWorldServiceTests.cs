@@ -11,6 +11,33 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static class MapWorldServiceTests
     {
+        internal static async Task AuthoredReadinessAsync()
+        {
+            foreach (var cancel in new[] { false, true })
+            {
+                using var failedFixture = Fixture(); using var cancellation = new CancellationTokenSource();
+                var failedBackend = new Backend { ThrowIndex = !cancel, OnIndex = cancel ? cancellation.Cancel : null };
+                using var failedService = Service(failedBackend);
+                var failed = await failedService.LoadAsync(failedFixture, Request(), cancellation.Token);
+                Assert(failed.ErrorCode == (cancel ? ModErrorCode.Cancelled : ModErrorCode.External),
+                    "index failure and cancellation refuse readiness with their proper result");
+                Assert(failedBackend.ContentDisposals == 1 && failedFixture.Native.DisposeCount == 1 && failedBackend.Spawned == null,
+                    "index failure and cancellation clean up before player placement");
+                if (cancel) Assert(!failedBackend.Map!.IsAlive, "cancelled index cannot stay live");
+            }
+            using var fixture = Fixture(); var backend = new Backend(); using var service = Service(backend);
+            var pending = service.LoadAsync(fixture, Request(), default);
+            Assert(!pending.IsCompleted && backend.Map != null, "authored index exists while native readiness is pending");
+            backend.MapAlive = false;
+            fixture.Native.Succeed();
+            var result = await pending;
+            Assert(!result.Succeeded, "a map lost during native readiness must not publish a successful world");
+            Assert(backend.ContentDisposals == 1 && fixture.Native.DisposeCount == 1,
+                "lost indexed root releases content and preparation exactly once");
+            Assert(backend.Map!.ResolveAnchors(Array.Empty<MapAnchor>()).ErrorCode == ModErrorCode.InvalidState,
+                "failed readiness leaves no usable authored map");
+            Console.WriteLine("Authored map atomic readiness passed (3 phases: indexing failure, indexing cancellation, lost root).");
+        }
         internal static async Task RunAsync()
         {
             var owned = Directory.CreateTempSubdirectory("map-service-");
@@ -173,6 +200,10 @@ namespace TopiaForge.ModManager.Tests
             internal int Imported, ContentDisposals; internal string? Spawned, SceneArgument, Label;
             internal Action? OnPrepare, OnImport, OnSpawn; internal bool Throw;
             internal bool ThrowContentCleanup;
+            internal bool MapAlive = true;
+            internal AuthoredMapIndex? Map;
+            internal bool ThrowIndex;
+            internal Action? OnIndex;
             internal Task<OperationResult<IMapImportTransaction>>? PendingPreparation;
             public Uri PublicBase => new Uri("https://maps.example.test/");
             public Uri ResolvePublished(string id) => new Uri(PublicBase, id);
@@ -184,9 +215,14 @@ namespace TopiaForge.ModManager.Tests
                 return PendingPreparation ?? Task.FromResult(OperationResult<IMapImportTransaction>.Success(this));
             }
             public string SceneId => "scene";
-            public AuthoredMapIndex CreateMap(MapDocument document, string mapId, IModContext context) => new AuthoredMapIndex(
-                mapId, document.Authored.Scenes[SceneId], new MapRevision(document.Sha256, document.Packed.Length, document.Modified),
-                Array.Empty<AuthoredMarker>(), value => value, value => TransformState.Identity);
+            public AuthoredMapIndex CreateMap(MapDocument document, string mapId, IModContext context)
+            {
+                if (ThrowIndex) throw new InvalidOperationException("Synthetic indexing failure.");
+                Map = new AuthoredMapIndex(mapId, document.Authored.Scenes[SceneId], new MapRevision(document.Sha256, document.Packed.Length, document.Modified),
+                    Array.Empty<AuthoredMarker>(), value => value, value => TransformState.Identity, () => MapAlive);
+                OnIndex?.Invoke();
+                return Map;
+            }
             public bool NativeEntered => Imported != 0;
             public bool NativeReturned => Imported != 0;
             public OperationResult<IDisposable> Import()

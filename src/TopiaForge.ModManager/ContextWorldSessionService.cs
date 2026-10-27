@@ -11,11 +11,12 @@ namespace TopiaForge.ModManager
         private readonly IWorldSessionService authority;
         private readonly GamemodeSessionOrchestrator orchestrator;
         private readonly IModLifetime lifetime;
+        private readonly IModContext context;
         private readonly object gate = new object();
         private readonly List<Subscription> subscriptions = new List<Subscription>();
-        internal ContextWorldSessionService(GamemodeSessionOrchestrator authority, IModLifetime lifetime)
+        internal ContextWorldSessionService(GamemodeSessionOrchestrator authority, IModContext context)
         {
-            this.authority = authority; orchestrator = authority; this.lifetime = lifetime;
+            this.authority = authority; orchestrator = authority; this.context = context; lifetime = context.Lifetime;
             lifetime.Defer(DisposeSubscriptions);
         }
         public WorldSessionSnapshot Current => Bind(authority.Current);
@@ -48,7 +49,7 @@ namespace TopiaForge.ModManager
         {
             if (lifetime.IsStopping) return new WorldSessionSnapshot(WorldSessionPhase.Idle, null, null, snapshot.Sequence);
             return new WorldSessionSnapshot(snapshot.Phase,
-                snapshot.Session == null ? null : new BoundSession(snapshot.Session, lifetime, orchestrator), snapshot.World, snapshot.Sequence);
+                snapshot.Session == null ? null : new BoundSession(snapshot.Session, lifetime, orchestrator), snapshot.World?.ForContext(context), snapshot.Sequence);
         }
         private void DisposeSubscriptions()
         {

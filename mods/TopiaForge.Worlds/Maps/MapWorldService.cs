@@ -95,6 +95,8 @@ namespace TopiaForge.Worlds.Maps
                             // applies and verifies that transform; it must not search for an SDK prefab marker.
                             var ready = await preparation.FinishAsync(new WorldSpawnPolicy(WorldSpawnKind.ProviderDefault), null,
                                 transform, resources.StoppingToken);
+                            if (ready.Succeeded && !map.IsAlive)
+                                return Failure(ModErrorCode.InvalidState, "The imported map ended before world readiness. Load the world again.");
                             if (ready.Succeeded)
                             {
                                 var modified = DateTime.TryParse(document.Modified, System.Globalization.CultureInfo.InvariantCulture,

@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
 
 namespace TopiaForge.Mods.Analyzers
@@ -33,7 +34,9 @@ namespace TopiaForge.Mods.Analyzers
                     node.ReportDiagnostic(Diagnostic.Create(MapWorldRequired, node.Node.GetLocation()));
                 if (!(node.Node is InvocationExpressionSyntax call) || type != "TopiaForge.Mods.IAuthoredMap" ||
                     !(symbol?.Name == "Entity" || symbol?.Name == "TryGetEntity") || call.ArgumentList.Arguments.Count == 0) return;
-                var argument = call.ArgumentList.Arguments[0].Expression;
+                var invocation = node.SemanticModel.GetOperation(call, node.CancellationToken) as IInvocationOperation;
+                var argument = invocation?.Arguments.FirstOrDefault(a => a.Parameter?.Ordinal == 0)?.Value.Syntax as ExpressionSyntax;
+                if (argument == null) return;
                 var constant = node.SemanticModel.GetConstantValue(argument, node.CancellationToken);
                 if (!(constant.Value is string id) || !MapId(id, 64)) return;
                 var surveys = data.ForModes(modes);
