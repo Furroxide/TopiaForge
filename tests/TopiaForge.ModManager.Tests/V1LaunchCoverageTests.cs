@@ -821,8 +821,17 @@ namespace TopiaForge.ModManager.Tests
             Assert(docsStart >= 0 && templatesStart > docsStart,
                 "CI must define a dedicated documentation job before the template matrix");
             var docsJob = workflow.Substring(docsStart, templatesStart - docsStart);
-            Assert(docsJob.Contains("needs: [csharp-tests, template-matrix]", StringComparison.Ordinal),
-                "documentation publishing must wait for C# and all compiled release scaffolds");
+            var requiredStart = workflow.IndexOf("\n  required-ci:\n", StringComparison.Ordinal);
+            Assert(requiredStart > templatesStart, "CI must end with the required validation job");
+            var requiredJob = workflow.Substring(requiredStart);
+            Assert(requiredJob.Contains("\n      - csharp-tests\n", StringComparison.Ordinal)
+                && requiredJob.Contains("\n      - template-matrix\n", StringComparison.Ordinal)
+                && requiredJob.Contains("\n      - docs\n", StringComparison.Ordinal),
+                "required CI validation must cover C#, all compiled release scaffolds and the documentation build");
+            var pages = File.ReadAllText(Path.Combine(root, ".github", "workflows", "deploy-pages.yml"));
+            Assert(pages.Contains("workflows: [CI]", StringComparison.Ordinal)
+                && pages.Contains("github.event.workflow_run.conclusion == 'success'", StringComparison.Ordinal),
+                "documentation publishing must wait for a successful CI run, and so for C# and all compiled release scaffolds");
             Assert(docsJob.Contains("Restore Robotopia managed refs", StringComparison.Ordinal)
                 && docsJob.Contains(
                     "dist/api/csharp/api/TopiaForge.Mods.Interop.Unity.IUnityInteropService.html",

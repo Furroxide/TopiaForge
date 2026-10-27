@@ -84,10 +84,8 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --require-latest
 
-      - name: Verify formatting
-        run: |
-          dotnet restore TopiaForge.slnx
-          dotnet format TopiaForge.slnx --verify-no-changes --no-restore
+      - name: Restore solution
+        run: dotnet restore TopiaForge.slnx
 
       - name: Build solution
         run: dotnet build TopiaForge.slnx -c Release --no-restore
@@ -130,6 +128,57 @@ jobs:
           path: ${{ runner.temp }}/topiaforge-sdk-acceptance.tar
           if-no-files-found: error
           retention-days: 1
+
+  # Formatting needs nothing the build produces, so it runs beside csharp-tests instead of ahead of its build.
+  csharp-format:
+    name: Verify C# formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Install managed-reference archive dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Resolve Robotopia refs cache key
+        id: refs-cache
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
+
+      - name: Restore Robotopia managed refs
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
+
+      - name: Verify formatting
+        run: |
+          dotnet restore TopiaForge.slnx
+          dotnet format TopiaForge.slnx --verify-no-changes --no-restore
 
   dart-tests:
     name: Analyze and test Dart packages
@@ -243,9 +292,10 @@ jobs:
           dotnet build src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj -c Release --nologo
           dotnet build tests/TopiaForge.ValidTestMod/TopiaForge.ValidTestMod.csproj -c Release --nologo
 
+      # package:test runs one suite per two processors by default; run one per processor.
       - name: Test
         working-directory: ${{ matrix.package }}
-        run: dart test
+        run: dart test --concurrency="$(nproc)"
 
   flutter-tests:
     name: Analyze and test Flutter packages
@@ -483,9 +533,10 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
 
+  # Publishing waits for C# and every release scaffold through deploy-pages.yml, which builds only after a
+  # successful CI run, so this check starts at once.
   docs:
     name: Build guides, C# and Dart references, and search
-    needs: [csharp-tests, template-matrix]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -676,6 +727,7 @@ jobs:
     if: always()
     needs:
       - csharp-tests
+      - csharp-format
       - dart-tests
       - flutter-tests
       - repository-audits
@@ -688,6 +740,7 @@ jobs:
       - name: Enforce all validation jobs
         env:
           CSHARP: ${{ needs.csharp-tests.result }}
+          CSHARP_FORMAT: ${{ needs.csharp-format.result }}
           DART: ${{ needs.dart-tests.result }}
           FLUTTER: ${{ needs.flutter-tests.result }}
           REPOSITORY: ${{ needs.repository-audits.result }}
@@ -696,6 +749,6 @@ jobs:
           TEMPLATES: ${{ needs.template-matrix.result }}
         run: |
           set -euo pipefail
-          for result in "$CSHARP" "$DART" "$FLUTTER" "$REPOSITORY" "$RELEASE_HELPERS_WINDOWS" "$DOCS" "$TEMPLATES"; do
+          for result in "$CSHARP" "$CSHARP_FORMAT" "$DART" "$FLUTTER" "$REPOSITORY" "$RELEASE_HELPERS_WINDOWS" "$DOCS" "$TEMPLATES"; do
             test "$result" = success
           done
