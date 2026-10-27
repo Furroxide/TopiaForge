@@ -43,7 +43,7 @@ namespace TopiaForge.ModManager
             var events = UnityEngine.EventSystems.EventSystem.current;
             var typing = TopiaForgeInputOwnership.KitTextFieldHasKeyboard() ||
                 TopiaForgeGameTextFocus.Current.HasKeyboard(events == null ? null : events.currentSelectedGameObject);
-            var blocked = typing || voice()?.PushToTalkSuspended == true || (top != null && !ReferenceEquals(top, this)) || nextScene != scene;
+            var blocked = !UnityEngine.Application.isFocused || typing || voice()?.PushToTalkSuspended == true || (top != null && !ReferenceEquals(top, this)) || nextScene != scene;
             scene = nextScene;
             var show = hold.Tick(key?.IsHeld == true, key?.WasPressed == true, blocked, inGame && screen.Available);
             if (host == null && inGame && screen.Available) Build();

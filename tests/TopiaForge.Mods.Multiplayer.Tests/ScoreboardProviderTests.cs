@@ -19,6 +19,13 @@ internal static class ScoreboardProviderTests
         ScreenPrompt? question = null;
         var screen = new ScoreboardPresenter(() => rig.Host.Control, () => Array.Empty<ScoreboardData>(), () => null, prompt => question = prompt, (_, _) => { });
         screen.Tick(); var ada = screen.Rows.Single(row => row.Name == "Ada");
+        var liveClient = new ScoreboardPresenter(() => b.Control, () => Array.Empty<ScoreboardData>(), () => null,
+            _ => throw new Exception("Client offered moderation"), (_, _) => { });
+        liveClient.Tick();
+        var clientAda = liveClient.Rows.Single(row => row.Name == "Ada");
+        That(liveClient.Rows.Count == 3 && liveClient.Rows.All(row => !row.CanModerate), "a ready client sees the full roster without host actions");
+        liveClient.Kick(clientAda); liveClient.Ban(clientAda); liveClient.ServerMute(clientAda);
+        That(a.Control.Role == InternalSessionRole.Client && !rig.Host.Control.IsServerMuted(rig.Host.IdOf("Ada")), "client callbacks cannot moderate another peer");
         screen.ServerMute(ada);
         That(rig.Host.Control.IsServerMuted(rig.Host.IdOf("Ada")) && !rig.Host.Control.IsServerMuted(rig.Host.IdOf("Bo")), "scoreboard server mute affects only the authenticated target");
         screen.Kick(ada); That(question != null, "kick asks before contacting provider");

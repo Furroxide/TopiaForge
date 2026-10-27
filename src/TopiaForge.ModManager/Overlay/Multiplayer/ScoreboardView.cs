@@ -4,7 +4,7 @@ using TopiaForge.Mods.UnityUi;
 
 namespace TopiaForge.ModManager.Sessions
 {
-    /// <summary>HUD scoreboard: bounded pooled rows in a scroll view, with four score columns per page.</summary>
+    /// <summary>HUD scoreboard: bounded identity-bound rows in a scroll view, with four score columns per page.</summary>
     internal sealed class ScoreboardView
     {
         private const int PageSize = 4;
@@ -53,13 +53,27 @@ namespace TopiaForge.ModManager.Sessions
             for (var i = 0; i < PageSize; i++)
             {
                 var column = first + i; var exists = column < screen.Columns.Count;
+                if (!exists) headers[i].ReleaseFocus();
                 headers[i].SetVisible(exists);
                 if (!exists) continue;
                 titles[i].SetText(screen.Columns[column]);
                 sort[i].SetText(screen.SortColumn == column ? screen.Descending ? "HIGH FIRST" : "LOW FIRST" : "SORT");
             }
-            while (rows.Count < Math.Min(32, screen.Rows.Count)) rows.Add(new Row(list, screen));
-            for (var i = 0; i < rows.Count; i++) rows[i].Bind(i < screen.Rows.Count ? screen.Rows[i] : null, first, screen.Columns.Count);
+            var count = Math.Min(32, screen.Rows.Count);
+            for (var i = rows.Count - 1; i >= 0; i--)
+            {
+                var present = false;
+                for (var p = 0; p < count; p++) if (ReferenceEquals(rows[i].Bound, screen.Rows[p])) { present = true; break; }
+                if (present) continue;
+                rows[i].Destroy(); rows.RemoveAt(i);
+            }
+            for (var i = 0; i < count; i++)
+            {
+                Row? view = null;
+                for (var p = 0; p < rows.Count; p++) if (ReferenceEquals(rows[p].Bound, screen.Rows[i])) { view = rows[p]; break; }
+                if (view == null) { view = new Row(list, screen, screen.Rows[i]); rows.Add(view); }
+                view.Bind(i, first, screen.Columns.Count);
+            }
         }
 
         private sealed class Row
@@ -72,9 +86,13 @@ namespace TopiaForge.ModManager.Sessions
             private readonly TopiaForgeButton mute, serverMute;
             private readonly TopiaForgeSlider volume;
             private readonly TopiaForgeLabel[] values = new TopiaForgeLabel[PageSize];
-            private ScoreboardRow? bound;
-            internal Row(TopiaForgeContainer parent, IScoreboardScreen screen)
+            private readonly ScoreboardRow bound;
+            private int position = -1;
+            internal ScoreboardRow Bound => bound;
+            internal Row(TopiaForgeContainer parent, IScoreboardScreen screen, ScoreboardRow row)
             {
+                // Keep pointer presses and slider drags attached to one identity across sorting and roster changes.
+                bound = row;
                 root = parent.Column(TopiaForgeGap.Xs, TopiaForgeGap.Sm).Dynamic().FixedHeight(132f);
                 var identity = root.Row(TopiaForgeGap.Sm).FixedHeight(32f);
                 talk = identity.TalkIndicator();
@@ -85,20 +103,21 @@ namespace TopiaForge.ModManager.Sessions
                 var scores = root.Row(TopiaForgeGap.Sm).FixedHeight(24f);
                 for (var i = 0; i < PageSize; i++) values[i] = scores.Label("", TopiaForgeTextStyle.Caption).PlainText().Ellipsis().FixedWidth(0f).Flex(1f, 0f);
                 var actions = root.Row(TopiaForgeGap.Sm).FixedHeight(TopiaForgeTokens.ControlHeight);
-                mute = actions.Button("MUTE", () => { if (bound != null) screen.Mute(bound); }, TopiaForgeButtonStyle.Outline);
-                volume = actions.Slider("Volume %", 0, 100, 100, value => { if (bound != null) screen.Volume(bound, value / 100f); });
+                mute = actions.Button("MUTE", () => screen.Mute(bound), TopiaForgeButtonStyle.Outline);
+                volume = actions.Slider("Volume %", 0, 100, 100, value => screen.Volume(bound, value / 100f));
                 volume.Flex(1f, 0f);
                 moderation = actions.Row(TopiaForgeGap.Xs);
-                serverMute = moderation.Button("SERVER MUTE", () => { if (bound != null) screen.ServerMute(bound); }, TopiaForgeButtonStyle.Outline);
-                moderation.Button("KICK", () => { if (bound != null) screen.Kick(bound); }, TopiaForgeButtonStyle.Outline);
-                moderation.Button("BAN", () => { if (bound != null) screen.Ban(bound); }, TopiaForgeButtonStyle.Danger);
+                serverMute = moderation.Button("SERVER MUTE", () => screen.ServerMute(bound), TopiaForgeButtonStyle.Outline);
+                moderation.Button("KICK", () => screen.Kick(bound), TopiaForgeButtonStyle.Outline);
+                moderation.Button("BAN", () => screen.Ban(bound), TopiaForgeButtonStyle.Danger);
             }
-            internal void Bind(ScoreboardRow? row, int first, int columns)
+            internal void Destroy() { root.ReleaseFocus(); root.SetShown(false); root.Destroy(); }
+            internal void Bind(int index, int first, int columns)
             {
                 // A live re-sort must not leave keyboard focus on a different player's action.
-                if (!ReferenceEquals(bound, row)) root.ReleaseFocus();
-                root.SetShown(row != null); bound = row;
-                if (row == null) return;
+                if (position != index) root.ReleaseFocus();
+                root.SetSiblingIndex(index); position = index;
+                var row = bound;
                 name.SetText(row.Name); host.SetShown(row.IsHost); local.SetShown(row.IsLocal);
                 talk.SetState((TopiaForgeTalkState)row.Talk); signal.SetLevel(row.Signal, 4);
                 mute.SetText(row.Muted ? "UNMUTE" : "MUTE"); mute.SetEnabled(row.CanHear);

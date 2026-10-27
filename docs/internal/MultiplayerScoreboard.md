@@ -1,8 +1,10 @@
 # Scoreboard and avatar names
 
 Hold Tab in a live gameplay session to see its players. Releasing Tab, Escape,
-typing, a key capture, a modal or leaving gameplay closes the scoreboard. A held
+typing, a key capture, a modal, losing application focus or leaving gameplay closes the scoreboard. A held
 key cannot reopen it after another surface closes; release and press again.
+An input reset while another surface owns input or the application is unfocused
+does not count as that release.
 The action uses the existing input registry and its per-binding ownership rules.
 With a row control selected, kit navigation owns navigation keys and controller
 controls. The scoreboard changes no native action map.
@@ -18,6 +20,12 @@ Kick and ban use the existing destructive modal. Every action resolves the
 retained row's participant ID and player key in the current ready session. Host
 actions also recheck the current provider role after confirmation. Changed
 sessions, departed players and reused IDs cannot redirect an old action.
+A departed row's pending confirmation stays invalid even if the same ID and key
+return before it is answered.
+Each rendered row retains its identity while moving through the sorted list, so
+a mouse press or volume drag cannot switch targets mid-gesture. Departed rows
+are destroyed through the kit; new identities receive new controls. Retired
+column headers release their selected control before hiding.
 
 Local mute shares VOICE's stable-key mute book and reaches the voice SPI through
 the existing voice runtime. The SPI supplies playback streams; its contract has

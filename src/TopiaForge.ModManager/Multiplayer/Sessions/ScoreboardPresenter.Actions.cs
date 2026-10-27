@@ -52,6 +52,8 @@ namespace TopiaForge.ModManager.Sessions
         private bool Current(Target target, bool moderate, out IInternalMultiplayerControl? current, out MultiplayerParticipant? participant)
         {
             current = control(); participant = null;
+            // A delayed confirmation cannot revive authority removed by a roster refresh.
+            if (!targets.ContainsValue(target)) return false;
             if (!ReferenceEquals(current, target.Owner) || current == null || !current.IsLiveAvailable || current.Role == InternalSessionRole.Solo) return false;
             if (moderate && current.Role != InternalSessionRole.ListenHost) return false;
             var snapshot = current.SessionSnapshot;

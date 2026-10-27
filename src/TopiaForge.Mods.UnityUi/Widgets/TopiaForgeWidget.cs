@@ -90,6 +90,12 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeFocus.Release(Go);
         }
 
+        /// <summary>Reorders an identity-bound internal view without replacing its interactive controls.</summary>
+        internal void SetSiblingIndex(int index)
+        {
+            if (Go.transform.GetSiblingIndex() != index) Go.transform.SetSiblingIndex(index);
+        }
+
         /// <summary>
         /// Pushes a dismissible composition rooted in this widget. Back dismisses only the topmost surface;
         /// navigation belongs to this subtree only while one of its controls is selected, as for a kit window.

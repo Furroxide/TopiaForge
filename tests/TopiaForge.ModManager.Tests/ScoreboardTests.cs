@@ -15,6 +15,10 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             RowsAndColumns(); CurrentTargets(); RolesAndLifetime(); HoldOwnership(); PlaybackGain(); NametagsAndAllocations();
+            ScoreboardInteractionTests.Run();
+            ScoreboardViewContractTests.Run();
+            ScoreboardReviewTests.Run();
+            ScoreboardRetirementTests.Run();
             Console.WriteLine("ScoreboardTests passed: 6 production model/action/input/playback/nametag groups.");
         }
         private static void RowsAndColumns()

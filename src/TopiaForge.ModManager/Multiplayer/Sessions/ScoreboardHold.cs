@@ -7,8 +7,8 @@ namespace TopiaForge.ModManager.Sessions
         internal bool IsOpen { get; private set; }
         internal bool Tick(bool held, bool pressed, bool blocked, bool available)
         {
-            if (!held) { released = true; IsOpen = false; return false; }
             if (blocked || !available) { Dismiss(); return false; }
+            if (!held) { released = true; IsOpen = false; return false; }
             if (released && pressed) { IsOpen = true; released = false; }
             return IsOpen;
         }
