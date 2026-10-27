@@ -3,6 +3,7 @@ using System.IO;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
+using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModRuntime.Tests
@@ -19,6 +20,9 @@ namespace TopiaForge.ModRuntime.Tests
                 host.Game.Presence.HasPlayer = true;
                 host.Start();
                 host.LoadScene("Yard", true);
+                // The fake world supplies readiness; presence and motion keep their real runtime installation.
+                host.Runtime.Presence.RunningWorld = () => "world-one";
+                host.Runtime.Presence.RunningSpawn = () => new TransformState(Vec3.Zero, Quat.Identity, new Vec3(1f, 1f, 1f));
                 var near = MotionBox(host, 0);
                 var far = MotionBox(host, 1);
                 far.Position = new NetVector3(900f, 0f, 3f);
@@ -35,11 +39,20 @@ namespace TopiaForge.ModRuntime.Tests
                 Assert(missing.State == OwnershipState.Server && missing.Result == OwnershipResult.NoChange && !near.Kinematic,
                     "a grab before the first validated pose fails closed even when its packet reports a nearby player");
 
+                Pose(new NetVector3(900f, 0f, 0f), PresenceFlags.Teleported);
+                var firstForged = Grab(far, new NetVector3(900f, 0f, 0f));
+                var visible = host.Runtime.Presence.TryGetAvatar(raw.Id, out _);
+                Console.WriteLine("Hostile first pose: motion=" + firstForged.Result + ", avatar=" + visible +
+                    ", validated=" + host.Runtime.Presence.ValidatedPosition(raw.Id).HasValue);
+                Assert(firstForged.State == OwnershipState.Server && firstForged.Result == OwnershipResult.NoChange && !far.Kinematic &&
+                    !visible && host.Runtime.Presence.ValidatedPosition(raw.Id) == null,
+                    "a hostile first pose creates neither a validated position nor an avatar and cannot acquire a nearby body");
+
                 Pose(NetVector3.Zero);
                 var anchor = host.Runtime.Presence.ValidatedPosition(raw.Id);
                 Assert(anchor.HasValue && NearPoint(anchor.Value, NetVector3.Zero), "the host accepts the player's initial pose");
                 Pose(new NetVector3(900f, 0f, 0f));
-                Assert(host.Runtime.Presence.Counters.Corrections == 1 && host.Runtime.Presence.ValidatedPosition(raw.Id).Equals(anchor),
+                Assert(host.Runtime.Presence.Counters.Corrections == 2 && host.Runtime.Presence.ValidatedPosition(raw.Id).Equals(anchor),
                     "an unflagged pose 900 metres away is corrected without moving the validated anchor");
                 var forged = Grab(far, new NetVector3(900f, 0f, 0f));
                 Assert(forged.Result == OwnershipResult.OutOfRange && forged.State == OwnershipState.Server && !far.Kinematic,
@@ -53,9 +66,9 @@ namespace TopiaForge.ModRuntime.Tests
                 var stale = Grab(MotionBox(host, 2), NetVector3.Zero);
                 Assert(stale.State == OwnershipState.Server && stale.Result == OwnershipResult.NoChange,
                     "a stale validated position never falls back to the grab packet");
-                Assert(host.World.Motion.GrabsGranted == 1 && host.World.Motion.GrabsRefused == 3 && host.Fixture.Logger.Errors.Count == 0,
-                    "exactly one honest grab succeeds and all three invalid grabs are refused without a runtime error");
-                Console.WriteLine("Presence motion integration passed: missing, forged and stale positions refused; honest grab granted.");
+                Assert(host.World.Motion.GrabsGranted == 1 && host.World.Motion.GrabsRefused == 4 && host.Fixture.Logger.Errors.Count == 0,
+                    "exactly one honest grab succeeds and all four invalid grabs are refused without a runtime error");
+                Console.WriteLine("Presence motion integration passed: missing, hostile first, forged and stale positions refused; honest grab granted.");
 
                 void Frames(int count)
                 {
@@ -68,12 +81,15 @@ namespace TopiaForge.ModRuntime.Tests
                     }
                 }
 
-                void Pose(NetVector3 feet)
+                void Pose(NetVector3 feet, PresenceFlags flags = PresenceFlags.None)
                 {
+                    Assert(host.Runtime.Presence.TryGetPeer(raw.Id, out var peer), "the raw player is present");
                     var bits = new NetBitWriter(PresenceMessages.PoseBytes);
                     PresenceWire.WritePose(bits, new PresencePoseRecord
                     {
                         Millis = (uint)(clock.Now / 1000),
+                        Correction = peer!.Plausibility!.Correction,
+                        Flags = flags,
                         Position = NetQuantization.QuantizePosition(feet),
                         Rotation = NetQuantization.IdentityRotationBits,
                         EyeCentimeters = 160

@@ -64,17 +64,13 @@ namespace TopiaForge.ModManager
         /// <summary>A participant left the session for good: its index rests, and its slot frees with it.</summary>
         internal void Left(PresencePeer peer, long nowMicros) => presence.Roster.Release(peer.Id, nowMicros);
 
-        /// <summary>A player's link went or came back. Back, it may have moved meanwhile, so the next pose is measured afresh.</summary>
-        internal void LinkChanged(PresencePeer peer, bool connected, long nowMicros)
-        {
-            if (connected) peer.Plausibility?.Restart(nowMicros);
-        }
-
         /// <summary>Frame step 2: what the players sent since the last frame.</summary>
         internal void Receive(long nowMicros)
         {
             var open = presence.Channel;
             if (!active || open == null) return;
+            FollowWorld(nowMicros);
+            FollowStreams(open);
             while (open.IsOpen && open.TryReceive(out var message))
             {
                 if (!presence.TryGetPeer(message.Sender, out var peer) || peer == null || peer.IsLocal || peer.Removed)
@@ -192,18 +188,8 @@ namespace TopiaForge.ModManager
         /// <summary>Sends the player back to its last validated position, under the correction's number.</summary>
         private void Correct(PresencePeer peer, in PresenceCheck check)
         {
-            NetVector3 target;
-            if (check.HasCorrection)
-            {
-                target = NetQuantization.DequantizePosition(check.CorrectTo);
-            }
-            else
-            {
-                // Nothing of the player's was ever valid here: it goes to where the world put players, if the host knows.
-                var spawn = presence.RunningSpawn?.Invoke();
-                if (spawn == null) return;
-                target = new NetVector3(spawn.Value.Position.X, spawn.Value.Position.Y, spawn.Value.Position.Z);
-            }
+            if (!check.HasCorrection) return;
+            var target = NetQuantization.DequantizePosition(check.CorrectTo);
 
             peer.CorrectionDue = true;
             peer.CorrectionNumber = check.Correction;
@@ -233,8 +219,8 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
-        /// A player runs the host's world session now: the host measures it afresh from its next pose in that world, and
-        /// places it on the spawn ring, once per world.
+        /// A player runs the host's world session now: the host places it on the spawn ring once per world,
+        /// preserving any pose already validated against that world's readiness spawn.
         /// </summary>
         private void Arrive(PresencePeer peer, string world, long nowMicros)
         {
@@ -243,9 +229,8 @@ namespace TopiaForge.ModManager
             peer.PlacedWorld = world;
             peer.Slot = -1;
             peer.PlacementDue = false;
-            peer.Plausibility?.Restart(nowMicros);
             var spawn = presence.RunningSpawn?.Invoke();
-            if (spawn == null) return;
+            if (!TrySpawnPosition(spawn, out var point)) return;
             occupied.Clear();
             var all = presence.Peers;
             for (var index = 0; index < all.Count; index++)
@@ -254,11 +239,10 @@ namespace TopiaForge.ModManager
                 if (!ReferenceEquals(other, peer) && other.Slot >= 0 && string.Equals(other.PlacedWorld, world, StringComparison.Ordinal)) occupied.Add(other.Slot);
             }
 
-            var point = new NetVector3(spawn.Value.Position.X, spawn.Value.Position.Y, spawn.Value.Position.Z);
             SpawnSlot slot;
             try
             {
-                if (!point.IsFinite || !planner.TryPlan(point, occupied, out slot)) return;
+                if (!planner.TryPlan(point, occupied, out slot) || !IsRepresentable(slot.Position)) return;
             }
             catch (Exception exception)
             {
@@ -269,7 +253,7 @@ namespace TopiaForge.ModManager
             peer.Slot = slot.Index;
             peer.PlacementDue = true;
             peer.PlacementFeet = slot.Position;
-            var rotation = spawn.Value.Rotation;
+            var rotation = spawn!.Value.Rotation;
             peer.PlacementYaw = RemotePlayerAvatar.YawOf(new NetQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W));
             peer.Plausibility?.ExpectPlacement(NetQuantization.QuantizePosition(slot.Position), nowMicros);
             presence.Counters.Placements++;

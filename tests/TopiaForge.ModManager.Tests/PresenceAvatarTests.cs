@@ -100,8 +100,10 @@ namespace TopiaForge.ModManager.Tests
             rig.Frames(2);
             That(bodies.Made[0].Disposed && bodies.Made.Count == 2 && avatar.IsWearingBody, "a body the game destroyed is replaced");
             rig.Host.SceneVersion++;
-            rig.Frames(2);
-            That(bodies.Made[1].Disposed && bodies.Made.Count == 3 && avatar.IsWearingBody, "and a scene change dresses every avatar afresh");
+            rig.Frames(1);
+            That(bodies.Made[1].Disposed && avatar.Destroyed, "a scene change retires the old world's avatar before a new pose");
+            That(rig.RunUntil(() => rig.Host.AvatarOf(player)?.IsWearingBody == true, 100) && bodies.Made.Count == 3,
+                "a fresh pose in the new scene dresses a new avatar");
         }
 
         private static void AvatarsTheGameDestroysAreMadeAgain()

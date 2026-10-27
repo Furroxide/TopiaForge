@@ -34,12 +34,19 @@ namespace TopiaForge.ModManager.Tests
 
         private static NetQuantizedPosition At(float x, float y = 0f, float z = 0f) => NetQuantization.QuantizePosition(new NetVector3(x, y, z));
 
+        private static PresencePlausibility AtSpawn(NetQuantizedPosition spawn)
+        {
+            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            rules.SetInitialPosition(spawn, 0);
+            return rules;
+        }
+
         private static PresenceCheck Check(PresencePlausibility rules, NetQuantizedPosition position, long now, PresenceFlags flags = PresenceFlags.None, byte? correction = null) =>
             rules.Check(position, NetQuantization.IdentityRotationBits, flags, correction ?? rules.Correction, now, PresenceBounds.Everywhere);
 
         private static void RunningWithinTheBudgetStands()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Equal(PresenceVerdict.Accepted, Check(rules, At(0), 0).Verdict, "the first pose anchors the player");
             var now = 0L;
             var x = 0f;
@@ -59,7 +66,7 @@ namespace TopiaForge.ModManager.Tests
             // The tolerance is slack once, not on every pose: a steady 40 m/s, a third past the limit, stands only while the bank
             // lasts. The first tick spends 2 m of a full bank, each after it half a metre more than it earns, so the 60 m bank
             // runs dry on the 119th.
-            var steady = new PresencePlausibility(PresencePolicy.Default, 0);
+            var steady = AtSpawn(At(0f));
             Check(steady, At(0f), 0);
             var caught = -1;
             var at = 0f;
@@ -74,7 +81,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TooFastIsCorrectedToTheLastValidPose()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(5f, 1f, 5f));
             Check(rules, At(5f, 1f, 5f), 0);
             Check(rules, At(5f, 1f, 6f), Tick);
             var check = Check(rules, At(5f, 1f, 200f), 2 * Tick);
@@ -86,7 +93,7 @@ namespace TopiaForge.ModManager.Tests
             Equal(At(5f, 1f, 6f), rules.Anchor, "the refused pose never moves the anchor");
 
             // Climbing counts against the same budget as running.
-            var climber = new PresencePlausibility(PresencePolicy.Default, 0);
+            var climber = AtSpawn(At(0f));
             Check(climber, At(0f), 0);
             Equal(PresenceVerdict.Accepted, Check(climber, At(0f, 50f), Second).Verdict, "50 m up in a second stands while the bank allows it");
             Equal(PresenceVerdict.Corrected, Check(climber, At(0f, 90f), Second + Tick).Verdict, "40 m more up a tick later does not");
@@ -94,7 +101,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void FallingHasABudgetOfItsOwn()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f, 500f));
             Check(rules, At(0f, 500f), 0);
             var now = 0L;
             var y = 500f;
@@ -105,7 +112,7 @@ namespace TopiaForge.ModManager.Tests
                 Equal(PresenceVerdict.Accepted, Check(rules, At(0f, y), now).Verdict, "a fall at 62 m/s stands, past the running limit (tick " + tick + ")");
             }
 
-            var shoved = new PresencePlausibility(PresencePolicy.Default, 0);
+            var shoved = AtSpawn(At(0f, 500f));
             Check(shoved, At(0f, 500f), 0);
             Equal(PresenceVerdict.Corrected, Check(shoved, At(0f, 300f), Tick).Verdict, "200 m down in a tick is not a fall");
         }
@@ -114,7 +121,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var world = PresenceBounds.FromMeters(new NetVector3(-10f, -2f, -10f), new NetVector3(10f, 5f, 10f), 64f, 256f);
             True(world.IsLimited, "a measured world is limited");
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Equal(PresenceVerdict.Accepted, rules.Check(At(0f), NetQuantization.IdentityRotationBits, PresenceFlags.None, 0, 0, world).Verdict, "inside");
             Equal(PresenceVerdict.Accepted, rules.Check(At(73.9f), NetQuantization.IdentityRotationBits, PresenceFlags.Teleported, 0, Second, world).Verdict,
                 "the margin lets a player out to 64 m past the colliders");
@@ -126,13 +133,13 @@ namespace TopiaForge.ModManager.Tests
 
             var lost = new PresencePlausibility(PresencePolicy.Default, 0);
             var first = lost.Check(At(500f), NetQuantization.IdentityRotationBits, PresenceFlags.None, 0, 0, world);
-            True(first.Verdict == PresenceVerdict.Corrected && !first.HasCorrection, "a first pose outside the world has nothing valid to go back to");
+            True(first.Verdict == PresenceVerdict.Ignored && !first.HasCorrection, "a first pose outside the world has nothing valid to go back to");
             True(PresenceBounds.Everywhere.Contains(At(4095f, -4096f, 4095f)), "unmeasured bounds take every pose the wire carries");
         }
 
         private static void TeleportsNeedTheFlagAndTheAllowance()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Check(rules, At(0f), 0);
             Equal(PresenceVerdict.Accepted, Check(rules, At(500f), Tick, PresenceFlags.Teleported).Verdict, "a flagged teleport stands");
             Equal(PresenceVerdict.Accepted, Check(rules, At(-500f), 2 * Tick, PresenceFlags.Teleported).Verdict, "and a second at once");
@@ -150,7 +157,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void PosesOnTheirWayAreIgnoredForAMoment()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Check(rules, At(0f), 0);
             var corrected = Check(rules, At(300f), Tick);
             Equal(PresenceVerdict.Corrected, corrected.Verdict, "a cheat is corrected");
@@ -166,7 +173,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TheFifthStrikeKicks()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Check(rules, At(0f), 0);
             var now = 0L;
             for (var strike = 1; strike < PresencePolicy.DefaultStrikesBeforeKick; strike++)
@@ -186,7 +193,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void StrikesAreForgivenOverTime()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Check(rules, At(0f), 0);
             Check(rules, At(900f), Tick);
             Check(rules, At(900f), 2 * Tick, PresenceFlags.None, 0);
@@ -199,7 +206,7 @@ namespace TopiaForge.ModManager.Tests
             Equal(1, later.Strikes, "a strike after a clean spell starts from nothing");
 
             // An honest player with a lag spike now and then is never removed.
-            var honest = new PresencePlausibility(PresencePolicy.Default, 0);
+            var honest = AtSpawn(At(0f));
             Check(honest, At(0f), 0);
             var now = 0L;
             for (var spike = 0; spike < 50; spike++)
@@ -212,21 +219,21 @@ namespace TopiaForge.ModManager.Tests
 
         private static void APlacementIsTakenAsItLands()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Check(rules, At(0f), 0);
             rules.ExpectPlacement(At(900f), Tick);
             Equal(PresenceVerdict.Accepted, Check(rules, At(901.5f), 2 * Tick).Verdict, "the host's own placement is taken wherever it is, within two metres");
             Equal(PresenceVerdict.Accepted, Check(rules, At(902f), 3 * Tick).Verdict, "and measured from there on");
             rules.ExpectPlacement(At(-900f), 4 * Tick);
             Equal(PresenceVerdict.Corrected, Check(rules, At(-900f), 4 * Tick + 11 * Second).Verdict, "a placement waits ten seconds at most");
-            var near = new PresencePlausibility(PresencePolicy.Default, 0);
+            var near = AtSpawn(At(0f));
             Check(near, At(0f), 0);
             near.ExpectPlacement(At(900f), Tick);
             Equal(PresenceVerdict.Corrected, Check(near, At(904f), 2 * Tick).Verdict, "four metres off is not the placement");
 
             foreach (var flags in new[] { PresenceFlags.None, PresenceFlags.Teleported })
             {
-                var arriving = new PresencePlausibility(PresencePolicy.Default, 0);
+                var arriving = AtSpawn(At(0f));
                 arriving.ExpectPlacement(At(900f), 0);
                 Check(arriving, At(0f), Tick);
                 Equal(PresenceVerdict.Accepted, Check(arriving, At(900f), 2 * Tick, flags).Verdict,
@@ -242,7 +249,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void AwayWhileMovingIsCleared()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             Check(rules, At(0f), 0);
             True((Check(rules, At(0.2f), Second, PresenceFlags.Away).Flags & PresenceFlags.Away) != 0, "away while standing still stands");
             True((Check(rules, At(3f), 2 * Second, PresenceFlags.Away).Flags & PresenceFlags.Away) == 0, "away while running is cleared");
@@ -258,14 +265,16 @@ namespace TopiaForge.ModManager.Tests
 
         private static void FreshnessAndRestart()
         {
-            var rules = new PresencePlausibility(PresencePolicy.Default, 0);
+            var rules = AtSpawn(At(0f));
             True(!rules.IsFresh(0), "nothing is fresh before a pose");
             Check(rules, At(1f), Second);
             True(rules.IsFresh(Second + PresencePolicy.DefaultStaleAfterMicros), "a pose stays fresh for 2.5 seconds");
             True(!rules.IsFresh(Second + PresencePolicy.DefaultStaleAfterMicros + 1), "and no longer");
             rules.Restart(2 * Second);
             True(!rules.HasAnchor && !rules.IsFresh(2 * Second), "a restart forgets the anchor");
-            Equal(PresenceVerdict.Accepted, Check(rules, At(3000f), 2 * Second + 1).Verdict, "and takes the next pose wherever it is, as a new world's");
+            Equal(PresenceVerdict.Ignored, Check(rules, At(3000f), 2 * Second + 1).Verdict, "a new world waits for its trusted spawn");
+            rules.SetInitialPosition(At(3000f), 2 * Second + 1);
+            Equal(PresenceVerdict.Accepted, Check(rules, At(3000f), 2 * Second + 2).Verdict, "a pose at that spawn stands");
         }
 
         private static void HealthKeepsToTheGamesRules()
