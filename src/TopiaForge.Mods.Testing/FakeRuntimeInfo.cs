@@ -15,8 +15,8 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Creates runtime metadata with the current V1 release-candidate defaults.</summary>
         public FakeRuntimeInfo()
         {
-            LoaderVersion = SemanticVersion.Parse("0.1.0-rc.1");
-            SdkVersion = SemanticVersion.Parse("0.1.0-rc.1");
+            LoaderVersion = SemanticVersion.Parse("0.2.0");
+            SdkVersion = SemanticVersion.Parse("0.2.0");
             gameVersion = SemanticVersion.Parse("0.0.2545");
             Platform = "test";
             Architecture = "x64";

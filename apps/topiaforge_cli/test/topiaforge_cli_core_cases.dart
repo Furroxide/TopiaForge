@@ -280,7 +280,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.1.0-rc.1" />',
+        '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.2.0" />',
       ),
     );
 
@@ -306,7 +306,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
     expect(withInterop['capabilities'], contains('unsafe-native'));
     expect(
       project.readAsStringSync(),
-      contains('Include="TopiaForge.Mods.Interop.Unity" Version="0.1.0-rc.1"'),
+      contains('Include="TopiaForge.Mods.Interop.Unity" Version="0.2.0"'),
     );
 
     final removeModule = await currentHarness().runCli([
@@ -352,7 +352,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       r'<TopiaForgeSdkFeed>([^<]+)</TopiaForgeSdkFeed>',
     ).firstMatch(devProps)!.group(1)!;
     final interopPackage = File(
-      p.join(feedPath, 'TopiaForge.Mods.Interop.Unity.0.1.0-rc.1.nupkg'),
+      p.join(feedPath, 'TopiaForge.Mods.Interop.Unity.0.2.0.nupkg'),
     );
     final interopArchive = ZipDecoder().decodeBytes(
       interopPackage.readAsBytesSync(),

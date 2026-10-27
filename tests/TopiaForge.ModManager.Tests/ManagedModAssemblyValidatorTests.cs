@@ -291,8 +291,8 @@ namespace TopiaForge.ModManager.Tests
                 EntryAssembly = assembly,
                 EntryType = type,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
-                SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0"
+                SupportedLoaderVersionRange = ">=0.2.0 <0.3.0",
+                SupportedSdkVersionRange = ">=0.2.0 <0.3.0"
             };
         }
 

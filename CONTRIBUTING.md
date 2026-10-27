@@ -9,7 +9,7 @@ details.
 
 ## Developer Certificate of Origin
 
-Contributions made after the `v0.1.0-rc.1` cutover must certify the
+Every commit introduced by a pull request must certify the
 [Developer Certificate of Origin 1.1](DCO). Add a trailer to every commit:
 
 ```text
@@ -18,7 +18,9 @@ Signed-off-by: Your Name <your-email@example.com>
 
 Git can add it with `git commit --signoff`. The trailer states that you have
 the right to submit the work under the project's license; it is not a copyright
-assignment. Existing history before `v0.1.0-rc.1` is grandfathered.
+assignment. Already-integrated history in the verified PR base is outside
+the incoming commit range. Enforcement does not depend on a release tag or
+the current product version.
 
 ## Pull requests
 

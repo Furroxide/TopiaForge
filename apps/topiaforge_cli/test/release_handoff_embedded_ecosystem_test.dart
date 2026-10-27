@@ -22,7 +22,7 @@ void main() {
     temp = Directory.systemTemp.createTempSync(
       'topiaforge-handoff-embedded-test-',
     );
-    root = writeSignedReleaseHandoffRoot(temp);
+    root = writeSignedReleaseHandoffRoot(temp, version: version);
   });
 
   tearDown(() {

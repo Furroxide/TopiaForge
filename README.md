@@ -141,7 +141,7 @@ TopiaForge is in early **0.x** development and has not had a stable release.
 
 | | |
 | --- | --- |
-| Current candidate | `v0.1.0-rc.1` — prerelease, release readiness **blocked** |
+| Current candidate | `v0.2.0` — release readiness **blocked** (see [release notes](release/notes/v0.2.0.md)) |
 | Platforms | Windows x64 only in this candidate |
 | Robotopia target | build `2545` (canonical pin: [`.github/robotopia-game-build.json`](.github/robotopia-game-build.json)) |
 | Registry | First-party artifacts only; community submissions closed pending moderation policy |

@@ -37,7 +37,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       (manifest['dependencies']
           as Map)['io.github.furroxide.topiaforge.multiplayer'],
-      '0.1.0-rc.1',
+      '0.2.0',
     );
     expect(added.stdout, contains('topiaforge mod sync multiplayer'));
 
@@ -48,13 +48,13 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.1.0-rc.1" />',
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.2.0" />',
       ),
     );
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.1.0-rc.1" PrivateAssets="all" />',
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.2.0" PrivateAssets="all" />',
       ),
     );
     final lockFile = File(
@@ -230,7 +230,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
         'protocol': {'version': '1.0.0', 'peerVersionRange': '>=1.0.0 <2.0.0'},
       });
       expect(manifest['dependencies'], {
-        'io.github.furroxide.topiaforge.multiplayer': '0.1.0-rc.1',
+        'io.github.furroxide.topiaforge.multiplayer': '0.2.0',
       });
       expect(manifest['capabilities'], ['hud', 'input']);
 
@@ -243,9 +243,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
       ]) {
         expect(
           project,
-          contains(
-            '<PackageReference Include="$package" Version="0.1.0-rc.1" />',
-          ),
+          contains('<PackageReference Include="$package" Version="0.2.0" />'),
         );
       }
       for (final analyzer in const [
@@ -255,7 +253,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
         expect(
           project,
           contains(
-            '<PackageReference Include="$analyzer" Version="0.1.0-rc.1" PrivateAssets="all" />',
+            '<PackageReference Include="$analyzer" Version="0.2.0" PrivateAssets="all" />',
           ),
         );
       }

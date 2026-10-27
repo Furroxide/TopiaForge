@@ -6,7 +6,7 @@ description: 0.x source, binary, manifest, runtime, and package compatibility po
 # Compatibility policy
 
 TopiaForge runtime, SDK, CLI, launcher, schemas, and first-party packages use Semantic Versioning 2 and
-are currently on the **0.x** line, starting at `0.1.0-rc.1`.
+are on the **0.x** line, currently targeting `0.2.0`. Historical RC1 artifacts retain their own versions.
 
 **A 0.x line makes no cross-minor compatibility promise.** Under SemVer the breaking axis below `1.0.0`
 is MINOR, so anything in this document that holds "within a release" holds within a 0.x **patch**, and a

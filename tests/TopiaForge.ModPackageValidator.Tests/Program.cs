@@ -9,7 +9,7 @@ namespace TopiaForge.ModPackageValidator.Tests;
 
 internal static class Program
 {
-    private const string SdkVersion = "0.1.0-rc.1";
+    private const string SdkVersion = "0.2.0";
     private const string ContractLockPath = "topiaforge.multiplayer.lock.json";
 
     private static int Main()

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Target the TopiaForge 0.2 loader and SDK line.
+
 ## 0.1.0-rc.1
 
 - Add authenticated creator catalogs and owner-scoped custom content factories.

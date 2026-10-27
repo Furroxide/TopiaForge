@@ -4,6 +4,10 @@
 
 - Added the game's VOICE controls, versioned consent, push-to-talk, microphone test and meter, global playback and player-key mutes. Microphone capture yields to native recording and RobotKit; positional playback and HUD indicators follow their dependent slices.
 
+## 0.2.0
+
+- Target the TopiaForge 0.2 loader and SDK line.
+
 ## 0.1.0-rc.1
 
 - Added the Players runtime: permanent player handles, presence reads and avatar targets, owner-applied damage, healing and teleportation, per-player input edges, targeted interactive UI, and replicated scoreboard columns. The same API works in solo play. Handles never retarget after a join, repeated directory reads allocate nothing, and cancelling a join before its first flush no longer sends a premature leave. A remote modal always reports one answer, a failing UI callback or join handler is logged to its mod, and a client-local or server-only mod says when it cannot reach another player instead of reporting success.

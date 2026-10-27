@@ -10,23 +10,28 @@ import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
 import 'package:test/test.dart';
 
+import 'release_metadata_source_fixture.dart';
+
 part 'release_metadata_fixtures.dart';
 
 void main() {
   late Directory temp;
+  late Directory sourceFixture;
   late String root;
   late TopiaForgeReleaseCatalogEntry release;
   const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-metadata-test-');
-    root = _repositoryRoot();
-    release = TopiaForgeReleaseCatalog.load(root).release('0.1.0-rc.1');
+    sourceFixture = writeMetadataPrereleaseFixture(_repositoryRoot());
+    root = sourceFixture.path;
+    release = TopiaForgeReleaseCatalog.load(root).release('0.2.0-rc.1');
     _writeCandidateAssets(temp, release);
   });
 
   tearDown(() {
     if (temp.existsSync()) temp.deleteSync(recursive: true);
+    sourceFixture.deleteSync(recursive: true);
   });
 
   test('release catalog schema and parser retain prerelease state', () {
@@ -43,12 +48,15 @@ void main() {
 
     expect(result.isValid, isTrue, reason: result.errors.join('\n'));
     expect(catalogJson['schemaVersion'], 3);
-    expect(release.version, '0.1.0-rc.1');
-    expect(release.tag, 'v0.1.0-rc.1');
+    expect(release.version, '0.2.0-rc.1');
+    expect(release.tag, 'v0.2.0-rc.1');
     expect(release.prerelease, isTrue);
 
     final entryWithoutFlag = Map<String, Object?>.from(
-      (catalogJson['releases'] as List).single as Map,
+      (catalogJson['releases'] as List).singleWhere(
+            (entry) => (entry as Map)['version'] == release.version,
+          )
+          as Map,
     )..remove('prerelease');
     final invalidCatalog = <String, Object?>{
       ...catalogJson,
@@ -78,61 +86,66 @@ void main() {
     );
   });
 
-  test('release policy preserves unsigned RC1 and signed default rules', () {
-    final policyFile = File(p.join(root, 'release', 'release-policy.json'));
-    final schemaFile = File(
-      p.join(root, 'schemas', 'topiaforge.release-policy.schema.json'),
-    );
-    final policyJson =
-        jsonDecode(policyFile.readAsStringSync()) as Map<String, Object?>;
-    final schema = JsonSchema.create(
-      jsonDecode(schemaFile.readAsStringSync()) as Map<String, Object?>,
-    );
-    expect(
-      schema.validate(policyJson).isValid,
-      isTrue,
-      reason: schema.validate(policyJson).errors.join('\n'),
-    );
+  test(
+    'release policy preserves unsigned prerelease and signed default rules',
+    () {
+      final policyFile = File(p.join(root, 'release', 'release-policy.json'));
+      final schemaFile = File(
+        p.join(root, 'schemas', 'topiaforge.release-policy.schema.json'),
+      );
+      final policyJson =
+          jsonDecode(policyFile.readAsStringSync()) as Map<String, Object?>;
+      final schema = JsonSchema.create(
+        jsonDecode(schemaFile.readAsStringSync()) as Map<String, Object?>,
+      );
+      expect(
+        schema.validate(policyJson).isValid,
+        isTrue,
+        reason: schema.validate(policyJson).errors.join('\n'),
+      );
 
-    final unsignedRoot = Directory(p.join(temp.path, 'unsigned-policy'));
-    _writeJson(
-      File(p.join(unsignedRoot.path, 'release/release-policy.json'))
-        ..createSync(recursive: true),
-      {
-        ...policyJson,
-        'signingIdentities': {'windowsDistribution': 'unsigned'},
-      },
-    );
-    final policy = TopiaForgeReleasePolicy.load(unsignedRoot.path);
-    expect(policy.targetPlatforms, ['windows-x64']);
-    expect(policy.windowsCertificateSha256, isEmpty);
-    expect(policy.distributesWindowsUnsigned, isTrue);
-    expect(policy.requiresWindowsSigningIdentity, isFalse);
-    expect(policy.hasConfiguredWindowsSigningIdentity, isFalse);
+      final unsignedRoot = Directory(p.join(temp.path, 'unsigned-policy'));
+      _writeJson(
+        File(p.join(unsignedRoot.path, 'release/release-policy.json'))
+          ..createSync(recursive: true),
+        {
+          ...policyJson,
+          'signingIdentities': {'windowsDistribution': 'unsigned'},
+        },
+      );
+      final policy = TopiaForgeReleasePolicy.load(unsignedRoot.path);
+      expect(policy.targetPlatforms, ['windows-x64']);
+      expect(policy.windowsCertificateSha256, isEmpty);
+      expect(policy.distributesWindowsUnsigned, isTrue);
+      expect(policy.requiresWindowsSigningIdentity, isFalse);
+      expect(policy.hasConfiguredWindowsSigningIdentity, isFalse);
 
-    final configuredJson = jsonDecode(jsonEncode(policyJson)) as Map;
-    configuredJson['signingIdentities'] = {
-      'windowsCertificateSha256': List.filled(64, 'a').join(),
-    };
-    final configuredRoot = Directory(p.join(temp.path, 'configured-policy'));
-    File(p.join(configuredRoot.path, 'release', 'release-policy.json'))
-      ..createSync(recursive: true)
-      ..writeAsStringSync(jsonEncode(configuredJson));
-    final configuredPolicy = TopiaForgeReleasePolicy.load(configuredRoot.path);
-    expect(configuredPolicy.hasConfiguredWindowsSigningIdentity, isTrue);
-    expect(schema.validate(configuredJson).isValid, isTrue);
+      final configuredJson = jsonDecode(jsonEncode(policyJson)) as Map;
+      configuredJson['signingIdentities'] = {
+        'windowsCertificateSha256': List.filled(64, 'a').join(),
+      };
+      final configuredRoot = Directory(p.join(temp.path, 'configured-policy'));
+      File(p.join(configuredRoot.path, 'release', 'release-policy.json'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync(jsonEncode(configuredJson));
+      final configuredPolicy = TopiaForgeReleasePolicy.load(
+        configuredRoot.path,
+      );
+      expect(configuredPolicy.hasConfiguredWindowsSigningIdentity, isTrue);
+      expect(schema.validate(configuredJson).isValid, isTrue);
 
-    final zeroPinJson = jsonDecode(jsonEncode(configuredJson)) as Map;
-    (zeroPinJson['signingIdentities'] as Map)['windowsCertificateSha256'] =
-        List.filled(64, '0').join();
-    expect(schema.validate(zeroPinJson).isValid, isFalse);
+      final zeroPinJson = jsonDecode(jsonEncode(configuredJson)) as Map;
+      (zeroPinJson['signingIdentities'] as Map)['windowsCertificateSha256'] =
+          List.filled(64, '0').join();
+      expect(schema.validate(zeroPinJson).isValid, isFalse);
 
-    final exceptionJson = jsonDecode(jsonEncode(policyJson)) as Map;
-    (exceptionJson['publication'] as Map)['codeSigningException'] = {
-      'legacy': 'forbidden',
-    };
-    expect(schema.validate(exceptionJson).isValid, isFalse);
-  });
+      final exceptionJson = jsonDecode(jsonEncode(policyJson)) as Map;
+      (exceptionJson['publication'] as Map)['codeSigningException'] = {
+        'legacy': 'forbidden',
+      };
+      expect(schema.validate(exceptionJson).isValid, isFalse);
+    },
+  );
 
   test('release policy rejects a mismatched prerelease flag', () async {
     final mismatched = TopiaForgeReleaseCatalogEntry(
@@ -156,7 +169,7 @@ void main() {
 
     expect(
       issues,
-      contains('Catalog prerelease false does not match version 0.1.0-rc.1.'),
+      contains('Catalog prerelease false does not match version 0.2.0-rc.1.'),
     );
   });
 
@@ -365,7 +378,7 @@ void main() {
       prerelease: release.prerelease,
       status: release.status,
       notesFile: release.notesFile,
-      components: {...release.components, 'sdk': '0.1.1', 'unityUi': '0.1.1'},
+      components: {...release.components, 'sdk': '0.2.1', 'unityUi': '0.2.1'},
       vpmPackages: release.vpmPackages,
       mods: release.mods,
       excludedDeveloperMods: release.excludedDeveloperMods,
@@ -392,7 +405,7 @@ void main() {
 
     expect(
       issues,
-      contains('$abstractions Version 0.1.0-rc.1 does not match 0.1.1.'),
+      contains('$abstractions Version 0.2.0 does not match 0.2.1.'),
     );
     expect(hasAssemblyIssue(abstractions), isFalse);
     expect(hasAssemblyIssue(unityUi), isFalse);

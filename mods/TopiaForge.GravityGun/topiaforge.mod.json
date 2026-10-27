@@ -3,7 +3,7 @@
   "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.gravitygun",
   "displayName": "Gravity Gun",
-  "version": "0.1.0-rc.1",
+  "version": "0.2.0",
   "author": {
     "name": "TopiaForge"
   },
@@ -12,8 +12,8 @@
   "entryType": "TopiaForge.GravityGun.GravityGunMod",
   "dependencies": {},
   "supportedGameVersionRange": ">=0.0.2545 <0.0.2600",
-  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
-  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "category": "Gameplay",
   "tags": [
     "gravity-gun",

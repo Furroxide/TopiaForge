@@ -9,11 +9,11 @@
       MINOR, not MAJOR, so AssemblyVersion stays pinned for all of 0.1.x;
       Version/FileVersion move per release.
     -->
-    <Version>0.1.0-rc.1</Version>
-    <PackageVersion>0.1.0-rc.1</PackageVersion>
+    <Version>0.2.0</Version>
+    <PackageVersion>0.2.0</PackageVersion>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
-    <InformationalVersion>0.1.0-rc.1</InformationalVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591;CS1574</WarningsAsErrors>
     <ProduceReferenceAssembly>true</ProduceReferenceAssembly>

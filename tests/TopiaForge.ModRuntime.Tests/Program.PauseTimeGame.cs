@@ -31,7 +31,7 @@ namespace TopiaForge.ModRuntime.Tests
             internal TimeGame(string root, LoopbackControl control, WorldTestClock clock)
             {
                 Control = control;
-                chronos = TimePackage(root, ChronosId, "TopiaForge Chronos", "0.1.0-rc.1", "TopiaForge.Chronos.ChronosMod", "TopiaForge.Chronos.dll", null);
+                chronos = TimePackage(root, ChronosId, "TopiaForge Chronos", "0.2.0", "TopiaForge.Chronos.ChronosMod", "TopiaForge.Chronos.dll", null);
                 gamemode = TimePackage(root, TimeGamemodeId, "Time gamemode", "1.0.0", "TopiaForge.ValidTestMod.RuntimeTimeConsumerMod", FixtureAssembly, ChronosId);
                 Runtime = new RuntimeUnderTest(
                     new ManagerPaths(root),
@@ -152,10 +152,10 @@ namespace TopiaForge.ModRuntime.Tests
                     EntryAssembly = assemblyName,
                     EntryType = entryType,
                     SupportedGameVersionRange = "*",
-                    SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
-                    SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0"
+                    SupportedLoaderVersionRange = ">=0.2.0 <0.3.0",
+                    SupportedSdkVersionRange = ">=0.2.0 <0.3.0"
                 };
-                if (dependency != null) manifest.Dependencies.Add(dependency, ">=0.1.0-rc.1 <0.2.0");
+                if (dependency != null) manifest.Dependencies.Add(dependency, ">=0.2.0 <0.3.0");
                 JsonUtil.SaveFile(
                     Path.Combine(packagePath, PackageInstallReceipt.FileName),
                     PackageInstallReceipt.Create(Path.Combine(packagePath, assemblyName), packagePath, manifest));

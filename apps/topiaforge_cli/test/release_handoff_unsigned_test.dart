@@ -35,7 +35,12 @@ void main() {
   });
 
   Future<ReleaseHandoffVerification> run(String windowsDistribution) async {
-    final candidate = _overlayRoot(root, temp, windowsDistribution);
+    final candidate = _overlayRoot(
+      root,
+      temp,
+      windowsDistribution,
+      version: version,
+    );
     final assets = Directory(p.join(temp.path, 'assets-$windowsDistribution'))
       ..createSync(recursive: true);
     File(
@@ -118,7 +123,7 @@ void main() {
   test(
     'an unsigned candidate is rejected if it sends Authenticode anyway',
     () async {
-      final candidate = _overlayRoot(root, temp, 'unsigned');
+      final candidate = _overlayRoot(root, temp, 'unsigned', version: version);
       final assets = Directory(p.join(temp.path, 'assets-contradiction'))
         ..createSync(recursive: true);
       File(
@@ -154,18 +159,29 @@ void main() {
             releasePlatformBundleFileName('windows-x64'),
           ),
         ),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('validations must be exactly'),
+          ),
+        ),
       );
     },
   );
 }
 
 /// A repository root carrying the release inputs the handoff contract reads,
-/// with the Windows distribution mode overridden.
+/// with the candidate version and Windows distribution mode overridden.
 ///
 /// Copying the five files it actually opens keeps the test honest about the
 /// real schemas and the real pinned game build without needing a full checkout.
-String _overlayRoot(String root, Directory temp, String windowsDistribution) {
+String _overlayRoot(
+  String root,
+  Directory temp,
+  String windowsDistribution, {
+  required String version,
+}) {
   final candidate = Directory(p.join(temp.path, 'root-$windowsDistribution'))
     ..createSync(recursive: true);
   for (final relative in const [
@@ -187,6 +203,7 @@ String _overlayRoot(String root, Directory temp, String windowsDistribution) {
             ).readAsStringSync(),
           )
           as Map<String, Object?>;
+  (policy['versioning'] as Map)['productVersion'] = version;
   policy['signingIdentities'] = <String, Object?>{
     'windowsDistribution': windowsDistribution,
     if (windowsDistribution != 'unsigned')

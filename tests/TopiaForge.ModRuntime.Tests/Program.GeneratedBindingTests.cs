@@ -74,7 +74,7 @@ namespace TopiaForge.ModRuntime.Tests
         {
             var paths = new ManagerPaths(Path.Combine(root, "runtime"));
             var state = new ManagerState();
-            var validation = new ManifestValidationContext("0.0.2545", "0.1.0-rc.1", "0.1.0-rc.1",
+            var validation = new ManifestValidationContext("0.0.2545", "0.2.0", "0.2.0",
                 platform: "windows", architecture: "x64", contentTargets: new[] { "code", "standalonewindows64" }, enforceRuntimeCompatibility: true);
             var fixtureManifest = GeneratedWorldsManifest();
             InstallGeneratedArchive(Path.Combine(root, "dependency.topiaforgemod"), paths, state, validation,
@@ -201,12 +201,12 @@ namespace TopiaForge.ModRuntime.Tests
             Id = GeneratedWorldsId,
             Name = "Declared engine fixture",
             Author = new ModAuthor { Name = "TopiaForge Tests" },
-            Version = "0.1.0-rc.1",
+            Version = "0.2.0",
             EntryAssembly = GeneratedDependencyAssembly,
             EntryType = "TopiaForge.GeneratedWorldsTestMod.Entry",
             SupportedGameVersionRange = "*",
-            SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
-            SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0",
+            SupportedLoaderVersionRange = ">=0.2.0 <0.3.0",
+            SupportedSdkVersionRange = ">=0.2.0 <0.3.0",
             Contributions = new ModContributions
             {
                 Worlds = new List<ModWorldDeclaration> { new ModWorldDeclaration { Id = GeneratedWorldsId + ".open_sandbox", Name = "Engine fixture",

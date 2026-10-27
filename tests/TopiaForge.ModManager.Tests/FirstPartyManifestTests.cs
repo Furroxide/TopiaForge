@@ -32,8 +32,8 @@ namespace TopiaForge.ModManager.Tests
             "io.github.furroxide.topiaforge.robotkit",
             "io.github.furroxide.topiaforge.worlds",
         };
-        private const string LoaderRange = ">=0.1.0-rc.1 <0.2.0";
-        private const string SdkRange = ">=0.1.0-rc.1 <0.2.0";
+        private const string LoaderRange = ">=0.2.0 <0.3.0";
+        private const string SdkRange = ">=0.2.0 <0.3.0";
 
         // The network class WS4 of the live-multiplayer plan gives each first-party mod. Four change only the game of the
         // player who enables them: behaviour-identical engine fixes, performance and quality levers (whose physics knobs
@@ -67,6 +67,7 @@ namespace TopiaForge.ModManager.Tests
 
         internal static void Run()
         {
+            ReleaseVersionTests.Run();
             var repoRoot = FindRepoRoot();
             var manifestPaths = Directory.GetFiles(
                     Path.Combine(repoRoot, "mods"),
@@ -97,9 +98,9 @@ namespace TopiaForge.ModManager.Tests
                         ? manifest.Id + " declares native bindings, so it must pin the audited Robotopia build"
                         : manifest.Id + " rides the SDK alone, so it must declare the bounded game range");
                 Assert(manifest.SupportedLoaderVersionRange == LoaderRange,
-                    manifest.Id + " must declare the compatible V1 loader line");
+                    manifest.Id + " must declare the compatible 0.2 loader line");
                 Assert(manifest.SupportedSdkVersionRange == SdkRange,
-                    manifest.Id + " must declare the compatible V1 SDK line");
+                    manifest.Id + " must declare the compatible 0.2 SDK line");
                 Assert(manifest.License == "AGPL-3.0-or-later",
                     manifest.Id + " must use the approved project license");
                 // A mod that vendors third-party source ships that source's notices beside the project license.

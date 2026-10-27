@@ -6,8 +6,8 @@ import 'package:test/test.dart';
 
 void main() {
   test('launcher compatibility versions match the bundled runtime', () {
-    expect(TopiaForgeRuntimeVersions.loaderVersion, '0.1.0-rc.1');
-    expect(TopiaForgeRuntimeVersions.sdkVersion, '0.1.0-rc.1');
+    expect(TopiaForgeRuntimeVersions.loaderVersion, '0.2.0');
+    expect(TopiaForgeRuntimeVersions.sdkVersion, '0.2.0');
     expect(TopiaForgeRuntimeVersions.gameVersion, '0.0.2545');
     final policyFile = [
       File('release/release-policy.json'),
@@ -15,6 +15,10 @@ void main() {
     ].firstWhere((file) => file.existsSync());
     final policy =
         jsonDecode(policyFile.readAsStringSync()) as Map<String, Object?>;
+    expect(
+      (policy['versioning'] as Map)['productVersion'],
+      TopiaForgeRuntimeVersions.loaderVersion,
+    );
     final gameBuild = policy['gameBuild'] as Map<String, Object?>;
     expect(
       RobotopiaGameVersion.tryFromBuildId(gameBuild['id']),
