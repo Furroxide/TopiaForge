@@ -10,6 +10,22 @@ namespace {{ASSEMBLY_NAME}}.Tests
     [TestFixture]
     public sealed class {{TYPE_NAME}}ModTests
     {
+#if TOPIAFORGE_AUTHORED_MAP
+        [Test]
+        public async Task MapVariantOwnsInteractionAndEndsItsMap()
+        {
+            var map = new FakeAuthoredMap().AddEntity("replace-with-surveyed-id", "Example prop", "kit/prop");
+            var retained = map.Entity("replace-with-surveyed-id").Entity;
+            using var runner = new GamemodeSessionRunner(new {{TYPE_NAME}}Gamemode()).WithMap(map);
+            var result = await runner.StartAsync();
+            Assert.That(result.Succeeded, Is.True, result.ErrorMessage);
+            Assert.That(runner.ServerContext.Interactions.ActiveRegistrationCount, Is.EqualTo(1));
+            runner.Stop();
+            Assert.That(retained.IsAlive, Is.False);
+            Assert.That(map.IsAlive, Is.False);
+            runner.ServerContext.AssertNoLeaks();
+        }
+#else
         [Test]
         public void LoadingPackageDoesNotStartGameplay()
         {
@@ -65,5 +81,6 @@ namespace {{ASSEMBLY_NAME}}.Tests
             new FakeGamemodeSession(context,
                 new WorldReadiness(new WorldSceneIdentity(1, "TestWorld"), TransformState.Identity),
                 gamemodeId: "{{MOD_ID}}.mode", cancellationToken: token);
+#endif
     }
 }

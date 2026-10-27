@@ -15,6 +15,11 @@ namespace TopiaForge.Mods
     /// <summary>Imports local exports as owned content of an existing running session.</summary>
     public interface ILocalWorldService
     {
+        /// <summary>Imports a validated local map into the captured session and returns its lifetime-owned authored index.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        Task<OperationResult<IAuthoredMap>> ImportMapAsync(string sessionId, string requestedPath,
+            CancellationToken cancellationToken = default);
+
         /// <summary>Lists local exports, including files with the native scanner's parse errors.</summary>
         OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds();
 

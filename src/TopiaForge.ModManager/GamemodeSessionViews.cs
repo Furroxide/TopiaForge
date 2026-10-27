@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager
         private readonly SessionIdentity identity;
         internal GamemodeSessionView(GamemodeSessionOrchestrator owner, SessionIdentity identity,
             ModContext context, CancellationToken token, WorldReadiness world)
-        { this.owner = owner; this.identity = identity; Context = context; CancellationToken = token; World = world; }
+        { this.owner = owner; this.identity = identity; Context = context; CancellationToken = token; World = world.ForContext(context); }
         public string SessionId => identity.SessionId;
         public string TargetId => identity.Selection.TargetId;
         public string GamemodeId => identity.Selection.GamemodeId;
@@ -37,7 +37,7 @@ namespace TopiaForge.ModManager
         private readonly SessionIdentity identity;
         internal GamemodeParticipantView(GamemodeSessionOrchestrator owner, SessionIdentity identity,
             ModContext context, CancellationToken token, WorldReadiness world)
-        { this.owner = owner; this.identity = identity; Context = context; CancellationToken = token; World = world; }
+        { this.owner = owner; this.identity = identity; Context = context; CancellationToken = token; World = world.ForContext(context); }
         public string SessionId => identity.SessionId;
         public string TargetId => identity.Selection.TargetId;
         public string GamemodeId => identity.Selection.GamemodeId;

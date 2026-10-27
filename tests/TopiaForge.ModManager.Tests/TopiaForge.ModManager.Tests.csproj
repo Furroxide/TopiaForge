@@ -228,6 +228,7 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\UnityMainThreadGuard.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\UnityTimingServices.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.AuthoredMaps.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Configuration.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.LocalStorage.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Files.cs" />
@@ -287,7 +288,7 @@
   </ItemGroup>
   <!-- Production binding and world-provider adapters exercised by the full offline harness. -->
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
-    <Compile Include="../../mods/TopiaForge.Worlds/Maps/*.cs" Exclude="../../mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/Maps/*.cs" Exclude="../../mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs;../../mods/TopiaForge.Worlds/Maps/MapNativeIndex.cs;../../mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/MapWorldImplementation.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Commands.cs" Link="Runtime/GamemodeSessionOrchestrator.Commands.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.Observations.cs" Link="Runtime/RuntimeBindingRegistry.Observations.cs" />
@@ -336,6 +337,8 @@
     <Compile Include="../../mods/TopiaForge.Worlds/PauseExitOperation.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/LocalImportOwnership.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/LocalImportContracts.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/LocalWorldService.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/LocalWorldService.Maps.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/NativeImportOverrides.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/FreePlayGamemode.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/ContextWorldSessionService.cs" />

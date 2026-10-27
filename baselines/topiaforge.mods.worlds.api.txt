@@ -6,12 +6,58 @@
 assembly TopiaForge.Mods.Worlds, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
 target-framework .NETStandard,Version=v2.1
 
+type public enum TopiaForge.Mods.AnchorMatch : System.Int32 [requires-topiaforge="0.2.0"]
+  field System.Int32 value__ [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AnchorMatch Ambiguous = 2 (Ambiguous) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AnchorMatch Id = 0 (Id) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AnchorMatch Missing = 3 (Missing) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AnchorMatch NameModelAndPosition = 1 (NameModelAndPosition) [requires-topiaforge="0.2.0"]
+
+type public flags enum TopiaForge.Mods.AuthoredComponents : System.Int32 [requires-topiaforge="0.2.0"]
+  field System.Int32 value__ [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AuthoredComponents Agent = 32 (Agent) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AuthoredComponents Aoi = 16 (Aoi) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AuthoredComponents ModelRenderer = 1 (ModelRenderer) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AuthoredComponents None = 0 (None) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AuthoredComponents Poi = 8 (Poi) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AuthoredComponents PrefabInstance = 2 (PrefabInstance) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AuthoredComponents SpawnLocation = 4 (SpawnLocation) [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.AuthoredEntity : System.Object [requires-topiaforge="0.2.0"]
+  property System.Boolean AssetResolved { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Id { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Name { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String SceneId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? ModelId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? ParentId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? PrefabUri { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AuthoredComponents Components { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.IEntity Entity { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.MapTransform EditorTransform { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.DiscoveredWorldDescriptor : System.Object
   constructor .ctor(System.String id, System.String familyId, System.String name, System.String? description = null)
   property System.String FamilyId { get; }
   property System.String Id { get; }
   property System.String Name { get; }
   property System.String? Description { get; }
+
+type public interface TopiaForge.Mods.IAuthoredMap [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.Boolean TryGetAuthored(TopiaForge.Mods.IEntity entity, out TopiaForge.Mods.AuthoredEntity? authored) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.Boolean TryGetEntity(System.String entityId, out TopiaForge.Mods.AuthoredEntity? entity) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.AuthoredEntity> FindByModel(System.String modelId) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.AuthoredEntity Entity(System.String entityId) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.MapAnchorResolution ResolveAnchors(System.Collections.Generic.IEnumerable<TopiaForge.Mods.MapAnchor> anchors) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.MapAnchorResolution ResolveAnchors(System.String packagePath) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.TransformState ToWorld(TopiaForge.Mods.MapTransform editorTransform) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.Vec3 ToWorld(TopiaForge.Mods.Vec3 editorPosition) [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAlive { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.AuthoredEntity> Entities { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Environment { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String MapId { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String SceneId { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String SceneName { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.MapRevision Revision { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public interface TopiaForge.Mods.IGamemodeController : System.IDisposable
 
@@ -37,6 +83,7 @@ type public interface TopiaForge.Mods.IGamemodeSession : TopiaForge.Mods.IWorldS
 
 type public interface TopiaForge.Mods.ILocalWorldService
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> ImportAsync(System.String sessionId, System.String requestedPath, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IAuthoredMap>> ImportMapAsync(System.String sessionId, System.String requestedPath, System.Threading.CancellationToken cancellationToken = null) [requires-topiaforge="0.2.0"]
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.LocalWorldFile>> ListLocalWorlds()
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterAssetOverride(TopiaForge.Mods.WorldAssetOverride assetOverride)
 
@@ -94,6 +141,44 @@ type public sealed class TopiaForge.Mods.LocalWorldFile : System.Object
   property System.String LoadError { get; }
   property System.String Path { get; }
   property System.String ProjectName { get; }
+
+type public sealed class TopiaForge.Mods.MapAnchor : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String key, System.String entityId, System.String? name = null, System.String? modelId = null, System.Nullable<TopiaForge.Mods.Vec3> editorPosition = null, System.Boolean required = true, System.Single positionTolerance = 1) [requires-topiaforge="0.2.0"]
+  property System.Boolean Required { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.Vec3> EditorPosition { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single PositionTolerance { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String EntityId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Key { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? ModelId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? Name { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.MapAnchorResolution : System.Object [requires-topiaforge="0.2.0"]
+  property System.Boolean IsComplete { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.ResolvedAnchor> Anchors { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Report { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AuthoredEntity Item[System.String key] { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.ModErrorCode ErrorCode { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.MapRevision : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String sha256, System.Int64 size, System.String modifiedTime) [requires-topiaforge="0.2.0"]
+  property System.Int64 Size { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String ModifiedTime { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Sha256 { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public readonly struct TopiaForge.Mods.MapTransform : System.ValueType [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.Vec3 position, TopiaForge.Mods.Quat rotation, TopiaForge.Mods.Vec3 scale) [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.Vec3 position, TopiaForge.Mods.Vec3 eulerDegrees, TopiaForge.Mods.Vec3 scale) [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.Quat> QuaternionRotation { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.Vec3> EulerDegrees { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Vec3 Position { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Vec3 Scale { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property static TopiaForge.Mods.MapTransform Identity { get [static] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.ResolvedAnchor : System.Object [requires-topiaforge="0.2.0"]
+  property System.Boolean Changed { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AnchorMatch Match { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AuthoredEntity? Entity { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.MapAnchor Anchor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.ShopItem : System.Object
   constructor .ctor(System.String id, System.String name, System.String description, System.Int32 price, System.String category = "", System.Int32 maxPurchases = 0)
@@ -157,8 +242,12 @@ type public enum TopiaForge.Mods.WorldPauseExitDecision : System.Int32
 
 type public sealed class TopiaForge.Mods.WorldReadiness : System.Object
   constructor .ctor(TopiaForge.Mods.WorldSceneIdentity scene, TopiaForge.Mods.TransformState spawn)
+  property TopiaForge.Mods.IAuthoredMap? Map { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.TransformState Spawn { get; }
   property TopiaForge.Mods.WorldSceneIdentity Scene { get; }
+
+type public static class TopiaForge.Mods.WorldReadinessExtensions : System.Object [requires-topiaforge="0.2.0"]
+  method extension [static] TopiaForge.Mods.IAuthoredMap RequireMap(TopiaForge.Mods.WorldReadiness world) [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.WorldSceneIdentity : System.Object
   constructor .ctor(System.Int32 instanceId, System.String name)

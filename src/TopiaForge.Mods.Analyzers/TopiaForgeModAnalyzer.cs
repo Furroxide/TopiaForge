@@ -130,7 +130,9 @@ namespace TopiaForge.Mods.Analyzers
                 BlockingWaitOnSdkTask,
                 InputEdgeInFixedUpdate,
                 SdkVersionRequired,
-                InvalidMapWorld);
+                InvalidMapWorld,
+                MapWorldRequired,
+                MissingSurveyEntity);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -162,6 +164,7 @@ namespace TopiaForge.Mods.Analyzers
             // FixedUpdate's timing is the game loop's too, whichever profile the mod builds with.
             RegisterFixedUpdateInput(context);
             RegisterVersionGates(context);
+            RegisterAuthoredMaps(context);
 
             if (HasBooleanBuildProperty(
                     context.Options.AnalyzerConfigOptionsProvider,

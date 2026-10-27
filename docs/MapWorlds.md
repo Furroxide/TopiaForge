@@ -43,3 +43,62 @@ This release enables map worlds in single player. Opening one to multiplayer is
 refused until session content identity and transfer support are available. Import,
 spawn, cancellation and cleanup use the shared world transition owner. Native catalog
 lore and respawn integration still require verification against the installed game.
+
+## Authored entities and anchors
+
+In a gamemode, `session.World.RequireMap()` returns the imported map's index.
+`World.Map` is null for other worlds. The index contains every authored record,
+parents before children, even when the game produced no usable live marker.
+`map.Entity("entry")` gives its metadata and `IEntity`; check `Entity.IsAlive`
+before registering interactions. `TryGetAuthored(hit.Entity, out var authored)`
+resolves an interaction or raycast handle back to its authored id. `FindByModel`
+finds all records using a model; repeated names are not identities.
+
+`MapTransform` preserves editor position, scale and Euler-or-quaternion rotation.
+Use `map.ToWorld(...)` for world-space coordinates. The native adapter calls the
+game's conversion helpers and applies the imported root transform. The testing
+kit pins the editor-X reflection; native root, rotation and prefab expansion
+behavior still needs in-game qualification. The index is built once, with no
+per-frame work. After teardown its lookups refuse and entity handles are dead.
+
+Survey a declared world and track selected objects in a copied anchors file:
+
+```sh
+topiaforge world survey example.mode.map
+topiaforge world survey example.mode.map --anchors map-anchors.json --update
+```
+
+```json
+{
+  "schemaVersion": 1,
+  "anchors": [
+    { "key": "entry", "entityId": "entry", "required": true },
+    { "key": "crate", "entityId": "crate", "name": "Supply crate",
+      "modelId": "kit/box", "editorPosition": { "x": 12, "y": 2, "z": 3 },
+      "positionTolerance": 1, "required": true }
+  ]
+}
+```
+
+Include it as `<None Update="map-anchors.json" CopyToOutputDirectory="PreserveNewest" />`.
+`map.ResolveAnchors("map-anchors.json")` reads from the consuming gamemode's
+package. It matches ids first, then an exact name and model within the configured
+editor-space distance (1 metre by default). Two candidates are ambiguous. Required
+anchors need a usable live entity. Read `IsComplete` and `Report` before indexing a
+resolved key. Missing or malformed files return `InvalidArgument` with file/field
+guidance. Never treat map names as rich text or use authored ids as paths.
+
+Survey refreshes the ignored snapshot under `obj/`; `--update` rewrites matched
+anchors only when all required anchors resolve. Optional misses retain their
+original data. `--offline` checks an existing matching published-map snapshot and
+explicitly reports that its revision was not refreshed. Packaged maps are read
+locally. TF1012 checks launch-target wiring; TF1013 offers surveyed entity ids for
+code and copied anchors files. No survey means no TF1013 warning.
+
+For an extra map inside a running single-player session, await
+`ILocalWorldService.ImportMapAsync(sessionId, path, cancellationToken)`. It uses the
+configured local import folder, validates bytes, dispatches through the shared
+transition owner and returns the same index contract. Stale sessions and cancelled
+or failed imports release their content. Test with `FakeAuthoredMap.FromProject`,
+its builder, or `GamemodeSessionRunner.WithMap(map)`; keep native checks separate
+from fake results.

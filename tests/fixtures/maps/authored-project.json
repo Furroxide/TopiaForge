@@ -1,0 +1,191 @@
+{
+  "name": "Workshop",
+  "modified": "2026-01-01T00:00:00Z",
+  "scenes": {
+    "workshop": {
+      "id": "workshop",
+      "name": "Workshop",
+      "environment": "day",
+      "entities": {
+        "child": {
+          "name": "Child",
+          "components": {
+            "transform": {
+              "position": {
+                "x": 1,
+                "y": 2,
+                "z": 3
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.5,
+                "z": 0,
+                "w": 0.8660254
+              },
+              "scale": {
+                "x": 1,
+                "y": 2,
+                "z": 1
+              }
+            },
+            "model-renderer": {
+              "model": "kit/box"
+            }
+          },
+          "parent": "root"
+        },
+        "consoleA": {
+          "name": "Console",
+          "components": {
+            "transform": {
+              "position": {
+                "x": 4,
+                "y": 2,
+                "z": 3
+              },
+              "rotation": {
+                "x": 0,
+                "y": 90,
+                "z": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 2,
+                "z": 1
+              }
+            },
+            "model-renderer": {
+              "model": "kit/console"
+            }
+          }
+        },
+        "consoleB": {
+          "name": "Console",
+          "components": {
+            "transform": {
+              "position": {
+                "x": 4.5,
+                "y": 2,
+                "z": 3
+              },
+              "rotation": {
+                "x": 0,
+                "y": 90,
+                "z": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 2,
+                "z": 1
+              }
+            },
+            "model-renderer": {
+              "model": "kit/console"
+            }
+          }
+        },
+        "crate": {
+          "name": "Supply crate",
+          "components": {
+            "transform": {
+              "position": {
+                "x": 12,
+                "y": 2,
+                "z": 3
+              },
+              "rotation": {
+                "x": 0,
+                "y": 90,
+                "z": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 2,
+                "z": 1
+              }
+            },
+            "poi": {},
+            "model-renderer": {
+              "model": "kit/box"
+            }
+          }
+        },
+        "entry": {
+          "name": "Entry",
+          "components": {
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 2,
+                "z": 3
+              },
+              "rotation": {
+                "x": 0,
+                "y": 90,
+                "z": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 2,
+                "z": 1
+              }
+            },
+            "spawn-location": {}
+          }
+        },
+        "gate": {
+          "name": "Console",
+          "components": {
+            "transform": {
+              "position": {
+                "x": 20,
+                "y": 2,
+                "z": 3
+              },
+              "rotation": {
+                "x": 0,
+                "y": 90,
+                "z": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 2,
+                "z": 1
+              }
+            },
+            "model-renderer": {
+              "model": "kit/gate"
+            }
+          }
+        },
+        "root": {
+          "name": "Group",
+          "components": {
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 2,
+                "z": 3
+              },
+              "rotation": {
+                "x": 0,
+                "y": 90,
+                "z": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 2,
+                "z": 1
+              }
+            },
+            "prefab-instance": {
+              "uri": "kit:group"
+            },
+            "aoi": {},
+            "agent": {}
+          }
+        }
+      }
+    }
+  }
+}

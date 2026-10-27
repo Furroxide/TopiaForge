@@ -27,7 +27,7 @@ namespace TopiaForge.ModManager
                     throw new ArgumentException("A packaged map requires its verified hash.");
                 read = token => ReadFileAsync(package.PackagePath, file, digest, token);
             }
-            request = new InternalMapWorldRequest(content.Map, content.Scene, read);
+            request = new InternalMapWorldRequest(content.Map, content.Scene, read, content.File);
         }
         public PackageIdentity Package { get; }
         public string DeclarationId { get; }

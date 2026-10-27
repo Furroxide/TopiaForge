@@ -1,5 +1,12 @@
 # {{DISPLAY_NAME}}
 
+With `new mod --template gamemode --map <link>`, `topiaforge.map.props` enables the
+authored-map example and its fake-map test. The example calls `RequireMap()`, looks
+up a surveyed entity and registers one Inspect interaction. Choose the intended
+entity after `topiaforge world survey <world>`; offline scaffolding leaves the
+explicit `replace-with-surveyed-id` placeholder. The generated test owns a
+`FakeAuthoredMap` through `GamemodeSessionRunner.WithMap` and checks cleanup.
+
 A Manifest V6 gamemode package (`{{MOD_ID}}`). Its launch target selects Open Sandbox and the declared `{{TYPE_NAME}}Gamemode` factory. The manager loads the world, establishes player/spawn readiness, and then calls `StartAsync` once within a session scope.
 
 ## Quick start

@@ -1,0 +1,62 @@
+{
+  "order": [
+    "root",
+    "child",
+    "consoleA",
+    "consoleB",
+    "crate",
+    "entry",
+    "gate"
+  ],
+  "isComplete": false,
+  "outcomes": [
+    {
+      "key": "id",
+      "match": "Id",
+      "entityId": "entry",
+      "changed": false
+    },
+    {
+      "key": "renamed",
+      "match": "Id",
+      "entityId": "crate",
+      "changed": true
+    },
+    {
+      "key": "near",
+      "match": "NameModelAndPosition",
+      "entityId": "crate",
+      "changed": true
+    },
+    {
+      "key": "far",
+      "match": "Missing",
+      "entityId": null,
+      "changed": false
+    },
+    {
+      "key": "ambiguous",
+      "match": "Ambiguous",
+      "entityId": null,
+      "changed": false
+    },
+    {
+      "key": "wrong-model",
+      "match": "Missing",
+      "entityId": null,
+      "changed": false
+    },
+    {
+      "key": "optional",
+      "match": "Missing",
+      "entityId": null,
+      "changed": false
+    },
+    {
+      "key": "wide",
+      "match": "NameModelAndPosition",
+      "entityId": "crate",
+      "changed": true
+    }
+  ]
+}

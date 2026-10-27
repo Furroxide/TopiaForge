@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="topiaforge.dev.props" Condition="Exists('topiaforge.dev.props')" />
+  <Import Project="topiaforge.map.props" Condition="Exists('topiaforge.map.props')" />
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>

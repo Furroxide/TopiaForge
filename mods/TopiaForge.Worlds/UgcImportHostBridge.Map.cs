@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -8,7 +9,7 @@ using TopiaForge.Worlds.Maps;
 
 namespace TopiaForge.Worlds
 {
-    internal sealed partial class UgcImportHostBridge
+    internal sealed partial class UgcImportHostBridge : ILocalAuthoredMapBackend
     {
         public Uri PublicBase
         {
@@ -41,8 +42,12 @@ namespace TopiaForge.Worlds
             throw Unavailable();
         }
 
-        public async Task<OperationResult<IMapImportTransaction>> PrepareAsync(MapDocument document, string? sceneId,
+        public Task<OperationResult<IMapImportTransaction>> PrepareAsync(MapDocument document, string? sceneId,
             string label, WorldSceneIdentity scene, CancellationToken token)
+            => PrepareMapAsync(document, sceneId, label, scene, Array.Empty<WorldAssetOverride>(), token);
+
+        public async Task<OperationResult<IMapImportTransaction>> PrepareMapAsync(MapDocument document, string? sceneId,
+            string label, WorldSceneIdentity scene, IReadOnlyList<WorldAssetOverride> overrides, CancellationToken token)
         {
             try
             {
@@ -68,7 +73,7 @@ namespace TopiaForge.Worlds
                 await MapLorePreparation.PrepareAsync(project, config, token);
                 token.ThrowIfCancellationRequested();
                 return OperationResult<IMapImportTransaction>.Success(new ImportTransaction(host, null,
-                    Array.Empty<WorldAssetOverride>(), scene, project, exportProjectType, selected, label));
+                    overrides, scene, project, exportProjectType, selected, label));
             }
             catch (OperationCanceledException) { return OperationResult<IMapImportTransaction>.Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }
             catch (MapProblem error) { return OperationResult<IMapImportTransaction>.Failure(error.Code, error.Message); }

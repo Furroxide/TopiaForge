@@ -1,5 +1,5 @@
 {
-  "capturedUtc": "2026-10-27T00:53:11.0650281Z",
+  "capturedUtc": "2026-10-27T01:23:05.9182681Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
   "gameVersion": "0.0.2545",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "148c3a39837da9eea441368239dd5ad478dfb3f018ee9bd7735e663884465258",
+  "surfaceContentHash": "c6a6aaf0f3113f600dc3261c130d18853efcea9eda8cf9b90948dfef477ca42d",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -11942,6 +11942,102 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcPublishedProjectLoader"
     },
+    "GameCode|UgcRotationHelper": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "UGC_TO_UNITY_BASIS",
+          "type": "UnityEngine.Matrix4x4"
+        }
+      ],
+      "fullName": "UgcRotationHelper",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "QuaternionFromUgcEulerXyz",
+          "parameters": [
+            "System.Single",
+            "System.Single",
+            "System.Single"
+          ],
+          "returnType": "UnityEngine.Quaternion"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ToUnityQuaternion",
+          "parameters": [
+            "UgcRotationValue"
+          ],
+          "returnType": "UnityEngine.Quaternion"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcRotationHelper",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcRotationHelper"
+    },
+    "GameCode|UgcRotationValue": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "w",
+          "type": "System.Nullable<System.Single>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "x",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "y",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "z",
+          "type": "System.Single"
+        }
+      ],
+      "fullName": "UgcRotationValue",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcRotationValue",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcRotationValue"
+    },
     "GameCode|UgcRuntimeAssetConfig": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -12346,6 +12442,65 @@
       "simpleName": "UgcSceneSpawnLocation",
       "status": "Resolved",
       "typeKey": "GameCode|UgcSceneSpawnLocation"
+    },
+    "GameCode|UgcVector3Value": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "x",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "y",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "z",
+          "type": "System.Single"
+        }
+      ],
+      "fullName": "UgcVector3Value",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ToUnityPosition",
+          "parameters": [],
+          "returnType": "UnityEngine.Vector3"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ToUnityScale",
+          "parameters": [],
+          "returnType": "UnityEngine.Vector3"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcVector3Value",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcVector3Value"
     },
     "GameCode|WalkSession": {
       "assembly": "GameCode",

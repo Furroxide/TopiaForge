@@ -110,6 +110,7 @@ namespace TopiaForge.ModManager
             Ui.ApplyAccessibility(parent.Ui.Accessibility);
             SceneTransitions = gameplay.SceneTransitions;
             WorldRuntime = gameplay.WorldRuntime;
+            authoredMapInterop = gameplay.UnityInterop;
             unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
             Localization = new OwnerLocalizationService(Lifetime, (OwnerLocalizationService)parent.Localization);
             Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry, replication.Intents);

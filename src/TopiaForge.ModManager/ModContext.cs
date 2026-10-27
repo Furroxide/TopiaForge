@@ -113,6 +113,7 @@ namespace TopiaForge.ModManager
                     Identity.Id, NetProfile.NetworkClass == ModNetworkClass.Shared, Logger, Lifetime, LocalPlayer, gameplay.Ui, inputActivity);
                 SceneTransitions = gameplay.SceneTransitions;
                 WorldRuntime = gameplay.WorldRuntime;
+                authoredMapInterop = gameplay.UnityInterop;
                 unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
 
                 Localization = new OwnerLocalizationService(Lifetime);

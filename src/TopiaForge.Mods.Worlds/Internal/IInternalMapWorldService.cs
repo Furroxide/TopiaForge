@@ -16,9 +16,10 @@ namespace TopiaForge.Mods.Internal
     internal sealed class InternalMapWorldRequest
     {
         internal InternalMapWorldRequest(string? publishedId, string? sceneId,
-            Func<CancellationToken, Task<OperationResult<byte[]>>>? readFile)
-        { PublishedId = publishedId; SceneId = sceneId; ReadFile = readFile; }
+            Func<CancellationToken, Task<OperationResult<byte[]>>>? readFile, string? packagePath = null)
+        { PublishedId = publishedId; SceneId = sceneId; ReadFile = readFile; PackagePath = packagePath; }
         internal string? PublishedId { get; }
+        internal string? PackagePath { get; }
         internal string? SceneId { get; }
         internal Func<CancellationToken, Task<OperationResult<byte[]>>>? ReadFile { get; }
     }

@@ -81,7 +81,16 @@ namespace TopiaForge.Mods.Testing
         public FakeModContext ParticipantContext { get; }
 
         /// <summary>Gets the world readiness both controllers see.</summary>
-        public WorldReadiness World { get; }
+        public WorldReadiness World { get; private set; }
+
+        /// <summary>Supplies a map before startup; stopping the runner disposes it when it owns a disposable fake.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public GamemodeSessionRunner WithMap(IAuthoredMap map)
+        {
+            if (started || finished || World.Map != null) throw new InvalidOperationException("Supply one map before starting the runner.");
+            World = new WorldReadiness(World.Scene, World.Spawn, map ?? throw new ArgumentNullException(nameof(map)));
+            return this;
+        }
 
         /// <summary>Gets the server controller's session once it started, or null where no server runs.</summary>
         public FakeGamemodeSession? Session { get; private set; }
@@ -246,7 +255,7 @@ namespace TopiaForge.Mods.Testing
             ParticipantController = null;
             Controller = null;
             var disposed = new List<IDisposable>();
-            foreach (var resource in new IDisposable?[] { participant, controller, Factory as IDisposable, ParticipantContext, ServerContext })
+            foreach (var resource in new IDisposable?[] { participant, controller, Factory as IDisposable, World.Map as IDisposable, ParticipantContext, ServerContext })
             {
                 if (resource == null || disposed.Exists(previous => ReferenceEquals(previous, resource))) continue;
                 disposed.Add(resource);

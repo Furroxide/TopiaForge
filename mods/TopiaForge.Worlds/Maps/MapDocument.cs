@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods.Internal;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -18,6 +19,7 @@ namespace TopiaForge.Worlds.Maps
         internal string Sha256 { get; }
         internal string Name { get; }
         internal string Modified { get; }
+        internal AuthoredProject Authored { get; }
         internal IReadOnlyDictionary<string, MapScene> Scenes { get; }
 
         internal MapDocument(byte[] packed)
@@ -28,6 +30,7 @@ namespace TopiaForge.Worlds.Maps
             Sha256 = Hash(Packed);
             Json = Unpack(Packed);
             var project = MapJson.Read(Json);
+            Authored = AuthoredProject.Read(project);
             Name = Text(project, "name", 256);
             Modified = Text(project, "modified", 128);
             var scenes = Object(project, "scenes");

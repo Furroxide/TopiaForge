@@ -69,6 +69,13 @@ namespace TopiaForge.Mods
                 throw new ArgumentException("World readiness requires a finite spawn with a valid rotation and non-zero scale.", nameof(spawn));
             Spawn = spawn;
         }
+        internal WorldReadiness(WorldSceneIdentity scene, TransformState spawn, IAuthoredMap map) : this(scene, spawn)
+        { Map = map ?? throw new ArgumentNullException(nameof(map)); }
+        /// <summary>Gets the imported map, or null for another kind of world.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public IAuthoredMap? Map { get; }
+        internal WorldReadiness ForContext(IModContext context) => Map is Internal.AuthoredMapIndex index && context is Internal.IInternalAuthoredMapContext package
+            ? new WorldReadiness(Scene, Spawn, index.ForPackage(package.ReadAnchorFile)) : this;
         /// <summary>Gets the actual scene identity.</summary>
         public WorldSceneIdentity Scene { get; }
         /// <summary>Gets the resolved spawn transform applied to the player.</summary>

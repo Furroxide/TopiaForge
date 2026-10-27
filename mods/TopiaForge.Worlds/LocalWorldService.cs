@@ -9,7 +9,7 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Worlds
 {
-    internal sealed class LocalWorldService : ILocalWorldService, IOwnerContextBoundExtensionFactory, IDisposable
+    internal sealed partial class LocalWorldService : ILocalWorldService, IOwnerContextBoundExtensionFactory, IDisposable
     {
         private readonly IModLogger logger;
         private readonly Func<ILocalWorldImportHost> createHost;
@@ -45,7 +45,7 @@ namespace TopiaForge.Worlds
                 throw new ArgumentException("The local importer requires the consuming session context.");
             return new Facade(this, context, runtime.ContentOperations);
         }
-        private sealed class Facade : ILocalWorldService
+        private sealed partial class Facade : ILocalWorldService
         {
             private readonly LocalWorldService service;
             private readonly IModContext context;
