@@ -23,7 +23,7 @@ namespace TopiaForge.Mods.UnityUi
     /// cannot be filtered this way and still sees every key. A failure stops the filtering until the game restarts and is
     /// logged once, so the game always keeps its input. Main thread only.
     /// </summary>
-    internal static class TopiaForgeInputOwnership
+    internal static partial class TopiaForgeInputOwnership
     {
         private const int EastButton = 0;
         private const int SouthButton = 1;

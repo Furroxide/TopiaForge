@@ -247,6 +247,12 @@ non-keyboard bindings. These SDK names describe physical position or purpose, so
 on Unity button ordinals or platform-specific native enums. Keyboard bindings use portable SDK key
 names such as `F`, `Space`, or `F8`.
 
+`InputGamepadAxis` reads the current Input System controller: both sticks are signed,
+and triggers range from zero to one. Keyboard movement never drives these bindings;
+use `InputAxis.Horizontal` or `Vertical` for the game's combined movement axes. With no
+controller connected, gamepad axes are idle. Stick deadzones follow the Input System's
+processed controls. Bindings keep the same focus and held-press rules as keyboard input.
+
 Gameplay actions are suppressed while text entry or another framework UI surface owns focus.
 Use the configurable action in the `ui` template rather than reserving a function key globally.
 F5 routes the shared Creator workbench, F8 opens UiGallery in development installs, and F10 opens

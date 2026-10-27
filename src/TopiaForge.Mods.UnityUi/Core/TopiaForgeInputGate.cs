@@ -199,6 +199,28 @@ namespace TopiaForge.Mods.UnityUi
             return false;
         }
 
+        /// <summary>Reads one taken direction, without mixing another device, stick, or keyboard into it.</summary>
+        public bool TryGetDirection(int deviceId, int control, out float x, out float y)
+        {
+            x = 0f;
+            y = 0f;
+            var slot = SlotOf(deviceId);
+            if (slot < 0 || control < 0 || control >= ControlsPerDevice)
+            {
+                return false;
+            }
+
+            var index = (slot * ControlsPerDevice) + control;
+            if (!taken[index] || !TopiaForgeInputClaims.IsDirection(roles[index]))
+            {
+                return false;
+            }
+
+            x = directionX[index];
+            y = directionY[index];
+            return true;
+        }
+
         /// <summary>Gets the direction the taken, held direction controls point, each axis between -1 and 1.</summary>
         public void Direction(out float x, out float y)
         {
