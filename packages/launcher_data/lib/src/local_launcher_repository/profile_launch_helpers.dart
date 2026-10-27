@@ -30,7 +30,9 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
     final required = {...layout.launchEnvironment()};
     // Resolve before the child's working directory changes. Under Wine the
     // runtime translates this POSIX root using the active prefix's mappings.
-    required['TOPIAFORGE_DATA_ROOT'] = _dataRoot.absolute.path;
+    required['TOPIAFORGE_DATA_ROOT'] = gameDataRootEnvironmentValue(
+      _dataRoot.absolute.path,
+    );
     final reserved = {
       ProfileLaunchConfigurationV4.environmentVariable.toLowerCase(),
       AcceptanceIsolationContext.environmentVariable.toLowerCase(),

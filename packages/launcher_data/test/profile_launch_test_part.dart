@@ -8,6 +8,37 @@ void _registerProfileLaunchTests({
 }) {
   group('profile launch isolation', () {
     test(
+      'resolves a relative data root before changing child directory',
+      () async {
+        final folder = Directory.current.createTempSync('profile cache Sam é-');
+        addTearDown(() => folder.deleteSync(recursive: true));
+        final relativeRoot = Directory(p.relative(folder.path));
+        expect(p.isAbsolute(relativeRoot.path), isFalse);
+        late GameProcessRequest request;
+        final prepared = await _prepareProfileLaunchRepository(
+          dataRoot: relativeRoot,
+          repositoryRoot: repositoryRoot(),
+          gameRoot: gameRoot(),
+          starter: (value) async {
+            request = value;
+            return 4242;
+          },
+        );
+
+        final result = await prepared.$1.launch(
+          prepared.$2,
+          LauncherProfile(id: 'relative-cache', name: 'Relative cache'),
+        );
+
+        expect(result.started, isTrue);
+        expect(request.workingDirectory, isNot(Directory.current.path));
+        final inherited = request.environment['TOPIAFORGE_DATA_ROOT'];
+        expect(inherited, folder.absolute.path);
+        expect(p.isAbsolute(inherited!), isTrue);
+      },
+    );
+
+    test(
       'revalidates the exact selected version against the live game build',
       () async {
         File(

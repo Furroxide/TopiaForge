@@ -72,8 +72,11 @@ game for a launch V5 cannot carry.
   absolute data root; profile environment overrides cannot replace it. Under Wine or Proton the game translates a
   POSIX root with Wine's own active-prefix path mapping, without assuming a drive letter or using the prefix's
   unrelated `APPDATA`. A failed conversion leaves the archive cache unavailable instead of selecting another root.
+  The launcher collapses repeated leading Unix slashes before passing the root, so they cannot be mistaken for
+  Windows UNC syntax. Windows roots keep their spelling; interior Unix components are not normalized.
   Manual launches can still set `TOPIAFORGE_DATA_ROOT`; use an absolute value because the game has its own working
-  directory. Native Windows cannot use a POSIX override.
+  directory. Use one leading slash for a manual POSIX root; two leading slashes denote a Windows UNC path.
+  Native Windows cannot use a POSIX override.
   Each request checks developer mode and verifies the same open archive handle it will stream, on a worker with
   cancellation and the endpoint's existing two-minute deadline. The status line follows verification, so
   verification also counts against the launcher's 15 seconds of silence: the largest archive, 512 MiB, needs at
