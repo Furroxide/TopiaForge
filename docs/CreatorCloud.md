@@ -50,6 +50,13 @@ it uses a digest suffix instead. This never changes or truncates the map store's
 canonical cache key. Discovery validates the full list before limiting results,
 and checks the source again when loading a selected world.
 
+Cache index and removal-marker filenames use the SHA-256 of the exact map id,
+and each index records that id. This keeps case-distinct publications separate
+on Windows, including their validators and offline copies. Older indexes without
+an exact source identity are not used offline: play each map once with a connection
+to create its verified index. Existing content blobs remain subject to the shared
+cache limit and **Clear downloaded maps**.
+
 The feature requires the stable 0.2 SDK/loader floor. Package versions and release
 activation are tracked separately. Native public-map resolution and play remain
 subject to the map-world compatibility checks for the installed game build.

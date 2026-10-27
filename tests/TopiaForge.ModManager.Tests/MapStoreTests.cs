@@ -77,7 +77,7 @@ namespace TopiaForge.ModManager.Tests
             if (OperatingSystem.IsWindows())
             {
                 cache.Put("example", new MapDocument(MapDocumentTests.Project()), null, null);
-                var index = Path.Combine(root, "id-example.json");
+                var index = Directory.EnumerateFiles(root, "id-*.json").Single();
                 File.SetAttributes(index, FileAttributes.ReadOnly);
                 try
                 {

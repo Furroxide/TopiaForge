@@ -27,6 +27,7 @@ namespace TopiaForge.ModManager.Tests
                 await SharedStore(root.FullName);
                 HostRestriction(root.FullName);
                 await OnlineRefusal(root.FullName);
+                await PublishedMapCacheIdentityTests.RunAsync(root.FullName);
                 Console.WriteLine("Published map discovery passed: shared corpus, bounded identities/listing, safe refusal, shared static/discovered cache, offline reuse, cancellation, ownership and host restriction.");
             }
             finally { root.Delete(true); }
