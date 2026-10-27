@@ -34,12 +34,16 @@ final class HostingPlan extends HostingPreparation {
     required this.profile,
     required this.preferences,
     required this.choices,
+    required this.installIdentity,
     required this.packageDigest,
     required this.joinability,
   });
   final LauncherProfile profile;
   final MultiplayerPreferences preferences;
   final HostingChoices choices;
+
+  /// Local correlation only; never shown in the review or diagnostics.
+  final String installIdentity;
   final String packageDigest;
   final String joinability;
 }

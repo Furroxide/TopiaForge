@@ -54,6 +54,7 @@ final class _Rig
     profile: profile,
     preferences: preferences,
     choices: choices,
+    installIdentity: 'install',
     packageDigest: 'digest',
     joinability: 'Local network only.',
   );

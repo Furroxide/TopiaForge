@@ -112,6 +112,7 @@ final class HostingService {
         profile: profile,
         preferences: preferences,
         choices: choices,
+        installIdentity: preview.installIdentity,
         packageDigest: preview.packageDigest,
         joinability: switch (choices.defaults.visibility) {
           ServerVisibility.public =>
@@ -153,10 +154,11 @@ final class HostingService {
       );
       if (checked is HostingRefused) return refused(checked.message);
       final current = checked as HostingPlan;
-      if (current.packageDigest != plan.packageDigest ||
+      if (current.installIdentity != plan.installIdentity ||
+          current.packageDigest != plan.packageDigest ||
           _fingerprint(current.preferences) != _fingerprint(plan.preferences)) {
         return refused(
-          'The profile or multiplayer preferences changed. Review hosting again; nothing was launched.',
+          'The game install, profile or multiplayer preferences changed. Review hosting again; nothing was launched.',
         );
       }
       if (current.preferences.settings.needsPrivacyDisclosure &&

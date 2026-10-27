@@ -179,7 +179,9 @@ void registerMultiplayerSettingsWidgetTests() {
         isFalse,
       );
       expect(
-        find.textContaining('Read the game hosting defaults'),
+        find.text(
+          'Select a game install and let its settings finish loading before changing the hosting port.',
+        ),
         findsOneWidget,
       );
       expect(

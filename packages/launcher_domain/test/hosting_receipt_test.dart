@@ -79,6 +79,47 @@ void bind(HostingReceipt monitor, [LaunchActivity? receipt]) => monitor.bind(
 );
 
 void main() {
+  test('an empty or refused launch never confirms or exposes an invite', () {
+    for (final result in [
+      const LaunchResult(started: false, message: 'Refused'),
+      const LaunchResult(started: true, message: 'Unverified'),
+    ]) {
+      final monitor = HostingReceipt(profile, 'intent', needsInvite: true);
+      monitor.bind(result);
+      monitor.accept(success());
+      expect(monitor.failed, isTrue);
+      expect(monitor.confirmed, isFalse);
+      expect(monitor.inviteCode, isNull);
+    }
+  });
+  test(
+    'a matching runtime failure stays failed after late hosting progress',
+    () {
+      final monitor = HostingReceipt(profile, 'intent', needsInvite: true);
+      bind(monitor);
+      monitor.accept(
+        activity().applyOutcome(
+          LaunchOutcome(
+            kind: 'launch',
+            requestId: 'request',
+            command: 'host-session',
+            sequence: 1,
+            status: 'failed',
+            phase: 'idle',
+            multiplayer: LaunchOutcomeMultiplayer(
+              role: LaunchSessionRole.host,
+              intentId: 'intent',
+              failure: LaunchMultiplayerFailure.portInUse,
+            ),
+          ),
+        ),
+      );
+      monitor.accept(success());
+      expect(monitor.failed, isTrue);
+      expect(monitor.confirmed, isFalse);
+      expect(monitor.inviteCode, isNull);
+    },
+  );
   test(
     'buffers before spawn and waits for matching outcome, progress and invite',
     () {
