@@ -13,15 +13,21 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task RunAsync()
         {
-            await ReadinessAndOwnership();
-            foreach (var phase in new[] { "prepare", "read", "lore", "import", "spawn", "readiness" }) await CancelledPhase(phase);
-            await InvalidSpawn();
-            await PrivateNativeFailure();
-            await CacheFailureRecovery();
-            await PendingPreparationDrains();
-            await CleanupFailureAfterCancellation();
-            await LoreAwaiter();
-            Console.WriteLine("Map world service passed: readiness, ownership, six cancellation phases, pending preparation drain, failed cleanup, cache recovery, ambiguous spawn and native failure privacy.");
+            var owned = Directory.CreateTempSubdirectory("map-service-");
+            try
+            {
+                var root = owned.FullName;
+                await ReadinessAndOwnership(root);
+                foreach (var phase in new[] { "prepare", "read", "lore", "import", "spawn", "readiness" }) await CancelledPhase(root, phase);
+                await InvalidSpawn(root);
+                await PrivateNativeFailure(root);
+                await CacheFailureRecovery();
+                await PendingPreparationDrains(root);
+                await CleanupFailureAfterCancellation(root);
+                await LoreAwaiter();
+                Console.WriteLine("Map world service passed: readiness, ownership, six cancellation phases, pending preparation drain, failed cleanup, cache recovery, ambiguous spawn and native failure privacy.");
+            }
+            finally { owned.Delete(true); }
         }
         private static async Task LoreAwaiter()
         {
@@ -54,13 +60,13 @@ namespace TopiaForge.ModManager.Tests
             SpawnPolicy = new WorldSpawnPolicy(WorldSpawnKind.ProviderDefault),
             SceneTransitions = new Transitions()
         };
-        private static MapWorldService Service(Backend backend) => new MapWorldService(new MapCache(Path.Combine(Path.GetTempPath(), "unused-map-cache")),
+        private static MapWorldService Service(string root, Backend backend) => new MapWorldService(new MapCache(Path.Combine(root, "cache")),
             new NoNetwork(), () => backend);
         private static InternalMapWorldRequest Request(byte[]? bytes = null, Action? read = null) => new InternalMapWorldRequest(null, null, _ =>
         { read?.Invoke(); return Task.FromResult(OperationResult<byte[]>.Success(bytes ?? Project())); });
-        private static async Task ReadinessAndOwnership()
+        private static async Task ReadinessAndOwnership(string root)
         {
-            using var fixture = Fixture(); var backend = new Backend(); using var service = Service(backend);
+            using var fixture = Fixture(); var backend = new Backend(); using var service = Service(root, backend);
             var original = fixture.Fake.Lifetime.TrackedResourceCount;
             var task = service.LoadAsync(fixture, Request(), default);
             Assert(!task.IsCompleted && backend.Imported == 1 && backend.Spawned == "entry", "import and spawn precede readiness");
@@ -75,10 +81,10 @@ namespace TopiaForge.ModManager.Tests
             Assert(backend.ContentDisposals == 1 && fixture.Native.DisposeCount == 1 && fixture.Fake.Lifetime.TrackedResourceCount == original,
                 "the returned world owns and releases map content and native preparation exactly once");
         }
-        private static async Task CancelledPhase(string phase)
+        private static async Task CancelledPhase(string root, string phase)
         {
             using var fixture = Fixture(); using var cancellation = new CancellationTokenSource();
-            var backend = new Backend(); using var service = Service(backend);
+            var backend = new Backend(); using var service = Service(root, backend);
             if (phase == "prepare") fixture.Native.OnPrepare = cancellation.Cancel;
             if (phase == "lore") backend.OnPrepare = cancellation.Cancel;
             if (phase == "import") backend.OnImport = cancellation.Cancel;
@@ -89,17 +95,17 @@ namespace TopiaForge.ModManager.Tests
             Assert(result.ErrorCode == ModErrorCode.Cancelled && fixture.Native.DisposeCount == 1, "cancel " + phase + " never publishes readiness");
             Assert(backend.ContentDisposals == backend.Imported, "cancel " + phase + " releases every returned root");
         }
-        private static async Task InvalidSpawn()
+        private static async Task InvalidSpawn(string root)
         {
-            using var fixture = Fixture(); var backend = new Backend(); using var service = Service(backend);
+            using var fixture = Fixture(); var backend = new Backend(); using var service = Service(root, backend);
             var bytes = Project("\"a\":{\"components\":{\"spawn-location\":{}}},\"b\":{\"components\":{\"spawn-location\":{}}}");
             var result = await service.LoadAsync(fixture, Request(bytes), default);
             Assert(result.ErrorCode == ModErrorCode.InvalidState && backend.Imported == 0 && fixture.Native.DisposeCount == 1,
                 "ambiguous spawn refuses before import and cleans preparation");
         }
-        private static async Task PrivateNativeFailure()
+        private static async Task PrivateNativeFailure(string root)
         {
-            using var fixture = Fixture(); var backend = new Backend { Throw = true }; using var service = Service(backend);
+            using var fixture = Fixture(); var backend = new Backend { Throw = true }; using var service = Service(root, backend);
             var result = await service.LoadAsync(fixture, Request(), default);
             Assert(!result.Succeeded && !result.ErrorMessage.Contains("private") && !result.ErrorMessage.Contains("://"), "native details stay private");
             Assert(fixture.Native.DisposeCount == 1, "native prepare fault cleans scene");
@@ -129,11 +135,11 @@ namespace TopiaForge.ModManager.Tests
             }
             finally { directory.Delete(true); }
         }
-        private static async Task PendingPreparationDrains()
+        private static async Task PendingPreparationDrains(string root)
         {
             using var fixture = Fixture(); using var cancellation = new CancellationTokenSource();
             var completion = new TaskCompletionSource<OperationResult<IMapImportTransaction>>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var backend = new Backend { PendingPreparation = completion.Task }; using var service = Service(backend);
+            var backend = new Backend { PendingPreparation = completion.Task }; using var service = Service(root, backend);
             var pending = service.LoadAsync(fixture, Request(), cancellation.Token);
             cancellation.Cancel();
             Assert(!pending.IsCompleted && fixture.Native.DisposeCount == 0, "cancellation waits for pending native preparation before cleanup");
@@ -142,11 +148,11 @@ namespace TopiaForge.ModManager.Tests
             Assert(result.ErrorCode == ModErrorCode.Cancelled && fixture.Native.DisposeCount == 1 && backend.Imported == 0,
                 "drained preparation cannot import or publish a cancelled map");
         }
-        private static async Task CleanupFailureAfterCancellation()
+        private static async Task CleanupFailureAfterCancellation(string root)
         {
             using var fixture = Fixture(); using var cancellation = new CancellationTokenSource();
             var backend = new Backend { OnImport = cancellation.Cancel, ThrowContentCleanup = true };
-            using var service = Service(backend);
+            using var service = Service(root, backend);
             var result = await service.LoadAsync(fixture, Request(), cancellation.Token);
             Assert(result.ErrorCode == ModErrorCode.External && result.ErrorMessage.Contains("restart"),
                 "a failed import cleanup must not be reported as ordinary cancellation");
