@@ -87,7 +87,7 @@ its HUDs and stops its loops. A destroyed host canvas retires its mirror; a dest
 the latest state within the once-per-second retry cadence. Guest text is displayed literally, and shared HUDs cannot
 capture input or run callbacks.
 
-See [presentation routing](internal/MultiplayerRuntimeIntegration.md#scoreboard-seam-and-later-presentation) for
+See [presentation routing](https://github.com/Furroxide/TopiaForge/blob/5c2e66efe4b7cbb90647c316bb62817d9d8822c8/docs/internal/MultiplayerRuntimeIntegration.md#scoreboard-seam-and-later-presentation) for
 the budgets and transport behavior.
 
 ### Where HUDs dock

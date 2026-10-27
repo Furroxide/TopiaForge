@@ -84,3 +84,20 @@ test('Players guide publication connects incoming links and the author sidebar',
   assert.ok(authorGuides[1].includes(`slug: '${route.slice(1, -1)}'`),
     'Players guide is discoverable in the author sidebar');
 });
+
+test('UI guide keeps its internal presentation reference outside the public catalog', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  assert.equal(sourceToRoute.get('docs/UiKit.md'), '/guides/ui/');
+  assert.equal(sourceToRoute.has('docs/internal/MultiplayerRuntimeIntegration.md'), false);
+  const content = readFileSync(new URL('../../docs/UiKit.md', import.meta.url), 'utf8');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const rewritten = links.rewrite('docs/UiKit.md', content);
+  assert.deepEqual(failures, []);
+  const reference = /\[presentation routing\]\(https:\/\/github\.com\/Furroxide\/TopiaForge\/blob\/[a-f0-9]{40}\/docs\/internal\/MultiplayerRuntimeIntegration\.md#scoreboard-seam-and-later-presentation\)/u;
+  assert.match(content, reference);
+  assert.match(rewritten, reference);
+});
