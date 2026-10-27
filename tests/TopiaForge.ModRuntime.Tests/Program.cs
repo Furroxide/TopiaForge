@@ -24,6 +24,7 @@ namespace TopiaForge.ModRuntime.Tests
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
                 finally { TryDelete(blockerRoot); }
             }
+            if (args.Length == 1 && args[0] == "--log-privacy") { ManagerFileLoggerTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--loader-version")
             {
                 var versionRoot = Directory.CreateTempSubdirectory("TopiaForgeVersionTests-").FullName;
@@ -38,6 +39,7 @@ namespace TopiaForge.ModRuntime.Tests
                     : args[0] == "--malformed-selection-case" ? RunMalformedSelectionCase(args[1])
                     : args[0] == "--follow-case" ? RunFollowCase(args[1]) : 2;
             TestProductionBindingsInFreshProcesses();
+            ManagerFileLoggerTests.Run();
             TestGeneratedPackagesInFreshProcesses();
             TestMalformedSelectionInFreshProcesses();
             TestSessionFollowInFreshProcesses();

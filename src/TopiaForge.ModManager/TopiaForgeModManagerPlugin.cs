@@ -82,7 +82,12 @@ namespace TopiaForge.ModManager
                     managerLogger = new ManagerFileLogger(paths.ManagerLogFile, Logger);
                 });
             }
-            catch (Exception error) { Logger.LogError("TopiaForge storage was rejected: " + error); return; }
+            catch (Exception error)
+            {
+                // No manager log exists yet, so this goes to BepInEx's own log, through the same path filter.
+                Logger.LogError(TopiaForge.Mods.Internal.DiagnosticPathRedactor.Redact("TopiaForge storage was rejected: " + error));
+                return;
+            }
 
             // Unity runs no frame once a quit starts destroying objects, and cleanup begun in OnDestroy needs
             // later frames, so a quit is held until the teardown it starts has finished. The handler answers last,
@@ -405,7 +410,7 @@ namespace TopiaForge.ModManager
             try
             {
                 if (managerLogger != null) managerLogger.Error(exception, message);
-                else Logger.LogError(message + " " + exception);
+                else Logger.LogError(TopiaForge.Mods.Internal.DiagnosticPathRedactor.Redact(message + " " + exception));
             }
             catch { /* Teardown must attempt every independent cleanup even after logging stops. */ }
         }

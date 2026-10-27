@@ -28,6 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../mods/Shared/DiagnosticPathRedactor.cs" />
     <!-- The game's binder, which the testing kit's lifecycle runner must match, failures included. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\GeneratedMultiplayerBinder.cs" Link="Runtime\GeneratedMultiplayerBinder.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntime.cs" Link="Runtime\MultiplayerRuntime.cs" />
