@@ -9,3 +9,5 @@ TF1010 | TopiaForge | Error | SDK APIs require a manifest loader floor at least 
 TF1011 | TopiaForge | Error | Map worlds require a bounded published id or packed map file, a required Worlds dependency and scene replacement.
 TF1012 | TopiaForge | Warning | Gamemodes using authored map content need a map world launch target.
 TF1013 | TopiaForge | Warning | Authored entity ids absent from the matching survey need a refreshed survey or a corrected id.
+TF1014 | TopiaForge | Warning | Participant code cannot change world views or place blockers; move the call to the server controller.
+TF1015 | TopiaForge | Warning | Environment literals must exist in the verified native preset catalogue; nearest keys are offered.

@@ -132,7 +132,9 @@ namespace TopiaForge.Mods.Analyzers
                 SdkVersionRequired,
                 InvalidMapWorld,
                 MapWorldRequired,
-                MissingSurveyEntity);
+                MissingSurveyEntity,
+                ParticipantViewChange,
+                UnknownEnvironmentPreset);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -143,7 +145,7 @@ namespace TopiaForge.Mods.Analyzers
             context.RegisterCompilationAction(AnalyzeMapWorlds);
         }
 
-        private static void StartCompilation(CompilationStartAnalysisContext context)
+        private void StartCompilation(CompilationStartAnalysisContext context)
         {
             // Test code may legitimately wait on a task: it is not running inside the game loop.
             if (HasBooleanBuildProperty(
@@ -165,6 +167,7 @@ namespace TopiaForge.Mods.Analyzers
             RegisterFixedUpdateInput(context);
             RegisterVersionGates(context);
             RegisterAuthoredMaps(context);
+            RegisterWorldView(context);
 
             if (HasBooleanBuildProperty(
                     context.Options.AnalyzerConfigOptionsProvider,

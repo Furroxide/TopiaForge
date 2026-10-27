@@ -125,10 +125,13 @@ namespace TopiaForge.ModManager
         internal MultiplayerReplication(MultiplayerRuntime runtime)
         {
             Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            runtime.AddObserver(Views);
         }
 
         /// <summary>Gets the composition root: the realm, and the ledger spawns are recorded in.</summary>
         internal MultiplayerRuntime Runtime { get; }
+
+        internal RuntimeWorldViews Views { get; } = new RuntimeWorldViews();
 
         internal IMultiplayerMotion? Motion { get; set; }
         internal MultiplayerPlayers? Players { get; set; }

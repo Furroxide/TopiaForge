@@ -1,5 +1,5 @@
 {
-  "capturedUtc": "2026-10-27T01:23:05.9182681Z",
+  "capturedUtc": "2026-10-27T06:26:07.5626706Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
   "gameVersion": "0.0.2545",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "c6a6aaf0f3113f600dc3261c130d18853efcea9eda8cf9b90948dfef477ca42d",
+  "surfaceContentHash": "001e7246e5a7d49a63f735088a60188429ece723caca06bbce17d65fa0c3f74b",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -11206,6 +11206,75 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcImportedEntity"
     },
+    "GameCode|UgcImportedVisualRoot": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "authoredLocalPosition",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "authoredLocalRotation",
+          "type": "UnityEngine.Quaternion"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "authoredLocalScale",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "hasAuthoredTransform",
+          "type": "System.Boolean"
+        }
+      ],
+      "fullName": "UgcImportedVisualRoot",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "CaptureAuthoredLocalTransform",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ResetToAuthoredLocalTransform",
+          "parameters": [],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcImportedVisualRoot",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcImportedVisualRoot"
+    },
     "GameCode|UgcPlayLaunchRequest": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -12329,6 +12398,102 @@
       "simpleName": "UgcRuntimeSpawnPointFactory",
       "status": "Resolved",
       "typeKey": "GameCode|UgcRuntimeSpawnPointFactory"
+    },
+    "GameCode|UgcSceneEnvironmentApplier": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DEFAULT_PRESET_KEY",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcSceneEnvironmentApplier",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "Apply",
+          "parameters": [
+            "UgcExportScene",
+            "UgcEnvironmentPrefabMap",
+            "UnityEngine.Transform",
+            "UnityEngine.Object"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DestroyExistingInstances",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DestroyInstance",
+          "parameters": [
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "FindDirectionalLight",
+          "parameters": [
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "UnityEngine.Light"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcSceneEnvironmentApplier",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcSceneEnvironmentApplier"
+    },
+    "GameCode|UgcSceneEnvironmentInstance": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [],
+      "fullName": "UgcSceneEnvironmentInstance",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcSceneEnvironmentInstance",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcSceneEnvironmentInstance"
     },
     "GameCode|UgcSceneRoot": {
       "assembly": "GameCode",

@@ -79,6 +79,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 RunMapWorldTests();
                 RunAuthoredMapTests();
                 RunRealAuthoredMapTests();
+                RunWorldViewTests();
                 Console.WriteLine("All TopiaForge analyzer tests passed.");
                 return 0;
             }

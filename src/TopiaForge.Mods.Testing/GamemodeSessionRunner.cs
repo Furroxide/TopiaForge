@@ -83,6 +83,20 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Gets the world readiness both controllers see.</summary>
         public WorldReadiness World { get; private set; }
 
+        /// <summary>Gets the shared single-player view fake registered automatically when the session starts.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public FakeWorldView View { get; private set; } = new FakeWorldView();
+
+        /// <summary>Supplies a configured view before startup; the runner owns its teardown.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public GamemodeSessionRunner WithView(FakeWorldView view)
+        {
+            if (started || finished) throw new InvalidOperationException("Supply the view before starting.");
+            if (view == null) throw new ArgumentNullException(nameof(view));
+            if (!ReferenceEquals(View, view)) View.Dispose();
+            View = view; return this;
+        }
+
         /// <summary>Supplies a map before startup; stopping the runner disposes it when it owns a disposable fake.</summary>
         [RequiresTopiaForge("0.2.0")]
         public GamemodeSessionRunner WithMap(IAuthoredMap map)
@@ -156,6 +170,10 @@ namespace TopiaForge.Mods.Testing
 
         private async Task<OperationResult<bool>?> StartControllersAsync()
         {
+            if (!ServerContext.Extensions.TryGet<IWorldView>(out _))
+                ServerContext.Extensions.Register<IWorldView>(View.ForScope(ServerContext.Lifetime, role: Role));
+            if (!ParticipantContext.Extensions.TryGet<IWorldView>(out _))
+                ParticipantContext.Extensions.Register<IWorldView>(View.ForScope(ParticipantContext.Lifetime, participant: true, role: Role));
             var token = session.Token;
             if (Role != GamemodeSessionRole.Client)
             {
@@ -255,7 +273,7 @@ namespace TopiaForge.Mods.Testing
             ParticipantController = null;
             Controller = null;
             var disposed = new List<IDisposable>();
-            foreach (var resource in new IDisposable?[] { participant, controller, Factory as IDisposable, World.Map as IDisposable, ParticipantContext, ServerContext })
+            foreach (var resource in new IDisposable?[] { participant, controller, Factory as IDisposable, View, World.Map as IDisposable, ParticipantContext, ServerContext })
             {
                 if (resource == null || disposed.Exists(previous => ReferenceEquals(previous, resource))) continue;
                 disposed.Add(resource);

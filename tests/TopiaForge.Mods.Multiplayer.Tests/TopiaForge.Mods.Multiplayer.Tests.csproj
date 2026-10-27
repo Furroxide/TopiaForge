@@ -98,4 +98,9 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceControls.cs" Link="Runtime\Voice\VoiceControls.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\NativeInputCensus.cs" Link="Runtime\Voice\NativeInputCensus.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.WorldView.cs" Link="Runtime/Multiplayer/RuntimeReplication.WorldView.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/RuntimeWorldViews.cs" Link="Runtime/WorldView/RuntimeWorldViews.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/WorldViewLeases.cs" Link="Runtime/WorldView/WorldViewLeases.cs" />
+  </ItemGroup>
 </Project>

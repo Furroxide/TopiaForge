@@ -38,6 +38,7 @@ namespace TopiaForge.Worlds
             private readonly string? mapScene;
             private readonly string? mapLabel;
             private Transform? importedRoot;
+            private object? importedScene;
             private readonly WorldSceneIdentity scene;
             private readonly object sceneRoot;
             private readonly PropertyInfo activeRoot;
@@ -87,8 +88,13 @@ namespace TopiaForge.Worlds
             public bool NativeEntered { get; private set; }
             public bool NativeReturned { get; private set; }
             public string SceneId => mapScene ?? string.Empty;
-            public TopiaForge.Mods.Internal.AuthoredMapIndex CreateMap(MapDocument document, string mapId, IModContext context) =>
-                MapNativeIndex.Create(importedRoot, document, SceneId, mapId, context);
+            public TopiaForge.Mods.Internal.AuthoredMapIndex CreateMap(MapDocument document, string mapId, IModContext context)
+            {
+                var index = MapNativeIndex.Create(importedRoot, document, SceneId, mapId, context);
+                if (importedRoot != null && importedScene != null)
+                    index.ViewSource = new NativeMapViewSource(host, importedRoot, importedScene, scene);
+                return index;
+            }
             public OperationResult<TransformState> PlaceRespawn(string entityId) => MapNativeSpawn.Place(importedRoot, entityId);
             public OperationResult<IDisposable> Import()
             {
@@ -114,6 +120,7 @@ namespace TopiaForge.Worlds
                     // A null scene id requests the project's own default scene, as UgcExportProject.ResolveScene's
                     // optional parameter of the same name declares. The label is the file name, never the full path.
                     var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName });
+                    importedScene = data;
                     NativeReturned = true;
                     var root = activeRoot.GetValue(sceneRoot) as Transform;
                     importedRoot = root;

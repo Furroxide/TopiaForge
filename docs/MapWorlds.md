@@ -102,3 +102,60 @@ transition owner and returns the same index contract. Stale sessions and cancell
 or failed imports release their content. Test with `FakeAuthoredMap.FromProject`,
 its builder, or `GamemodeSessionRunner.WithMap(map)`; keep native checks separate
 from fake results.
+
+## The single-player world view
+
+The Worlds SDK provides `session.View()` from the server controller's context.
+These APIs require stable TopiaForge 0.2.0. Keep a required Worlds dependency and
+use the SDK version gates; package and loader releases must satisfy those floors.
+
+```csharp
+var view = session.View();
+var reducedSight = view.Fog(VisionFog.Blackout);
+if (reducedSight.TryGetValue(out var fogLease))
+{
+    // The scope also owns the lease; dispose it early when visibility returns.
+    fogLease.Dispose();
+}
+var hidden = view.Hide(session.World.RequireMap().Entity("workshop-crate"));
+```
+
+`VisionFog.Blackout` requests dark fog at six metres. `VisionFog.Radius(metres,
+tint)` accepts finite distances from one through 500 metres. The shortest live
+request wins; equal distances choose Dark, Haze, then Smoke, independently of
+acquisition order. Releasing it restores the next request. There is no unfog
+override.
+
+For environment changes, first inspect `view.EnvironmentPresets`, then call
+`view.Environment(key)`. The list comes from the running game's asset map; do not
+guess keys. The newest live environment lease wins. Releasing the last restores
+the imported map's original preset. Missing keys return `NotFound` with a bounded
+list of available keys; worlds without environment support return `Unavailable`.
+
+Hiding suppresses the target's own renderers, excluding nested authored entities.
+Colliders, lights, audio and active state remain unchanged. Overlapping hides
+combine until their last lease ends. Restoration preserves renderer values that
+the game changed in the meantime. A view supports 1,024 distinct hidden targets
+and 4,096 total leases; exceeding either returns `RateLimited`. Preset keys have a
+64-character bound. Dead or foreign targets fail explicitly.
+
+Leases end on disposal, caller scope end, provider unload, world teardown or
+leaving single player. Participant code receives `NotAuthoritative` in every
+role, including offline. TF1014 follows participant entry points and visible
+helpers and also warns about participant blockers. Multiplayer view delivery is
+not available in this API stage: online calls return `Unavailable`, and no view
+state is transmitted. Do not use a participant to bypass session authority.
+
+Fog uses an owned HDRP override. Transitions take 0.5 seconds, or apply immediately
+with reduced motion. The adapter unsubscribes from updates at rest. Unsupported
+renderers return `Unavailable`; the six-metre default and the environment switch
+still require visual checks on the supported game build. TF1015 diagnoses preset
+literals only after the shipped catalogue has been verified against game assets;
+until that capture, it deliberately stays silent. Metadata alone cannot prove
+which preset assets ship.
+
+`GamemodeSessionRunner` supplies a `FakeWorldView` automatically. Configure a
+synthetic preset list with `WithView(new FakeWorldView(keys, originalPreset))`.
+Inspect `EffectiveFog`, `EffectiveEnvironment` and `HiddenEntities`. `ForScope`
+binds another caller to the same derived view, with runtime-equivalent scope and
+participant rules. Synthetic presets in tests are not a native preset catalogue.

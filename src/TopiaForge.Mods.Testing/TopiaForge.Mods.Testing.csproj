@@ -63,6 +63,11 @@
           Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Worlds.dll" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../TopiaForge.ModManager.Core/WorldViewLedger.cs" Link="Internal/WorldViewLedger.cs" />
+    <Compile Include="../TopiaForge.ModManager/WorldView/WorldViewLeases.cs" Link="Internal/WorldViewLeases.cs" />
+  </ItemGroup>
+
   <!-- The multiplayer rig runs the same session engine as the provider, linked in as internal source. -->
   <Import Project="..\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.props" />
 

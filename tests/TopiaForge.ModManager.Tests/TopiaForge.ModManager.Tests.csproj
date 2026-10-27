@@ -447,4 +447,14 @@
     <Compile Include="../TopiaForge.ModRuntime.Tests/FakePresenceBackend.cs" Link="Multiplayer/FakePresenceBackend.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/PlayersTestServices.cs" Link="Multiplayer/PlayersTestServices.cs" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.WorldView.cs" Link="Runtime/Multiplayer/RuntimeReplication.WorldView.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/RuntimeWorldViews.cs" Link="Runtime/WorldView/RuntimeWorldViews.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/WorldViewLeases.cs" Link="Runtime/WorldView/WorldViewLeases.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.WorldView.cs" Link="Runtime/ModContext.WorldView.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.ViewEntities.cs" Link="Runtime/ModContext.ViewEntities.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/View/OwnedRendererVisibility.cs" Link="Worlds/OwnedRendererVisibility.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/View/ViewRendererSelection.cs" Link="Worlds/ViewRendererSelection.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/View/WorldViewProvider.cs" Link="Worlds/WorldViewProvider.cs" />
+  </ItemGroup>
 </Project>

@@ -134,6 +134,10 @@ type public interface TopiaForge.Mods.IWorldSessionService
   event System.Action<TopiaForge.Mods.WorldSessionSnapshot> StateChanged { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
   property TopiaForge.Mods.WorldSessionSnapshot Current { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IWorldView : TopiaForge.Mods.IViewControls [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<System.String> EnvironmentPresets { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.LocalWorldFile : System.Object
   constructor .ctor(System.String path, System.String fileName, System.String projectName, System.String loadError)
   property System.Boolean IsLoadable { get; }
@@ -279,6 +283,10 @@ type public sealed class TopiaForge.Mods.WorldSpawnPolicy : System.Object
   constructor .ctor(TopiaForge.Mods.WorldSpawnKind kind, System.String? markerName = null)
   property System.String? MarkerName { get; }
   property TopiaForge.Mods.WorldSpawnKind Kind { get; }
+
+type public static class TopiaForge.Mods.WorldViewExtensions : System.Object [requires-topiaforge="0.2.0"]
+  method extension [static] TopiaForge.Mods.IWorldView View(TopiaForge.Mods.IGamemodeSession session) [requires-topiaforge="0.2.0"]
+  method extension [static] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Hide(TopiaForge.Mods.IViewControls view, TopiaForge.Mods.AuthoredEntity entity) [requires-topiaforge="0.2.0"]
 
 type public static class TopiaForge.Mods.WorldsModule : System.Object
   field const System.String Id = "io.github.furroxide.topiaforge.worlds"

@@ -547,3 +547,21 @@ processing remain in a `.topiaforge-consume-*` quarantine directory under the in
 still successful. Check that the launcher data `logs` directory is writable, is not a symbolic link,
 and has free disk space; the bounded fallback diagnostic is written to the launcher's standard error
 stream.
+
+### TF1014
+
+**Participant code changes an authoritative world view or places a blocker.** Move
+the change to the gamemode's server controller. The runtime refuses participant
+calls in single player too. The analyzer follows participant session parameters,
+participant controllers and calls to visible helpers. It cannot prove arbitrary
+reflection, dynamic dispatch or code in another assembly. Ordinary server calls
+remain valid. See [the world view](MapWorlds.md#the-single-player-world-view).
+
+### TF1015
+
+**A preset literal is absent from the verified game-build catalogue.** Choose one
+of the nearest keys offered by the code fix, or inspect
+`session.View().EnvironmentPresets` in the running game. The rule checks only SDK
+environment calls and constant strings. It stays silent for dynamic keys and
+while the shipped native catalogue is unverified. The pinned build's asset keys
+still need a native capture; none are inferred from type metadata or test data.
