@@ -34,6 +34,7 @@ namespace TopiaForge.Worlds
             Context.Lifetime.Track(pauseBridge);
             RegisterExtension<IWorldSessionService>(new WorldSessionServiceForwarder(runtime.Sessions));
             RegisterExtension<ILocalWorldService>(local);
+            RegisterExtension<IWorldView>(new WorldViewProvider(Context, NativeWorldViewRenderer.Create));
             RegisterExtension<IInternalMapWorldService>(maps);
             RegisterExtension<IWorldPauseMenuService>(pauseBridge);
             Context.Events.SubscribeUpdate(delta => pauseBridge?.Update(delta));

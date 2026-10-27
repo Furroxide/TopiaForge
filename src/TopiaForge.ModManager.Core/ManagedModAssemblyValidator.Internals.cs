@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Core
                 ["TopiaForge.GameCompat.Extractor.dll"] = null,
                 ["TopiaForge.ModManager.Tests.dll"] = null,
                 ["TopiaForge.ModRuntime.Tests.dll"] = null,
+                ["TopiaForge.Mods.Analyzers.Tests.dll"] = null,
                 ["TopiaForge.Mods.Multiplayer.Generators.Tests.dll"] = null,
                 ["TopiaForge.Mods.Multiplayer.Tests.dll"] = null,
                 ["TopiaForge.Multiplayer.Engine.dll"] = null,

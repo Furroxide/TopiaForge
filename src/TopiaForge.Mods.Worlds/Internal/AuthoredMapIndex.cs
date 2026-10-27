@@ -72,9 +72,10 @@ namespace TopiaForge.Mods.Internal
         {
             MapId = source.MapId; SceneId = source.SceneId; SceneName = source.SceneName; Environment = source.Environment;
             Revision = source.Revision; Entities = source.Entities; life = source.life; entities = source.entities; live = source.live;
-            models = source.models; position = source.position; transform = source.transform; nativeAlive = source.nativeAlive; readAnchors = reader;
+            models = source.models; position = source.position; transform = source.transform; nativeAlive = source.nativeAlive; readAnchors = reader; ViewSource = source.ViewSource;
             MissingMarkers = source.MissingMarkers; UnknownMarkers = source.UnknownMarkers; DuplicateMarkers = source.DuplicateMarkers;
         }
+        internal IInternalMapViewSource? ViewSource { get; set; }
         internal AuthoredMapIndex ForPackage(Func<string, OperationResult<byte[]>> reader) => new AuthoredMapIndex(this, reader);
         internal int MissingMarkers { get; }
         internal int UnknownMarkers { get; }

@@ -16,6 +16,14 @@ namespace TopiaForge.ModManager.Tests
             UnityMainThreadGuard.CaptureCurrentThread();
             if (args.Length == 2 && args[0] == "--authored-review")
             { AuthoredMapReviewTests.Run(args[1]); return 0; }
+            if (args.Length == 1 && args[0] == "--world-view")
+            { WorldViewTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--managed-assembly-validation")
+            {
+                var validationRoot = Directory.CreateTempSubdirectory("TopiaForgeAssemblyValidation-").FullName;
+                try { ManagedModAssemblyValidatorTests.Run(validationRoot); return 0; }
+                finally { TryDelete(validationRoot); }
+            }
             if (args.Length == 1 && args[0] == "--authored-maps")
             { AuthoredMapTests.Run(FindRepoRoot()); AuthoredMapImportTests.RunAsync().GetAwaiter().GetResult(); return 0; }
             if (args.Length == 1 && args[0] == "--gamecompat")
@@ -546,6 +554,7 @@ namespace TopiaForge.ModManager.Tests
                 WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
                 MapDocumentTests.Run(FindRepoRoot());
                 AuthoredMapTests.Run(FindRepoRoot());
+                WorldViewTests.Run();
                 AuthoredMapImportTests.RunAsync().GetAwaiter().GetResult();
                 AuthoredMapReviewTests.Run("all");
                 MapWorldServiceTests.AuthoredReadinessAsync().GetAwaiter().GetResult();

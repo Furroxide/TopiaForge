@@ -1088,6 +1088,177 @@
       "requireReadable": true,
       "indexParameterCount": 0,
       "member": "UnresolvedAsset"
+    },
+    {
+      "id": "worlds.view.type.UgcEnvironmentPrefabMap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcSceneEnvironmentApplier",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneEnvironmentApplier",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcSceneEnvironmentInstance",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneEnvironmentInstance",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcEnvironmentPrefabMap.Entry",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap+Entry",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcImportedVisualRoot",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportedVisualRoot",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeViewHiding.cs"
+    },
+    {
+      "id": "worlds.view.host.environment-map",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "EnvironmentPrefabMap",
+      "returnType": "UgcEnvironmentPrefabMap"
+    },
+    {
+      "id": "worlds.view.map.entries",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "entries",
+      "returnType": "UgcEnvironmentPrefabMap+Entry[]",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.view.entry.key",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap+Entry",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "presetKey",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.view.map.lookup",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "TryGetPrefab",
+      "returnType": "System.Boolean",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject&",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.view.environment.apply",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneEnvironmentApplier",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "Apply",
+      "returnType": "System.Void",
+      "parameters": [
+        {
+          "type": "UgcExportScene",
+          "constrained": true
+        },
+        {
+          "type": "UgcEnvironmentPrefabMap",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.Transform",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.Object",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "isStatic": true,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.view.scene.environment",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "environment",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.view.scene.constructor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "parameters": [],
+      "exactParameters": true
     }
   ]
 }

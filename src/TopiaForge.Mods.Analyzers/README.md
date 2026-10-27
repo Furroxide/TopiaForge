@@ -30,3 +30,11 @@ target. TF1013 checks literal entity ids and copied anchors files against matchi
 `obj/topiaforge-map-survey*.json` snapshots. Refresh them with `topiaforge world survey`.
 Without a matching survey TF1013 is silent. Its code fix offers surveyed ids instead
 of guessing through duplicate names. See [diagnostics](https://docs.topiaforge.dev/reference/diagnostics/).
+
+## World view diagnostics
+
+TF1014 warns about view changes and blockers reachable from participant code.
+Move them into the server controller; runtime authority checks still apply.
+TF1015 offers nearest environment keys only from a verified native catalogue.
+The current catalogue is deliberately unqualified pending native asset capture,
+so this rule does not yet diagnose preset literals in ordinary builds.

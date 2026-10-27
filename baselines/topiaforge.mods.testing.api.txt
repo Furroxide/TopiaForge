@@ -741,6 +741,20 @@ type public sealed class TopiaForge.Mods.Testing.FakeWorldSessionService : Syste
   method System.Void Publish(TopiaForge.Mods.WorldSessionPhase phase, TopiaForge.Mods.IWorldSession? session = null, TopiaForge.Mods.WorldReadiness? world = null)
   property TopiaForge.Mods.WorldSessionSnapshot Current { get [virtual,final,newslot]; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeWorldView : System.Object, System.IDisposable, TopiaForge.Mods.IViewControls, TopiaForge.Mods.IWorldView [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Collections.Generic.IEnumerable<System.String>? presets = null, System.String originalEnvironment = "") [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.IWorldView ForScope(TopiaForge.Mods.Testing.FakeModLifetime scope, System.Boolean participant = false, TopiaForge.Mods.Testing.GamemodeSessionRole role = 0 (SinglePlayer)) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Environment(System.String preset) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Fog(TopiaForge.Mods.VisionFog fog) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Hide(TopiaForge.Mods.IEntity entity) [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAvailable { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean SupportsFog { get [requires-topiaforge="0.2.0"]; set [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<System.String> EnvironmentPresets { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IEntity> HiddenEntities { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.VisionFog> EffectiveFog { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String EffectiveEnvironment { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public enum TopiaForge.Mods.Testing.GamemodeSessionRole : System.Int32
   field System.Int32 value__
   field const TopiaForge.Mods.Testing.GamemodeSessionRole Client = 2 (Client)
@@ -752,6 +766,7 @@ type public sealed class TopiaForge.Mods.Testing.GamemodeSessionRunner : System.
   method System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> StartAsync(System.Threading.CancellationToken cancellationToken = null)
   method System.Void Stop()
   method TopiaForge.Mods.Testing.GamemodeSessionRunner WithMap(TopiaForge.Mods.IAuthoredMap map) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.Testing.GamemodeSessionRunner WithView(TopiaForge.Mods.Testing.FakeWorldView view) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Void Dispose()
   property System.Boolean IsRunning { get; }
   property System.Collections.Generic.IReadOnlyList<System.Exception> CleanupFailures { get; }
@@ -762,6 +777,7 @@ type public sealed class TopiaForge.Mods.Testing.GamemodeSessionRunner : System.
   property TopiaForge.Mods.Testing.FakeGamemodeSession? Session { get; }
   property TopiaForge.Mods.Testing.FakeModContext ParticipantContext { get; }
   property TopiaForge.Mods.Testing.FakeModContext ServerContext { get; }
+  property TopiaForge.Mods.Testing.FakeWorldView View { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.Testing.GamemodeSessionRole Role { get; }
   property TopiaForge.Mods.WorldReadiness World { get; }
 

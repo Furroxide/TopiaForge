@@ -93,6 +93,12 @@ type public enum TopiaForge.Mods.ExtensionCardinality : System.Int32
   field const TopiaForge.Mods.ExtensionCardinality Multiple = 1 (Multiple)
   field const TopiaForge.Mods.ExtensionCardinality Singleton = 0 (Singleton)
 
+type public enum TopiaForge.Mods.FogTint : System.Int32 [requires-topiaforge="0.2.0"]
+  field System.Int32 value__ [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.FogTint Dark = 0 (Dark) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.FogTint Haze = 1 (Haze) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.FogTint Smoke = 2 (Smoke) [requires-topiaforge="0.2.0"]
+
 type public enum TopiaForge.Mods.GameLoopPhase : System.Int32
   field System.Int32 value__
   field const TopiaForge.Mods.GameLoopPhase Fixed = 1 (Fixed)
@@ -383,6 +389,13 @@ type public interface TopiaForge.Mods.IUiSurface : System.IDisposable
 
 type public interface TopiaForge.Mods.IUiSurfaceDismissalSource
   event System.Action? Dismissed { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IViewControls [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Environment(System.String preset) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Fog(TopiaForge.Mods.VisionFog fog) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Hide(TopiaForge.Mods.IEntity entity) [requires-topiaforge="0.2.0"]
+
+type public interface TopiaForge.Mods.IViewLease : System.IDisposable, TopiaForge.Mods.IGameplayLease [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.InputActionDefinition : System.Object
   constructor .ctor(System.String name, System.String displayName, System.Collections.Generic.IEnumerable<TopiaForge.Mods.InputBinding> defaultBindings, System.Boolean suppressWhileUiFocused = true)
@@ -975,3 +988,12 @@ type public readonly struct TopiaForge.Mods.Vec3 : System.ValueType, System.IEqu
   property System.Single Z { get; }
   property TopiaForge.Mods.Vec3 Normalized { get; }
   property static TopiaForge.Mods.Vec3 Zero { get [static]; }
+
+type public readonly struct TopiaForge.Mods.VisionFog : System.ValueType, System.IEquatable<TopiaForge.Mods.VisionFog> [requires-topiaforge="0.2.0"]
+  method [static] TopiaForge.Mods.VisionFog Radius(System.Single metres, TopiaForge.Mods.FogTint tint = 0 (Dark)) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.VisionFog other) [requires-topiaforge="0.2.0"]
+  method [virtual] System.Boolean Equals(System.Object? obj) [requires-topiaforge="0.2.0"]
+  method [virtual] System.Int32 GetHashCode() [requires-topiaforge="0.2.0"]
+  property System.Single VisibleDistance { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.FogTint Tint { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property static TopiaForge.Mods.VisionFog Blackout { get [static] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
