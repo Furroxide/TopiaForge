@@ -46,6 +46,7 @@ namespace TopiaForge.ModManager.Tests
         }
         internal static async Task RunAsync()
         {
+            MapLoadProgressTests.Run();
             var owned = Directory.CreateTempSubdirectory("map-service-");
             try
             {

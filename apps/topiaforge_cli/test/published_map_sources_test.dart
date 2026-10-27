@@ -80,13 +80,10 @@ void main() {
     ],
     'missing explicit scene': ['add', 'example', '--name', 'Map'],
   }.entries) {
-    test(
-      'CLI rejects ${entry.key}',
-      () async {
-        final result = await cli(entry.value);
-        expect(result.exitCode, isNot(0));
-        expect(result.stderr, isNot(contains(root.path)));
-      },
-    );
+    test('CLI rejects ${entry.key}', () async {
+      final result = await cli(entry.value);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, isNot(contains(root.path)));
+    });
   }
 }
