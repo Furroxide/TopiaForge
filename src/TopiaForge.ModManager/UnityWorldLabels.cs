@@ -52,9 +52,19 @@ namespace TopiaForge.ModManager
         private void EnsureLayer()
         {
             if (layer != null && layer.Go != null) return;
-            hud = host.HudLayer("world-labels-" + Guid.NewGuid().ToString("N"), persistent: true);
-            layer = hud.Nametags(UiLabelState.MaximumLabels);
-            hud.Go.AddComponent<WorldLabelDriver>().Owner = this;
+            var nextHud = host.HudLayer("world-labels-" + Guid.NewGuid().ToString("N"), persistent: true);
+            try
+            {
+                var nextLayer = nextHud.Nametags(UiLabelState.MaximumLabels);
+                nextHud.Go.AddComponent<WorldLabelDriver>().Owner = this;
+                hud = nextHud;
+                layer = nextLayer;
+            }
+            catch
+            {
+                nextHud.Destroy();
+                throw;
+            }
         }
         internal void Tick()
         {

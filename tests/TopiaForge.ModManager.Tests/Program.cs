@@ -43,7 +43,9 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--world-widgets")
-            { TestingKitTests.RunWorldWidgets(); return 0; }
+            { TestingKitTests.RunWorldWidgets(); WorldWidgetAdapterTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--world-widget-adapter")
+            { WorldWidgetAdapterTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-widget-regressions")
             {
                 UiKitCoreTests.Run(); UiKitWindowMathTests.Run(); UiKitMultiplayerCoreTests.Run();
@@ -51,6 +53,7 @@ namespace TopiaForge.ModManager.Tests
                 UiKitSourceConventionTests.Run(); UiKitMultiplayerConventionTests.Run();
                 UiKitLayerLedgerTests.Run(); UiKitHudLayoutTests.Run();
                 UiSurfaceLifetimeTests.Run(); UiSurfaceLifetimeConventionTests.Run(); UiKitEventSystemTests.Run();
+                WorldWidgetAdapterTests.Run();
                 TestingKitTests.Run(); return 0;
             }
             if (args.Length == 1 && args[0] == "--blockers")
@@ -648,6 +651,7 @@ namespace TopiaForge.ModManager.Tests
                 UiSurfaceLifetimeTests.Run();
                 UiSurfaceLifetimeConventionTests.Run();
                 UiKitEventSystemTests.Run();
+                WorldWidgetAdapterTests.Run();
                 OverlayRefreshTests.Run();
                 LaunchSessionFixtureTests.Run(FindRepoRoot());
                 ServerContentFixtureTests.Run(FindRepoRoot());

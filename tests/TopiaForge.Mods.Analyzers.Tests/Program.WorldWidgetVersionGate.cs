@@ -20,7 +20,18 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "object Run(IUiService ui) => ui.Labels;",
                 "double Run(IUiService ui) => ui.ClockTime;",
                 "object Run() => UiWorldLabelRequest.At(Vec3.Zero, \"Marker\");",
-                "void Run(IUiWorldLabel label) => label.SetText(\"Marker\");"
+                "void Run(IUiWorldLabel label) => label.SetText(\"Marker\");",
+                """
+                void Run(IModContext context, IEntity entity)
+                {
+                    var ui = context.Ui;
+                    var surface = ui.CreateSurface(new UiSurfaceRequest("status", "Status", "", UiSurfaceKind.Hud,
+                        content: new UiColumn(new UiProgress(0.25f, "Tasks"), new UiCountdown(ui.ClockTime + 30, "Remaining"))));
+                    if (!surface.Succeeded) return;
+                    var label = ui.Labels.Add(UiWorldLabelRequest.For(entity, "Panel"));
+                    if (!label.Succeeded) surface.Value!.Dispose();
+                }
+                """
             };
             foreach (var body in bodies)
             {
@@ -31,7 +42,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 Assert(!Analyze(source, VersionManifest(">=0.2.0 <0.3.0"), additionalReferences: references).Any(d => d.Id == "TF1010"),
                     "world-widget API accepts a 0.2 floor: " + body);
             }
-            Console.WriteLine("World-widget version gates passed: six shipped-API cases, 18 assertions.");
+            Console.WriteLine("World-widget version gates passed: seven shipped-API cases, 21 assertions, including a complete author sample.");
         }
     }
 }
