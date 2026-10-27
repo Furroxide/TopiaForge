@@ -18,10 +18,11 @@ namespace TopiaForge.ModManager.Tests
             var world = manifest.Contributions!.Worlds.Single();
             Check(world.Transitions.SequenceEqual(new[] { ModTransitions.SceneReplacement }) && world.Spawn!.Kind == ModSpawnPolicy.ProviderDefaultKind,
                 "Omitted map defaults must be effective in the typed model.");
-            var root = Path.Combine(Path.GetTempPath(), "MapWorldManifestTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path.Combine(root, "Content"));
+            var owned = Directory.CreateTempSubdirectory("MapWorldManifestTests-");
+            var root = owned.FullName;
             try
             {
+                Directory.CreateDirectory(Path.Combine(root, "Content"));
                 var file = Path.Combine(root, "Content/world.json");
                 File.WriteAllText(file, "{\"scenes\":[]}");
                 manifest.Hashes["Content/world.json"] = Hash(file);
@@ -48,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
                 manifest.SupportedLoaderVersionRange = ">=0.2.0 <1.0.0";
                 Check(!ManifestContentValidator.Validate(root, manifest).Any(e => e.StartsWith("TFPKG180:")), "The stable loader floor is sufficient.");
             }
-            finally { Directory.Delete(root, true); }
+            finally { owned.Delete(true); }
             Console.WriteLine("Map world manifest: 12 checks passed.");
             MapWorldPackageTests.Run();
         }

@@ -13,8 +13,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
-            var root = Path.Combine(Path.GetTempPath(), "map-package-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            var owned = Directory.CreateTempSubdirectory("map-package-");
+            var root = owned.FullName;
             try
             {
                 var fixture = Path.Combine(Program.FindRepoRoot(), "tests/fixtures/gamemode-v6/serialization/manifest/v6-map-file-unhashed.json");
@@ -75,7 +75,7 @@ namespace TopiaForge.ModManager.Tests
                 Check(File.ReadAllBytes(installedMap).SequenceEqual(bytes), "Failed replacements must preserve the previous installed map.");
                 Console.WriteLine("Map world package boundary: 11 checks passed.");
             }
-            finally { Directory.Delete(root, true); }
+            finally { owned.Delete(true); }
         }
 
         private static void Write(ZipArchive zip, string path, byte[] bytes)
