@@ -690,9 +690,14 @@ namespace TopiaForge.Multiplayer.Engine
             var current = channel;
             if (current != null && current.Link.State != EngineLinkState.Closed)
             {
-                clientFrame.Reset();
-                SessionMessages.WriteEmpty(clientFrame, clientBody, MessageType.Leave);
-                current.Link.Send(EngineChannel.Session, clientFrame.AsSegment());
+                // Before the first flush the host has never seen a join. Sending Leave then would be
+                // pre-admission traffic; closing the unused link is the entire cancellation.
+                if (!current.JoinPending)
+                {
+                    clientFrame.Reset();
+                    SessionMessages.WriteEmpty(clientFrame, clientBody, MessageType.Leave);
+                    current.Link.Send(EngineChannel.Session, clientFrame.AsSegment());
+                }
                 current.Link.Close();
             }
 

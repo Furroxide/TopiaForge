@@ -13,7 +13,7 @@ namespace TopiaForge.Multiplayer
     /// player is the host, and canonical work runs inline. Calls made on the provider itself use its own owner
     /// partition, which no consuming mod can reach.
     /// </summary>
-    internal sealed partial class MultiplayerProvider : IMultiplayerSession, IInternalAnswerDispatch, IOwnerBoundExtensionFactory, IDisposable
+    internal sealed partial class MultiplayerProvider : IMultiplayerSession, IInternalAnswerDispatch, IOwnerBoundExtensionFactory, IOwnerContextBoundExtensionFactory, IDisposable
     {
         internal const string LocalParticipantId = "local";
         internal const string LocalDisplayName = "Local player";
@@ -80,6 +80,13 @@ namespace TopiaForge.Multiplayer
 
         object IOwnerBoundExtensionFactory.CreateOwnerFacade(Type contractType, string ownerModId, IModLifetime lifetime) =>
             CreateOwnerFacade(contractType, ownerModId, lifetime);
+
+        object IOwnerContextBoundExtensionFactory.CreateOwnerFacade(Type contractType, IModContext context)
+        {
+            var facade = (EngineSessionFacade)CreateOwnerFacade(contractType, context.Identity.Id, context.Lifetime);
+            if (context is IInternalPlayerContext players) facade.BindPlayers(players);
+            return facade;
+        }
 
         internal object CreateOwnerFacade(Type contractType, string ownerModId, IModLifetime lifetime)
         {

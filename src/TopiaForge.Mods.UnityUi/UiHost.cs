@@ -27,6 +27,7 @@ namespace TopiaForge.Mods.UnityUi
         private TopiaForgeRgba? accent;
         private bool disposed;
         private bool initReported;
+        internal bool PlainText { get; set; }
 
         internal UiHost(TopiaForgeUiOptions options)
         {
@@ -158,6 +159,7 @@ namespace TopiaForge.Mods.UnityUi
             ThrowIfDisposed();
             ReportInitOnce();
             var root = TopiaForgeLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent);
+            if (PlainText) root.AddComponent<TopiaForgePlainTextRoot>();
             TopiaForgeLayers.WatchLoss(root, HandleLayerLost);
             layerRoots.Add(root);
             var scaler = root.GetComponent<CanvasScaler>();

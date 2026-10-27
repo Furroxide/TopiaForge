@@ -12,6 +12,13 @@ internal static class Program
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--in-session-chat") { InSessionChatProviderTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--players")
+            {
+                ParticipantListTests.TheListGenerationMovesOnlyWhenTheListIsLetGo();
+                EnginePlayersTests.CancelBeforeJoinFlush();
+                Console.WriteLine("Players engine: join generations, reconnect, solo and pre-flush cancellation passed.");
+                return 0;
+            }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {
@@ -643,6 +650,7 @@ internal static class Program
             ParticipantListProviderTests.AJoinWhoseWholeAnswerArrivesAtOnceEndsThePreviousHostsStreams();
             VoiceSessionChangeTests.AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams();
             ParticipantListTests.TheListGenerationMovesOnlyWhenTheListIsLetGo();
+            EnginePlayersTests.CancelBeforeJoinFlush();
             ParticipantListFuzzTests.EverySnapshotShowsTheListOfTheHostThatSentIt();
             ControlPlaneFakeTests.TheFakeServiceAnswersAsTheRecordingsDo();
             InternetConfigurationTests.ALanHostNeverContactsTheService();

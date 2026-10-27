@@ -10,6 +10,7 @@ export const pages = [
   page('docs/Modules.md', 'guides/modules.md'),
   page('docs/Sandbox.md', 'guides/sandbox.md'),
   page('docs/Multiplayer.md', 'guides/multiplayer.md'),
+  page('docs/Players.md', 'guides/players.md'),
   page('docs/MultiplayerHostingFeasibility.md', 'reference/multiplayer-hosting-feasibility.md'),
   page('docs/RobotKit.md', 'guides/robotkit.md'),
   page('docs/Zombies.md', 'guides/zombies.md'),

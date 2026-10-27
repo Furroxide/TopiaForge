@@ -15,7 +15,7 @@ using TopiaForge.Mods.Interop.Unity;
 namespace TopiaForge.ModManager
 {
     internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext, IInternalWorldRuntimeContext,
-        IInternalReplicationContext
+        IInternalReplicationContext, IInternalPlayerContext
     {
         private readonly OwnerModLifetime ownerLifetime;
         private readonly ModEvents modEvents;
@@ -108,6 +108,8 @@ namespace TopiaForge.ModManager
                 Audio = gameplay.Audio;
                 Ui = new NetUiService(gameplay.Ui, replication);
                 replication.Ui = gameplay.Ui;
+                playerContext = this.replicationServices.Players?.Bind(
+                    Identity.Id, NetProfile.NetworkClass == ModNetworkClass.Shared, Logger, Lifetime, LocalPlayer, gameplay.Ui, inputActivity);
                 SceneTransitions = gameplay.SceneTransitions;
                 WorldRuntime = gameplay.WorldRuntime;
                 unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;

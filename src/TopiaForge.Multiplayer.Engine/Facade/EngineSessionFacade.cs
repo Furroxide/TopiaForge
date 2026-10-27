@@ -23,7 +23,7 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly IModLifetime? lifetime;
         private readonly List<IDisposable> owned = new List<IDisposable>();
         private readonly object ownedGate = new object();
-        private SnapshotPlayerDirectory? players;
+        private IPlayerDirectory? players;
         private int nextPrune = 32;
         private bool disposed;
 
@@ -44,7 +44,26 @@ namespace TopiaForge.Multiplayer.Engine
 
         public CancellationToken CurrentSessionToken => engine.CurrentSessionToken;
 
-        public IPlayerDirectory Players => players ??= new SnapshotPlayerDirectory(() => engine.Snapshot);
+        public IPlayerDirectory Players
+        {
+            get
+            {
+                ThrowIfClosing();
+                if (players != null) return players;
+                var directory = new PlayerDirectory(() => engine.Snapshot, () => engine.ParticipantListGeneration, null,
+                    exception => engine.ReportCallbackFailure("player join or leave handler", exception));
+                players = directory;
+                OwnSubscription(directory);
+                OwnSubscription(engine.SubscribeSession(_ => directory.Refresh()));
+                return directory;
+            }
+        }
+
+        internal void BindPlayers(IInternalPlayerContext context)
+        {
+            players = context.CreatePlayers(this, () => engine.ParticipantListGeneration);
+            if (players is IDisposable disposable) OwnSubscription(disposable);
+        }
 
         /// <summary>Gets whether the facade refuses new work: it was disposed, or the mod lifetime it is bound to is stopping.</summary>
         internal bool IsClosing => disposed || (lifetime?.IsStopping ?? false);

@@ -201,6 +201,10 @@ internal static class ParticipantListTests
         Join(rig, hostA, "a", "host-a");
         var (traveller, link) = Join(rig, hostA, "traveller", "host-a");
         var generation = traveller.ParticipantListGeneration;
+        var directory = traveller.CreateFacade("players-observer").Players;
+        That(directory.TryGet(new ParticipantId("p1"), out var oldPlayer), "the directory finds A's first guest");
+        var oldInput = oldPlayer!.Input;
+        var oldUi = oldPlayer.Ui;
         foreach (var end in new[] { link, link.Peer! })
         {
             end.State = EngineLinkState.Stalled;
@@ -224,6 +228,7 @@ internal static class ParticipantListTests
         rig.Flush();
         That(Rows(traveller.Snapshot) == "local=Host A^,p1=a,p2=traveller*" && traveller.ParticipantListGeneration == generation,
             "and a rejoin to the host that kept the record");
+        That(directory.TryGet(oldPlayer.Id, out var rejoined) && ReferenceEquals(oldPlayer, rejoined), "a retained list preserves its handles over reconnect");
 
         var seen = new List<int>();
         using var watch = traveller.CreateFacade("observer").SubscribeChanged(snapshot => seen.Add(snapshot.Participants.Count));
@@ -231,8 +236,13 @@ internal static class ParticipantListTests
         rig.Flush();
         That(Rows(traveller.Snapshot) == "local=Host B^,p1=traveller*" && seen.All(count => count > 0) && traveller.ParticipantListGeneration == generation + 1,
             "a join to another host lets the list go, though the session never listed nobody (" + string.Join(",", seen) + ")");
+        That(!oldPlayer.IsPresent && directory.TryGet(oldPlayer.Id, out var replacement) && !ReferenceEquals(oldPlayer, replacement),
+            "a fast join cannot retarget the old handle to B's p1");
+        That(!oldInput.IsHeld("fire") && oldUi.ShowToast("old").ErrorCode == ModErrorCode.NotFound,
+            "retained input and UI are retired with the old incarnation");
         traveller.SwitchToSolo(new SoloSessionStart(new MultiplayerSessionId("solo"), new SessionSeed(4), new ParticipantId("local"), "traveller"));
         That(traveller.ParticipantListGeneration == generation + 2, "and so does going back to solo play");
+        That(directory.Players.Count == 1 && directory.Local!.IsLocal && directory.Local.IsHost, "returning to solo leaves exactly one player");
     }
 
     /// <summary>

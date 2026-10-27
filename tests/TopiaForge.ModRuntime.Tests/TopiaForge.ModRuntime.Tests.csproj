@@ -10,6 +10,7 @@
     <ProjectReference Include="..\..\src\TopiaForge.ModManager\TopiaForge.ModManager.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Testing/TopiaForge.Mods.Testing.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../TopiaForge.SecondTestMod/TopiaForge.SecondTestMod.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>

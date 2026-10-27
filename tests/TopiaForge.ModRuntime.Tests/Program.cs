@@ -31,6 +31,7 @@ namespace TopiaForge.ModRuntime.Tests
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
                 finally { TryDelete(versionRoot); }
             }
+            if (args.Length == 1 && args[0] == "--players") return RunPlayersCases();
             if (args.Length > 0)
                 return args.Length != 2 ? 2 : args[0] == "--binding-case" ? RunBindingCase(args[1])
                     : args[0] == "--generated-binding-case" ? RunGeneratedBindingCase(args[1])

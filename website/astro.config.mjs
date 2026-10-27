@@ -86,6 +86,7 @@ export default defineConfig({
             { label: 'Specialist modules', slug: 'guides/modules' },
             { label: 'Sandbox creator mode', slug: 'guides/sandbox' },
             { label: 'Multiplayer preview', slug: 'guides/multiplayer' },
+            { label: 'Act on players', slug: 'guides/players' },
             { label: 'RobotKit', slug: 'guides/robotkit' },
             { label: 'Zombies worked example', slug: 'guides/zombies' },
             { label: 'Custom worlds and modes', slug: 'guides/custom-worlds' },

@@ -437,6 +437,38 @@ type public sealed class TopiaForge.Mods.Testing.FakePlayerDialogueInputService 
   property System.Int32 ActiveCaptureCount { get; }
   property System.String NextTranscript { get; set; }
 
+type public sealed class TopiaForge.Mods.Testing.FakePlayerDirectory : System.Object, System.IDisposable, TopiaForge.Mods.IPlayerDirectory [requires-topiaforge="0.2.0"]
+  constructor .ctor() [requires-topiaforge="0.2.0"]
+  method System.Boolean Remove(TopiaForge.Mods.ParticipantId id) [requires-topiaforge="0.2.0"]
+  method System.Boolean TryGetScore(System.String columnId, TopiaForge.Mods.ParticipantId player, out System.String displayValue, out System.Int64 sortKey) [requires-topiaforge="0.2.0"]
+  method System.Void AdvanceTick() [requires-topiaforge="0.2.0"]
+  method System.Void ReplaceGeneration() [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.IPlayer Add(TopiaForge.Mods.ParticipantId id, System.String displayName, TopiaForge.Mods.MultiplayerPlayerKey key = null) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.Testing.FakePlayerState State(TopiaForge.Mods.ParticipantId id) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean TryGet(TopiaForge.Mods.ParticipantId id, out TopiaForge.Mods.IPlayer? player) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.IDisposable SubscribeJoined(System.Action<TopiaForge.Mods.IPlayer> handler) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.IDisposable SubscribeLeft(System.Action<TopiaForge.Mods.IPlayer> handler) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IScoreboardColumn> RegisterScoreboardColumn(TopiaForge.Mods.ScoreboardColumnDefinition definition) [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAuthoritative { get [requires-topiaforge="0.2.0"]; set [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<System.String> CallbackErrors { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IPlayer> Players { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.IPlayer? Local { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.Testing.FakePlayerInput : System.Object, TopiaForge.Mods.IPlayerInput [requires-topiaforge="0.2.0"]
+  constructor .ctor() [requires-topiaforge="0.2.0"]
+  method System.Void AdvanceTick() [requires-topiaforge="0.2.0"]
+  method System.Void SetHeld(System.String name, System.Boolean held) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean IsHeld(System.String actionName) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean WasPressed(System.String actionName) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean WasReleased(System.String actionName) [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.Testing.FakePlayerState : System.Object [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.IEntity? Entity { get [requires-topiaforge="0.2.0"]; set [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Testing.FakeLocalPlayerService Player { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Testing.FakePlayerInput Input { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Testing.FakeUiService Ui { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.Testing.FakePrefabAsset : System.Object, System.IDisposable, TopiaForge.Mods.IPrefabAsset
   method [virtual,final,newslot] System.Void Dispose()
   property System.Boolean IsAlive { get [virtual,final,newslot]; }

@@ -2701,3 +2701,130 @@ its world put it.
   datagram on its way never names the next one.
 - **The bodies' seam in the runtime, and RobotKit's side in the same change**: it is small, and presence asks whichever
   provider offers a body and falls back to the capsule, so neither depends on the other being loaded.
+
+## 20. Players API runtime (WS3.11)
+
+`session.Players` uses the shared, Unity-free `PlayerDirectory`. The provider binds it to the exact consuming
+`ModContext`, including gamemode and participant scopes, through `IOwnerContextBoundExtensionFactory`. Every handle
+captures its participant id and player key. A changed `ParticipantListGeneration` retires the whole directory's old
+handles even when a new host's complete participant list arrives in one pump. A retained reconnect keeps the handles.
+Removing a player or changing its key retires that incarnation. Retained input and UI references use the same guard.
+Solo play holds the local player; a headless host contributes no player. Directory reads and `TryGetParticipant` use
+index loops and cached collections, without boxed enumerators.
+
+The process owns one `MultiplayerPlayers` composition root, installed beside presence. Contexts bind their own
+lifetimes, local player service, UI service and registered input activity. The receive stage runs after world follow
+and presence, before mod updates; sampling and scoreboard publication run after mod updates. Solo play samples input
+and reads the local backend without requiring an online presence stream. Local snapshots use presence's cached native
+accessors, rather than the legacy allocating local-player reads. Remote snapshots cache immutable SDK values until the
+pose or health changes. `Entity` wraps the local entity or presence's avatar.
+
+### Wire and authority
+
+The internal reliable system channel `Players` is kind 6. Engine stream generations, authenticated sender attribution,
+credit windows and session replacement apply before decoding. Each frame is bounded to 32 KiB and includes the owning
+mod's id. No endpoint, address or transport credential reaches mod code or this wire format.
+
+| Kind | Direction | Content |
+| --- | --- | --- |
+| 1 | Owner to host | Registered action name and held/press/release bits |
+| 2 | Host to owner | Target, damage/heal amount and source, or position and optional yaw |
+| 10–13 | Host to target | Surface, modal, toast, or close |
+| 14–15 | Target to host | Control answer or dismissal, with token and content revision |
+| 20 | Host to all clients | Atomic scoreboard baseline |
+
+Only the host may send remote damage, heal or teleport commands. The receiving game verifies the sender is its host,
+the target is its own participant, all values are finite and bounded, and no bytes remain. A client sending these
+frames to the host is refused. API calls from a client targeting another player return `NotAuthoritative` before
+serialization. Health changes go through the owning context's local player service. An accepted remote heal increases
+presence's bounded health allowance by the health it can add, never more, so a heal at full health leaves nothing for a
+later false report to spend. Combined pending heals cannot exceed the remaining health gap, and accepted health or
+regeneration retires any allowance that no longer fits that gap. An accepted teleport records an expected placement, which takes the landing pose whether or
+not the owner flags it as a teleport. The owner does not arm presence's jump expectation for it: a move shorter than a
+jump would never spend it, and it would hide the player's next teleport of its own, which the host would then correct
+as speed. A send with no recipient is a failure. The immediate health result is an estimate; presence subsequently
+confirms the owner's value.
+
+Every frame names the mod, and the receiving game hands it to that mod's context, so it can reach only a game that
+runs the mod. Each context therefore binds with its mod's network class. A `client-local` or `server-only` mod's remote
+damage, heal, teleport, surface, modal and toast return `Unavailable` before anything is written, with a message that
+says why and how to make the mod shared; acting on its own game's player is unchanged, and so are reads. Admission puts
+an implicitly shared or required `session` mod on every peer. An optional `session` mod can still be missing on one
+player's game, where its frames are refused unseen; telling the host which players run it is later work.
+
+Input never carries a participant id: the authenticated sender is the player. The host accepts only names registered
+by that mod. At most 64 actions are tracked per player and mod. An outgoing bucket permits 4 KiB/s with an 8 KiB burst;
+each host ingress bucket permits 8 KiB/s with a 16 KiB burst. Changes send at most every 50 ms per action; held state
+heartbeats once a second. Edges accumulate until the next canonical tick, including both edges of a short tap, then
+clear once. Each action expires independently after 2.5 seconds of silence. Stream replacement removes old input;
+departure removes its caches and budgets. Input asserts what its owner did, so server gameplay still validates the
+consequences of an action.
+
+### Targeted UI
+
+`UiNodeWireCodec` handles the SDK's declarative nodes and replaces graph canvases with a noninteractive placeholder.
+Both ends call `UiComposition.Validate`; decoding also bounds recursion, allocation counts, strings, enum values and
+finite numbers before constructing nodes. A frame cannot create half a surface. Text fields are at most 4096
+characters, toasts 512, and a window is 80–1920 by 80–1440 scaled units. UI ingress is separately limited to 20 messages
+and 32 KiB/s, with bounded bursts; controls allow 20 replies/s with a burst of 32. Modal cancellations have a separate
+20/s budget with a burst of 96, enough for all 64 open modals plus the host's 32-request send burst, so scope cleanup
+cannot lose answers to the control budget. Sender, target, token and one-shot validation still apply. The received canvas carries the kit's internal
+`TopiaForgePlainTextRoot` marker. All TMP labels under it, including controls and rows created later, disable rich-text
+and escape parsing. Toasts use `ShowPlain`.
+
+Host surfaces retain the original composition and its callbacks. A control reply must match the mod, token, target
+handle, sender, visible state and current revision. The codec then checks the declared enabled control and its value's
+range or membership. A dismissal can name an earlier content revision of the same window, so a concurrent content
+update cannot discard the player's close; zero and future revisions remain refused. The player's game sends a dismissal
+only for a close while the host shows the window: a surface raises `Dismissed` for any hide, and an answer to the
+host's own hide would arrive after the host had shown the window again and close it a second time. Modal answers are
+one-shot. The callback runs under forwarded UI intent for that player. Replacing content, closing, departure or scope
+shutdown revokes old answers. Client closures also check their revision, as a second guard. Windows and unanswered
+modals resend on a retained target's new stream. A different player's join changes no existing window. A generation
+change at the client disposes its received UI without answering it.
+
+Host callbacks run as the local kit runs them. A control, dismissal or modal callback that throws is logged to the mod's
+own logger ("A mod UI window control 'buy' callback failed.") and counts neither as a refused reply nor as a failed frame
+stage, so the frame's other replies still run. A remote modal keeps `IUiService.ShowModal`'s contract and reports exactly
+one answer: the player's, or `false` when it is closed or disposed, its player leaves, its scope ends or the session
+resets. A local player's toast goes to the ordinary UI service; the 512-character limit applies only on the wire.
+Pending modal callbacks remain owned by their exact context while reset detaches the transport lists, so a cancellation
+that disposes another scope completes that scope's modals before disposal returns. Reconciliation rechecks its iteration
+position after a reentrant reset. Dismissal subscribers are isolated individually, including when a prior subscriber throws.
+If the recipient's scope starts stopping or is disposed while the session stays connected, its modal sends one
+cancellation before received UI is retired. This works whichever order the scope and UI resources are disposed;
+session replacement still discards old received UI without sending an answer into a different session.
+`PlayerDirectory` reports a join or leave handler that throws, and the next handler still runs: to the mod's logger in
+the game, to the engine's diagnostics on a bare engine facade, and to `FakePlayerDirectory.CallbackErrors` in tests.
+
+### Scoreboard seam and later presentation
+
+`MultiplayerPlayers.Scoreboard` exposes internal `ScoreboardData` rows to the scoreboard overlay: mod id, definition
+(id/title/order), and participant-indexed display values with numeric sort keys. Host column registrations belong to
+the exact scope and retain handles for their values, so reused ids cannot inherit scores. There are at most 64 columns
+and a 28 KiB total encoded baseline; writes that exceed it fail without changing the old value. Changed versions and
+new streams receive an atomic baseline, including an empty baseline after the last column is removed. Late join and
+reconnect require no author work. This slice provides the data; WS5 owns the overlay and sorting presentation.
+
+WS4 can use `Players`, presence reads, avatar entities, damage/heal/teleport, action edges and targeted windows directly
+for Zombies. WS3.12 should reuse the exact consuming context and forwarded-intent boundary for presentation routing.
+The targeted UI path already preserves the host callback and recipient; global presentation effects still need their
+own host-commit routing and must not invent a second player identity or callback authorization scheme.
+
+### Tests and cost contract
+
+`--players` selects focused cases in the ModManager, ModRuntime and Multiplayer harnesses. Unity-free cases cover solo
+rosters, key and generation retirement, real-engine fast joins, reconnect and pre-flush cancellation, fake author
+workflows, input reconstruction, codec bounds, sender and UI forgery, floods, and scoreboard replication.
+`PlayersRemoteContractTests` holds remote UI and actions to the local contracts: modal cancellation on dispose, leave,
+scope end and session end, in the fake too; failing callbacks and handlers; client-local and server-only mods; toast
+rules; a heal at full health that leaves no allowance; consecutive heals, heals followed by damage, and health
+regenerated after a report or toward a held one; cancellation that resets the runtime or disposes another scope;
+isolated dismissal subscribers; dismissal during a content update; a host hide that the player's game does not answer;
+recipient disposal and recipient scope cleanup in either order, including all 64 open modals; another player's flood of
+forged cancellations; placement and teleport budgets; and a short host teleport that hides no later one. Real
+`ModRuntime` instances run two-player and three-player scenarios over the loopback network, with actions, targeted
+clicks and input. Allocation assertions measure repeated directory/presence reads and 10,000 resting runtime frames.
+Source guards cover the native plain-text renderer; visual layout and actual game health/controller behavior require
+in-game checks. `FakePlayerDirectory`, `FakePlayerState` and `FakePlayerInput` are the only new public SDK types; the
+existing Players contract is unchanged.

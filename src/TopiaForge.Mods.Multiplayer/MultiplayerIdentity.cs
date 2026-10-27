@@ -483,8 +483,9 @@ namespace TopiaForge.Mods
         /// <summary>Tries to find an admitted participant by identity.</summary>
         public bool TryGetParticipant(ParticipantId id, out MultiplayerParticipant? participant)
         {
-            foreach (var candidate in Participants)
+            for (var index = 0; index < Participants.Count; index++)
             {
+                var candidate = Participants[index];
                 if (candidate.Id.Equals(id))
                 {
                     participant = candidate;

@@ -358,7 +358,7 @@ namespace TopiaForge.ModManager
             channelFailureLogged = true;
         }
 
-        private static Vec3 Forward(NetQuaternion view)
+        internal static Vec3 Forward(NetQuaternion view)
         {
             double x = view.X, y = view.Y, z = view.Z, w = view.W;
             var forward = new Vec3((float)(2.0 * (x * z + w * y)), (float)(2.0 * (y * z - w * x)), (float)(1.0 - 2.0 * (x * x + y * y)));

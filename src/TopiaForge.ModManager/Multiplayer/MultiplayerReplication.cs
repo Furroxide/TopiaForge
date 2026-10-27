@@ -131,6 +131,7 @@ namespace TopiaForge.ModManager
         internal MultiplayerRuntime Runtime { get; }
 
         internal IMultiplayerMotion? Motion { get; set; }
+        internal MultiplayerPlayers? Players { get; set; }
 
         /// <summary>Gets the microphone's arbiter, which every context's leases share.</summary>
         internal MultiplayerMicrophoneArbiter Microphone { get; } = new MultiplayerMicrophoneArbiter();
