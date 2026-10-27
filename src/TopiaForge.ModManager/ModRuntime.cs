@@ -201,6 +201,8 @@ namespace TopiaForge.ModManager
             return loadedMods.Any(m => string.Equals(m.Manifest.Id, id, StringComparison.OrdinalIgnoreCase));
         }
 
+        internal IRuntimeGameplayHost GameplayHost => coreGameplayServices;
+
         public T? GetService<T>() where T : class
         {
             return serviceRegistry.Get<T>();

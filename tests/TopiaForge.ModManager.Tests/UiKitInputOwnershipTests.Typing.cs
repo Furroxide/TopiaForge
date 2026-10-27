@@ -68,7 +68,7 @@ namespace TopiaForge.ModManager.Tests
         // A contract double, not TextMesh Pro's code: what the kit's text input relies on of TextMesh Pro's field, as the game's
         // own carries it. A selection, a click or a submit marks a start, which runs in the field's late update and selects the
         // field again if the selection left it meanwhile; once started, the field types what the window's key messages carry.
-        private const string TextInputContract = """
+        internal const string TextInputContract = """
             using System.Collections.Generic;
 
             namespace UnityEngine
@@ -79,6 +79,10 @@ namespace TopiaForge.ModManager.Tests
                 public class MonoBehaviour : Behaviour { }
                 public class GameObject : Object
                 {
+                    public Transform transform = new Transform();
+                    public bool activeSelf = true;
+                    public bool activeInHierarchy => activeSelf && (transform.parent?.Owner.activeInHierarchy ?? true);
+                    public GameObject() { transform.Owner = this; }
                     public readonly List<Component> Components = new List<Component>();
                     public T AddComponent<T>() where T : Component, new()
                     {
@@ -86,6 +90,12 @@ namespace TopiaForge.ModManager.Tests
                         Components.Add(component);
                         return component;
                     }
+                }
+                public class Transform
+                {
+                    public GameObject Owner = null!;
+                    public Transform? parent;
+                    public bool IsChildOf(Transform other) => this == other || parent?.IsChildOf(other) == true;
                 }
             }
             namespace UnityEngine.EventSystems
@@ -114,6 +124,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 public class Selectable : MonoBehaviour
                 {
+                    public void Select() => UnityEngine.EventSystems.EventSystem.current!.SetSelectedGameObject(gameObject);
                     public virtual void OnSelect(UnityEngine.EventSystems.BaseEventData eventData) { }
                     public virtual void OnDeselect(UnityEngine.EventSystems.BaseEventData eventData) { }
                     protected virtual void OnDisable() { }

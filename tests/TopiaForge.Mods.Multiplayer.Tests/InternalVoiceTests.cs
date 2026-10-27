@@ -19,7 +19,7 @@ internal static class InternalVoiceTests
 
     internal static void VoiceIsOffUntilThePlayerTurnsItOn()
     {
-        // Without voice the control has none to hand out, and a host cannot mute anyone for everyone.
+        // Without voice the control has none to hand out; host moderation still protects text chat.
         using (var plain = new ControlRig(330, Sandbox))
         {
             plain.StartHosting(new InternalHostSettings("Plain", 4));
@@ -29,9 +29,9 @@ internal static class InternalVoiceTests
             That(plain.Host.Control.Voice == null && guest.Control.Voice == null && plain.Host.Control.GetStatistics().Voice == null,
                 "a provider without voice hands out none");
             That(plain.Run(() => plain.Host.Session.Snapshot.Participants.Count == 2), "the guest is listed");
-            var refused = plain.Host.Control.SetServerMute(plain.Host.IdOf("Guest"), true);
-            That(refused.ErrorCode == ModErrorCode.Unavailable && !plain.Host.Control.IsServerMuted(plain.Host.IdOf("Guest")),
-                "and mutes for everyone are unavailable without it (" + refused.ErrorCode + ")");
+            var muted = plain.Host.Control.SetServerMute(plain.Host.IdOf("Guest"), true);
+            That(muted.Succeeded && plain.Host.Control.IsServerMuted(plain.Host.IdOf("Guest")),
+                "and host mutes still protect chat without a voice service");
         }
 
         using var rig = ControlRig.WithVoice(331, Sandbox);

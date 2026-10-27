@@ -185,6 +185,11 @@ before a surface took it keeps reaching that action until it is released.
 TopiaForge takes these presses from the Input System, which the game's menus, pause and navigation
 read. Code that reads Unity's legacy input still sees every key.
 
+Custom kit compositions can call `root.PushDismissable(surface)` on their own widget subtree. This
+uses the same selection-scoped navigation claim as a kit window; focused fields own typing separately.
+Use the root containing that composition's controls, not a shared HUD root. Remove the surface with
+`TopiaForgeDismissStack.Remove(surface)` when it closes. Inactive or destroyed roots take no input.
+
 ## Accessibility
 
 `Context.Ui.Accessibility` exposes the effective `UiAccessibilityPreferences`:
@@ -387,6 +392,10 @@ the safe `Context.Ui` contract.
   it back. It is dirty-checked: a call that changes nothing rebuilds no layout. `SetVisible` keeps a
   hidden widget's space, which suits a momentary change.
 - `inputField.Password()` masks what is typed; the text itself is unchanged.
+- `inputField.PlainText()` renders a draft literally. `Focus()` begins kit text entry after every held key is released,
+  including when the field is already selected; moving selection away cancels the pending start. `Blur()` ends it. Before
+  hiding a composer, call its container's `ReleaseFocus()` too: that clears a selected child button as well as a field,
+  while preserving selection in another surface. No native input component needs disabling or restoring.
 
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.

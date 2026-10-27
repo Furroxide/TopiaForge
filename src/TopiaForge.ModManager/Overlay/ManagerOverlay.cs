@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager
         private readonly MultiplayerSessionsPresenter multiplayer;
         private readonly MultiplayerFrameGuard multiplayerGuard;
         private readonly MultiplayerOverlayFrame multiplayerFrame;
+        private readonly InSessionOverlay inSession;
         private UiHost? host;
         private GameObject? root;
         private TopiaForgePanel? shell;
@@ -46,7 +47,12 @@ namespace TopiaForge.ModManager
             multiplayer = new MultiplayerSessionsPresenter(
                 new PluginMultiplayerEnvironment(plugin, multiplayerGuard),
                 new FileMultiplayerSettingsStore(plugin.Paths.Data),
-                MultiplayerWorkSchedulers.Background);
+                MultiplayerWorkSchedulers.Background, plugin.ExecuteChatCommand);
+            inSession = new InSessionOverlay(plugin, multiplayer, () =>
+            {
+                multiplayer.SelectTab(MultiplayerSubTab.Session);
+                ShowMultiplayer();
+            });
             multiplayerFrame = new MultiplayerOverlayFrame(multiplayerGuard, multiplayer, TickMultiplayerOutside, TickLiveTab);
             multiplayerGuard.Run(MultiplayerOverlayFrame.StartStage, multiplayer.Start);
         }
@@ -102,6 +108,7 @@ namespace TopiaForge.ModManager
             multiplayerGuard.Run(MultiplayerOverlayFrame.TeardownStage, () =>
             {
                 multiplayerUi?.Close();
+                inSession.Dispose();
                 multiplayer.OnHidden();
                 multiplayer.Stop();
             });
@@ -135,6 +142,7 @@ namespace TopiaForge.ModManager
         /// </summary>
         private void TickMultiplayerOutside()
         {
+            inSession.Tick();
             if (multiplayerUi == null && (multiplayer.PendingPrompt != null || multiplayer.Connecting.IsVisible)) Build();
             if (multiplayerUi != null) multiplayerUi.Tick();
             else MultiplayerSessionsUi.ShowNotices(multiplayer);

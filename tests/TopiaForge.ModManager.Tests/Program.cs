@@ -19,6 +19,11 @@ namespace TopiaForge.ModManager.Tests
                 try { BlockerTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
+            if (args.Length == 1 && args[0] == "--in-session-chat")
+            {
+                try { InSessionChatTests.Run(); MultiplayerUiArchitectureTests.Run(); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+            }
             if (args.Length == 1 && args[0] == "--ui-kit-event-systems")
             {
                 try { UiKitEventSystemTests.Run(); return 0; }
@@ -169,6 +174,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--ui-input-ownership", StringComparison.Ordinal))
             {
+                ChatViewContractTests.Run();
                 UiKitInputOwnershipTests.Run();
                 UiKitInputOwnershipConventionTests.Run();
                 UiKitIntentConventionTests.Run();
@@ -578,6 +584,7 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerContentIdentificationTests.Run(root);
             MultiplayerPrivacyTextTests.Run();
             MultiplayerSessionsTests.Run(Path.Combine(root, "multiplayer-sessions"));
+            InSessionChatTests.Run();
             MultiplayerFrameGuardTests.Run();
             ManagerTabLookupTests.Run();
             MultiplayerUiArchitectureTests.Run();

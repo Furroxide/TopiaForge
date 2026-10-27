@@ -57,6 +57,10 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the game's clock, which Chronos drives time through and the multiplayer pause guard keeps running online.</summary>
         public IMultiplayerGameClock GameClock => gameClock;
 
+        internal UnityInputRegistry Inputs => input;
+        internal UnityUiHudPlacement HudPlacement => hudPlacement;
+        internal UiGameplayGate UiGameplay => uiGameplay;
+
         /// <summary>Gets or sets Unity's <c>Application.runInBackground</c>; multiplayer keeps it on while online.</summary>
         public bool RunInBackground
         {

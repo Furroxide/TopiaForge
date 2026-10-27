@@ -14,6 +14,16 @@ namespace TopiaForge.Mods.UnityUi
     {
         private readonly TopiaForgeTypingStart start = new TopiaForgeTypingStart();
 
+        /// <summary>Requests focus even when already selected, without bypassing the held-key wait.</summary>
+        internal void FocusWhenReleased()
+        {
+            Select();
+            if (start.Ask(TopiaForgeInputOwnership.AnyKeyHeld))
+            {
+                ActivateInputField();
+            }
+        }
+
         /// <summary>Gets whether selecting the field starts it now: never while a start waits for held keys.</summary>
         public override bool shouldActivateOnSelect
         {

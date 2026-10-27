@@ -18,7 +18,6 @@ namespace TopiaForge.Multiplayer
     {
         private const string LiveOff = "Live multiplayer is switched off in this build.";
         private const string NoRuntime = "The TopiaForge runtime has not attached to multiplayer yet.";
-        private const string NoVoice = "Muting players for everyone needs voice chat, which is switched off in this build.";
 
         private readonly MultiplayerProvider provider;
         private readonly SessionEngine engine;
@@ -325,7 +324,7 @@ namespace TopiaForge.Multiplayer
             engine.RequireOwnerThread();
             if (live?.Host == null || engine.Role != EngineRole.Host) return Fail(ModErrorCode.NotAuthoritative, "Only a listen host mutes players for everyone.");
             if (IsLocal(participant)) return Fail(ModErrorCode.InvalidArgument, "The host cannot mute its own player for everyone.");
-            if (!engine.IsVoiceEnabled) return Fail(ModErrorCode.Unavailable, NoVoice);
+            if (!engine.IsVoiceEnabled) return SetChatMute(participant, muted);
             if (engine.ParticipantIdentityOf(participant) == null || !engine.SetServerMute(participant, muted))
             {
                 return Fail(ModErrorCode.NotFound, "No player in this session has that id.");
@@ -341,7 +340,7 @@ namespace TopiaForge.Multiplayer
         public bool IsServerMuted(ParticipantId participant)
         {
             engine.RequireOwnerThread();
-            return engine.IsVoiceEnabled && participant.IsValid && engine.IsServerMuted(participant);
+            return participant.IsValid && (engine.IsVoiceEnabled ? engine.IsServerMuted(participant) : IsChatMuted(participant));
         }
 
         public void Dispose()

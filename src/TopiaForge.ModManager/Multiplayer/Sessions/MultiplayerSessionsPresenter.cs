@@ -53,7 +53,7 @@ namespace TopiaForge.ModManager.Sessions
         /// <param name="environment">The runtime and game around the screens.</param>
         /// <param name="store">Where the multiplayer settings live; it runs on the background queue.</param>
         /// <param name="scheduler">Where file work runs: a background thread in the game.</param>
-        internal MultiplayerSessionsPresenter(IMultiplayerSessionEnvironment environment, IMultiplayerSettingsStore store, IMultiplayerWorkScheduler scheduler)
+        internal MultiplayerSessionsPresenter(IMultiplayerSessionEnvironment environment, IMultiplayerSettingsStore store, IMultiplayerWorkScheduler scheduler, ExecuteChatCommand? executeCommand = null)
         {
             this.environment = environment ?? throw new ArgumentNullException(nameof(environment));
             queue = new MultiplayerBackgroundQueue(scheduler ?? throw new ArgumentNullException(nameof(scheduler)));
@@ -67,11 +67,16 @@ namespace TopiaForge.ModManager.Sessions
             host = new HostPresenter(context);
             connect = new ConnectPresenter(context, connecting);
             session = new SessionPresenter(context);
+            InSession = new InSessionPresenter(context, session, executeCommand ?? NoCommand);
             launches = new LaunchSessionPresenter(context, connecting, queue);
             intake = launcher == null ? null : new LiveJoinIntake(launcher);
         }
 
         public bool IsAvailable => status.IsLiveAvailable;
+
+        internal InSessionPresenter InSession { get; }
+
+        private static bool NoCommand(string name, IReadOnlyList<string> arguments, out OperationResult<string>? result) { result = null; return false; }
 
         public string AvailabilityText => environment.Control == null ? NotInstalled : status.IsLiveAvailable ? string.Empty : SwitchedOff;
 
@@ -214,6 +219,7 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Stops taking live joins and lets go of a launch still starting, as the game closes.</summary>
         internal void Stop()
         {
+            InSession.Dispose();
             intake?.Dispose();
             launches.Stop();
             context.LanBrowsing.Stop();
@@ -252,6 +258,7 @@ namespace TopiaForge.ModManager.Sessions
             host.Tick();
             connect.Tick();
             session.Tick();
+            InSession.Tick(deltaTime);
             if (shown || browse.IsSearching) browse.Tick();
 
             // Why a joined game waits at the main menu moves with the follow alone, not with the control's status.

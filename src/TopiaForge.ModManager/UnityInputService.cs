@@ -154,6 +154,13 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal bool IsBoundByOther(string ownerModId, InputBinding candidate)
+        {
+            foreach (var action in actions.Values)
+                if (action.OwnerModId != ownerModId && ContainsControl(action.Bindings, candidate)) return true;
+            return false;
+        }
+
         private static bool ContainsControl(IReadOnlyList<InputBinding> bindings, InputBinding candidate)
         {
             for (var index = 0; index < bindings.Count; index++)

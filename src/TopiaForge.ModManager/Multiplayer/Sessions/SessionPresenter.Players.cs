@@ -127,6 +127,7 @@ namespace TopiaForge.ModManager.Sessions
                         : LanInvite;
                     break;
                 case InternalSessionRole.Client:
+                    inviteText = "Ask the host for an invite code to share with another player.";
                     title = name.Length == 0 ? "Joined a session" : "Joined " + name;
 
                     // A joined game that waits at the main menu says why, for as long as it waits (session follow).

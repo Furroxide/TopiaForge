@@ -54,11 +54,13 @@ namespace TopiaForge.UiGallery.Pages
             var tab = new MultiplayerTabView(host, fake);
             tab.Build(content);
             Demos.Add(new Demo(page, fake, tab, new MultiplayerSessionsUi(host, fake)));
+            SessionsPageHud.Build(page);
         }
 
         /// <summary>Advances the fake joins and binds the views; called once per frame by the gallery.</summary>
         public static void Tick(float deltaTime)
         {
+            SessionsPageHud.Tick();
             var dt = float.IsNaN(deltaTime) || deltaTime < 0f ? 0f : Math.Min(deltaTime, 0.25f);
             for (var index = 0; index < Demos.Count; index++)
             {
@@ -72,6 +74,7 @@ namespace TopiaForge.UiGallery.Pages
         /// <summary>Drops the views of a page the gallery is about to clear.</summary>
         public static void Detach(TopiaForgeContainer page)
         {
+            SessionsPageHud.Detach(page);
             for (var index = Demos.Count - 1; index >= 0; index--)
             {
                 if (!ReferenceEquals(Demos[index].Page, page)) continue;
@@ -82,6 +85,7 @@ namespace TopiaForge.UiGallery.Pages
 
         public static void Reset()
         {
+            SessionsPageHud.Detach();
             foreach (var demo in Demos) demo.Overlays.Close();
             Demos.Clear();
         }
