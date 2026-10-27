@@ -57,6 +57,8 @@ void main() {
       );
       expect((await cli(['list'])).stdout, contains('No saved maps'));
     },
+    // Six Dart CLI startups share this budget when suites run concurrently.
+    timeout: const Timeout(Duration(minutes: 2)),
   );
   test(
     'CLI rejects live documents, wrong hosts and missing explicit scene',
