@@ -107,7 +107,7 @@ namespace TopiaForge.ModManager
                 Interactions = new NetInteractionService(gameplay.Interactions, replication);
                 Items = new NetItemService(gameplay.Items, replication);
                 Assets = new NetAssetService(gameplay.Assets, replication);
-                Audio = gameplay.Audio;
+                Audio = new NetAudioService(gameplay.Audio, replication);
                 Ui = new NetUiService(gameplay.Ui, replication);
                 replication.Ui = gameplay.Ui;
                 playerContext = this.replicationServices.Players?.Bind(

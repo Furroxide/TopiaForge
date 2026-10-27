@@ -28,6 +28,7 @@ namespace TopiaForge.ModManager
             installed.RunningSpawn = () => activeSessions?.RunningSpawn;
             networkWorld.Motion.ParticipantPosition = installed.ValidatedPosition;
             Replication.Players = MultiplayerPlayers.Install(multiplayer, installed);
+            Replication.Players.Presentation = new MultiplayerPresentation(Replication.Players, CreatePresentationSink);
             return installed;
         }
     }

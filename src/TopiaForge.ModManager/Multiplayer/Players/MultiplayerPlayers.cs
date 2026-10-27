@@ -21,6 +21,8 @@ namespace TopiaForge.ModManager
         internal MultiplayerSessionSnapshot? Snapshot => runtime.Control?.SessionSnapshot;
         internal bool IsHost => runtime.Role != InternalSessionRole.Client;
         internal long Now => Presence.Now();
+        internal NetRealm Realm => runtime.Realm;
+        internal MultiplayerPresentation? Presentation { get; set; }
 
         private MultiplayerPlayers(MultiplayerRuntime runtime, MultiplayerPresence presence)
         { this.runtime = runtime; Presence = presence; }
@@ -70,6 +72,7 @@ namespace TopiaForge.ModManager
 
         private void Reset()
         {
+            Presentation?.Reset();
             for (var i = 0; i < contexts.Count; i++) contexts[i].Reset();
             ResetUi();
             inputBudgets.Clear(); outgoingInputBudget = null;
@@ -94,6 +97,10 @@ namespace TopiaForge.ModManager
             AdvanceInputs();
             ReconcilePlayers();
             ReconcileUi();
+            Presentation?.ReconcileReceivedAudio();
+            Presentation?.RetryReceived();
+            byte[]? latestPresentation = null;
+            var presentationSender = default(ParticipantId);
             while (channel.TryReceive(out var message))
             {
                 if (message.Payload.Length > MaximumMessageBytes) { Rejected++; continue; }
@@ -101,6 +108,16 @@ namespace TopiaForge.ModManager
                 try
                 {
                     if (!reader.TryReadHeader(out var kind) || !reader.TryReadString(128, out var mod)) { Rejected++; continue; }
+                    if (kind >= 30)
+                    {
+                        if (kind == 30 && mod.Length == 0 && FromHost(message.Sender))
+                        {
+                            // A recovering stream can contain many superseded baselines. Apply only its newest one.
+                            latestPresentation = message.Payload; presentationSender = message.Sender;
+                        }
+                        else if (mod.Length != 0 || Presentation?.Receive(message.Sender, kind, reader) != true) Rejected++;
+                        continue;
+                    }
                     if (kind == 20) { if (!ReceiveColumn(null, message.Sender, reader)) Rejected++; continue; }
                     var context = Find(mod);
                     if (context == null) { Rejected++; continue; }
@@ -109,6 +126,14 @@ namespace TopiaForge.ModManager
                         : ReceiveUi(context, message.Sender, kind, reader);
                     if (!accepted) Rejected++;
                 }
+                catch (ArgumentException) { Rejected++; }
+                catch (InvalidOperationException) { Rejected++; }
+            }
+            if (latestPresentation != null)
+            {
+                reader.Reset(latestPresentation);
+                reader.TryReadHeader(out _); reader.TryReadString(128, out _);
+                try { if (Presentation?.Receive(presentationSender, 30, reader) != true) Rejected++; }
                 catch (ArgumentException) { Rejected++; }
                 catch (InvalidOperationException) { Rejected++; }
             }
@@ -132,7 +157,7 @@ namespace TopiaForge.ModManager
         {
             private readonly MultiplayerPlayers players;
             internal SendStage(MultiplayerPlayers players) { this.players = players; }
-            public void Run(float deltaTime) { players.SendInputs(); players.SendScores(); }
+            public void Run(float deltaTime) { players.SendInputs(); players.SendScores(); players.Presentation?.Send(); }
         }
     }
 }

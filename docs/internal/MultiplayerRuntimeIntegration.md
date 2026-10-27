@@ -2873,9 +2873,31 @@ new streams receive an atomic baseline, including an empty baseline after the la
 reconnect require no author work. This slice provides the data; WS5 owns the overlay and sorting presentation.
 
 WS4 can use `Players`, presence reads, avatar entities, damage/heal/teleport, action edges and targeted windows directly
-for Zombies. WS3.12 should reuse the exact consuming context and forwarded-intent boundary for presentation routing.
-The targeted UI path already preserves the host callback and recipient; global presentation effects still need their
-own host-commit routing and must not invent a second player identity or callback authorization scheme.
+for Zombies. Presentation routing uses the same exact consuming context. `NetUiService` mirrors a GamemodeServer
+HUD from a listen host; `NetAudioService` broadcasts its framework cues. Process, world-owner, participant and
+client-local presentation remains local. Windows, tools and modals remain local, while `IPlayer.Ui` retains its
+existing targeted callback and forwarded-intent boundary.
+
+The process-owned presenter uses the authenticated Players channel with no matching guest mod requirement. HUDs
+are read-only full replacements, coalesced to at most 10 Hz, with independent per-peer delivery and a fresh baseline
+on stream generation changes. A full peer window does not stop other recipients. There are at most 32 shared HUDs,
+28 KiB of encoded HUD content, 4,096 characters per text field, and eight looping framework cues. Each peer's HUD
+traffic has a 32 KiB burst and 32 KiB/s budget. Larger solo HUDs remain local when the game opens to players; an online
+creation or update exceeding these limits is refused before changing local content. No author wire identifiers or
+resend calls are needed. Ending the exact creating scope retires its presentation.
+
+Toasts allow four initially and two per second, suppressing duplicate content for two seconds. Audio allows eight
+initially and four per second, suppressing duplicate cue requests for 250 ms. Transient effects are not replayed on
+late join or after a full peer window; active loops are included in the next baseline. One-shot handles are bounded
+to 32 and retired after playback ends or two seconds (the current framework synthesizes short cues). A guest accepts
+presentation only from its authenticated host, validates the whole baseline before applying it, rejects interactive
+HUD nodes, and renders received strings through the existing plain-text UI receiver. A refused local HUD render is
+retried at most once a second from the bounded latest state, without asking the author to resend. Incoming traffic is bounded
+independently of host-side limits. The same bounded latest state recreates a lost guest canvas, including a hidden
+one; a lost host canvas retires its shared slot. Visibility callbacks preserve their most recent author write, and
+solo HUDs that exceed the shared bounds retain local Show/Hide after promotion. Disconnect clears remote HUDs and
+audio. This does not change microphone consent, voice transport, targeted UI authorization or the Players API's
+optional-mod and input-tick limitations.
 
 ### Tests and cost contract
 
