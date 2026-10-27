@@ -33,6 +33,8 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && args[0] == "--presentation")
             {
                 try { MultiplayerPresentationTests.Run(); PresentationRuntimeTests.Run(); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+            }
             if (args.Length == 1 && args[0] == "--scoreboard")
             {
                 try { ScoreboardTests.Run(); MultiplayerUiArchitectureTests.Run(); return 0; }
