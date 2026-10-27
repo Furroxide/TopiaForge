@@ -90,15 +90,9 @@ namespace TopiaForge.ModManager
                             return Failure<TransformState>(ModErrorCode.External, "The native player did not retain the applied spawn position and rotation.");
                         return OperationResult<TransformState>.Success(actual);
                     }
-                    var controller = player.GetComponent<CharacterController>();
-                    var wasEnabled = controller != null && controller.enabled;
-                    try
-                    {
-                        if (controller != null) controller.enabled = false;
-                        player.SetPositionAndRotation(new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z),
-                            new Quaternion(spawn.Rotation.X, spawn.Rotation.Y, spawn.Rotation.Z, spawn.Rotation.W));
-                    }
-                    finally { if (controller != null) controller.enabled = wasEnabled; }
+                    TopiaForge.Mods.GameBridge.NativePlayerTeleport.Place(player,
+                        new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z),
+                        new Quaternion(spawn.Rotation.X, spawn.Rotation.Y, spawn.Rotation.Z, spawn.Rotation.W));
                     placedPlayer = player; requestedSpawn = spawn;
                     return null; // Read back on a later frame after native player code has run.
                 }

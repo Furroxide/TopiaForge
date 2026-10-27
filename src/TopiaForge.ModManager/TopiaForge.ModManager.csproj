@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\mods\Shared\NativePlayerTeleport.cs" Link="Shared\NativePlayerTeleport.cs" />
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />

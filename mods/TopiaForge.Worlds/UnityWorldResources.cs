@@ -19,7 +19,13 @@ namespace TopiaForge.Worlds
             {
                 var current = value;
                 value = null;
-                if (current != null) UnityEngine.Object.Destroy(current);
+                if (current != null)
+                {
+                    // Destroy is deferred until the end of the frame. Stop lights and callbacks before
+                    // restoring borrowed scene state or constructing a replacement arena in this frame.
+                    if (current is GameObject gameObject) gameObject.SetActive(false);
+                    UnityEngine.Object.Destroy(current);
+                }
             }
         }
     }
