@@ -42,7 +42,9 @@ final class LaunchActivity {
                 launchOutcome!.command != command)) ||
         (sessionOutcome != null &&
             (sessionOutcome!.requestId != requestId ||
-                sessionOutcome!.kind != 'session'))) {
+                sessionOutcome!.kind != 'session' ||
+                (sessionOutcome!.multiplayer != null &&
+                    sessionOutcome!.multiplayer!.role.command != command)))) {
       throw const FormatException('Activity record correlation mismatch.');
     }
     final sessions = {

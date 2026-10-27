@@ -184,6 +184,8 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
   commands, admission codes or reports, requests, consent or privacy settings. A report on an unknown end remains
   invalid: only `admission-rejected` may carry one. A valid report on a failed join remains intact and never triggers
   an admission re-plan unless the failure is the known `admission-changed`.
+  A terminal record's multiplayer role must match the activity's launch command, including when the terminal arrives
+  before acknowledgement; matching request and intent ids alone cannot end another role's activity.
   Already shipped readers cannot gain this behavior retroactively. Readers from before this change reject an
   unknown reason's whole record and can show the join as running until the game exits; update the launcher and
   runtime together. This change neither raises the schema version nor enables live publication.
