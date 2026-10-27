@@ -8,7 +8,8 @@ namespace TopiaForge.ModManager.Tests
     {
         private static void NormalizedChatTextStaysPrivate()
         {
-            foreach (var text in new[] { "No route to 192.0.\u202e2.8", "No route to host.t\u202eest", "retry\0host.test" })
+            foreach (var text in new[] { "No route to 192.0.\u202e2.8", "No route to host.t\u202eest", "retry\0host.test",
+                "a.\u202eco " + new string('x', HostText.LineChars - 21) + " 192.0.2.800" })
             {
                 void Private(string value) => That(!value.Contains("192.0.2.8", StringComparison.Ordinal) &&
                     !value.Contains("host.test", StringComparison.Ordinal) && value.Length <= 256,
@@ -33,6 +34,16 @@ namespace TopiaForge.ModManager.Tests
                 Private(line.Text);
             }
             That(HostText.ForDisplay("a.\u202eco", 4).Length <= 4, "redaction after normalization still respects a short label's bound");
+            foreach (var bound in new[] { 20, HostText.NameChars, HostText.LineChars })
+            {
+                var text = bound == 20 ? "aaaaa.\u202eco 192.0.2.800" :
+                    "a.\u202eco " + new string('x', bound - 21) + " 192.0.2.800";
+                var shown = HostText.ForDisplay(text, bound);
+                That(shown.Length <= bound && MultiplayerDiagnosticRedactor.RedactAddresses(shown) == shown,
+                    "replacement expansion cannot reconstruct an address at the final truncation boundary");
+            }
+            That(HostText.ForDisplay("  \u202eType /help  for rules \n", HostText.LineChars) == "Type /help for rules",
+                "normalized display text keeps ordinary slash commands through every privacy pass");
             That(HostText.ForDisplay("<b>Try again</b>") == "<b>Try again</b>", "markup remains literal text for the plain renderer");
         }
 

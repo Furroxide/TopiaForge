@@ -27,10 +27,15 @@ namespace TopiaForge.ModManager.Sessions
             if (string.IsNullOrEmpty(text)) return string.Empty;
             var redacted = MultiplayerDiagnosticRedactor.RedactAddresses(text);
             var plain = TopiaForgePlainText.Sanitize(redacted, maximumChars);
-            // Removing a direction control or splitting a token can reveal an address the original text did not contain.
-            // Check the displayed form too, and keep the bound if its replacement is longer than the original token.
-            return ReferenceEquals(plain, redacted) ? plain :
-                TopiaForgePlainText.Sanitize(MultiplayerDiagnosticRedactor.RedactAddresses(plain), maximumChars);
+            // Normalization can expose an address, as can truncation after a replacement grows. Recheck each
+            // changed display form; once sanitization leaves a filtered form unchanged, it is both private and bounded.
+            while (!ReferenceEquals(plain, redacted))
+            {
+                redacted = MultiplayerDiagnosticRedactor.RedactAddresses(plain);
+                plain = TopiaForgePlainText.Sanitize(redacted, maximumChars);
+            }
+
+            return plain;
         }
 
         /// <summary>Attributes the host's own words to it, redacted; empty when it said nothing.</summary>
