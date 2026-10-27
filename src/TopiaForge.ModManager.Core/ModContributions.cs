@@ -76,6 +76,7 @@ namespace TopiaForge.ModManager.Core
         public const string BundleKind = "bundle";
         public const string ProviderKind = "provider";
         public const string GameSceneKind = "game-scene";
+        public const string MapKind = "map";
 
         /// <summary>
         /// A family of worlds enumerated at runtime rather than declared one by one. The declaration's
@@ -99,6 +100,13 @@ namespace TopiaForge.ModManager.Core
 
         [DataMember(Name = "sceneName", EmitDefaultValue = false)]
         public string? SceneName { get; set; }
+
+        [DataMember(Name = "map", EmitDefaultValue = false)]
+        public string? Map { get; set; }
+        [DataMember(Name = "file", EmitDefaultValue = false)]
+        public string? File { get; set; }
+        [DataMember(Name = "scene", EmitDefaultValue = false)]
+        public string? Scene { get; set; }
     }
 
     /// <summary>
@@ -135,10 +143,22 @@ namespace TopiaForge.ModManager.Core
         public ModWorldContent? Content { get; set; }
 
         [DataMember(Name = "transitions")]
-        public List<string> Transitions { get; set; } = new List<string>();
+        public List<string> Transitions
+        {
+            get => transitions ?? (transitions = Content?.Kind == ModWorldContent.MapKind
+                ? new List<string> { ModTransitions.SceneReplacement } : new List<string>());
+            set => transitions = value;
+        }
+        private List<string>? transitions;
 
         [DataMember(Name = "spawn", EmitDefaultValue = false)]
-        public ModSpawnPolicy? Spawn { get; set; }
+        public ModSpawnPolicy? Spawn
+        {
+            get => spawn ?? (Content?.Kind == ModWorldContent.MapKind
+                ? spawn = new ModSpawnPolicy { Kind = ModSpawnPolicy.ProviderDefaultKind } : null);
+            set => spawn = value;
+        }
+        private ModSpawnPolicy? spawn;
 
         /// <summary>
         /// Gamemodes this world agrees to be paired with by an <c>open</c> policy. Consent is scoped

@@ -245,6 +245,8 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--map-worlds", StringComparison.Ordinal))
+            { MapWorldManifestTests.Run(); GamemodeContractConformanceTests.Run(); return 0; }
             if (args.Length == 1 && string.Equals(args[0], "--gamemode-contract", StringComparison.Ordinal))
             {
                 GamemodeContractConformanceTests.Run();

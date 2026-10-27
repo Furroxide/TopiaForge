@@ -46,10 +46,16 @@ void _worldContributionShape(
       'openTo',
       'openToAnyCompatible',
     },
-    const {'id', 'name', 'content', 'transitions', 'spawn'},
+    const {'id', 'name', 'content'},
   );
   if (fields == null) return;
   shape.id(fields, 'id', path);
+  final isMap =
+      fields['content'] is Map &&
+      (fields['content'] as Map)['kind'] == ModWorldContent.mapKind;
+  if (!isMap) {
+    shape.conditional(fields, path, const {'transitions', 'spawn'}, const {});
+  }
   // Reserve a dot and a nonempty suffix inside the 96-character instance limit.
   if (fields['content'] case {'kind': ModWorldContent.discoveredKind}) {
     shape.text(fields, 'id', path, minimum: 4, maximum: 94);
@@ -62,7 +68,9 @@ void _worldContributionShape(
     path,
     minimum: 1,
     maximum: 2,
-    choices: ModTransitions.byPrecedence,
+    choices: isMap
+        ? const [ModTransitions.sceneReplacement]
+        : ModTransitions.byPrecedence,
   );
   shape.strings(fields, 'openTo', path, maximum: 32, declarationIds: true);
   shape.boolean(fields, 'openToAnyCompatible', path);
@@ -83,7 +91,16 @@ void _worldContentShape(Object? value, String path, _ContributionShape shape) {
   final fields = shape.object(
     value,
     path,
-    const {'kind', 'bundle', 'prefab', 'implementation', 'sceneName'},
+    const {
+      'kind',
+      'bundle',
+      'prefab',
+      'implementation',
+      'sceneName',
+      'map',
+      'file',
+      'scene',
+    },
     const {'kind'},
   );
   if (fields == null) return;
@@ -96,8 +113,14 @@ void _worldContentShape(Object? value, String path, _ContributionShape shape) {
       ModWorldContent.providerKind,
       ModWorldContent.gameSceneKind,
       ModWorldContent.discoveredKind,
+      ModWorldContent.mapKind,
     },
   );
+  if (fields['kind'] == ModWorldContent.mapKind) {
+    _mapContentShape(fields, path, shape);
+    return;
+  }
+  shape.conditional(fields, path, const {}, const {'map', 'file', 'scene'});
   shape.path(fields, 'bundle', path);
   shape.text(fields, 'prefab', path, minimum: 1, maximum: 512);
   shape.text(fields, 'sceneName', path, minimum: 1, maximum: 128);

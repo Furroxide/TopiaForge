@@ -21,6 +21,7 @@ part 'models/manifest_contract_constants.dart';
 part 'models/manifest_schema_dispatch.dart';
 part 'models/manifest_structural_validation.dart';
 part 'models/manifest_contribution_structure.dart';
+part 'models/manifest_map_worlds.dart';
 part 'models/manifest_contribution_shape_checks.dart';
 part 'models/manifest_contribution_validation.dart';
 part 'models/manifest_contribution_target_validation.dart';

@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager.Tests
             PackagedContentHashesAreEnforced(root);
             InstallerAndRegistryEnforceSynchronizedHashes(root);
             PeerNetworkIsARecognizedCapability();
+            MapWorldManifestTests.Run();
             Console.WriteLine("ManifestV6Tests passed.");
         }
 

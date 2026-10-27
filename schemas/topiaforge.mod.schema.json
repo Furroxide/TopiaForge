@@ -561,7 +561,8 @@
             "bundle",
             "provider",
             "game-scene",
-            "discovered"
+            "discovered",
+            "map"
           ]
         },
         "bundle": {
@@ -579,6 +580,32 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128
+        },
+        "map": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "not": {
+            "pattern": "[^A-Za-z0-9_-]"
+          }
+        },
+        "scene": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "[^A-Za-z0-9_-]"
+          }
+        },
+        "file": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/portablePath"
+            },
+            {
+              "pattern": "\\.([Rr][Oo][Bb][Oo][Ww][Oo][Rr][Ll][Dd]|[Jj][Ss][Oo][Nn](\\.[Gg][Zz])?)$"
+            }
+          ]
         }
       },
       "allOf": [
@@ -608,6 +635,21 @@
                 {
                   "required": [
                     "sceneName"
+                  ]
+                },
+                {
+                  "required": [
+                    "map"
+                  ]
+                },
+                {
+                  "required": [
+                    "file"
+                  ]
+                },
+                {
+                  "required": [
+                    "scene"
                   ]
                 }
               ]
@@ -645,6 +687,21 @@
                   "required": [
                     "sceneName"
                   ]
+                },
+                {
+                  "required": [
+                    "map"
+                  ]
+                },
+                {
+                  "required": [
+                    "file"
+                  ]
+                },
+                {
+                  "required": [
+                    "scene"
+                  ]
                 }
               ]
             }
@@ -680,6 +737,21 @@
                 {
                   "required": [
                     "implementation"
+                  ]
+                },
+                {
+                  "required": [
+                    "map"
+                  ]
+                },
+                {
+                  "required": [
+                    "file"
+                  ]
+                },
+                {
+                  "required": [
+                    "scene"
                   ]
                 }
               ]
@@ -717,6 +789,71 @@
                   "required": [
                     "sceneName"
                   ]
+                },
+                {
+                  "required": [
+                    "map"
+                  ]
+                },
+                {
+                  "required": [
+                    "file"
+                  ]
+                },
+                {
+                  "required": [
+                    "scene"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "map"
+              }
+            }
+          },
+          "then": {
+            "oneOf": [
+              {
+                "required": [
+                  "map"
+                ]
+              },
+              {
+                "required": [
+                  "file"
+                ]
+              }
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "bundle"
+                  ]
+                },
+                {
+                  "required": [
+                    "prefab"
+                  ]
+                },
+                {
+                  "required": [
+                    "sceneName"
+                  ]
+                },
+                {
+                  "required": [
+                    "implementation"
+                  ]
                 }
               ]
             }
@@ -729,9 +866,7 @@
       "required": [
         "id",
         "name",
-        "content",
-        "transitions",
-        "spawn"
+        "content"
       ],
       "additionalProperties": false,
       "properties": {
@@ -814,6 +949,43 @@
                 "openTo"
               ]
             }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "content"
+            ],
+            "properties": {
+              "content": {
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "map"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "transitions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "const": "scene-replacement"
+                }
+              }
+            }
+          },
+          "else": {
+            "required": [
+              "transitions",
+              "spawn"
+            ]
           }
         }
       ]

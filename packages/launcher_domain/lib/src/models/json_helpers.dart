@@ -21,7 +21,8 @@ String? _portableManifestPathCollisionKey(String value) {
           .toUpperCase()
           .replaceAll('\u00df', 'SS')
           .replaceAll('\u1e9e', 'SS');
-      if (key.contains('/') ||
+      if (key.runes.length > 255 ||
+          key.contains('/') ||
           key.contains('\\') ||
           _isUnsafePortablePathSegment(key)) {
         return null;
@@ -41,7 +42,9 @@ bool _isUnsafePortablePathSegment(String segment) {
       segment.contains(':') ||
       segment.endsWith(' ') ||
       segment.endsWith('.') ||
-      segment.codeUnits.any((unit) => unit < 0x20)) {
+      segment.codeUnits.any(
+        (unit) => unit < 0x20 || (unit >= 0x7f && unit <= 0x9f),
+      )) {
     return true;
   }
   final deviceName = segment.split('.').first.toLowerCase();

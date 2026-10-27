@@ -178,7 +178,11 @@ void _validateWorldDeclaration(
 
   final content = world.content;
   if (content != null) {
-    _validateWorldContent(content, '$path.content', manifest, error);
+    if (content.kind == ModWorldContent.mapKind) {
+      _validateMapWorldContent(content, '$path.content', manifest, error);
+    } else {
+      _validateWorldContent(content, '$path.content', manifest, error);
+    }
   }
 
   final spawn = world.spawn;

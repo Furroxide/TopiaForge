@@ -370,6 +370,24 @@
       "path": "resolution/longest-target-owner-valid-ignores-shorter-declaration.json"
     },
     {
+      "id": "map-world-fixed-policy",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/map-world-fixed-policy.json"
+    },
+    {
+      "id": "map-world-list-policy",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/map-world-list-policy.json"
+    },
+    {
+      "id": "map-world-open-policy",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/map-world-open-policy.json"
+    },
+    {
       "id": "missing-longer-world-and-required-edge-accumulate",
       "channel": "resolution",
       "kind": "launch-resolution",
@@ -938,6 +956,210 @@
       "channel": "serialization",
       "kind": "manifest-accepts",
       "path": "serialization/manifest/v6-longest-declaration-id.json"
+    },
+    {
+      "id": "v6-map-additive",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-additive.json"
+    },
+    {
+      "id": "v6-map-both-sources",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-both-sources.json"
+    },
+    {
+      "id": "v6-map-empty-transitions",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-empty-transitions.json"
+    },
+    {
+      "id": "v6-map-file-absolute",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-absolute.json"
+    },
+    {
+      "id": "v6-map-file-compat-device",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-compat-device.json"
+    },
+    {
+      "id": "v6-map-file-compat-separator",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-compat-separator.json"
+    },
+    {
+      "id": "v6-map-file-compat-traversal",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-compat-traversal.json"
+    },
+    {
+      "id": "v6-map-file-control-c1",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-control-c1.json"
+    },
+    {
+      "id": "v6-map-file-control",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-control.json"
+    },
+    {
+      "id": "v6-map-file-extension",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-extension.json"
+    },
+    {
+      "id": "v6-map-file-folded-long-segment",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-folded-long-segment.json"
+    },
+    {
+      "id": "v6-map-file-json-gz",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-map-file-json-gz.json"
+    },
+    {
+      "id": "v6-map-file-json",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-map-file-json.json"
+    },
+    {
+      "id": "v6-map-file-long-segment",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-long-segment.json"
+    },
+    {
+      "id": "v6-map-file-non-nfc",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-non-nfc.json"
+    },
+    {
+      "id": "v6-map-file-reserved",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-reserved.json"
+    },
+    {
+      "id": "v6-map-file-roboworld",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-map-file-roboworld.json"
+    },
+    {
+      "id": "v6-map-file-traversal",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-traversal.json"
+    },
+    {
+      "id": "v6-map-file-unhashed",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-map-file-unhashed.json"
+    },
+    {
+      "id": "v6-map-foreign-field",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-foreign-field.json"
+    },
+    {
+      "id": "v6-map-id-empty",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-id-empty.json"
+    },
+    {
+      "id": "v6-map-id-max",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-map-id-max.json"
+    },
+    {
+      "id": "v6-map-id-newline",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-id-newline.json"
+    },
+    {
+      "id": "v6-map-id-non-ascii",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-id-non-ascii.json"
+    },
+    {
+      "id": "v6-map-id-overlong",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-id-overlong.json"
+    },
+    {
+      "id": "v6-map-id-url",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-id-url.json"
+    },
+    {
+      "id": "v6-map-marker-without-name",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-marker-without-name.json"
+    },
+    {
+      "id": "v6-map-no-source",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-no-source.json"
+    },
+    {
+      "id": "v6-map-no-worlds-dependency",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-no-worlds-dependency.json"
+    },
+    {
+      "id": "v6-map-null-scene",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-null-scene.json"
+    },
+    {
+      "id": "v6-map-null-spawn",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-null-spawn.json"
+    },
+    {
+      "id": "v6-map-optional-worlds-dependency",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-optional-worlds-dependency.json"
+    },
+    {
+      "id": "v6-map-published-defaults",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-map-published-defaults.json"
+    },
+    {
+      "id": "v6-map-scene-and-marker",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-map-scene-and-marker.json"
     },
     {
       "id": "v6-minimal-gamemode",

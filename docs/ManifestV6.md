@@ -13,7 +13,7 @@ every peer in a session must enable the identical package. `"mode": "standalone"
 Manifest V4 and V5 were retired before the first public release. Tooling rejects them with a migration command
 instead of carrying a second permanent contract.
 
-The editor-friendly `topiaforge.mod.schema.json` URL names the latest supported schema. The immutable
+The editor-friendly `topiaforge.mod.schema.json` URL names the latest supported schema. The versioned
 `topiaforge.mod.v6.schema.json` file is a self-contained V6 contract and never references that moving alias.
 The V4 and V5 versioned schemas are rejecting stubs. Use the migration command below
 for existing V3/V4/V5 source projects; no retired reader can activate a package.
@@ -217,7 +217,8 @@ contract. Constructors and startup callbacks run only after the child context is
 
 ### World declaration
 
-Required fields are `id`, `name`, `content`, `transitions` and `spawn`; optional fields are
+Required fields are `id`, `name` and `content`; non-map worlds also require `transitions`
+and `spawn`. Map worlds have the defaults described below. Optional fields are
 `description`, `openTo` and `openToAnyCompatible`.
 
 | `content.kind` | Required content fields | Runtime behavior |
@@ -226,9 +227,11 @@ Required fields are `id`, `name`, `content`, `transitions` and `spawn`; optional
 | `provider` | `implementation` | `IWorldContentProvider.LoadAsync(context, cancellationToken)` |
 | `game-scene` | `sceneName` | Built-in native scene adapter |
 | `discovered` | `implementation` | `IWorldDiscoverySource` enumerates bounded family instances and loads the selected instance |
+| `map` | Exactly one of `map` or `file`; optional `scene` | Static map declaration; the map runtime follow-up supplies loading |
 
 Fields from other branches are forbidden, even when empty. `transitions` is a nonempty unique list
-containing `scene-replacement`, `additive-arena`, or both. `spawn.kind` is `authored-marker` (requires
+containing `scene-replacement`, `additive-arena`, or both; map worlds permit only scene replacement.
+`spawn.kind` is `authored-marker` (requires
 `markerName`, 1–128 characters) or `provider-default` (forbids `markerName`). Missing or ambiguous
 markers fail startup; no camera position or zero-position fallback is used.
 
@@ -400,3 +403,54 @@ New numbered contracts require explicit
 readers, validators and migration; no compatibility promise requires retaining unreleased V5.
 See [Compatibility policy](CompatibilityPolicy.md) and [Multiplayer API preview](Multiplayer.md).
 Native timing, visuals and release acceptance remain pending until verified against the actual candidate.
+
+
+## Map worlds (pre-release V6 amendment)
+
+V6 gains `content.kind: "map"` before the 0.1 release freezes its schema. Existing
+V6 manifests keep their meaning and need no number change. The canonical alias
+and versioned schema both include this amendment. `migrate-manifest` leaves a
+valid V6 map declaration unchanged; V3/V4/V5 migration still targets V6 and does
+not invent map content for an existing provider or bundle.
+
+```json
+{
+  "id": "example.maps.courtyard",
+  "name": "Courtyard",
+  "content": { "kind": "map", "map": "ExampleMap_01", "scene": "MainScene" }
+}
+```
+
+Declare `world-service` and a required dependency on
+`io.github.furroxide.topiaforge.worlds`. Exactly one source is required: `map`
+is a published identifier of 1–64 ASCII letters, digits, underscores or dashes;
+`file` is a portable package-relative `.roboworld`, `.json` or `.json.gz` path.
+Page URLs, filesystem roots, traversal and reserved device paths are refused.
+File paths must use Unicode NFC and remain safe under compatibility normalization;
+control characters and segments longer than 255 characters are refused. Packing,
+package checks and acceptance receipts reject duplicate JSON properties before
+decoding, including escaped spellings of the same property name.
+`scene` is an optional 1–128-character identifier with the same ASCII alphabet.
+When absent it selects the project's default scene; an explicit scene pins that
+choice against later project changes. Empty strings and JSON null are not omission.
+
+Map worlds default to `transitions: ["scene-replacement"]` and
+`spawn: {"kind":"provider-default"}`. Explicit defaults are equivalent.
+`additive-arena` is refused. An `authored-marker` spawn must name its marker.
+Map worlds are static: fixed, list and open target policies may reference them
+in their normal default/allow fields. Existing consent and ownership checks
+still apply; discovered families and observed instances retain their restrictions.
+
+Packing derives each declared map file's SHA-256 from the bytes actually added
+to the archive and refuses a missing payload. Source manifests may omit that
+generated hash. Package validation requires it and checks the ordinary file's
+bytes; install receipts classify the map as critical content. Ship your own map
+files or obtain the creator's permission.
+
+`TFPKG180` requires a loader range whose minimum is stable `0.2.0` or later.
+A wildcard, a 0.1 floor or `0.2.0-rc.1` is insufficient. This amendment adds
+manifest and package support; map retrieval, import, spawn readiness and the
+`world add map` / `check world` commands belong to the map runtime follow-up.
+The 0.1 runtime and its native package checker still refuse packages requiring
+0.2.0. End-to-end loading needs the map runtime and a compatible release.
+This amendment performs no map fetch or native game import by itself.

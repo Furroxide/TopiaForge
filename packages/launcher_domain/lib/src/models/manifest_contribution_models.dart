@@ -95,6 +95,9 @@ class ModWorldContent {
     this.prefab = '',
     this.implementation,
     this.sceneName = '',
+    this.map = '',
+    this.file = '',
+    this.scene = '',
   });
 
   factory ModWorldContent.fromJson(Object? json) {
@@ -107,12 +110,16 @@ class ModWorldContent {
           ? ModImplementationBinding.fromJson(map['implementation'])
           : null,
       sceneName: (map['sceneName'] as String?) ?? '',
+      map: (map['map'] as String?) ?? '',
+      file: (map['file'] as String?) ?? '',
+      scene: (map['scene'] as String?) ?? '',
     );
   }
 
   static const bundleKind = 'bundle';
   static const providerKind = 'provider';
   static const gameSceneKind = 'game-scene';
+  static const mapKind = 'map';
 
   /// A family of worlds enumerated at runtime rather than declared one by one.
   /// Its declaration id is at most 94 characters, leaving room for `.<slug>`
@@ -126,6 +133,9 @@ class ModWorldContent {
   final String prefab;
   final ModImplementationBinding? implementation;
   final String sceneName;
+  final String map;
+  final String file;
+  final String scene;
 
   Map<String, Object?> toJson() => {
     'kind': kind,
@@ -133,6 +143,9 @@ class ModWorldContent {
     if (prefab.isNotEmpty) 'prefab': prefab,
     if (implementation != null) 'implementation': implementation!.toJson(),
     if (sceneName.isNotEmpty) 'sceneName': sceneName,
+    if (map.isNotEmpty) 'map': map,
+    if (file.isNotEmpty) 'file': file,
+    if (scene.isNotEmpty) 'scene': scene,
   };
 }
 
@@ -169,11 +182,13 @@ class ModWorldDeclaration {
     this.name = '',
     String? description,
     this.content,
-    this.transitions = const [],
-    this.spawn,
+    List<String>? transitions,
+    ModSpawnPolicy? spawn,
     List<String>? openTo,
     this.openToAnyCompatible,
   }) : _description = description,
+       _transitions = transitions,
+       _spawn = spawn,
        _openTo = openTo;
 
   factory ModWorldDeclaration.fromJson(Object? json) {
@@ -185,7 +200,9 @@ class ModWorldDeclaration {
       content: map.containsKey('content')
           ? ModWorldContent.fromJson(map['content'])
           : null,
-      transitions: _contributionStrings(map['transitions']),
+      transitions: map.containsKey('transitions')
+          ? _contributionStrings(map['transitions'])
+          : null,
       spawn: map.containsKey('spawn')
           ? ModSpawnPolicy.fromJson(map['spawn'])
           : null,
@@ -203,8 +220,18 @@ class ModWorldDeclaration {
   String get description => _description ?? '';
   bool get hasDescription => _description != null;
   final ModWorldContent? content;
-  final List<String> transitions;
-  final ModSpawnPolicy? spawn;
+  final List<String>? _transitions;
+  List<String> get transitions =>
+      _transitions ??
+      (content?.kind == ModWorldContent.mapKind
+          ? const [ModTransitions.sceneReplacement]
+          : const []);
+  final ModSpawnPolicy? _spawn;
+  ModSpawnPolicy? get spawn =>
+      _spawn ??
+      (content?.kind == ModWorldContent.mapKind
+          ? const ModSpawnPolicy(kind: ModSpawnPolicy.providerDefaultKind)
+          : null);
 
   /// Gamemodes this world agrees to be paired with by an `open` policy. Consent
   /// is scoped to that one policy on purpose: requiring it for every pairing
