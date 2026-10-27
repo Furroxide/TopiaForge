@@ -60,25 +60,33 @@ void main() {
     // Six Dart CLI startups share this budget when suites run concurrently.
     timeout: const Timeout(Duration(minutes: 2)),
   );
-  test(
-    'CLI rejects live documents, wrong hosts and missing explicit scene',
-    () async {
-      for (final args in [
-        ['add', 'automerge:document', '--scene', 'scene', '--name', 'Map'],
-        [
-          'add',
-          'https://example.test/map/map',
-          '--scene',
-          'scene',
-          '--name',
-          'Map',
-        ],
-        ['add', 'example', '--name', 'Map'],
-      ]) {
-        final result = await cli(args);
+  // Each cold startup keeps the default 30-second test budget and its own root.
+  for (final entry in {
+    'live documents': [
+      'add',
+      'automerge:document',
+      '--scene',
+      'scene',
+      '--name',
+      'Map',
+    ],
+    'wrong hosts': [
+      'add',
+      'https://example.test/map/map',
+      '--scene',
+      'scene',
+      '--name',
+      'Map',
+    ],
+    'missing explicit scene': ['add', 'example', '--name', 'Map'],
+  }.entries) {
+    test(
+      'CLI rejects ${entry.key}',
+      () async {
+        final result = await cli(entry.value);
         expect(result.exitCode, isNot(0));
         expect(result.stderr, isNot(contains(root.path)));
-      }
-    },
-  );
+      },
+    );
+  }
 }
