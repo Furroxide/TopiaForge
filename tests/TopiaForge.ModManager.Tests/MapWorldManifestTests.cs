@@ -50,6 +50,7 @@ namespace TopiaForge.ModManager.Tests
             }
             finally { Directory.Delete(root, true); }
             Console.WriteLine("Map world manifest: 12 checks passed.");
+            MapWorldPackageTests.Run();
         }
         private static string Hash(string path)
         { using var sha = SHA256.Create(); return string.Concat(sha.ComputeHash(File.ReadAllBytes(path)).Select(b => b.ToString("x2"))); }

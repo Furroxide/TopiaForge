@@ -217,16 +217,13 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
         throw StateError('topiaforge.mod.json was not found in $packagePath.');
       }
       manifest = ModManifest.fromJson(
-        jsonDecode(
-              utf8.decode(
-                await _readDeveloperFileBounded(
-                  file,
-                  maxBytes: _maxDeveloperManifestBytes,
-                  label: 'topiaforge.mod.json',
-                ),
-              ),
-            )
-            as Map<String, Object?>,
+        _decodeDeveloperManifest(
+          await _readDeveloperFileBounded(
+            file,
+            maxBytes: _maxDeveloperManifestBytes,
+            label: 'topiaforge.mod.json',
+          ),
+        ),
       );
     } else {
       manifest = (await _readPackage(packagePath, expectedSha256: '')).manifest;

@@ -56,6 +56,10 @@ void _validateMapWorldContent(
   ModManifest manifest,
   void Function(String) error,
 ) {
+  if (content.file.isNotEmpty &&
+      _portableManifestPathCollisionKey(content.file) == null) {
+    error('$path.file must be a safe relative path inside the package.');
+  }
   if (!manifest.dependencies.any(
     (dependency) =>
         dependency.id.toLowerCase() == 'io.github.furroxide.topiaforge.worlds',

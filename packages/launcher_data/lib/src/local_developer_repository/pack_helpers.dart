@@ -58,17 +58,13 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     if (!manifestFile.existsSync()) {
       throw StateError('topiaforge.mod.json was not found in ${root.path}');
     }
-    final manifest =
-        jsonDecode(
-              utf8.decode(
-                _readDeveloperFileBoundedSync(
-                  manifestFile,
-                  maxBytes: _maxDeveloperManifestBytes,
-                  label: 'topiaforge.mod.json',
-                ),
-              ),
-            )
-            as Map<String, Object?>;
+    final manifest = _decodeDeveloperManifest(
+      _readDeveloperFileBoundedSync(
+        manifestFile,
+        maxBytes: _maxDeveloperManifestBytes,
+        label: 'topiaforge.mod.json',
+      ),
+    );
     final manifestContract = ModManifest.fromJson(manifest);
     final blockingManifestIssues = [
       ...manifestContract.validate(),

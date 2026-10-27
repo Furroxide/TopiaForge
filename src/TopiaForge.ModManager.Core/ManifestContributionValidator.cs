@@ -216,6 +216,8 @@ namespace TopiaForge.ModManager.Core
 
             if (content.Kind == ModWorldContent.MapKind)
             {
+                if (content.File != null && !IsPortablePath(content.File))
+                    errors.Add(path + ".file must be a safe relative path inside the package.");
                 if (!manifest.Dependencies.Keys.Any(id => string.Equals(id, "io.github.furroxide.topiaforge.worlds", StringComparison.OrdinalIgnoreCase)))
                     errors.Add(path + " requires the Worlds package in dependencies.");
                 return;

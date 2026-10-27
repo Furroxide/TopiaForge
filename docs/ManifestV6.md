@@ -426,6 +426,10 @@ Declare `world-service` and a required dependency on
 is a published identifier of 1–64 ASCII letters, digits, underscores or dashes;
 `file` is a portable package-relative `.roboworld`, `.json` or `.json.gz` path.
 Page URLs, filesystem roots, traversal and reserved device paths are refused.
+File paths must use Unicode NFC and remain safe under compatibility normalization;
+control characters and segments longer than 255 characters are refused. Packing,
+package checks and acceptance receipts reject duplicate JSON properties before
+decoding, including escaped spellings of the same property name.
 `scene` is an optional 1–128-character identifier with the same ASCII alphabet.
 When absent it selects the project's default scene; an explicit scene pins that
 choice against later project changes. Empty strings and JSON null are not omission.

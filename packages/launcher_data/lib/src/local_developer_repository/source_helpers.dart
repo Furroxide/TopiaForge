@@ -385,7 +385,7 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
       label: 'topiaforge.mod.json',
     );
     final manifest = ModManifest.fromJson(
-      jsonDecode(utf8.decode(manifestBytes)) as Map<String, Object?>,
+      _decodeDeveloperManifest(manifestBytes),
     );
     final manifestIssues = manifest
         .validate()

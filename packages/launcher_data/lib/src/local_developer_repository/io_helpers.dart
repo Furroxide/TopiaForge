@@ -1,5 +1,11 @@
 part of '../local_developer_repository.dart';
 
+Map<String, Object?> _decodeDeveloperManifest(List<int> bytes) {
+  final text = utf8.decode(bytes);
+  rejectDuplicateJsonProperties(text, label: 'topiaforge.mod.json');
+  return jsonDecode(text) as Map<String, Object?>;
+}
+
 /// Finds [executable] on PATH, as `where` does on Windows and `which` does
 /// elsewhere: its first match, or '' when there is none. The developer tools'
 /// own lookup runs one of those, bounded to five seconds.

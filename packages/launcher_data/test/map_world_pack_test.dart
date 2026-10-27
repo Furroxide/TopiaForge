@@ -14,6 +14,7 @@ void main() {
     'json.gz',
     'missing',
     'compiled',
+    'stale-hash',
   ]) {
     test(
       'pack includes exact map bytes and derives its hash: $extension',
@@ -23,6 +24,8 @@ void main() {
           final project = Directory(p.join(root.path, 'project'))..createSync();
           final file = extension == 'compiled'
               ? 'Maps/world.json'
+              : extension == 'stale-hash'
+              ? 'Content/world.json'
               : 'Content/world.$extension';
           final bytes = utf8.encode('{"scenes":[]}');
           if (extension != 'missing') {
@@ -46,6 +49,7 @@ void main() {
             'supportedLoaderVersionRange': '>=0.2.0 <1.0.0',
             'capabilities': ['world-service'],
             'dependencies': {'io.github.furroxide.topiaforge.worlds': '*'},
+            if (extension == 'stale-hash') 'hashes': {declared: '0' * 64},
             'contributions': {
               'worlds': [
                 {

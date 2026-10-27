@@ -982,10 +982,46 @@
       "path": "serialization/manifest/v6-map-file-absolute.json"
     },
     {
+      "id": "v6-map-file-compat-device",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-compat-device.json"
+    },
+    {
+      "id": "v6-map-file-compat-separator",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-compat-separator.json"
+    },
+    {
+      "id": "v6-map-file-compat-traversal",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-compat-traversal.json"
+    },
+    {
+      "id": "v6-map-file-control-c1",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-control-c1.json"
+    },
+    {
+      "id": "v6-map-file-control",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-control.json"
+    },
+    {
       "id": "v6-map-file-extension",
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-map-file-extension.json"
+    },
+    {
+      "id": "v6-map-file-folded-long-segment",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-folded-long-segment.json"
     },
     {
       "id": "v6-map-file-json-gz",
@@ -998,6 +1034,18 @@
       "channel": "serialization",
       "kind": "manifest-accepts",
       "path": "serialization/manifest/v6-map-file-json.json"
+    },
+    {
+      "id": "v6-map-file-long-segment",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-long-segment.json"
+    },
+    {
+      "id": "v6-map-file-non-nfc",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-map-file-non-nfc.json"
     },
     {
       "id": "v6-map-file-reserved",
