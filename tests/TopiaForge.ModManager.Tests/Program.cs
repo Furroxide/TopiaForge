@@ -14,8 +14,6 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
-            if (args.Length == 1 && args[0] == "--authored-readiness")
-            { MapWorldServiceTests.AuthoredReadinessAsync().GetAwaiter().GetResult(); return 0; }
             if (args.Length == 2 && args[0] == "--authored-review")
             { AuthoredMapReviewTests.Run(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "--authored-maps")

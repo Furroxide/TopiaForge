@@ -54,7 +54,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 new AnalyzerOptions(files, new MapOptions("anchors.json"))).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
         }
 
-        private static void RunRealAuthoredMapTests(string test = "all")
+        private static void RunRealAuthoredMapTests()
         {
             var ordinary = RealAuthoredDiagnostics(RealAuthoredBody);
             Assert(ordinary.Count(d => d.Id == "TF1013") == 1 && !ordinary.Any(d => d.Id == "TF1012" || d.Id == "TF1010" || d.Id == "AD0001"),
@@ -62,15 +62,11 @@ namespace TopiaForge.Mods.Analyzers.Tests
             var fixedBody = ApplyRealAuthoredFix(RealAuthoredBody, ordinary.Single(d => d.Id == "TF1013"));
             Assert(!RealAuthoredDiagnostics(fixedBody).Any(d => d.Id == "TF1013"), "real source code fix compiles and clears missing-id warning");
             Assert(RealAuthoredDiagnostics(RealAuthoredBody, floor: ">=0.1.0 <0.3.0").Any(d => d.Id == "TF1010"), "real authored SDK keeps stable 0.2 feature floor");
-            if (test != "named")
-            {
-                var implicitCreation = RealAuthoredBody.Replace("new Controller(session)", "new(session)", StringComparison.Ordinal);
-                Assert(RealAuthoredDiagnostics(implicitCreation, "provider").Count(d => d.Id == "TF1012") == 1,
-                    "target-typed controller construction still requires a map world");
-                Assert(RealAuthoredDiagnostics(implicitCreation).Count(d => d.Id == "TF1013") == 1,
-                    "target-typed controller construction retains survey ownership");
-            }
-            if (test == "typed") return;
+            var implicitCreation = RealAuthoredBody.Replace("new Controller(session)", "new(session)", StringComparison.Ordinal);
+            Assert(RealAuthoredDiagnostics(implicitCreation, "provider").Count(d => d.Id == "TF1012") == 1,
+                "target-typed controller construction still requires a map world");
+            Assert(RealAuthoredDiagnostics(implicitCreation).Count(d => d.Id == "TF1013") == 1,
+                "target-typed controller construction retains survey ownership");
             var named = RealAuthoredBody.Replace("map.Entity(\"doorr\")", "map.TryGetEntity(entity: out var found, entityId: \"doorr\")", StringComparison.Ordinal);
             var diagnostic = RealAuthoredDiagnostics(named).SingleOrDefault(d => d.Id == "TF1013");
             Assert(diagnostic != null, "reordered named entityId argument is checked");

@@ -44,10 +44,8 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "io.github.furroxide.topiaforge.ugc.livesync"),
         };
 
-        private static int Main(string[] args)
+        private static int Main()
         {
-            if (args.Length == 2 && args[0] == "--authored-real")
-            { RunRealAuthoredMapTests(args[1]); return 0; }
             try
             {
                 ReportsUnsafeNativeUsing();
