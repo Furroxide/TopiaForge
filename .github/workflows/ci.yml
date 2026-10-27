@@ -396,6 +396,8 @@ jobs:
 
       - name: Test incoming commit DCO and release source policy
         run: python3 .github/scripts/test_pr_policy.py
+      - name: Test required CI and Pages completion gates
+        run: python3 .github/scripts/test_ci_validation.py
 
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
@@ -533,8 +535,8 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
 
-  # Publishing waits for C# and every release scaffold through deploy-pages.yml, which builds only after a
-  # successful CI run, so this check starts at once.
+  # CI-triggered Pages publishing waits for a successful complete CI run through deploy-pages.yml.
+  # This documentation check needs no outputs from C# or the release scaffolds, so it starts at once.
   docs:
     name: Build guides, C# and Dart references, and search
     runs-on: ubuntu-latest
