@@ -1,6 +1,7 @@
 <Project>
   <Target Name="TopiaForgeMapFileInventory" BeforeTargets="GenerateMSBuildEditorConfigFile">
     <ItemGroup>
+      <AdditionalFiles Include="$(MSBuildProjectDirectory)/obj/topiaforge-map-survey*.json" />
       <_TopiaForgeMapCandidates Include="@(Content);@(None)" />
       <AdditionalFiles Include="%(_TopiaForgeMapCandidates.FullPath)"
                        Condition="Exists('%(_TopiaForgeMapCandidates.FullPath)') and ('%(_TopiaForgeMapCandidates.CopyToOutputDirectory)' == 'Always' or '%(_TopiaForgeMapCandidates.CopyToOutputDirectory)' == 'PreserveNewest' or '%(_TopiaForgeMapCandidates.CopyToOutputDirectory)' == 'IfDifferent')">

@@ -16,6 +16,7 @@ namespace TopiaForge.Worlds.Maps
     internal interface IMapImportTransaction : ILocalImportTransaction
     {
         string SceneId { get; }
+        AuthoredMapIndex CreateMap(MapDocument document, string mapId, IModContext context);
         OperationResult<TransformState> PlaceRespawn(string entityId);
     }
 
@@ -84,6 +85,8 @@ namespace TopiaForge.Worlds.Maps
                                 resources.StoppingToken, transaction);
                             if (!imported.TryGetValue(out var content)) return Failure(imported.ErrorCode, "The map could not be built. Try again or choose another map.");
                             resources.Add(content);
+                            var map = resources.Add(transaction.CreateMap(document,
+                                request.PublishedId ?? "file:" + (request.PackagePath ?? "map.roboworld"), context.Context));
                             resources.ThrowIfStopping();
                             var placed = transaction.PlaceRespawn(spawn.Id);
                             if (!placed.TryGetValue(out var transform)) return Failure(placed.ErrorCode, placed.ErrorMessage);
@@ -99,7 +102,8 @@ namespace TopiaForge.Worlds.Maps
                                 context.Context.Logger.Info("Map loaded: id=" + (request.PublishedId ?? "package") + "; scene=" + scene.Id +
                                     "; sha256=" + document.Sha256 + "; bytes=" + document.Packed.Length + "; modified=" + modified);
                             }
-                            return ready;
+                            return ready.TryGetValue(out var readiness)
+                                ? OperationResult<WorldReadiness>.Success(new WorldReadiness(readiness.Scene, readiness.Spawn, map)) : ready;
                         }
                     }
                     catch (OperationCanceledException) { return Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }

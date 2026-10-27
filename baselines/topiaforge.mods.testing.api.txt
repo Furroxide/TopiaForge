@@ -88,6 +88,28 @@ type public sealed class TopiaForge.Mods.Testing.FakeAudioService : System.Objec
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeAudioPlayback> ActivePlaybacks { get; }
   property TopiaForge.Mods.ModErrorCode PlayErrorCode { get; set; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeAuthoredMap : System.Object, System.IDisposable, TopiaForge.Mods.IAuthoredMap [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String mapId = "test-map", System.String sceneId = "scene", System.String sceneName = "Test map", System.String environment = "") [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.Testing.FakeAuthoredMap AddEntity(System.String id, System.String name, System.String? modelId = null, System.Nullable<TopiaForge.Mods.MapTransform> editorTransform = null, System.String? parentId = null, TopiaForge.Mods.AuthoredComponents components = 0 (None), System.String? prefabUri = null, System.Boolean assetResolved = true, System.Boolean hasMarker = true) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.Testing.FakeAuthoredMap WithAnchorFile(System.String packagePath, System.String json) [requires-topiaforge="0.2.0"]
+  method [static] TopiaForge.Mods.Testing.FakeAuthoredMap FromProject(System.String json, System.String? sceneId = null, System.String mapId = "test-map") [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean TryGetAuthored(TopiaForge.Mods.IEntity entity, out TopiaForge.Mods.AuthoredEntity? authored) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean TryGetEntity(System.String entityId, out TopiaForge.Mods.AuthoredEntity? entity) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.AuthoredEntity> FindByModel(System.String modelId) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.AuthoredEntity Entity(System.String entityId) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.MapAnchorResolution ResolveAnchors(System.Collections.Generic.IEnumerable<TopiaForge.Mods.MapAnchor> anchors) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.MapAnchorResolution ResolveAnchors(System.String packagePath) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.TransformState ToWorld(TopiaForge.Mods.MapTransform editorTransform) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.Vec3 ToWorld(TopiaForge.Mods.Vec3 editorPosition) [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAlive { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.AuthoredEntity> Entities { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Environment { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String MapId { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String SceneId { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String SceneName { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.MapRevision Revision { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.Testing.FakeBlocker : System.Object, System.IDisposable, TopiaForge.Mods.IBlocker, TopiaForge.Mods.IEntity, TopiaForge.Mods.ISpawnedEntity [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
   property System.Boolean BlocksSight { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
@@ -329,12 +351,14 @@ type public sealed class TopiaForge.Mods.Testing.FakeLocalPlayerService : System
 type public sealed class TopiaForge.Mods.Testing.FakeLocalWorldService : System.Object, TopiaForge.Mods.ILocalWorldService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> ImportAsync(System.String sessionId, System.String requestedPath, System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IAuthoredMap>> ImportMapAsync(System.String sessionId, System.String requestedPath, System.Threading.CancellationToken cancellationToken = null) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.LocalWorldFile>> ListLocalWorlds()
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterAssetOverride(TopiaForge.Mods.WorldAssetOverride assetOverride)
   property System.Boolean LocalWorldsAvailable { get; set; }
   property System.Collections.Generic.IReadOnlyList<System.String> ImportedLocalWorlds { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.WorldAssetOverride> AssetOverrides { get; }
   property System.Collections.Generic.List<TopiaForge.Mods.LocalWorldFile> LocalWorlds { get; }
+  property System.Func<System.String, TopiaForge.Mods.IAuthoredMap>? MapImporter { get; set; } [requires-topiaforge="0.2.0"]
   property System.String? SessionId { get; set; }
 
 type public sealed class TopiaForge.Mods.Testing.FakeLocalizationService : System.Object, TopiaForge.Mods.ILocalizationService
@@ -727,6 +751,7 @@ type public sealed class TopiaForge.Mods.Testing.GamemodeSessionRunner : System.
   constructor .ctor(TopiaForge.Mods.IGamemodeFactory factory, TopiaForge.Mods.Testing.GamemodeSessionRole role = 0 (SinglePlayer), TopiaForge.Mods.Testing.FakeModContext? serverContext = null, TopiaForge.Mods.Testing.FakeModContext? participantContext = null, TopiaForge.Mods.WorldReadiness? world = null)
   method System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> StartAsync(System.Threading.CancellationToken cancellationToken = null)
   method System.Void Stop()
+  method TopiaForge.Mods.Testing.GamemodeSessionRunner WithMap(TopiaForge.Mods.IAuthoredMap map) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Void Dispose()
   property System.Boolean IsRunning { get; }
   property System.Collections.Generic.IReadOnlyList<System.Exception> CleanupFailures { get; }

@@ -502,6 +502,25 @@ required Worlds dependency. Ambiguous or malformed manifests need a manual edit.
 Use `topiaforge world add map <link-or-id>` and `topiaforge check world <link-or-id>`
 to author and verify declarations. See [Map worlds](MapWorlds.md).
 
+### TF1012
+
+**The gamemode needs a map world.** Its factory or controller reads `World.Map`
+or calls `RequireMap()`, but its launch targets select no declared map world.
+Run `topiaforge world add map <link>` and select the target that starts this mode.
+An unrelated map declaration does not satisfy this requirement. Open world pickers
+and external world declarations cannot be checked conclusively at build time.
+
+### TF1013
+
+**The entity id is absent from the matching survey.** Run
+`topiaforge world survey <world>` to refresh the snapshot under `obj/`. Check the
+anchor drift report before using `--update`. The code fix offers nearby ids, ranking
+an anchor's name and model first; choose the intended object yourself.
+
+The analyzer receives survey snapshots automatically and checks copied JSON anchors
+files. A snapshot for another map or scene is ignored; without a matching snapshot,
+this warning stays silent. Include anchors files as copied project items.
+
 ### TFPKG180
 
 **Manifest feature needs a newer loader.**

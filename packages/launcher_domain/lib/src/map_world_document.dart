@@ -1,6 +1,7 @@
 import 'dart:convert';
+import 'authored_map.dart';
 
-import 'json_duplicate_properties.dart';
+import 'strict_map_json.dart';
 
 /// Public map references never accept an arbitrary download URL.
 class MapReference {
@@ -55,39 +56,7 @@ class MapWorldDocument {
     }
     try {
       final text = utf8.decode(jsonBytes, allowMalformed: false);
-      rejectDuplicateJsonProperties(text, label: 'Map');
-      final raw = jsonDecode(text);
-      var remaining = 2000000;
-      void inspect(Object? value, int depth) {
-        if (depth > 64 || --remaining < 0) throw const FormatException();
-        if (value is double && !value.isFinite) throw const FormatException();
-        if (value is String) {
-          for (var i = 0; i < value.length; i++) {
-            final code = value.codeUnitAt(i);
-            if (code >= 0xd800 && code <= 0xdbff) {
-              if (++i == value.length ||
-                  value.codeUnitAt(i) < 0xdc00 ||
-                  value.codeUnitAt(i) > 0xdfff) {
-                throw const FormatException();
-              }
-            } else if (code >= 0xdc00 && code <= 0xdfff) {
-              throw const FormatException();
-            }
-          }
-        }
-        if (value is Map) {
-          for (final entry in value.entries) {
-            inspect(entry.key, depth + 1);
-            inspect(entry.value, depth + 1);
-          }
-        } else if (value is List) {
-          for (final item in value) {
-            inspect(item, depth + 1);
-          }
-        }
-      }
-
-      inspect(raw, 0);
+      final raw = decodeStrictMapJson(text);
       final project = _object(raw);
       final scenes = _object(project['scenes']);
       if (scenes.isEmpty || scenes.length > 256) throw const FormatException();
@@ -125,9 +94,10 @@ class MapWorldDocument {
         }
         result[entry.key] = MapWorldScene(
           entry.key,
-          _text(scene, 'name', 256),
+          _text(scene, 'name', 128),
           Map.unmodifiable(entities),
           Map.unmodifiable(spawns),
+          environment: MapEditorVector.text(scene, 'environment', 128),
         );
       }
       return MapWorldDocument._(
@@ -160,7 +130,11 @@ class MapWorldDocument {
   static String _text(Map<String, dynamic> value, String key, int maximum) {
     final raw = value[key];
     if (raw == null) return '';
-    if (raw is! String || raw.length > maximum) throw const FormatException();
+    if (raw is! String ||
+        raw.length > maximum ||
+        raw.codeUnits.any((c) => c < 32 || c >= 127 && c <= 159)) {
+      throw const FormatException();
+    }
     return raw;
   }
 
@@ -173,9 +147,17 @@ class MapWorldDocument {
 }
 
 class MapWorldScene {
-  const MapWorldScene(this.id, this.name, this.entities, this.spawns);
+  MapWorldScene(
+    this.id,
+    this.name,
+    this.entities,
+    this.spawns, {
+    this.environment = '',
+  }) : authored = MapAuthoredScene.read(id, entities);
   final String id;
   final String name;
+  final String environment;
+  final MapAuthoredScene authored;
   final Map<String, dynamic> entities;
   final Map<String, String> spawns;
   void requireSpawn([String? marker]) {

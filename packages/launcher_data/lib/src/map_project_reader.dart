@@ -121,16 +121,25 @@ class MapProjectSurvey {
     );
   }
   Map<String, Object?> snapshot(MapReference reference, MapWorldScene scene) =>
-      {
-        'schemaVersion': 1,
-        'map': reference.id,
-        'scene': scene.id,
-        'sha256': sha256,
-        'packedSize': packedSize,
-        'modified': document.modified,
-        'name': document.name,
-        'entities': scene.entities,
-      };
+      authoredSnapshot(reference.id, scene);
+  Map<String, Object?> authoredSnapshot(
+    String identity,
+    MapWorldScene scene, {
+    String? world,
+  }) => {
+    'schemaVersion': 1,
+    'map': identity,
+    'world': ?world,
+    'scene': scene.id,
+    'sha256': sha256,
+    'packedSize': packedSize,
+    'modified': document.modified,
+    'name': document.name,
+    'sceneName': scene.name,
+    'environment': scene.environment,
+    'entities': scene.entities,
+    'records': scene.authored.entities.map((e) => e.toSurveyRecord()).toList(),
+  };
 }
 
 class _MapBytes implements Sink<List<int>> {

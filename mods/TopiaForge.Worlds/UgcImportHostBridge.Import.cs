@@ -87,6 +87,8 @@ namespace TopiaForge.Worlds
             public bool NativeEntered { get; private set; }
             public bool NativeReturned { get; private set; }
             public string SceneId => mapScene ?? string.Empty;
+            public TopiaForge.Mods.Internal.AuthoredMapIndex CreateMap(MapDocument document, string mapId, IModContext context) =>
+                MapNativeIndex.Create(importedRoot, document, SceneId, mapId, context);
             public OperationResult<TransformState> PlaceRespawn(string entityId) => MapNativeSpawn.Place(importedRoot, entityId);
             public OperationResult<IDisposable> Import()
             {

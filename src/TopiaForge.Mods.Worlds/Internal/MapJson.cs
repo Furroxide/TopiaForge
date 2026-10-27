@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace TopiaForge.Worlds.Maps
+namespace TopiaForge.Mods.Internal
 {
     /// <summary>Bounded strict JSON for untrusted map data, rejecting duplicate keys and nonfinite numbers.</summary>
     internal sealed class MapJson

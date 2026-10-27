@@ -23,3 +23,5 @@ export 'src/session_link_handling.dart';
 export 'src/cancellation.dart';
 export 'src/join_host_packages.dart';
 export 'src/network_text.dart';
+export 'src/authored_map.dart';
+export 'src/map_anchors.dart';

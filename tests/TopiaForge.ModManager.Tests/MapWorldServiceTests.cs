@@ -184,6 +184,9 @@ namespace TopiaForge.ModManager.Tests
                 return PendingPreparation ?? Task.FromResult(OperationResult<IMapImportTransaction>.Success(this));
             }
             public string SceneId => "scene";
+            public AuthoredMapIndex CreateMap(MapDocument document, string mapId, IModContext context) => new AuthoredMapIndex(
+                mapId, document.Authored.Scenes[SceneId], new MapRevision(document.Sha256, document.Packed.Length, document.Modified),
+                Array.Empty<AuthoredMarker>(), value => value, value => TransformState.Identity);
             public bool NativeEntered => Imported != 0;
             public bool NativeReturned => Imported != 0;
             public OperationResult<IDisposable> Import()
@@ -203,7 +206,7 @@ namespace TopiaForge.ModManager.Tests
         { private readonly Action dispose; internal Owned(Action dispose) { this.dispose = dispose; } public void Dispose() => dispose(); }
         private sealed class NoNetwork : IMapTransport
         { public Task<MapResponse> FetchAsync(Uri uri, MapCacheRecord? cached, CancellationToken token) => throw new InvalidOperationException("Packaged maps must not fetch."); }
-        private sealed class Transitions : IInternalSceneTransitionService
+        internal sealed class Transitions : IInternalSceneTransitionService
         {
             public bool IsBusy => false;
             public OperationResult<IInternalSceneTransitionLease> Acquire(string name, bool automatic, string reason) => throw new NotSupportedException();

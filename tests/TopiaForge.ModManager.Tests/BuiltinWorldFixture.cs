@@ -8,7 +8,8 @@ using TopiaForge.Mods.Testing;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IInternalSceneTransitionContext, IDisposable
+    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IInternalSceneTransitionContext,
+        IInternalWorldSessionContext, IInternalSessionContentContext, IDisposable
     {
         internal readonly FakeModContext Fake = new FakeModContext();
         internal readonly NativeFixture Native = new NativeFixture();
@@ -21,6 +22,9 @@ namespace TopiaForge.ModManager.Tests
         public IModContext Context => this;
         public IInternalWorldRuntimeService WorldRuntime => Native;
         public IInternalSceneTransitionService SceneTransitions { get; set; } = null!;
+        public IWorldSessionService Sessions => throw new NotSupportedException();
+        public IInternalWorldSessionOperations ContentOperations { get; set; } = null!;
+        public WorldReadiness World => new WorldReadiness(Native.Scene, TransformState.Identity);
         public ModIdentity Identity => Fake.Identity;
         public IRuntimeInfo Runtime => Fake.Runtime;
         internal IModLifetime? LifetimeOverride;

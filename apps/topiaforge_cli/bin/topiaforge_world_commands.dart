@@ -7,6 +7,7 @@ extension _WorldCommands on _TopiaForgeCli {
   Future<int> _world(List<String> args) async {
     return switch (args.firstOrNull) {
       'add' => _worldAddMap(args.skip(1).toList()),
+      'survey' => _worldSurvey(args.skip(1).toList()),
       'link' => _worldLink(args.skip(1).toList()),
       'build' => _worldBuild(args.skip(1).toList()),
       'play' => _worldPlay(args.skip(1).toList()),

@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:topiaforge/src/map_world_authoring.dart';
+import 'package:topiaforge/src/map_world_survey.dart';
+import 'package:topiaforge/src/map_gamemode_template.dart';
 import 'package:topiaforge/src/cli_launch_options.dart';
 import 'package:topiaforge/src/cli_launch_workflow.dart';
 import 'package:topiaforge/src/cli_host_options.dart';
@@ -61,6 +63,7 @@ part 'topiaforge_ui_bundle_commands.dart';
 part 'topiaforge_unity_commands.dart';
 part 'topiaforge_world_commands.dart';
 part 'topiaforge_map_commands.dart';
+part 'topiaforge_map_survey_commands.dart';
 
 Future<void> main(List<String> args) async {
   try {

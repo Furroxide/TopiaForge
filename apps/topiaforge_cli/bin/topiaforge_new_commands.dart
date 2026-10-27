@@ -64,6 +64,10 @@ extension _NewCommands on _TopiaForgeCli {
           if (_option(args, flag) case final value?) ...[flag, value],
         if (args.contains('--offline')) '--offline',
       ]);
+      await enableMapGamemodeTemplate(workspace.projectRoot);
+      stdout.writeln(
+        'Map example enabled: survey the world, choose the entity to inspect, and run the generated fake-map test.',
+      );
     }
     stdout.writeln(
       'Next: edit topiaforge.mod.json (or use `topiaforge mod set|add|remove`), then validate with '

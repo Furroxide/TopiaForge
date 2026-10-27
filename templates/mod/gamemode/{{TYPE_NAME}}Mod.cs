@@ -33,10 +33,23 @@ namespace {{ASSEMBLY_NAME}}
         private readonly IDisposable updateSubscription;
         private readonly IDisposable? pauseAction;
         private bool disposed;
+#if TOPIAFORGE_AUTHORED_MAP
+        private readonly IInteractableRegistration mapInteraction;
+#endif
 
         public {{TYPE_NAME}}Controller(IGamemodeSession session)
         {
             this.session = session;
+#if TOPIAFORGE_AUTHORED_MAP
+            var map = session.World.RequireMap();
+            // Replace this surveyed id when choosing a different object; anchors handle republished maps.
+            var target = map.Entity("replace-with-surveyed-id");
+            var registeredInteraction = session.Context.Interactions.Register(target.Entity,
+                new InteractableDefinition("Inspect"), _ => session.Context.Ui.ShowToast("Object inspected.", UiTone.Neutral));
+            if (!registeredInteraction.TryGetValue(out var interaction))
+                throw new InvalidOperationException(registeredInteraction.ErrorMessage);
+            mapInteraction = interaction;
+#endif
             updateSubscription = session.Context.Events.SubscribeUpdate(OnUpdate);
             if (session.Context.TryGetExtension<IWorldPauseMenuService>(out var pause))
             {
@@ -66,6 +79,9 @@ namespace {{ASSEMBLY_NAME}}
             if (disposed) return;
             disposed = true;
             var failures = new List<Exception>();
+#if TOPIAFORGE_AUTHORED_MAP
+            try { mapInteraction.Dispose(); } catch (Exception error) { failures.Add(error); }
+#endif
             try { pauseAction?.Dispose(); } catch (Exception error) { failures.Add(error); }
             try { updateSubscription.Dispose(); } catch (Exception error) { failures.Add(error); }
             if (failures.Count != 0) throw new AggregateException(failures);

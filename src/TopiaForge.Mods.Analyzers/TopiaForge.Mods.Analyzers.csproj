@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <Compile Include="../TopiaForge.ModManager.Core/VersionUtil.cs" Link="VersionUtil.cs" />
+    <Compile Include="../TopiaForge.Mods.Worlds/Internal/MapJson.cs" Link="MapJson.cs" />
     <!-- Roslyn supplies these assemblies at analyzer load time. Keep them compile-only. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0"
                       PrivateAssets="all" />

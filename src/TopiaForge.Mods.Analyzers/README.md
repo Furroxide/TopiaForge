@@ -23,3 +23,10 @@ repeats presses and, in multiplayer, never counts as the player's own action.
 Manifest checks parse the JSON structure: matching text in descriptions, dependency range values,
 or `x-*` metadata never satisfies a dependency or capability. Each diagnostic links to a stable
 remediation page. The package has no runtime component.
+## Authored map diagnostics
+
+TF1012 warns when a gamemode reads authored map content without a map-world launch
+target. TF1013 checks literal entity ids and copied anchors files against matching
+`obj/topiaforge-map-survey*.json` snapshots. Refresh them with `topiaforge world survey`.
+Without a matching survey TF1013 is silent. Its code fix offers surveyed ids instead
+of guessing through duplicate names. See [diagnostics](https://docs.topiaforge.dev/reference/diagnostics/).

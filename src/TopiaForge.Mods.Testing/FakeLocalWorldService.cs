@@ -23,6 +23,38 @@ namespace TopiaForge.Mods.Testing
         public IReadOnlyList<string> ImportedLocalWorlds => imported.AsReadOnly();
         /// <summary>Gets the current asset override snapshot.</summary>
         public IReadOnlyList<WorldAssetOverride> AssetOverrides => overrides.ConvertAll(item => item.Value).AsReadOnly();
+        /// <summary>Gets or sets the factory for a validated fake local map import.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public Func<string, IAuthoredMap>? MapImporter { get; set; }
+        /// <inheritdoc/>
+        [RequiresTopiaForge("0.2.0")]
+        public Task<OperationResult<IAuthoredMap>> ImportMapAsync(string sessionId, string requestedPath, CancellationToken cancellationToken = default)
+        {
+            if (lifetime.IsStopping || cancellationToken.IsCancellationRequested) return Refuse(ModErrorCode.Cancelled, "The import owner is stopping.");
+            if (SessionId == null || sessionId != SessionId) return Refuse(ModErrorCode.InvalidState, "The running session identity is stale.");
+            if (!LocalWorldsAvailable || MapImporter == null) return Refuse(ModErrorCode.Unavailable, "Supply an available fake map importer first.");
+            var file = LocalWorlds.Find(item => item.Path == requestedPath || item.FileName == requestedPath);
+            if (file == null) return Refuse(ModErrorCode.NotFound, "The export was not found.");
+            if (!file.IsLoadable) return Refuse(ModErrorCode.InvalidArgument, file.LoadError);
+            IAuthoredMap? map = null;
+            try
+            {
+                map = MapImporter(requestedPath);
+                if (lifetime.IsStopping || cancellationToken.IsCancellationRequested || SessionId != sessionId)
+                { (map as IDisposable)?.Dispose(); return Refuse(ModErrorCode.Cancelled, "The import session ended."); }
+                if (map == null || !map.IsAlive)
+                { (map as IDisposable)?.Dispose(); return Refuse(ModErrorCode.InvalidState, "The fake importer did not return a live map."); }
+                if (map is IDisposable resource) lifetime.Track(resource);
+                imported.Add(file.Path);
+                return Task.FromResult(OperationResult<IAuthoredMap>.Success(map));
+            }
+            catch (Exception)
+            {
+                try { (map as IDisposable)?.Dispose(); } catch (Exception) { }
+                return Refuse(lifetime.IsStopping ? ModErrorCode.Cancelled : ModErrorCode.External, "The fake map import failed.");
+            }
+            Task<OperationResult<IAuthoredMap>> Refuse(ModErrorCode code, string message) => Task.FromResult(OperationResult<IAuthoredMap>.Failure(code, message));
+        }
         /// <inheritdoc />
         public OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds() =>
             !LocalWorldsAvailable ? OperationResult<IReadOnlyList<LocalWorldFile>>.Failure(ModErrorCode.Unavailable, "Local importer unavailable.")
