@@ -25,9 +25,9 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
     await _runModule(currentHarness(), 'add', 'multiplayer', project);
 
     const multiplayer =
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.1.0-rc.1" />';
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.2.0" />';
     const generators =
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.1.0-rc.1" PrivateAssets="all" />';
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.2.0" PrivateAssets="all" />';
     const pinned =
         '''
 <Project Sdk="Microsoft.NET.Sdk">
@@ -58,7 +58,7 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
     // The run-on match used to delete everything up to Newtonsoft.Json's
     // closing tag, Newtonsoft.Json included.
     const robotKit =
-        '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.1.0-rc.1" />';
+        '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.2.0" />';
     const original =
         '''
 <Project Sdk="Microsoft.NET.Sdk">
@@ -111,10 +111,10 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
     expect(project.readAsStringSync(), '''
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.1.0-rc.1">
+    <PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.2.0">
       <IncludeAssets>compile</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.1.0-rc.1">
+    <PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.2.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>
@@ -146,7 +146,7 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
     $lookalike
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.1.0-rc.1" />
+    <PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.2.0" />
   </ItemGroup>
 </Project>
 ''');
@@ -184,7 +184,7 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
         project.readAsStringSync(),
         '<Project Sdk="Microsoft.NET.Sdk">\n'
         '  <ItemGroup>\n'
-        '    <PackageReference Include="$robotKit" Version="0.1.0-rc.1" />\n'
+        '    <PackageReference Include="$robotKit" Version="0.2.0" />\n'
         '    <PackageReference Update="$robotKit" PrivateAssets="all" />\n'
         '  </ItemGroup>\n'
         '  <ItemGroup>\n'
@@ -220,9 +220,9 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
 
     await _runModule(currentHarness(), 'add', 'multiplayer', project);
 
-    const pinnedMultiplayer = '$multiplayer Version="0.1.0-rc.1" />';
+    const pinnedMultiplayer = '$multiplayer Version="0.2.0" />';
     const pinnedGenerators =
-        '$generators Version="0.1.0-rc.1" PrivateAssets="all">$end';
+        '$generators Version="0.2.0" PrivateAssets="all">$end';
     const pinned =
         '<Project Sdk="Microsoft.NET.Sdk">\n'
         '  <ItemGroup>\n'
@@ -296,7 +296,7 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
       // No item is closed, so add appends one and remove finds only that one.
       const items = {
         'add':
-            '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.1.0-rc.1" />',
+            '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="0.2.0" />',
         'remove': '',
       };
       for (final MapEntry(key: verb, value: item) in items.entries) {

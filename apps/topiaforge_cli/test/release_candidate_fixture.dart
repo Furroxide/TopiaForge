@@ -54,14 +54,18 @@ final class CandidateFixture {
       writeObject(readinessFile, readiness);
       final catalogFile = File(p.join(root.path, 'release/catalog.json'));
       final catalog = readObject(catalogFile);
+      // Freeze this historical RC1 fixture independently of the next target.
+      catalog['releases'] = (catalog['releases'] as List)
+          .where((entry) => (entry as Map)['version'] == version)
+          .toList();
       (catalog['releases'] as List).single['status'] = 'ready';
       writeObject(catalogFile, catalog);
       // Keep fixture intent explicit even when the production policy changes.
       final policyFile = File(p.join(root.path, 'release/release-policy.json'));
-      writeObject(
-        policyFile,
-        readObject(policyFile)..['signingIdentities'] = <String, Object?>{},
-      );
+      final policy = readObject(policyFile);
+      (policy['versioning'] as Map)['productVersion'] = version;
+      policy['signingIdentities'] = <String, Object?>{};
+      writeObject(policyFile, policy);
       mutateContracts?.call(root);
       git(root, ['init', '--quiet']);
       git(root, ['config', 'user.name', 'Synthetic Candidate Test']);

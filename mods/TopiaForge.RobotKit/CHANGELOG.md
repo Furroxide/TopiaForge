@@ -4,6 +4,10 @@
 
 - Robot dialogue capture now holds the runtime microphone lease, yields to native recording, and returns Conflict when preempted without ending the native recording.
 
+## 0.2.0
+
+- Target the TopiaForge 0.2 loader and SDK line.
+
 ## 0.1.0-rc.1
 
 - Added optional dynamic composition of the Prompts global robot directive into structured brain and conversation requests.

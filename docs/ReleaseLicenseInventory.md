@@ -10,9 +10,9 @@ a record of what has been reviewed, not as evidence that the surface is closed.
 
 TopiaForge-owned code and content are licensed under the GNU Affero General
 Public License, version 3 or later (`AGPL-3.0-or-later`), with
-`Copyright (C) 2026 furroxide`. Contributions made after the
-`v0.1.0-rc.1` cutover use Developer Certificate of Origin 1.1 sign-off;
-inbound terms match outbound terms. Existing history is grandfathered.
+`Copyright (C) 2026 furroxide`. Incoming PR commits use Developer
+Certificate of Origin 1.1 sign-off; inbound terms match outbound terms.
+Already-integrated base history is outside the incoming commit range.
 Third-party materials retain their original licenses and are not relicensed by
 the project AGPL grant.
 
@@ -66,7 +66,7 @@ candidate payloads and reviewed acceptance.
 ## Contribution policy
 
 The canonical DCO 1.1 text is checked in as `DCO`; `CONTRIBUTING.md` explains
-the required `Signed-off-by` trailer. The PR policy begins enforcing trailers
-for commits introduced after the immutable `v0.1.0-rc.1` cutover tag. The
-repository web-commit sign-off setting is enabled at that cutover so GitHub
-authored commits can carry the same certification.
+the required `Signed-off-by` trailer. The PR policy checks every incoming
+commit against the verified PR base without requiring a release tag. The
+repository web-commit sign-off setting must be verified so GitHub-authored
+commits can carry the same certification.

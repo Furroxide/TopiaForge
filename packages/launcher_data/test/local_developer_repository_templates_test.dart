@@ -216,7 +216,7 @@ void main() {
           mainProjectText,
           allOf(
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.1.0-rc.1" />',
+              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.2.0" />',
             ),
             contains('<Compile Remove="tests\\**\\*.cs" />'),
           ),
@@ -247,7 +247,7 @@ void main() {
             contains('<TopiaForgeSafeProject>false</TopiaForgeSafeProject>'),
             contains('<PackageReference Include="NUnit" Version="4.3.2" />'),
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Testing" Version="0.1.0-rc.1" />',
+              '<PackageReference Include="TopiaForge.Mods.Testing" Version="0.2.0" />',
             ),
           ),
           reason: template.id,
@@ -409,7 +409,7 @@ void main() {
     expect(
       projectFile,
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.1.0-rc.1" />',
+        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.2.0" />',
       ),
     );
     expect(projectFile, contains('<RestorePackagesWithLockFile>true'));

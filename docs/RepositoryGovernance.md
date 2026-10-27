@@ -55,8 +55,9 @@ matrix jobs are never configured directly as required checks.
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
 development, or unknown scope. License and notice validation is
-release-blocking. DCO enforcement is grandfathered through the immutable
-`v0.1.0-rc.1` cutover and applies to every commit introduced afterward.
+release-blocking. DCO applies to every commit introduced by a PR against
+its verified base. Already-integrated base history is outside that range;
+release tags and product version do not enable or disable enforcement.
 
 CodeQL is an independent ruleset gate at high-or-critical severity. For the
 Windows/Linux-only RC1, default setup covers Actions, C/C++, C#, and
@@ -224,9 +225,9 @@ The desired live settings are:
   an eligible organization plan.
 - Immutable releases are enabled before publication. The repository push limit
   is five refs per push, preventing accidental mirror pushes. Wiki is disabled;
-  Issues remain enabled. GitHub web commit sign-off is enabled immediately
-  after the `v0.1.0-rc.1` cutover so future browser-created commits satisfy the
-  DCO policy.
+  Issues remain enabled. GitHub web commit sign-off must be enabled so
+  browser-created commits satisfy the DCO policy; verify the setting
+  independently of any release tag.
 
 The five-ref push limit and owner-account security posture require manual verification because GitHub does not expose
 all of them through the repository audit API. The sole owner must maintain a passkey or hardware security key, TOTP

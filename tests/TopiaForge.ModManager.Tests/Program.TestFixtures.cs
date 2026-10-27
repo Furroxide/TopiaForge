@@ -114,8 +114,8 @@ namespace TopiaForge.ModManager.Tests
                     EntryAssembly = fixtureAssembly,
                     EntryType = fixtureType,
                     SupportedGameVersionRange = supportedGameVersionRange,
-                    SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
-                    SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0",
+                    SupportedLoaderVersionRange = ">=0.2.0 <0.3.0",
+                    SupportedSdkVersionRange = ">=0.2.0 <0.3.0",
                     Category = category,
                     Dependencies = dependencies == null
                         ? new Dictionary<string, string>()

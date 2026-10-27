@@ -344,6 +344,9 @@ jobs:
       - name: Test executable workflow source trust
         run: python3 .github/scripts/test_workflow_source_trust.py
 
+      - name: Test incoming commit DCO and release source policy
+        run: python3 .github/scripts/test_pr_policy.py
+
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
 

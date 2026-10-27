@@ -1,5 +1,10 @@
 # Admin-orchestrated release
 
+The current development target is [0.2.0](../release/notes/v0.2.0.md), with catalog status
+blocked. RC1 examples and approvals below remain historical; they do not qualify 0.2.0.
+Stable signing, current-version readiness and exact-candidate native evidence remain required.
+
+
 Production archives are built only on maintainer-controlled machines. GitHub
 Actions verifies the exact staged bytes, attests what it verified, creates the
 signed update metadata, and publishes after approval of the protected

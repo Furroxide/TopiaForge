@@ -8,7 +8,7 @@ Machine setup and the resumable command sequence are in
 
 ## 1. Scope, policy, and ownership
 
-- [x] Product version is `0.1.0-rc.1`; components/mods version independently; initial release has no rollback target.
+- [x] Product target is `0.2.0` (catalog blocked); components/mods version independently; initial release has no rollback target.
 - [ ] Freeze the tracked twelve-gate register at the candidate SHA. Run
       `release validate-prerequisites --version <version> --target-sha <sha>`:
       `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01` require real
@@ -24,7 +24,7 @@ Machine setup and the resumable command sequence are in
       tracked register. Reviewer references and evidence hashes do not prove
       reviewer identity: the protected approver must verify actual records and
       authorization. Never infer approval from a test pass.
-- [x] Unsigned Windows RC1 is authorized and recorded in policy. The construction repairs have passing
+- [ ] Review stable 0.2.0 signing policy. The unsigned Windows RC1 decision remains historical and cannot authorize a stable release. The construction repairs have passing
       synthetic regressions; see [Status](internal/gamemode-contract/Status.md) for revision-specific evidence.
       The exact candidate build and isolated acceptance remain required.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
@@ -44,8 +44,9 @@ Machine setup and the resumable command sequence are in
       `Copyright (C) 2026 furroxide`; third-party terms remain unchanged and
       the redistribution inventory in
       [`ReleaseLicenseInventory.md`](ReleaseLicenseInventory.md) is reconciled.
-- [x] DCO 1.1 is checked in and post-cutover commits require valid
-      `Signed-off-by` trailers; pre-`v0.1.0-rc.1` history is grandfathered.
+- [x] DCO 1.1 is checked in. Every incoming PR commit requires a valid
+      `Signed-off-by` trailer; already-integrated base history is excluded.
+      Enforcement is independent of release tags and product version.
 - [ ] Owner/legal approves Robotopia/brand/art/font/compatibility/injection rights and all third-party dispositions.
 - [ ] Privacy/backend/security owners approve remote data flows, retention, consent, cost, abuse, and incident policy.
 - [ ] Security/product owners approve first-party package trust, origin, revocation, and installed-user recovery.
@@ -55,7 +56,7 @@ Machine setup and the resumable command sequence are in
 ## 2. Candidate and toolchains
 
 - [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
-- [ ] Create a protected, annotated `v0.1.0-rc.1` tag on that SHA through the approved administrator process.
+- [ ] Create a protected, annotated `v0.2.0` tag on that SHA after all stable-release gates pass through the approved administrator process.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
 - [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, and Node `24.18.0` in each
       applicable production environment, plus Unity `6000.0.23f1` on the

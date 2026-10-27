@@ -136,7 +136,7 @@ void main() {
   );
 
   test('raising the floor allows pack and checking its archive', () async {
-    writeManifest('>=0.1.0-rc.1 <0.2.0');
+    writeManifest('>=0.2.0 <0.3.0');
     final output = p.join(temp.path, 'output');
     expect(
       await cli.runCli([

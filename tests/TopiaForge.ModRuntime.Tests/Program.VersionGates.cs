@@ -9,11 +9,11 @@ namespace TopiaForge.ModRuntime.Tests
         private static void TestLoaderVersionRefusalBeforeCode(string root)
         {
             var fixture = NewFixture(root, "newer-sdk", "TopiaForge.ValidTestMod.RuntimeSuccessMod");
-            fixture.Manifest.SupportedLoaderVersionRange = ">=0.2.0 <0.3.0";
-            const string reason = "This mod needs TopiaForge 0.2.0 or newer; update TopiaForge.";
+            fixture.Manifest.SupportedLoaderVersionRange = ">=0.3.0 <0.4.0";
+            const string reason = "This mod needs TopiaForge 0.3.0 or newer; update TopiaForge.";
             Assert(ManifestValidator.Validate(fixture.Manifest).Contains(reason), "discovery refuses the loader floor");
             // The TF1010 fix raises both floors; the player is told once what to do.
-            fixture.Manifest.SupportedSdkVersionRange = ">=0.2.0 <0.3.0";
+            fixture.Manifest.SupportedSdkVersionRange = ">=0.3.0 <0.4.0";
             var errors = ManifestValidator.Validate(fixture.Manifest);
             Assert(errors.Count(error => error == reason) == 1 && errors.All(error => !error.Contains("SDK", StringComparison.Ordinal)),
                 "both raised floors give one update message: " + string.Join(" | ", errors));
@@ -32,8 +32,8 @@ namespace TopiaForge.ModRuntime.Tests
                 Assert(mixed.Length == 1 && mixed[0] == expected,
                     "different floors give one update to the stricter requirement: " + string.Join(" | ", mixed));
             }
-            fixture.Manifest.SupportedLoaderVersionRange = ">=0.2.0 <0.3.0";
-            fixture.Manifest.SupportedSdkVersionRange = ">=0.2.0 <0.3.0";
+            fixture.Manifest.SupportedLoaderVersionRange = ">=0.3.0 <0.4.0";
+            fixture.Manifest.SupportedSdkVersionRange = ">=0.3.0 <0.4.0";
             using var runtime = fixture.CreateRuntime();
             runtime.Load(new[] { fixture.Package });
             Assert(!runtime.IsLoaded(fixture.Manifest.Id) && runtime.GetLoadFailure(fixture.Manifest.Id) == reason,

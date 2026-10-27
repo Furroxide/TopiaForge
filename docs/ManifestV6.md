@@ -31,8 +31,8 @@ for existing V3/V4/V5 source projects; no retired reader can activate a package.
   "entryAssembly": "ExampleFirstMod.dll",
   "entryType": "Example.FirstMod.FirstMod",
   "supportedGameVersionRange": "0.0.2545",
-  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
-  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "license": "AGPL-3.0-or-later"
 }
 ```
