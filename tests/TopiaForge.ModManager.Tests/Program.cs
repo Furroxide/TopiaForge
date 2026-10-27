@@ -30,6 +30,11 @@ namespace TopiaForge.ModManager.Tests
             { PublishedMapDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult(); return 0; }
             if (args.Length == 1 && args[0] == "--gamecompat")
             { GameCompatTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--presentation")
+            {
+                try { MultiplayerPresentationTests.Run(); PresentationRuntimeTests.Run(); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+            }
             if (args.Length == 1 && args[0] == "--blockers")
             {
                 try { BlockerTests.Run(); return 0; }
@@ -503,6 +508,7 @@ namespace TopiaForge.ModManager.Tests
                 PresenceSuite.Run();
                 PlayersApiTests.Run();
                 PlayersNetworkTests.Run();
+                PresentationRuntimeTests.Run();
                 PlayersRemoteContractTests.Run();
                 RunMultiplayerSessions(root);
                 ModuleContractSurfaceTests.Run();

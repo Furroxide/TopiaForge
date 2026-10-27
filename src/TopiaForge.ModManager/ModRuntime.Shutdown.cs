@@ -171,6 +171,7 @@ namespace TopiaForge.ModManager
             runtimeInfo.SetCapabilityRefresher(null);
             coreGameplayServices.FixedUpdate -= DispatchFixedUpdate;
             coreGameplayServices.LateUpdate -= DispatchLateUpdate;
+            Attempt(presentationLifetime.Dispose, failures, "Shared presentation cleanup failed.");
             Attempt(coreGameplayServices.Dispose, failures, "Gameplay host cleanup failed.");
             AppDomain.CurrentDomain.AssemblyResolve -= ResolveAssembly;
             Attempt(() => nativeHost?.DetachRuntime(runtimeOwnershipId), failures, "Native runtime attachment could not be released.");

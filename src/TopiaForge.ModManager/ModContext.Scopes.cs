@@ -103,7 +103,7 @@ namespace TopiaForge.ModManager
             Items = new NetItemService(gameplay.Items, replication);
             Assets = new NetAssetService(gameplay.Assets, replication);
             if (Assets is IParentAssetScope assetScope) assetScope.AttachParent(parent.Assets);
-            Audio = gameplay.Audio;
+            Audio = new NetAudioService(gameplay.Audio, replication);
             Ui = new NetUiService(gameplay.Ui, replication);
             replication.Ui = gameplay.Ui;
             playerContext = replicationServices.Players?.Bind(

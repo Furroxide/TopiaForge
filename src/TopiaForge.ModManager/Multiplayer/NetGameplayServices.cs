@@ -105,9 +105,7 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>
-    /// The network seam's UI service. It changes no behaviour yet: every member forwards to the service the gameplay host
-    /// made and returns exactly what that returns. Presentation routing (WS3.12) mirrors a host gamemode server's HUD and
-    /// broadcasts its toasts here.
+    /// Routes an exact consuming context's presentation. Targeted player UI uses its separate authenticated path.
     /// </summary>
     internal sealed class NetUiService : IUiService
     {
@@ -130,10 +128,28 @@ namespace TopiaForge.ModManager
         public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences) =>
             inner.ApplyAccessibility(preferences);
 
-        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => inner.CreateSurface(request);
+        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)
+        {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            UnityMainThreadGuard.AssertCurrent();
+            var presentation = Replication.Services.Players?.Presentation;
+            var profile = Replication.Profile;
+            // Retain an eligible solo HUD too, so opening the existing game to players needs no author rebuild.
+            var eligible = Core.Multiplayer.PresentationRoutingPolicy.Route(Core.Multiplayer.NetRealm.ListenHost, profile,
+                Core.Multiplayer.PresentationKind.HudSurface) == Core.Multiplayer.PresentationRoute.MirrorToEveryone;
+            return request.Kind == UiSurfaceKind.Hud && presentation != null && eligible
+                ? presentation.CreateHud(Replication, inner, request) : inner.CreateSurface(request);
+        }
 
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => inner.ShowModal(request, completed);
 
-        public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral) => inner.ShowToast(message, tone);
+        public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            var presentation = Replication.Services.Players?.Presentation;
+            return presentation != null && Core.Multiplayer.PresentationRoutingPolicy.Route(Replication.Services.Runtime.Realm,
+                Replication.Profile, Core.Multiplayer.PresentationKind.Toast) == Core.Multiplayer.PresentationRoute.BroadcastToEveryone
+                ? presentation.Toast(Replication, inner, message, tone) : inner.ShowToast(message, tone);
+        }
     }
 }

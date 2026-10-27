@@ -367,6 +367,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/NetAssetService.cs" Link="Runtime/Multiplayer/NetAssetService.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/NetPhysicsService.cs" Link="Runtime/Multiplayer/NetPhysicsService.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/NetGameplayServices.cs" Link="Runtime/Multiplayer/NetGameplayServices.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Presentation/*.cs" Link="Runtime/Multiplayer/Presentation/%(Filename)%(Extension)" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRuntimeHost.cs" Link="Runtime/Multiplayer/MultiplayerRuntimeHost.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentInventory.cs" Link="Runtime/Multiplayer/MultiplayerContentInventory.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentAdmission.cs" Link="Runtime/Multiplayer/MultiplayerContentAdmission.cs" />

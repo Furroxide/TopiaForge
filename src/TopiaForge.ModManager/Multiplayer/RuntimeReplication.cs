@@ -37,6 +37,7 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets the process's replication services the seam is bound to.</summary>
         internal MultiplayerReplication Services => services;
+        internal IModLifetime Lifetime => lifetime;
 
         public InternalNetRealm Realm => (InternalNetRealm)(int)services.Runtime.Realm;
 

@@ -70,6 +70,23 @@ If the game or another mod destroys a surface's canvas anyway, the surface says 
 visible again, a visible one raises `Dismissed`, its id is free for a new surface, and the mod's log
 names it. Create the surface again to show it. A modal on such a canvas completes as cancelled.
 
+### Shared gamemode presentation
+
+In a multiplayer session, a gamemode server's `UiSurfaceKind.Hud` surfaces are mirrored read-only to guests, with
+changes combined to at most ten updates per second. Its toasts and framework audio cues are broadcast with rate
+limits and duplicate suppression. Existing HUDs that fit the shared limits appear automatically when a solo game
+opens to players. Windows, tools and modals remain on the host; use `IPlayer.Ui` for a particular player's window or
+confirmation. Participant and ordinary process UI stays local.
+
+Shared HUDs allow 32 surfaces and 28 KiB of encoded content in total, with text fields up to 4,096 characters and
+dimensions from 80 by 80 to 1,920 by 1,440 scaled units. Oversized solo HUDs continue locally when hosting begins.
+Online calls that exceed the shared limits fail without replacing the previous content. Guests receive the latest
+HUD and active audio loops on join or reconnect; old toasts and one-shot cues are not replayed. Scope disposal removes
+its HUDs and stops its loops. Guest text is displayed literally, and shared HUDs cannot capture input or run callbacks.
+
+See [presentation routing](internal/MultiplayerRuntimeIntegration.md#scoreboard-seam-and-later-presentation) for
+the budgets and transport behavior.
+
 ### Where HUDs dock
 
 In every level Robotopia draws its microphone label at the top left, a development build's version at
