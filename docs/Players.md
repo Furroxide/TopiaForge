@@ -1,6 +1,6 @@
 ---
 title: Act on players
-description: Use the same player handles for solo and multiplayer gameplay, targeted UI, input and scores.
+description: Use the same player handles for solo and multiplayer gameplay in Robotopia, targeted UI, input and scores.
 ---
 
 # Act on players
