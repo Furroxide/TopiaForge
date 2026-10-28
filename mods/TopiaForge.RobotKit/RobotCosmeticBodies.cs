@@ -141,11 +141,11 @@ namespace TopiaForge.RobotKit
         }
 
         // Nothing native moves, thinks, collides or listens: the avatar moves the body, and its capsule is what others hit.
-        private static void Quieten(GameObject clone)
+        internal static void Quieten(GameObject clone, bool cosmetic = true)
         {
             foreach (var behaviour in clone.GetComponentsInChildren<Behaviour>(true))
             {
-                if (behaviour != null && GameReflection.IsNamed(behaviour, "LocomotionController", "NavMeshAgent", "BehaviorTree"))
+                if (behaviour != null && GameReflection.IsNamed(behaviour, "LocomotionController", "NavMeshAgent", "BehaviorTree", "Speakable", "AgentHead"))
                 {
                     behaviour.enabled = false;
                 }
@@ -154,9 +154,10 @@ namespace TopiaForge.RobotKit
             foreach (var body in clone.GetComponentsInChildren<Rigidbody>(true))
             {
                 body.isKinematic = true;
-                body.detectCollisions = false;
+                body.detectCollisions = !cosmetic;
             }
 
+            if (!cosmetic) return;
             foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
             {
                 collider.enabled = false;

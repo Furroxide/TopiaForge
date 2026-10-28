@@ -184,6 +184,7 @@ namespace TopiaForge.ModManager
                     counters.AuthorityRequestsSent++;
                 }
             }
+            PumpEntityCommands(now);
         }
 
         /// <summary>This player's world went: changes that wait are dropped with it, and the budgets start again.</summary>
@@ -192,6 +193,7 @@ namespace TopiaForge.ModManager
             transforms.Clear();
             transformOrder.Clear();
             destroyQueue.Clear();
+            entityCommands.Clear();
             transformPace = null;
             destroyPace = null;
         }

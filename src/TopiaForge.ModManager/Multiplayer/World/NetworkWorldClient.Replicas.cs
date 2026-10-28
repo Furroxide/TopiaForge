@@ -74,7 +74,7 @@ namespace TopiaForge.ModManager
                 if (known.Source != update.Source || known.DescriptionHash != hash)
                 {
                     // This player's own instance keeps standing for the entity while it is the same kind of thing (WS3.7).
-                    if (KeepsLocalBinding(known, update))
+                    if (TryUpdateProvider(known, update) || KeepsLocalBinding(known, update))
                     {
                         Describe(known, update, hash);
                         return;

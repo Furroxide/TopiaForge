@@ -14,7 +14,7 @@ namespace TopiaForge.RobotKit
     // or withdraw it at any time. Off by default, and every consumer must stay fully playable on the unavailable
     // result. See the warning on RoboApiClient and the P0-PRIV-01 gate.
     internal sealed class RobotBrainQueryService : IRobotBrainQueryService,
-        IOwnerBoundExtensionFactory, IDisposable
+        IOwnerContextBoundExtensionFactory, IDisposable
     {
         private const float HardTimeoutSeconds = 3f;
         private const int MaxConcurrent = 4;
@@ -100,17 +100,15 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
-            Type contractType,
-            string ownerModId,
-            IModLifetime lifetime)
+        object IOwnerContextBoundExtensionFactory.CreateOwnerFacade(Type contractType, IModContext context)
         {
             if (contractType != typeof(IRobotBrainQueryService))
             {
                 throw new ArgumentException("Unsupported RobotKit brain extension contract.", nameof(contractType));
             }
 
-            return new OwnerFacade(this, lifetime);
+            return new OwnerRobotBrainQueries(this, context.Lifetime,
+                () => (context as IInternalReplicationContext)?.Replication.Realm != InternalNetRealm.Client);
         }
 
         // Kept as a no-op pump so the provider's unified tick remains stable; query completion is Task-native now.
@@ -179,30 +177,5 @@ namespace TopiaForge.RobotKit
             return effectiveRequest;
         }
 
-        private sealed class OwnerFacade : IRobotBrainQueryService
-        {
-            private readonly RobotBrainQueryService service;
-            private readonly IModLifetime lifetime;
-
-            public OwnerFacade(RobotBrainQueryService service, IModLifetime lifetime)
-            {
-                this.service = service;
-                this.lifetime = lifetime;
-            }
-
-            public bool IsAvailable => !lifetime.IsStopping && service.IsAvailable;
-
-            public async Task<OperationResult<BrainQueryResult>> QueryAsync(
-                BrainQueryRequest request,
-                CancellationToken cancellationToken = default)
-            {
-                using (var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                    cancellationToken,
-                    lifetime.StoppingToken))
-                {
-                    return await service.QueryAsync(request, linked.Token);
-                }
-            }
-        }
     }
 }

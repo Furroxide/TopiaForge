@@ -154,9 +154,11 @@ namespace TopiaForge.ModManager.TestDoubles
             return all;
         }
 
-        private static FakeWorldObject? ObjectOf(IEntity entity) =>
+        internal Func<IEntity, FakeWorldObject?>? ProviderObject { get; set; }
+
+        private FakeWorldObject? ObjectOf(IEntity entity) =>
             entity is FakeWorldEntity fake ? fake.Object : entity is FakeSpawnedEntity spawned ? spawned.Object :
-            entity is FakeWorldBlocker blocker ? blocker.Object : null;
+            entity is FakeWorldBlocker blocker ? blocker.Object : ProviderObject?.Invoke(entity);
 
         internal List<FakeWorldBlocker> Blockers { get; } = new List<FakeWorldBlocker>();
         public OperationResult<IBlocker> CreateBlocker(BlockerRequest request)

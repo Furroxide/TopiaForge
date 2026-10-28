@@ -211,7 +211,8 @@ namespace TopiaForge.ModManager
 
         /// <summary>The spawn handler this context's mod registered for <paramref name="kind"/>, or null; another mod's never serves.</summary>
         private IInternalSpawnHandler? HandlerFor(string kind) =>
-            services.TryGetSpawnHandler(kind, out var handler, out var owner) && string.Equals(owner, OwnerModId, StringComparison.OrdinalIgnoreCase)
+            services.TryGetSpawnHandler(kind, out var handler, out var owner) &&
+            (string.Equals(owner, OwnerModId, StringComparison.OrdinalIgnoreCase) || handler is IInternalSharedSpawnHandler)
                 ? handler
                 : null;
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.RobotKit
 {
@@ -12,12 +13,14 @@ namespace TopiaForge.RobotKit
         {
             private readonly RobotAgentService service;
             private readonly IModLifetime lifetime;
+            private readonly IRuntimeReplication? replication;
             private readonly List<IRobotAgent> ownedAgents = new List<IRobotAgent>();
 
-            public OwnerFacade(RobotAgentService service, IModLifetime lifetime)
+            public OwnerFacade(RobotAgentService service, IModContext context)
             {
                 this.service = service;
-                this.lifetime = lifetime;
+                lifetime = context.Lifetime;
+                replication = (context as IInternalReplicationContext)?.Replication;
             }
 
             public bool IsAvailable => !lifetime.IsStopping && service.IsAvailable;
@@ -50,7 +53,7 @@ namespace TopiaForge.RobotKit
 
                 foreach (var owned in ownedAgents)
                 {
-                    if (ReferenceEquals(owned, resolved)
+                    if (string.Equals(owned.Id, resolved.Id, StringComparison.Ordinal)
                         || owned is OwnerRobotAgent wrapper && wrapper.Wraps(resolved))
                     {
                         agent = owned;
@@ -82,7 +85,8 @@ namespace TopiaForge.RobotKit
                         "The mod is stopping and cannot spawn robots.");
                 }
 
-                var result = service.Spawn(request);
+                var result = replication != null && service.Replication != null
+                    ? service.Replication.Spawn(replication, request) : service.Spawn(request);
                 if (!result.TryGetValue(out var agent))
                 {
                     return result;
@@ -114,7 +118,7 @@ namespace TopiaForge.RobotKit
                 }
             }
 
-            private sealed class OwnerRobotAgent : IRobotAgent
+            private sealed class OwnerRobotAgent : IRobotAgent, IInternalNativeObjectEntity
             {
                 private readonly IRobotAgent agent;
                 private IDisposable? lifetimeLease;
@@ -126,6 +130,7 @@ namespace TopiaForge.RobotKit
                 }
 
                 public string Id => agent.Id;
+                public object? NativeObject => (agent as IInternalNativeObjectEntity)?.NativeObject;
                 public string Name => agent.Name;
                 public bool IsAlive => lifetimeLease != null && agent.IsAlive;
                 public Vec3 Position => agent.Position;
@@ -161,7 +166,7 @@ namespace TopiaForge.RobotKit
                 public OperationResult<bool> Despawn()
                 {
                     var result = agent.Despawn();
-                    Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                    if (result.Succeeded) Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
                     return result;
                 }
 

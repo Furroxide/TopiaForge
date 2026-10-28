@@ -1,0 +1,22 @@
+using System;
+
+namespace TopiaForge.Mods.Internal
+{
+    // Opt-in for trusted providers whose factory serves consuming mods' exact contexts.
+    internal interface IInternalSharedSpawnHandler : IInternalSpawnHandler { }
+
+    internal interface IInternalEntityCommands
+    {
+        OperationResult<bool> SubmitEntityCommand(IEntity target, string kind, byte[] payload);
+    }
+
+    // A provider owns the payload schema. The runtime authenticates the target and consuming mod,
+    // applies per-participant budgets, and preserves the original record's lifetime and ownership.
+    internal interface IInternalReplicaCommands : IInternalReplicaFactory
+    {
+        OperationResult<bool> Execute(IEntity target, ReadOnlyMemory<byte> payload,
+            Func<InternalNetRef, IEntity?> resolve);
+        InternalSpawnDescriptor Describe(IEntity target);
+        OperationResult<bool> ApplyReplica(IEntity target, InternalSpawnDescriptor descriptor);
+    }
+}

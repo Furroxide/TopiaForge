@@ -206,13 +206,13 @@ namespace TopiaForge.ModManager
         private static bool TryReadProvisional(WorldWireReader reader, out uint provisional) =>
             reader.TryReadUInt32(SpawnAuthorityRules.MaximumProvisionalId, out provisional) && provisional != 0;
 
-        private static void WriteTarget(WorldWireWriter writer, AuthorityTarget target)
+        internal static void WriteTarget(WorldWireWriter writer, AuthorityTarget target)
         {
             writer.WriteByte(target.IsProvisional ? AuthorityMessages.TargetProvisional : AuthorityMessages.TargetEntity);
             writer.WriteVarUInt(target.Value);
         }
 
-        private static bool TryReadTarget(WorldWireReader reader, out AuthorityTarget target)
+        internal static bool TryReadTarget(WorldWireReader reader, out AuthorityTarget target)
         {
             target = default;
             if (!reader.TryReadByte(out var kind) || kind > AuthorityMessages.TargetProvisional) return false;

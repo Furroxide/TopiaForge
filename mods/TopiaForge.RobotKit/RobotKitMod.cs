@@ -7,7 +7,7 @@ namespace TopiaForge.RobotKit
     // that come up native (body, animation, native locomotion) and are driven by the game's own pathing — then
     // override only the behaviour and visuals they need, without re-deriving the GameCode reflection themselves.
     // Mirrors the TopiaForge.Worlds lifecycle discipline.
-    public sealed class RobotKitMod : TopiaForgeMod
+    public sealed partial class RobotKitMod : TopiaForgeMod
     {
         private IModLogger? logger;
         private RobotAgentService? service;
@@ -28,6 +28,7 @@ namespace TopiaForge.RobotKit
 
             service = new RobotAgentService(logger);
             Context.Lifetime.Track(service);
+            OfferRobotReplication(service);
             brainService = new RobotBrainQueryService(logger, ResolvePromptRegistry);
             Context.Lifetime.Track(brainService);
             // The objective service resolves Reprogram courier recipients back to agent handles via the agent

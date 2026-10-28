@@ -56,6 +56,7 @@ namespace TopiaForge.ModManager
             channel.Register(AuthorityMessages.SpawnRequest, this);
             channel.Register(AuthorityMessages.TransformRequest, this);
             channel.Register(AuthorityMessages.DestroyRequest, this);
+            channel.Register(EntityCommandWire.Request, this);
         }
 
         /// <summary>
@@ -124,6 +125,7 @@ namespace TopiaForge.ModManager
             if (!IsActive || channel.GetGeneration(sender) == 0) return false;
             switch (type)
             {
+                case EntityCommandWire.Request: return EntityCommand(sender, reader);
                 case AuthorityMessages.SpawnRequest:
                     counters.SpawnRequests++;
                     if (!AuthorityWire.TryReadSpawnRequest(reader, request)) return Malformed();
@@ -233,7 +235,8 @@ namespace TopiaForge.ModManager
             // The runtime's own kinds are made by the runtime alone; a provider's, by the handler of the mod that owns it.
             if (MultiplayerSpawnKinds.IsReserved(asked.Kind)) return SpawnRefusal.NotPermitted;
             if (!replication.TryGetSpawnHandler(asked.Kind, out var found, out var owner) ||
-                !string.Equals(owner, asked.ModId, StringComparison.OrdinalIgnoreCase))
+                (!string.Equals(owner, asked.ModId, StringComparison.OrdinalIgnoreCase) &&
+                 !(found is IInternalSharedSpawnHandler && owner != null && IsShared(owner))))
             {
                 return SpawnRefusal.NotShared;
             }

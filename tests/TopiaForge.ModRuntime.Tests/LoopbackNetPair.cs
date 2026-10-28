@@ -206,6 +206,7 @@ namespace TopiaForge.ModManager.TestDoubles
         internal InternalSessionRole NextRole { get; set; }
 
         internal ulong Generation => generation;
+        internal MultiplayerPlayerKey PlayerKey { get; set; }
 
         internal IEnumerable<LoopbackChannel> Channels => channels.Values;
 
@@ -260,12 +261,12 @@ namespace TopiaForge.ModManager.TestDoubles
                 if (online)
                 {
                     var host = network.Host;
-                    participants.Add(new MultiplayerParticipant(host.Id, host.Name, ReferenceEquals(host, this), true, true, MultiplayerConnectionQuality.Unknown, null, default));
+                    participants.Add(new MultiplayerParticipant(host.Id, host.Name, ReferenceEquals(host, this), true, true, MultiplayerConnectionQuality.Unknown, null, host.PlayerKey));
                     listedSelf = ReferenceEquals(host, this);
                     foreach (var member in network.Members)
                     {
                         participants.Add(new MultiplayerParticipant(member.Id, member.Name, ReferenceEquals(member, this), network.IsConnected(member), false,
-                            MultiplayerConnectionQuality.Unknown, null, default));
+                            MultiplayerConnectionQuality.Unknown, null, member.PlayerKey));
                         listedSelf |= ReferenceEquals(member, this);
                     }
                 }

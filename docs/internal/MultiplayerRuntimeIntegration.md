@@ -1405,12 +1405,11 @@ world events, and every other runtime callback.
 - **Motion leases.** WS3.7 opens `EnterMotionLease(mod)` around the code that drives a lease the local player holds,
   such as GravityGun's FixedUpdate, which moves the body the player holds.
 - **Providers that act for another mod.** A provider's own seam answers for the provider's mod, so it sees none of a
-  consumer's intent. CreatorContent's and RobotKit's facades are bound by owner id alone (`IOwnerBoundExtensionFactory`),
-  and their spawns run in another mod's code: RobotKit's own for a robot, and the content source's factory for creator
-  content. Binding those facades to the consumer's context (`IOwnerContextBoundExtensionFactory`, as Worlds already
-  is) lets them ask the consumer's seam (`IInternalReplicationContext.Replication.CurrentIntent`), but that answer still
-  has to reach the seam that routes the spawn. WS3.7 decides how: re-attributing the consumer's current intent to the
-  mod whose code spawns, for the call's duration, as a command does, or handing the route down with the request.
+  consumer's intent. RobotKit binds its facade to the exact consuming context through
+  `IOwnerContextBoundExtensionFactory` and hands that context's seam to its spawn and command adapter. Its factory
+  remains process-owned, while each robot's ownership, quota and lifetime belong to its consumer. See
+  [RobotKit replication](RobotKitReplication.md) for the internal command contract. CreatorContent's owner-id-only
+  facade still needs equivalent consuming-context integration; it must not borrow the provider's intent.
 - **Input-active frames are coarse.** A mod's whole Update and LateUpdate carry `InputActiveFrame` while its own input
   is active, scripted work included. On a joined player, a scripted spawn made there reads as the player's, although the
   host's own run of the same script makes it too. `CurrentIntent.IsDirectAction` is false for it and for what it starts,
