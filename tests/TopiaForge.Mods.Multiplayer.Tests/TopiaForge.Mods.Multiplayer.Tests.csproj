@@ -48,6 +48,7 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerMicrophoneArbiter.cs" Link="Runtime\MultiplayerMicrophoneArbiter.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\RuntimeReplication.cs" Link="Runtime\RuntimeReplication.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\RuntimeReplication.Authority.cs" Link="Runtime\RuntimeReplication.Authority.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\RuntimeReplication.EntityCommands.cs" Link="Runtime\RuntimeReplication.EntityCommands.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\UnityMainThreadGuard.cs" Link="Runtime\UnityMainThreadGuard.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\World\*.cs" Link="Runtime\World\%(Filename)%(Extension)" />
     <Compile Include="..\TopiaForge.ModRuntime.Tests\FakeWorldScene.cs" Link="World\FakeWorldScene.cs" />

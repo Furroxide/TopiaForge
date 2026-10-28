@@ -119,6 +119,7 @@ internal static class Program
                 VoiceReadinessFocusedTests.Run();
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--entity-command-harness") { EntityCommandHarnessTests.Run(); return 0; }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {
@@ -131,6 +132,7 @@ internal static class Program
             VoiceRetirementTests.Service();
             VoiceRetirementTests.Engine();
             PerPlayerStateTests.Run();
+            EntityCommandHarnessTests.Run();
             HostPackageTests.Run();
             CommunicationRoutingTests.Run();
             CommunicationChatTests.Run();
