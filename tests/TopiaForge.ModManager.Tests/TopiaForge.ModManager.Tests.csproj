@@ -35,7 +35,7 @@
   <!-- The plugin is a MonoBehaviour the harness cannot run, so its wiring is checked in its source, read as C# syntax
        so that no change of layout can fool a check (PluginSourceSyntax). -->
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
