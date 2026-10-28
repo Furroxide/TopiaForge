@@ -13,6 +13,7 @@ internal static partial class PerPlayerStateTests
 
     internal static void Run()
     {
+        CommitRegressions();
         GeneratedPrivateStateAndTransactions();
         RawLinksContainOnlyTheirOwnValues();
         ReconnectReplacementAndDisposal();
@@ -27,7 +28,7 @@ internal static partial class PerPlayerStateTests
         SystemChannelTests.SystemMessagesTravelBothWaysInOrder();
         SystemStreamTests.StreamsRestartWhenAPlayerRejoins();
         SessionTimeChannelTests.OnlyTheHostSendsTheSessionsTime();
-        Console.WriteLine("Per-player delivery: 14 focused regression groups passed.");
+        Console.WriteLine("Per-player delivery: 17 focused regression groups passed.");
     }
 
     private static void GeneratedPrivateStateAndTransactions()

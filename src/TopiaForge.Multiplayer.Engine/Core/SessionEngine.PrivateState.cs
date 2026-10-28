@@ -10,6 +10,9 @@ namespace TopiaForge.Multiplayer.Engine
         internal const int MaximumPrivateValueBytes = 16 * 1024;
         private readonly Dictionary<WireKey, PerPlayerRecord> privateStates = new Dictionary<WireKey, PerPlayerRecord>();
         private readonly Dictionary<WireKey, StagedState> privateReceived = new Dictionary<WireKey, StagedState>();
+        // The receive inventory may be ahead of the last Commit. Only privateReceived is adoptable.
+        private readonly Dictionary<WireKey, StagedState> privateStaged = new Dictionary<WireKey, StagedState>();
+        private bool privateChangesPending;
         private bool privateBaseline;
 
         internal OperationResult<IPerPlayerState<T>> RegisterPrivateState<T>(string owner, ReplicatedStateDefinition<T> definition) where T : class
@@ -36,6 +39,8 @@ namespace TopiaForge.Multiplayer.Engine
                 if (!slot.CanDecode(received.Bytes))
                     return OperationResult<IPerPlayerState<T>>.Failure(ModErrorCode.InvalidArgument, "The private value does not match its codec.");
                 slot.ResetTo(received.Bytes, received.Version);
+                slot.NotifiedBytes = slot.CurrentBytes;
+                slot.NotifiedVersion = slot.CurrentVersion;
             }
 
             privateStates.Add(key, record);
@@ -58,12 +63,41 @@ namespace TopiaForge.Multiplayer.Engine
         private void ResetPrivateState()
         {
             privateReceived.Clear();
+            privateStaged.Clear();
+            privateChangesPending = false;
             privateBaseline = false;
             foreach (var record in privateStates.Values)
             {
                 record.Reset();
                 record.Values.Clear();
             }
+        }
+
+        // Called by reconciliation after the closing Commit, before any state observers or completions.
+        private bool ReconcilePrivateState()
+        {
+            if (!privateChangesPending || !localParticipantId.HasValue) return true;
+            // A binding may have appeared since receive. Validate it before publishing any private value.
+            foreach (var record in privateStates.Values)
+            {
+                if (privateStaged.TryGetValue(record.Key, out var staged) && !record.Slot(localParticipantId.Value).CanDecode(staged.Bytes))
+                {
+                    FailContract("private state '" + record.Key + "'");
+                    return false;
+                }
+            }
+
+            privateChangesPending = false;
+            privateReceived.Clear();
+            foreach (var staged in privateStaged) privateReceived.Add(staged.Key, staged.Value);
+            foreach (var record in privateStates.Values)
+            {
+                if (!privateReceived.TryGetValue(record.Key, out var received)) { record.Reset(); continue; }
+                var slot = record.Slot(localParticipantId.Value);
+                slot.ResetTo(received.Bytes, received.Version);
+                PrivateValueChanged(slot);
+            }
+            return true;
         }
 
         private void ForgetPrivatePlayer(ParticipantId player)

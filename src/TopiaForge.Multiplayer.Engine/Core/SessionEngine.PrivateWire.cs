@@ -111,7 +111,8 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 if (!reader.AtEnd) throw new ProtocolException("Private state contained trailing bytes.");
                 if (privateBaseline) throw new ProtocolException("A private stream restarted without a new generation.");
-                ResetPrivateState();
+                privateStaged.Clear();
+                privateChangesPending = true;
                 privateBaseline = true;
                 return;
             }
@@ -120,24 +121,23 @@ namespace TopiaForge.Multiplayer.Engine
             if (operation == 2)
             {
                 if (!reader.AtEnd) throw new ProtocolException("Private state contained trailing bytes.");
-                privateReceived.Remove(key);
-                if (privateStates.TryGetValue(key, out var removed)) removed.Reset();
+                privateStaged.Remove(key);
+                privateChangesPending = true;
                 return;
             }
             if (operation != 1) throw new ProtocolException("Unknown private state operation.");
             var version = reader.ReadVarUInt();
             var bytes = reader.ReadBytes(MaximumPrivateValueBytes);
             if (!reader.AtEnd) throw new ProtocolException("Private state contained trailing bytes.");
-            if (!privateReceived.ContainsKey(key) && privateReceived.Count >= MaximumPrivateFields)
+            if (!privateStaged.ContainsKey(key) && privateStaged.Count >= MaximumPrivateFields)
                 throw new ProtocolException("The private field inventory exceeded its bound.");
             if (privateStates.TryGetValue(key, out var record))
             {
                 var slot = record.Slot(localParticipantId.Value);
                 if (!slot.CanDecode(bytes)) throw new ProtocolException("A private value did not match its codec.");
-                slot.ResetTo(bytes, version);
-                PrivateValueChanged(slot);
             }
-            privateReceived[key] = new StagedState(key, version, bytes);
+            privateStaged[key] = new StagedState(key, version, bytes);
+            privateChangesPending = true;
         }
     }
 }

@@ -320,6 +320,7 @@ namespace TopiaForge.Multiplayer.Engine
         /// </summary>
         private void Reconcile()
         {
+            if (!ReconcilePrivateState()) return;
             foreach (var record in stateList)
             {
                 if (record.CurrentMatchesConfirmed) continue;
