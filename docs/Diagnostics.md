@@ -424,6 +424,12 @@ or SDK issue.
 
 **Build failed.** Fix the first compiler/analyzer diagnostic, then run `dotnet build --no-restore`.
 
+### TFDEV115
+
+The generated multiplayer contract could not be synchronized. Fix the multiplayer
+compiler diagnostics, rebuild, and rerun `dev`. Plain `dev` and `dev --peers` use the
+same schema-3 contract lock pipeline.
+
 ### TFDEV120
 
 **Tests failed.** Run `dotnet test --no-restore` for the complete test-host and assertion output.
@@ -442,10 +448,22 @@ manifest, managed assembly, or archive finding.
 **Install failed.** Pass `--game-dir <Robotopia folder>` or set `ROBOTOPIA_GAME_DIR`, then run
 `topiaforge doctor`.
 
+### TFDEV152
+
+Private development overlays could not be prepared. Repair the source installation
+and built runtime, check directory access, and retry. Existing source game data
+is shared through links and is never a cleanup target.
+
 ### TFDEV160
 
 **Launch failed.** Run `topiaforge doctor`, repair the runtime in the launcher, and retry with
 `--no-tail` while diagnosing.
+
+### TFDEV165
+
+A local development peer could not join. Check its package and world selection and
+the labeled peer logs, then restart the dev loop. The join uses the host's verified
+descriptor and never falls back to external discovery.
 
 ### TFDEV170
 

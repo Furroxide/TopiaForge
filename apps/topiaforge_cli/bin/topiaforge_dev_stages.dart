@@ -50,6 +50,29 @@ final class _DevStage {
         'Fix the failing test or test-host error, then run `dotnet test --no-restore`.',
   );
 
+  static const contract = _DevStage(
+    code: 'TFDEV115',
+    label: 'contract',
+    action: 'Synchronize the generated multiplayer contract lock.',
+    remediation: 'Fix the multiplayer compiler diagnostics and rerun dev.',
+  );
+
+  static const overlays = _DevStage(
+    code: 'TFDEV152',
+    label: 'peers',
+    action: 'Prepare private game overlays and launcher roots.',
+    remediation:
+        'Repair the game and runtime, and check development directory permissions.',
+  );
+
+  static const joinPeers = _DevStage(
+    code: 'TFDEV165',
+    label: 'join',
+    action: 'Join the development peers to their local host.',
+    remediation:
+        'Check the peer logs and package selection, then restart the dev loop.',
+  );
+
   static const pack = _DevStage(
     code: 'TFDEV130',
     label: 'pack',
@@ -99,9 +122,11 @@ extension _TopiaForgeDevStages on _TopiaForgeCli {
     Future<T> Function() action,
   ) async {
     stdout.writeln('[${stage.label}] ${stage.action}');
+    final elapsed = Stopwatch()..start();
     try {
       final value = await action();
       stdout.writeln('[${stage.label}] complete.');
+      stdout.writeln('${stage.code}: ${elapsed.elapsedMilliseconds} ms.');
       return value;
     } on Object catch (error) {
       throw _DevStageFailure(stage, error);

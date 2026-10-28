@@ -427,7 +427,7 @@ and still go wrong in a live session, because solo play never shows these:
 The [test rig](#test-before-transport) shows each of these deterministically, in a unit test, on the same session
 engine the provider runs. To see them in the game, two machines on one LAN can host and join each other with the
 developer switch. Running several copies of the game on one machine needs a separate folder for each copy;
-`topiaforge dev --peers`, which will set those up and join the copies into one session, is later work.
+[`topiaforge dev --peers 2`](CliDevLoop.md#local-multiplayer-peers) prepares private copies and joins them into one local session.
 
 ## Test before transport
 

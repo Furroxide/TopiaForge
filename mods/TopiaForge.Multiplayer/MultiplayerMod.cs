@@ -20,6 +20,8 @@ namespace TopiaForge.Multiplayer
             var live = DeveloperSessions.IsLiveEnabled()
                 ? new Network.LiveSessionsSetup(new Network.ModDataFiles(Context.Files), content)
                 : null;
+            var peerRun = DeveloperPeerRendezvous.ReadRunId();
+            if (live != null && peerRun != null) { live.LoopbackOnly = true; live.Voice = false; }
             var provider = new MultiplayerProvider(Context.Identity.Id, diagnostics, live: live);
             Context.Lifetime.Track(provider);
             Register<IMultiplayerSession>(provider);
@@ -31,6 +33,12 @@ namespace TopiaForge.Multiplayer
 
             // Once the runtime attaches it pumps the provider first in the frame; until then the provider pumps itself.
             Context.Lifetime.Track(Context.Events.SubscribeUpdate(_ => control.PumpUnattached()));
+            if (peerRun != null && provider.Live != null && live != null)
+            {
+                var receipt = new DeveloperPeerRendezvous(provider.Live, live.Files, peerRun, Context.Logger);
+                Context.Lifetime.Track(receipt);
+                Context.Lifetime.Track(Context.Events.SubscribeUpdate(_ => receipt.Pump()));
+            }
             Context.Logger.Info(provider.Live == null
                 ? "TopiaForge Multiplayer loaded with the solo session engine; live sessions are switched off."
                 : "TopiaForge Multiplayer loaded with live sessions switched on for development.");

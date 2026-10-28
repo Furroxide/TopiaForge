@@ -36,6 +36,8 @@ export 'src/json_duplicate_properties.dart';
 export 'src/launch_storage_keys.dart';
 export 'src/multiplayer/descriptor_signature_verifier.dart';
 export 'src/data_root.dart';
+export 'src/dev_peer_overlays.dart';
+export 'src/dev_peer_session.dart';
 export 'src/session_links.dart';
 export 'src/cancellation_token.dart';
 export 'src/multiplayer/control_plane.dart';

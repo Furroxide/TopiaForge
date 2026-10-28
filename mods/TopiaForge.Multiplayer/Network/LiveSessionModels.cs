@@ -50,6 +50,7 @@ namespace TopiaForge.Multiplayer.Network
         internal bool MapPorts { get; set; }
 
         internal bool Voice { get; set; }
+        internal bool LocalDevelopmentPeers { get; set; }
         // Read on the network worker as well as the main thread. A later disable stops new package requests.
         private volatile bool servePackages;
         private volatile bool developerMode;

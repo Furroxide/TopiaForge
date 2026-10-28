@@ -1,6 +1,20 @@
 part of 'topiaforge_cli_test.dart';
 
 void _devCliTests(_CliTestHarness Function() currentHarness) {
+  test('dev peer options refuse invalid combinations before restore', () async {
+    for (final options in [
+      ['--peers', '1'],
+      ['--peers', '9'],
+      ['--peers', 'two'],
+      ['--peers', '2', '--peers', '3'],
+      ['--peers', '2', '--no-launch'],
+      ['--peers', '2', '--no-wait'],
+    ]) {
+      final result = await currentHarness().runCli(['dev', ...options]);
+      expect(result.exitCode, 2, reason: options.join(' '));
+      expect(result.stdout.toString(), isNot(contains('[restore]')));
+    }
+  });
   test(
     'dev failures expose a stable code, remediation, and docs link',
     () async {
@@ -73,6 +87,7 @@ void _devCliTests(_CliTestHarness Function() currentHarness) {
         'restore',
         'toolchain',
         'build',
+        'contract',
         'test',
         'pack',
         'validate',
