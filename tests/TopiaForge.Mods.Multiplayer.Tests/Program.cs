@@ -49,6 +49,39 @@ internal static class Program
                 Console.WriteLine("Engine white-box: all 13 tests passed.");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--engine-readiness")
+            {
+                EngineHardeningTests.UnsolicitedClockRepliesAreIgnored();
+                EngineHardeningTests.OnlyTheLatestProbeIsTimed();
+                EngineHardeningTests.ParticipantChangesReachEachClientOncePerFlush();
+                EngineHardeningTests.DepartedParticipantsMakeRoomWithinTheRecordLimit();
+                EngineHardeningTests.AJoinBeyondTheRecordLimitIsRefused();
+                EngineHardeningTests.KicksAndShutdownWaitForTheTransactionToEnd();
+                EngineHardeningTests.RateHistoryEndsWithItsValue();
+                EngineHardeningTests.NamesBeyondTheInternBudgetTravelInline();
+                EngineHardeningTests.DisposedObjectTypesRunNoInput();
+                EngineReconciliationTests.SplitFlushesReconcileOnlyAtTheirCommit();
+                EngineReconciliationTests.CancellingASentPredictionKeepsItApplied();
+                EngineReconciliationTests.ACancellationDuringAPumpWaitsForItsSettlePoint();
+                EngineReconciliationTests.ResultsQueuedBeforeAReplacementStillComplete();
+                EngineReconciliationTests.LateResultsFromAReplacedSessionMatchNothing();
+                EngineReconciliationTests.AnInputThatDespawnsItsTargetStillSucceeds();
+                EngineReconciliationTests.CommandEventsAddressTheCommandsSender();
+                EngineReconciliationTests.ReRegisteredStatesKeepTheirCanonicalValue();
+                EngineReconciliationTests.AFrameHoldsOneMaximumMessageAfterTheSoftLimit();
+                EngineOwnerTests.RetiringAnOwnerCancelsOnlyItsSubmissions();
+                EngineOwnerTests.ARegistrationOutlivedByItsFacadeIsCancelled();
+                EngineRoleTests.ASoloSessionJoinsAnotherHostAndComesBack();
+                EngineRoleTests.AnEndedClientSessionReturnsToSolo();
+                EngineRoleTests.AHostClosesItsConnectionsAndPlaysOn();
+                EngineRoleTests.RoleChangesRefuseWhatTheyCannotDo();
+                EngineRoleTests.JoinPoliciesSeeTheLinkARequestCameOver();
+                EnginePlayersTests.CancelBeforeJoinFlush();
+                HardeningRegressionTests.ASessionThatEndsMidSnapshotLeavesNothingBehind();
+                HardeningRegressionTests.AStateAdoptedThatDoesNotDecodeEndsTheSession();
+                Console.WriteLine("Engine readiness: 28 tests passed.");
+                return 0;
+            }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {

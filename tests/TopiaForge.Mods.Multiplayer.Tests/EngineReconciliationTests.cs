@@ -140,6 +140,14 @@ internal static class EngineReconciliationTests
         harness.Host.ReplaceSession(new MultiplayerSessionId("second-round"), new SessionSeed(9));
         harness.PumpAll();
         harness.Advance(2);
+        Assert(client.Engine.Snapshot.State == MultiplayerSessionState.Synchronizing && client.Engine.HasPendingWork &&
+               first.IsCompleted && first.Result.Result.ErrorCode == ModErrorCode.Cancelled && executions == 0 && harness.Network.HasInFlight,
+            "the replacement snapshot defers readiness while the old submission's refusal is still in flight");
+        // Settle only local readiness: no virtual time advances and no in-flight host result is delivered.
+        var replacementTime = harness.NowMicros;
+        client.Engine.Pump(replacementTime);
+        Assert(harness.NowMicros == replacementTime && harness.Network.HasInFlight && executions == 0,
+            "the readiness pump leaves the old host answer in flight");
         Assert(client.Engine.Snapshot.Id.Value == "second-round" && client.Engine.Snapshot.State == MultiplayerSessionState.Ready,
             "the client is ready in the new session while the host's answer to the old submission is still in flight");
         var second = client.Session.SubmitAsync(AddCommandType, new AddRequest(2));
