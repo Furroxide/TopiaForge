@@ -69,8 +69,9 @@ namespace TopiaForge.ModManager
                     : target.Declared.Resolved ? new LaunchRequest(target.Id) : null;
             }
             var selected = target.Choices.ToList().FindIndex(choice => Matches(choice.Request, chosen));
+            var worldNames = context.Plugin.GetWorldNames();
             var options = new[] { selected < 0 && chosen != null ? "Saved choice unavailable — select a permitted option" : "Select a world and transition" }
-                .Concat(target.Choices.Select(choice => (choice.IsDeclaredDefault ? "Declared default: " : "") + choice.WorldId + " · " + choice.Transition)).ToArray();
+                .Concat(target.Choices.Select(choice => (choice.IsDeclaredDefault ? "Declared default: " : "") + Sessions.HostTargets.WorldName(choice.WorldId, worldNames) + " · " + choice.Transition)).ToArray();
             var dropdown = card.Dropdown(options, selected + 1, index =>
             {
                 drafts[target.Id] = index > 0 && index <= target.Choices.Count ? target.Choices[index - 1].Request : null;
