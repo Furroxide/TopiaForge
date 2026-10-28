@@ -30,6 +30,8 @@ namespace TopiaForge.Multiplayer.Engine
             NotifiedBytes = initialBytes;
         }
 
+        internal ParticipantId? PrivatePlayer { get; set; }
+        internal Action<byte[]>? PrivateNotification { get; set; }
         internal SessionEngine Engine { get; }
         internal WireKey Key { get; }
         internal byte[] InitialBytes { get; }
@@ -110,6 +112,13 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal override void NotifySubscribers(byte[] reported)
         {
+            if (PrivatePlayer.HasValue)
+            {
+                // The engine selects the local player when queuing. A disconnect reset still needs to
+                // notify after the local participant id has gone, so the presentation clears immediately.
+                PrivateNotification?.Invoke(reported);
+                return;
+            }
             if (subscribers.Count == 0) return;
             // Every observer in this round sees the value being reported, even if an earlier observer changes the
             // state again; that change is reported in a later round.

@@ -19,6 +19,8 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>The steady rate a host allows one player: twice what an honest player keeps to, so arrival bunching never trips it.</summary>
         internal const int SystemIngressPerSecond = 2 * InternalSystemLimits.PlayerMessagesPerSecond;
 
+        private static bool IsHostOnlySystemKind(byte kind) => kind == TimeKind || kind == PrivateStateKind || kind == (byte)InternalSystemChannelKind.PerPlayer;
+
         /// <summary>The session time channel's kind: it carries the host's messages only.</summary>
         private const byte TimeKind = (byte)InternalSystemChannelKind.Time;
 
@@ -49,6 +51,7 @@ namespace TopiaForge.Multiplayer.Engine
         {
             RequireOwnerThread();
             if (!SystemStreamSet.IsKind((byte)kind)) throw new ArgumentOutOfRangeException(nameof(kind));
+            if (kind == InternalSystemChannelKind.PrivateState) return OperationResult<IInternalSystemChannel>.Failure(ModErrorCode.Conflict, "The engine owns the private state channel.");
             if (ended) return OperationResult<IInternalSystemChannel>.Failure(ModErrorCode.InvalidState, "The multiplayer session has ended.");
             if (systemChannels[(int)kind] != null)
             {
@@ -179,6 +182,10 @@ namespace TopiaForge.Multiplayer.Engine
             if (scope.IsOpen) return OperationResult<int>.Failure(ModErrorCode.InvalidState, "System messages cannot be sent inside a transaction.");
             if (ended) return OperationResult<int>.Failure(ModErrorCode.InvalidState, "The multiplayer session has ended.");
             var kind = (byte)endpoint.Kind;
+            if (kind == (byte)InternalSystemChannelKind.PerPlayer && Role == EngineRole.Host && target.Kind != InternalSystemTargetKind.Only)
+                return OperationResult<int>.Failure(ModErrorCode.InvalidArgument, "Private delivery requires exactly one player.");
+            if (kind == (byte)InternalSystemChannelKind.PerPlayer && Role == EngineRole.Host && FindParticipant(target.Participant)?.Connection?.IsJoined != true)
+                return OperationResult<int>.Failure(ModErrorCode.NotFound, "Private delivery requires an admitted player with a live stream.");
             if (Role == EngineRole.Host)
             {
                 if (target.Kind == InternalSystemTargetKind.Host)
@@ -193,9 +200,9 @@ namespace TopiaForge.Multiplayer.Engine
                     : null;
             }
 
-            if (kind == TimeKind)
+            if (IsHostOnlySystemKind(kind))
             {
-                return OperationResult<int>.Failure(ModErrorCode.NotAuthoritative, "Only the host sends the session's time; a joined player follows it.");
+                return OperationResult<int>.Failure(ModErrorCode.NotAuthoritative, "Only the host sends on this system channel.");
             }
 
             if (target.Kind != InternalSystemTargetKind.Host)
@@ -228,6 +235,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Takes a system message that arrived on <paramref name="stream"/> from <paramref name="sender"/>.</summary>
         private void DeliverSystem(SystemStream stream, ParticipantId sender, byte[] payload)
         {
+            if (stream.Kind == PrivateStateKind)
+            {
+                ReceivePrivateState(sender, payload);
+                stream.Consume(payload.Length);
+                return;
+            }
             var endpoint = systemChannels[stream.Kind];
             if (endpoint == null)
             {
@@ -258,7 +271,7 @@ namespace TopiaForge.Multiplayer.Engine
 
             // The session's time flows from the host only, in every session and on every stream: an honest player never
             // sends it, so one that does breaks the protocol, whatever it stamped its message with.
-            if (kind == TimeKind) throw new ProtocolException("A player sent the session's time, which only the host sends.");
+            if (IsHostOnlySystemKind(kind)) throw new ProtocolException("A player sent data on a host-only system channel.");
             var participant = connection.Participant;
             if (!connection.IsJoined || participant == null)
             {
@@ -360,6 +373,10 @@ namespace TopiaForge.Multiplayer.Engine
             if (endpoint != null) endpoint.CountDropped();
             else systemMessagesUnclaimed++;
         }
+
+        /// <summary>Retires unread runtime-private payloads before the stream-end generation becomes visible.</summary>
+        private void DropPendingPerPlayerMessages() =>
+            FindSystemChannel(InternalSystemChannelKind.PerPlayer)?.DropPending();
 
         /// <summary>Drops what every channel holds: the session or the connection it arrived on is gone.</summary>
         private void DropPendingSystemMessages()

@@ -33,7 +33,7 @@ namespace TopiaForge.Mods
         public string Id { get; set; } = string.Empty;
     }
 
-    /// <summary>Marks one <see cref="ReplicatedState{T}"/> field for generated snapshot registration.</summary>
+    /// <summary>Marks one shared <see cref="ReplicatedState{T}"/> or private <see cref="PerPlayerState{T}"/> field for generated registration.</summary>
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false, Inherited = false)]
     public sealed class ReplicatedStateAttribute : Attribute
     {

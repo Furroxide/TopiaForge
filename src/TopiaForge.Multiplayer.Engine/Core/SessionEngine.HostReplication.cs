@@ -59,7 +59,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void OnStateCommitted(StateRecord record)
         {
-            if (Role != EngineRole.Host) return;
+            if (Role != EngineRole.Host || record.PrivatePlayer.HasValue) return;
             foreach (var connection in connections)
             {
                 if (connection.IsJoined) connection.PendingStates.Add(record);
@@ -182,6 +182,7 @@ namespace TopiaForge.Multiplayer.Engine
         private void FlushConnection(HostConnection connection, bool downstreamDue)
         {
             if (connection.Phase == HostConnectionPhase.Closed) return;
+            if (downstreamDue) FlushPrivateState(connection);
             if (!connection.HasOutbound && !connection.HasPendingDeltas) return;
             var context = flush;
             context.Frame.Reset();

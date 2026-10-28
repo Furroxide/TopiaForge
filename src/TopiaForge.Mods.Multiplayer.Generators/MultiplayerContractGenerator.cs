@@ -219,13 +219,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 var id = GetConstructorString(attribute);
                 if (!RegisterId(context, contract, contractId, ids, id, field.Locations.FirstOrDefault())) invalid = true;
                 if (field.IsStatic || field.IsReadOnly || field.Type is not INamedTypeSymbol named ||
-                    named.ConstructedFrom.ToDisplayString() != ReplicatedStateType)
+                    (named.ConstructedFrom.ToDisplayString() != ReplicatedStateType && named.ConstructedFrom.ToDisplayString() != "TopiaForge.Mods.PerPlayerState<T>"))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         UnsupportedType,
                         field.Locations.FirstOrDefault(),
                         field.Type.ToDisplayString(),
-                        "[ReplicatedState] fields must be mutable instance fields of type ReplicatedState<T>"));
+                        "[ReplicatedState] fields must be mutable instance fields of type ReplicatedState<T> or PerPlayerState<T>"));
                     invalid = true;
                     continue;
                 }
@@ -234,6 +234,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 {
                     invalid = true;
                     continue;
+                }
+
+                if (named.ConstructedFrom.ToDisplayString() == "TopiaForge.Mods.PerPlayerState<T>" && stateDelivery != 0)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(UnsupportedType, field.Locations.FirstOrDefault(), field.Type.ToDisplayString(), "Private state requires coalesced delivery"));
+                    invalid = true;
                 }
 
                 states.Add(new StateModel(field, id, named.TypeArguments[0], stateDelivery, stateUpdates));
@@ -404,6 +410,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             {
                 var codec = codecModels.FirstOrDefault(item =>
                     SymbolEqualityComparer.Default.Equals(item.Type, state.ValueType));
+                if (state.IsPrivate && (codec?.MaximumBytes ?? 0) > 16 * 1024)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(UnsupportedType, state.Field.Locations.FirstOrDefault(),
+                        state.ValueType.ToDisplayString(), "Private state codec bounds must not exceed 16384 bytes"));
+                    invalid = true;
+                    continue;
+                }
                 if ((codec?.MaximumBytes ?? 0) <= 1024 * 1024) continue;
                 context.ReportDiagnostic(Diagnostic.Create(
                     TransportPayloadLimitExceeded,
@@ -2249,7 +2262,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 "wire-format-revision:" + wireFormatRevision.ToString(CultureInfo.InvariantCulture),
                 "contract:" + contractId
             };
-            lines.AddRange(states.OrderBy(state => state.Id, StringComparer.Ordinal).Select(state => "state:" + state.Id + ":" + TypeName(state.ValueType)));
+            lines.AddRange(states.OrderBy(state => state.Id, StringComparer.Ordinal).Select(state => (state.IsPrivate ? "private-state:" : "state:") + state.Id + ":" + TypeName(state.ValueType)));
             lines.AddRange(commands.OrderBy(command => command.Id, StringComparer.Ordinal).Select(command =>
                 "command:" + command.Id + ":" + TypeName(command.RequestType) + ":" + TypeName(command.ResponseType) + ":" + command.Prediction + ":" + command.MaximumPerSecond + ":" + command.MaximumPayloadBytes));
             lines.AddRange(objects.OrderBy(item => item.Id, StringComparer.Ordinal).Select(item =>
@@ -2405,6 +2418,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
         {
             public StateModel(IFieldSymbol field, string id, ITypeSymbol valueType, int delivery = 0, int maximumUpdatesPerSecond = 0)
             { Field = field; Id = id; ValueType = valueType; Delivery = delivery; MaximumUpdatesPerSecond = maximumUpdatesPerSecond; }
+            public bool IsPrivate => ((INamedTypeSymbol)Field.Type).ConstructedFrom.ToDisplayString() == "TopiaForge.Mods.PerPlayerState<T>";
             public IFieldSymbol Field { get; }
             public string Id { get; }
             public ITypeSymbol ValueType { get; }

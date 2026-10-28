@@ -26,7 +26,7 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 foreach (var connection in connections)
                 {
-                    if (connection.HasOutbound || connection.HasPendingDeltas) return true;
+                    if (connection.HasOutbound || connection.HasPendingDeltas || HasPrivatePending(connection)) return true;
                     if (participantsDirty && connection.IsJoined) return true;
                     if (voiceRosterDirty && connection.IsJoined) return true;
                 }
@@ -82,6 +82,7 @@ namespace TopiaForge.Multiplayer.Engine
             nextObjectNumber = 0;
             foreach (var binding in commands.Values) binding.ResetForNewSession();
             presentationDeliveries.Clear();
+            ResetPrivateState();
             DropPendingSystemMessages();
             // Submission sequences keep counting, so nothing sent in the old session can pass for the new one. Results
             // already queued still reach their clients ahead of the replacement.
@@ -490,6 +491,7 @@ namespace TopiaForge.Multiplayer.Engine
             // The voice moderation table forgets whoever was seen longest ago, so a record that goes counts as seen now.
             NoteVoiceSeen(record);
             participantRecords.Remove(record);
+            ForgetPrivatePlayer(record.Id);
             foreach (var binding in commands.Values) binding.ForgetSender(record.Id);
             foreach (var item in objectList) item.ForgetSender(record.Id);
         }

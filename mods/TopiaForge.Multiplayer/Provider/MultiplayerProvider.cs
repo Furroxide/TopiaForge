@@ -13,7 +13,7 @@ namespace TopiaForge.Multiplayer
     /// player is the host, and canonical work runs inline. Calls made on the provider itself use its own owner
     /// partition, which no consuming mod can reach.
     /// </summary>
-    internal sealed partial class MultiplayerProvider : IMultiplayerSession, IInternalAnswerDispatch, IOwnerBoundExtensionFactory, IOwnerContextBoundExtensionFactory, IDisposable
+    internal sealed partial class MultiplayerProvider : IMultiplayerSession, IPerPlayerStateSession, IInternalAnswerDispatch, IOwnerBoundExtensionFactory, IOwnerContextBoundExtensionFactory, IDisposable
     {
         internal const string LocalParticipantId = "local";
         internal const string LocalDisplayName = "Local player";
@@ -108,6 +108,9 @@ namespace TopiaForge.Multiplayer
         }
 
         public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler) => reserved.SubscribeChanged(handler);
+
+        public OperationResult<IPerPlayerState<T>> RegisterPerPlayerState<T>(ReplicatedStateDefinition<T> definition) where T : class =>
+            reserved.RegisterPerPlayerState(definition);
 
         public OperationResult<IReplicatedState<T>> RegisterState<T>(ReplicatedStateDefinition<T> definition) where T : class =>
             reserved.RegisterState(definition);

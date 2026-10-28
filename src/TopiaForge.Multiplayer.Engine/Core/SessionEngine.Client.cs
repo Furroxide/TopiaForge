@@ -258,6 +258,7 @@ namespace TopiaForge.Multiplayer.Engine
             // so what the channels still hold from it goes too, and the new generation tells their owners to start again.
             if (joinedBefore) DropPendingSystemMessages();
             current.JoinGeneration = message.Generation;
+            ResetPrivateState();
             clientStreamGeneration = ++systemGeneration;
             sessionId = newSession;
             seed = new SessionSeed(message.Seed);
@@ -640,6 +641,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             DespawnAllLocally();
+            ResetPrivateState();
             unboundStates.Clear();
             unboundObjects.Clear();
             tombstones.Clear();
@@ -652,6 +654,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void LoseLink(string message)
         {
+            DropPendingPerPlayerMessages();
             var lost = channel;
             channel = null;
             if (lost != null)
@@ -662,6 +665,7 @@ namespace TopiaForge.Multiplayer.Engine
                 NoteUnansweredJoin(lost);
             }
 
+            ResetPrivateState();
             ResetClientVoice();
             CancelAllPending(message);
             localParticipantId = null;
@@ -671,6 +675,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void EndClient(MultiplayerSessionEndReason reason, string message, byte[]? report = null)
         {
+            DropPendingPerPlayerMessages();
             var lost = channel;
             channel = null;
             if (lost != null)
@@ -680,6 +685,7 @@ namespace TopiaForge.Multiplayer.Engine
                 systemGeneration++;
             }
 
+            ResetPrivateState();
             ResetClientVoice();
 
             // The host's own words go to the runtime alone: mods see this game's text, never what a host wrote.
@@ -696,6 +702,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void ShutdownClient()
         {
+            DropPendingPerPlayerMessages();
             var current = channel;
             if (current != null && current.Link.State != EngineLinkState.Closed)
             {
@@ -717,6 +724,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             channel = null;
+            ResetPrivateState();
             ResetClientVoice();
             CancelAllPending("The multiplayer session ended.");
         }

@@ -111,7 +111,7 @@ namespace TopiaForge.Multiplayer.Engine
     /// </summary>
     internal sealed class SystemStreamSet
     {
-        internal const int Slots = 7;
+        internal const int Slots = 9;
         private readonly SystemStream?[] streams = new SystemStream?[Slots];
         private List<SystemStream>? unknown;
 
@@ -143,7 +143,7 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets the stream of <paramref name="kind"/> if it was ever used.</summary>
         internal SystemStream? Find(byte kind) => IsKind(kind) ? streams[kind] : null;
 
-        /// <summary>Gets the stream of a kind this build has no channel for, creating it on first use; at most 251 of them.</summary>
+        /// <summary>Gets the stream of a kind this build has no channel for, creating it on first use; bounded by the byte-sized kind.</summary>
         internal SystemStream GetUnknown(byte kind)
         {
             unknown ??= new List<SystemStream>();

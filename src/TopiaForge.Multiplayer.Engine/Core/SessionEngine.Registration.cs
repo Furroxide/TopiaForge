@@ -22,7 +22,7 @@ namespace TopiaForge.Multiplayer.Engine
             var refusal = RegistrationRefusal<IReplicatedState<T>>("Replicated state");
             if (refusal != null) return refusal;
             var key = new WireKey(owner, definition.Id);
-            if (states.ContainsKey(key))
+            if (states.ContainsKey(key) || privateStates.ContainsKey(key))
             {
                 return OperationResult<IReplicatedState<T>>.Failure(
                     ModErrorCode.Conflict,

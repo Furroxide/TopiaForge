@@ -230,6 +230,10 @@ invariants that generated code normally supplies.
 - `ReplicatedState<T>` is persistent for the current session and included in snapshots for late join/reconnect.
   `Update` hands its updater a detached copy of the current value, so the updater may change that copy in place and
   return it.
+- `PerPlayerState<T>` (SDK 0.2.0) uses `[ReplicatedState]` to declare a private field. The host assigns
+  `Set(player.Id, value)`; a client can `Get` only its own value and observe local changes with `SubscribeChanged`.
+  Private baselines and deltas go only to their player. See [private delivery](internal/MultiplayerPrivateState.md)
+  for defaults, bounds, reconnects, transactions, and the runtime consumer channel.
 - `[ReplicatedObject]` turns one transactional `(context, state, input)` handler into a registered wire type plus typed
   `Spawn...Object`, `TryGet...Object`, `Get...Objects`, and `Subscribe...Objects` proxies. Clients reconstruct objects
   through their own generated codecs and handlers; snapshots never carry server delegates.
