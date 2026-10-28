@@ -161,6 +161,7 @@ Future<void> sourceSdkOwnerMain(List<Object?> args) async {
         () {
           observer?.send('waiting');
         },
+        () => detached,
       );
       observer?.send('released');
     } catch (error, stack) {
@@ -211,13 +212,16 @@ Future<void> sourceSdkOwnerMain(List<Object?> args) async {
   }
 }
 
-Future<T> _withNativeLock<T>(
+Future<void> _withNativeLock(
   Directory repository,
-  Future<T> Function() action,
+  Future<void> Function() action,
   void Function() waiting,
+  bool Function() abandoned,
 ) async {
   final root = repository;
-  if (!Platform.isWindows) return _withDirectoryFlock(root, action, waiting);
+  if (!Platform.isWindows) {
+    return _withDirectoryFlock(root, action, waiting, abandoned);
+  }
 
   final storage = Directory(p.join(root.path, '.dart_tool'));
   _requireOrdinary(storage.path, FileSystemEntityType.directory);
@@ -226,16 +230,25 @@ Future<T> _withNativeLock<T>(
   _requireOrdinary(file.path, FileSystemEntityType.file);
   final handle = await file.open(mode: FileMode.append);
   try {
-    // Windows locks belong to handles, including within one process. POSIX
-    // RandomAccessFile locks instead belong to processes and admit isolates.
-    try {
-      await handle.lock(FileLock.exclusive);
-    } on FileSystemException catch (error) {
-      if (error.osError?.errorCode != 33) rethrow;
-      waiting();
-      await handle.lock(FileLock.blockingExclusive);
+    // Windows locks belong to handles, including within one process. Use only
+    // nonblocking attempts: an outstanding blocking lock cannot be cancelled
+    // when the caller exits and would retain this isolate and handle forever.
+    var announced = false;
+    while (!abandoned()) {
+      try {
+        await handle.lock(FileLock.exclusive);
+      } on FileSystemException catch (error) {
+        if (error.osError?.errorCode != 33) rethrow;
+        if (!announced) {
+          waiting();
+          announced = true;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        continue;
+      }
+      await action();
+      return;
     }
-    return await action();
   } finally {
     await handle.close();
   }
@@ -279,10 +292,11 @@ final _errno = _libc
       Platform.isMacOS ? '__error' : '__errno_location',
     );
 
-Future<T> _withDirectoryFlock<T>(
+Future<void> _withDirectoryFlock(
   Directory root,
-  Future<T> Function() action,
+  Future<void> Function() action,
   void Function() waiting,
+  bool Function() abandoned,
 ) async {
   final bytes = utf8.encode(root.path);
   final path = _calloc(bytes.length + 1, 1);
@@ -298,8 +312,12 @@ Future<T> _withDirectoryFlock<T>(
   if (fd < 0) throw FileSystemException('Could not open SDK build lock');
   var announced = false;
   try {
-    while (_flock(fd, 2 | 4) != 0) {
+    while (!abandoned()) {
       // LOCK_EX | LOCK_NB
+      if (_flock(fd, 2 | 4) == 0) {
+        await action();
+        return;
+      }
       final error = _errno().value;
       if (error != (Platform.isMacOS ? 35 : 11) && error != 4) {
         throw FileSystemException('Could not acquire SDK build lock');
@@ -310,7 +328,6 @@ Future<T> _withDirectoryFlock<T>(
       }
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
-    return await action();
   } finally {
     _close(fd);
   }

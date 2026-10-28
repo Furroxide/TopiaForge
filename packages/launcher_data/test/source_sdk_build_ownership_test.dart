@@ -178,6 +178,55 @@ void main() {
     },
   );
 
+  for (final killed in [false, true]) {
+    test('contended owner exits before holder releases after caller '
+        '${killed ? 'kill' : 'Isolate.exit'}', () async {
+      final controls = ReceivePort();
+      final waiting = ReceivePort();
+      final callerExit = ReceivePort();
+      final ownerExit = ReceivePort();
+      final ownerHandle = ReceivePort();
+      Isolate? caller;
+      Isolate? owner;
+      try {
+        await withSourceSdkBuildLock(root, () async {
+          caller = await Isolate.spawn(callerWhileContended, [
+            root.path,
+            controls.sendPort,
+            waiting.sendPort,
+            ownerExit.sendPort,
+            ownerHandle.sendPort,
+          ], onExit: callerExit.sendPort);
+          final control = await controls.first as SendPort;
+          owner = Isolate(await ownerHandle.first as SendPort);
+          // This acknowledgment proves a real OS acquisition contended.
+          expect(await waiting.first, 'waiting');
+          if (killed) {
+            caller!.kill(priority: Isolate.immediate);
+          } else {
+            control.send('exit');
+          }
+          await callerExit.first;
+          // The holder stays locked until VM exit, so later acquisition cannot
+          // disguise a leaked pending owner. This is a liveness deadline only.
+          await ownerExit.first.timeout(const Duration(seconds: 3));
+        });
+        expect(
+          await withSourceSdkBuildLock(root, () async => 'reused'),
+          'reused',
+        );
+      } finally {
+        caller?.kill(priority: Isolate.immediate);
+        owner?.kill(priority: Isolate.immediate);
+        controls.close();
+        waiting.close();
+        callerExit.close();
+        ownerExit.close();
+        ownerHandle.close();
+      }
+    });
+  }
+
   test('caller exit retains checkout until its writing child exits', () async {
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final connection = server.first;

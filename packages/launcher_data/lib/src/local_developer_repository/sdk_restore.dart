@@ -191,9 +191,7 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
     return version;
   }
 
-  Future<SdkReferencePack?> _buildSourceSdkPack({
-    String? requiredVersion,
-  }) {
+  Future<SdkReferencePack?> _buildSourceSdkPack({String? requiredVersion}) {
     if (!Directory(p.join(_repositoryRoot.path, 'src')).existsSync()) {
       return Future.value();
     }

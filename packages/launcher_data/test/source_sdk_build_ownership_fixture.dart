@@ -209,3 +209,28 @@ Future<void> callerBeforeOwnerEntry(List<Object> args) async {
 }
 
 void immediatelyExitingCaller(Object? _) => Isolate.exit();
+
+Future<void> callerWhileContended(List<Object> args) async {
+  final control = ReceivePort();
+  control.listen((_) => Isolate.exit());
+  (args[1] as SendPort).send(control.sendPort);
+  await runZoned(
+    () => withSourceSdkBuildLock(
+      Directory(args[0] as String),
+      () async => (args[1] as SendPort).send('unexpected admission'),
+      spawnOwner: (arguments, replies) async {
+        final owner = await Isolate.spawn(
+          sourceSdkOwnerMain,
+          arguments,
+          paused: true,
+          onExit: replies,
+        );
+        owner.addOnExitListener(args[3] as SendPort);
+        (args[4] as SendPort).send(owner.controlPort);
+        owner.resume(owner.pauseCapability!);
+        return owner;
+      },
+    ),
+    zoneValues: {sourceSdkOwnershipObserver: args[2] as SendPort},
+  );
+}
