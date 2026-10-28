@@ -232,8 +232,8 @@ invariants that generated code normally supplies.
   return it.
 - `PerPlayerState<T>` (SDK 0.2.0) uses `[ReplicatedState]` to declare a private field. The host assigns
   `Set(player.Id, value)`; a client can `Get` only its own value and observe local changes with `SubscribeChanged`.
-  Private baselines and deltas go only to their player. See [private delivery](internal/MultiplayerPrivateState.md)
-  for defaults, bounds, reconnects, transactions, and the runtime consumer channel.
+  Private baselines and deltas go only to their player. See [private delivery](#private-per-player-delivery)
+  for defaults, bounds, reconnects, and transactions.
 - `[ReplicatedObject]` turns one transactional `(context, state, input)` handler into a registered wire type plus typed
   `Spawn...Object`, `TryGet...Object`, `Get...Objects`, and `Subscribe...Objects` proxies. Clients reconstruct objects
   through their own generated codecs and handlers; snapshots never carry server delegates.
@@ -250,6 +250,53 @@ events, tick handlers and command confirmations. None of them may block. The ses
 network tick, because the snapshot's `Tick` advances, so a handler that redraws a HUD or window from the snapshot should
 first compare what it shows. A replicated state's `SubscribeChanged` runs only when the state is updated, never for a
 tick alone, and an update that writes the same value again runs it too.
+
+## Private per-player delivery
+
+`PerPlayerState<T>` (SDK 0.2.0) uses the existing contract generator and
+`[ReplicatedState("id")]` declaration. The runtime binds it automatically, just as
+it binds shared state. A field has a non-secret default and one value per admitted
+player. The host calls `Set(player.Id, value)`; participant code calls
+`Get(session.Players.Local.Id)` and observes `SubscribeChanged` for its own changes.
+Reads, writes and notifications use codec-detached copies. No author serialization,
+audience filtering, reconnect messages or frame polling is needed.
+
+```csharp
+[ReplicatedState("card")]
+private PerPlayerState<Card> card = new(new Card());
+
+public sealed class Card
+{
+    [NetworkBound(96)]
+    public string Text { get; set; } = "";
+}
+
+// In authoritative code, after the player is admitted:
+card.Set(player.Id, new Card { Text = "Your private assignment" });
+```
+
+The default is part of the mod assembly and must never contain a secret. A client
+receives only its own assigned value; it cannot read another player's value or
+write any value. A host can read and assign admitted players, including players
+retained during reconnect grace. Callers must check the returned operation result.
+Private state is not an anti-cheat boundary against the host or trusted in-process
+mods. Do not put private data in a shared DTO, command response to another player,
+or broadcast presentation event.
+
+### Bounds and lifetime
+
+- Generated codecs retain their normal DTO restrictions. Private codecs are limited to 16 KiB, and delivery must be
+  coalesced. `MaximumUpdatesPerSecond` is supported; a new baseline bypasses that rate limit.
+- At most 64 private fields can be registered across mods. Changing a field between shared and private changes its
+  contract digest; existing shared contracts keep their digests and namespaced IDs.
+- Host writes join the canonical transaction: failure rolls them back. Client prediction cannot write private state.
+  Local notifications run after commit and never report another player's changes.
+- Reconnect within grace keeps host values but starts a new baseline. Expiring a participant removes its private
+  values. Session replacement or end clears values; disposing the binding resets the remote value to its declared
+  default. Rebinding starts from the frozen default.
+- Until its first private baseline arrives, a client reads its declared default. Subscribe to changes to refresh local
+  presentation. Shared-session Ready does not promise that private presentation has already arrived.
+- A provider without private-state support fails binding as `Unavailable`, without a shared-state fallback.
 
 ## Session contract for live play
 
