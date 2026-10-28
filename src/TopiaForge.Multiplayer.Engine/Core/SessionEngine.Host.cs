@@ -65,6 +65,9 @@ namespace TopiaForge.Multiplayer.Engine
                 throw new ArgumentException("The replacement session id must differ from the current session id.", nameof(newSessionId));
             }
 
+            RetireCommunication();
+            DiscardHeldVoice();
+            voiceInbox?.Clear();
             var previous = sessionCancellation;
             sessionCancellation = new CancellationTokenSource();
             sessionId = newSessionId;

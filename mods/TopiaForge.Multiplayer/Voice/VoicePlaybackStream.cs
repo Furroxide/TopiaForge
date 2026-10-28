@@ -25,8 +25,28 @@ namespace TopiaForge.Multiplayer.Voice
     /// that could move to another stream, so a stream that ends stays ended and never plays anybody else.
     /// </para>
     /// </remarks>
-    internal sealed class VoicePlaybackStream : IVoicePlaybackStream
+    internal sealed class VoicePlaybackStream : IVoicePlaybackStream, IInternalRoutedVoiceStream
     {
+        private ulong routingStream;
+        private ulong routingSequence;
+        internal bool HasRouting { get; private set; }
+        public bool NonSpatial { get; private set; }
+
+        internal bool AcceptsRouting(TopiaForge.Multiplayer.Engine.VoiceFrame frame) =>
+            frame.Stream > routingStream || (frame.Stream == routingStream && frame.Sequence > routingSequence);
+
+        internal void Route(TopiaForge.Multiplayer.Engine.VoiceFrame frame)
+        {
+            if (!AcceptsRouting(frame)) return;
+            HasRouting = true;
+            routingStream = frame.Stream;
+            routingSequence = frame.Sequence;
+            NonSpatial = (frame.Flags & TopiaForge.Multiplayer.Engine.VoiceFrameFlags.NonSpatial) != 0;
+        }
+
+        // Keep the old presentation until fresh audio arrives; changing it here could re-present buffered samples.
+        internal void ResetRouting() { routingStream = routingSequence = 0; }
+
         /// <summary>The rate of every sample, in hertz.</summary>
         internal const int Rate = 48_000;
 
@@ -119,6 +139,11 @@ namespace TopiaForge.Multiplayer.Voice
         {
             if (buffer == null) throw new ArgumentNullException(nameof(buffer));
             if (offset < 0 || count < 0 || count > buffer.Length - offset) throw new ArgumentOutOfRangeException(nameof(count));
+            if (IsEnded)
+            {
+                Array.Clear(buffer, offset, count);
+                return count;
+            }
             // The flush position is loaded before the end: the writer flushes to an end it has already published, and the
             // end only grows, so the end loaded second is never behind the flush loaded first. Loaded the other way round,
             // a write and a flush in between put the flush past the end, and the copy below got a negative length.

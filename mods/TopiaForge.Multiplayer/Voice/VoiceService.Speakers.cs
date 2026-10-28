@@ -109,7 +109,11 @@ namespace TopiaForge.Multiplayer.Voice
                 // Each host process numbers its streams from one, so a buffer kept from another session could take a new
                 // stream for an old one, and after a lost or stalled link what was buffered is out of date. Every jitter
                 // buffer goes then, after the frames already queued and before any new one.
-                if (sessionChanged || rejoined) inbound.Writable.AddControl(VoiceControlKind.ResetAll);
+                if (sessionChanged || rejoined)
+                {
+                    inbound.Writable.AddControl(VoiceControlKind.ResetAll);
+                    foreach (var stream in streams.Values) stream.ResetRouting();
+                }
                 present.Clear();
                 connectedOthers = 0;
                 for (var index = 0; index < participants.Count; index++)
@@ -177,12 +181,23 @@ namespace TopiaForge.Multiplayer.Voice
                 while (engine.TryReceiveVoiceFrame(out var frame))
                 {
                     framesReceived++;
-                    if (EnsureStream(frame.Speaker, nowMicros) == null)
+                    var stream = EnsureStream(frame.Speaker, nowMicros);
+                    if (stream == null)
                     {
                         unlistedFramesDropped++;
                         continue;
                     }
 
+                    var nonSpatial = (frame.Flags & VoiceFrameFlags.NonSpatial) != 0;
+                    if (stream.HasRouting && stream.NonSpatial != nonSpatial)
+                    {
+                        if (!stream.AcceptsRouting(frame)) continue;
+                        // Retire both decoded and jitter-buffered audio before changing presentation. The old
+                        // emitter keeps its presentation and reads silence, even if its worker is still finishing.
+                        EndStream(frame.Speaker.Value);
+                        stream = EnsureStream(frame.Speaker, nowMicros)!;
+                    }
+                    stream.Route(frame);
                     any = true;
                     if (!batch.TryAddFrame(frame)) inboundOverflow++;
                 }

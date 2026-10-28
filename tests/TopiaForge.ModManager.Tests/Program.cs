@@ -24,6 +24,8 @@ namespace TopiaForge.ModManager.Tests
                 PublishedMapDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--communication-routing")
+            { CommunicationRuntimeTests.Run(); return 0; }
             if (args.Length == 2 && args[0] == "--authored-review")
             { AuthoredMapReviewTests.Run(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "--world-view")
@@ -695,6 +697,7 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerPrivacyTextTests.Run();
             MultiplayerSessionsTests.Run(Path.Combine(root, "multiplayer-sessions"));
             InSessionChatTests.Run();
+            CommunicationRuntimeTests.Run();
             VoiceChatTests.Run(Path.Combine(root, "voice-chat"));
             MultiplayerFrameGuardTests.Run();
             ManagerTabLookupTests.Run();

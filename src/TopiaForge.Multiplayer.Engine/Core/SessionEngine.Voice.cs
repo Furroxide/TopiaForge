@@ -456,6 +456,7 @@ namespace TopiaForge.Multiplayer.Engine
             foreach (var connection in connections)
             {
                 if (ReferenceEquals(connection, sender) || connection.Phase != HostConnectionPhase.Ready) continue;
+                if (connection.Participant == null || !CanCommunicate(new ParticipantId(speaker), connection.Participant.Id)) continue;
                 if (connection.VoiceMuteAll || connection.VoiceMutes.Contains(speaker))
                 {
                     voiceDropped[(int)VoiceDropReason.ListenerMuted]++;
@@ -463,7 +464,7 @@ namespace TopiaForge.Multiplayer.Engine
                 }
 
                 if (connection.Link.State == EngineLinkState.Closed) continue;
-                connection.Link.Send(EngineChannel.Voice, datagram);
+                connection.Link.Send(EngineChannel.Voice, RouteVoicePresentation(new ParticipantId(speaker), connection.Participant.Id, datagram));
                 voiceSent++;
             }
         }
@@ -511,6 +512,7 @@ namespace TopiaForge.Multiplayer.Engine
         {
             var inbox = voiceInbox;
             if (inbox == null || ProcessKind != MultiplayerProcessKind.Interactive || !localParticipantId.HasValue) return;
+            if (Role == EngineRole.Host && !CanCommunicate(speaker, localParticipantId.Value)) return;
             if (localVoiceMuteAll || localVoiceMutes.Contains(speaker.Value))
             {
                 voiceDropped[(int)VoiceDropReason.ListenerMuted]++;
@@ -525,7 +527,8 @@ namespace TopiaForge.Multiplayer.Engine
                     stream,
                     frame.Sequence,
                     frame.Timestamp,
-                    frame.Flags,
+                    Role == EngineRole.Host && IsGlobalCommunication(speaker, localParticipantId.Value)
+                        ? frame.Flags | VoiceFrameFlags.NonSpatial : frame.Flags,
                     new ArraySegment<byte>(datagram, frame.PayloadOffset, frame.PayloadLength),
                     nowMicros));
                 voiceDelivered++;

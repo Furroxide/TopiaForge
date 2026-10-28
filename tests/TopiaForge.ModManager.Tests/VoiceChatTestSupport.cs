@@ -127,8 +127,9 @@ namespace TopiaForge.ModManager.Tests
         }
     }
 
-    internal sealed class FakePlaybackStream : IVoicePlaybackStream
+    internal sealed class FakePlaybackStream : IVoicePlaybackStream, IInternalRoutedVoiceStream
     {
+        public bool NonSpatial { get; set; }
         internal FakePlaybackStream(ParticipantId speaker)
         {
             Speaker = speaker;

@@ -446,6 +446,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Presence/*.cs" Link="Runtime/Multiplayer/Presence/%(Filename)%(Extension)" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Players/*.cs" Link="Runtime/Multiplayer/Players/%(Filename)%(Extension)" />
     <Compile Include="../../src/TopiaForge.ModManager/ModContext.Players.cs" Link="Runtime/ModContext.Players.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.Communication.cs" Link="Runtime/ModContext.Communication.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Presence.cs" Link="Runtime/GamemodeSessionOrchestrator.Presence.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/LoopbackChannel.Datagrams.cs" Link="Multiplayer/LoopbackChannel.Datagrams.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/FakePresenceBackend.cs" Link="Multiplayer/FakePresenceBackend.cs" />

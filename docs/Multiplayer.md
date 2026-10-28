@@ -522,6 +522,10 @@ Two build-checked first-party examples keep the intended author experience hones
 
 ## Security boundary
 
+Gamemode server controllers can apply [host-enforced communication groups](internal/GamemodeCommunications.md) to
+voice and chat: proximity, private teams, observer groups and global discussions share one bounded policy. The runtime
+owns relay authorization, validated positions and scope cleanup; ordinary sessions keep their existing behavior.
+
 Every client command is bounded and rate-limited by the provider and revalidated by the server. Matching package or
 content hashes is compatibility and integrity evidence, not anti-cheat. TopiaForge mods remain trusted in-process
 code. Live transport, dedicated Robotopia hosting, redistribution, and a genuinely headless Robotopia build remain a

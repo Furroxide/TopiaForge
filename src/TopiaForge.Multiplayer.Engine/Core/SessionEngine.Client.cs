@@ -627,6 +627,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Retires the current session locally: new token, default values, no objects, no pending work.</summary>
         private void ResetLocalSession(MultiplayerSessionId newSession, SessionSeed newSeed, ulong newEpoch, string message)
         {
+            RetireCommunication();
+            DiscardHeldVoice();
+            voiceInbox?.Clear();
             var previous = sessionCancellation;
             sessionCancellation = new CancellationTokenSource();
             sessionId = newSession;

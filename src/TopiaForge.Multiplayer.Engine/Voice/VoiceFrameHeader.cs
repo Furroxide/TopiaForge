@@ -12,7 +12,10 @@ namespace TopiaForge.Multiplayer.Engine
         Discontinuous = 1,
 
         /// <summary>The last frame of a talk spurt: push-to-talk was released or voice activity ended.</summary>
-        EndOfTalk = 2
+        EndOfTalk = 2,
+
+        /// <summary>Host-only relay hint: play a global group route without positional attenuation.</summary>
+        NonSpatial = 4
     }
 
     /// <summary>One frame's place in its speaker's stream and where its codec packet sits in the datagram.</summary>
@@ -169,12 +172,13 @@ namespace TopiaForge.Multiplayer.Engine
             if (position >= datagram.Length) return false;
             var count = datagram[position++];
             if (count < 1 || count > MaximumFrames) return false;
-            if (!TryReadFrame(datagram, ref position, maximumPayload, out var flags, out var offset, out var length)) return false;
+            var allowedFlags = kind == RelayedKind ? KnownFlags | VoiceFrameFlags.NonSpatial : KnownFlags;
+            if (!TryReadFrame(datagram, ref position, maximumPayload, allowedFlags, out var flags, out var offset, out var length)) return false;
             var first = new VoiceFrameHeader(speaker, stream, sequence, timestamp, flags, offset, length);
             var second = default(VoiceFrameHeader);
             if (count == 2)
             {
-                if (!TryReadFrame(datagram, ref position, maximumPayload, out flags, out offset, out length)) return false;
+                if (!TryReadFrame(datagram, ref position, maximumPayload, allowedFlags, out flags, out offset, out length)) return false;
                 second = new VoiceFrameHeader(speaker, stream, sequence + 1, timestamp + 1, flags, offset, length);
             }
 
@@ -195,6 +199,7 @@ namespace TopiaForge.Multiplayer.Engine
             ReadOnlySpan<byte> datagram,
             ref int position,
             int maximumPayload,
+            VoiceFrameFlags allowedFlags,
             out VoiceFrameFlags flags,
             out int offset,
             out int length)
@@ -204,7 +209,7 @@ namespace TopiaForge.Multiplayer.Engine
             length = 0;
             if (position >= datagram.Length) return false;
             flags = (VoiceFrameFlags)datagram[position++];
-            if ((flags & ~KnownFlags) != 0) return false;
+            if ((flags & ~allowedFlags) != 0) return false;
             if (!TryReadVarUInt(datagram, ref position, out var size)) return false;
             if (size == 0 || size > (ulong)maximumPayload || size > (ulong)(datagram.Length - position)) return false;
             offset = position;

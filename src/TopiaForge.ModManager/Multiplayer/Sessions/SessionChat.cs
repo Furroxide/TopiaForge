@@ -107,12 +107,34 @@ namespace TopiaForge.ModManager.Sessions
         private bool Relay(MultiplayerParticipant sender, string text)
         {
             if (text.Length == 0) return false;
+            if (control is IInternalCommunicationControl routing && routing.HasCommunicationRouting)
+                return RelayAudience(sender, text, routing);
             skipped.Clear();
             var result = channel!.Send(new ArraySegment<byte>(ChatWire.Write(text, sender.Id.Value)), InternalSystemTarget.Everyone, skipped);
             // Everyone broadcasts succeed with zero recipients when all windows are full. That differs from a host
             // with nobody else joined, whose local chat still works. A partial broadcast must not be retried as a whole.
             if (!result.TryGetValue(out var recipients) || (recipients == 0 && skipped.Count > 0)) return false;
             Append(new ChatLine(Author(sender), text));
+            return true;
+        }
+
+        private bool RelayAudience(MultiplayerParticipant sender, string text, IInternalCommunicationControl routing)
+        {
+            var payload = new ArraySegment<byte>(ChatWire.Write(text, sender.Id.Value));
+            var delivered = 0;
+            var refused = 0;
+            var local = false;
+            foreach (var listener in snapshot!.Participants)
+            {
+                if (!routing.CanCommunicate(sender.Id, listener.Id)) continue;
+                if (listener.IsLocal) { local = true; continue; }
+                var result = channel!.Send(payload, InternalSystemTarget.Only(listener.Id));
+                if (result.TryGetValue(out var count) && count > 0) delivered += count;
+                else refused++;
+            }
+            // Preserve the ordinary partial-send rule: never retry a line some recipients already received.
+            if (delivered == 0 && refused > 0) return false;
+            if (local) Append(new ChatLine(Author(sender), text));
             return true;
         }
 
