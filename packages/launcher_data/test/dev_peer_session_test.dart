@@ -87,6 +87,69 @@ void main() {
     });
 
     test(
+      'a published report does not complete launch before readiness acknowledgement',
+      () async {
+        final session = await prepare();
+        final fixture = fixtures.single;
+        var launched = false;
+        await withHeldPublication(
+          fixture,
+          () async {
+            await session.launch(2);
+            launched = true;
+          },
+          () async {
+            // The child still owns its open report writer here. The old
+            // existence predicate is true before publication has completed.
+            expect(fixture.report.existsSync(), isTrue);
+            expect(launched, isFalse);
+            expect(
+              await isLaunchProcessAlive(fixture.receipt!.identity!),
+              isTrue,
+            );
+            expect(launched, isFalse);
+          },
+        );
+        expect(launched, isTrue);
+        final report = jsonDecode(fixture.report.readAsStringSync()) as Map;
+        expect(report['pid'], fixture.receipt!.pid);
+        await session.close();
+      },
+    );
+
+    test(
+      'pre-publication launch failure preserves the original rejection',
+      () async {
+        final cancellation = CancellationToken();
+        final session = await prepare(cancellation: cancellation);
+        final fixture = fixtures.single;
+        cancellation.cancel();
+        Object? originalFailure;
+        await expectLater(
+          withHeldPublication(fixture, () async {
+            try {
+              await session.launch(2);
+            } catch (error) {
+              originalFailure = error;
+              rethrow;
+            }
+          }, () async => fail('A failed launch cannot publish.')),
+          throwsA(
+            predicate<Object>(
+              (error) =>
+                  error is OperationCancelledException &&
+                  identical(error, originalFailure),
+            ),
+          ),
+        );
+        expect(originalFailure, isNotNull);
+        expect(fixture.receipt, isNull);
+        expect(fixture.report.existsSync(), isFalse);
+        await session.close();
+      },
+    );
+
+    test(
       'two through eight inert peers keep distinct processes roots and exact log arguments',
       () async {
         for (final count in [2, 8]) {
@@ -262,4 +325,47 @@ void main() {
       },
     );
   }, skip: !Platform.isWindows);
+}
+
+Future<void> withHeldPublication(
+  PeerSessionFixture fixture,
+  Future<void> Function() launch,
+  Future<void> Function() verify,
+) async {
+  final published = Completer<void>();
+  fixture.onReportPublished = published.complete;
+  Object? failure;
+  StackTrace? failureStack;
+  void recordFailure(Object error, StackTrace stack) {
+    if (failure == null) {
+      failure = error;
+      failureStack = stack;
+    }
+  }
+
+  // Observe rejection immediately, including a synchronous launch failure.
+  final settled = Future<void>.sync(
+    launch,
+  ).then<void>((_) {}, onError: recordFailure);
+  try {
+    await Future.any<void>([
+      published.future,
+      settled.then<void>((_) {
+        if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
+        throw StateError('Launch completed before held publication.');
+      }),
+    ]).timeout(const Duration(seconds: 10));
+    await verify();
+  } catch (error, stack) {
+    recordFailure(error, stack);
+  } finally {
+    try {
+      fixture.completePublication();
+    } catch (error, stack) {
+      recordFailure(error, stack);
+    } finally {
+      await settled;
+    }
+  }
+  if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
 }

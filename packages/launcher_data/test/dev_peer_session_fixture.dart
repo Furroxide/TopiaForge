@@ -18,6 +18,9 @@ final class PeerSessionFixture extends LocalLauncherRepository {
   final Directory root;
   final int index;
   bool omitIdentity = false;
+  void Function()? onReportPublished;
+  Socket? _publicationSocket;
+  void completePublication() => _publicationSocket?.write('continue\n');
   LaunchProcessReceipt? receipt;
   LauncherProfile? savedProfile;
   LaunchSessionRequest? sessionRequest;
@@ -80,32 +83,88 @@ final class PeerSessionFixture extends LocalLauncherRepository {
     script.writeAsStringSync(r'''
 import 'dart:async'; import 'dart:convert'; import 'dart:io';
 Future<void> main(List<String> args) async {
-  File('${args[0]}.tmp').writeAsStringSync(jsonEncode({'pid': pid, 'cwd': Directory.current.path,
+  final holdPublication = Platform.environment['TF_FIXTURE_HOLD_PUBLICATION'] == '1';
+  final output = File(holdPublication ? args[0] : '${args[0]}.tmp').openSync(mode: FileMode.write);
+  output.writeStringSync(jsonEncode({'pid': pid, 'cwd': Directory.current.path,
     'arguments': args.skip(2).toList(), 'root': Platform.environment['TOPIAFORGE_DATA_ROOT']}));
-  File('${args[0]}.tmp').renameSync(args[0]);
+  if (!holdPublication) {
+    output.closeSync();
+    File('${args[0]}.tmp').renameSync(args[0]);
+  }
+  final ready = await Socket.connect(InternetAddress.loopbackIPv4,
+    int.parse(Platform.environment['TF_FIXTURE_READY_PORT']!));
+  final commands = StreamIterator(ready.cast<List<int>>().transform(utf8.decoder).transform(const LineSplitter()));
+  ready.write('published\n');
+  await ready.flush();
+  if (!await commands.moveNext() || commands.current != 'continue') {
+    throw StateError('Missing publication acknowledgement.');
+  }
+  if (holdPublication) output.closeSync();
+  ready.write('ready\n');
+  await ready.flush();
+  ready.destroy();
+  await commands.cancel();
   final deadline = Stopwatch()..start();
   while (!File(args[1]).existsSync() && deadline.elapsed < const Duration(seconds: 45)) {
     await Future<void>.delayed(const Duration(milliseconds: 20));
   }
 }
 ''');
-    receipt = await startLaunchProcessWithReceipt(
-      executable: vm,
-      arguments: [
-        script.path,
-        report.path,
-        stop.path,
-        ...profile.launchSettings.extraArguments,
-      ],
-      workingDirectory: gameRoot,
-      environment: profile.launchSettings.environment,
-    );
-    final elapsed = Stopwatch()..start();
-    while (!report.existsSync()) {
-      if (elapsed.elapsed > const Duration(seconds: 10)) {
-        throw TimeoutException('Inert peer did not start.');
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final connections = StreamIterator(server);
+    Socket? socket;
+    StreamIterator<String>? messages;
+    try {
+      receipt = await startLaunchProcessWithReceipt(
+        executable: vm,
+        arguments: [
+          script.path,
+          report.path,
+          stop.path,
+          ...profile.launchSettings.extraArguments,
+        ],
+        workingDirectory: gameRoot,
+        environment: {
+          ...profile.launchSettings.environment,
+          'TF_FIXTURE_READY_PORT': '${server.port}',
+          // Expose the old path-visible/writer-open sequence deterministically.
+          if (onReportPublished != null) 'TF_FIXTURE_HOLD_PUBLICATION': '1',
+        },
+      );
+      await (() async {
+        if (!await connections.moveNext()) {
+          throw StateError('Inert peer readiness connection closed.');
+        }
+        socket = connections.current;
+        final lines = messages = StreamIterator(
+          socket!
+              .cast<List<int>>()
+              .transform(utf8.decoder)
+              .transform(const LineSplitter()),
+        );
+        if (!await lines.moveNext() || lines.current != 'published') {
+          throw StateError('Inert peer did not publish its report.');
+        }
+        final published = onReportPublished;
+        if (published == null) {
+          socket!.write('continue\n');
+          await socket!.flush();
+        } else {
+          _publicationSocket = socket;
+          published();
+        }
+        // Path visibility can precede release of the Windows rename handle.
+        // Only the child's post-rename message permits readers to open it.
+        if (!await lines.moveNext() || lines.current != 'ready') {
+          throw StateError('Inert peer did not acknowledge readiness.');
+        }
+      })().timeout(const Duration(seconds: 10));
+    } finally {
+      _publicationSocket = null;
+      socket?.destroy();
+      await messages?.cancel();
+      await connections.cancel();
+      await server.close();
     }
     return LaunchResult(
       started: true,
