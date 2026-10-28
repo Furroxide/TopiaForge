@@ -367,7 +367,7 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>Creates owner-scoped TopiaForgeUi surfaces, modals, and toasts.</summary>
-    public interface IUiService
+    public partial interface IUiService
     {
         /// <summary>Gets the current accessibility preferences for this mod's UI host.</summary>
         UiAccessibilityPreferences Accessibility { get; }

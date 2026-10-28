@@ -2,6 +2,16 @@ using UnityEngine;
 
 namespace TopiaForge.Mods.UnityUi
 {
+    /// <summary>Optional per-anchor distance and visibility policy for pooled world labels.</summary>
+    [RequiresTopiaForge("0.2.0")]
+    public interface ITopiaForgeNametagPresentation
+    {
+        /// <summary>Gets the anchor's distance fade, overriding the layer default.</summary>
+        TopiaForgeNametagFalloff Falloff { get; }
+        /// <summary>Returns whether this anchor is visible from the camera; called without allocation on the main thread.</summary>
+        bool CanShow(Vec3 cameraPosition, Vec3 anchorPosition);
+    }
+
     /// <summary>
     /// Supplies the world position a name tag follows. Queried once per frame on the main thread;
     /// keep it cheap and allocation-free. Returning false (no position yet, despawned) hides the tag

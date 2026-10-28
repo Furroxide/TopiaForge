@@ -114,6 +114,42 @@ Destructive actions require a destructive modal and explicit confirmation. Long 
 a scrollable or virtualized provider surface. Gameplay overlays should avoid steady-state allocation;
 update only when their displayed value changes.
 
+## Local world widgets (0.2)
+
+`UiProgress` renders a bounded fraction through the kit's progress bar. `UiCountdown` takes an
+end time on `Context.Ui.ClockTime`, the unscaled clock of the owning UI scope, and updates itself:
+
+```csharp
+var content = new UiColumn(
+    new UiProgress(0.25f, "Tasks"),
+    new UiCountdown(Context.Ui.ClockTime + 30, "Remaining", id: "remaining"));
+var result = Context.Ui.CreateSurface(new UiSurfaceRequest(
+    "status", "Status", "", UiSurfaceKind.Hud, content: content));
+```
+
+The clock starts when the mod or gamemode scope starts. It continues during pause and slow motion;
+it is local, not a synchronized multiplayer clock. A countdown rounds remaining seconds up, stops
+at zero, and ends with its composition or surface. No author frame callback is needed. Progress
+and countdown nodes use the surface's semantic tones, UI scale and high-contrast theme.
+
+Place a label through `Context.Ui.Labels.Add(UiWorldLabelRequest.At(position, "Marker"))`, or use
+`UiWorldLabelRequest.For(entity, "Panel")` to follow an entity automatically. Check the returned
+`OperationResult<IUiWorldLabel>` before using its value. Labels require a loaded gameplay world,
+are local to this player, and never send text or entity identity to peers. Each UI scope has a pool
+of 64 views. Text is plain text, at most 32 characters; `SetText` ignores unchanged values.
+
+Labels fade near their maximum distance (30 meters by default), hide offscreen and behind the
+camera, and respect solid geometry by default. `occlusion: false` explicitly opts out of geometry
+checks. `SetPosition` detaches an entity label to a fixed point. Dispose a handle to release its
+view early; entity despawn, its scene unloading, or owner teardown releases it automatically.
+An old handle cannot change a subsequently reused view. Labels use the HUD scheme and the kit's
+canvas scaling, high-contrast tones and band allocator.
+
+The testing kit exposes `FakeUiService.Labels`, captured `FakeUiWorldLabel` handles, controllable
+occlusion, and `FakeUiSurface.TryGetCountdownSeconds`. Advance the fake clock to test a countdown
+without rebuilding its composition. Projection and physics occlusion still need native testing.
+These additions require a `0.2.0` TopiaForge floor; a current `0.1` runtime does not activate them.
+
 ## Safe declarative controls
 
 The V1 authoring contract is immutable and Unity-free. Compose `UiNode` values and pass the root to

@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             TestCompleteCoreServiceContext();
             TestDeclarativeUiComposition();
             TestGraphUiComposition();
+            RunWorldWidgets(report: false);
             TestGameplayHudsFollowFakeScenes();
             TestLifecycleAndLeaks();
             TestDisposeNeverHidesTheRealFailure();

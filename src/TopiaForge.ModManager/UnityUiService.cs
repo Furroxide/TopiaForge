@@ -153,6 +153,7 @@ namespace TopiaForge.ModManager
                     nativeRoot = null;
                 }
 
+                surface.SetClock(clock);
                 if (request.Content != null)
                 {
                     var contentResult = surface.SetContent(request.Content);

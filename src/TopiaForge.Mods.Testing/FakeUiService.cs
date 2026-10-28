@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Captures UI surfaces, modals, and toasts without rendering.</summary>
-    public sealed class FakeUiService : IUiService
+    public sealed partial class FakeUiService : IUiService
     {
         private readonly FakeModLifetime lifetime;
         private readonly List<FakeUiSurface> surfaces = new List<FakeUiSurface>();
@@ -112,6 +112,7 @@ namespace TopiaForge.Mods.Testing
                 request,
                 value => surfaces.Remove(value),
                 scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay);
+            surface.SetClock(() => ClockTime);
             if (pendingContentFailures.TryGetValue(request.Id, out var contentFailure))
             {
                 pendingContentFailures.Remove(request.Id);
