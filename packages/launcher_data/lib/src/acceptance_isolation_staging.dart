@@ -1,6 +1,6 @@
 part of 'launch_staging_store.dart';
 
-/// A private acceptance sidecar; this never adds fields to profile wire V4.
+/// A private acceptance sidecar binding the exact V4 or V5 request bytes.
 final class AcceptanceIsolationRequest {
   AcceptanceIsolationRequest(
     this.context,
@@ -24,6 +24,7 @@ extension AcceptanceIsolationStaging on LaunchStagingStore {
   Future<AcceptanceIsolationRequest> writeAcceptanceRequest({
     required AcceptanceIsolationContext context,
     required ProfileLaunchConfigurationV4 profile,
+    StagedLaunchRequest? request,
     required String challenge,
     required DateTime now,
   }) async {
@@ -38,13 +39,13 @@ extension AcceptanceIsolationStaging on LaunchStagingStore {
     _directories();
     _ordinaryFile(profileFile);
     final bytes = await profileFile.readAsBytes();
+    final expected = request ?? StagedLaunchRequest.forLaunch(profile);
     if (bytes.length > LaunchStagingStore.documentLimit ||
-        jsonEncode(
-              ProfileLaunchConfigurationV4.fromJson(
-                jsonDecode(utf8.decode(bytes)) as Map<String, Object?>,
-              ).toJson(),
-            ) !=
-            jsonEncode(profile.toJson())) {
+        expected.requestId != profile.requestId ||
+        jsonEncode(expected.executable.toJson()) !=
+            jsonEncode(profile.toJson()) ||
+        StagedLaunchRequest.decode(utf8.decode(bytes)).encode() !=
+            expected.encode()) {
       throw const FormatException(
         'Acceptance must bind the exact staged launch profile.',
       );

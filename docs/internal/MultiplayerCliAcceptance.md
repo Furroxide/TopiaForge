@@ -111,37 +111,59 @@ and guest in that order. The probe comes first, so a missing probe is refused
 as `TFMPACCEPT110` before any QA layout is read. The harness's own refusals
 (`TFMPACCEPT100` to `TFMPACCEPT140`) print as they are; any other failure prints
 one generic sentence, since admission errors can name private QA roots. Both
-use the existing V4 acceptance bootstrap and its owned process receipts.
+use V5 host-session and join-session requests, each hashed into its private
+challenge sidecar. The same admission binds the measured identity and exact roots.
 Cleanup attempts both original receipts even if one fails. Unconfirmed cleanup
-prevents success. The single-instance V5 prohibition is not weakened.
+prevents success. Acceptance never replaces an already running process, and
+profile arguments or environment overrides remain forbidden. Ordinary single-instance
+acceptance still writes V4. No guest config names the host's evidence root.
+The original process receipts must remain live during collection and at the final
+evidence check; an exited or unverifiable peer cannot be replaced by later markers.
 
 ### Game-side prerequisite
 
-The planned `tests/TopiaForge.MultiplayerAcceptanceMod` does not exist at this
-base. The CLI runner and dry run are present, but a real run remains blocked until
-that probe implements and verifies this contract. No dry run substitutes for it.
+Build and pack `tests/TopiaForge.MultiplayerAcceptanceMod`, then supply its reviewed
+archive with `--package`. The probe observes the supported public session and uses
+`Context.Ui` for a Paper window with scrollable manual checks, toggled by F9. It
+does not host, join, resolve addresses or write outside its mod-owned services.
+The runner owns those operations through the production launcher and V5 pipeline.
 
 - Package id: `dev.topiaforge.multiplayer-acceptance`.
-- V4 bootstrap targets: that id plus `.host` and `.guest`. A successful target
-  means the isolated probe is ready; it must not wait for the other peer to launch.
+- The host starts the `.session` target with the Worlds Free Play mode and Open
+  Sandbox. The guest starts at the main menu and follows through normal joining.
+  The runner confirms matching outcome V2 and hosting progress V2, verifies the
+  signed descriptor against the confirmed server identity, then launches the guest
+  with an exact loopback target and confirms its outcome and in-session progress
+  against that target's server identity.
+  The local port is selected before launch; a race for that port fails explicitly.
 - Schema-1 config `value`: `challenge`, `peer` (`host` or `guest`), `topology`
-  (`listen-pair`), `controlRoot` (private host evidence root), and `requiredCases`.
-- The probe owns the live host/join exercises and coordination in `controlRoot`.
-  Every message must carry the current challenge. Descriptor pins must come from
-  the real host; no dummy admission result or forced session success counts.
+  (`listen-pair`), `requiredCases`, and `checks` containing that peer's case ids,
+  modes and instructions. Each peer reads only its own config and writes through
+  its attributed logger. Voice and router forwarding are off for this base pair.
+- Both peers must emit `TF-MP-SESSION|READY|challenge|peer` after the public session
+  reports the correct local role and at least two connected participants.
 - Attributed manager log markers, with no extra suffix:
   `TF-MP-ACCEPT|PASS|challenge|peer|case-id|automatic` at INFO, or
   `TF-MP-ACCEPT|FAIL|challenge|peer|case-id|automatic` at ERROR. Manual cases use
   `manual` only after the tester has performed and confirmed the stated check.
+- `NOT-RUN` at INFO explicitly leaves a check incomplete. The base probe supports
+  host-start plus in-session manual observations. Other automatic scenarios and
+  voice, kick/ban and host-quit need their own driver. Invite and relay are marked
+  as service-dependent in the dry-run inventory. They cannot pass by observing a
+  local pair. The result records `notRun`, `notRunReasons` and `bothInSession`;
+  any not-run row prevents overall success. Use `--case multiplayer.host-start`
+  for the base transport check; the complete release suite needs the later drivers.
 - The harness requires each case's listed peers, rejects replayed challenges,
   wrong logger sources and wrong manual/automatic modes, and keeps any failure.
   Both fresh `last-run.json` records must show the exact installed archive and
-  critical-file receipts loaded, with no root startup error.
+  critical-file receipts loaded, with no root startup error. A previous startup
+  identity or a completion timestamp outside the current run cannot qualify.
+  Log polling reads at most 64 KiB at a time and refuses lines over 8 KiB.
 
 `multiplayer-acceptance-result.json` is private QA evidence, including both
 runtime isolation acknowledgements. Do not publish it or raw game logs; use
 reviewed hashes. Source-only tests exercise synthetic peers and cannot prove
-the multiplayer transport or the missing probe. Internet, real input, rendered
+the multiplayer transport. Internet, real input, rendered
 state and microphone checks still need a live run.
 
 ## Joining

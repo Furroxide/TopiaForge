@@ -12,9 +12,6 @@ extension _ProcessHelpers on LocalLauncherRepository {
   }) async {
     final acceptance = _acceptanceIsolation;
     cancellation?.throwIfCancelled();
-    if (acceptance != null && session != null) {
-      throw StateError('Acceptance runs never host or join a session.');
-    }
     if (acceptance != null) {
       acceptance.verify();
       if (_acceptanceChallenge == null ||
@@ -106,6 +103,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
         _acceptanceRequests[requestId] = await store.writeAcceptanceRequest(
           context: acceptance,
           profile: configuration,
+          request: request,
           challenge: _acceptanceChallenge!,
           now: DateTime.now().toUtc(),
         );
@@ -114,6 +112,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
           launchFile.path,
           requestId,
         );
+        if (session != null) environment['TOPIAFORGE_LIVE_MULTIPLAYER'] = '1';
       }
       if (await _runningForLaunch(refreshed)) {
         await store.deleteLaunchRequest(request);

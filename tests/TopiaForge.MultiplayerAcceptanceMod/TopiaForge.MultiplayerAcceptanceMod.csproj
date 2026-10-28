@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <TopiaForgeSafeProject>true</TopiaForgeSafeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="topiaforge.mod.json" />
+  </ItemGroup>
+</Project>

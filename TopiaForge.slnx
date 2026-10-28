@@ -36,6 +36,7 @@
     <Project Path="mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TopiaForge.MultiplayerAcceptanceMod/TopiaForge.MultiplayerAcceptanceMod.csproj" />
     <Project Path="tests/TopiaForge.ManagedRefs.Tests/TopiaForge.ManagedRefs.Tests.csproj" />
     <Project Path="tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj" />
     <Project Path="tests/TopiaForge.Mods.Analyzers.Tests/TopiaForge.Mods.Analyzers.Tests.csproj" />

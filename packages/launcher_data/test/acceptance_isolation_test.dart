@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_data/src/acceptance_isolation_bootstrap.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -11,6 +12,63 @@ void main() {
   late IsolationFixture f;
   setUp(() => f = IsolationFixture());
   tearDown(() => f.dispose());
+  for (final host in [true, false]) {
+    test(
+      'V5 ${host ? 'host' : 'join'} sidecar binds the complete session request',
+      () async {
+        final settings = MultiplayerSettings(displayName: 'Acceptance');
+        final session = host
+            ? LaunchSessionRequest.host(
+                intentId: 'bound-session',
+                settings: settings,
+                privacy: SessionPrivacy.relayOnly,
+                host: LaunchHostOptions(name: 'Acceptance'),
+              )
+            : LaunchSessionRequest.join(
+                intentId: 'bound-session',
+                settings: settings,
+                privacy: SessionPrivacy.relayOnly,
+                target: LaunchDirectTarget(
+                  host: '127.0.0.1',
+                  port: 12345,
+                  serverId: 'a' * 64,
+                  descriptorSha256: 'b' * 64,
+                  packageDigest: 'c' * 64,
+                ),
+              );
+        final staged = StagedLaunchRequest.forLaunch(
+          f.profile,
+          session: session,
+        );
+        final store = LaunchStagingStore(f.game.path);
+        final file = await store.writeLaunchRequest(staged);
+        await expectLater(
+          store.writeAcceptanceRequest(
+            context: f.admit(),
+            profile: f.profile,
+            challenge: 'a' * 64,
+            now: DateTime.now(),
+          ),
+          throwsFormatException,
+        );
+        final binding = await store.writeAcceptanceRequest(
+          context: f.admit(),
+          profile: f.profile,
+          request: staged,
+          challenge: 'a' * 64,
+          now: DateTime.now(),
+        );
+        expect(
+          binding.document['profileRequestSha256'],
+          sha256.convert(file.readAsBytesSync()).toString(),
+        );
+        expect(
+          StagedLaunchRequest.decode(file.readAsStringSync()).schemaVersion,
+          5,
+        );
+      },
+    );
+  }
   test(
     'admission is read-only and verifies measured identity on every use',
     () {

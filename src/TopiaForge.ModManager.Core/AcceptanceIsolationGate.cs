@@ -25,7 +25,7 @@ namespace TopiaForge.ModManager.Core
                 if (request.Integer("schemaVersion") != 1) reasons.Add("unsupported-schema");
                 if (request.Text("requestId", 128) != requestId) reasons.Add("request-mismatch");
                 request.Digest("challenge"); request.Digest("isolationEvidenceSha256");
-                var profile = LaunchTransportJson.ReadProfile(profileJson);
+                var profile = LaunchTransportJson.ReadLaunchRequest(profileJson).Profile;
                 if (profile.RequestId != requestId) reasons.Add("profile-request-mismatch");
                 if (request.Digest("profileRequestSha256") != AcceptanceIsolationJson.Hash(profileJson)) reasons.Add("profile-bytes-mismatch");
                 var issued = Date(request.Text("issuedAtUtc", 64)); var expires = Date(request.Text("expiresAtUtc", 64));

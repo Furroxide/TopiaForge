@@ -39,6 +39,42 @@ void main() {
       'close:host',
     ]);
   });
+  for (final peer in ['host', 'guest']) {
+    test(
+      'an exited $peer cannot supply results after startup confirmation',
+      () async {
+        fixture.deadPeer = peer;
+        await expectLater(fixture.run(), throwsStateError);
+        expect(fixture.events.sublist(fixture.events.length - 2), [
+          'close:guest',
+          'close:host',
+        ]);
+      },
+    );
+  }
+  test(
+    'the final evidence check rejects a process lost during collection',
+    () async {
+      fixture.dieAtFinal = true;
+      await expectLater(fixture.run(), throwsStateError);
+      expect(fixture.events.last, 'close:host');
+    },
+  );
+  test(
+    'an exited process aborts while its guest markers are missing',
+    () async {
+      fixture.deadPeer = 'host';
+      fixture.omitGuest = true;
+      final started = fixture.now;
+      await expectLater(fixture.run(), throwsStateError);
+      expect(
+        fixture.now,
+        started,
+        reason:
+            'Do not wait out the observation timeout after losing ownership.',
+      );
+    },
+  );
   test(
     'one cleanup failure does not prevent cleanup of the other peer',
     () async {
@@ -72,6 +108,28 @@ void main() {
     expect(result['succeeded'], isFalse);
     expect(result['receiptsMatch'], isFalse);
   });
+  for (final stale in [true, false]) {
+    test(
+      '${stale ? 'pre-existing' : 'future-dated'} receipts cannot certify a new pair',
+      () async {
+        fixture.reuseOldReports = stale;
+        fixture.futureReport = !stale;
+        await expectLater(fixture.run(), throwsStateError);
+        expect(fixture.events.last, 'close:host');
+        final report =
+            jsonDecode(
+                  File(
+                    p.join(
+                      fixture.host.output.path,
+                      'multiplayer-acceptance-result.json',
+                    ),
+                  ).readAsStringSync(),
+                )
+                as Map;
+        expect(report['receiptsMatch'], isFalse);
+      },
+    );
+  }
   test(
     'missing guest observation times out and cleans both processes',
     () async {
@@ -124,14 +182,20 @@ final class _Pair {
   final events = <String>[];
   var now = DateTime.utc(2026, 1, 1);
   var admissions = 0;
-  String? failConfirm, failClose;
+  String? failConfirm, failClose, deadPeer;
   bool tamper = false, omitGuest = false;
+  bool reuseOldReports = false, futureReport = false;
+  bool dieAtFinal = false;
   _Pair() {
     host.package.writeAsBytesSync(
       acceptancePackageBytes(MultiplayerAcceptanceSpec.packageId),
     );
   }
   Future<Map<String, Object?>> run({bool refuseGuest = false}) {
+    if (reuseOldReports) {
+      writeRun(host.admitIsolation(host.options()), '0' * 64, 'host');
+      writeRun(guest.admitIsolation(guest.options()), '0' * 64, 'guest');
+    }
     final spec = MultiplayerAcceptanceSpec.decode(
       jsonEncode({
         'schemaVersion': 1,
@@ -165,7 +229,14 @@ final class _Pair {
       launchPeer: (_, context, challenge, peer) async {
         events.add('launch:$peer');
         writeRun(context, challenge, peer);
-        return _Session(peer, events, failConfirm == peer, failClose == peer);
+        return _Session(
+          peer,
+          events,
+          failConfirm == peer,
+          failClose == peer,
+          deadPeer == peer,
+          dieAtFinal,
+        );
       },
     ).run(
       MultiplayerAcceptanceOptions(
@@ -191,17 +262,24 @@ final class _Pair {
     if (!(peer == 'guest' && omitGuest)) {
       File(p.join(logs.path, 'manager.log')).writeAsStringSync(
         '${now.toIso8601String()} [INFO] [${MultiplayerAcceptanceSpec.packageId}] '
-        'TF-MP-ACCEPT|PASS|$challenge|$peer|multiplayer.lan|automatic\n',
+        'TF-MP-ACCEPT|PASS|$challenge|$peer|multiplayer.lan|automatic\n'
+        '${now.toIso8601String()} [INFO] [${MultiplayerAcceptanceSpec.packageId}] '
+        'TF-MP-SESSION|READY|$challenge|$peer\n',
+        mode: FileMode.append,
       );
     }
+    final lastRun = File(p.join(logs.path, 'last-run.json'));
+    if (reuseOldReports && lastRun.existsSync()) return;
     final receipt = readLiveAcceptancePackageReceipt(
       host.package.path,
     ).toJson();
     if (peer == 'guest' && tamper) receipt['sourceSha256'] = '0' * 64;
-    File(p.join(logs.path, 'last-run.json')).writeAsStringSync(
+    lastRun.writeAsStringSync(
       jsonEncode({
         'schemaVersion': 1,
-        'completedAtUtc': now.toIso8601String(),
+        'completedAtUtc':
+            (futureReport ? now.add(const Duration(days: 1)) : now)
+                .toIso8601String(),
         'sessionId': 'test-$peer',
         'rootError': '',
         'packages': [
@@ -223,11 +301,27 @@ final class _Pair {
 }
 
 final class _Session implements LiveAcceptanceSession {
-  _Session(this.peer, this.events, this.failConfirm, this.failClose);
+  _Session(
+    this.peer,
+    this.events,
+    this.failConfirm,
+    this.failClose,
+    this.dead,
+    this.dieAtFinal,
+  );
   final String peer;
   final List<String> events;
-  final bool failConfirm, failClose;
+  final bool failConfirm, failClose, dead, dieAtFinal;
+  int livenessChecks = 0;
   bool confirmed = false, closed = false;
+  @override
+  Future<void> verifyAlive() async {
+    livenessChecks++;
+    if (dead || (dieAtFinal && livenessChecks > 1)) {
+      throw StateError('The original fixture process has exited.');
+    }
+  }
+
   @override
   Future<void> confirm(Duration timeout) async {
     events.add('confirm:$peer');

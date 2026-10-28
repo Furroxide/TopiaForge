@@ -261,6 +261,17 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
       // Dev installs stage everything, including DevTool-category mods.
       includeDevMods: !args.contains('--no-dev-mods'),
     );
+    if (acceptanceIsolation != null) {
+      // The isolated V5 launch must resolve its dependencies before startup;
+      // leaving them in the inbox would make probe installation fail first.
+      acceptanceIsolation!.verify();
+      final installed = await launcher.installInboxPackages(install);
+      if (installed.status != PackageInboxInstallStatus.success) {
+        throw StateError(
+          'Acceptance runtime packages could not be installed. Repair the isolated package inbox before retrying.',
+        );
+      }
+    }
     stdout.writeln('');
     stdout.writeln('Installed the TopiaForge runtime into ${install.path}');
     stdout.writeln('${staged.length} package(s) staged in the package-inbox.');

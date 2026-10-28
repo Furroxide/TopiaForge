@@ -111,12 +111,15 @@ final class MultiplayerAcceptanceCase {
   ) : peers = List.unmodifiable(peers);
   final String id, steps;
   final bool manual;
+  bool get requiresService =>
+      id == 'multiplayer.invite' || id == 'multiplayer.relay';
   final List<String> peers;
   Map<String, Object?> toJson() => {
     'id': id,
     'mode': manual ? 'manual' : 'automatic',
     'peers': peers,
     'steps': steps,
+    if (requiresService) 'requiresService': true,
   };
 }
 
@@ -128,6 +131,8 @@ final class MultiplayerAcceptanceObservations {
   final List<MultiplayerAcceptanceCase> cases;
   final _passed = <String>{};
   final _failed = <String>{};
+  final _notRun = <String>{};
+  final _ready = <String>{};
 
   void observe({
     required String peer,
@@ -136,8 +141,13 @@ final class MultiplayerAcceptanceObservations {
     required String message,
   }) {
     if (source != MultiplayerAcceptanceSpec.packageId) return;
+    if (level == 'INFO' &&
+        message == 'TF-MP-SESSION|READY|$challenge|$peer' &&
+        (peer == 'host' || peer == 'guest')) {
+      _ready.add(peer);
+    }
     final marker = RegExp(
-      r'^TF-MP-ACCEPT\|(PASS|FAIL)\|([0-9a-f]{64})\|(host|guest)\|'
+      r'^TF-MP-ACCEPT\|(PASS|FAIL|NOT-RUN)\|([0-9a-f]{64})\|(host|guest)\|'
       r'(multiplayer\.[a-z][a-z0-9-]{0,80})\|(automatic|manual)$',
     ).firstMatch(message);
     if (marker == null || marker[2] != challenge || marker[3] != peer) return;
@@ -150,6 +160,7 @@ final class MultiplayerAcceptanceObservations {
     final key = '$peer:${entry.id}';
     if (marker[1] == 'PASS' && level == 'INFO') _passed.add(key);
     if (marker[1] == 'FAIL' && level == 'ERROR') _failed.add(key);
+    if (marker[1] == 'NOT-RUN' && level == 'INFO') _notRun.add(key);
   }
 
   List<String> get missing => [
@@ -158,5 +169,9 @@ final class MultiplayerAcceptanceObservations {
         if (!_passed.contains('$peer:${c.id}')) '$peer:${c.id}',
   ];
   List<String> get failures => _failed.toList()..sort();
-  bool get complete => missing.isEmpty && failures.isEmpty;
+  List<String> get notRun => _notRun.toList()..sort();
+  bool get bothInSession => _ready.containsAll(['host', 'guest']);
+  bool get settled => bothInSession && missing.every(_notRun.contains);
+  bool get complete =>
+      bothInSession && missing.isEmpty && failures.isEmpty && notRun.isEmpty;
 }

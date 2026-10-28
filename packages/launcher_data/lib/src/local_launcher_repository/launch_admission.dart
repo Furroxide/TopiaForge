@@ -57,8 +57,8 @@ extension _LaunchAdmission on LocalLauncherRepository {
         'selectionOverride',
       );
     }
-    final refusal = _acceptanceIsolation != null
-        ? 'Acceptance runs never host or join a session.'
+    final refusal = _acceptanceIsolation != null && restart
+        ? 'Acceptance never replaces a running process; close its original receipt first.'
         : profile.launchSettings.safeMode
         ? 'Safe Mode never hosts or joins a session. Turn Safe Mode off for '
               'this profile, then try again.'
