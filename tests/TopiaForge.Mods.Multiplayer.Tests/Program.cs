@@ -82,6 +82,27 @@ internal static class Program
                 Console.WriteLine("Engine readiness: 28 tests passed.");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--voice-session-readiness")
+            {
+                VoiceSessionChangeTests.ASessionChangeDropsEveryJitterBuffer();
+                VoiceSessionChangeTests.AHostWhoseSessionIsReplacedDropsItsJitterBuffers();
+                VoiceSessionChangeTests.TheWorkerAppliesControlInTheOrderItWasQueued();
+                VoiceSessionChangeTests.TheWishToHearNobodyFollowsThePlayerAndNamesNobody();
+                VoiceSessionChangeTests.MutesTheEngineKeepsOutliveAnInPlaceReplacement();
+                VoiceSessionChangeTests.NamesMutedWhileJoiningStayWithTheirHost();
+                VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownSurviveAnInPlaceReplacement();
+                VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownNeverReachAnotherHost();
+                VoiceSessionChangeTests.NamesGivenWithNoHostJoinedNameNobody();
+                VoiceSessionChangeTests.NamesGivenBeforeTheNewHostListsItsPlayersNameNobodyThere();
+                VoiceSessionChangeTests.AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams();
+                Console.WriteLine("Voice session changes: 11 tests passed.");
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--voice-adjacent-readiness")
+            {
+                VoiceReadinessFocusedTests.Run();
+                return 0;
+            }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {

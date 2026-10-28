@@ -73,6 +73,9 @@ internal sealed class VoiceServiceRig : IDisposable
         Connect(member, host);
         if (!untilReady) return member;
         Step(5);
+        // Finish the deferred snapshot-readiness turn at the last pumped timestamp. This raw-engine rig has no
+        // runtime map observer; do not advance capture, playback, transport or the five-step join budget.
+        engine.Pump(NowMicros - StepMicros);
         if (engine.Snapshot.State != MultiplayerSessionState.Ready) throw new InvalidOperationException(name + " did not join.");
         return member;
     }
