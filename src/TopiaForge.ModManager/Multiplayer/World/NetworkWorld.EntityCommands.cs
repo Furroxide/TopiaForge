@@ -23,6 +23,31 @@ namespace TopiaForge.ModManager
             catch (Exception) { return false; }
         }
 
+        private void ApplyBoundProvider(ClientWorldEntity mirrored, IEntity entity)
+        {
+            try
+            {
+                if (factories(mirrored.Kind) is IInternalReplicaCommands provider)
+                    provider.ApplyReplica(entity, new InternalSpawnDescriptor(mirrored.Kind,
+                        ToTransform(mirrored.EntryPose, mirrored.Scale), mirrored.Payload));
+            }
+            catch (Exception) { counters.MarkFailures++; }
+        }
+
+        private void ResetEntityCommands()
+        {
+            entityCommands.Clear();
+            foreach (var local in localByEntity.Values)
+            {
+                try
+                {
+                    if (factories(local.Kind) is IInternalReplicaCommandLifetime provider)
+                        provider.ResetPendingCommands(local.Entity);
+                }
+                catch (Exception) { counters.MarkFailures++; }
+            }
+        }
+
         // Wait for adoption before edits can change the payload used to match the predicted body.
         internal OperationResult<bool> SubmitEntityCommand(RuntimeReplication context, IEntity entity, string kind, byte[] payload)
         {

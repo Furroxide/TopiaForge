@@ -136,6 +136,8 @@ namespace TopiaForge.ModManager.TestDoubles
         /// <summary>The host replaces the session: every player's stream restarts.</summary>
         internal void ReplaceSession()
         {
+            Host.LifetimeId = Guid.NewGuid();
+            SessionVersion++;
             foreach (var player in players)
             {
                 if (player.StreamId == 0) continue;
@@ -147,6 +149,8 @@ namespace TopiaForge.ModManager.TestDoubles
         private void StartStream(LoopbackControl player)
         {
             var stream = nextStream++;
+            player.LifetimeId = Guid.NewGuid();
+            SessionVersion++;
             player.StreamId = stream;
             player.BumpGeneration();
             Host.BumpGeneration();
@@ -207,6 +211,7 @@ namespace TopiaForge.ModManager.TestDoubles
 
         internal ulong Generation => generation;
         internal MultiplayerPlayerKey PlayerKey { get; set; }
+        internal Guid LifetimeId { get; set; } = Guid.NewGuid();
 
         internal IEnumerable<LoopbackChannel> Channels => channels.Values;
 
@@ -261,12 +266,12 @@ namespace TopiaForge.ModManager.TestDoubles
                 if (online)
                 {
                     var host = network.Host;
-                    participants.Add(new MultiplayerParticipant(host.Id, host.Name, ReferenceEquals(host, this), true, true, MultiplayerConnectionQuality.Unknown, null, host.PlayerKey));
+                    participants.Add(new MultiplayerParticipant(host.Id, host.Name, ReferenceEquals(host, this), true, true, MultiplayerConnectionQuality.Unknown, null, host.PlayerKey, host.LifetimeId));
                     listedSelf = ReferenceEquals(host, this);
                     foreach (var member in network.Members)
                     {
                         participants.Add(new MultiplayerParticipant(member.Id, member.Name, ReferenceEquals(member, this), network.IsConnected(member), false,
-                            MultiplayerConnectionQuality.Unknown, null, member.PlayerKey));
+                            MultiplayerConnectionQuality.Unknown, null, member.PlayerKey, member.LifetimeId));
                         listedSelf |= ReferenceEquals(member, this);
                     }
                 }

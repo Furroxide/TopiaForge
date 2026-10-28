@@ -13,6 +13,7 @@ internal static class Program
             if (args.Length == 1 && args[0] == "--voice-flood") { VoiceRelayPolicyTests.FloodsJustPastTwiceALimitAreRateLimitedWithoutStrikesEnoughToMute(); Console.WriteLine("Voice flood regression passed."); return 0; }
             if (args.Length == 1 && args[0] == "--voice-retirement-service") { VoiceRetirementTests.Service(); return 0; }
             if (args.Length == 1 && args[0] == "--voice-retirement-engine") { VoiceRetirementTests.Engine(); return 0; }
+            if (args.Length == 1 && args[0] == "--participant-lifetimes") { ParticipantLifetimeTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--per-player") { PerPlayerStateTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--communication-routing")
             {
@@ -35,6 +36,7 @@ internal static class Program
             if (args.Length == 1 && args[0] == "--in-session-chat") { InSessionChatProviderTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--players")
             {
+                ParticipantLifetimeTests.Run();
                 ParticipantListTests.TheListGenerationMovesOnlyWhenTheListIsLetGo();
                 EnginePlayersTests.CancelBeforeJoinFlush();
                 Console.WriteLine("Players engine: join generations, reconnect, solo and pre-flush cancellation passed.");
@@ -761,6 +763,7 @@ internal static class Program
             ParticipantListProviderTests.ALostLinkKeepsTheListAndTheVoiceStreams();
             ParticipantListProviderTests.AJoinWhoseWholeAnswerArrivesAtOnceEndsThePreviousHostsStreams();
             VoiceSessionChangeTests.AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams();
+            ParticipantLifetimeTests.Run();
             ParticipantListTests.TheListGenerationMovesOnlyWhenTheListIsLetGo();
             EnginePlayersTests.CancelBeforeJoinFlush();
             ParticipantListFuzzTests.EverySnapshotShowsTheListOfTheHostThatSentIt();

@@ -78,13 +78,7 @@ namespace TopiaForge.ModManager
                     TryResolveRef(reference, out var resolved) ? resolved : null);
                 if (result.Succeeded && record.IsLive)
                 {
-                    var descriptor = commands.Describe(record.Entity);
-                    var previous = record.Description;
-                    if (previous.Descriptor is InternalSpawnDescriptor before && before.Payload.Span.SequenceEqual(descriptor.Payload.Span)) return result;
-                    if (descriptor.Kind != kind) throw new InvalidOperationException("A command cannot change entity kind.");
-                    Runtime.Spawns.Record(record.Entity, new MultiplayerSpawnDescription(previous.OwnerModId,
-                        previous.Profile, previous.Source, kind, previous.ContentKey, descriptor.Transform, descriptor),
-                        record.Owner, record.ShadowKey, record.OwnerSlot);
+                    RefreshEntityDescription(record);
                 }
                 return result;
             }
@@ -92,6 +86,20 @@ namespace TopiaForge.ModManager
             {
                 return OperationResult<bool>.Failure(ModErrorCode.External, "The entity command could not be applied.");
             }
+        }
+
+        internal void RefreshEntityDescription(MultiplayerSpawnRecord record)
+        {
+            if (!record.IsLive || !TryGetReplicaFactory(record.Description.Kind, out var factory) ||
+                !(factory is IInternalReplicaCommands commands)) return;
+            var kind = record.Description.Kind;
+            var descriptor = commands.Describe(record.Entity);
+            var previous = record.Description;
+            if (previous.Descriptor is InternalSpawnDescriptor before && before.Payload.Span.SequenceEqual(descriptor.Payload.Span)) return;
+            if (descriptor.Kind != kind) throw new InvalidOperationException("A command cannot change entity kind.");
+            Runtime.Spawns.Record(record.Entity, new MultiplayerSpawnDescription(previous.OwnerModId,
+                previous.Profile, previous.Source, kind, previous.ContentKey, descriptor.Transform, descriptor),
+                record.Owner, record.ShadowKey, record.OwnerSlot);
         }
     }
 }

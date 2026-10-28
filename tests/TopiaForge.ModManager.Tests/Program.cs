@@ -26,6 +26,8 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && args[0] == "--communication-routing")
             { CommunicationRuntimeTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--replica-motion-rejections") { ReplicaMotionRejectionTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--replica-state-review") { ReplicaStateReviewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--first-party-local-robots")
             { FirstPartyLocalRobotTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--first-party-replication")

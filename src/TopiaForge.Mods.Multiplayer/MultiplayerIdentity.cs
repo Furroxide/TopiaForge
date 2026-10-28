@@ -232,6 +232,14 @@ namespace TopiaForge.Mods
             MultiplayerConnectionQuality quality,
             int? pingMilliseconds,
             MultiplayerPlayerKey playerKey)
+            : this(id, displayName, isLocal, isConnected, isHost, quality, pingMilliseconds, playerKey, Guid.Empty)
+        {
+        }
+
+        /// <summary>Creates a participant snapshot with a host-issued connection lifetime. Empty means unavailable.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public MultiplayerParticipant(ParticipantId id, string displayName, bool isLocal, bool isConnected, bool isHost,
+            MultiplayerConnectionQuality quality, int? pingMilliseconds, MultiplayerPlayerKey playerKey, Guid lifetimeId)
         {
             if (!id.IsValid)
             {
@@ -258,6 +266,7 @@ namespace TopiaForge.Mods
             // Coarse buckets keep ping useful for presentation without exposing fine-grained timing.
             PingMilliseconds = pingMilliseconds.HasValue ? (pingMilliseconds.Value + 5) / 10 * 10 : (int?)null;
             PlayerKey = playerKey;
+            LifetimeId = lifetimeId;
         }
 
         /// <summary>Gets the session-scoped identity.</summary>
@@ -283,6 +292,14 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets the player's key on this host, or the default value when the provider has none.</summary>
         public MultiplayerPlayerKey PlayerKey { get; }
+
+        /// <summary>
+        /// Gets an opaque host-issued lifetime shared by every peer, including for the host. It changes on each accepted
+        /// connection and session replacement; a stalled link alone preserves it. Empty means the provider has none.
+        /// This value is not a persistence identity. Entity references also bind it to the current session id.
+        /// </summary>
+        [RequiresTopiaForge("0.2.0")]
+        public Guid LifetimeId { get; }
     }
 
     /// <summary>Immutable readiness, side, participant, and clock state for a session.</summary>

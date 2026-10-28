@@ -13,10 +13,9 @@ namespace TopiaForge.ModManager.Tests
             var host = MultiplayerPlayers.Install(rig.Host.Runtime, rig.Host.Presence);
             rig.Host.Replication.Players = host;
             rig.Host.Runtime.Connect();
-            rig.Host.Control.PlayerKey = new MultiplayerPlayerKey("host-lifetime");
             rig.OpenToMultiplayer();
             var guest = rig.AddPlayer("guest");
-            guest.Control.PlayerKey = new MultiplayerPlayerKey("guest-lifetime");
+            guest.Control.PlayerKey = new MultiplayerPlayerKey("persistent-guest");
             guest.Runtime.Disconnect();
             var local = MultiplayerPlayers.Install(guest.Runtime, guest.Presence);
             guest.Replication.Players = local;
@@ -31,7 +30,6 @@ namespace TopiaForge.ModManager.Tests
             Check(host.TryCreateReference(avatar!, out var roundTrip) && roundTrip.Equals(reference), "references round trip across peers");
             rig.Network.Leave(guest.Control); rig.Frames(3);
             Check(!rig.Host.Replication.TryResolveRef(reference, out _), "departed player does not resolve");
-            guest.Control.PlayerKey = new MultiplayerPlayerKey("successor-lifetime");
             rig.Join(guest); rig.Frames(24);
             Check(!rig.Host.Replication.TryResolveRef(reference, out _), "new player lifetime cannot consume a stale target");
             Console.WriteLine("First-party player references: 1 group passed.");

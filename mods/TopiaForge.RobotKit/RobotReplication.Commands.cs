@@ -29,12 +29,16 @@ namespace TopiaForge.RobotKit
                             return () => Update(state, agent.ConfigureMovement(movement), Copy(state.Request, movement: movement));
                         case RobotCommand.MoveTo:
                             var position = RobotReplicationWire.Vector(reader);
-                            return () => agent.MoveTo(position);
+                            var move = RobotReplicationWire.Motion(reader);
+                            return () => Motion(state, () => agent.MoveTo(position), move);
                         case RobotCommand.Chase:
                             var reference = RobotReplicationWire.Reference(reader);
-                            return () => resolve(reference) is IEntity chased && chased.IsAlive ? agent.Chase(chased)
-                                : OperationResult<bool>.Failure(ModErrorCode.NotFound, "The chase target is no longer available.");
-                        case RobotCommand.Stop: return agent.Stop;
+                            var chase = RobotReplicationWire.Motion(reader);
+                            return () => Motion(state, () => resolve(reference) is IEntity chased && chased.IsAlive ? agent.Chase(chased)
+                                : OperationResult<bool>.Failure(ModErrorCode.NotFound, "The chase target is no longer available."), chase);
+                        case RobotCommand.Stop:
+                            var stop = RobotReplicationWire.Motion(reader);
+                            return () => Motion(state, agent.Stop, stop);
                         case RobotCommand.Tint:
                             var tint = RobotReplicationWire.Color(reader);
                             return () => Update(state, agent.SetTint(tint), Copy(state.Request, tint: tint));
@@ -71,6 +75,14 @@ namespace TopiaForge.RobotKit
                 return apply();
             }
             catch (Exception) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Invalid robot command."); }
+        }
+
+        private static OperationResult<bool> Motion(State state, Func<OperationResult<bool>> apply, Guid motion)
+        {
+            // The token acknowledges fully decoded host processing, not success. A rejected Chase leaves the
+            // previous intent intact, but must release its own wait; it cannot release a newer token's wait.
+            try { return apply(); }
+            finally { state.Motion = motion; state.Descriptor = null; }
         }
 
         private static OperationResult<bool> Update(State state, OperationResult<bool> result, RobotAgentSpawnRequest request)

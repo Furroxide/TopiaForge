@@ -247,11 +247,13 @@ type public static class TopiaForge.Mods.MultiplayerModule : System.Object
 type public sealed class TopiaForge.Mods.MultiplayerParticipant : System.Object
   constructor .ctor(TopiaForge.Mods.ParticipantId id, System.String displayName, System.Boolean isLocal, System.Boolean isConnected)
   constructor .ctor(TopiaForge.Mods.ParticipantId id, System.String displayName, System.Boolean isLocal, System.Boolean isConnected, System.Boolean isHost, TopiaForge.Mods.MultiplayerConnectionQuality quality, System.Nullable<System.Int32> pingMilliseconds, TopiaForge.Mods.MultiplayerPlayerKey playerKey)
+  constructor .ctor(TopiaForge.Mods.ParticipantId id, System.String displayName, System.Boolean isLocal, System.Boolean isConnected, System.Boolean isHost, TopiaForge.Mods.MultiplayerConnectionQuality quality, System.Nullable<System.Int32> pingMilliseconds, TopiaForge.Mods.MultiplayerPlayerKey playerKey, System.Guid lifetimeId) [requires-topiaforge="0.2.0"]
   field const System.Int32 MaximumDisplayNameLength = 128
   field const System.Int32 MaximumPingMilliseconds = 60000
   property System.Boolean IsConnected { get; }
   property System.Boolean IsHost { get; }
   property System.Boolean IsLocal { get; }
+  property System.Guid LifetimeId { get; } [requires-topiaforge="0.2.0"]
   property System.Nullable<System.Int32> PingMilliseconds { get; }
   property System.String DisplayName { get; }
   property TopiaForge.Mods.MultiplayerConnectionQuality Quality { get; }

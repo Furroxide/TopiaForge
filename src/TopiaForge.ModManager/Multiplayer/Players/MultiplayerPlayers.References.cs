@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -6,8 +8,8 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class MultiplayerPlayers
     {
-        // Use the provider's lifetime key, not a slot or process-local entity id. A successor occupying
-        // the same participant slot cannot become the target of an old robot command.
+        // Persistence keys and slots survive reconnects. References bind the host-issued connection lifetime
+        // to the session, so neither a rejoin nor a replacement can revive a retired target.
         internal bool TryCreateReference(IEntity entity, out InternalNetRef reference)
         {
             reference = default;
@@ -15,10 +17,10 @@ namespace TopiaForge.ModManager
             if (snapshot == null || !entity.IsAlive) return false;
             foreach (var player in snapshot.Participants)
             {
-                if (!player.IsConnected || !player.PlayerKey.IsValid) continue;
+                if (!player.IsConnected || player.LifetimeId == Guid.Empty) continue;
                 var target = PlayerEntity(player.Id);
                 if (target == null || !target.IsAlive || !SameEntity(target, entity)) continue;
-                reference = new InternalNetRef(InternalNetRefKind.Player, player.PlayerKey.Value);
+                reference = new InternalNetRef(InternalNetRefKind.Player, ReferenceValue(snapshot, player));
                 return true;
             }
             return false;
@@ -31,11 +33,18 @@ namespace TopiaForge.ModManager
             if (reference.Kind != InternalNetRefKind.Player || !reference.IsSpecified || snapshot == null) return false;
             foreach (var player in snapshot.Participants)
             {
-                if (!player.IsConnected || !player.PlayerKey.IsValid || !string.Equals(player.PlayerKey.Value, reference.Value, StringComparison.Ordinal)) continue;
+                if (!player.IsConnected || player.LifetimeId == Guid.Empty || !string.Equals(ReferenceValue(snapshot, player), reference.Value, StringComparison.Ordinal)) continue;
                 entity = PlayerEntity(player.Id);
                 return entity?.IsAlive == true;
             }
             return false;
+        }
+
+        private static string ReferenceValue(MultiplayerSessionSnapshot snapshot, MultiplayerParticipant player)
+        {
+            using var hash = SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(snapshot.Id.Value + ":" + player.LifetimeId.ToString("N"));
+            return "p2:" + Convert.ToBase64String(hash.ComputeHash(bytes));
         }
 
         private static bool SameEntity(IEntity first, IEntity second)

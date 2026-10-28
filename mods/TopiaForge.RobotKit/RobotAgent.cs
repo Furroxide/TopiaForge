@@ -123,13 +123,13 @@ namespace TopiaForge.RobotKit
             GameReflection.ApplyBrainMode(go, mode, nativeBrainSnapshot, logger);
             return OperationResult<bool>.Success(true);
         }
-        public bool IsMoving => isMoving;
-        public bool HasReachedTarget => hasReachedTarget;
+        public bool IsMoving => ReplicaState?.IsMoving ?? isMoving;
+        public bool HasReachedTarget => ReplicaState?.HasReachedTarget ?? hasReachedTarget;
 
-        public float MoveSpeed => moveSpeed;
-        public float TurnSpeed => turnSpeed;
-        public float StopDistance => stopDistance;
-        public RobotGait Gait => gait;
+        public float MoveSpeed => ReplicaState?.MoveSpeed ?? moveSpeed;
+        public float TurnSpeed => ReplicaState?.TurnSpeed ?? turnSpeed;
+        public float StopDistance => ReplicaState?.StopDistance ?? stopDistance;
+        public RobotGait Gait => ReplicaState?.Gait ?? gait;
 
         public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings)
         {

@@ -10,6 +10,12 @@ namespace TopiaForge.Mods.Internal
         OperationResult<bool> SubmitEntityCommand(IEntity target, string kind, byte[] payload);
     }
 
+    // Optional notification when a stream retires queued/in-flight commands but preserves a predicted body.
+    internal interface IInternalReplicaCommandLifetime
+    {
+        void ResetPendingCommands(IEntity target);
+    }
+
     // A provider owns the payload schema. The runtime authenticates the target and consuming mod,
     // applies per-participant budgets, and preserves the original record's lifetime and ownership.
     internal interface IInternalReplicaCommands : IInternalReplicaFactory

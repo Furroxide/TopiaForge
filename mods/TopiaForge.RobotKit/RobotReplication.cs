@@ -6,7 +6,7 @@ using TopiaForge.Mods.Internal;
 namespace TopiaForge.RobotKit
 {
     // The native adapter supplies bodies; this layer owns the same host/replica contract in tests and in the game.
-    internal sealed partial class RobotReplication : IInternalReplicaCommands, IInternalSharedSpawnHandler
+    internal sealed partial class RobotReplication : IInternalReplicaCommands, IInternalSharedSpawnHandler, IInternalReplicaCommandLifetime
     {
         private readonly Func<RobotAgentSpawnRequest, bool, OperationResult<IRobotAgent>> spawn;
         private readonly Func<IEntity, TransformState> transform;
@@ -54,6 +54,7 @@ namespace TopiaForge.RobotKit
                 var result = Make(request, replica);
                 if (result.TryGetValue(out var entity) && decoded.Emote.Length != 0)
                 { states[entity.Id].Emote = decoded.Emote; states[entity.Id].Agent.SetEmote(decoded.Emote); }
+                if (replica && result.TryGetValue(out var body)) ApplyReplica(body, descriptor);
                 return result;
             }
             catch (Exception) { return OperationResult<IEntity>.Failure(ModErrorCode.InvalidArgument, "Invalid robot description."); }
@@ -65,6 +66,12 @@ namespace TopiaForge.RobotKit
             if (!made.TryGetValue(out var agent)) return OperationResult<IEntity>.Failure(made.ErrorCode, made.ErrorMessage);
             states.Add(agent.Id, new State(agent, request));
             return OperationResult<IEntity>.Success(agent);
+        }
+
+        public void ResetPendingCommands(IEntity target)
+        {
+            if (states.TryGetValue(target.Id, out var state))
+                (state.Agent as IRobotReplicaState)?.ReplicaState?.ResetPending();
         }
 
         public void ReleaseReplica(IEntity replica) => Despawn(replica);
@@ -82,8 +89,11 @@ namespace TopiaForge.RobotKit
         public InternalSpawnDescriptor Describe(IEntity target)
         {
             var state = states[target.Id];
+            var moving = state.Agent.IsMoving; var reached = state.Agent.HasReachedTarget;
+            if (moving != state.Moving || reached != state.Reached) state.Descriptor = null;
+            state.Moving = moving; state.Reached = reached;
             return state.Descriptor ??= new InternalSpawnDescriptor(RobotReplicationWire.Kind, transform(state.Agent),
-                RobotReplicationWire.Spawn(state.Request, state.Emote));
+                RobotReplicationWire.Spawn(state.Request, state.Emote, moving, reached, state.Motion));
         }
 
         public OperationResult<bool> ApplyReplica(IEntity target, InternalSpawnDescriptor descriptor)
@@ -98,6 +108,7 @@ namespace TopiaForge.RobotKit
             if (request.Tint.HasValue) state.Agent.SetTint(request.Tint.Value);
             if (request.Name != null) state.Agent.SetName(request.Name);
             if (decoded.Emote != state.Emote) state.Agent.SetEmote(decoded.Emote);
+            (state.Agent as IRobotReplicaState)?.ReplicaState?.Apply(request, decoded.Moving, decoded.Reached, decoded.Motion);
             state.Request = request; state.Emote = decoded.Emote;
             return OperationResult<bool>.Success(true);
         }
@@ -109,6 +120,8 @@ namespace TopiaForge.RobotKit
             internal RobotAgentSpawnRequest Request { get; set; }
             internal string Emote { get; set; } = "";
             internal InternalSpawnDescriptor? Descriptor { get; set; }
+            internal bool Moving, Reached;
+            internal Guid Motion;
         }
 
         private static Quat Facing(Vec3? facing)

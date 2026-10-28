@@ -77,6 +77,7 @@ namespace TopiaForge.ModManager
                     if (TryUpdateProvider(known, update) || KeepsLocalBinding(known, update))
                     {
                         Describe(known, update, hash);
+                        if (known.Object != null && (known.Buffer == null || known.Buffer.Count == 0)) Place(known);
                         return;
                     }
 

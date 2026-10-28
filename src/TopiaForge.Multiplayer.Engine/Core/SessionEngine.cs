@@ -468,7 +468,7 @@ namespace TopiaForge.Multiplayer.Engine
                     isHost,
                     entry.Quality,
                     entry.PingMilliseconds,
-                    entry.PlayerKey == null ? default : new MultiplayerPlayerKey(entry.PlayerKey)));
+                    entry.PlayerKey == null ? default : new MultiplayerPlayerKey(entry.PlayerKey), entry.LifetimeId));
             }
 
             return view.AsReadOnly();

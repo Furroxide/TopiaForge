@@ -23,7 +23,7 @@ namespace TopiaForge.RobotKit
         {
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream, Utf8, true);
-            writer.Write((byte)1);
+            writer.Write((byte)2);
             write(writer);
             if (stream.Length > MaximumBytes) throw new ArgumentException("Robot data exceeds its limit.");
             return stream.ToArray();
@@ -34,13 +34,13 @@ namespace TopiaForge.RobotKit
             if (bytes.Length > MaximumBytes) throw new ArgumentException("Robot data exceeds its limit.");
             using var stream = new MemoryStream(bytes.ToArray(), false);
             using var reader = new BinaryReader(stream, Utf8, true);
-            if (reader.ReadByte() != 1) throw new ArgumentException("Unsupported robot data version.");
+            if (reader.ReadByte() != 2) throw new ArgumentException("Unsupported robot data version.");
             var result = read(reader);
             if (stream.Position != stream.Length) throw new ArgumentException("Unexpected robot data.");
             return result;
         }
 
-        internal static byte[] Spawn(RobotAgentSpawnRequest request, string emote = "") => Write(writer =>
+        internal static byte[] Spawn(RobotAgentSpawnRequest request, string emote = "", bool moving = false, bool reached = false, Guid motion = default) => Write(writer =>
         {
             Vector(writer, request.Position);
             writer.Write(request.Facing.HasValue);
@@ -55,9 +55,10 @@ namespace TopiaForge.RobotKit
             writer.Write(request.Interaction.NativeTalkMode == RobotNativeTalkMode.Enabled);
             writer.Write(request.Interaction.NativeTalkDistance);
             Text(writer, emote, 64);
+            writer.Write(moving); writer.Write(reached); writer.Write(motion.ToByteArray());
         });
 
-        internal static (RobotAgentSpawnRequest Request, string Emote) Spawn(ReadOnlyMemory<byte> bytes) => Read(bytes, reader =>
+        internal static (RobotAgentSpawnRequest Request, string Emote, bool Moving, bool Reached, Guid Motion) Spawn(ReadOnlyMemory<byte> bytes) => Read(bytes, reader =>
         {
             var position = Vector(reader);
             Vec3? facing = Boolean(reader) ? Vector(reader) : null;
@@ -69,11 +70,19 @@ namespace TopiaForge.RobotKit
             var name = Text(reader, 128); var type = Text(reader, 128);
             var talk = Boolean(reader); var distance = Number(reader, 0, 100);
             var emote = Text(reader, 64);
+            var moving = Boolean(reader); var reached = Boolean(reader); var motion = Motion(reader);
             return (new RobotAgentSpawnRequest(position, facing, brain, gait, speed, turn, stop, tint,
                 name.Length == 0 ? null : name, scale,
                 talk ? RobotInteractionOptions.NativeTalkAtDistance(distance) : RobotInteractionOptions.DisableNativeTalk(),
-                type.Length == 0 ? null : type), emote);
+                type.Length == 0 ? null : type), emote, moving, reached, motion);
         });
+
+        internal static Guid Motion(BinaryReader reader)
+        {
+            var bytes = reader.ReadBytes(16);
+            if (bytes.Length != 16) throw new EndOfStreamException();
+            return new Guid(bytes);
+        }
 
         internal static void Vector(BinaryWriter writer, Vec3 value)
         { writer.Write(value.X); writer.Write(value.Y); writer.Write(value.Z); }

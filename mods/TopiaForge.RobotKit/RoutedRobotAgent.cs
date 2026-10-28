@@ -36,19 +36,26 @@ namespace TopiaForge.RobotKit
             }
             catch (ArgumentException) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Invalid robot command values."); }
         }
+        private OperationResult<bool> SendMotion(RobotCommand command, Action<BinaryWriter>? write = null)
+        {
+            var motion = Guid.NewGuid();
+            var result = Send(command, writer => { write?.Invoke(writer); writer.Write(motion.ToByteArray()); });
+            if (result.TryGetValue(out var sent) && sent) (agent as IRobotReplicaState)?.ReplicaState?.Await(motion);
+            return result;
+        }
         public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => Send(RobotCommand.Brain, writer => writer.Write((byte)mode));
         public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) => Send(RobotCommand.Movement, writer =>
         { writer.Write((byte)settings.Gait); writer.Write(settings.MoveSpeed); writer.Write(settings.TurnSpeed); writer.Write(settings.StopDistance); });
         public OperationResult<bool> MoveTo(Vec3 position) => replication.Realm != InternalNetRealm.Client
-            ? agent.MoveTo(position) : Send(RobotCommand.MoveTo, writer => RobotReplicationWire.Vector(writer, position));
+            ? agent.MoveTo(position) : SendMotion(RobotCommand.MoveTo, writer => RobotReplicationWire.Vector(writer, position));
         public OperationResult<bool> Chase(IEntity target)
         {
             if (replication.Realm != InternalNetRealm.Client) return agent.Chase(target is RoutedRobotAgent routed ? routed.agent : target);
             return replication.TryCreateRef(target, out var reference)
-                ? Send(RobotCommand.Chase, writer => RobotReplicationWire.Reference(writer, reference))
+                ? SendMotion(RobotCommand.Chase, writer => RobotReplicationWire.Reference(writer, reference))
                 : OperationResult<bool>.Failure(ModErrorCode.NotFound, "Chase needs a current player or replicated entity.");
         }
-        public OperationResult<bool> Stop() => replication.Realm != InternalNetRealm.Client ? agent.Stop() : Send(RobotCommand.Stop);
+        public OperationResult<bool> Stop() => replication.Realm != InternalNetRealm.Client ? agent.Stop() : SendMotion(RobotCommand.Stop);
         public OperationResult<bool> SetTint(RobotColor color) => Send(RobotCommand.Tint, writer => RobotReplicationWire.Color(writer, color));
         public OperationResult<bool> SetEmote(string emojiShortcode) => Send(RobotCommand.Emote, writer => RobotReplicationWire.Text(writer, emojiShortcode, 64));
         public OperationResult<bool> SetName(string name) => Send(RobotCommand.Name, writer => RobotReplicationWire.Text(writer, name, 128));

@@ -41,7 +41,7 @@ namespace TopiaForge.ModManager.Tests
         private static void Check(bool value) { if (!value) throw new Exception("Robot registration failed."); }
     }
 
-    internal sealed class FirstPartyRobot : IRobotAgent
+    internal sealed class FirstPartyRobot : IRobotAgent, IRobotReplicaState
     {
         internal readonly FakeWorldObject Body;
         internal readonly FakeRobotAgent Inner;
@@ -49,24 +49,26 @@ namespace TopiaForge.ModManager.Tests
         internal readonly RobotAgentSpawnRequest Request;
         internal IEntity? Chased;
         internal FirstPartyRobot(FakeWorldObject body, RobotAgentSpawnRequest request, bool replica)
-        { Body = body; Replica = replica; Request = request; Inner = (FakeRobotAgent)new FakeRobotAgentService(new FakeModLifetime()).Spawn(request).Value!; }
+        { Body = body; Replica = replica; Request = request; Inner = (FakeRobotAgent)new FakeRobotAgentService(new FakeModLifetime()).Spawn(request).Value!;
+            if (replica) ReplicaState = new RobotReplicaState(new RobotMovementSettings(request.Gait, request.MoveSpeed, request.TurnSpeed, request.StopDistance)); }
+        public RobotReplicaState? ReplicaState { get; }
         public string Id => Body.Entity.Id;
         public string Name => Inner.Name;
         public bool IsAlive => Body.IsAlive && Inner.IsAlive;
         public Vec3 Position => new Vec3(Body.Position.X, Body.Position.Y, Body.Position.Z);
         public Vec3 HeadPosition => Position;
         public RobotBrainMode BrainMode => Inner.BrainMode;
-        public bool IsMoving => Inner.IsMoving;
-        public bool HasReachedTarget => Inner.HasReachedTarget;
-        public float MoveSpeed => Inner.MoveSpeed;
-        public float TurnSpeed => Inner.TurnSpeed;
-        public float StopDistance => Inner.StopDistance;
-        public RobotGait Gait => Inner.Gait;
+        public bool IsMoving => ReplicaState?.IsMoving ?? Inner.IsMoving;
+        public bool HasReachedTarget => ReplicaState?.HasReachedTarget ?? Inner.HasReachedTarget;
+        public float MoveSpeed => ReplicaState?.MoveSpeed ?? Inner.MoveSpeed;
+        public float TurnSpeed => ReplicaState?.TurnSpeed ?? Inner.TurnSpeed;
+        public float StopDistance => ReplicaState?.StopDistance ?? Inner.StopDistance;
+        public RobotGait Gait => ReplicaState?.Gait ?? Inner.Gait;
         public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => Inner.SetBrainMode(mode);
-        public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) => Inner.ConfigureMovement(settings);
-        public OperationResult<bool> MoveTo(Vec3 position) => Inner.MoveTo(position);
-        public OperationResult<bool> Chase(IEntity target) { Chased = target; return Inner.Chase(target); }
-        public OperationResult<bool> Stop() => Inner.Stop();
+        public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) => Replica ? Refuse() : Inner.ConfigureMovement(settings);
+        public OperationResult<bool> MoveTo(Vec3 position) => Replica ? Refuse() : Inner.MoveTo(position);
+        public OperationResult<bool> Chase(IEntity target) { if (Replica) return Refuse(); Chased = target; return Inner.Chase(target); }
+        public OperationResult<bool> Stop() => Replica ? Refuse() : Inner.Stop();
         public OperationResult<bool> SetTint(RobotColor color) => Inner.SetTint(color);
         public OperationResult<bool> SetEmote(string emojiShortcode) => Inner.SetEmote(emojiShortcode);
         public OperationResult<bool> SetName(string name) => Inner.SetName(name);
@@ -77,6 +79,7 @@ namespace TopiaForge.ModManager.Tests
         public OperationResult<bool> Ragdoll() => Inner.Ragdoll();
         public OperationResult<bool> Knockback(Vec3 impulse) => Inner.Knockback(impulse);
         public OperationResult<bool> Despawn() { Body.Destroy(); return Inner.Despawn(); }
+        private static OperationResult<bool> Refuse() => OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, "Replica navigation is disabled.");
         public void Dispose() { Body.Destroy(); Inner.Dispose(); }
     }
 }

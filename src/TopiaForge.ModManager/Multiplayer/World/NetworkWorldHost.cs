@@ -71,6 +71,8 @@ namespace TopiaForge.ModManager
         /// <summary>The downstream snapshot interval: 10 Hz.</summary>
         internal const long DownstreamIntervalMicros = 100_000;
 
+        internal Action<MultiplayerSpawnRecord>? RefreshDescription { get; set; }
+
         /// <summary>How many unbound scene objects each downstream tick checks for first motion.</summary>
         internal const int FirstMotionChecksPerTick = 512;
 
@@ -267,6 +269,12 @@ namespace TopiaForge.ModManager
                 nextTickMicros = Math.Max(nextTickMicros + DownstreamIntervalMicros, now);
                 CollectEnded();
                 ScanFirstMotion(FirstMotionChecksPerTick);
+                foreach (var hosted in ordered)
+                {
+                    if (hosted.Record == null || !hosted.IsAlive) continue;
+                    try { RefreshDescription?.Invoke(hosted.Record); }
+                    catch (Exception) { counters.MarkFailures++; }
+                }
             }
 
             if (peers.Count == 0)

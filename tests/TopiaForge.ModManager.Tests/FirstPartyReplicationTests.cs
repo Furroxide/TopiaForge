@@ -10,6 +10,9 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            ReplicaStateReviewTests.Run();
+            ReplicaMotionLifecycleTests.Run();
+            ReplicaMotionRejectionTests.Run();
             FirstPartyPlayerReferenceTests.Run();
             FirstPartyBrainAuthorityTests.Run();
             FirstPartyLocalRobotTests.Run();

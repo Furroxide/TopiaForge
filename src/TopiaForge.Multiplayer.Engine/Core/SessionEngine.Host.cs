@@ -71,6 +71,7 @@ namespace TopiaForge.Multiplayer.Engine
             var previous = sessionCancellation;
             sessionCancellation = new CancellationTokenSource();
             sessionId = newSessionId;
+            foreach (var participant in participantRecords) participant.LifetimeId = Guid.NewGuid();
             seed = newSeed;
             epoch++;
             // Tokens already handed out stay readable, so the retired source is cancelled but never disposed.
@@ -417,6 +418,7 @@ namespace TopiaForge.Multiplayer.Engine
             record.DisplayName = request.DisplayName;
             record.Connection = connection;
             record.IsConnected = true;
+            record.LifetimeId = Guid.NewGuid();
             record.DepartedAtMicros = 0;
             record.PlayerKey = connection.Link.PlayerKey.IsValid ? connection.Link.PlayerKey.Value : null;
             connection.Participant = record;

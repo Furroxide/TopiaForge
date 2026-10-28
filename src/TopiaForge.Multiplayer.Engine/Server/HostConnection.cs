@@ -156,6 +156,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal ulong LastSequence { get; set; }
         internal long RttMicros { get; set; } = -1;
         internal string? PlayerKey { get; set; }
+        internal Guid LifetimeId { get; set; } = Guid.NewGuid();
 
         /// <summary>Gets or sets the host's voice state for this participant, or null when voice is off.</summary>
         internal VoiceSpeaker? Voice { get; set; }
@@ -180,7 +181,7 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         internal ParticipantEntry ToEntry() =>
-            new ParticipantEntry(Id.Value, DisplayName, IsConnected, IsHost, Quality, PingMilliseconds, PlayerKey);
+            new ParticipantEntry(Id.Value, DisplayName, IsConnected, IsHost, Quality, PingMilliseconds, PlayerKey, LifetimeId);
     }
 
     /// <summary>A set that iterates in insertion order, so flushes are deterministic.</summary>
