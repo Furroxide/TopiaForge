@@ -43,8 +43,6 @@ namespace TopiaForge.ModManager
             {
                 if (context.WorldId != id || context.WorldFamilyId != null || context.Transition != WorldLoadTransition.SceneReplacement)
                     return Failure(ModErrorCode.InvalidArgument, "The map selection does not match its declaration.");
-                if (context.Context is IInternalReplicationContext network && network.Replication.Realm != InternalNetRealm.Offline)
-                    return Failure(ModErrorCode.Unavailable, "Map worlds currently support single player. Leave the multiplayer session before playing this map.");
                 if (!context.Context.Extensions.TryGet<IInternalMapWorldService>(out var maps))
                     return Failure(ModErrorCode.Unavailable, "Map loading needs an enabled TopiaForge Worlds package. Install or enable it and restart.");
                 return maps.LoadAsync(context, request, cancellationToken);

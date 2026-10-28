@@ -49,7 +49,7 @@ namespace TopiaForge.ModManager
                 ThrowIfStopping(record);
                 Commit(record, SessionPhase.LoadingWorld);
                 ThrowIfStopping(record);
-                var worldContext = new WorldLoadContext(record.Identity, record.Scopes[record.World.Package.Id].Context, record.Plan.World.Spawn!);
+                var worldContext = new WorldLoadContext(record.Identity, record.Scopes[record.World.Package.Id].Context, record.Plan.World.Spawn!, beginMapHost: BeginMapHost);
                 OperationResult<IWorldInstance> loaded;
                 using (record.Slots[record.World.Package.Id].Install(record.Reservation!.BorrowFor(record.World.Package.Id, record.Identity.SessionId)))
                     loaded = await dispatcher.InvokeCallbackAsync(() => record.Provider.LoadAsync(worldContext, record.Cancellation.Token));

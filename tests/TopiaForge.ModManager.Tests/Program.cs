@@ -14,6 +14,16 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--session-maps")
+            {
+                SessionMapTransferTests.Run();
+                SessionMapStoreTests.RunAsync().GetAwaiter().GetResult();
+                MapDocumentTests.Run(FindRepoRoot());
+                MapWorldServiceTests.RunAsync().GetAwaiter().GetResult();
+                MapWorldBindingTests.RunAsync().GetAwaiter().GetResult();
+                PublishedMapDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--authored-review")
             { AuthoredMapReviewTests.Run(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "--world-view")
@@ -589,6 +599,8 @@ namespace TopiaForge.ModManager.Tests
                 AuthoredMapReviewTests.Run("all");
                 MapWorldServiceTests.AuthoredReadinessAsync().GetAwaiter().GetResult();
                 MapStoreTests.RunAsync().GetAwaiter().GetResult();
+                SessionMapTransferTests.Run();
+                SessionMapStoreTests.RunAsync().GetAwaiter().GetResult();
                 MapWorldServiceTests.RunAsync().GetAwaiter().GetResult();
                 PublishedMapDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
                 MapWorldBindingTests.RunAsync().GetAwaiter().GetResult();

@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run(string root)
         {
             EveryStateInOrder(root + "-states");
+            MapIdentityReachesProvider(root + "-map");
             AnAdditiveArenaLoadsItsLevelFirst(root + "-additive");
             EachFailureEndsWithItsOwnKind(root + "-failures");
             CancellationAtEachState(root + "-cancel");
@@ -55,6 +56,28 @@ namespace TopiaForge.ModManager.Tests
             var task = test.Hosted.FollowAsync(plan, (stage, step, steps) => reached?.Add(stage + (steps > 0 ? " " + step + "/" + steps : string.Empty)), token);
             test.Wait(task);
             return task.Result;
+        }
+
+        private static void MapIdentityReachesProvider(string root)
+        {
+            using var test = GamemodeParticipantRealmTests.InRealm(root, NetRealm.Client);
+            var bytes = MapDocumentTests.Project();
+            var identity = SessionMapStoreTests.Identity(bytes);
+            var source = Plan(test, NewSessionId());
+            var plan = new SessionFollowPlan(source.HostSessionId, source.Request, source.GamemodeId, source.WorldId,
+                source.WorldFamilyId, source.Transition, null, null, source.Synchronize, map: identity,
+                readMap: (_, __) => Task.FromResult(OperationResult<byte[]>.Success(bytes)));
+            var calls = 0;
+            SessionFixture.Load = async (context, token) =>
+            {
+                var follow = (IInternalMapFollowContext)context;
+                That(ReferenceEquals(follow.ExpectedMap, identity) && follow.BeginMapHost == null, "joined load receives the host identity and cannot replace the host");
+                var copy = await follow.ReadHostMap!(token, null);
+                That(copy.Succeeded && copy.Value!.SequenceEqual(bytes), "host copy callback reaches the provider through the owned load context");
+                calls++;
+                return OperationResult<IWorldInstance>.Success(new SessionTestWorld());
+            };
+            That(Follow(test, plan).Succeeded && calls == 1, "exact map follows the normal orchestrator lifecycle");
         }
 
         private static void EveryStateInOrder(string root)

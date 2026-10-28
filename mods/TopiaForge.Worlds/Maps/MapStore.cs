@@ -7,7 +7,7 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.Worlds.Maps
 {
-    internal sealed class MapStore
+    internal sealed partial class MapStore
     {
         private readonly MapCache cache;
         private readonly MapEndpointPolicy endpoints;

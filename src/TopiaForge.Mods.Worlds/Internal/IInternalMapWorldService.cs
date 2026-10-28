@@ -14,8 +14,11 @@ namespace TopiaForge.Mods.Internal
         string MapCacheDirectory { get; }
         string PublishedMapLibraryPath { get; }
     }
-    // Maps cannot be hosted until content identity and transfer are implemented.
-    internal interface IInternalMapWorldInstance : IWorldInstance { }
+    internal interface IInternalMapWorldInstance : IWorldInstance
+    {
+        InternalMapIdentity? Identity { get; }
+        ReadOnlyMemory<byte> PackedMap { get; }
+    }
     internal sealed class InternalMapWorldRequest
     {
         internal InternalMapWorldRequest(string? publishedId, string? sceneId,

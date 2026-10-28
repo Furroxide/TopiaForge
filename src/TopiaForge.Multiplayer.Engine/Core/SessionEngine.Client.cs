@@ -23,7 +23,7 @@ namespace TopiaForge.Multiplayer.Engine
         private bool joinedBefore;
         private bool reconcileRequested;
 
-        private bool ClientHasPendingWork => channel != null && channel.HasOutbound;
+        private bool ClientHasPendingWork => channel != null && (channel.HasOutbound || channel.SnapshotReadinessPending);
 
         private bool ClientFlushOpen => channel != null && channel.FlushOpen;
 
@@ -88,6 +88,14 @@ namespace TopiaForge.Multiplayer.Engine
         {
             var current = channel;
             if (current == null) return;
+            // Give the runtime one frame to observe a new stream and take its world/map hold.
+            // A small snapshot may otherwise acknowledge Ready in the same pump as replacement.
+            if (current.SnapshotReadinessPending)
+            {
+                current.SnapshotReadinessPending = false;
+                if (readinessHolds > 0) EnterReadinessHeld(current);
+                else EnterClientReady(current);
+            }
             UpdateLinkHealth(current);
             while (ReferenceEquals(channel, current) && current.Link.TryReceive(out var channelKind, out var frame))
             {
@@ -275,9 +283,9 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 current.SnapshotCompleted = false;
 
-                // The runtime may still be loading the host's world: it stays Synchronizing until the last hold goes.
+                // Holds already taken apply immediately; otherwise allow the runtime to observe the stream first.
                 if (readinessHolds > 0) EnterReadinessHeld(current);
-                else EnterClientReady(current);
+                else current.SnapshotReadinessPending = true;
             }
 
             // A result's effects are part of the confirmed values once its flush commits. A submission its caller
@@ -605,6 +613,7 @@ namespace TopiaForge.Multiplayer.Engine
             current.Phase = ClientPhase.Synchronizing;
             current.Staging = null;
             current.SnapshotCompleted = false;
+            current.SnapshotReadinessPending = false;
             current.ReadinessHeld = false;
             current.ReadyAckPending = false;
             current.ReplacementReceivedPending = true;

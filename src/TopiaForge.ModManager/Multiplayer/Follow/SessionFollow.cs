@@ -27,6 +27,7 @@ namespace TopiaForge.ModManager
         private NetRealm realm;
         private HostWorldState? described;
         private bool channelFailureLogged;
+        private bool preparingMap;
 
         /// <param name="sessions">The session orchestrator, whose world this game announces or follows.</param>
         /// <param name="scene">The active scene, as the runtime tells it.</param>
@@ -48,9 +49,11 @@ namespace TopiaForge.ModManager
             this.detaching = detaching ?? throw new ArgumentNullException(nameof(detaching));
             this.launchedJoin = launchedJoin ?? throw new ArgumentNullException(nameof(launchedJoin));
             this.log = log ?? throw new ArgumentNullException(nameof(log));
-            Host = new SessionFollowHost(() => channel, Describe);
+            Host = new SessionFollowHost(() => channel, Describe, new SessionMapHost(sessions.RunningMapCopy,
+                peer => control != null && !control.IsParticipantReady(peer)));
             Follower = new SessionFollower(sessions, scene, () => channel, grantFollow, leave, world, discover, dispatcher, log);
             sessions.Follower = Follower;
+            sessions.BeginMapHost = BeginMapHost;
         }
 
         internal SessionFollowHost Host { get; }
@@ -92,6 +95,7 @@ namespace TopiaForge.ModManager
         public void RealmChanged(NetRealm previous, NetRealm next)
         {
             realm = next;
+            preparingMap = false;
             if (previous == NetRealm.Client) Follower.Left(detaching());
             if (previous == NetRealm.ListenHost) Host.Deactivate();
             if (next == NetRealm.ListenHost) Host.Activate();
@@ -120,8 +124,29 @@ namespace TopiaForge.ModManager
         /// <summary>Step 2, online: a host announces its world; a joined player follows the host's.</summary>
         public void Run(float deltaTime)
         {
-            if (realm == NetRealm.ListenHost) Host.Pump();
+            if (realm == NetRealm.ListenHost)
+            {
+                // A replaced stream waits for the new map, never the preceding world's stale announcement.
+                if (preparingMap && sessions.DescribeRunningWorld() == null && sessions.RealmPhase != SessionPhase.Idle) return;
+                preparingMap = false;
+                Host.Pump();
+            }
             else if (realm == NetRealm.Client) Follower.Pump(deltaTime);
+        }
+
+        private OperationResult<bool> BeginMapHost()
+        {
+            if (realm != NetRealm.ListenHost || control == null) return OperationResult<bool>.Success(true);
+            // Replace before importing or starting the mode: replicated values created by the new world must survive.
+            var result = control.ReplaceSession();
+            if (result.Succeeded)
+            {
+                preparingMap = true;
+                described = null;
+                Host.Deactivate();
+                Host.Activate();
+            }
+            return result;
         }
 
         /// <summary>

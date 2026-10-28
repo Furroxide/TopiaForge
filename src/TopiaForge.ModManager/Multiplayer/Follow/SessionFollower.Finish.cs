@@ -200,7 +200,7 @@ namespace TopiaForge.ModManager
         /// <summary>Says the follow is at work, once a second, while it loads; never while it only waits for the host's world.</summary>
         private void ReportWork(float elapsed)
         {
-            if (arrival != null) return;
+            if (arrival != null || maps.IsPending) return;
             progressWait -= elapsed;
             if (progressWait > 0f) return;
             ReportProgress();

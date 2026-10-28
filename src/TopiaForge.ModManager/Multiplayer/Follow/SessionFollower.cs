@@ -46,6 +46,7 @@ namespace TopiaForge.ModManager
         private readonly Func<CancellationToken, Task>? discover;
         private readonly IHostDispatcher dispatcher;
         private readonly IMultiplayerLog log;
+        private readonly SessionMapReceiver maps;
         private readonly WorldWireReader reader = new WorldWireReader();
         private IInternalMultiplayerControl? control;
         private IInternalReadinessHold? hold;
@@ -63,6 +64,7 @@ namespace TopiaForge.ModManager
         private float busyWait;
         private float busyTotal;
         private int refollows;
+        private ulong streamGeneration;
         private bool discovered;
         private bool loaded;
         private bool stranded;
@@ -85,6 +87,11 @@ namespace TopiaForge.ModManager
             this.discover = discover;
             this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             this.log = log ?? throw new ArgumentNullException(nameof(log));
+            maps = new SessionMapReceiver(channel, dispatcher, bytes =>
+            {
+                Status.Move(FollowStage.LoadingWorld, "Downloading the host's map (" + (bytes / 1024) + " KiB)");
+                ReportProgress();
+            });
         }
 
         /// <summary>Gets where the follow stands, for the connecting overlay.</summary>
@@ -132,6 +139,7 @@ namespace TopiaForge.ModManager
                 return;
             }
 
+            streamGeneration = channel()?.Generation ?? 0;
             IsJoined = true;
             control = joined;
             launchRequestId = launchedJoin;
@@ -165,6 +173,7 @@ namespace TopiaForge.ModManager
         internal void Left(bool detaching)
         {
             var wasJoined = IsJoined;
+            maps.Clear();
             IsJoined = false;
             var running = pending;
             pending = null;
@@ -209,6 +218,18 @@ namespace TopiaForge.ModManager
         {
             if (!IsJoined || ending) return;
             var elapsed = deltaTime > 0f && !float.IsNaN(deltaTime) && !float.IsInfinity(deltaTime) ? deltaTime : 0f;
+            var generation = channel()?.Generation ?? 0;
+            if (generation != streamGeneration)
+            {
+                streamGeneration = generation;
+                TakeHold();
+                Status.Move(FollowStage.AwaitingHost, "Waiting for the host's new world");
+                latest = null;
+                applied = null;
+                if (pending != null) { pending.Superseded = true; pending.Cancellation.Cancel(); }
+                maps.Clear();
+            }
+            maps.Pump(elapsed);
             Receive();
             if (pending != null)
             {
@@ -249,6 +270,7 @@ namespace TopiaForge.ModManager
             if (open == null || !open.IsOpen) return;
             while (open.TryReceive(out var message))
             {
+                if (maps.Receive(message.Payload)) continue;
                 if (SessionFollowWire.TryRead(reader, message.Payload, out var state)) latest = state;
                 else Unreadable++;
             }
@@ -267,7 +289,8 @@ namespace TopiaForge.ModManager
                     loaded = true;
                     stranded = false;
                     var plan = new SessionFollowPlan(target.SessionId!, target.Request!, target.GamemodeId!, target.WorldId!,
-                        target.WorldFamilyId, target.Transition!, target.Scene, target.Spawn, WaitForWorldAsync, launchRequestId);
+                        target.WorldFamilyId, target.Transition!, target.Scene, target.Spawn, WaitForWorldAsync, launchRequestId, target.Map,
+                        (token, progress) => maps.ReadAsync(target, token, progress));
                     var follow = new Pending(target);
                     pending = follow;
                     Status.Move(FollowStage.Preparing, "Getting your mods ready");
@@ -358,7 +381,8 @@ namespace TopiaForge.ModManager
         private void Fail(FollowFailureKind kind, ModErrorCode code, string reason)
         {
             LogReason("Multiplayer: following the host's world failed: " + kind + " (" + code + ")", reason);
-            Status.Fail(FollowFailureWords.For(kind, code));
+            Status.Fail(kind == FollowFailureKind.WorldLoadFailed && following?.Map != null
+                ? FollowFailureWords.Map(code) : FollowFailureWords.For(kind, code));
             ending = true;
             leave();
         }

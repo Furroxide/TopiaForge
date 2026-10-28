@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets or sets the session follower, which the runtime installs: while it follows a host, a local launch is refused.</summary>
         internal ISessionFollowOwner? Follower { get; set; }
+        internal Func<OperationResult<bool>>? BeginMapHost { get; set; }
 
         /// <summary>Gets whether the session this game runs now follows a host's world; main thread.</summary>
         internal bool RunsFollowedSession => current?.Follow != null;
@@ -81,7 +82,8 @@ namespace TopiaForge.ModManager
             try
             {
                 record.Announced = HostWorldState.World(record.Identity.SessionId, descriptor.Request, descriptor.GamemodeId, descriptor.WorldId,
-                    descriptor.WorldFamilyId, descriptor.Transition, level, spawn);
+                    descriptor.WorldFamilyId, descriptor.Transition, level, spawn,
+                    (record.Instance as TopiaForge.Mods.Internal.IInternalMapWorldInstance)?.Identity);
             }
             catch (ArgumentException error)
             {
@@ -92,6 +94,11 @@ namespace TopiaForge.ModManager
 
             return record.Announced;
         }
+
+        internal ReadOnlyMemory<byte> RunningMapCopy(string sessionId) =>
+            current?.Identity.SessionId == sessionId && lifecycle.Current.Phase == SessionPhase.Running
+                && current.Instance is TopiaForge.Mods.Internal.IInternalMapWorldInstance map
+                ? map.PackedMap : ReadOnlyMemory<byte>.Empty;
 
         private void BeginFollow(SessionFollowPlan plan, Action<SessionFollowStage, int, int> reached, CancellationToken token,
             TaskCompletionSource<SessionFollowResult> completion)
@@ -250,7 +257,7 @@ namespace TopiaForge.ModManager
                     Reach(reached, stage, 2, steps);
                 }
 
-                var worldContext = new WorldLoadContext(record.Identity, record.Scopes[record.World.Package.Id].Context, record.Plan.World.Spawn!);
+                var worldContext = new WorldLoadContext(record.Identity, record.Scopes[record.World.Package.Id].Context, record.Plan.World.Spawn!, plan);
                 OperationResult<IWorldInstance> loaded;
                 using (record.Slots[record.World.Package.Id].Install(record.Reservation!.BorrowFor(record.World.Package.Id, record.Identity.SessionId)))
                     loaded = await dispatcher.InvokeCallbackAsync(() => record.Provider.LoadAsync(worldContext, record.Cancellation.Token));

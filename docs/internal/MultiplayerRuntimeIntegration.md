@@ -2207,7 +2207,7 @@ and `SessionFollowPlan.cs`, and the level loader over Unity in `CoreGameplayServ
 - **When.** To everyone whenever that changes, and whenever a stream starts, restarts or ends, so a player that joins,
   rejoins or comes back to a replaced session hears it at once. A player a full window skipped gets the newest
   announcement alone once `CanSend` to it says there is room (section 8's broadcast rule).
-- **One way.** Only the host sends on `SceneFollow`. What a player sends is taken and dropped, so no window stays full.
+- **Direction.** The host announces on `SceneFollow`. A joining player may request its exact running map copy (type 32); all other player messages are taken and dropped.
 - **At rest** a frame compares a few fields: the host describes its session once, and the same instance comes back
   while nothing changes, so it sends and allocates nothing.
 
@@ -2220,6 +2220,35 @@ and `SessionFollowPlan.cs`, and the level loader over Unity in `CoreGameplayServ
 | 1 `World` | session id; target, world override and transition override (each override a flag byte, then the id); gamemode; world; world family (flag, then the id); transition; the base level (flag, then its scene name and, with a second flag, the spawn: position, rotation and scale as ten little-endian singles) |
 | 2 `Level` | scene name |
 | 3 `Menu` | nothing |
+| 4 `MapWorld` | map id, scene id, packed SHA-256, packed byte count (varuint), modified text; then the complete type 1 body |
+| 5 `MapChunk` | request token (32 lowercase hex), byte offset (varuint), length-prefixed bytes (at most 16 KiB) |
+| 6 `MapRefused` | request token |
+| 32 `MapRequest` | world session id, request token, SHA-256 |
+
+Non-map announcements keep their existing version 1 bytes. Both peers need map-follow
+support for type 4. Map identity is internal runtime evidence; manifest and launcher
+request V5/progress V2 formats do not change. A map id is at most 64 ASCII identifier
+characters, scene id 128, digest 64 lowercase hex, packed size 1 through 8 MiB,
+and modified text 128 characters. Text is never used as an endpoint or a path.
+
+The host serves only its running world to an authenticated, not-yet-ready peer,
+once per stream generation, at most 4 MiB. It sends one 16 KiB chunk per peer per
+frame within channel credits, retaining the offset on backpressure. The receiver
+requires the current request token, contiguous exact-size chunks and matching SHA-256.
+The store then applies the normal decompression, strict JSON, scene and entity limits
+before native parsing or hash-cache publication. No partial copy is cached. The
+receiver uses the existing readiness maximum of 300 seconds, with the outer join
+continuing to enforce its earlier absolute deadline; cancellation,
+world replacement and stream replacement retire old buffers and requests. Only
+received map chunks report transfer progress; an idle transfer does not renew its hold.
+
+A map launch replaces the multiplayer session before import and mode startup, so
+fresh streams can send its revision and newly initialized replicated state survives.
+Announcements wait until that world runs. A follower takes readiness again on a
+stream-generation change and waits for the new announcement. Ordinary non-map world
+changes retain their existing behavior. The engine gives a completed snapshot one
+pump for the runtime to observe its stream before acknowledging Ready; existing
+holds apply immediately and retain their existing timeout accounting.
 
 A player reads every field as the runtime checks its own: ids by the declaration rule, the session id as exactly 32
 lowercase hexadecimal characters, the transition as a known one, a scene name as a gameplay scene's of at most 128
@@ -2492,7 +2521,7 @@ runs that Cancel would stop; the player stays in the session, and the host's nex
 
 ### Choices
 
-- **No `ReplaceSession` at a change of worlds.** Players follow again from `SceneFollow`, world replication already
+- **Non-map world changes do not call `ReplaceSession`.** Players follow again from `SceneFollow`, world replication already
   handles the host's new scene, and the engine's session stays, so the mods' replicated values behave as in single
   player, where a new world session keeps them.
 - **The follow's hold lasts until Running**, not only through LoadingWorld, so the overlay's Spawning step and the

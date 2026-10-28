@@ -24,6 +24,13 @@ internal static class Program
                 Console.WriteLine("Players engine: join generations, reconnect, solo and pre-flush cancellation passed.");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--map-follow-readiness")
+            {
+                SystemChannelTests.MapFollowCanHoldAfterAReplacementArrives();
+                SystemChannelTests.ReadinessHoldsDelayTheAcknowledgement();
+                Console.WriteLine("Map follow readiness passed (replacement observation, delayed acknowledgement, release, existing hold lifecycle).");
+                return 0;
+            }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {
@@ -546,6 +553,7 @@ internal static class Program
             SystemChannelTests.MessagesFromAnEarlierSessionAreDropped();
             SystemChannelTests.ChannelsAreBoundedAndOwnedOnce();
             SystemChannelTests.HostilePeersCannotAbuseSystemMessages();
+            SystemChannelTests.MapFollowCanHoldAfterAReplacementArrives();
             SystemChannelTests.ReadinessHoldsDelayTheAcknowledgement();
             SystemChannelTests.HostsEndPlayersThatNeverBecomeReady();
             SystemChannelTests.SourcesAnswerTheSessionsLookups();

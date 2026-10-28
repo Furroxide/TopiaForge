@@ -63,6 +63,31 @@ namespace TopiaForge.Worlds.Maps
             Trim(document.Sha256);
         }
 
+        internal byte[]? ReadHash(string hash)
+        {
+            if (!IsHash(hash)) return null;
+            try
+            {
+                var path = Blob(hash);
+                var bytes = ReadOrdinary(path, MapDocument.MaximumPackedBytes);
+                if (MapDocument.Hash(bytes) != hash) return null;
+                File.SetLastWriteTimeUtc(path, utcNow());
+                return bytes;
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException) { return null; }
+        }
+
+        // A followed revision never becomes the published map's current/offline index.
+        internal void PutHash(MapDocument document)
+        {
+            if (document.Packed.LongLength > maximum) return;
+            CheckAncestry(root);
+            Directory.CreateDirectory(root);
+            CheckAncestry(root);
+            Atomic(Blob(document.Sha256), document.Packed);
+            Trim(document.Sha256);
+        }
+
         internal void Remove(string id)
         {
             RequireId(id);

@@ -35,6 +35,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal SnapshotStaging? Staging { get; set; }
         internal bool SnapshotCompleted { get; set; }
+        internal bool SnapshotReadinessPending { get; set; }
 
         /// <summary>Gets or sets whether the snapshot is complete but a readiness hold keeps the client short of Ready.</summary>
         internal bool ReadinessHeld { get; set; }

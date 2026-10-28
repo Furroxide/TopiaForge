@@ -1,6 +1,7 @@
 using System;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
@@ -25,8 +26,9 @@ namespace TopiaForge.ModManager
     internal sealed class HostWorldState
     {
         private HostWorldState(HostWorldKind kind, string? sessionId, LaunchRequest? request, string? gamemodeId, string? worldId,
-            string? worldFamilyId, string? transition, string? scene, TransformState? spawn)
+            string? worldFamilyId, string? transition, string? scene, TransformState? spawn, InternalMapIdentity? map = null)
         {
+            Map = map;
             Kind = kind;
             SessionId = sessionId;
             Request = request;
@@ -40,6 +42,7 @@ namespace TopiaForge.ModManager
 
         internal static HostWorldState Menu { get; } = new HostWorldState(HostWorldKind.Menu, null, null, null, null, null, null, null, null);
 
+        internal InternalMapIdentity? Map { get; }
         internal HostWorldKind Kind { get; }
 
         /// <summary>Gets the host's world session id, for a world.</summary>
@@ -72,7 +75,7 @@ namespace TopiaForge.ModManager
         }
 
         internal static HostWorldState World(string sessionId, LaunchRequest request, string gamemodeId, string worldId, string? worldFamilyId,
-            string transition, string? baseScene, TransformState? spawn)
+            string transition, string? baseScene, TransformState? spawn, InternalMapIdentity? map = null)
         {
             if (!SessionFollowWire.IsSessionId(sessionId)) throw new ArgumentException("A world session id is 32 lowercase hexadecimal characters.", nameof(sessionId));
             if (request == null) throw new ArgumentNullException(nameof(request));
@@ -80,12 +83,13 @@ namespace TopiaForge.ModManager
             LaunchContractValues.Identifier(worldId, nameof(worldId));
             LaunchContractValues.OptionalIdentifier(worldFamilyId, nameof(worldFamilyId));
             LaunchContractValues.Choice(transition, nameof(transition), ModTransitions.ByPrecedence);
+            if (map != null && transition != ModTransitions.SceneReplacement) throw new ArgumentException("A map replaces its scene.");
             var additive = transition == ModTransitions.AdditiveArena;
             if (baseScene != null && (!additive || !SessionFollowWire.IsSceneName(baseScene)))
                 throw new ArgumentException("Only an additive arena names the gameplay level it is built over.", nameof(baseScene));
             if (spawn.HasValue && (baseScene == null || !SessionFollowWire.IsSpawn(spawn.Value)))
                 throw new ArgumentException("Only an arena built over a level carries the spawn it was built at, within the world's bounds.", nameof(spawn));
-            return new HostWorldState(HostWorldKind.World, sessionId, request, gamemodeId, worldId, worldFamilyId, transition, baseScene, spawn);
+            return new HostWorldState(HostWorldKind.World, sessionId, request, gamemodeId, worldId, worldFamilyId, transition, baseScene, spawn, map);
         }
 
         /// <summary>Gets whether <paramref name="other"/> announces the same world: the same session, or the same level, or the menu.</summary>
@@ -127,6 +131,7 @@ namespace TopiaForge.ModManager
         internal const byte WorldType = 1;
         internal const byte LevelType = 2;
         internal const byte MenuType = 3;
+        internal const byte MapWorldType = 4;
 
         /// <summary>The largest message: every field at its bound fits well within it.</summary>
         internal const int MaximumMessageBytes = 2048;
@@ -155,7 +160,15 @@ namespace TopiaForge.ModManager
                     writer.WriteString(state.Scene!);
                     return;
                 case HostWorldKind.World:
-                    writer.WriteByte(WorldType);
+                    writer.WriteByte(state.Map == null ? WorldType : MapWorldType);
+                    if (state.Map != null)
+                    {
+                        writer.WriteString(state.Map.MapId);
+                        writer.WriteString(state.Map.SceneId);
+                        writer.WriteString(state.Map.Sha256);
+                        writer.WriteVarUInt((ulong)state.Map.Size);
+                        writer.WriteString(state.Map.Modified);
+                    }
                     writer.WriteString(state.SessionId!);
                     writer.WriteString(state.Request!.TargetId);
                     WriteOptional(writer, state.Request.WorldOverride);
@@ -204,6 +217,12 @@ namespace TopiaForge.ModManager
                     case LevelType:
                         if (!reader.TryReadString(MaximumTextBytes, out var level) || !IsSceneName(level)) return false;
                         state = HostWorldState.Level(level);
+                        break;
+                    case MapWorldType:
+                        if (!reader.TryReadString(64, out var mapId) || !reader.TryReadString(128, out var sceneId)
+                            || !reader.TryReadString(64, out var hash) || !reader.TryReadUInt32(InternalMapIdentity.MaximumBytes, out var size)
+                            || !reader.TryReadString(512, out var modified)) return false;
+                        state = ReadWorld(reader, new InternalMapIdentity(mapId, sceneId, hash, (int)size, modified));
                         break;
                     case WorldType:
                         state = ReadWorld(reader);
@@ -262,7 +281,7 @@ namespace TopiaForge.ModManager
                 && scale.X != 0f && scale.Y != 0f && scale.Z != 0f;
         }
 
-        private static HostWorldState? ReadWorld(WorldWireReader reader)
+        private static HostWorldState? ReadWorld(WorldWireReader reader, InternalMapIdentity? map = null)
         {
             if (!reader.TryReadString(MaximumTextBytes, out var session) || !IsSessionId(session)) return null;
             if (!reader.TryReadString(MaximumTextBytes, out var target)) return null;
@@ -282,7 +301,7 @@ namespace TopiaForge.ModManager
             }
 
             return HostWorldState.World(session, new LaunchRequest(target, worldOverride, transitionOverride), gamemode, world, family,
-                transition, scene, spawn);
+                transition, scene, spawn, map);
         }
 
         private static bool TryReadSpawn(WorldWireReader reader, out TransformState spawn)

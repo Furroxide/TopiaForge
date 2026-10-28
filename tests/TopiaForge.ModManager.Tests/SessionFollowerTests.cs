@@ -24,6 +24,8 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run(string root)
         {
             JoinsAndFollowsTheHostsWorld(root + "-join");
+            ReplacedStreamWaitsForANewAnnouncement(root + "-map-stream");
+            IdleMapTransferDoesNotRenewReadiness(root + "-map-idle");
             ReadyOnlyOnceBothHoldsRelease(root + "-holds");
             TheHostMovingOnMidFollowIsFollowed(root + "-moving");
             TheHostChangingWorldsAfterTheJoinIsFollowed(root + "-changes");
