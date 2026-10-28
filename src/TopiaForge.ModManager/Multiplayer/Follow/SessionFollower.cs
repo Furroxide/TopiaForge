@@ -67,6 +67,8 @@ namespace TopiaForge.ModManager
         private ulong streamGeneration;
         private bool discovered;
         private bool loaded;
+        // Completed-join history survives retirement of an announcement when the host replaces its stream.
+        private bool hasCompletedFollow;
         private bool stranded;
         private bool leavingForMenu;
         private bool ending;
@@ -105,7 +107,7 @@ namespace TopiaForge.ModManager
         /// <summary>Gets whether this follower's readiness hold is open, for tests and diagnostics.</summary>
         internal bool HoldsReadiness => hold != null;
 
-        /// <summary>Gets the announcement this game is in now, as followed; null before the first follow ends.</summary>
+        /// <summary>Gets the valid announcement this game followed; null before arrival or after its stream is replaced.</summary>
         internal HostWorldState? Applied => applied;
 
         /// <summary>Gets this join's different-level corrections; native restarts of the same level do not spend the allowance.</summary>
@@ -146,6 +148,7 @@ namespace TopiaForge.ModManager
             ending = false;
             latest = null;
             applied = null;
+            hasCompletedFollow = false;
             following = null;
             refollows = 0;
             discovered = false;
@@ -186,6 +189,7 @@ namespace TopiaForge.ModManager
             ending = false;
             latest = null;
             applied = null;
+            hasCompletedFollow = false;
             following = null;
             if (!wasJoined) return;
             var returnToMenu = !detaching && !leavingForMenu && loaded && (!scene.IsMainMenu || sessions.RunsFollowedSession);
@@ -226,6 +230,7 @@ namespace TopiaForge.ModManager
                 Status.Move(FollowStage.AwaitingHost, "Waiting for the host's new world");
                 latest = null;
                 applied = null;
+                following = null;
                 if (pending != null) { pending.Superseded = true; pending.Cancellation.Cancel(); }
                 maps.Clear();
             }
@@ -279,7 +284,7 @@ namespace TopiaForge.ModManager
         /// <summary>Starts following <paramref name="target"/>: the host's world, its level, or the main menu.</summary>
         private void Begin(HostWorldState target)
         {
-            var refollow = applied != null || Status.IsRefollow;
+            var refollow = hasCompletedFollow || Status.IsRefollow;
             if (refollow && !target.SameAs(following)) Status.Refollowing();
             following = target;
             switch (target.Kind)
@@ -312,6 +317,7 @@ namespace TopiaForge.ModManager
                     {
                         // Already at the menu, where the host is: nothing loads, and the player is Ready there.
                         applied = target;
+                        hasCompletedFollow = true;
                         stranded = false;
                         ReleaseHold();
                         Status.Move(FollowStage.AtMenu, "The host is at the main menu");

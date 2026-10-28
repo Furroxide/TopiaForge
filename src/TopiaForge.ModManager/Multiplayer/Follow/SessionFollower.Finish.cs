@@ -103,6 +103,7 @@ namespace TopiaForge.ModManager
         private void Arrived(HostWorldState target, FollowStage stage, string detail)
         {
             applied = target;
+            hasCompletedFollow = true;
             arrivedScene = scene.Version;
             arrivedSceneName = scene.Name;
             busyTotal = 0f;
