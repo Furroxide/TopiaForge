@@ -149,7 +149,7 @@ namespace TopiaForge.ModManager.Tests
                 "the same shared packages are admitted, without the host's optional, client-local or server-only mods");
 
             Expect(host, Offer("2478", sandbox, lobby), "The host runs Robotopia build 2545; this game runs 2478.");
-            Expect(host, new InternalContentOffer("2545", "2.0.0", ">=2.0.0 <3.0.0", new[] { sandbox, lobby }), "The host's multiplayer protocol cannot play with this game's.");
+            Expect(host, new InternalContentOffer("2545", "1.0.0", ">=1.0.0 <2.0.0", new[] { sandbox, lobby }), "The host's multiplayer protocol cannot play with this game's.");
             Expect(host, Offer("2545", lobby), "Sandbox 0.2.0 is missing.");
             Expect(host, Offer("2545", sandbox), "Lobby 1.0.0 is missing.");
             Expect(host, Offer("2545", Offered("io.example.mine", "1.0.0", 'f', InternalContentMode.ImplicitShared), sandbox, lobby),

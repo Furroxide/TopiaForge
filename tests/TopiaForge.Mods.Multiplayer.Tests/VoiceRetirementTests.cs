@@ -69,52 +69,52 @@ internal static class VoiceRetirementTests
     {
         var failures = new List<string>();
         foreach (var clientSpeaker in new[] { false, true })
-        foreach (var stage in new[] { "capture", "encoded", "partial", "late-result" })
-        {
-            using var rig = new VoiceServiceRig();
-            var host = rig.AddHost(withVoice: !clientSpeaker);
-            var remote = rig.AddClient("speaker", withVoice: clientSpeaker);
-            var speaker = clientSpeaker ? remote : host;
-            var listener = clientSpeaker ? host : remote;
-            var voice = speaker.Voice!;
-            using var lifetime = new FakeModLifetime();
-            using var routing = host.Engine.RouteCommunications(lifetime, new CommunicationPolicy(
-                new[] { Member("host", 1), Member("speaker", 2) }, Array.Empty<CommunicationRoute>())).Value!;
-            rig.Step(10);
-            voice.SetTransmitting(true);
-            var samples = Enumerable.Range(0, 960).Select(i => (float)(0.4 * Math.Sin(i * 0.07))).ToArray();
-            voice.SubmitCapture(samples, stage is "partial" or "late-result" ? 480 : 960, 48_000);
-            if (stage != "capture") voice.Worker.Step(rig.NowMicros);
-            if (stage is "partial" or "late-result")
-                That(voice.Worker.Transmitter.Framer.PendingSamples == 480, "retired partial frame fixture");
-            var submitted = speaker.Engine.GetVoiceStatistics().Submitted;
-            host.Engine.ReplaceSession(new MultiplayerSessionId("after-private"), new SessionSeed(43));
-            // Pump only the engines: queued worker output remains younger than the send deadline.
-            for (var step = 0; step < 10; step++)
+            foreach (var stage in new[] { "capture", "encoded", "partial", "late-result" })
             {
-                host.Engine.Pump(rig.NowMicros);
-                remote.Engine.Pump(rig.NowMicros);
-                rig.Network.Now = rig.Tick + (ulong)step + 1;
-                rig.Network.DeliverDue(rig.Network.Now);
-            }
-            That(speaker.Engine.Snapshot.State == MultiplayerSessionState.Ready, "replacement speaker ready");
-            voice.Pump();
-            if (stage == "late-result")
-            {
-                // Deterministic worker interleaving: an already-running old Feed finishes after retirement.
-                voice.Worker.Transmitter.Feed(samples.AsSpan(0, 480), 48_000, rig.NowMicros, true);
+                using var rig = new VoiceServiceRig();
+                var host = rig.AddHost(withVoice: !clientSpeaker);
+                var remote = rig.AddClient("speaker", withVoice: clientSpeaker);
+                var speaker = clientSpeaker ? remote : host;
+                var listener = clientSpeaker ? host : remote;
+                var voice = speaker.Voice!;
+                using var lifetime = new FakeModLifetime();
+                using var routing = host.Engine.RouteCommunications(lifetime, new CommunicationPolicy(
+                    new[] { Member("host", 1), Member("speaker", 2) }, Array.Empty<CommunicationRoute>())).Value!;
+                rig.Step(10);
+                voice.SetTransmitting(true);
+                var samples = Enumerable.Range(0, 960).Select(i => (float)(0.4 * Math.Sin(i * 0.07))).ToArray();
+                voice.SubmitCapture(samples, stage is "partial" or "late-result" ? 480 : 960, 48_000);
+                if (stage != "capture") voice.Worker.Step(rig.NowMicros);
+                if (stage is "partial" or "late-result")
+                    That(voice.Worker.Transmitter.Framer.PendingSamples == 480, "retired partial frame fixture");
+                var submitted = speaker.Engine.GetVoiceStatistics().Submitted;
+                host.Engine.ReplaceSession(new MultiplayerSessionId("after-private"), new SessionSeed(43));
+                // Pump only the engines: queued worker output remains younger than the send deadline.
+                for (var step = 0; step < 10; step++)
+                {
+                    host.Engine.Pump(rig.NowMicros);
+                    remote.Engine.Pump(rig.NowMicros);
+                    rig.Network.Now = rig.Tick + (ulong)step + 1;
+                    rig.Network.DeliverDue(rig.Network.Now);
+                }
+                That(speaker.Engine.Snapshot.State == MultiplayerSessionState.Ready, "replacement speaker ready");
                 voice.Pump();
+                if (stage == "late-result")
+                {
+                    // Deterministic worker interleaving: an already-running old Feed finishes after retirement.
+                    voice.Worker.Transmitter.Feed(samples.AsSpan(0, 480), 48_000, rig.NowMicros, true);
+                    voice.Pump();
+                }
+                voice.Worker.Step(rig.NowMicros);
+                voice.Pump();
+                if (speaker.Engine.GetVoiceStatistics().Submitted != submitted || voice.Worker.Transmitter.Framer.PendingSamples != 0)
+                    failures.Add((clientSpeaker ? "client " : "host ") + stage + " survived retirement");
+                // The same microphone remains usable after the boundary.
+                voice.SubmitCapture(samples, samples.Length, 48_000);
+                voice.Worker.Step(rig.NowMicros + 20_000);
+                voice.Pump(rig.NowMicros + 20_000);
+                That(speaker.Engine.GetVoiceStatistics().Submitted > submitted, "fresh capture resumes after retirement");
             }
-            voice.Worker.Step(rig.NowMicros);
-            voice.Pump();
-            if (speaker.Engine.GetVoiceStatistics().Submitted != submitted || voice.Worker.Transmitter.Framer.PendingSamples != 0)
-                failures.Add((clientSpeaker ? "client " : "host ") + stage + " survived retirement");
-            // The same microphone remains usable after the boundary.
-            voice.SubmitCapture(samples, samples.Length, 48_000);
-            voice.Worker.Step(rig.NowMicros + 20_000);
-            voice.Pump(rig.NowMicros + 20_000);
-            That(speaker.Engine.GetVoiceStatistics().Submitted > submitted, "fresh capture resumes after retirement");
-        }
         CaptureBeforeServicePump();
         RetirementPreservesTheCaptureClock();
         That(failures.Count == 0, string.Join("; ", failures));
