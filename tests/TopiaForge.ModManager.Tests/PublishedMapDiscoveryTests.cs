@@ -161,8 +161,10 @@ namespace TopiaForge.ModManager.Tests
             public WorldSpawnPolicy SpawnPolicy => new WorldSpawnPolicy(WorldSpawnKind.ProviderDefault);
         }
         private sealed class RestrictedWorld : IInternalMapWorldInstance
-        { public InternalMapIdentity? Identity => null; public ReadOnlyMemory<byte> PackedMap => ReadOnlyMemory<byte>.Empty;
-          public WorldReadiness Readiness { get; } = new WorldReadiness(new WorldSceneIdentity(-12, "World"), TransformState.Identity); public void Dispose() { } }
+        {
+            public InternalMapIdentity? Identity => null; public ReadOnlyMemory<byte> PackedMap => ReadOnlyMemory<byte>.Empty;
+            public WorldReadiness Readiness { get; } = new WorldReadiness(new WorldSceneIdentity(-12, "World"), TransformState.Identity); public void Dispose() { }
+        }
         private sealed class Capture : IInternalMapWorldService
         {
             internal int Calls; internal InternalMapWorldRequest? Request;

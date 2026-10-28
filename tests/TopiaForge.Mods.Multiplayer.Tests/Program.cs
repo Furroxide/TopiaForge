@@ -31,6 +31,24 @@ internal static class Program
                 Console.WriteLine("Map follow readiness passed (replacement observation, delayed acknowledgement, release, existing hold lifecycle).");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--engine-white-box")
+            {
+                EngineWhiteBoxTests.StaleDuplicateAndOldEpochSubmissionsAreRejected();
+                EngineWhiteBoxTests.MalformedTrafficEndsOnlyTheOffendingConnection();
+                EngineWhiteBoxTests.ClientEndsWhenTheHostViolatesTheProtocol();
+                EngineWhiteBoxTests.ProtocolPrimitivesRejectMalformedInput();
+                EngineWhiteBoxTests.SoloPumpDoesNotAllocate();
+                EngineWhiteBoxTests.CatchUpStepsAreBounded();
+                EngineWhiteBoxTests.DeltasFollowTheirDeliveryKnobs();
+                EngineWhiteBoxTests.CancellationFromAnotherThreadCompletesAtTheNextPump();
+                EngineWhiteBoxTests.MismatchedContractsAreRejectedAtJoin();
+                EngineWhiteBoxTests.DepartedParticipantsExpireAfterTheGracePeriod();
+                EngineWhiteBoxTests.JoinRequestsNeedAValidDisplayName();
+                EngineWhiteBoxTests.SubmissionsWaitForTheReadyAcknowledgement();
+                EngineWhiteBoxTests.DespawnPayloadsMustDecode();
+                Console.WriteLine("Engine white-box: all 13 tests passed.");
+                return 0;
+            }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {

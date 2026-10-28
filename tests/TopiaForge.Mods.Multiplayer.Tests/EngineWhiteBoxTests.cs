@@ -405,6 +405,11 @@ internal static class EngineWhiteBoxTests
         network.Now = 1;
         network.DeliverDue(1);
         client.Pump(20_000);
+        Assert(client.Snapshot.State == MultiplayerSessionState.Synchronizing &&
+               facade.GetObjects(boxType).Count == 1 && client.HasPendingWork,
+            "the committed snapshot discovers the object while readiness waits for runtime follow");
+        // Readiness settles on the next pump, after runtime follow can take a map hold. No time needs to pass.
+        client.Pump(20_000);
         Assert(client.Snapshot.State == MultiplayerSessionState.Ready && facade.GetObjects(boxType).Count == 1,
             "the client joins and discovers the object");
 
