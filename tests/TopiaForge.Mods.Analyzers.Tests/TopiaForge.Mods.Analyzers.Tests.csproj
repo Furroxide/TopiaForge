@@ -10,8 +10,8 @@
     <ProjectReference Include="../../src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" Aliases="sdk" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj" Aliases="worlds" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" PrivateAssets="all" />
     <!-- The TF1008 code fix runs in a workspace, as it does in the IDE. -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" PrivateAssets="all" />
   </ItemGroup>
 </Project>
