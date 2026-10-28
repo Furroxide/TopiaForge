@@ -10,10 +10,10 @@ namespace TopiaForge.Mods
         public const string Id = "io.github.furroxide.topiaforge.multiplayer";
 
         /// <summary>Gets the live-provider protocol version implemented by this stable contract line.</summary>
-        public const string ProtocolVersion = "1.0.0";
+        public const string ProtocolVersion = "2.0.0";
 
         /// <summary>Gets the mutually negotiated peer range accepted by this stable contract line.</summary>
-        public const string PeerVersionRange = ">=1.0.0 <2.0.0";
+        public const string PeerVersionRange = ">=2.0.0 <3.0.0";
     }
 
     /// <summary>Describes whether the current process has interactive presentation systems.</summary>

@@ -115,7 +115,7 @@ internal static class VoiceSessionTests
 
         var notRelayed = codec.Packet(42);
         var uplinkFormat = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
-        var length = VoicePacket.WriteUplink(uplinkFormat, 9, 9, VoiceFrameFlags.None, notRelayed, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        var length = VoicePacket.WriteUplink(uplinkFormat, 9, 9, VoiceFrameFlags.None, notRelayed, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty, 0);
         pair.HostEnd.Send(EngineChannel.Voice, new ArraySegment<byte>(uplinkFormat, 0, length));
         Pump();
         Pump();
@@ -358,8 +358,8 @@ internal static class VoiceSessionTests
     {
         var buffer = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
         var length = speaker == 0
-            ? VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, codec.Packet(id), VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty)
-            : VoicePacket.WriteRelayed(buffer, speaker, RelayedStream, sequence, timestamp, VoiceFrameFlags.None, codec.Packet(id), VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+            ? VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, codec.Packet(id), VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty, 0)
+            : VoicePacket.WriteRelayed(buffer, speaker, RelayedStream, sequence, timestamp, VoiceFrameFlags.None, codec.Packet(id), VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty, 0);
         return buffer.AsSpan(0, length).ToArray();
     }
 

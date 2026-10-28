@@ -7,6 +7,12 @@ internal static class Program
         try
         {
             if (args.Length == 1 && args[0] == "--private-commit") { PerPlayerStateTests.CommitRegressions(); return 0; }
+            if (args.Length == 1 && args[0] == "--voice-retirement-contract") { VoiceEpochContractTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--voice-device-retirement") { VoiceDeviceRetirementTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--voice-protocol-baseline") { VoiceProtocolBaselineTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--voice-flood") { VoiceRelayPolicyTests.FloodsJustPastTwiceALimitAreRateLimitedWithoutStrikesEnoughToMute(); Console.WriteLine("Voice flood regression passed."); return 0; }
+            if (args.Length == 1 && args[0] == "--voice-retirement-service") { VoiceRetirementTests.Service(); return 0; }
+            if (args.Length == 1 && args[0] == "--voice-retirement-engine") { VoiceRetirementTests.Engine(); return 0; }
             if (args.Length == 1 && args[0] == "--per-player") { PerPlayerStateTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--communication-routing")
             {
@@ -120,6 +126,10 @@ internal static class Program
                 return 0;
             }
 
+            VoiceEpochContractTests.Run();
+            VoiceDeviceRetirementTests.Run();
+            VoiceRetirementTests.Service();
+            VoiceRetirementTests.Engine();
             PerPlayerStateTests.Run();
             HostPackageTests.Run();
             CommunicationRoutingTests.Run();

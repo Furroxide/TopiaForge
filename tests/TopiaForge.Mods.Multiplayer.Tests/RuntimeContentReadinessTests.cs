@@ -32,7 +32,7 @@ internal static class RuntimeContentReadinessTests
             var content = new RuntimeContent("2545", "0.2.0") { Runtime = runtime, Report = reports.Add };
             That(content.IsLocalContentPending && work.Pending == 1, "looking starts identifying, off this thread, and says it is pending");
             That(content.HostPackages() == null && content.ClientContent().Length == 0, "while it runs nothing is announced or offered");
-            var offer = ContentOfferCodec.TryEncode(new InternalContentOffer("2545", "1.0.0", ">=1.0.0 <2.0.0", Array.Empty<InternalContentDescriptor>()))!;
+            var offer = ContentOfferCodec.TryEncode(new InternalContentOffer("2545", TopiaForge.Mods.MultiplayerModule.ProtocolVersion, TopiaForge.Mods.MultiplayerModule.PeerVersionRange, Array.Empty<InternalContentDescriptor>()))!;
             var admission = content.Admit(offer);
             That(!admission.IsAdmitted && admission.Code == AdmissionCode.NotReady && admission.Problems.SequenceEqual(new[] { RuntimeContent.HostNotReady }),
                 "and nobody is admitted, as a host not ready yet rather than one that cannot read its mods");

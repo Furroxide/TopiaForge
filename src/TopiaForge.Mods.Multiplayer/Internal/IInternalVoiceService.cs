@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace TopiaForge.Mods.Internal
 {
@@ -77,6 +78,13 @@ namespace TopiaForge.Mods.Internal
     /// </remarks>
     internal interface IInternalVoiceService
     {
+        /// <summary>
+        /// Gets the engine lifetime that accepts capture. Before reading an open microphone, the runtime compares this
+        /// token with the lifetime of its recording and discards unread device audio when it changes. No callback or
+        /// codec wait is required; a new recording continues under the player's existing consent and input state.
+        /// </summary>
+        CancellationToken CaptureSessionToken { get; }
+
         /// <summary>
         /// Gets or sets whether voice is on for this player. It starts off. While it is off, nothing is captured, coded or
         /// sent, and the meter reads silence; voice from other players still plays. Turning it off stops at once: coded

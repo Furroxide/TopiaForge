@@ -281,6 +281,8 @@ namespace TopiaForge.ModManager.Tests
 
         internal Exception? Failure { get; set; }
 
+        public System.Threading.CancellationToken CaptureSessionToken => default;
+
         public bool Enabled { get; set; }
 
         public InternalVoiceTransmitMode Mode { get; set; }

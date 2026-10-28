@@ -137,7 +137,7 @@ internal static class LivePolicyTests
         var right = PasswordProof.Prove(passwordKey, link.ChannelBinding);
         var wrong = PasswordProof.Prove(PasswordProof.DeriveKey("guess", Enumerable.Repeat((byte)3, 32).ToArray()), link.ChannelBinding);
 
-        ProviderEngine.JoinDecision Ask(byte[]? proof, string? identity = null, int connected = 1, string protocol = "1.0.0", byte[]? body = null, NetworkLink? over = null) =>
+        ProviderEngine.JoinDecision Ask(byte[]? proof, string? identity = null, int connected = 1, string protocol = TopiaForge.Mods.MultiplayerModule.ProtocolVersion, byte[]? body = null, NetworkLink? over = null) =>
             policy.Evaluate(new ProviderEngine.JoinRequestContext(over ?? link, identity ?? Identity(1),
                 new ProviderEngine.JoinRequestMessage(protocol, "Guest", Array.Empty<ProviderEngine.ContractEntry>(), body ?? JoinContent.Encode(proof, content.ClientContent())),
                 Array.Empty<ProviderEngine.ContractEntry>(), connected, 8));
@@ -152,9 +152,9 @@ internal static class LivePolicyTests
         That(Ask(right).Accepted, "and a minute later the first may try again");
 
         bans.Add(Identity(3), "Banned", 0);
-        var banned = Ask(right, identity: Identity(3), protocol: "2.0.0", connected: 8);
+        var banned = Ask(right, identity: Identity(3), protocol: "1.0.0", connected: 8);
         That(Code(banned) == AdmissionCode.Banned && banned.Reason == MultiplayerSessionEndReason.Banned, "a ban is checked before anything else");
-        var protocol = Ask(right, protocol: "2.0.0");
+        var protocol = Ask(right, protocol: "1.0.0");
         That(Code(protocol) == AdmissionCode.Protocol && protocol.Reason == MultiplayerSessionEndReason.ProtocolMismatch, "then the protocol");
         That(Code(Ask(null, connected: 8)) == AdmissionCode.Full, "then capacity, before the password");
         That(Code(Ask(right, body: new byte[] { 9, 9, 9 })) == AdmissionCode.Protocol, "then the join content's own form");
@@ -165,7 +165,7 @@ internal static class LivePolicyTests
 
         var open = new HostPolicy(bans, null, content, () => now);
         var openContext = new ProviderEngine.JoinRequestContext(link, Identity(4),
-            new ProviderEngine.JoinRequestMessage("1.0.0", "Guest", Array.Empty<ProviderEngine.ContractEntry>(), JoinContent.Encode(wrong, content.ClientContent())),
+            new ProviderEngine.JoinRequestMessage(TopiaForge.Mods.MultiplayerModule.ProtocolVersion, "Guest", Array.Empty<ProviderEngine.ContractEntry>(), JoinContent.Encode(wrong, content.ClientContent())),
             Array.Empty<ProviderEngine.ContractEntry>(), 1, 8);
         That(open.Evaluate(openContext).Accepted, "a session without a password ignores any proof");
     }

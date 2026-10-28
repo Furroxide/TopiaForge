@@ -121,6 +121,14 @@ namespace TopiaForge.Multiplayer.Voice
             sink.OnFrame(frame, nextTimestamp++, lastEndMicros, endOfCapture: true);
         }
 
+        /// <summary>Drops partial samples and resampler history without reusing a timestamp already sent.</summary>
+        internal void Discard()
+        {
+            fill = 0;
+            Array.Clear(frame, 0, frame.Length);
+            resampler?.ResetMem();
+        }
+
         private void Restart(long startMicros)
         {
             fill = 0;

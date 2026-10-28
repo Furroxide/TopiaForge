@@ -83,7 +83,7 @@ internal static class RuntimeAdmissionTests
         // and nothing is listed or offered.
         var reports = new List<InternalMultiplayerDiagnostic>();
         var content = new RuntimeContent("2545", "0.2.0") { Runtime = new UnreadableContent(new MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog())), Report = reports.Add };
-        var offer = ContentOfferCodec.TryEncode(new InternalContentOffer("2545", "1.0.0", ">=1.0.0 <2.0.0", Array.Empty<InternalContentDescriptor>()))!;
+        var offer = ContentOfferCodec.TryEncode(new InternalContentOffer("2545", TopiaForge.Mods.MultiplayerModule.ProtocolVersion, TopiaForge.Mods.MultiplayerModule.PeerVersionRange, Array.Empty<InternalContentDescriptor>()))!;
         var admission = content.Admit(offer);
         That(!admission.IsAdmitted && admission.Code == AdmissionCode.NotReady && admission.Problems.SequenceEqual(new[] { RuntimeContent.HostContentUnreadable }),
             "the host refuses the player as not ready, saying why");
@@ -212,7 +212,7 @@ internal static class RuntimeAdmissionTests
         var malformed = content.Admit(new byte[] { 1, 2, 3 });
         That(!malformed.IsAdmitted && malformed.Code == AdmissionCode.Protocol && malformed.Problems.SequenceEqual(new[] { RuntimeContent.OfferUnreadable }),
             "malformed content is a protocol refusal");
-        var offer = ContentOfferCodec.TryEncode(new InternalContentOffer("2545", "1.0.0", ">=1.0.0 <2.0.0", Array.Empty<InternalContentDescriptor>()))!;
+        var offer = ContentOfferCodec.TryEncode(new InternalContentOffer("2545", TopiaForge.Mods.MultiplayerModule.ProtocolVersion, TopiaForge.Mods.MultiplayerModule.PeerVersionRange, Array.Empty<InternalContentDescriptor>()))!;
         var failing = content.Admit(offer);
         That(!failing.IsAdmitted && failing.Code == AdmissionCode.NotReady && reports.Single().Code == "content.admission-failed",
             "a failing admission check refuses the player as not ready and is reported, never admits");

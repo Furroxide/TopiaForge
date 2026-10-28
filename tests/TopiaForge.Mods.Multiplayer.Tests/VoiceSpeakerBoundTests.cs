@@ -42,7 +42,7 @@ internal static class VoiceSpeakerBoundTests
             rig.Step();
             foreach (var entry in entries)
             {
-                var length = VoicePacket.WriteRelayed(datagram, entry.Speaker, 1, 1, 0, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+                var length = VoicePacket.WriteRelayed(datagram, entry.Speaker, 1, 1, 0, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty, 0);
                 b.Link.Deliver(EngineChannel.Voice, datagram.AsSpan(0, length).ToArray());
             }
 

@@ -79,7 +79,7 @@ namespace TopiaForge.Multiplayer.Engine
                 packet.First.Sequence, packet.First.Timestamp, packet.First.Flags | VoiceFrameFlags.NonSpatial,
                 datagram.AsSpan().Slice(packet.First.PayloadOffset, packet.First.PayloadLength),
                 packet.Second.Flags | VoiceFrameFlags.NonSpatial,
-                packet.Count == 2 ? datagram.AsSpan().Slice(packet.Second.PayloadOffset, packet.Second.PayloadLength) : ReadOnlySpan<byte>.Empty);
+                packet.Count == 2 ? datagram.AsSpan().Slice(packet.Second.PayloadOffset, packet.Second.PayloadLength) : ReadOnlySpan<byte>.Empty, packet.Epoch);
             return new ArraySegment<byte>(routedVoice, 0, length);
         }
 

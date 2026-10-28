@@ -24,6 +24,15 @@ namespace TopiaForge.Multiplayer
             this.voice = voice ?? throw new ArgumentNullException(nameof(voice));
         }
 
+        public System.Threading.CancellationToken CaptureSessionToken
+        {
+            get
+            {
+                engine.RequireOwnerThread();
+                return engine.CurrentSessionToken;
+            }
+        }
+
         public bool Enabled
         {
             get

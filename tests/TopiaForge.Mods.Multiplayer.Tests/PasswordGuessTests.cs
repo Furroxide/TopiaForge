@@ -220,7 +220,7 @@ internal static class PasswordGuessTests
             return Policy.Evaluate(new ProviderEngine.JoinRequestContext(
                 link,
                 link.PeerIdentity,
-                new ProviderEngine.JoinRequestMessage("1.0.0", "Guest", Array.Empty<ProviderEngine.ContractEntry>(), JoinContent.Encode(proof, new byte[] { 1, 2, 3 })),
+                new ProviderEngine.JoinRequestMessage(TopiaForge.Mods.MultiplayerModule.ProtocolVersion, "Guest", Array.Empty<ProviderEngine.ContractEntry>(), JoinContent.Encode(proof, new byte[] { 1, 2, 3 })),
                 Array.Empty<ProviderEngine.ContractEntry>(),
                 1,
                 8,

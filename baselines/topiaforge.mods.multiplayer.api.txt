@@ -241,8 +241,8 @@ type public flags enum TopiaForge.Mods.MultiplayerExecutionSide : System.Int32
 
 type public static class TopiaForge.Mods.MultiplayerModule : System.Object
   field const System.String Id = "io.github.furroxide.topiaforge.multiplayer"
-  field const System.String PeerVersionRange = "\u003E=1.0.0 \u003C2.0.0"
-  field const System.String ProtocolVersion = "1.0.0"
+  field const System.String PeerVersionRange = "\u003E=2.0.0 \u003C3.0.0"
+  field const System.String ProtocolVersion = "2.0.0"
 
 type public sealed class TopiaForge.Mods.MultiplayerParticipant : System.Object
   constructor .ctor(TopiaForge.Mods.ParticipantId id, System.String displayName, System.Boolean isLocal, System.Boolean isConnected)

@@ -40,6 +40,8 @@ namespace TopiaForge.ModManager.Tests
 
         internal int MadeStreams { get; private set; }
 
+        public System.Threading.CancellationToken CaptureSessionToken { get; set; }
+
         public bool Enabled
         {
             get => enabled;
