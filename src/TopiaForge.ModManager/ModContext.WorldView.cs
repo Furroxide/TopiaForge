@@ -21,6 +21,10 @@ namespace TopiaForge.ModManager
             internal NativeEntityReadScope(ModContext context, WorldReadiness world, IModLifetime worldLifetime)
             { this.context = context; this.world = world; this.worldLifetime = worldLifetime; }
 
+            public bool IsCurrentWorld(IInternalNativeEntityReadContext caller) => IsCurrent(context.Lifetime)
+                && caller is ModContext currentContext && currentContext.TryGetViewWorld(out var current, out var lifetime)
+                && ReferenceEquals(current, world) && ReferenceEquals(lifetime, worldLifetime);
+
             public int SceneInstanceId => world.Scene.InstanceId;
             public string SceneName => world.Scene.Name;
             public bool IsCurrent(IModLifetime caller) => UnityMainThreadGuard.IsCurrent

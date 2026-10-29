@@ -78,6 +78,8 @@ namespace TopiaForge.ModManager
         internal IInternalReplicaFactory? Factory { get; set; }
 
         internal IEntity? FactoryReplica { get; set; }
+        internal int ProviderIndex { get; set; } = -1;
+        internal long ProviderRetryAt { get; set; }
 
         internal AssetReplicaBuild? Build { get; set; }
 
@@ -266,6 +268,8 @@ namespace TopiaForge.ModManager
             foreach (var mirrored in scratch) Release(mirrored);
             scratch.Clear();
             entities.Clear();
+            providerReplicas.Clear();
+            providerCursor = 0;
 
             // This player's own instances were copies of the host's world, which it leaves: each ends, as the host ends what
             // it made for this player once it is gone (WS3.7).
@@ -306,6 +310,8 @@ namespace TopiaForge.ModManager
             foreach (var mirrored in scratch) Release(mirrored);
             scratch.Clear();
             entities.Clear();
+            providerReplicas.Clear();
+            providerCursor = 0;
 
             // What the old world adopted or numbered is not the new one's: adopted instances and shadows end, and spawns still
             // waiting for a verdict are asked of the new world (WS3.7).
@@ -408,6 +414,7 @@ namespace TopiaForge.ModManager
             channel.Receive();
             var now = clock();
             if (rebuilds.Count > 0) RebuildReplicas();
+            PumpProviders(now);
             AdvanceBuilds(now);
             if (requestPending && now >= nextRequestMicros) SendRequest(now);
             if (progressPending && receiving >= 0) SendProgress();

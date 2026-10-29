@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.RobotKit
 {
@@ -11,6 +12,7 @@ namespace TopiaForge.RobotKit
     {
         private IModLogger? logger;
         private RobotAgentService? service;
+        private RobotBodyService? bodies;
         private RobotBrainQueryService? brainService;
         private RobotConversationService? conversationService;
         private PlayerDialogueInputService? dialogueInputService;
@@ -30,6 +32,10 @@ namespace TopiaForge.RobotKit
             service = new RobotAgentService(logger);
             Context.Lifetime.Track(service);
             OfferRobotReplication(service);
+            bodies = new RobotBodyService(service.CreatePersistentBody, Context as IInternalNativeEntityReadContext);
+            Context.Lifetime.Track(bodies);
+            OfferPersistentBodies(bodies);
+            RegisterExtension<IRobotBodyService>(bodies);
             brainService = new RobotBrainQueryService(logger, ResolvePromptRegistry);
             Context.Lifetime.Track(brainService);
             // The objective service resolves Reprogram courier recipients back to agent handles via the agent
@@ -128,6 +134,7 @@ namespace TopiaForge.RobotKit
             }
 
             // Consumers release handles before providers clear their underlying agents/queries.
+            RunLifecycle(() => bodies?.EndWorld(), "persistent body cleanup");
             RunLifecycle(() => sceneEditorService?.OnSceneChanged(), "scene editor cleanup");
             RunLifecycle(() => conversationService?.OnSceneChanged(), "conversation scene cleanup");
             RunLifecycle(() => dialogueInputService?.OnSceneChanged(), "dialogue scene cleanup");

@@ -558,6 +558,23 @@ type public sealed class TopiaForge.Mods.Testing.FakeRobotAgentService : System.
   property TopiaForge.Mods.IEntity? PlayerEntity { get; set; }
   property TopiaForge.Mods.Vec3 NextReachablePosition { get; set; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeRobotBody : System.Object, System.IDisposable, TopiaForge.Mods.IEntity, TopiaForge.Mods.IRobotBody [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAlive { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Id { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Name { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AvatarAppearance Appearance { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Quat Rotation { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Vec3 Position { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.Testing.FakeRobotBodyService : System.Object, System.IDisposable, TopiaForge.Mods.IRobotBodyService [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotBody> Spawn(TopiaForge.Mods.RobotBodyRequest request) [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAuthoritative { get [requires-topiaforge="0.2.0"]; set [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean IsAvailable { get [requires-topiaforge="0.2.0"]; set [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeRobotBody> Bodies { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.Testing.FakeRobotBrainQueryService : System.Object, TopiaForge.Mods.IRobotBrainQueryService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   method System.Boolean CompleteNext(System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> values)
@@ -581,6 +598,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeRobotKit : System.Object
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   property TopiaForge.Mods.Testing.FakePlayerDialogueInputService DialogueInput { get; }
   property TopiaForge.Mods.Testing.FakeRobotAgentService Agents { get; }
+  property TopiaForge.Mods.Testing.FakeRobotBodyService Bodies { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.Testing.FakeRobotBrainQueryService BrainQueries { get; }
   property TopiaForge.Mods.Testing.FakeRobotConversationService Conversations { get; }
   property TopiaForge.Mods.Testing.FakeRobotObjectiveService Objectives { get; }

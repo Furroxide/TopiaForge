@@ -192,6 +192,8 @@ namespace TopiaForge.ModManager
 
         private void BuildWithFactory(ClientWorldEntity mirrored)
         {
+            TrackProvider(mirrored);
+            mirrored.ProviderRetryAt = clock() + 5_000_000;
             IInternalReplicaFactory? factory;
             OperationResult<IEntity>? made;
             try
@@ -215,7 +217,13 @@ namespace TopiaForge.ModManager
             mirrored.FactoryReplica = replica;
             mirrored.Binding = ClientEntityBinding.Factory;
             var adopted = Adopt(replica);
-            if (adopted != null) Attach(mirrored, adopted, ClientEntityBinding.Factory);
+            if (adopted == null)
+            {
+                Release(mirrored);
+                Unbuildable(mirrored);
+                return;
+            }
+            Attach(mirrored, adopted, ClientEntityBinding.Factory);
             counters.ReplicasBuilt++;
         }
 
@@ -272,6 +280,7 @@ namespace TopiaForge.ModManager
         /// <summary>Ends an entity here: its replica is released, or its scene object or content unbound.</summary>
         private void Remove(ClientWorldEntity mirrored, bool tombstone)
         {
+            UntrackProvider(mirrored);
             Release(mirrored);
             driver.Untrack(mirrored);
             entities.Remove(mirrored.Id.Value);

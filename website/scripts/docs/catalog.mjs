@@ -19,6 +19,12 @@ export const pages = [
   ),
   page('docs/MultiplayerHostingFeasibility.md', 'reference/multiplayer-hosting-feasibility.md'),
   page('docs/RobotKit.md', 'guides/robotkit.md'),
+  page(
+    'docs/PersistentBodies.md',
+    'guides/persistent-bodies.md',
+    true,
+    generatedFrontmatter('Persistent cosmetic bodies', 'Create scoped persistent cosmetic bodies in mods for Robotopia with automatic replication.'),
+  ),
   page('docs/Zombies.md', 'guides/zombies.md'),
   page('docs/CustomWorlds.md', 'guides/custom-worlds.md'),
   page(

@@ -11,6 +11,7 @@ namespace TopiaForge.Worlds
     {
         private readonly WorldSceneIdentity scene;
         private readonly IModContext context;
+        private readonly IInternalNativeEntityReadScope? readScope;
         private readonly NativeMapViewSource? map;
         private readonly NativeMapViewSource.NativeEnvironment? environment;
         private readonly NativeViewHiding hiding = new NativeViewHiding();
@@ -24,6 +25,7 @@ namespace TopiaForge.Worlds
         internal NativeWorldViewRenderer(WorldSceneIdentity scene, IModContext context, NativeMapViewSource? map = null)
         {
             this.scene = scene; this.context = context; this.map = map;
+            readScope = (context as IInternalNativeEntityReadContext)?.CaptureNativeEntityReadScope();
             environment = map?.BindEnvironment(); fog = new NativeVisionFog(scene, context.Events);
             if (UnityWorldScene.TryGetLoaded(scene, out var loaded))
             {
@@ -43,7 +45,8 @@ namespace TopiaForge.Worlds
                 }
             }
         }
-        public bool IsAlive => !disposed && (map == null || map.IsAlive) && UnityWorldScene.TryGetLoaded(scene, out _);
+        public bool IsAlive => !disposed && readScope?.IsCurrent(context.Lifetime) == true
+            && (map == null || map.IsAlive) && UnityWorldScene.TryGetLoaded(scene, out _);
         public bool FogAvailable => IsAlive && NativeVisionFog.IsSupported;
         public bool EnvironmentAvailable => IsAlive && environment != null;
         public IReadOnlyList<string> Presets => environment?.Presets ?? Array.Empty<string>();

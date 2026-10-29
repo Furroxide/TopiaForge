@@ -6,6 +6,16 @@ namespace TopiaForge.RobotKit
 {
     public sealed partial class RobotKitMod
     {
+        private void OfferPersistentBodies(RobotBodyService bodies)
+        {
+            var seam = (Context as IInternalReplicationContext)?.Replication;
+            if (seam == null) return;
+            var factory = seam.RegisterReplicaFactory(RobotBodyWire.Kind, bodies);
+            if (!factory.Succeeded) throw new InvalidOperationException(factory.ErrorMessage);
+            var handler = seam.RegisterSpawnHandler(RobotBodyWire.Kind, bodies);
+            if (!handler.Succeeded) throw new InvalidOperationException(handler.ErrorMessage);
+        }
+
         private void OfferRobotReplication(RobotAgentService agents)
         {
             var seam = (Context as IInternalReplicationContext)?.Replication;
