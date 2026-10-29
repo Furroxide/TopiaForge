@@ -47,7 +47,7 @@ namespace TopiaForge.ModManager.Tests
             Check(!clientView.Hidden.Contains(original.Object), "recovery releases stale native hold");
             Check(!clientView.Admits(original.Object.Entity), "retired replica refuses a new native hide");
             Check(!clientView.Admits(body), "another process's returned body refuses");
-            Check(!hostView.Admits(new FakeEntity(body.Id, "Foreign", Vec3.Zero)), "same-id foreign entity refuses");
+            Check(!hostView.Admits(new TopiaForge.Mods.Testing.FakeEntity(body.Id, "Foreign", Vec3.Zero)), "same-id foreign entity refuses");
             using (var foreignRenderer = new BodyRenderer(rig.Host, hostWorld))
                 Check(!foreignRenderer.Admits(body), "foreign renderer cannot borrow active world admission");
             var saved = hostWorld.World;
@@ -59,13 +59,22 @@ namespace TopiaForge.ModManager.Tests
                 new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Participant), participant);
             Check(participantSeam.PlayerWorldView(hostView, "local").Hide(body).ErrorCode == ModErrorCode.NotAuthoritative,
                 "participant hide authority remains refused");
-            clientWorld.WorldLifetime.Dispose();
-            Check(!clientView.Admits(guest.Native[1].Object.Entity), "ended client world refuses surviving registry root");
             owner.Lifetime.Dispose();
             Check(!body.IsAlive && !hostView.Admits(body), "scope retirement refuses returned body");
             rig.Frames(30);
             Check(clientView.Hidden.Count == 0, "scope retirement restores remote native holds");
             Check(!audience!.IsActive, "scope retirement revokes audience lease");
+            var nextOwner = new AuthorityMod(rig.Host, ModExecutionContext.GamemodeServer);
+            using var nextWorld = hostWorld.For(nextOwner.Lifetime);
+            var nextBody = host.Bind(nextOwner, nextWorld).Spawn(Request()).Value!;
+            using var nextAudience = nextOwner.Seam.PlayerWorldView(hostView,
+                player.Control.SessionSnapshot.LocalParticipantId!.Value.Value).Hide(nextBody).Value!;
+            Check(nextAudience != null && rig.Run(() => clientView.Hidden.Count == 1), "successor scope establishes a fresh remote native hold");
+            var survivor = guest.Native.Last();
+            clientWorld.WorldLifetime.Dispose();
+            Check(!clientView.Admits(survivor.Object.Entity), "ended client world refuses surviving registry root");
+            Check(clientView.Hidden.Count == 0, "world retirement restores native holds independently of server scope");
+            nextOwner.Lifetime.Dispose();
         }
 
         // World readiness and lifetime are inputs; admission, canonical lookup, replica recovery, leases and
@@ -94,8 +103,8 @@ namespace TopiaForge.ModManager.Tests
                 public string SceneName => world.Scene.Name;
                 public bool IsCurrent(IModLifetime caller) => ReferenceEquals(caller, context.lifetime) && !caller.IsStopping
                     && !lifetime.IsStopping && ReferenceEquals(context.root.World, world) && ReferenceEquals(context.root.WorldLifetime, lifetime);
-                public bool IsCurrentWorld(IInternalWorldViewContext caller) => IsCurrent(context.lifetime)
-                    && caller.TryGetViewWorld(out var current, out var scope) && ReferenceEquals(current, world) && ReferenceEquals(scope, lifetime);
+                public bool IsCurrentWorld(IInternalNativeEntityReadContext caller) => IsCurrent(context.lifetime)
+                    && caller is BodyReadContext readContext && readContext.TryGetViewWorld(out var current, out var scope) && ReferenceEquals(current, world) && ReferenceEquals(scope, lifetime);
             }
         }
 
@@ -105,6 +114,7 @@ namespace TopiaForge.ModManager.Tests
             private readonly BodyReadContext world;
             private readonly IInternalNativeEntityReadScope readScope;
             private IDisposable? tracking;
+            private readonly HashSet<Hold> holds = new HashSet<Hold>();
             internal readonly HashSet<FakeWorldObject> Hidden = new HashSet<FakeWorldObject>();
             internal BodyRenderer(WorldPeer peer, BodyReadContext world)
             {
@@ -137,11 +147,17 @@ namespace TopiaForge.ModManager.Tests
                 var target = Resolve(entity);
                 if (target == null) return OperationResult<IDisposable>.Failure(ModErrorCode.InvalidArgument, "Foreign body target.");
                 Hidden.Add(target);
-                return OperationResult<IDisposable>.Success(new Hold(() => Hidden.Remove(target)));
+                Hold? hold = null;
+                hold = new Hold(() => { Hidden.Remove(target); holds.Remove(hold!); });
+                holds.Add(hold);
+                return OperationResult<IDisposable>.Success(hold);
             }
             public void Dispose()
             {
-                if (disposed) return; disposed = true; Stopped(); context.Dispose();
+                if (disposed) return; disposed = true; Stopped();
+                // Like NativeViewHiding, the renderer owns its native holds even after projection detaches.
+                foreach (var native in holds.ToArray()) native.Dispose();
+                context.Dispose();
                 var hold = tracking; tracking = null; hold?.Dispose();
             }
             private sealed class Hold : IDisposable

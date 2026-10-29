@@ -17,3 +17,11 @@ test('persistent body guidance is published, linked and discoverable', () => {
   const config = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
   assert.match(config, /label: 'Build mods',[\s\S]*?slug: 'guides\/persistent-bodies'/u);
 });
+
+
+test('persistent body page supplies required public guide metadata', () => {
+  const entry = pages.find(page => page.sourcePath === 'docs/PersistentBodies.md');
+  assert.ok(entry);
+  assert.match(entry.frontmatter, /^---\ntitle: Persistent cosmetic bodies\ndescription: .+Robotopia.+\n---$/u);
+  assert.equal(entry.enforceV1Contract, true);
+});

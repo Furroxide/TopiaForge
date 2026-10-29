@@ -11,7 +11,7 @@ using TopiaForge.ModManager;
 using TopiaForge.RobotKit;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-public static class BodyPoseScenarios {
+internal static class BodyPoseScenarios {
  private static int assertions;
  private static void Check(bool value,string why) { assertions++; if(!value) throw new InvalidOperationException("Body pose: "+why); }
  private static void Refuses(IEntityService reader,IEntity body,string why) {
@@ -33,6 +33,7 @@ public static class BodyPoseScenarios {
   Refuses(new OwnerEntityService(other.Lifetime,registry),body,"foreign context in same world cannot read");
   var scope=((IInternalOwnedNativeEntity)body).NativeReadScope!;
   Check(scope.IsCurrentWorld(other),"view scopes may share the same actual world");
+  Check(!scope.IsCurrentWorld(new ForeignReadContext()),"a read-context adapter cannot attest runtime world identity");
   var saved=owner.World;owner.World=new WorldReadiness(saved!.Scene,TransformState.Identity);
   Refuses(read,body,"same scene replacement refuses reads");Check(!scope.IsCurrentWorld(other),"old view scope refuses replacement before callbacks");owner.World=saved;
   other.World=new WorldReadiness(saved.Scene,TransformState.Identity);
@@ -59,6 +60,9 @@ public static class BodyPoseScenarios {
   var raced=racing.Bind(race.Lifetime,seam(race.Lifetime),race).Spawn(request).Value!;
   Refuses(new OwnerEntityService(race.Lifetime,registry),raced,"read scope was captured before construction changed the world");
   Console.WriteLine("Persistent body native pose assertions: "+assertions);
+ }
+ private sealed class ForeignReadContext : IInternalNativeEntityReadContext {
+  public IInternalNativeEntityReadScope? CaptureNativeEntityReadScope() => throw new InvalidOperationException("must not mint authority");
  }
  private sealed class NativeBody : IRobotBody,IInternalNativeObjectEntity {
   private readonly GameObject root;private readonly RobotBodyRequest request;private bool ended;

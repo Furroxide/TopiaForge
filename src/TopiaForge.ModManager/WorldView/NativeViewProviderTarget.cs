@@ -5,7 +5,7 @@ namespace TopiaForge.ModManager
 {
     internal static class NativeViewProviderTarget
     {
-        internal static object? Resolve(IInternalWorldViewContext context, IEntity? provider)
+        internal static object? Resolve(IInternalNativeEntityReadContext context, IEntity? provider)
         {
             try
             {
