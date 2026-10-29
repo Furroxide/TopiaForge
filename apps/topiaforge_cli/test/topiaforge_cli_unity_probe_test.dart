@@ -4,6 +4,32 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
+  late Directory cliTemp;
+  late File cliKernel;
+
+  setUpAll(() async {
+    if (Platform.isWindows) return;
+    cliTemp = Directory.systemTemp.createTempSync('unity-probe-cli-');
+    addTearDown(() {
+      if (cliTemp.existsSync()) cliTemp.deleteSync(recursive: true);
+    });
+    cliKernel = File(p.join(cliTemp.path, 'topiaforge.dill'));
+    // Compile once outside the probe budget: `dart run` includes cold CLI
+    // compilation, which competes with other test processes on CI.
+    final compiled = await Process.run(Platform.resolvedExecutable, [
+      'compile',
+      'kernel',
+      'bin/topiaforge.dart',
+      '-o',
+      cliKernel.path,
+    ], workingDirectory: Directory.current.path);
+    expect(
+      compiled.exitCode,
+      0,
+      reason: '${compiled.stdout}\n${compiled.stderr}',
+    );
+  });
+
   test(
     'UI bundle Unity probe times out and terminates a hung executable',
     () async {
@@ -28,8 +54,7 @@ exec /bin/sleep 300
 
       final stopwatch = Stopwatch()..start();
       final result = await Process.run(Platform.resolvedExecutable, [
-        'run',
-        'topiaforge',
+        cliKernel.path,
         'unity',
         'build-ui-bundle',
         '--unity',
@@ -69,8 +94,7 @@ done
 
       final stopwatch = Stopwatch()..start();
       final result = await Process.run(Platform.resolvedExecutable, [
-        'run',
-        'topiaforge',
+        cliKernel.path,
         'unity',
         'build-ui-bundle',
         '--unity',
