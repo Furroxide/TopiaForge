@@ -28,6 +28,38 @@ a stalled connection alone preserves the lifetime. Providers without a lifetime 
 translates guest targets to these player/entity references; host-local movement stays direct and allocation-free in
 the routing wrapper. Native animation and navigation still require in-game qualification.
 
+## Reading an owned robot's transform
+
+`Context.Entities.TryGetTransform(robot, out pose)` reads a live RobotKit spawn's actual native root position,
+rotation and local scale in a running managed world. The consuming context uses the same handle returned by `Spawn`;
+no interop capability, registration, adapter or heading calculation is needed. Routed host, prediction and shadow
+handles retain their canonical native object. This is a read of the local body, including its replicated/interpolated
+pose on a joined player, rather than an arrival or authoritative navigation claim.
+
+The owner facade captures a runtime-only read scope **before** spawning. It binds the exact consuming context lifetime,
+the current `WorldReadiness` object and world lifetime. Parent and child contexts each read their own spawns; passing a
+handle to a sibling, parent or child grants no read authority. Replacing a world in the same native scene invalidates
+the captured readiness. The runtime also checks that the captured native scene handle and name are still loaded, so
+unload is refused before managed cleanup callbacks. RobotKit's persistent root deliberately remains in
+`DontDestroyOnLoad`; the robot's own Unity scene is not evidence of world ownership.
+
+Stopped owner/world scopes, disposed/dead robots, foreign handles, missing native roots and malformed poses return
+`false` with identity output. Raw quaternion components are checked before normalization. Engine reads remain on the
+game thread. A native-object adapter alone confers no authority, and reading never inserts a robot in the entity
+registry or widens `SetTransform`, motion acquisition, destruction or public Unity interop access.
+
+Outside a managed world's readiness record this path fails closed: a scene name alone cannot prove a current world
+incarnation. Spawning and existing RobotKit operations remain available there; complete safe pose reads require a
+managed world. The internal scope extends the existing trusted native-object seam and uses the established first-party
+friend-assembly validation. Public SDK signatures, API baselines, package dependencies and wire formats are unchanged.
+
+`TopiaForge.ModManager.Tests --native-entity-pose` runs real context/orchestrator lifetime admission plus production
+registry, owner facade and read-chain code against controlled engine boundaries. It covers native values, exact owner
+identity, routed wrappers, same-scene replacement, disposal and unchanged mutation refusal. The corresponding
+`--native-entity-pose-before <directory>` control accepts saved pre-fix registry/service sources to reproduce the
+original owned-robot read refusal. These checks do not qualify native pose, pathfinding, catalogue or screen-size
+acceptance; those still require an integrated in-game run.
+
 ## Internal wire contract
 
 World message **71** carries an authority target, consuming mod id, provider kind and bounded payload. The authenticated
