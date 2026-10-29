@@ -117,7 +117,8 @@ namespace TopiaForge.ModManager
                 ui,
                 new OwnerUnityInteropService(ownerModId, lifetime, entities),
                 sceneTransitions,
-                new OwnerWorldRuntimeService(lifetime, sceneTransitions, worlds, new WorldRuntimeClock(ownerScheduler), dispatcher));
+                new OwnerWorldRuntimeService(lifetime, sceneTransitions, worlds, new WorldRuntimeClock(ownerScheduler), dispatcher),
+                NativeRobotSpeechHost.ForProvider(ownerModId, lifetime));
         }
 
         /// <summary>

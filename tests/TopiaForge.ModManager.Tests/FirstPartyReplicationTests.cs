@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager.Tests
             ReplicaStateReviewTests.Run();
             ReplicaMotionLifecycleTests.Run();
             ReplicaMotionRejectionTests.Run();
+            RobotSpeechTests.Run();
             FirstPartyPlayerReferenceTests.Run();
             FirstPartyBrainAuthorityTests.Run();
             FirstPartyLocalRobotTests.Run();

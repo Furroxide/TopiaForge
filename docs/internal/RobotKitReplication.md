@@ -104,8 +104,8 @@ Disposing the consuming lifetime also disposes its local handles and removes the
 
 The resolved autonomous brain-query facade refuses guests before checking local backend/token availability. The
 host or solo process uses its own backend. Local conversations receive the existing local service directly; speech
-capture keeps the existing microphone lease and local credentials. Replicas never enable native talk. This does not
-add speech replication, remote callback execution or persistent ragdoll bodies.
+capture keeps the existing microphone lease and local credentials. Replicas never enable native talk. [Robot speech](RobotSpeech.md) adds private earshot delivery through a separate
+ephemeral event, without remote callback execution or persistent ragdoll bodies.
 
 ## Compatibility
 

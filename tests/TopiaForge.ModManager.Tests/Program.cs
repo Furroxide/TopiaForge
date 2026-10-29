@@ -16,6 +16,10 @@ namespace TopiaForge.ModManager.Tests
             UnityMainThreadGuard.CaptureCurrentThread();
             if (args.Length == 1 && args[0] == "--avatar-appearance")
             { AvatarAppearanceTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--native-speech-ownership")
+            { NativeSpeechOwnershipTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--native-speech-owner-stop")
+            { RobotSpeechTests.OwnerStop(); return 0; }
             if (args.Length == 1 && args[0] == "--session-maps")
             {
                 SessionMapTransferTests.Run();
@@ -30,6 +34,8 @@ namespace TopiaForge.ModManager.Tests
             { CommunicationRuntimeTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--replica-motion-rejections") { ReplicaMotionRejectionTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--replica-state-review") { ReplicaStateReviewTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--robot-speech")
+            { RobotSpeechTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robotkit-native-navigation")
             { RobotNativeNavigationTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--native-entity-pose")

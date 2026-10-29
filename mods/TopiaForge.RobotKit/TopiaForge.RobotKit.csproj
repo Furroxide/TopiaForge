@@ -11,7 +11,7 @@
     <AssemblyVersion>0.2.0.0</AssemblyVersion>
     <FileVersion>0.2.0.0</FileVersion>
     <InformationalVersion>0.2.0</InformationalVersion>
-    <!-- Genuinely native: this mod uses UnityEngine/Harmony by design, so the safe-API rules do not
+    <!-- Genuinely native: this provider uses UnityEngine by design, so the safe-API rules do not
          apply. Main-thread rules still do - opting out of the safe profile does not leave the game loop. -->
     <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
   </PropertyGroup>
@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
+    <Reference Include="FMODUnity" HintPath="$(RobotopiaManagedDir)\FMODUnity.dll" Private="false" />
     <Reference Include="UniTask" HintPath="$(RobotopiaManagedDir)\UniTask.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />

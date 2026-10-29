@@ -331,6 +331,9 @@ type public sealed class TopiaForge.Mods.RobotProgramDelivery : System.Object
   property TopiaForge.Mods.IRobotAgent Sender { get; }
   property TopiaForge.Mods.RobotObjective Payload { get; }
 
+type public static class TopiaForge.Mods.RobotSpeechExtensions : System.Object [requires-topiaforge="0.2.0"]
+  method extension [static] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> SayAsync(TopiaForge.Mods.IRobotAgent agent, System.String text, System.Threading.CancellationToken cancellationToken = null) [requires-topiaforge="0.2.0"]
+
 type public static class TopiaForge.Mods.RobotTargetFacts : System.Object
   method [static] System.String Describe(TopiaForge.Mods.RobotTargetInfo info, System.Nullable<TopiaForge.Mods.RobotTargetSnapshot> snapshot, TopiaForge.Mods.Vec3 observerPosition)
   method [static] System.String Describe(TopiaForge.Mods.RobotTargetInfo info, System.Nullable<TopiaForge.Mods.RobotTargetSnapshot> snapshot, TopiaForge.Mods.Vec3 observerPosition, System.String? activity)

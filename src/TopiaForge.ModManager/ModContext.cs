@@ -15,7 +15,7 @@ using TopiaForge.Mods.Interop.Unity;
 namespace TopiaForge.ModManager
 {
     internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext, IInternalWorldRuntimeContext,
-        IInternalReplicationContext, IInternalPlayerContext, IInternalMapStorageContext
+        IInternalReplicationContext, IInternalPlayerContext, IInternalMapStorageContext, IInternalNativeSpeechContext
     {
         private readonly OwnerModLifetime ownerLifetime;
         private readonly ModEvents modEvents;
@@ -115,6 +115,7 @@ namespace TopiaForge.ModManager
                 if (playerContext != null) playerContext.AppearanceProfile = NetProfile;
                 SceneTransitions = gameplay.SceneTransitions;
                 WorldRuntime = gameplay.WorldRuntime;
+                NativeSpeech = gameplay.NativeSpeech;
                 authoredMapInterop = gameplay.UnityInterop;
                 unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
 
@@ -184,6 +185,8 @@ namespace TopiaForge.ModManager
         public IExtensionService Extensions { get; }
         public IInternalSceneTransitionService SceneTransitions { get; }
         public IInternalWorldRuntimeService WorldRuntime { get; }
+        // Only the provider's root load context hosts interception. Child scopes consume speech through replication.
+        public IInternalNativeSpeechHost? NativeSpeech { get; }
 
         /// <summary>Gets where this context runs: its mod's network class and its execution context.</summary>
         internal ModNetProfile NetProfile { get; }

@@ -5,12 +5,15 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.RobotKit
 {
-    internal sealed class RoutedRobotAgent : IRobotAgent, IInternalNativeObjectEntity
+    internal sealed class RoutedRobotAgent : IRobotAgent, IInternalNativeObjectEntity, IInternalSpeechAgent
     {
         private readonly IRobotAgent agent;
         private readonly IRuntimeReplication replication;
         internal RoutedRobotAgent(IRobotAgent agent, IRuntimeReplication replication)
         { this.agent = agent; this.replication = replication; }
+        public System.Threading.Tasks.Task<OperationResult<bool>> SayAsync(string text, System.Threading.CancellationToken token) =>
+            replication is IInternalEntitySpeech speech ? speech.SayAsync(agent, RobotReplicationWire.Kind, text, token)
+            : System.Threading.Tasks.Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Robot speech routing is unavailable."));
         public string Id => agent.Id;
         public object? NativeObject => (agent as IInternalNativeObjectEntity)?.NativeObject;
         public string Name => agent.Name;

@@ -106,7 +106,23 @@ Reissuing the same destination preserves arrival; a changed destination starts a
 The existing 0.5-metre release hysteresis allows pursuit to resume when the target moves away.
 `IsMoving` remains true while a native walk is still pending, including while it settles near a target.
 
-This spawn path does not import an entity overlay or add robot speech delivery.
+This spawn path does not import an entity overlay.
+
+## Robot speech
+
+Call `await agent.SayAsync(reply, cancellationToken)` on an agent from the owning host context.
+RobotKit selects listeners within 20 metres using current-world validated presence, privately delivers
+only the bounded line and its native voice fingerprint, and synthesizes locally on each eligible peer.
+Native `AgentHead.Say` calls on these owned robots use the same route automatically. Guests cannot
+originate NPC speech and their replicas remain dormant. Authors write no packet, recipient list or token plumbing.
+
+Lines allow up to 512 plain-text characters. A new line replaces the previous one; cancellation,
+despawn, scope disposal, hiding and world changes stop playback. Missing bindings return `Unavailable`;
+retry a fresh line after recovery. Delivery is best effort: full windows, expired lines and late joins
+do not replay speech. Local completion does not acknowledge remote audio. Native subtitle-only or
+pre-recorded-clip overrides are outside this replicated speech contract.
+
+See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/c43ed92e963b0f662996eb6649f412e1d9176485/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
 
 ## Deterministic Robotopia gameplay first
 

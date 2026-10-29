@@ -8,6 +8,7 @@ namespace TopiaForge.ModManager.Tests
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Testing;

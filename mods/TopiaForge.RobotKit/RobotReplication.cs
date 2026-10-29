@@ -33,6 +33,7 @@ namespace TopiaForge.RobotKit
                 var result = replication.RequestSpawn(descriptor, () => Make(request, replication.Realm == InternalNetRealm.Client));
                 if (!result.TryGetValue(out var entity) || !states.TryGetValue(entity.Id, out var state))
                     return OperationResult<IRobotAgent>.Failure(result.ErrorCode, result.ErrorMessage);
+                BindSpeech(state.Agent, replication);
                 return OperationResult<IRobotAgent>.Success(new RoutedRobotAgent(state.Agent, replication));
             }
             catch (ArgumentException) { return OperationResult<IRobotAgent>.Failure(ModErrorCode.InvalidArgument, "Robot spawn values must be bounded plain text and finite numbers."); }
@@ -64,7 +65,10 @@ namespace TopiaForge.RobotKit
         {
             var made = spawn(replica ? Copy(request, brain: RobotBrainMode.Dormant, interaction: RobotInteractionOptions.DisableNativeTalk()) : request, replica);
             if (!made.TryGetValue(out var agent)) return OperationResult<IEntity>.Failure(made.ErrorCode, made.ErrorMessage);
-            states.Add(agent.Id, new State(agent, request));
+            var state = new State(agent, request, replica);
+            states.Add(agent.Id, state);
+            // Replicas have a canonical receiving association before any host-origin route is attached.
+            BindPlayback(state, null);
             return OperationResult<IEntity>.Success(agent);
         }
 
@@ -115,8 +119,12 @@ namespace TopiaForge.RobotKit
 
         private sealed class State
         {
-            internal State(IRobotAgent agent, RobotAgentSpawnRequest request) { Agent = agent; Request = request; }
+            internal State(IRobotAgent agent, RobotAgentSpawnRequest request, bool replica)
+            { Agent = agent; Request = request; IsReplica = replica; }
             internal IRobotAgent Agent { get; }
+            internal bool IsReplica { get; }
+            internal object? SpeechAssociation;
+            internal IRuntimeReplication? SpeechConsumer;
             internal RobotAgentSpawnRequest Request { get; set; }
             internal string Emote { get; set; } = "";
             internal InternalSpawnDescriptor? Descriptor { get; set; }

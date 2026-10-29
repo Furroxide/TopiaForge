@@ -99,7 +99,14 @@ PackageNaming _naming(String raw, String package, {required bool include}) {
       alone = false;
       continue;
     }
-    final spec = _unescaped(trimmed, trim: include);
+    // Already trimmed with MSBuild's whitespace rules. Without escapes or
+    // wildcards, the code-unit view needs neither decoding nor a second trim.
+    final spec =
+        !trimmed.contains('%') &&
+            !trimmed.contains('*') &&
+            !trimmed.contains('?')
+        ? trimmed.codeUnits
+        : _unescaped(trimmed, trim: include);
     final wildcard = spec.contains(_anyRun) || spec.contains(_anyOne);
     final matches = wildcard
         ? !include && _matches(spec, package)

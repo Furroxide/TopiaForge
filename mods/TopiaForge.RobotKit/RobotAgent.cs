@@ -360,6 +360,7 @@ namespace TopiaForge.RobotKit
             }
 
             despawned = true;
+            ReleaseSpeech();
             // Release the walk now: there will be no later Step to drain it, so cancel + dispose the CTS here.
             ReleaseWalk();
             ResetInteractionOverrides();

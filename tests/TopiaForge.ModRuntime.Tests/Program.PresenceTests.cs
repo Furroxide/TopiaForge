@@ -162,8 +162,13 @@ namespace TopiaForge.ModRuntime.Tests
                 PresenceFrames(pair, clock, 120);
                 Assert(host.AvatarOf(players[0]) != null && players[0].AvatarOf(host) != null, "the two see each other");
                 var heartbeats = players[0].Presence.Counters.PosesSent;
+                var hostSpeechChannel = host.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+                var playerSpeechChannel = players[0].Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+                var speechMessages = hostSpeechChannel.SentMessages + playerSpeechChannel.SentMessages;
                 var online = MeasurePresenceFrames(pair, clock, 10_000);
                 Assert(players[0].Presence.Counters.PosesSent > heartbeats + 100, "their heartbeats went on throughout");
+                Assert(hostSpeechChannel.SentMessages + playerSpeechChannel.SentMessages == speechMessages,
+                    "presence without a speech provider emits no world-channel speech readiness traffic");
                 Assert(online == 0, "a host and a player online at rest allocate nothing, the clock running (" + online + " bytes over 10,000 frames)");
 
                 // A host and three players moving: the cost of one frame of all four games, measured.

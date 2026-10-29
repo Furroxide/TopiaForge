@@ -42,7 +42,8 @@ namespace TopiaForge.ModManager
             IUiService ui,
             IUnityInteropService? unityInterop,
             IInternalSceneTransitionService sceneTransitions,
-            IInternalWorldRuntimeService? worldRuntime = null)
+            IInternalWorldRuntimeService? worldRuntime = null,
+            IInternalNativeSpeechHost? nativeSpeech = null)
         {
             Input = input;
             LocalPlayer = localPlayer;
@@ -59,6 +60,7 @@ namespace TopiaForge.ModManager
             UnityInterop = unityInterop;
             SceneTransitions = sceneTransitions;
             WorldRuntime = worldRuntime ?? UnavailableWorldRuntimeService.Instance;
+            NativeSpeech = nativeSpeech;
         }
 
         public IInputService Input { get; }
@@ -76,6 +78,7 @@ namespace TopiaForge.ModManager
         public IUnityInteropService? UnityInterop { get; }
         public IInternalSceneTransitionService SceneTransitions { get; }
         public IInternalWorldRuntimeService WorldRuntime { get; }
+        public IInternalNativeSpeechHost? NativeSpeech { get; }
 
         public static GameplayContextServices Unavailable(IModLifetime lifetime)
         {
