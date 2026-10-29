@@ -11,6 +11,12 @@ export const pages = [
   page('docs/Sandbox.md', 'guides/sandbox.md'),
   page('docs/Multiplayer.md', 'guides/multiplayer.md'),
   page('docs/Players.md', 'guides/players.md'),
+  page(
+    'docs/ParticipantAppearance.md',
+    'guides/participant-appearance.md',
+    true,
+    generatedFrontmatter('Participant appearance', 'Apply scoped participant cosmetics in mods for Robotopia.'),
+  ),
   page('docs/MultiplayerHostingFeasibility.md', 'reference/multiplayer-hosting-feasibility.md'),
   page('docs/RobotKit.md', 'guides/robotkit.md'),
   page('docs/Zombies.md', 'guides/zombies.md'),

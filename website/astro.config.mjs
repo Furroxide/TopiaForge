@@ -96,6 +96,7 @@ export default defineConfig({
             { label: 'Sandbox creator mode', slug: 'guides/sandbox' },
             { label: 'Multiplayer preview', slug: 'guides/multiplayer' },
             { label: 'Act on players', slug: 'guides/players' },
+            { label: 'Participant appearance', slug: 'guides/participant-appearance' },
             { label: 'RobotKit', slug: 'guides/robotkit' },
             { label: 'Zombies worked example', slug: 'guides/zombies' },
             { label: 'Custom worlds and modes', slug: 'guides/custom-worlds' },

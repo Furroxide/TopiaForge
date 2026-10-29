@@ -1371,7 +1371,7 @@
       "matchMode": "ValueContract",
       "criticality": "Degraded",
       "feature": "Participant cosmetic appearance",
-      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
     },
     {
       "id": "robotkit.avatar.slot.glasses",
@@ -1383,7 +1383,7 @@
       "matchMode": "ValueContract",
       "criticality": "Degraded",
       "feature": "Participant cosmetic appearance",
-      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
     },
     {
       "id": "robotkit.avatar.slot.hair",
@@ -1395,7 +1395,7 @@
       "matchMode": "ValueContract",
       "criticality": "Degraded",
       "feature": "Participant cosmetic appearance",
-      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
     },
     {
       "id": "robotkit.avatar.slot.beard",
@@ -1407,7 +1407,7 @@
       "matchMode": "ValueContract",
       "criticality": "Degraded",
       "feature": "Participant cosmetic appearance",
-      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
     },
     {
       "id": "robotkit.avatar.slot.necklace",
@@ -1419,7 +1419,7 @@
       "matchMode": "ValueContract",
       "criticality": "Degraded",
       "feature": "Participant cosmetic appearance",
-      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
     }
   ]
 }

@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             assertions = 0;
+            NativeAccessorySlots();
             PoweredDownCollision();
             ValuesAndFake();
             LeasesAndBounds();

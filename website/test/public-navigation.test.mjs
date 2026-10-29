@@ -121,3 +121,24 @@ test('private per-player author guidance links resolve without publishing runtim
   assert.match(content, /^## Private per-player delivery$/mu);
   assert.doesNotMatch(content, /IInternalSystemChannel|## Engine wire channel|## Runtime consumer channel/u);
 });
+
+
+test('participant appearance guide publishes its source and incoming link in the author sidebar', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  const route = sourceToRoute.get('docs/ParticipantAppearance.md');
+  assert.equal(route, '/guides/participant-appearance/');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const source = readFileSync(new URL('../../docs/Multiplayer.md', import.meta.url), 'utf8');
+  assert.ok(source.includes('(ParticipantAppearance.md)'));
+  assert.ok(links.rewrite('docs/Multiplayer.md', source).includes(`](${route})`));
+  const guide = readFileSync(new URL('../../docs/ParticipantAppearance.md', import.meta.url), 'utf8');
+  links.rewrite('docs/ParticipantAppearance.md', guide);
+  assert.deepEqual(failures, []);
+  const authorGuides = /label: 'Build mods',\s*items: \[([\s\S]*?)\],/u.exec(configSource);
+  assert.ok(authorGuides?.[1].includes(`slug: '${route.slice(1, -1)}'`),
+    'participant appearance is discoverable in the author sidebar');
+});

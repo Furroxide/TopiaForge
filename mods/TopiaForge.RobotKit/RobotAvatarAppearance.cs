@@ -56,7 +56,7 @@ namespace TopiaForge.RobotKit
         {
             if (composer == null || PartType == null || Parts == null || Select == null || Build == null || None == null)
                 throw new InvalidOperationException("The avatar accessory binding is unavailable.");
-            var slot = Enum.Parse(PartType, appearance.AccessorySlot.ToString(), false);
+            var slot = Enum.Parse(PartType, RobotAvatarAccessorySlots.NativeName(appearance.AccessorySlot), false);
             GameObject? selected = null;
             if (appearance.Accessory!.Length == 0) selected = None.GetValue(null) as GameObject;
             else
