@@ -100,6 +100,8 @@ namespace TopiaForge.ModRuntime.Tests
                 internal Preparation(GeneratedGameplayHost owner, IModLifetime lifetime) : base(owner) { this.owner = owner; Own(lifetime); }
                 public WorldSceneIdentity Scene => owner.scene;
                 public TransformState? NativeDefaultSpawn => TransformState.Identity;
+                public OperationResult<IInternalNativeSceneOperation> TryDispatchContent(IInternalNativeSceneDispatch dispatch, CancellationToken token) =>
+                    throw new NotSupportedException();
                 public Task<OperationResult<WorldReadiness>> FinishAsync(WorldSpawnPolicy policy, IEntity? contentRoot,
                     TransformState? providerSpawn, CancellationToken token)
                 {

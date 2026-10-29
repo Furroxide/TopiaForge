@@ -9,14 +9,23 @@ namespace TopiaForge.Worlds
 {
     internal static class LocalWorldImportOperation
     {
-        internal static async Task<OperationResult<IDisposable>> RunAsync(IInternalSceneTransitionService transitions,
+        internal static Task<OperationResult<IDisposable>> RunAsync(IInternalSceneTransitionService transitions,
+            WorldSceneIdentity scene, CancellationToken token, ILocalImportTransaction transaction) =>
+            RunAsync(dispatch => transitions.TryDispatch(new NativeSceneRequest(scene.Name, false,
+                "local content import", observeSceneArrival: false), dispatch, token), scene, token, transaction);
+
+        internal static Task<OperationResult<IDisposable>> RunAsync(IInternalWorldPreparation preparation,
+            CancellationToken token, ILocalImportTransaction transaction) =>
+            RunAsync(dispatch => preparation.TryDispatchContent(dispatch, token), preparation.Scene, token, transaction);
+
+        private static async Task<OperationResult<IDisposable>> RunAsync(
+            Func<IInternalNativeSceneDispatch, OperationResult<IInternalNativeSceneOperation>> dispatch,
             WorldSceneIdentity scene, CancellationToken token, ILocalImportTransaction transaction)
         {
             IDisposable? content = null;
             var errors = new List<Exception>();
             var snapshot = new SceneSnapshot(scene.Name, true, true);
-            var dispatched = transitions.TryDispatch(new NativeSceneRequest(scene.Name, false, "local content import", observeSceneArrival: false),
-                new DelegateNativeSceneDispatch(completion =>
+            var dispatched = dispatch(new DelegateNativeSceneDispatch(completion =>
                 {
                     OperationResult<IDisposable> result;
                     try { result = transaction.Import(); }
@@ -28,7 +37,7 @@ namespace TopiaForge.Worlds
                     else completion.FailCaller(result.ErrorCode, result.ErrorMessage);
                     return transaction.NativeReturned ? NativeSceneDispatchStatus.Dispatched
                         : transaction.NativeEntered ? NativeSceneDispatchStatus.Indeterminate : NativeSceneDispatchStatus.NotDispatched;
-                }), token);
+                }));
             if (!dispatched.TryGetValue(out var operation)) return Failure(dispatched.ErrorCode, dispatched.ErrorMessage);
             OperationResult<SceneSnapshot>? acknowledged = null;
             OperationResult<SceneSnapshot>? terminal = null;

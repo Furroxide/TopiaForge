@@ -65,6 +65,11 @@ namespace TopiaForge.Mods.Internal
     {
         WorldSceneIdentity Scene { get; }
         TransformState? NativeDefaultSpawn { get; }
+        // One content mutation in the prepared scene, under the preparation's retained admission.
+        // The caller must drain the returned operation before placement/FinishAsync. Disposal also
+        // cancels and drains it; it never transfers a reusable scene-transition route to the provider.
+        OperationResult<IInternalNativeSceneOperation> TryDispatchContent(
+            IInternalNativeSceneDispatch dispatch, CancellationToken cancellationToken);
         Task<OperationResult<WorldReadiness>> FinishAsync(WorldSpawnPolicy policy, IEntity? contentRoot,
             TransformState? providerSpawn, CancellationToken cancellationToken);
     }
