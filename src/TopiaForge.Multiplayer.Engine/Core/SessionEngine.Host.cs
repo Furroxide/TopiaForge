@@ -71,7 +71,7 @@ namespace TopiaForge.Multiplayer.Engine
             var previous = sessionCancellation;
             sessionCancellation = new CancellationTokenSource();
             sessionId = newSessionId;
-            foreach (var participant in participantRecords) participant.LifetimeId = Guid.NewGuid();
+            foreach (var participant in participantRecords) participant.LifetimeId = options.NewParticipantLifetime();
             seed = newSeed;
             epoch++;
             // Tokens already handed out stay readable, so the retired source is cancelled but never disposed.
@@ -170,7 +170,7 @@ namespace TopiaForge.Multiplayer.Engine
                     throw new ArgumentException("A headless host has no local participant.", nameof(hostParticipant));
                 }
 
-                participantRecords.Add(new ParticipantRecord(hostParticipant.Value, null, hostDisplayName, isHost: true)
+                participantRecords.Add(new ParticipantRecord(hostParticipant.Value, null, hostDisplayName, isHost: true, options.NewParticipantLifetime())
                 {
                     IsConnected = true,
                     Voice = CreateVoiceSpeaker(null)
@@ -418,7 +418,7 @@ namespace TopiaForge.Multiplayer.Engine
             record.DisplayName = request.DisplayName;
             record.Connection = connection;
             record.IsConnected = true;
-            record.LifetimeId = Guid.NewGuid();
+            record.LifetimeId = options.NewParticipantLifetime();
             record.DepartedAtMicros = 0;
             record.PlayerKey = connection.Link.PlayerKey.IsValid ? connection.Link.PlayerKey.Value : null;
             connection.Participant = record;
@@ -465,7 +465,7 @@ namespace TopiaForge.Multiplayer.Engine
                 return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The session is full.");
             }
 
-            record = new ParticipantRecord(id.Value, identity, displayName, isHost: false) { Voice = CreateVoiceSpeaker(identity) };
+            record = new ParticipantRecord(id.Value, identity, displayName, isHost: false, options.NewParticipantLifetime()) { Voice = CreateVoiceSpeaker(identity) };
             participantRecords.Add(record);
             return null;
         }

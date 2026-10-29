@@ -49,8 +49,10 @@ namespace TopiaForge.ModManager.Tests
         internal readonly RobotAgentSpawnRequest Request;
         internal IEntity? Chased;
         internal FirstPartyRobot(FakeWorldObject body, RobotAgentSpawnRequest request, bool replica)
-        { Body = body; Replica = replica; Request = request; Inner = (FakeRobotAgent)new FakeRobotAgentService(new FakeModLifetime()).Spawn(request).Value!;
-            if (replica) ReplicaState = new RobotReplicaState(new RobotMovementSettings(request.Gait, request.MoveSpeed, request.TurnSpeed, request.StopDistance)); }
+        {
+            Body = body; Replica = replica; Request = request; Inner = (FakeRobotAgent)new FakeRobotAgentService(new FakeModLifetime()).Spawn(request).Value!;
+            if (replica) ReplicaState = new RobotReplicaState(new RobotMovementSettings(request.Gait, request.MoveSpeed, request.TurnSpeed, request.StopDistance));
+        }
         public RobotReplicaState? ReplicaState { get; }
         public string Id => Body.Entity.Id;
         public string Name => Inner.Name;

@@ -25,12 +25,12 @@ namespace TopiaForge.Multiplayer
         private readonly EngineSessionFacade reserved;
         private bool disposed;
 
-        internal MultiplayerProvider(string providerModId, IEngineDiagnostics? diagnostics = null, Func<long>? clockMicros = null, LiveSessionsSetup? live = null)
+        internal MultiplayerProvider(string providerModId, IEngineDiagnostics? diagnostics = null, Func<long>? clockMicros = null, LiveSessionsSetup? live = null, Func<Guid>? participantLifetime = null)
         {
             if (!ProtocolLimits.IsValidIdentity(providerModId)) throw new ArgumentException("A provider mod id is required.", nameof(providerModId));
             this.providerModId = providerModId;
             this.clockMicros = clockMicros ?? MonotonicMicros;
-            var options = new EngineOptions { Diagnostics = diagnostics, Voice = CreateVoiceOptions(live) };
+            var options = new EngineOptions { Diagnostics = diagnostics, Voice = CreateVoiceOptions(live), NewParticipantLifetime = participantLifetime ?? Guid.NewGuid };
             engine = SessionEngine.CreateHost(
                 options,
                 MultiplayerProcessKind.Interactive,

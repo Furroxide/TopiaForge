@@ -85,6 +85,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets the voice codec and the host's voice limits; null leaves voice off and sends nothing for it.</summary>
         internal VoiceOptions? Voice { get; set; }
 
+        /// <summary>Issues opaque participant lifetimes. Tests may seed this independent of gameplay randomness.</summary>
+        internal Func<Guid> NewParticipantLifetime { get; set; } = Guid.NewGuid;
+
         internal void Validate()
         {
             Voice?.Validate();
