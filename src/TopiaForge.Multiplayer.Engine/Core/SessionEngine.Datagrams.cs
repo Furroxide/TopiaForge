@@ -89,9 +89,9 @@ namespace TopiaForge.Multiplayer.Engine
         private OperationResult<int>? CheckDatagram(SystemChannelEndpoint endpoint, InternalSystemTarget target, int payloadBytes)
         {
             if (!endpoint.IsOpen) return OperationResult<int>.Failure(ModErrorCode.InvalidState, "The system channel is closed.");
-            if (endpoint.Kind == InternalSystemChannelKind.Time)
+            if (IsHostOnlySystemKind((byte)endpoint.Kind))
             {
-                return OperationResult<int>.Failure(ModErrorCode.InvalidArgument, "The session's time has no datagram lane; the host sends it as messages.");
+                return OperationResult<int>.Failure(ModErrorCode.InvalidArgument, "This host-only channel requires reliable messages.");
             }
 
             if (payloadBytes > InternalSystemLimits.MaximumDatagramBytes)
@@ -148,6 +148,13 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
+            if (kind == PrivateStateKind || kind == (byte)InternalSystemChannelKind.PerPlayer)
+            {
+                Report(new EngineDiagnostic(EngineDiagnosticKind.ProtocolViolation, "A player sent a private system datagram.", participant.Id));
+                EndConnection(connection, MultiplayerSessionEndReason.ProtocolMismatch, "Private channels require host-only reliable messages.");
+                return;
+            }
+
             var ingress = connection.DatagramIngress ??= new TokenBucket(DatagramIngressBurst, DatagramIngressPerSecond, nowMicros);
             if (!ingress.TryTake(nowMicros))
             {
@@ -179,7 +186,7 @@ namespace TopiaForge.Multiplayer.Engine
         private void DeliverDatagram(byte kind, ParticipantId sender, ArraySegment<byte> payload)
         {
             // The session's time travels as the host's messages alone; a datagram for it is nobody's.
-            var endpoint = kind != TimeKind && SystemStreamSet.IsKind(kind) ? systemChannels[kind] : null;
+            var endpoint = !IsHostOnlySystemKind(kind) && SystemStreamSet.IsKind(kind) ? systemChannels[kind] : null;
             if (endpoint == null)
             {
                 systemDatagramsUnclaimed++;
@@ -191,7 +198,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void CountDroppedDatagram(byte kind)
         {
-            var endpoint = kind != TimeKind && SystemStreamSet.IsKind(kind) ? systemChannels[kind] : null;
+            var endpoint = !IsHostOnlySystemKind(kind) && SystemStreamSet.IsKind(kind) ? systemChannels[kind] : null;
             if (endpoint != null) endpoint.CountDatagramDropped();
             else systemDatagramsUnclaimed++;
         }

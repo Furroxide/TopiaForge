@@ -387,8 +387,9 @@ and a log that throws loses the line rather than the frame.
 ## 5. System channels
 
 The runtime's own traffic between peers travels as engine `SystemMessage` envelopes (type `0x20`), apart from any mod's
-contract. `OpenSystemChannel` opens one of five channels, one owner each: `WorldReplication`, `Avatars`, `Chat`,
-`SceneFollow` and `Time`.
+contract. `OpenSystemChannel` opens one runtime channel per kind, one owner each: `WorldReplication`, `Avatars`,
+`Chat`, `SceneFollow`, `Time`, `Players`, and `PerPlayer`. The engine owns `PrivateState` separately. The two private
+channels accept host-to-one-player reliable delivery only; see [private delivery](MultiplayerPrivateState.md).
 
 - **Wire.** `[epoch varint][join generation varint][kind byte][payload bytes]` on the session channel, reliable and
   ordered with the session's own traffic. `SystemCredit` (type `0x21`) carries `[epoch][join generation][kind][consumed

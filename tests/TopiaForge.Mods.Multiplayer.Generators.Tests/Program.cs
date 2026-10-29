@@ -110,10 +110,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
 
         private static readonly MetadataReference[] References = BuildReferences();
 
-        private static int Main()
+        private static int Main(string[] args)
         {
             try
             {
+                if (args.Length == 1 && args[0] == "--per-player") { RunPerPlayerGeneratorTests(); return 0; }
+                RunPerPlayerGeneratorTests();
                 GeneratedContractMatchesGoldenSurface();
                 GeneratedConsumerCompilesAndCodecRoundTrips();
                 GeneratedPresentationRegistrationSupportsHeadlessPeers();

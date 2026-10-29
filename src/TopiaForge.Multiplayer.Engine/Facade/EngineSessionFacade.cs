@@ -16,7 +16,7 @@ namespace TopiaForge.Multiplayer.Engine
     /// whole (see <see cref="SessionEngine.CloseFacade"/>). A closing facade refuses new work with
     /// <see cref="ModErrorCode.Cancelled"/>.
     /// </summary>
-    internal sealed class EngineSessionFacade : IMultiplayerSession, IInternalAnswerDispatch, IDisposable
+    internal sealed class EngineSessionFacade : IMultiplayerSession, IPerPlayerStateSession, IInternalAnswerDispatch, IDisposable
     {
         private const string ClosingMessage = "The mod is stopping and cannot change its multiplayer session.";
         private readonly SessionEngine engine;
@@ -73,6 +73,9 @@ namespace TopiaForge.Multiplayer.Engine
             ThrowIfClosing();
             return OwnSubscription(engine.SubscribeSession(handler));
         }
+
+        public OperationResult<IPerPlayerState<T>> RegisterPerPlayerState<T>(ReplicatedStateDefinition<T> definition) where T : class =>
+            IsClosing ? Closing<IPerPlayerState<T>>() : OwnResult(engine.RegisterPrivateState(OwnerModId, definition));
 
         public OperationResult<IReplicatedState<T>> RegisterState<T>(ReplicatedStateDefinition<T> definition) where T : class =>
             IsClosing ? Closing<IReplicatedState<T>>() : OwnResult(engine.RegisterState(OwnerModId, definition));
@@ -270,6 +273,7 @@ namespace TopiaForge.Multiplayer.Engine
         {
             EngineLease lease => lease.IsDisposed,
             StateRecord state => !state.IsActive,
+            PerPlayerRecord privateState => !privateState.Active,
             CommandBinding command => !command.IsActive,
             ObjectTypeBinding objectType => !objectType.IsActive,
             PresentationBinding presentation => !presentation.IsActive,

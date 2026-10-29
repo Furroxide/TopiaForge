@@ -6,6 +6,8 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--private-commit") { PerPlayerStateTests.CommitRegressions(); return 0; }
+            if (args.Length == 1 && args[0] == "--per-player") { PerPlayerStateTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--dev-peers")
             {
                 DeveloperPeerTests.Run();
@@ -110,6 +112,7 @@ internal static class Program
                 return 0;
             }
 
+            PerPlayerStateTests.Run();
             HostPackageTests.Run();
             InSessionChatProviderTests.Run();
             DeveloperPeerTests.Run();

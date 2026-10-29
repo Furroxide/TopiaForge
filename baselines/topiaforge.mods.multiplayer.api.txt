@@ -57,6 +57,14 @@ type public interface TopiaForge.Mods.IMultiplayerSession
   property TopiaForge.Mods.IPlayerDirectory Players { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.MultiplayerSessionSnapshot Snapshot { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IPerPlayerState<T> : System.IDisposable where T : class [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.IDisposable SubscribeChanged(System.Action<T> handler) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<T> Get(TopiaForge.Mods.ParticipantId player) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<T> Set(TopiaForge.Mods.ParticipantId player, T value) [requires-topiaforge="0.2.0"]
+
+type public interface TopiaForge.Mods.IPerPlayerStateSession [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPerPlayerState<T>> RegisterPerPlayerState<T>(TopiaForge.Mods.ReplicatedStateDefinition<T> definition) where T : class [requires-topiaforge="0.2.0"]
+
 type public interface TopiaForge.Mods.IPlayer
   method [abstract,virtual,newslot] System.Boolean TryGetHealth(out TopiaForge.Mods.PlayerHealthSnapshot? health)
   method [abstract,virtual,newslot] System.Boolean TryGetSnapshot(out TopiaForge.Mods.PlayerSnapshot? snapshot)
@@ -350,6 +358,15 @@ type public readonly struct TopiaForge.Mods.ParticipantId : System.ValueType, Sy
   method [virtual] System.String ToString()
   property System.Boolean IsValid { get; }
   property System.String Value { get; }
+
+type public sealed class TopiaForge.Mods.PerPlayerState<T> : System.Object, System.IDisposable, TopiaForge.Mods.IPerPlayerState<T> where T : class [requires-topiaforge="0.2.0"]
+  constructor .ctor(T initialValue) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.OperationResult<System.IDisposable> Bind(TopiaForge.Mods.IMultiplayerSession session, System.String id, TopiaForge.Mods.IMultiplayerCodec<T> codec) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.OperationResult<System.IDisposable> Bind(TopiaForge.Mods.IMultiplayerSession session, System.String id, TopiaForge.Mods.IMultiplayerCodec<T> codec, TopiaForge.Mods.MultiplayerDelivery delivery, System.Int32 maximumUpdatesPerSecond) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.IDisposable SubscribeChanged(System.Action<T> handler) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<T> Get(TopiaForge.Mods.ParticipantId player) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<T> Set(TopiaForge.Mods.ParticipantId player, T value) [requires-topiaforge="0.2.0"]
 
 type public enum TopiaForge.Mods.PredictionMode : System.Int32
   field System.Int32 value__

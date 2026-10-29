@@ -25,7 +25,13 @@ namespace TopiaForge.Mods.Internal
         Time = 5,
 
         /// <summary>Player actions, input, targeted UI and scoreboard values.</summary>
-        Players = 6
+        Players = 6,
+
+        /// <summary>Engine-owned private contract fields. Host to one authenticated player only.</summary>
+        PrivateState = 7,
+
+        /// <summary>Runtime-owned private per-player data. Host to Only(player); reliable messages and credits only.</summary>
+        PerPlayer = 8
     }
 
     /// <summary>Who a system message goes to.</summary>

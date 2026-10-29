@@ -51,6 +51,9 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>Gets or sets the join generation this connection was accepted with, stamped on its system-channel traffic.</summary>
         internal ulong JoinGeneration { get; set; }
+        internal ulong PrivateGeneration { get; set; }
+        internal Dictionary<WireKey, PrivateSentValue> PrivateSent { get; } = new Dictionary<WireKey, PrivateSentValue>();
+        internal List<WireKey> PrivateRemoved { get; } = new List<WireKey>();
 
         /// <summary>Gets or sets the generation the system channels report for this connection's streams; it changes on every restart.</summary>
         internal ulong StreamGeneration { get; set; }

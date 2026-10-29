@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { pages, routeForOutput } from '../scripts/docs/catalog.mjs';
 import { LocalDocumentationLinkRewriter } from '../scripts/docs/local-links.mjs';
+import { checkMarkdownLinks } from '../scripts/lib/markdown-links.mjs';
 
 const configPath = fileURLToPath(new URL('../astro.config.mjs', import.meta.url));
 const configSource = readFileSync(configPath, 'utf8');
@@ -100,4 +101,23 @@ test('UI guide keeps its internal presentation reference outside the public cata
   const reference = /\[presentation routing\]\(https:\/\/github\.com\/Furroxide\/TopiaForge\/blob\/[a-f0-9]{40}\/docs\/internal\/MultiplayerRuntimeIntegration\.md#scoreboard-seam-and-later-presentation\)/u;
   assert.match(content, reference);
   assert.match(rewritten, reference);
+});
+
+test('private per-player author guidance links resolve without publishing runtime internals', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  assert.equal(sourceToRoute.get('docs/Multiplayer.md'), '/guides/multiplayer/');
+  assert.equal(sourceToRoute.has('docs/internal/MultiplayerPrivateState.md'), false);
+  const sourcePath = 'docs/Multiplayer.md';
+  const content = readFileSync(new URL(`../../${sourcePath}`, import.meta.url), 'utf8');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const rewritten = links.rewrite(sourcePath, content);
+  assert.deepEqual(failures, []);
+  assert.deepEqual(checkMarkdownLinks({ repositoryRoot, sourcePaths: [sourcePath] }), []);
+  assert.match(rewritten, /\[private delivery\]\(#private-per-player-delivery\)/u);
+  assert.match(content, /^## Private per-player delivery$/mu);
+  assert.doesNotMatch(content, /IInternalSystemChannel|## Engine wire channel|## Runtime consumer channel/u);
 });

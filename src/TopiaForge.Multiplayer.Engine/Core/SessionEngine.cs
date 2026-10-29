@@ -310,6 +310,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal void MarkStateChanged(StateRecord record)
         {
+            if (record.PrivatePlayer.HasValue && !Nullable.Equals(record.PrivatePlayer, localParticipantId)) return;
             if (record.NotificationQueued) return;
             record.NotificationQueued = true;
             changedStates.Enqueue(record);
@@ -475,7 +476,9 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void EnterEnded(MultiplayerSessionEndReason reason)
         {
+            DropPendingPerPlayerMessages();
             ended = true;
+            ResetPrivateState();
             state = MultiplayerSessionState.Ended;
             endReason = reason;
             RetireSessionToken(sessionCancellation);
