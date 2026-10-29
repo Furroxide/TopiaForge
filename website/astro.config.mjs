@@ -98,6 +98,7 @@ export default defineConfig({
             { label: 'Act on players', slug: 'guides/players' },
             { label: 'Participant appearance', slug: 'guides/participant-appearance' },
             { label: 'RobotKit', slug: 'guides/robotkit' },
+            { label: 'Persistent bodies', slug: 'guides/persistent-bodies' },
             { label: 'Zombies worked example', slug: 'guides/zombies' },
             { label: 'Custom worlds and modes', slug: 'guides/custom-worlds' },
             { label: 'Map worlds', slug: 'guides/map-worlds' },

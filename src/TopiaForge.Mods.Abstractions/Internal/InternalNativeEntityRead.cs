@@ -12,6 +12,7 @@ namespace TopiaForge.Mods.Internal
         int SceneInstanceId { get; }
         string SceneName { get; }
         bool IsCurrent(IModLifetime caller);
+        bool IsCurrentWorld(IInternalWorldViewContext caller);
     }
 
     internal interface IInternalOwnedNativeEntity : IInternalNativeObjectEntity

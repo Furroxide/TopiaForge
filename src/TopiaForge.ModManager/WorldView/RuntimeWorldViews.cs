@@ -28,6 +28,14 @@ namespace TopiaForge.ModManager
         internal bool IsCurrentAvatar(IEntity entity, IInternalWorldViewRenderer renderer) =>
             binding != null && ReferenceEquals(binding.Renderer, renderer) && renderer.IsAlive
             && services.Presence?.IsCurrentViewAvatar(entity, binding.WorldId) == true;
+        internal IEntity? ResolveProviderEntity(IEntity entity, IInternalWorldViewRenderer renderer)
+        {
+            if (binding == null || !ReferenceEquals(binding.Renderer, renderer) || !renderer.IsAlive || !entity.IsAlive) return null;
+            // Owned handles still carry exact runtime world authority offline. Registry handles on clients must
+            // resolve through the current factory instance, never through a native-object marker alone.
+            if (entity is IInternalOwnedNativeEntity) return entity;
+            return (services.References as NetworkWorld)?.ResolveViewProviderEntity(entity);
+        }
         private bool Client => services.Runtime.Role == InternalSessionRole.Client;
         private string? Local => services.Runtime.Control?.SessionSnapshot.LocalParticipantId?.Value ?? "local";
         internal WorldViewLeases For(IInternalWorldViewRenderer renderer)

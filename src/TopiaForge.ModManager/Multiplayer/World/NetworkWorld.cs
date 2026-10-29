@@ -332,6 +332,14 @@ namespace TopiaForge.ModManager
             return false;
         }
 
+        internal IEntity? ResolveViewProviderEntity(IEntity entity)
+        {
+            if (!entity.IsAlive || !TryGetId(entity, out var id)
+                || !TryGetEntity(id, out var current) || !ReferenceEquals(entity, current)) return null;
+            if (Host.IsActive && Host.TryGetHosted(id, out var hosted)) return hosted.Record?.Entity;
+            return Client.IsActive ? Client.ResolveViewProviderEntity(id) : null;
+        }
+
         private void OpenChannel(IInternalMultiplayerControl attached)
         {
             OperationResult<IInternalSystemChannel> opened;

@@ -14,6 +14,10 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--robot-body-views")
+            { RobotBodyTests.RunViews(); return 0; }
+            if (args.Length == 1 && args[0] == "--robot-bodies")
+            { RobotBodyTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--avatar-appearance")
             { AvatarAppearanceTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--native-speech-ownership")
@@ -433,6 +437,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--presence", StringComparison.Ordinal))
             {
                 PresenceSuite.Run();
+                RobotBodyTests.Run();
                 AvatarAppearanceTests.Run();
                 return 0;
             }
@@ -568,6 +573,7 @@ namespace TopiaForge.ModManager.Tests
                 NetworkWorldTests.Run();
                 FirstPartyReplicationTests.Run();
                 PresenceSuite.Run();
+                RobotBodyTests.Run();
                 AvatarAppearanceTests.Run();
                 PlayersApiTests.Run();
                 PlayersNetworkTests.Run();

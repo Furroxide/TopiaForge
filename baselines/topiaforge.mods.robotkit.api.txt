@@ -71,6 +71,13 @@ type public interface TopiaForge.Mods.IRobotAgentService
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotAgent> ActiveAgents { get [abstract,virtual,newslot]; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTypeDescriptor> RobotTypes { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IRobotBody : System.IDisposable, TopiaForge.Mods.IEntity [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AvatarAppearance Appearance { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Quat Rotation { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public interface TopiaForge.Mods.IRobotBodyService [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotBody> Spawn(TopiaForge.Mods.RobotBodyRequest request) [requires-topiaforge="0.2.0"]
+
 type public interface TopiaForge.Mods.IRobotBrainQueryService
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.BrainQueryResult>> QueryAsync(TopiaForge.Mods.BrainQueryRequest request, System.Threading.CancellationToken cancellationToken = null)
   property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
@@ -169,6 +176,12 @@ type public sealed class TopiaForge.Mods.RobotAgentSpawnRequest : System.Object
   property TopiaForge.Mods.RobotGait Gait { get; }
   property TopiaForge.Mods.RobotInteractionOptions Interaction { get; }
   property TopiaForge.Mods.Vec3 Position { get; }
+
+type public sealed class TopiaForge.Mods.RobotBodyRequest : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.AvatarAppearance appearance, TopiaForge.Mods.Vec3 position, System.Nullable<TopiaForge.Mods.Quat> rotation = null) [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AvatarAppearance Appearance { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Quat Rotation { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Vec3 Position { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public enum TopiaForge.Mods.RobotBrainMode : System.Int32
   field System.Int32 value__

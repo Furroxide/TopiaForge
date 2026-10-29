@@ -5,6 +5,8 @@ description: Build Robotopia robot, objective, dialogue, voice, and story featur
 
 # RobotKit
 
+For separately spawned, scope-owned powered-down bodies, see [Persistent cosmetic bodies](PersistentBodies.md).
+
 RobotKit is the optional V1 module for working with Robotopia's robots through typed entities,
 movement, damage and death, targets, objectives, interaction, dialogue, voice input, and structured
 brain queries. Robotopia and Unity native objects never cross its contract boundary.

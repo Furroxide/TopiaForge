@@ -61,7 +61,7 @@ namespace TopiaForge.ModManager {
   /* registry */
  }
  /* owner service */
- internal sealed class ModContext {
+ internal sealed class ModContext : IInternalWorldViewContext, IInternalNativeEntityReadContext {
   public IModLifetime Lifetime=new FakeModLifetime(); public IModLifetime WorldLifetime=new FakeModLifetime();
   public WorldReadiness? World=new(new WorldSceneIdentity(7,"World"),TransformState.Identity);
   public bool TryGetViewWorld(out WorldReadiness? world,out IModLifetime? lifetime) { world=World;lifetime=WorldLifetime;return world!=null; }

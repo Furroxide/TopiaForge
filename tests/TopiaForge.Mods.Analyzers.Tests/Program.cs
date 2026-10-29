@@ -44,8 +44,9 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "io.github.furroxide.topiaforge.ugc.livesync"),
         };
 
-        private static int Main()
+        private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--robot-body-version-gates") { RobotBodyVersionGate(); return 0; }
             try
             {
                 ReportsUnsafeNativeUsing();
@@ -74,6 +75,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 EveryRuleLinksToItsEntry();
                 RunBlockingWaitFixTests();
                 RunVersionGateTests();
+                RobotBodyVersionGate();
                 RunVersionGateCoverageTests();
                 RunVersionGateEventTests();
                 RunMapWorldTests();

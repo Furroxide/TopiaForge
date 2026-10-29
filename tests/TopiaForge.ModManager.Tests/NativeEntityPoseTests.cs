@@ -39,7 +39,10 @@ namespace TopiaForge.ModManager.Tests
                     .Replace("/* context scope */", Method(world, "CaptureNativeEntityReadScope") + Class(world, "NativeEntityReadScope"))
                     .Replace("/* lifetime read */", Method(Class(scoped, "LifetimeEntityService"), "TryGetTransform"))
                     .Replace("/* robot wrapper */", Class(owner, "OwnerRobotAgent")),
-                Scenarios
+                Scenarios,
+                Read("mods/TopiaForge.RobotKit/RobotBodyService.cs"),
+                Read("mods/TopiaForge.RobotKit/RobotBodyWire.cs"),
+                BodyScenarios
             };
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(path => !Path.GetFileName(path).StartsWith("UnityEngine", StringComparison.Ordinal))
@@ -51,7 +54,8 @@ namespace TopiaForge.ModManager.Tests
             using var bytes = new MemoryStream();
             var result = compilation.Emit(bytes);
             if (!result.Success) throw new InvalidOperationException(string.Join("\n", result.Diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
-            var probe = Assembly.Load(bytes.ToArray()).GetType("PoseScenarios", true)!;
+            var assembly = Assembly.Load(bytes.ToArray());
+            var probe = assembly.GetType("PoseScenarios", true)!;
             // The existing transport fixture is an in-memory channel; no sockets or backend are involved.
             var rig = new WorldRig();
             rig.OpenToMultiplayer();
@@ -64,6 +68,11 @@ namespace TopiaForge.ModManager.Tests
             if (guestOwner.Seam.Realm != InternalNetRealm.Client) throw new InvalidOperationException("Replica route must be joined.");
             Func<IRobotAgent, bool, IRobotAgent> routed = (agent, replica) => new RoutedRobotAgent(agent, replica ? guestOwner.Seam : hostOwner.Seam);
             ((Action<Func<IRobotAgent, bool, IRobotAgent>>)probe.GetMethod("Run")!.CreateDelegate(typeof(Action<Func<IRobotAgent, bool, IRobotAgent>>)))(routed);
+            var bodyProbe = assembly.GetType("BodyPoseScenarios", true)!;
+            Func<IModLifetime, IRuntimeReplication> bodySeam = lifetime => rig.Host.Replication.Bind(WorldPeer.ModId,
+                new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer), lifetime);
+            ((Action<Func<IModLifetime, IRuntimeReplication>>)bodyProbe.GetMethod("Run")!.CreateDelegate(
+                typeof(Action<Func<IModLifetime, IRuntimeReplication>>)))(bodySeam);
             Console.WriteLine("Native entity pose: production read chain, owner/routed wrappers, world and native boundary checks passed.");
         }
 

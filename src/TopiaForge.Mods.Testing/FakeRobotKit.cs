@@ -19,6 +19,7 @@ namespace TopiaForge.Mods.Testing
             }
 
             Agents = new FakeRobotAgentService(lifetime);
+            Bodies = new FakeRobotBodyService(lifetime);
             Objectives = new FakeRobotObjectiveService(lifetime);
             BrainQueries = new FakeRobotBrainQueryService(lifetime);
             Conversations = new FakeRobotConversationService(lifetime);
@@ -27,6 +28,10 @@ namespace TopiaForge.Mods.Testing
 
         /// <summary>Gets deterministic robot spawning and movement.</summary>
         public FakeRobotAgentService Agents { get; }
+
+        /// <summary>Gets persistent cosmetic body snapshots owned by this fake scope.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public FakeRobotBodyService Bodies { get; }
 
         /// <summary>Gets deterministic named targets and objectives.</summary>
         public FakeRobotObjectiveService Objectives { get; }
