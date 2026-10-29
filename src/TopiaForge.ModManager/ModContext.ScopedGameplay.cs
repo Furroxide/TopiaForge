@@ -27,7 +27,11 @@ namespace TopiaForge.ModManager
             private readonly IModLifetime lifetime;
             internal LifetimeEntityService(IEntityService inner, IModLifetime lifetime)
             { this.inner = inner; this.lifetime = lifetime; }
-            public bool TryGetTransform(IEntity entity, out TransformState transform) => inner.TryGetTransform(entity, out transform);
+            public bool TryGetTransform(IEntity entity, out TransformState transform)
+            {
+                transform = TransformState.Identity;
+                return !lifetime.IsStopping && inner.TryGetTransform(entity, out transform);
+            }
             public IReadOnlyList<IEntity> Query(EntityQuery query) => inner.Query(query);
             public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform) => lifetime.IsStopping
                 ? Stopped<TransformState>() : inner.SetTransform(entity, transform);

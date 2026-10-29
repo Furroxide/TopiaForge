@@ -3,8 +3,32 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed partial class ModContext : IInternalWorldViewContext
+    internal sealed partial class ModContext : IInternalWorldViewContext, IInternalNativeEntityReadContext
     {
+        public IInternalNativeEntityReadScope? CaptureNativeEntityReadScope()
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            return TryGetViewWorld(out var world, out var lifetime) && world != null && lifetime != null
+                ? new NativeEntityReadScope(this, world, lifetime) : null;
+        }
+
+        private sealed class NativeEntityReadScope : IInternalNativeEntityReadScope
+        {
+            private readonly ModContext context;
+            private readonly WorldReadiness world;
+            private readonly IModLifetime worldLifetime;
+
+            internal NativeEntityReadScope(ModContext context, WorldReadiness world, IModLifetime worldLifetime)
+            { this.context = context; this.world = world; this.worldLifetime = worldLifetime; }
+
+            public int SceneInstanceId => world.Scene.InstanceId;
+            public string SceneName => world.Scene.Name;
+            public bool IsCurrent(IModLifetime caller) => UnityMainThreadGuard.IsCurrent
+                && ReferenceEquals(caller, context.Lifetime) && !caller.IsStopping && !worldLifetime.IsStopping
+                && context.TryGetViewWorld(out var current, out var lifetime)
+                && ReferenceEquals(current, world) && ReferenceEquals(lifetime, worldLifetime);
+        }
+
         public bool TryGetViewWorld(out WorldReadiness? world, out IModLifetime? lifetime)
         {
             UnityMainThreadGuard.AssertCurrent();

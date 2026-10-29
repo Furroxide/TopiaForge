@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace TopiaForge.ModManager
 {
@@ -141,20 +142,51 @@ namespace TopiaForge.ModManager
         }
 
         public bool TryGetTransform(IEntity entity, out TransformState transform)
-        {
-            UnityMainThreadGuard.AssertCurrent();
-            if (!TryResolve(entity, out var unityEntity) || !unityEntity.IsAlive)
-            {
-                transform = TransformState.Identity;
-                return false;
-            }
+            => TryGetTransform(entity, null, out transform);
 
-            var native = unityEntity.GameObject.transform;
-            transform = new TransformState(
-                UnityPhysicsBackend.FromUnity(native.position),
-                FromUnity(native.rotation),
-                UnityPhysicsBackend.FromUnity(native.localScale));
-            return true;
+        internal bool TryGetTransform(IEntity entity, IModLifetime? caller, out TransformState transform)
+        {
+            transform = TransformState.Identity;
+            if (!UnityMainThreadGuard.IsCurrent || disposed) return false;
+            try
+            {
+                GameObject gameObject;
+                if (TryResolve(entity, out var unityEntity) && unityEntity.IsAlive)
+                    gameObject = unityEntity.GameObject;
+                else if (caller != null && entity is IInternalOwnedNativeEntity owned
+                    && owned.NativeReadScope is IInternalNativeEntityReadScope scope && scope.IsCurrent(caller)
+                    && IsNativeReadSceneLoaded(scope) && entity.IsAlive
+                    && owned.NativeObject is GameObject nativeObject && nativeObject != null)
+                    gameObject = nativeObject;
+                else return false;
+
+                var native = gameObject.transform;
+                var position = UnityPhysicsBackend.FromUnity(native.position);
+                var rotation = native.rotation;
+                var scale = UnityPhysicsBackend.FromUnity(native.localScale);
+                // Validate the native quaternion before normalization, which can hide a zero/invalid rotation.
+                var length = rotation.x * rotation.x + rotation.y * rotation.y
+                    + rotation.z * rotation.z + rotation.w * rotation.w;
+                if (!position.IsFinite || !scale.IsFinite || float.IsNaN(length)
+                    || float.IsInfinity(length) || length <= 0.000001f) return false;
+                transform = new TransformState(position, FromUnity(rotation), scale);
+                return true;
+            }
+            // A disappearing native object or a malformed trusted adapter must never leak a partial pose or exception.
+            catch (Exception) { return false; }
+        }
+
+        private static bool IsNativeReadSceneLoaded(IInternalNativeEntityReadScope scope)
+        {
+            // RobotKit roots intentionally live in DontDestroyOnLoad. Validate the captured world scene,
+            // not the robot's own scene, including the interval before managed scene callbacks run.
+            for (var index = 0; index < SceneManager.sceneCount; index++)
+            {
+                var scene = SceneManager.GetSceneAt(index);
+                if (scene.handle == scope.SceneInstanceId && scene.IsValid() && scene.isLoaded
+                    && string.Equals(scene.name, scope.SceneName, StringComparison.Ordinal)) return true;
+            }
+            return false;
         }
 
         public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform)

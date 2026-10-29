@@ -14,6 +14,7 @@ namespace TopiaForge.RobotKit
             private readonly RobotAgentService service;
             private readonly IModLifetime lifetime;
             private readonly IRuntimeReplication? replication;
+            private readonly IInternalNativeEntityReadContext? nativeReadContext;
             private readonly List<IRobotAgent> ownedAgents = new List<IRobotAgent>();
 
             public OwnerFacade(RobotAgentService service, IModContext context)
@@ -21,6 +22,7 @@ namespace TopiaForge.RobotKit
                 this.service = service;
                 lifetime = context.Lifetime;
                 replication = (context as IInternalReplicationContext)?.Replication;
+                nativeReadContext = context as IInternalNativeEntityReadContext;
             }
 
             public bool IsAvailable => !lifetime.IsStopping && service.IsAvailable;
@@ -85,6 +87,8 @@ namespace TopiaForge.RobotKit
                         "The mod is stopping and cannot spawn robots.");
                 }
 
+                // Capture before spawning: a subsequent world, even in the same scene, must never adopt this handle.
+                var readScope = nativeReadContext?.CaptureNativeEntityReadScope();
                 var result = replication != null && service.Replication != null
                     ? service.Replication.Spawn(replication, request) : service.Spawn(request);
                 if (!result.TryGetValue(out var agent))
@@ -94,7 +98,7 @@ namespace TopiaForge.RobotKit
 
                 try
                 {
-                    var wrapper = new OwnerRobotAgent(agent, lifetime.Track(agent));
+                    var wrapper = new OwnerRobotAgent(agent, lifetime.Track(agent), lifetime, readScope);
                     ownedAgents.Add(wrapper);
                     return OperationResult<IRobotAgent>.Success(wrapper);
                 }
@@ -118,21 +122,26 @@ namespace TopiaForge.RobotKit
                 }
             }
 
-            private sealed class OwnerRobotAgent : IRobotAgent, IInternalNativeObjectEntity
+            private sealed class OwnerRobotAgent : IRobotAgent, IInternalOwnedNativeEntity
             {
                 private readonly IRobotAgent agent;
                 private IDisposable? lifetimeLease;
+                private readonly IModLifetime lifetime;
 
-                public OwnerRobotAgent(IRobotAgent agent, IDisposable lifetimeLease)
+                public OwnerRobotAgent(IRobotAgent agent, IDisposable lifetimeLease, IModLifetime lifetime,
+                    IInternalNativeEntityReadScope? readScope)
                 {
                     this.agent = agent;
                     this.lifetimeLease = lifetimeLease;
+                    this.lifetime = lifetime;
+                    NativeReadScope = readScope;
                 }
 
                 public string Id => agent.Id;
-                public object? NativeObject => (agent as IInternalNativeObjectEntity)?.NativeObject;
+                public IInternalNativeEntityReadScope? NativeReadScope { get; }
+                public object? NativeObject => IsAlive ? (agent as IInternalNativeObjectEntity)?.NativeObject : null;
                 public string Name => agent.Name;
-                public bool IsAlive => lifetimeLease != null && agent.IsAlive;
+                public bool IsAlive => lifetimeLease != null && !lifetime.IsStopping && agent.IsAlive;
                 public Vec3 Position => agent.Position;
                 public Vec3 HeadPosition => agent.HeadPosition;
                 public RobotBrainMode BrainMode => agent.BrainMode;
