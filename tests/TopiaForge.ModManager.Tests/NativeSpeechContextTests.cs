@@ -15,8 +15,15 @@ namespace TopiaForge.ModManager.Tests
         {
             using var dispatcher = new HostDispatcher();
             var factory = new Factory();
-            var manifest = new ModManifest { SchemaVersion = 6, Id = "io.github.furroxide.topiaforge.robotkit",
-                Name = "RobotKit", Version = "0.2.0", EntryAssembly = "Test.dll", EntryType = "Test.Entry" };
+            var manifest = new ModManifest
+            {
+                SchemaVersion = 6,
+                Id = "io.github.furroxide.topiaforge.robotkit",
+                Name = "RobotKit",
+                Version = "0.2.0",
+                EntryAssembly = "Test.dll",
+                EntryType = "Test.Entry"
+            };
             var paths = new ManagerPaths(Path.Combine(Path.GetTempPath(), "TopiaForgeSpeech-" + Guid.NewGuid().ToString("N")));
             var parent = new ModContext(manifest, paths, "package", new OwnerFacadeStoppingTests.Logger(),
                 new ModServiceRegistry(), null, factory);

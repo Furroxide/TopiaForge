@@ -41,7 +41,8 @@ namespace TopiaForge.ModManager
                 if (clock() - pair.Value.Started >= 1_000_000 || !pair.Value.Current()) expiredPaces.Add(pair.Key);
             foreach (var entity in expiredPaces) speechPaces.Remove(entity);
             expiredPaces.Clear();
-            if (realm == NetRealm.Client && instance != 0 && runningWorld != null && clock() >= nextReady)
+            // A runtime with no speech provider has nothing to admit and must keep its idle frame allocation-free.
+            if (realm == NetRealm.Client && instance != 0 && runningWorld != null && services.HasSpeechProvider && clock() >= nextReady)
             {
                 if (challenge.Length == 0) challenge = Guid.NewGuid().ToString("N");
                 RobotSpeechWire.Header(writer, RobotSpeechWire.Ready, instance, challenge, (ulong)clock(), 0);

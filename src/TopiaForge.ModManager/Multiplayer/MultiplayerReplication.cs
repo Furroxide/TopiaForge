@@ -207,6 +207,17 @@ namespace TopiaForge.ModManager
             return found;
         }
 
+        /// <summary>Whether a currently registered replica factory can receive robot speech.</summary>
+        internal bool HasSpeechProvider
+        {
+            get
+            {
+                foreach (var registration in factories.Values)
+                    if (registration.Value is IInternalSpeechProvider) return true;
+                return false;
+            }
+        }
+
         /// <summary>Gets the handler <paramref name="ownerModId"/> registered for its commands of <paramref name="kind"/>.</summary>
         internal bool TryGetCommand(string ownerModId, string kind, out Func<InternalCommand, OperationResult<bool>>? handler)
         {
