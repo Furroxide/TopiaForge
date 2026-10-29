@@ -32,7 +32,9 @@ namespace TopiaForge.Worlds
                     sentinel = new GameObject("Worlds View Lifetime") { hideFlags = HideFlags.DontSave };
                     SceneManager.MoveGameObjectToScene(sentinel, loaded);
                     if (map != null) sentinel.transform.SetParent(map.Root, false);
-                    sentinel.AddComponent<WorldViewLifetime>().End = Dispose;
+                    var lifetime = sentinel.AddComponent<WorldViewLifetime>();
+                    lifetime.End = Dispose;
+                    lifetime.Refresh = hiding.Refresh;
                 }
                 catch
                 {
@@ -52,11 +54,12 @@ namespace TopiaForge.Worlds
         public OperationResult<bool> SetFog(VisionFog? value) => fog.Set(value);
         public OperationResult<IDisposable> Hide(IEntity entity)
         {
-            if (!(context is IInternalViewEntityContext bridge) || !(bridge.UnwrapViewEntity(entity) is GameObject target) || target == null)
-                return OperationResult<IDisposable>.Failure(ModErrorCode.InvalidArgument, "The entity is not a live object owned by this runtime.");
-            if (!UnityWorldScene.ContainsRoot(scene, target))
-                return OperationResult<IDisposable>.Failure(ModErrorCode.InvalidArgument, "The entity is outside this world's scene.");
-            return hiding.Hide(target);
+            var target = NativeViewTarget.Resolve<GameObject>(context, this, entity,
+                value => value != null && UnityWorldScene.ContainsRoot(scene, value));
+            if (target == null)
+                return OperationResult<IDisposable>.Failure(ModErrorCode.InvalidArgument, "The entity is outside this world's scene or current players.");
+            return hiding.Hide(target, () => ReferenceEquals(target, NativeViewTarget.Resolve<GameObject>(context, this, entity,
+                value => value != null && UnityWorldScene.ContainsRoot(scene, value))));
         }
         public void Dispose()
         {
@@ -69,16 +72,21 @@ namespace TopiaForge.Worlds
             disposed = true; Stopped = delegate { };
             if (sentinel != null)
             {
-                sentinel.GetComponent<WorldViewLifetime>().End = null;
+                var lifetime = sentinel.GetComponent<WorldViewLifetime>();
+                lifetime.End = null; lifetime.Refresh = null;
                 UnityEngine.Object.Destroy(sentinel);
             }
             try { hiding.Dispose(); } finally { fog.Dispose(); }
             if (failures.Count > 0) throw new AggregateException(failures);
         }
     }
+    // Presence dresses bodies during the manager's LateUpdate; collect their renderers afterwards.
+    [DefaultExecutionOrder(32000)]
     internal sealed class WorldViewLifetime : MonoBehaviour
     {
         internal Action? End;
+        internal Action? Refresh;
+        private void LateUpdate() => Refresh?.Invoke();
         private void OnDestroy() { var end = End; End = null; end?.Invoke(); }
     }
 }

@@ -98,6 +98,7 @@ type public interface TopiaForge.Mods.IPlayer
   property TopiaForge.Mods.IEntity? Entity { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IPlayerInput Input { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IPlayerUi Ui { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IViewControls View { get [abstract,virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.MultiplayerPlayerKey Key { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.ParticipantId Id { get [abstract,virtual,newslot]; }
 
@@ -389,6 +390,9 @@ type public sealed class TopiaForge.Mods.PerPlayerState<T> : System.Object, Syst
   method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<T> Get(TopiaForge.Mods.ParticipantId player) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<T> Set(TopiaForge.Mods.ParticipantId player, T value) [requires-topiaforge="0.2.0"]
+
+type public static class TopiaForge.Mods.PlayerViewExtensions : System.Object [requires-topiaforge="0.2.0"]
+  method extension [static] TopiaForge.Mods.IViewControls View(System.Collections.Generic.IEnumerable<TopiaForge.Mods.IPlayer> players) [requires-topiaforge="0.2.0"]
 
 type public enum TopiaForge.Mods.PredictionMode : System.Int32
   field System.Int32 value__

@@ -252,10 +252,13 @@ namespace TopiaForge.ModManager.TestDoubles
         /// Gets the session as this peer sees it: the host and every joined player while online, this peer alone in single
         /// player. The same instance comes back while nothing changes, as the engine's does.
         /// </summary>
+        internal MultiplayerSessionSnapshot? SnapshotOverride { get; set; }
+
         public MultiplayerSessionSnapshot SessionSnapshot
         {
             get
             {
+                if (SnapshotOverride != null) return SnapshotOverride;
                 if (snapshot != null && snapshotVersion == network.SessionVersion && snapshotRole == Role) return snapshot;
                 snapshotVersion = network.SessionVersion;
                 snapshotRole = Role;

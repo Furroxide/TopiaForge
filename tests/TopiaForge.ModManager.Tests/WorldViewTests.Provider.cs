@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
             });
             var a = (IWorldView)provider.CreateOwnerFacade(typeof(IWorldView), first);
             var b = (IWorldView)provider.CreateOwnerFacade(typeof(IWorldView), second);
+            ((IInternalWorldViewFacade)a).Activate("world");
             var narrow = Lease(a.Fog(VisionFog.Blackout)); var wide = Lease(b.Fog(VisionFog.Radius(24)));
             Check(built == 1 && renderer!.Fog!.Value.VisibleDistance == 6, "consumer facades share the selected primary world's renderer");
             first.Dispose(); Check(!narrow.IsActive && wide.IsActive && renderer!.Fog!.Value.VisibleDistance == 24, "each facade retains the exact consuming lifetime");

@@ -14,6 +14,12 @@ namespace TopiaForge.ModManager
     }
     internal sealed partial class GamemodeSessionOrchestrator
     {
+        private static void ActivateView(SessionRecord record)
+        {
+            var context = record.Scopes[record.World.Package.Id].Context;
+            if (context.Extensions.TryGet<IWorldView>(out var view) && view is IInternalWorldViewFacade facade)
+                facade.Activate(record.Identity.SessionId);
+        }
         internal bool TryGetViewWorld(ModContext caller, out WorldReadiness? world, out IModLifetime? lifetime)
         {
             world = null; lifetime = null;

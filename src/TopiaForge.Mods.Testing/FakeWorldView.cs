@@ -6,7 +6,7 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Mods.Testing
 {
-    /// <summary>A single-player view fake using the runtime's lease derivation and lifetime rules.</summary>
+    /// <summary>A world view fake using the runtime's lease derivation and lifetime rules.</summary>
     [RequiresTopiaForge("0.2.0")]
     public sealed class FakeWorldView : IWorldView, IDisposable
     {
@@ -22,9 +22,27 @@ namespace TopiaForge.Mods.Testing
             if (keys.Length > 256 || keys.Any(k => !TopiaForge.ModManager.Core.WorldViewLedger<IEntity>.ValidPreset(k)))
                 throw new ArgumentException("Supply at most 256 valid preset keys.", nameof(presets));
             renderer = new Renderer(keys, originalEnvironment ?? throw new ArgumentNullException(nameof(originalEnvironment)));
-            leases = new WorldViewLeases(renderer);
+            leases = new WorldViewLeases(renderer, () => "local");
             controls = leases.Bind(lifetime, () => ModErrorCode.None, () => { });
         }
+        /// <summary>Creates controls for one player with the supplied scope and authority.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public IViewControls ForPlayer(ParticipantId player, FakeModLifetime scope, bool authoritative = true)
+        {
+            if (!player.IsValid) throw new ArgumentException("A player is required.", nameof(player));
+            if (scope == null) throw new ArgumentNullException(nameof(scope));
+            return leases.Bind(scope, () => authoritative ? ModErrorCode.None : ModErrorCode.NotAuthoritative, () => { }, player.Value);
+        }
+        /// <summary>Gets one player's derived environment, including shared leases.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public string GetEnvironment(ParticipantId player) => leases.EnvironmentFor(player.Value) ?? renderer.Original;
+        /// <summary>Gets one player's most restrictive fog.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public VisionFog? GetFog(ParticipantId player) => leases.FogFor(player.Value);
+        /// <summary>Gets one player's union of hidden entities.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public IReadOnlyList<IEntity> GetHiddenEntities(ParticipantId player) => leases.HiddenFor(player.Value);
+        internal void RemovePlayer(ParticipantId player) => leases.RemovePlayer(player.Value);
         /// <summary>Gets the effective environment, or the world's original when no environment lease remains.</summary>
         [RequiresTopiaForge("0.2.0")]
         public string EffectiveEnvironment => renderer.Environment;
@@ -43,14 +61,14 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         [RequiresTopiaForge("0.2.0")]
         public IReadOnlyList<string> EnvironmentPresets => renderer.Presets;
-        /// <summary>Binds this same view to a caller's scope. Participants are refused in every role; delivery currently requires single player.</summary>
+        /// <summary>Binds this same view to a caller's scope. Participants are refused in every role; host changes derive the effective views.</summary>
         [RequiresTopiaForge("0.2.0")]
         public IWorldView ForScope(FakeModLifetime scope, bool participant = false, GamemodeSessionRole role = GamemodeSessionRole.SinglePlayer)
         {
             if (scope == null) throw new ArgumentNullException(nameof(scope));
             if (role < GamemodeSessionRole.SinglePlayer || role > GamemodeSessionRole.Client) throw new ArgumentOutOfRangeException(nameof(role));
             return new Scoped(this, scope, leases.Bind(scope, () => participant ? ModErrorCode.NotAuthoritative
-                : role == GamemodeSessionRole.SinglePlayer ? ModErrorCode.None : ModErrorCode.Unavailable, () => { }), participant, role);
+                : role != GamemodeSessionRole.Client ? ModErrorCode.None : ModErrorCode.NotAuthoritative, () => { }), participant, role);
         }
         /// <inheritdoc/>
         [RequiresTopiaForge("0.2.0")]
@@ -70,18 +88,35 @@ namespace TopiaForge.Mods.Testing
             private readonly FakeModLifetime lifetime;
             private readonly IViewControls controls;
             private readonly bool permitted;
+            private readonly bool shadow;
             internal Scoped(FakeWorldView owner, FakeModLifetime lifetime, IViewControls controls, bool participant, GamemodeSessionRole role)
-            { this.owner = owner; this.lifetime = lifetime; this.controls = controls; permitted = !participant && role == GamemodeSessionRole.SinglePlayer; }
+            { this.owner = owner; this.lifetime = lifetime; this.controls = controls; permitted = !participant; shadow = !participant && role == GamemodeSessionRole.Client; }
             public bool IsAvailable => permitted && !lifetime.IsStopping && owner.IsAvailable;
             public IReadOnlyList<string> EnvironmentPresets => owner.EnvironmentPresets;
-            public OperationResult<IViewLease> Environment(string preset) => controls.Environment(preset);
-            public OperationResult<IViewLease> Fog(VisionFog fog) => controls.Fog(fog);
-            public OperationResult<IViewLease> Hide(IEntity entity) => controls.Hide(entity);
+            public OperationResult<IViewLease> Environment(string preset) => shadow ? Shadow() : controls.Environment(preset);
+            public OperationResult<IViewLease> Fog(VisionFog fog) => shadow ? Shadow() : controls.Fog(fog);
+            public OperationResult<IViewLease> Hide(IEntity entity) => shadow ? Shadow() : controls.Hide(entity);
+            private OperationResult<IViewLease> Shadow() => lifetime.IsStopping || !owner.IsAvailable
+                ? OperationResult<IViewLease>.Failure(ModErrorCode.Cancelled, "The view's scope or world is stopping.")
+                : OperationResult<IViewLease>.Success(new ShadowLease(lifetime, owner.renderer));
         }
+        private sealed class ShadowLease : IViewLease
+        {
+            private readonly Renderer renderer;
+            private IDisposable? tracking;
+            private bool disposed;
+            internal ShadowLease(FakeModLifetime lifetime, Renderer renderer)
+            { this.renderer = renderer; tracking = lifetime.Track(this); renderer.Stopped += Dispose; }
+            public bool IsActive => !disposed && renderer.IsAlive;
+            public void Dispose()
+            { if (disposed) return; disposed = true; renderer.Stopped -= Dispose; var hold = tracking; tracking = null; hold?.Dispose(); }
+        }
+
         private sealed class Renderer : IInternalWorldViewRenderer
         {
             internal readonly HashSet<IEntity> Hidden = new HashSet<IEntity>();
             private readonly string original;
+            internal string Original => original;
             internal string Environment;
             internal VisionFog? Fog;
             internal Renderer(string[] presets, string original)

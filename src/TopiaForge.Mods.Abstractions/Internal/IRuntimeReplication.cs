@@ -25,8 +25,10 @@ namespace TopiaForge.Mods.Internal
     /// </remarks>
     internal interface IRuntimeReplication
     {
-        // Single-player view leases; Worlds supplies drawing, the runtime supplies authority and lifetime.
+        // Worlds supplies drawing and authored identity; runtime owns authority, lifetime and private delivery.
         IViewControls WorldView(IInternalWorldViewRenderer renderer);
+        IViewControls PlayerWorldView(IInternalWorldViewRenderer renderer, string player);
+        void ActivateWorldView(IInternalWorldViewBinding binding);
 
         /// <summary>Gets this process's realm now. It allocates nothing, so a per-frame check may read it.</summary>
         InternalNetRealm Realm { get; }

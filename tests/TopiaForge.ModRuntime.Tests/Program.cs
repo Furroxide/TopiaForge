@@ -17,6 +17,7 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--world-view") { SessionWorldViewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--blockers")
             {
                 var blockerRoot = Directory.CreateTempSubdirectory("TopiaForgeBlockerTests-").FullName;
@@ -40,6 +41,7 @@ namespace TopiaForge.ModRuntime.Tests
                     : args[0] == "--follow-case" ? RunFollowCase(args[1]) : 2;
             TestProductionBindingsInFreshProcesses();
             ManagerFileLoggerTests.Run();
+            SessionWorldViewTests.Run();
             TestGeneratedPackagesInFreshProcesses();
             TestMalformedSelectionInFreshProcesses();
             TestSessionFollowInFreshProcesses();

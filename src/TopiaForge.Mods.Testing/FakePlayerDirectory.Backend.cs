@@ -16,6 +16,7 @@ namespace TopiaForge.Mods.Testing
             public OperationResult<PlayerHealthSnapshot> Heal(ParticipantId id, float amount, string source) => owner.BackendHeal(id, amount, source);
             public OperationResult<bool> Teleport(ParticipantId id, Vec3 position, float? yaw) => owner.BackendTeleport(id, position, yaw);
             public IPlayerInput Input(ParticipantId id) => owner.BackendInput(id);
+            public IViewControls View(ParticipantId id) => owner.WorldView.ForPlayer(id, owner.lifetime, owner.IsAuthoritative);
             public IPlayerUi Ui(ParticipantId id) => owner.BackendUi(id);
             public OperationResult<IScoreboardColumn> Column(ScoreboardColumnDefinition definition) => owner.BackendColumn(definition);
         }

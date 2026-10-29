@@ -117,6 +117,7 @@ namespace TopiaForge.ModManager
         internal static MultiplayerPresence Install(MultiplayerRuntime runtime, MultiplayerReplication replication, IPresenceBackend backend, Func<long> clock)
         {
             var presence = new MultiplayerPresence(runtime, replication, backend, clock);
+            replication.Presence = presence;
             runtime.PresenceReceive = presence.Receive;
             runtime.PresenceSend = presence.Send;
             runtime.AvatarInterpolation = presence.Avatars;
@@ -261,6 +262,7 @@ namespace TopiaForge.ModManager
             }
 
             if (snapshot == null || ReferenceEquals(snapshot, reconciled)) return;
+            if (reconciled != null && !reconciled.Id.Equals(snapshot.Id)) Forget();
             reconciled = snapshot;
             LocalParticipant = snapshot.LocalParticipantId;
             for (var index = 0; index < peers.Count; index++) peers[index].Seen = false;
@@ -268,9 +270,12 @@ namespace TopiaForge.ModManager
             for (var index = 0; index < participants.Count; index++)
             {
                 var participant = participants[index];
+                if (peersById.TryGetValue(participant.Id, out var previous) && !previous.PlayerKey.Equals(participant.PlayerKey))
+                    Remove(previous, nowMicros);
                 if (!peersById.TryGetValue(participant.Id, out var peer))
                 {
                     peer = new PresencePeer(participant.Id, participant.DisplayName, participant.IsLocal);
+                    peer.PlayerKey = participant.PlayerKey;
                     peersById.Add(participant.Id, peer);
                     peers.Add(peer);
                     if (Realm == NetRealm.ListenHost) Host.Joined(peer, nowMicros);

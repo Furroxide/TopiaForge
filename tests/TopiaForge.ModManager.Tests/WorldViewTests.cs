@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             assertions = 0;
-            Values(); Derivation(); LifetimeAndAuthority(); Bounds(); RendererOwnership(); FailureRollback(); Runner(); Provider(); Selection();
+            Values(); EnvironmentOwnership(); Derivation(); LifetimeAndAuthority(); Bounds(); RendererOwnership(); FailureRollback(); Runner(); Provider(); Selection(); ClientTransition(); BodyRetryVisibility(); PresenceTargets();
             Console.WriteLine("World view passed: " + assertions + " assertions (production leases, runtime seam, fakes and renderer ownership).");
         }
         private static void Check(bool value, string reason) { assertions++; if (!value) throw new InvalidOperationException("World view: " + reason); }
@@ -81,11 +81,12 @@ namespace TopiaForge.ModManager.Tests
             var fog = Lease(controls.Fog(VisionFog.Blackout));
             Check(backend.Fog.HasValue, "runtime seam applies immediately offline");
             services.Views.RealmChanged(NetRealm.Offline, NetRealm.ListenHost);
-            Check(!fog.IsActive && backend.Fog == null && owner.TrackedResourceCount == 0, "realm promotion clears offline-only state");
+            Check(fog.IsActive && backend.Fog.HasValue, "realm promotion preserves existing view");
+            fog.Dispose();
             using var view = new FakeWorldView();
             foreach (GamemodeSessionRole role in Enum.GetValues(typeof(GamemodeSessionRole)))
                 Check(view.ForScope(owner, true, role).Fog(VisionFog.Blackout).ErrorCode == ModErrorCode.NotAuthoritative, "fake participant forbidden in every role");
-            Check(view.ForScope(owner, role: GamemodeSessionRole.Host).Fog(VisionFog.Blackout).ErrorCode == ModErrorCode.Unavailable, "multiplayer delivery is not pretended");
+            using var hostFog = Lease(view.ForScope(owner, role: GamemodeSessionRole.Host).Fog(VisionFog.Blackout));
             var active = Lease(view.ForScope(owner).Fog(VisionFog.Blackout));
             view.Dispose(); Check(!active.IsActive && owner.TrackedResourceCount == 0, "world end releases caller tracking");
             Check(view.Fog(VisionFog.Blackout).ErrorCode == ModErrorCode.Cancelled, "stopped world refuses new work");
@@ -107,6 +108,22 @@ namespace TopiaForge.ModManager.Tests
             Check(view.Fog(VisionFog.Blackout).ErrorCode == ModErrorCode.RateLimited, "total lease bound");
             foreach (var item in held) item.Dispose();
             Check(view.EffectiveFog == null, "bounded lease cleanup complete");
+        }
+        private static void EnvironmentOwnership()
+        {
+            var native = new object(); var key = "day"; var writes = 0;
+            var ownership = new OwnedEnvironment<object>("day", () => new[] { native }, next => { key = next; native = new object(); writes++; });
+            ownership.Set("night"); ownership.Set("cloudy"); ownership.Set(null);
+            Check(key == "day" && writes == 3, "environment stack restores while native instance is still owned");
+            ownership.Set("night"); native = new object(); key = "external";
+            ownership.Set(null);
+            Check(key == "external" && writes == 4, "replacement native environment is never overwritten on release");
+            ownership.Set("cloudy");
+            Check(key == "external", "remaining stack does not reacquire lost native ownership");
+            var prior = new object(); var instances = new List<object> { prior }; var restored = false;
+            var deferred = new OwnedEnvironment<object>("day", () => instances.ToArray(), next => { instances.Add(new object()); restored = next == "day"; });
+            deferred.Set("night"); instances.Remove(prior); deferred.Set(null);
+            Check(restored, "deferred destruction of a replaced native instance does not falsely surrender ownership");
         }
         private sealed class Visible { internal bool Enabled; internal bool Alive = true; }
         private static void RendererOwnership()

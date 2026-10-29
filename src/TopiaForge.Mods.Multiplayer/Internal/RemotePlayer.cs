@@ -3,7 +3,7 @@ using System;
 namespace TopiaForge.Mods.Internal
 {
     /// <summary>A permanently bound player incarnation. All retained Input and Ui references share its lifetime check.</summary>
-    internal sealed class RemotePlayer : IPlayer, IPlayerInput, IPlayerUi
+    internal sealed class RemotePlayer : IPlayer, IPlayerInput, IPlayerUi, IViewControls
     {
         private readonly PlayerDirectory directory;
         private readonly IInternalPlayerBackend? backend;
@@ -18,6 +18,10 @@ namespace TopiaForge.Mods.Internal
         public bool IsLocal => IsPresent && Record.IsLocal;
         public bool IsHost => IsPresent && Record.IsHost;
         public IEntity? Entity => IsPresent ? backend?.Entity(Id) : null;
+        public IViewControls View { get { directory.CheckThread(); return this; } }
+        public OperationResult<IViewLease> Environment(string preset) => IsPresent && backend != null ? backend.View(Id).Environment(preset) : Fail<IViewLease>();
+        public OperationResult<IViewLease> Fog(VisionFog fog) => IsPresent && backend != null ? backend.View(Id).Fog(fog) : Fail<IViewLease>();
+        public OperationResult<IViewLease> Hide(IEntity entity) => IsPresent && backend != null ? backend.View(Id).Hide(entity) : Fail<IViewLease>();
         public IPlayerInput Input { get { directory.CheckThread(); return this; } }
         public IPlayerUi Ui { get { directory.CheckThread(); return this; } }
         public bool TryGetSnapshot(out PlayerSnapshot? snapshot)

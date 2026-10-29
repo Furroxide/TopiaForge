@@ -19,6 +19,9 @@ namespace TopiaForge.ModManager
             IsLocal = isLocal;
         }
 
+        internal MultiplayerPlayerKey PlayerKey { get; set; }
+        internal string? AvatarWorld { get; set; }
+        internal int AvatarSceneVersion { get; set; }
         internal ParticipantId Id { get; }
 
         internal string DisplayName { get; set; }

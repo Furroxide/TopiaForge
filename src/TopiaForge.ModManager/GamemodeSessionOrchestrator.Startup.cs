@@ -58,6 +58,7 @@ namespace TopiaForge.ModManager
                 if (!loaded.Succeeded) throw new StartupFailure(loaded.ErrorCode, Message(loaded.ErrorMessage));
                 var ready = record.Instance!.Readiness ?? throw new InvalidOperationException("The world provider returned no readiness evidence.");
                 record.Readiness = ready;
+                await dispatcher.InvokeAsync(() => ActivateView(record));
                 Commit(record, SessionPhase.StartingMode);
                 ThrowIfStopping(record);
                 await StartGamemodeAsync(record, ready);

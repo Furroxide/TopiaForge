@@ -68,10 +68,22 @@ namespace TopiaForge.Worlds
             private readonly MethodInfo apply;
             private readonly MethodInfo find;
             private readonly FieldInfo environment;
-            private readonly string original;
+            private readonly OwnedEnvironment<Component> ownership;
             internal NativeEnvironment(NativeMapViewSource owner, object map, MethodInfo apply, MethodInfo find,
                 FieldInfo environment, string original, string[] keys)
-            { this.owner = owner; this.map = map; this.apply = apply; this.find = find; this.environment = environment; this.original = original; Presets = Array.AsReadOnly(keys); }
+            {
+                this.owner = owner; this.map = map; this.apply = apply; this.find = find; this.environment = environment;
+                Presets = Array.AsReadOnly(keys);
+                var instance = Type.GetType("UgcSceneEnvironmentInstance, GameCode", true)!;
+                ownership = new OwnedEnvironment<Component>(original,
+                    () => owner.root.GetComponentsInChildren(instance, true).OrderBy(c => c.GetInstanceID()).ToArray(), Apply);
+            }
+            private void Apply(string key)
+            {
+                var descriptor = Activator.CreateInstance(owner.scene.GetType());
+                environment.SetValue(descriptor, key);
+                apply.Invoke(null, new object[] { descriptor!, map, owner.root, owner.host });
+            }
             internal IReadOnlyList<string> Presets { get; }
             internal bool HasPreset(string key)
             {
@@ -84,9 +96,7 @@ namespace TopiaForge.Worlds
                 try
                 {
                     // Copy only the selected environment into a fresh native descriptor. The imported document stays immutable.
-                    var descriptor = Activator.CreateInstance(owner.scene.GetType());
-                    environment.SetValue(descriptor, key ?? original);
-                    apply.Invoke(null, new object[] { descriptor!, map, owner.root, owner.host });
+                    ownership.Set(key);
                     return OperationResult<bool>.Success(true);
                 }
                 catch { return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The game could not apply the environment preset. Update TopiaForge."); }

@@ -8,6 +8,9 @@ namespace TopiaForge.Mods.Testing
     [RequiresTopiaForge("0.2.0")]
     public sealed partial class FakePlayerDirectory : IPlayerDirectory, IDisposable
     {
+        /// <summary>Gets the world view used by these fake players, including its shared controls.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public FakeWorldView WorldView { get; } = new FakeWorldView();
         private readonly FakeModLifetime lifetime = new FakeModLifetime();
         private readonly List<MultiplayerParticipant> records = new List<MultiplayerParticipant>();
         private readonly Dictionary<ParticipantId, FakePlayerState> states = new Dictionary<ParticipantId, FakePlayerState>();
@@ -57,6 +60,7 @@ namespace TopiaForge.Mods.Testing
             Check();
             if (id.Value == "local") throw new InvalidOperationException("A solo directory keeps its local player.");
             if (!states.TryGetValue(id, out var state)) return false;
+            WorldView.RemovePlayer(id);
             states.Remove(id);
             records.RemoveAll(record => record.Id.Equals(id)); Refresh();
             // As in the game, a player who leaves answers no modal, so each one it was asked reports a cancellation.
@@ -64,7 +68,7 @@ namespace TopiaForge.Mods.Testing
             return true;
         }
         /// <summary>Replaces the participant list generation, even if every id and key is unchanged.</summary>
-        public void ReplaceGeneration() { Check(); generation++; Refresh(); }
+        public void ReplaceGeneration() { Check(); foreach (var id in states.Keys) WorldView.RemovePlayer(id); generation++; Refresh(); }
         /// <summary>Gets a present player's configurable game services.</summary>
         public FakePlayerState State(ParticipantId id) => states.TryGetValue(id, out var state) ? state : throw new ArgumentException("The player is absent.", nameof(id));
         /// <summary>Clears all press/release edges, preserving held actions, for the next simulated tick.</summary>
@@ -77,7 +81,7 @@ namespace TopiaForge.Mods.Testing
         public void Dispose()
         {
             if (disposed) return;
-            disposed = true; directory.Dispose(); lifetime.Dispose();
+            disposed = true; directory.Dispose(); lifetime.Dispose(); WorldView.Dispose();
             var retired = new List<Column>(columns.Values);
             for (var i = 0; i < retired.Count; i++) retired[i].Dispose();
         }
