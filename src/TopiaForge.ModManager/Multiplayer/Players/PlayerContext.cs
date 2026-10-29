@@ -12,6 +12,8 @@ namespace TopiaForge.ModManager
         internal IModContext? ViewContext;
         public IViewControls View(ParticipantId id) => new PlayerWorldViewControls(ViewContext, id);
         internal readonly string Mod;
+        internal TopiaForge.ModManager.Core.Multiplayer.ModNetProfile AppearanceProfile;
+        public IPlayerAppearance Appearance(ParticipantId id) => new PlayerAppearanceControls(this, id);
 
         /// <summary>Whether every player runs this mod, so its actions and UI can reach them: false for a client-local or server-only mod.</summary>
         internal readonly bool Networked;

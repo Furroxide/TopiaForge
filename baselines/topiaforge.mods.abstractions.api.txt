@@ -18,6 +18,24 @@ type public sealed class TopiaForge.Mods.AudioPlayRequest : System.Object
   property System.Single Volume { get; }
   property System.String CueId { get; }
 
+type public enum TopiaForge.Mods.AvatarAccessorySlot : System.Int32 [requires-topiaforge="0.2.0"]
+  field System.Int32 value__ [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AvatarAccessorySlot Beard = 3 (Beard) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AvatarAccessorySlot Glasses = 1 (Glasses) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AvatarAccessorySlot Hair = 2 (Hair) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AvatarAccessorySlot Hat = 0 (Hat) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.AvatarAccessorySlot Necklace = 4 (Necklace) [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.AvatarAppearance : System.Object, System.IEquatable<TopiaForge.Mods.AvatarAppearance> [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.RgbaColor plastic, TopiaForge.Mods.RgbaColor metal, System.String? accessory = null, TopiaForge.Mods.AvatarAccessorySlot accessorySlot = 0 (Hat)) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.AvatarAppearance? other) [requires-topiaforge="0.2.0"]
+  method [virtual] System.Boolean Equals(System.Object? obj) [requires-topiaforge="0.2.0"]
+  method [virtual] System.Int32 GetHashCode() [requires-topiaforge="0.2.0"]
+  property System.String? Accessory { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.AvatarAccessorySlot AccessorySlot { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.RgbaColor Metal { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.RgbaColor Plastic { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.BlockerRequest : System.Object [requires-topiaforge="0.2.0"]
   method [static] TopiaForge.Mods.BlockerRequest Box(TopiaForge.Mods.TransformState placement, TopiaForge.Mods.Vec3 size, System.Boolean blocksSight = true) [requires-topiaforge="0.2.0"]
   method [static] TopiaForge.Mods.BlockerRequest Box(TopiaForge.Mods.Vec3 center, TopiaForge.Mods.Vec3 size, System.Single yawDegrees = 0, System.Boolean blocksSight = true) [requires-topiaforge="0.2.0"]

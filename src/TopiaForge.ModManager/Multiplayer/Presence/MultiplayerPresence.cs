@@ -162,7 +162,11 @@ namespace TopiaForge.ModManager
                 channelFailureLogged = true;
             }
 
-            if (next == NetRealm.ListenHost) Host.Activate();
+            if (next == NetRealm.ListenHost)
+            {
+                Host.Activate();
+                for (var i = 0; i < peers.Count; i++) Host.Joined(peers[i], Now());
+            }
             else Client.Activate();
         }
 
@@ -276,6 +280,7 @@ namespace TopiaForge.ModManager
                 {
                     peer = new PresencePeer(participant.Id, participant.DisplayName, participant.IsLocal);
                     peer.PlayerKey = participant.PlayerKey;
+                    peer.PresentationLifetime = participant.LifetimeId;
                     peersById.Add(participant.Id, peer);
                     peers.Add(peer);
                     if (Realm == NetRealm.ListenHost) Host.Joined(peer, nowMicros);
@@ -286,19 +291,27 @@ namespace TopiaForge.ModManager
                     nametagVersion++;
                 }
 
+                if (peer.PresentationLifetime != participant.LifetimeId)
+                {
+                    peer.PresentationLifetime = participant.LifetimeId;
+                    peer.PresentationVersion = ++presentationVersion;
+                }
                 peer.IsConnected = participant.IsConnected;
                 peer.Seen = true;
+                EnsurePresentation(peer);
             }
 
             for (var index = peers.Count - 1; index >= 0; index--)
             {
                 if (!peers[index].Seen) Remove(peers[index], nowMicros);
             }
+            ApplyPendingPresentations();
         }
 
         /// <summary>A participant left the session: its avatar goes at once, and on the host its index and slot.</summary>
         private void Remove(PresencePeer peer, long nowMicros)
         {
+            peer.Presentation?.Retire();
             peersById.Remove(peer.Id);
             peers.Remove(peer);
             if (Realm == NetRealm.ListenHost) Host.Left(peer, nowMicros);
@@ -308,7 +321,9 @@ namespace TopiaForge.ModManager
         /// <summary>Forgets every peer and avatar, as leaving the realm does.</summary>
         private void Forget()
         {
-            for (var index = 0; index < peers.Count; index++) DisposeAvatar(peers[index]);
+            for (var index = 0; index < peers.Count; index++) { peers[index].Presentation?.Retire(); DisposeAvatar(peers[index]); }
+            pendingPresentations.Clear();
+            nextPresentationSend = 0;
             peers.Clear();
             peersById.Clear();
             Roster.Clear();

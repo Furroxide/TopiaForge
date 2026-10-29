@@ -1246,6 +1246,180 @@
       "feature": "Native walk arrival result",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeWalkCompletion.cs",
       "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.avatar.type.robotbodycomposer",
+      "kind": "Type",
+      "declaringType": "RobotBodyComposer",
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+    },
+    {
+      "id": "robotkit.avatar.type.composerparttype",
+      "kind": "Type",
+      "declaringType": "ComposerPartType",
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+    },
+    {
+      "id": "robotkit.avatar.composer.isexteriormetal",
+      "kind": "Method",
+      "declaringType": "RobotBodyComposer",
+      "member": "IsExteriorMetal",
+      "parameters": [
+        {
+          "type": "UnityEngine.Material",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Boolean",
+      "isStatic": true,
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs",
+      "exactParameters": true
+    },
+    {
+      "id": "robotkit.avatar.composer.iterpartsfor",
+      "kind": "Method",
+      "declaringType": "RobotBodyComposer",
+      "member": "IterPartsFor",
+      "parameters": [
+        {
+          "type": "ComposerPartType",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Collections.Generic.IEnumerable<UnityEngine.GameObject>",
+      "isStatic": false,
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs",
+      "exactParameters": true
+    },
+    {
+      "id": "robotkit.avatar.composer.selectpartprefab",
+      "kind": "Method",
+      "declaringType": "RobotBodyComposer",
+      "member": "SelectPartPrefab",
+      "parameters": [
+        {
+          "type": "ComposerPartType",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void",
+      "isStatic": false,
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs",
+      "exactParameters": true
+    },
+    {
+      "id": "robotkit.avatar.composer.buildbodyfromparts",
+      "kind": "Method",
+      "declaringType": "RobotBodyComposer",
+      "member": "BuildBodyFromParts",
+      "parameters": [],
+      "returnType": "System.Void",
+      "isStatic": false,
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs",
+      "exactParameters": true
+    },
+    {
+      "id": "robotkit.avatar.composer.none",
+      "kind": "Property",
+      "declaringType": "RobotBodyComposer",
+      "member": "NoneOption",
+      "returnType": "UnityEngine.GameObject",
+      "requireReadable": true,
+      "isStatic": true,
+      "indexParameterCount": 0,
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAppearance.cs"
+    },
+    {
+      "id": "robotkit.avatar.slot.hat",
+      "kind": "EnumValue",
+      "declaringType": "ComposerPartType",
+      "member": "Hat",
+      "contractValue": "Hat",
+      "assembly": "GameCode",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
+    },
+    {
+      "id": "robotkit.avatar.slot.glasses",
+      "kind": "EnumValue",
+      "declaringType": "ComposerPartType",
+      "member": "Glasses",
+      "contractValue": "Glasses",
+      "assembly": "GameCode",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
+    },
+    {
+      "id": "robotkit.avatar.slot.hair",
+      "kind": "EnumValue",
+      "declaringType": "ComposerPartType",
+      "member": "Hair",
+      "contractValue": "Hair",
+      "assembly": "GameCode",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
+    },
+    {
+      "id": "robotkit.avatar.slot.beard",
+      "kind": "EnumValue",
+      "declaringType": "ComposerPartType",
+      "member": "Beard",
+      "contractValue": "Beard",
+      "assembly": "GameCode",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
+    },
+    {
+      "id": "robotkit.avatar.slot.necklace",
+      "kind": "EnumValue",
+      "declaringType": "ComposerPartType",
+      "member": "Necklace",
+      "contractValue": "Necklace",
+      "assembly": "GameCode",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Participant cosmetic appearance",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs"
     }
   ]
 }

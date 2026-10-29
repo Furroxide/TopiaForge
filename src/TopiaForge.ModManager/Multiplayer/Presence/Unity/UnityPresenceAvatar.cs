@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager
     /// robots find it; an identity anchor, so every part of it names one entity; and a capsule in the player's colour,
     /// which hides while the avatar wears a provider's body. Main thread only; moving it allocates nothing.
     /// </summary>
-    internal sealed class UnityPresenceAvatar : IPresenceAvatarObject
+    internal sealed class UnityPresenceAvatar : IPresenceAvatarObject, IPresenceAvatarPresentation
     {
         /// <summary>A standing player's height and radius, about the game's own player's.</summary>
         internal const float Height = 1.8f;
@@ -37,6 +37,7 @@ namespace TopiaForge.ModManager
         private GameObject? body;
         private IEntity? entity;
         private bool crouching;
+        private bool poweredDown;
         private bool disposed;
 
         internal UnityPresenceAvatar(Transform container, int index, PresenceTint tint, UnityEntityRegistry entities)
@@ -81,7 +82,7 @@ namespace TopiaForge.ModManager
         {
             get
             {
-                var top = rootTransform.position + Vector3.up * ((crouching ? CrouchedHeight : Height) + NametagClearance);
+                var top = rootTransform.position + Vector3.up * ((poweredDown ? 0.5f : crouching ? CrouchedHeight : Height) + NametagClearance);
                 return new NetVector3(top.x, top.y, top.z);
             }
         }
@@ -120,6 +121,22 @@ namespace TopiaForge.ModManager
             Shape(crouched ? CrouchedHeight : Height);
         }
 
+        public void Present(AvatarAppearance appearance, bool poweredDown)
+        {
+            this.poweredDown = poweredDown;
+            var colour = appearance.Plastic;
+            var renderer = capsule.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                var tint = new UnityEngine.Color(colour.Red, colour.Green, colour.Blue, 1f);
+                block.SetColor(BaseColor, tint); block.SetColor(Color, tint); renderer.SetPropertyBlock(block);
+            }
+            capsuleTransform.localRotation = poweredDown ? Quaternion.Euler(90f, 0f, 0f) : Quaternion.identity;
+            Shape(crouching ? CrouchedHeight : Height);
+        }
+
         public void Dispose()
         {
             if (disposed) return;
@@ -135,7 +152,7 @@ namespace TopiaForge.ModManager
             collider.center = new Vector3(0f, height / 2f, 0f);
 
             // Unity's capsule is two metres tall and one across.
-            capsuleTransform.localPosition = new Vector3(0f, height / 2f, 0f);
+            capsuleTransform.localPosition = new Vector3(0f, poweredDown ? Radius : height / 2f, 0f);
             capsuleTransform.localScale = new Vector3(Radius * 2f, height / 2f, Radius * 2f);
         }
 

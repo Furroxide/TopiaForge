@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs" Link="RobotKit/RobotAvatarAccessorySlots.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/AcceptanceConfig.cs" Link="MultiplayerAcceptance/AcceptanceConfig.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/MultiplayerAcceptanceMod.cs" Link="MultiplayerAcceptance/MultiplayerAcceptanceMod.cs" />
     <Compile Remove="TestingKitFocusedProgram.cs" />

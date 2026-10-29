@@ -26,11 +26,21 @@ namespace TopiaForge.ModManager
         private NetVector3 drawn;
         private long nextBodyMicros;
         private bool disposed;
+        private InternalAvatarBodyRequest presentation;
 
         internal RemotePlayerAvatar(IPresenceAvatarObject avatar, PresenceTint tint)
         {
             this.avatar = avatar ?? throw new ArgumentNullException(nameof(avatar));
             Tint = tint;
+            presentation = tint.ToBodyRequest();
+        }
+
+        internal void Present(AvatarAppearance appearance, bool poweredDown)
+        {
+            if (presentation.Appearance.Equals(appearance) && presentation.PoweredDown == poweredDown) return;
+            presentation = new InternalAvatarBodyRequest(appearance, poweredDown);
+            if (avatar is IPresenceAvatarPresentation visual) visual.Present(appearance, poweredDown);
+            Undress();
         }
 
         internal PresenceTint Tint { get; }
@@ -73,7 +83,7 @@ namespace TopiaForge.ModManager
             OperationResult<IInternalAvatarBody> made;
             try
             {
-                made = factory.CreateBody(Tint.ToBodyRequest());
+                made = factory.CreateBody(presentation);
             }
             catch (Exception exception)
             {
@@ -85,6 +95,7 @@ namespace TopiaForge.ModManager
             if (made == null || !made.TryGetValue(out var created) || created == null)
             {
                 BodyFailures++;
+                if (made?.ErrorCode == ModErrorCode.External) BodyError = "External";
                 return;
             }
 
@@ -140,8 +151,8 @@ namespace TopiaForge.ModManager
             hasDrawn = true;
             drawn = feet;
             avatar.Place(feet, yawDegrees);
-            avatar.Animate(Speed, crouching);
-            body?.Animate(Speed, crouching);
+            avatar.Animate(presentation.PoweredDown ? 0f : Speed, crouching);
+            body?.Animate(presentation.PoweredDown ? 0f : Speed, !presentation.PoweredDown && crouching);
         }
 
         public void Dispose()

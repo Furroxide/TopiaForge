@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--avatar-appearance")
+            { AvatarAppearanceTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--session-maps")
             {
                 SessionMapTransferTests.Run();
@@ -425,6 +427,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--presence", StringComparison.Ordinal))
             {
                 PresenceSuite.Run();
+                AvatarAppearanceTests.Run();
                 return 0;
             }
 
@@ -559,6 +562,7 @@ namespace TopiaForge.ModManager.Tests
                 NetworkWorldTests.Run();
                 FirstPartyReplicationTests.Run();
                 PresenceSuite.Run();
+                AvatarAppearanceTests.Run();
                 PlayersApiTests.Run();
                 PlayersNetworkTests.Run();
                 PresentationRuntimeTests.Run();

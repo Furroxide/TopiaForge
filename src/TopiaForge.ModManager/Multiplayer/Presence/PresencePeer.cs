@@ -19,6 +19,14 @@ namespace TopiaForge.ModManager
             IsLocal = isLocal;
         }
 
+        internal TopiaForge.Mods.Internal.AvatarPresentation? Presentation;
+        internal ulong PresentationVersion;
+        internal bool HasPresentation;
+        internal Guid PresentationLifetime;
+        internal readonly ulong[] PresentationSent = new ulong[256];
+        internal ulong PresentationGeneration;
+        internal int PresentationCursor;
+
         internal MultiplayerPlayerKey PlayerKey { get; set; }
         internal string? AvatarWorld { get; set; }
         internal int AvatarSceneVersion { get; set; }

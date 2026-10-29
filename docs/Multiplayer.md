@@ -589,6 +589,12 @@ be recalled by a policy update; it drains within the existing bounded queues.
 Games using this API require TopiaForge 0.2.0 on every participant. Group assignments and route lists never travel
 to clients or diagnostics. Ordinary sessions keep their existing behavior.
 
+## Participant appearance
+
+The host can change participant plastic, metal, accessories, nameplates and powered-down cosmetic poses through
+`IPlayer.Appearance`. Scoped leases restore the underlying presentation automatically, and presence handles late
+joiners and reconnects. See [Participant appearance](ParticipantAppearance.md) for the contract and examples.
+
 ## Security boundary
 
 Gamemode server controllers can apply [host-enforced communication groups](#gamemode-communication-groups) to

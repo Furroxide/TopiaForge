@@ -46,7 +46,14 @@ namespace TopiaForge.Mods.Internal
             Red = red;
             Green = green;
             Blue = blue;
+            Appearance = new AvatarAppearance(new RgbaColor(red, green, blue), new RgbaColor(red, green, blue));
         }
+
+        internal InternalAvatarBodyRequest(AvatarAppearance appearance, bool poweredDown)
+        { Appearance = appearance; PoweredDown = poweredDown; Red = appearance.Plastic.Red; Green = appearance.Plastic.Green; Blue = appearance.Plastic.Blue; }
+
+        internal AvatarAppearance Appearance { get; }
+        internal bool PoweredDown { get; }
 
         /// <summary>Gets the tint's red channel, from zero to one: each player's avatar keeps one colour on every peer.</summary>
         public float Red { get; }

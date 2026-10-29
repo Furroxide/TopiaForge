@@ -134,6 +134,7 @@ namespace TopiaForge.ModManager
                     if (PresenceWire.TryReadArrived(reader, out var world)) Arrive(peer, world, nowMicros);
                     else presence.Counters.Malformed++;
                     return;
+                case PresencePresentationWire.Message:
                 case PresenceMessages.Roster:
                 case PresenceMessages.States:
                 case PresenceMessages.Place:

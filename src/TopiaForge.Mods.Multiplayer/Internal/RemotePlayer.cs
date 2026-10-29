@@ -3,7 +3,7 @@ using System;
 namespace TopiaForge.Mods.Internal
 {
     /// <summary>A permanently bound player incarnation. All retained Input and Ui references share its lifetime check.</summary>
-    internal sealed class RemotePlayer : IPlayer, IPlayerInput, IPlayerUi, IViewControls
+    internal sealed partial class RemotePlayer : IPlayer, IPlayerInput, IPlayerUi, IViewControls
     {
         private readonly PlayerDirectory directory;
         private readonly IInternalPlayerBackend? backend;

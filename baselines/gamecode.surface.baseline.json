@@ -1,5 +1,5 @@
 {
-  "capturedUtc": "2026-10-28T14:59:49.6896990Z",
+  "capturedUtc": "2026-10-29T11:57:21.5772157Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
   "gameVersion": "0.0.2545",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "12b1752dd3fee10b840abef275451627b321612cabaa16bb6af687805a58ce87",
+  "surfaceContentHash": "1b7db2f44c8c8471376f9f2b7414849f1b53a3bf4f7135b3b830b3f6210dcbcc",
   "types": {
     "GameCode|ActionSuccess": {
       "assembly": "GameCode",
@@ -1501,6 +1501,73 @@
       "simpleName": "CollisionEventProxy",
       "status": "Resolved",
       "typeKey": "GameCode|CollisionEventProxy"
+    },
+    "GameCode|ComposerPartType": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Enum",
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {
+        "Beard": 34,
+        "Belt": 36,
+        "Chest": 2,
+        "Ears_DEPRECATED": 33,
+        "Face": 40,
+        "Glasses": 32,
+        "Hair": 35,
+        "Hat": 31,
+        "Head": 30,
+        "Hips": 0,
+        "LeftEar": 43,
+        "LeftFoot": 9,
+        "LeftHand": 6,
+        "LeftIndex1": 10,
+        "LeftIndex2": 11,
+        "LeftLowerArm": 5,
+        "LeftLowerLeg": 8,
+        "LeftPants": 38,
+        "LeftPinky1": 12,
+        "LeftPinky2": 13,
+        "LeftShoulder": 3,
+        "LeftThumb1": 14,
+        "LeftThumb2": 15,
+        "LeftUpperArm": 4,
+        "LeftUpperLeg": 7,
+        "MainItem": 42,
+        "Neck": 29,
+        "Necklace": 45,
+        "RightEar": 44,
+        "RightFoot": 22,
+        "RightHand": 19,
+        "RightIndex1": 23,
+        "RightIndex2": 24,
+        "RightLowerArm": 18,
+        "RightLowerLeg": 21,
+        "RightPants": 39,
+        "RightPinky1": 25,
+        "RightPinky2": 26,
+        "RightShoulder": 16,
+        "RightThumb1": 27,
+        "RightThumb2": 28,
+        "RightUpperArm": 17,
+        "RightUpperLeg": 20,
+        "Shirt": 37,
+        "Spine": 1,
+        "StatusBadge": 41
+      },
+      "fields": [],
+      "fullName": "ComposerPartType",
+      "isAbstract": false,
+      "isEnum": true,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "ComposerPartType",
+      "status": "Resolved",
+      "typeKey": "GameCode|ComposerPartType"
     },
     "GameCode|DamageType": {
       "assembly": "GameCode",
@@ -9388,6 +9455,492 @@
       "simpleName": "RobotBody",
       "status": "Resolved",
       "typeKey": "GameCode|RobotBody"
+    },
+    "GameCode|RobotBodyComposer": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CAPSULE_BOX_COLLIDER_RATIO",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "COLLIDER_DIMENSION_THRESHOLD",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "JointMap",
+          "type": "System.Collections.Generic.Dictionary<UnityEngine.HumanBodyBones, RobotBodyComposer+JointSetupValues>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "MAIN_ITEM_ATTACH_POINT",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "MASS_FACTOR",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ROBOT_AUDIO_SOURCE_PRIO",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_accessoryAnchors",
+          "type": "System.Collections.Generic.Dictionary<ComposerPartType, AccessoryAnchor>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_accessoryObjects",
+          "type": "System.Collections.Generic.Dictionary<ComposerPartType, System.Collections.Generic.List<UnityEngine.GameObject>>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "_noneOption",
+          "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "density",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "exteriorMetal",
+          "type": "UnityEngine.Material"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "gatheredPartsDescriptionsSummarizedHash",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "generatedObjects",
+          "type": "System.Collections.Generic.List<UnityEngine.GameObject>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lastSignature",
+          "type": "System.UInt64"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "partSets",
+          "type": "RoboPartSetAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "physicsMaterial",
+          "type": "UnityEngine.PhysicsMaterial"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "plastic",
+          "type": "UnityEngine.Material"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "selectedParts",
+          "type": "BodyPartEntry[]"
+        }
+      ],
+      "fullName": "RobotBodyComposer",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<GetAttachPointToAccessoryMap>g__AddIfSome|46_0",
+          "parameters": [
+            "ComposerPartType",
+            "System.Boolean",
+            "System.Boolean",
+            "RobotBodyComposer+<>c__DisplayClass46_0&"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "<RandomizeParts>g__SetRandomMaterial|43_0",
+          "parameters": [
+            "System.Collections.Generic.IEnumerable<UnityEngine.Material>",
+            "UnityEngine.Material&"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "Awake",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "BuildBodyFromParts",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ComputeSelectedPartsSignature",
+          "parameters": [],
+          "returnType": "System.UInt64"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "EnsureFaceComponent",
+          "parameters": [
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetAccessoryObject",
+          "parameters": [
+            "ComposerPartType"
+          ],
+          "returnType": "UnityEngine.GameObject"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "GetAttachPointToAccessoryMap",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.Dictionary<ComposerPartType, AccessoryData>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetMaterial",
+          "parameters": [
+            "ComposerPartMaterial"
+          ],
+          "returnType": "UnityEngine.Material"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetPhysicsMaterial",
+          "parameters": [],
+          "returnType": "UnityEngine.PhysicsMaterial"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetRawPartsDescriptions",
+          "parameters": [],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetSelectedPartPrefab",
+          "parameters": [
+            "ComposerPartType"
+          ],
+          "returnType": "UnityEngine.GameObject"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "HasSelectedPartEntry",
+          "parameters": [
+            "ComposerPartType"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "InstancePart",
+          "parameters": [
+            "UnityEngine.Transform",
+            "UnityEngine.Transform",
+            "UnityEngine.GameObject",
+            "System.Collections.Generic.Dictionary<ComposerPartType, AccessoryData>"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "IsExteriorMetal",
+          "parameters": [
+            "UnityEngine.Material"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "IsPlastic",
+          "parameters": [
+            "UnityEngine.Material"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterBoneKinds",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<UnityEngine.HumanBodyBones>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterMaterials",
+          "parameters": [
+            "ComposerPartMaterial"
+          ],
+          "returnType": "System.Collections.Generic.IEnumerable<UnityEngine.Material>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterPartsFor",
+          "parameters": [
+            "ComposerPartType"
+          ],
+          "returnType": "System.Collections.Generic.IEnumerable<UnityEngine.GameObject>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "MakeAccessoryRigidbodiesKinematic",
+          "parameters": [
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "MapPartTypeToBone",
+          "parameters": [
+            "ComposerPartType"
+          ],
+          "returnType": "System.Nullable<UnityEngine.HumanBodyBones>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnEnable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "RandomizeParts",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ReplaceSelectedParts",
+          "parameters": [
+            "BodyPartEntry[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "RequiresFullRebuildForPartSelection",
+          "parameters": [
+            "ComposerPartType"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SelectMaterial",
+          "parameters": [
+            "ComposerPartMaterial",
+            "UnityEngine.Material"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SelectPartPrefab",
+          "parameters": [
+            "ComposerPartType",
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SetCapsuleColliderValues",
+          "parameters": [
+            "UnityEngine.CapsuleCollider",
+            "UnityEngine.Vector3",
+            "System.Int32",
+            "System.Single",
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetSummaryHash",
+          "parameters": [
+            "System.Int32"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SetupRagdollJoints",
+          "parameters": [
+            "UnityEngine.Animator"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ShouldSuppressBuiltInGeo",
+          "parameters": [
+            "System.Nullable<ComposerPartMeta>",
+            "System.Collections.Generic.Dictionary<ComposerPartType, AccessoryData>"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SwapAccessory",
+          "parameters": [
+            "ComposerPartType",
+            "UnityEngine.GameObject",
+            "AccessoryAnchor"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "GatheredPartsDescriptionsSummarizedHash",
+          "setterIsPublic": false,
+          "type": "System.Int32"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "HasPartSets",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": false,
+          "indexParameterCount": 0,
+          "isStatic": true,
+          "name": "NoneOption",
+          "setterIsPublic": false,
+          "type": "UnityEngine.GameObject"
+        }
+      ],
+      "simpleName": "RobotBodyComposer",
+      "status": "Resolved",
+      "typeKey": "GameCode|RobotBodyComposer"
     },
     "GameCode|SceneUtil": {
       "assembly": "GameCode",
