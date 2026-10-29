@@ -114,7 +114,9 @@ namespace TopiaForge.ModManager
             var spawned = spawn() ?? throw new InvalidOperationException("The spawn returned no result.");
             if (spawned.TryGetValue(out var entity) && entity.IsAlive)
             {
-                services.RecordQuietly(entity, Describe(descriptor), this, CanonicalShadowKey());
+                if (MultiplayerSpawnLedger.Records(Profile))
+                    services.RecordQuietly(entity, Describe(descriptor), this, CanonicalShadowKey());
+                else TrackLocalCommandTarget(entity, descriptor.Kind);
             }
 
             return spawned;
@@ -317,6 +319,7 @@ namespace TopiaForge.ModManager
                 var ending = seam;
                 if (ending == null) return;
                 seam = null;
+                ending.localCommandTargets?.Clear();
                 services.Runtime.Spawns.ReleaseOwner(ending);
                 services.LocalContent?.ReleaseOwner(ending);
                 services.AssetLoads.ReleaseOwner(ending);

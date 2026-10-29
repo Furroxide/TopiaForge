@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -50,11 +51,18 @@ namespace TopiaForge.ModManager
             behaviours.Clear();
         }
 
+        private bool TryGetProviderObject(IEntity entity, out GameObject gameObject)
+        {
+            if (entity is IInternalNativeObjectEntity provider && provider.NativeObject is GameObject native && native != null)
+            { gameObject = native; return true; }
+            return entities.TryGetGameObject(entity, out gameObject);
+        }
+
         public INetworkWorldObject? Adopt(IEntity entity)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             UnityMainThreadGuard.AssertCurrent();
-            return entities.TryGetGameObject(entity, out var gameObject) && gameObject != null
+            return TryGetProviderObject(entity, out var gameObject) && gameObject != null
                 ? new UnityNetworkWorldObject(gameObject, entities)
                 : null;
         }
@@ -64,7 +72,7 @@ namespace TopiaForge.ModManager
             id = NetworkEntityId.None;
             if (entity == null) return false;
             UnityMainThreadGuard.AssertCurrent();
-            if (!entities.TryGetGameObject(entity, out var gameObject) || gameObject == null) return false;
+            if (!TryGetProviderObject(entity, out var gameObject) || gameObject == null) return false;
             for (var current = gameObject.transform; current != null; current = current.parent)
             {
                 var mark = current.GetComponent<TopiaForgeNetworkIdentity>();

@@ -92,7 +92,8 @@ namespace TopiaForge.Mods.Internal
         /// and what it returns is recorded as that player's: announced to everyone, and ended through
         /// <see cref="IInternalSpawnHandler.Despawn"/> when they destroy it or leave. On a joined player the handler ends a
         /// prediction the host refused and a shadow that never bound. Every peer runs the same mod, so each registers the
-        /// same handler.
+        /// same handler. A trusted shared provider may opt in through <see cref="IInternalSharedSpawnHandler"/> to serve
+        /// other shared consuming mods; the consumer still owns each spawn's profile, quota and lifetime.
         /// </remarks>
         OperationResult<IDisposable> RegisterSpawnHandler(string kind, IInternalSpawnHandler handler);
 
@@ -111,8 +112,8 @@ namespace TopiaForge.Mods.Internal
 
         /// <summary>Makes a reference that names <paramref name="entity"/> on every peer.</summary>
         /// <remarks>
-        /// The network world (WS3.6) names the entities this session replicates, a part of one by its network root. Stub for
-        /// players: false until the players directory (WS3.11) names them.
+        /// The network world names replicated entities by their network root. The Players directory names local players
+        /// and presence avatars by the provider's current player-lifetime key, never a process-local id or reusable slot.
         /// </remarks>
         bool TryCreateRef(IEntity entity, out InternalNetRef reference);
 

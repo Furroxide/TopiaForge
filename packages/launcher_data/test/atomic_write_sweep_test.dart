@@ -201,12 +201,20 @@ void main() {
       );
       final release = await holdInPlace(held);
       if (release == null) return;
+      // The fixture must hold a real readable file without delete sharing.
+      expect(held.readAsStringSync(), isNotEmpty);
+      expect(
+        () => held.renameSync('${held.path}.moved'),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(() => held.deleteSync(), throwsA(isA<FileSystemException>()));
 
       await writeFileBytesAtomic(settings, [0x5B, 0x5D]);
       expect(settings.readAsStringSync(), '[]');
       expect(held.existsSync(), isTrue);
 
       await release();
+      await release(); // Explicit release and teardown share one child owner.
       writeFileBytesAtomicSync(settings, [0x7B, 0x7D]);
       expect(held.existsSync(), isFalse);
     },

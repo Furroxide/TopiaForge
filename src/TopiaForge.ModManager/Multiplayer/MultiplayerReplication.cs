@@ -279,6 +279,7 @@ namespace TopiaForge.ModManager
         internal bool TryCreateRef(IEntity entity, out InternalNetRef reference)
         {
             reference = default;
+            if (Players?.TryCreateReference(entity, out reference) == true) return true;
             var source = References;
             if (source == null) return false;
             try
@@ -299,6 +300,7 @@ namespace TopiaForge.ModManager
         internal bool TryResolveRef(InternalNetRef reference, out IEntity? entity)
         {
             entity = null;
+            if (reference.Kind == InternalNetRefKind.Player) return Players?.TryResolveReference(reference, out entity) == true;
             var source = References;
             if (source == null || !reference.IsSpecified) return false;
             try

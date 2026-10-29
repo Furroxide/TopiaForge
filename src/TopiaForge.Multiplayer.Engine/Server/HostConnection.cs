@@ -135,12 +135,13 @@ namespace TopiaForge.Multiplayer.Engine
     /// <summary>A participant the host knows: its own player, or a remote identity, connected or within its grace period.</summary>
     internal sealed class ParticipantRecord
     {
-        internal ParticipantRecord(ParticipantId id, string? identity, string displayName, bool isHost)
+        internal ParticipantRecord(ParticipantId id, string? identity, string displayName, bool isHost, Guid lifetimeId)
         {
             Id = id;
             Identity = identity;
             DisplayName = displayName;
             IsHost = isHost;
+            LifetimeId = lifetimeId;
         }
 
         internal ParticipantId Id { get; }
@@ -156,6 +157,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal ulong LastSequence { get; set; }
         internal long RttMicros { get; set; } = -1;
         internal string? PlayerKey { get; set; }
+        internal Guid LifetimeId { get; set; }
 
         /// <summary>Gets or sets the host's voice state for this participant, or null when voice is off.</summary>
         internal VoiceSpeaker? Voice { get; set; }
@@ -180,7 +182,7 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         internal ParticipantEntry ToEntry() =>
-            new ParticipantEntry(Id.Value, DisplayName, IsConnected, IsHost, Quality, PingMilliseconds, PlayerKey);
+            new ParticipantEntry(Id.Value, DisplayName, IsConnected, IsHost, Quality, PingMilliseconds, PlayerKey, LifetimeId);
     }
 
     /// <summary>A set that iterates in insertion order, so flushes are deterministic.</summary>

@@ -204,6 +204,7 @@ namespace TopiaForge.ModManager
             local.Object = present;
             if (present != null) Attach(mirrored, present, binding);
             else mirrored.Binding = binding;
+            ApplyBoundProvider(mirrored, local.Entity);
             if (local is ClientPrediction prediction && !owned.Contains(prediction)) owned.Add(prediction);
         }
 

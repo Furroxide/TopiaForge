@@ -55,6 +55,7 @@ namespace TopiaForge.ModManager
         /// <summary>A stream started or restarted: whatever was in flight is gone, so the world starts again from a baseline.</summary>
         private void StreamRestarted()
         {
+            ResetEntityCommands();
             receiving = -1;
             expected = 0;
             received = 0;

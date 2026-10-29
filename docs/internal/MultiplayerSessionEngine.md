@@ -180,6 +180,14 @@ with that result, because the host executed it; the rest complete as `Cancelled`
 
 ## Participants and connections
 
+Protocol 2 adds an opaque `LifetimeId` to every participant row, including the listen host. The host generates it,
+rotates it at every accepted connection and in-place session replacement, and publishes the same token to every peer.
+A stalled link alone does not rotate it. The wire carries exactly 32 hexadecimal characters; empty, malformed,
+truncated or duplicate tokens are rejected. The additive public participant constructor accepts the token; older
+constructors leave it empty, which cannot make a canonical player reference. This token does not replace
+`MultiplayerPlayerKey`, whose persistence and ban identity deliberately survives connections. Runtime references
+bind the token to the snapshot's session id as well, so a retained old list cannot revive an old-session reference.
+
 The host maps each link's authenticated identity to a participant. A participant whose link closes is marked
 disconnected at once, and objects it owned return to server ownership. Its record stays for a 30-second grace period,
 so a returning identity keeps its participant id and submission sequence. `JoinAccepted` tells the client the next

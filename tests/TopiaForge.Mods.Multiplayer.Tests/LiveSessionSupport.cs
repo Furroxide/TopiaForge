@@ -312,7 +312,7 @@ internal sealed class LiveRig : IDisposable
     internal const string ProviderId = "io.github.furroxide.topiaforge.multiplayer";
 
     /// <param name="seed">Seeds the network.</param>
-    /// <param name="seededTransports">Gives every endpoint seeded randomness from the start, so a run repeats every byte.</param>
+    /// <param name="seededTransports">Seeds every endpoint and provider lifetime stream from the start, so a run repeats every byte.</param>
     /// <param name="configureHostTransport">Adjusts the options of every endpoint the host builds, such as demanding cookies.</param>
     internal LiveRig(int seed, bool seededTransports = false, Action<TransportOptions>? configureHostTransport = null)
     {
@@ -452,7 +452,17 @@ internal sealed class LiveRig : IDisposable
         var number = ++providers;
         if (seededTransports) setup.TransportOptions = new SeededTransportOptions((seed * 131) + number, configure: configureTransport).Next;
         else if (configureTransport != null) setup.TransportOptions = () => Configured(configureTransport);
-        var provider = new Provider(ProviderId, null, () => Network.Now, setup);
+        // Lifetimes are semantic wire input. Give each provider its own stream, independent of transport and
+        // network draws, and keep it advancing across reconnects and session replacements.
+        var lifetimes = new Random((seed * 31337) + number);
+        Guid NextLifetime()
+        {
+            var bytes = new byte[16];
+            lifetimes.NextBytes(bytes);
+            return new Guid(bytes);
+        }
+
+        var provider = new Provider(ProviderId, null, () => Network.Now, setup, seededTransports ? NextLifetime : null);
         names.Add(provider, name);
         return provider;
     }

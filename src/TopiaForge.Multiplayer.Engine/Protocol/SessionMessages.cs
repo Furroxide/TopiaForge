@@ -13,7 +13,7 @@ namespace TopiaForge.Multiplayer.Engine
             bool isHost,
             MultiplayerConnectionQuality quality,
             int? pingMilliseconds,
-            string? playerKey)
+            string? playerKey, Guid? lifetimeId = null)
         {
             Id = id;
             DisplayName = displayName;
@@ -22,6 +22,7 @@ namespace TopiaForge.Multiplayer.Engine
             Quality = quality;
             PingMilliseconds = pingMilliseconds;
             PlayerKey = playerKey;
+            LifetimeId = lifetimeId ?? Guid.NewGuid();
         }
 
         internal string Id { get; }
@@ -31,6 +32,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal MultiplayerConnectionQuality Quality { get; }
         internal int? PingMilliseconds { get; }
         internal string? PlayerKey { get; }
+        internal Guid LifetimeId { get; }
     }
 
     internal sealed class SessionReplacedMessage
@@ -78,6 +80,7 @@ namespace TopiaForge.Multiplayer.Engine
                 body.WriteByte((byte)participant.Quality);
                 body.WriteVarUInt(participant.PingMilliseconds.HasValue ? (ulong)participant.PingMilliseconds.Value + 1 : 0);
                 body.WriteOptionalString(participant.PlayerKey);
+                body.WriteString(participant.LifetimeId.ToString("N"));
             }
 
             frame.WriteEnvelope(MessageType.ParticipantsChanged, body);
@@ -89,6 +92,7 @@ namespace TopiaForge.Multiplayer.Engine
             var participants = new List<ParticipantEntry>(count);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var hosts = 0;
+            var lifetimes = new HashSet<Guid>();
             for (var index = 0; index < count; index++)
             {
                 var id = reader.ReadIdentity();
@@ -103,6 +107,8 @@ namespace TopiaForge.Multiplayer.Engine
 
                 var ping = reader.ReadVarUInt((ulong)MultiplayerParticipant.MaximumPingMilliseconds + 1);
                 var playerKey = reader.ReadOptionalIdentity();
+                if (!Guid.TryParseExact(reader.ReadString(32), "N", out var lifetime) || lifetime == Guid.Empty || !lifetimes.Add(lifetime))
+                    throw new ProtocolException("A participant lifetime was invalid or repeated.");
                 if (!seen.Add(id)) throw new ProtocolException("A participant list repeated an identity.");
                 if ((flags & HostFlag) != 0) hosts++;
                 participants.Add(new ParticipantEntry(
@@ -112,7 +118,7 @@ namespace TopiaForge.Multiplayer.Engine
                     (flags & HostFlag) != 0,
                     quality,
                     ping == 0 ? (int?)null : (int)(ping - 1),
-                    playerKey));
+                    playerKey, lifetime));
             }
 
             if (hosts > 1) throw new ProtocolException("A participant list marked more than one host.");

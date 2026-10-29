@@ -44,7 +44,8 @@ namespace TopiaForge.ModManager
             if (findAssets == null) throw new ArgumentNullException(nameof(findAssets));
             Counters = new NetworkWorldCounters();
             SceneKeys = new SceneKeyRegistry(backend);
-            Host = new NetworkWorldHost(channel, backend, SceneKeys, clock, Counters);
+            Host = new NetworkWorldHost(channel, backend, SceneKeys, clock, Counters)
+            { RefreshDescription = replication.RefreshEntityDescription };
             var blockers = backend is IBlockerBackend boxes ? new BlockerReplicaFactory(boxes, replication.BlockerReplicas) : null;
             Client = new NetworkWorldClient(channel, backend, SceneKeys, clock, Counters,
                 kind => kind == BlockerDescriptor.Kind ? blockers : replication.TryGetReplicaFactory(kind, out var factory) ? factory : null, findAssets,

@@ -285,7 +285,17 @@ internal sealed class SoakRig : IDisposable
             Resolver = Resolver,
             TransportOptions = new SeededTransportOptions((seed * 101) + index, TransportDiagnostics).Next
         };
-        var created = new Provider(LiveRig.ProviderId, diagnostics, () => Network.Now, setup);
+        // Lifetimes are opaque but semantic: keep their exact wire bytes in the transcript, and seed their source
+        // separately so adding a participant never consumes gameplay or transport randomness.
+        var lifetimes = new Random((seed * 31337) + index);
+        Guid NextLifetime()
+        {
+            var lifetime = new byte[16];
+            lifetimes.NextBytes(lifetime);
+            return new Guid(lifetime);
+        }
+
+        var created = new Provider(LiveRig.ProviderId, diagnostics, () => Network.Now, setup, NextLifetime);
         return new SoakPeer(name, index, created, files, factory, diagnostics, fingerprint);
     }
 }

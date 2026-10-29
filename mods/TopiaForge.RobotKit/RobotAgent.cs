@@ -9,7 +9,7 @@ namespace TopiaForge.RobotKit
     // stuck, and drives the walk animation. This class is a thin driver around that native walk plus the visual
     // and combat overrides a mod typically needs; everything else (collision, grounding, slopes, separation) is
     // owned by the native LocomotionController.
-    internal sealed class RobotAgent : IRobotAgent, INativeEntityAdapter
+    internal sealed partial class RobotAgent : IRobotAgent, INativeEntityAdapter
     {
         private enum Intent
         {
@@ -103,6 +103,7 @@ namespace TopiaForge.RobotKit
         // path). To Autonomous: clear mod intents and best-effort wake the native brain back up.
         public OperationResult<bool> SetBrainMode(RobotBrainMode mode)
         {
+            if (replicaAnimation != null && mode != RobotBrainMode.Dormant) return ReplicaRefusal();
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
@@ -122,16 +123,17 @@ namespace TopiaForge.RobotKit
             GameReflection.ApplyBrainMode(go, mode, nativeBrainSnapshot, logger);
             return OperationResult<bool>.Success(true);
         }
-        public bool IsMoving => isMoving;
-        public bool HasReachedTarget => hasReachedTarget;
+        public bool IsMoving => ReplicaState?.IsMoving ?? isMoving;
+        public bool HasReachedTarget => ReplicaState?.HasReachedTarget ?? hasReachedTarget;
 
-        public float MoveSpeed => moveSpeed;
-        public float TurnSpeed => turnSpeed;
-        public float StopDistance => stopDistance;
-        public RobotGait Gait => gait;
+        public float MoveSpeed => ReplicaState?.MoveSpeed ?? moveSpeed;
+        public float TurnSpeed => ReplicaState?.TurnSpeed ?? turnSpeed;
+        public float StopDistance => ReplicaState?.StopDistance ?? stopDistance;
+        public RobotGait Gait => ReplicaState?.Gait ?? gait;
 
         public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings)
         {
+            if (replicaAnimation != null) return ReplicaRefusal();
             if (settings == null)
             {
                 throw new System.ArgumentNullException(nameof(settings));
@@ -152,6 +154,7 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<bool> MoveTo(Vec3 position)
         {
+            if (replicaAnimation != null) return ReplicaRefusal();
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
@@ -172,6 +175,7 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<bool> Chase(IEntity targetEntity)
         {
+            if (replicaAnimation != null) return ReplicaRefusal();
             // RobotKit's own robots and player, or any entity the runtime made over a native object, such as another
             // player's avatar in a multiplayer session.
             var target = (targetEntity as INativeEntityAdapter)?.NativeGameObject
@@ -281,6 +285,7 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<bool> SetInteraction(RobotInteractionOptions options)
         {
+            if (replicaAnimation != null && (options.NativeTalkMode != RobotNativeTalkMode.Disabled || options.CustomInteraction != null)) return ReplicaRefusal();
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
@@ -384,6 +389,11 @@ namespace TopiaForge.RobotKit
         // harvest its completion. The native LocomotionController owns the actual motion between calls.
         public void Step()
         {
+            if (replicaAnimation != null)
+            {
+                AnimateReplica();
+                return;
+            }
             if (despawned || go == null)
             {
                 return;

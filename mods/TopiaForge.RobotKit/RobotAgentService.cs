@@ -15,11 +15,12 @@ namespace TopiaForge.RobotKit
     internal sealed partial class RobotAgentService :
         IRobotAgentService,
         IRobotPlayerEntitySource,
-        IOwnerBoundExtensionFactory,
+        IOwnerContextBoundExtensionFactory,
         IDisposable
     {
         private readonly IModLogger logger;
         private readonly RobotPrefabResolver prefabResolver;
+        internal RobotReplication? Replication { get; set; }
         private readonly List<RobotAgent> agents = new List<RobotAgent>();
         private readonly Dictionary<string, RobotAgent> agentsById =
             new Dictionary<string, RobotAgent>(StringComparer.Ordinal);
@@ -114,7 +115,9 @@ namespace TopiaForge.RobotKit
             return null;
         }
 
-        public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request)
+        public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request) => SpawnNative(request, false);
+
+        internal OperationResult<IRobotAgent> SpawnNative(RobotAgentSpawnRequest request, bool replica)
         {
             if (request == null)
             {
@@ -175,9 +178,11 @@ namespace TopiaForge.RobotKit
             identityAnchor.Initialize(agentId);
             var agent = new RobotAgent(agentId, clone, request, logger, brainSnapshot);
 
+            if (replica) Quieten(clone, cosmetic: false);
             clone.transform.SetParent(root.transform, true);
             clone.SetActive(true);
             agent.OnActivated();
+            if (replica) agent.MakeReplica(ResolveAnimator(clone), ResolveWalkParameter());
             if (request.Scale != 1f)
             {
                 agent.SetScale(request.Scale);
@@ -291,17 +296,14 @@ namespace TopiaForge.RobotKit
             return search.Completion;
         }
 
-        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
-            Type contractType,
-            string ownerModId,
-            IModLifetime lifetime)
+        object IOwnerContextBoundExtensionFactory.CreateOwnerFacade(Type contractType, IModContext context)
         {
             if (contractType != typeof(IRobotAgentService))
             {
                 throw new ArgumentException("Unsupported RobotKit agent extension contract.", nameof(contractType));
             }
 
-            return new OwnerFacade(this, lifetime);
+            return new OwnerFacade(this, context);
         }
 
         // The designer-tuned PathFindSettings read off the spawnable robot prefab's LocomotionController (cached for
@@ -336,6 +338,7 @@ namespace TopiaForge.RobotKit
             {
                 if (!agents[index].IsAlive)
                 {
+                    Replication?.Forget(agents[index].Id);
                     agentsById.Remove(agents[index].Id);
                     agents.RemoveAt(index);
                     activeDirty = true;
@@ -382,6 +385,7 @@ namespace TopiaForge.RobotKit
         public void OnSceneChanged()
         {
             ClearAgents();
+            Replication?.Clear();
             CancelSearches();
             LocomotionBridge.ResetSceneCache();
             cachedCatalog = null;
@@ -402,6 +406,7 @@ namespace TopiaForge.RobotKit
 
             disposed = true;
             ClearAgents();
+            Replication?.Clear();
             CancelSearches();
             if (root != null)
             {

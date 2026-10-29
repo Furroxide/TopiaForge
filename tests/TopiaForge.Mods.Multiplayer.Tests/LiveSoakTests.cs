@@ -22,6 +22,7 @@ internal static class LiveSoakTests
 
     internal static void ASoakConvergesStaysBoundedAndRepeats()
     {
+        SoakLifetimeTests.Verify();
         var watch = Stopwatch.StartNew();
         var first = new SoakScenario(Seed, Minutes).Run();
         var cold = watch.Elapsed.TotalSeconds;

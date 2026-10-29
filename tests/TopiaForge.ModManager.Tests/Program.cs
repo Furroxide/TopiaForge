@@ -26,6 +26,12 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && args[0] == "--communication-routing")
             { CommunicationRuntimeTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--replica-motion-rejections") { ReplicaMotionRejectionTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--replica-state-review") { ReplicaStateReviewTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--first-party-local-robots")
+            { FirstPartyLocalRobotTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--first-party-replication")
+            { FirstPartyReplicationTests.Run(); return 0; }
             if (args.Length == 2 && args[0] == "--authored-review")
             { AuthoredMapReviewTests.Run(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "--world-view")
@@ -414,6 +420,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--authority-routing", StringComparison.Ordinal))
             {
                 AuthorityTests.Run();
+                FirstPartyReplicationTests.Run();
                 return 0;
             }
 
@@ -539,6 +546,7 @@ namespace TopiaForge.ModManager.Tests
                 MultiplayerRuntimeHostTests.Run(root);
                 MultiplayerSeamTests.Run(root);
                 NetworkWorldTests.Run();
+                FirstPartyReplicationTests.Run();
                 PresenceSuite.Run();
                 PlayersApiTests.Run();
                 PlayersNetworkTests.Run();
