@@ -90,7 +90,7 @@ void main() {
           gameBuild: '2545',
           runtimeVersion: '0.2.0',
           sdkVersion: '0.2.0',
-          protocolVersion: '1.0.0',
+          protocolVersion: TopiaForgeRuntimeVersions.multiplayerProtocolVersion,
           developerMode: true,
         ),
         mayContactHost: state.mayContactHost,

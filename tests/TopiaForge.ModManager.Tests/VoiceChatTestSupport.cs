@@ -40,6 +40,8 @@ namespace TopiaForge.ModManager.Tests
 
         internal int MadeStreams { get; private set; }
 
+        public System.Threading.CancellationToken CaptureSessionToken { get; set; }
+
         public bool Enabled
         {
             get => enabled;
@@ -127,8 +129,9 @@ namespace TopiaForge.ModManager.Tests
         }
     }
 
-    internal sealed class FakePlaybackStream : IVoicePlaybackStream
+    internal sealed class FakePlaybackStream : IVoicePlaybackStream, IInternalRoutedVoiceStream
     {
+        public bool NonSpatial { get; set; }
         internal FakePlaybackStream(ParticipantId speaker)
         {
             Speaker = speaker;

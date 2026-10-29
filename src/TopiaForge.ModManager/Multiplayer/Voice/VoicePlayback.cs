@@ -88,7 +88,8 @@ namespace TopiaForge.ModManager.Voice
                     continue;
                 }
 
-                if (positions != null && positions.TryGetPosition(entry.Key, out var position)) entry.Value.Emitter.Place(position);
+                if (!(entry.Value.Stream is IInternalRoutedVoiceStream routed && routed.NonSpatial)
+                    && positions != null && positions.TryGetPosition(entry.Key, out var position)) entry.Value.Emitter.Place(position);
                 else entry.Value.Emitter.Unplace();
             }
 

@@ -58,6 +58,7 @@ namespace TopiaForge.Multiplayer.Voice
         internal int Count;
         internal int SampleRate;
         internal long EndMicros;
+        internal long Generation;
         internal bool EndOfCapture;
 
         /// <summary>Whether the talker transmitted while these samples were captured; otherwise they are only metered.</summary>
@@ -157,7 +158,7 @@ namespace TopiaForge.Multiplayer.Voice
         /// Queues captured samples, and whether the talker transmitted them. One entry is always left free, so the end of
         /// a spurt that these samples opened always fits after them.
         /// </summary>
-        internal bool TryAddCapture(float[] samples, int offset, int count, int sampleRate, long endMicros, bool transmit)
+        internal bool TryAddCapture(float[] samples, int offset, int count, int sampleRate, long endMicros, bool transmit, long generation = 0)
         {
             if (CaptureCount >= CaptureEntryCapacity - 1 || captureSampleCount + count > CaptureSampleCapacity) return false;
             Array.Copy(samples, offset, captureSamples, captureSampleCount, count);
@@ -167,6 +168,7 @@ namespace TopiaForge.Multiplayer.Voice
                 Count = count,
                 SampleRate = sampleRate,
                 EndMicros = endMicros,
+                Generation = generation,
                 Transmit = transmit
             };
             captureSampleCount += count;
@@ -174,10 +176,10 @@ namespace TopiaForge.Multiplayer.Voice
         }
 
         /// <summary>Queues the end of transmission, after every sample queued so far.</summary>
-        internal bool TryAddEndOfCapture(long micros)
+        internal bool TryAddEndOfCapture(long micros, long generation = 0)
         {
             if (CaptureCount == CaptureEntryCapacity) return false;
-            captures[CaptureCount++] = new VoiceCaptureEntry { EndMicros = micros, EndOfCapture = true };
+            captures[CaptureCount++] = new VoiceCaptureEntry { EndMicros = micros, Generation = generation, EndOfCapture = true };
             return true;
         }
 
@@ -221,6 +223,7 @@ namespace TopiaForge.Multiplayer.Voice
         internal VoiceFrameFlags Flags;
         internal int Length;
         internal long CapturedMicros;
+        internal long Generation;
     }
 
     /// <summary>What the worker hands the main thread: encoded frames for the engine, in capture order.</summary>
@@ -240,7 +243,7 @@ namespace TopiaForge.Multiplayer.Voice
 
         internal ReadOnlySpan<byte> Payload(int index) => payloads.AsSpan(index * VoicePacketBytes, packets[index].Length);
 
-        internal bool TryAdd(ulong timestamp, VoiceFrameFlags flags, ReadOnlySpan<byte> payload, long capturedMicros)
+        internal bool TryAdd(ulong timestamp, VoiceFrameFlags flags, ReadOnlySpan<byte> payload, long capturedMicros, long generation = 0)
         {
             if (Count == PacketCapacity || payload.Length < 1 || payload.Length > VoicePacketBytes) return false;
             payload.CopyTo(payloads.AsSpan(Count * VoicePacketBytes));
@@ -249,7 +252,8 @@ namespace TopiaForge.Multiplayer.Voice
                 Timestamp = timestamp,
                 Flags = flags,
                 Length = payload.Length,
-                CapturedMicros = capturedMicros
+                CapturedMicros = capturedMicros,
+                Generation = generation
             };
             return true;
         }

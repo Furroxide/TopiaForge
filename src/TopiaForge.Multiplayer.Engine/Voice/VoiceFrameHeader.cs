@@ -12,7 +12,10 @@ namespace TopiaForge.Multiplayer.Engine
         Discontinuous = 1,
 
         /// <summary>The last frame of a talk spurt: push-to-talk was released or voice activity ended.</summary>
-        EndOfTalk = 2
+        EndOfTalk = 2,
+
+        /// <summary>Host-only relay hint: play a global group route without positional attenuation.</summary>
+        NonSpatial = 4
     }
 
     /// <summary>One frame's place in its speaker's stream and where its codec packet sits in the datagram.</summary>
@@ -59,32 +62,36 @@ namespace TopiaForge.Multiplayer.Engine
     /// </summary>
     /// <remarks>
     /// <code>
-    /// uplink:  01, sequence, timestamp, count, then count times: flags, length, payload
-    /// relayed: 02, speaker, stream, sequence, timestamp, count, then count times: flags, length, payload
+    /// uplink:  03, epoch, sequence, timestamp, count, then count times: flags, length, payload
+    /// relayed: 04, epoch, speaker, stream, sequence, timestamp, count, then count times: flags, length, payload
     /// </code>
     /// Numbers are minimal LEB128 varints; the sequence and timestamp are the first frame's, and the second frame's are one
     /// more. Parsing never throws: a datagram that breaks any rule is refused whole.
     /// </remarks>
     internal readonly struct VoicePacket
     {
-        internal const byte UplinkKind = 0x01;
-        internal const byte RelayedKind = 0x02;
+        internal const byte UplinkKind = 0x03;
+        internal const byte RelayedKind = 0x04;
         internal const int MaximumFrames = 2;
         internal const VoiceFrameFlags KnownFlags = VoiceFrameFlags.Discontinuous | VoiceFrameFlags.EndOfTalk;
 
-        private VoicePacket(int count, VoiceFrameHeader first, VoiceFrameHeader second)
+        private VoicePacket(ulong epoch, int count, VoiceFrameHeader first, VoiceFrameHeader second)
         {
+            Epoch = epoch;
             Count = count;
             First = first;
             Second = second;
         }
+
+        /// <summary>The session epoch from the reliable join or replacement, shared by both frames.</summary>
+        internal ulong Epoch { get; }
 
         internal int Count { get; }
         internal VoiceFrameHeader First { get; }
         internal VoiceFrameHeader Second { get; }
 
         /// <summary>Gets the most bytes a datagram of two <paramref name="maximumPayload"/>-byte frames can take.</summary>
-        internal static int MaximumBytes(int maximumPayload) => 1 + (4 * 10) + 1 + (MaximumFrames * (1 + 5 + maximumPayload));
+        internal static int MaximumBytes(int maximumPayload) => 1 + (5 * 10) + 1 + (MaximumFrames * (1 + 5 + maximumPayload));
 
         internal VoiceFrameHeader this[int index] => index == 0 ? First : Second;
 
@@ -99,10 +106,12 @@ namespace TopiaForge.Multiplayer.Engine
             VoiceFrameFlags firstFlags,
             ReadOnlySpan<byte> firstPayload,
             VoiceFrameFlags secondFlags,
-            ReadOnlySpan<byte> secondPayload)
+            ReadOnlySpan<byte> secondPayload,
+            ulong epoch)
         {
             var position = 0;
             destination[position++] = UplinkKind;
+            WriteVarUInt(destination, ref position, epoch);
             return WriteFrames(destination, position, sequence, timestamp, firstFlags, firstPayload, secondFlags, secondPayload);
         }
 
@@ -119,11 +128,13 @@ namespace TopiaForge.Multiplayer.Engine
             VoiceFrameFlags firstFlags,
             ReadOnlySpan<byte> firstPayload,
             VoiceFrameFlags secondFlags,
-            ReadOnlySpan<byte> secondPayload)
+            ReadOnlySpan<byte> secondPayload,
+            ulong epoch)
         {
             if (speaker == 0) throw new ArgumentOutOfRangeException(nameof(speaker), "Speaker index zero is never assigned.");
             var position = 0;
             destination[position++] = RelayedKind;
+            WriteVarUInt(destination, ref position, epoch);
             WriteVarUInt(destination, ref position, speaker);
             WriteVarUInt(destination, ref position, stream);
             return WriteFrames(destination, position, sequence, timestamp, firstFlags, firstPayload, secondFlags, secondPayload);
@@ -160,6 +171,7 @@ namespace TopiaForge.Multiplayer.Engine
             packet = default;
             var position = 0;
             if (datagram.Length < 1 || datagram[position++] != kind) return false;
+            if (!TryReadVarUInt(datagram, ref position, out var epoch)) return false;
             ulong speaker = 0;
             ulong stream = 0;
             if (kind == RelayedKind && (!TryReadVarUInt(datagram, ref position, out speaker) || speaker == 0)) return false;
@@ -169,17 +181,18 @@ namespace TopiaForge.Multiplayer.Engine
             if (position >= datagram.Length) return false;
             var count = datagram[position++];
             if (count < 1 || count > MaximumFrames) return false;
-            if (!TryReadFrame(datagram, ref position, maximumPayload, out var flags, out var offset, out var length)) return false;
+            var allowedFlags = kind == RelayedKind ? KnownFlags | VoiceFrameFlags.NonSpatial : KnownFlags;
+            if (!TryReadFrame(datagram, ref position, maximumPayload, allowedFlags, out var flags, out var offset, out var length)) return false;
             var first = new VoiceFrameHeader(speaker, stream, sequence, timestamp, flags, offset, length);
             var second = default(VoiceFrameHeader);
             if (count == 2)
             {
-                if (!TryReadFrame(datagram, ref position, maximumPayload, out flags, out offset, out length)) return false;
+                if (!TryReadFrame(datagram, ref position, maximumPayload, allowedFlags, out flags, out offset, out length)) return false;
                 second = new VoiceFrameHeader(speaker, stream, sequence + 1, timestamp + 1, flags, offset, length);
             }
 
             if (position != datagram.Length) return false;
-            packet = new VoicePacket(count, first, second);
+            packet = new VoicePacket(epoch, count, first, second);
             return true;
         }
 
@@ -195,6 +208,7 @@ namespace TopiaForge.Multiplayer.Engine
             ReadOnlySpan<byte> datagram,
             ref int position,
             int maximumPayload,
+            VoiceFrameFlags allowedFlags,
             out VoiceFrameFlags flags,
             out int offset,
             out int length)
@@ -204,7 +218,7 @@ namespace TopiaForge.Multiplayer.Engine
             length = 0;
             if (position >= datagram.Length) return false;
             flags = (VoiceFrameFlags)datagram[position++];
-            if ((flags & ~KnownFlags) != 0) return false;
+            if ((flags & ~allowedFlags) != 0) return false;
             if (!TryReadVarUInt(datagram, ref position, out var size)) return false;
             if (size == 0 || size > (ulong)maximumPayload || size > (ulong)(datagram.Length - position)) return false;
             offset = position;

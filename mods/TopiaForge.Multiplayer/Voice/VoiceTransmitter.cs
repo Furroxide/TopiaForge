@@ -39,6 +39,7 @@ namespace TopiaForge.Multiplayer.Voice
         private readonly byte[] packet = new byte[OpusVoiceCodec.MaximumPacketLength];
         private VoiceTransmitMode mode;
         private bool transmitting;
+        private long generation;
         private bool spurtOpen;
         private bool inDiscontinuousRun;
         private int levelBits = BitConverter.SingleToInt32Bits(VoiceActivityDetector.SilenceDb);
@@ -82,6 +83,19 @@ namespace TopiaForge.Multiplayer.Voice
 
             if (detector.ThresholdDb != thresholdDb) detector.ThresholdDb = thresholdDb;
             if (encoder.ExpectedLossPercent != expectedLossPercent) encoder.ExpectedLossPercent = expectedLossPercent;
+        }
+
+        /// <summary>Retires all coding history on the worker thread; no final frame belongs to the new lifetime.</summary>
+        internal void Retire(long nextGeneration)
+        {
+            generation = nextGeneration;
+            framer.Discard();
+            detector.Reset();
+            encoder.Reset();
+            transmitting = false;
+            spurtOpen = false;
+            inDiscontinuousRun = false;
+            Volatile.Write(ref levelBits, BitConverter.SingleToInt32Bits(VoiceActivityDetector.SilenceDb));
         }
 
         /// <summary>Takes one capture, as the main thread queued it, and whether the talker transmitted it.</summary>
@@ -166,7 +180,7 @@ namespace TopiaForge.Multiplayer.Voice
             }
 
             bool queued;
-            lock (outbound.Gate) queued = outbound.Writable.TryAdd(timestamp, flags, packet.AsSpan(0, length), capturedMicros);
+            lock (outbound.Gate) queued = outbound.Writable.TryAdd(timestamp, flags, packet.AsSpan(0, length), capturedMicros, generation);
             if (queued) FramesQueued++;
             else OutboundOverflow++;
         }

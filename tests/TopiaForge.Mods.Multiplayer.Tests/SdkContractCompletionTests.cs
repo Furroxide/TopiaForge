@@ -164,8 +164,8 @@ internal static class SdkContractCompletionTests
         Assert(ended.EndReason == MultiplayerSessionEndReason.HostEnded, "ended sessions report why");
         var reconnecting = Snapshot(MultiplayerSessionState.Reconnecting, host, MultiplayerSessionEndReason.None, hostRecord);
         Assert(reconnecting.State == MultiplayerSessionState.Reconnecting, "reconnecting is a defined session state");
-        Assert(MultiplayerModule.ProtocolVersion == "1.0.0" && MultiplayerModule.PeerVersionRange == ">=1.0.0 <2.0.0",
-            "the protocol line is unchanged");
+        Assert(MultiplayerModule.ProtocolVersion == "2.0.0" && MultiplayerModule.PeerVersionRange == ">=2.0.0 <3.0.0",
+            "the epoch-bound voice protocol refuses the preceding major");
     }
 
     internal static void PosesAndDefinitionsValidateBoundedData()

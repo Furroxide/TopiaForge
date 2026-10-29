@@ -6,6 +6,23 @@
 assembly TopiaForge.Mods.Multiplayer, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
 target-framework .NETStandard,Version=v2.1
 
+type public static class TopiaForge.Mods.CommunicationExtensions : System.Object [requires-topiaforge="0.2.0"]
+  method extension [static] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICommunicationRouting> RouteCommunications(TopiaForge.Mods.IModContext context, TopiaForge.Mods.CommunicationPolicy policy) [requires-topiaforge="0.2.0"]
+
+type public readonly struct TopiaForge.Mods.CommunicationMember : System.ValueType [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.ParticipantId participant, System.Int32 group) [requires-topiaforge="0.2.0"]
+  property System.Int32 Group { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.ParticipantId Participant { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.CommunicationPolicy : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CommunicationMember> members, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CommunicationRoute> routes) [requires-topiaforge="0.2.0"]
+
+type public readonly struct TopiaForge.Mods.CommunicationRoute : System.ValueType [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Int32 fromGroup, System.Int32 toGroup, System.Single maximumDistance = 0) [requires-topiaforge="0.2.0"]
+  property System.Int32 FromGroup { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Int32 ToGroup { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single MaximumDistance { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.DeterministicRandom : System.Object
   constructor .ctor(System.UInt64 seed)
   method System.Boolean NextBoolean()
@@ -16,6 +33,9 @@ type public sealed class TopiaForge.Mods.DeterministicRandom : System.Object
   method System.UInt32 NextUInt32()
   method System.UInt64 NextUInt64()
   method [static] TopiaForge.Mods.DeterministicRandom ForCommand(TopiaForge.Mods.SessionSeed seed, TopiaForge.Mods.ParticipantId sender, System.UInt64 sequence, System.UInt64 salt = 0)
+
+type public interface TopiaForge.Mods.ICommunicationRouting : System.IDisposable [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetPolicy(TopiaForge.Mods.CommunicationPolicy policy) [requires-topiaforge="0.2.0"]
 
 type public interface TopiaForge.Mods.IGeneratedMultiplayerBinding : TopiaForge.Mods.IGeneratedMultiplayerContract
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> BindMultiplayer(TopiaForge.Mods.IMultiplayerSession session)
@@ -221,8 +241,8 @@ type public flags enum TopiaForge.Mods.MultiplayerExecutionSide : System.Int32
 
 type public static class TopiaForge.Mods.MultiplayerModule : System.Object
   field const System.String Id = "io.github.furroxide.topiaforge.multiplayer"
-  field const System.String PeerVersionRange = "\u003E=1.0.0 \u003C2.0.0"
-  field const System.String ProtocolVersion = "1.0.0"
+  field const System.String PeerVersionRange = "\u003E=2.0.0 \u003C3.0.0"
+  field const System.String ProtocolVersion = "2.0.0"
 
 type public sealed class TopiaForge.Mods.MultiplayerParticipant : System.Object
   constructor .ctor(TopiaForge.Mods.ParticipantId id, System.String displayName, System.Boolean isLocal, System.Boolean isConnected)

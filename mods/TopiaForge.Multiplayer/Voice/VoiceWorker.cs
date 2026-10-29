@@ -49,6 +49,8 @@ namespace TopiaForge.Multiplayer.Voice
         private int thresholdBits = BitConverter.SingleToInt32Bits(VoiceActivityDetector.DefaultThresholdDb);
         private int lossPercent = OpusVoiceCodec.DefaultExpectedLossPercent;
         private int blocked;
+        private long generation;
+        private long appliedGeneration;
 
         internal VoiceWorker(
             OpusVoiceCodec codec,
@@ -91,6 +93,21 @@ namespace TopiaForge.Multiplayer.Voice
             Volatile.Write(ref blocked, transmitBlocked ? 1 : 0);
         }
 
+        /// <summary>Publishes retirement without waiting for a codec call already in progress.</summary>
+        internal void RetireCapture(long nextGeneration)
+        {
+            Volatile.Write(ref generation, nextGeneration);
+            Signal();
+        }
+
+        private void ObserveCaptureGeneration()
+        {
+            var current = Volatile.Read(ref generation);
+            if (current == appliedGeneration) return;
+            transmitter.Retire(current);
+            appliedGeneration = current;
+        }
+
         /// <summary>Starts the background thread.</summary>
         internal void Start()
         {
@@ -109,6 +126,7 @@ namespace TopiaForge.Multiplayer.Voice
         internal void Step(long nowMicros)
         {
             Steps++;
+            ObserveCaptureGeneration();
             transmitter.Configure(
                 (VoiceTransmitMode)Volatile.Read(ref mode),
                 BitConverter.Int32BitsToSingle(Volatile.Read(ref thresholdBits)),
@@ -121,7 +139,9 @@ namespace TopiaForge.Multiplayer.Voice
                 {
                     for (var index = 0; index < batch.CaptureCount; index++)
                     {
+                        ObserveCaptureGeneration();
                         ref var entry = ref batch.Capture(index);
+                        if (entry.Generation != appliedGeneration) continue;
                         if (entry.EndOfCapture) transmitter.EndCapture(entry.EndMicros);
                         else transmitter.Feed(batch.CaptureSamples(entry), entry.SampleRate, entry.EndMicros, entry.Transmit);
                     }

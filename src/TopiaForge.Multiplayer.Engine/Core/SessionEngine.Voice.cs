@@ -371,7 +371,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (Role == EngineRole.Client)
             {
                 if (channel == null || channel.Link.State == EngineLinkState.Closed) return VoiceSubmitResult.NotConnected;
-                var length = VoicePacket.WriteUplink(voiceScratch, sequence, timestamp, firstFlags, first, secondFlags, second);
+                var length = VoicePacket.WriteUplink(voiceScratch, sequence, timestamp, firstFlags, first, secondFlags, second, epoch);
                 if (!voicePolicy!.TrySpend(voicePace!, length, nowMicros))
                 {
                     voiceDropped[(int)VoiceDropReason.RateLimited]++;
@@ -386,7 +386,7 @@ namespace TopiaForge.Multiplayer.Engine
             var speaker = localParticipantId.HasValue ? FindParticipant(localParticipantId.Value) : null;
             var voice = speaker?.Voice;
             if (speaker == null || voice == null) return VoiceSubmitResult.NotConnected;
-            var relayed = VoicePacket.WriteRelayed(voiceScratch, voice.Index, voice.Stream, sequence, timestamp, firstFlags, first, secondFlags, second);
+            var relayed = VoicePacket.WriteRelayed(voiceScratch, voice.Index, voice.Stream, sequence, timestamp, firstFlags, first, secondFlags, second, epoch);
             RelayVoice(speaker.Id.Value, new ArraySegment<byte>(voiceScratch, 0, relayed), null);
             return VoiceSubmitResult.Sent;
         }
@@ -409,7 +409,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             var speaker = record.Voice;
-            var admission = policy.Admit(speaker, datagram, nowMicros);
+            var admission = policy.Admit(speaker, datagram, nowMicros, epoch);
             if (admission.Struck) voiceStrikes++;
             switch (admission.Verdict)
             {
@@ -425,7 +425,7 @@ namespace TopiaForge.Multiplayer.Engine
                         packet.First.Flags,
                         datagram.AsSpan(packet.First.PayloadOffset, packet.First.PayloadLength),
                         packet.Second.Flags,
-                        packet.Count == 2 ? datagram.AsSpan(packet.Second.PayloadOffset, packet.Second.PayloadLength) : ReadOnlySpan<byte>.Empty);
+                        packet.Count == 2 ? datagram.AsSpan(packet.Second.PayloadOffset, packet.Second.PayloadLength) : ReadOnlySpan<byte>.Empty, epoch);
                     RelayVoice(record.Id.Value, new ArraySegment<byte>(voiceScratch, 0, length), connection);
                     DeliverLocal(record.Id, speaker.Stream, packet, datagram);
                     return;
@@ -456,6 +456,7 @@ namespace TopiaForge.Multiplayer.Engine
             foreach (var connection in connections)
             {
                 if (ReferenceEquals(connection, sender) || connection.Phase != HostConnectionPhase.Ready) continue;
+                if (connection.Participant == null || !CanCommunicate(new ParticipantId(speaker), connection.Participant.Id)) continue;
                 if (connection.VoiceMuteAll || connection.VoiceMutes.Contains(speaker))
                 {
                     voiceDropped[(int)VoiceDropReason.ListenerMuted]++;
@@ -463,7 +464,7 @@ namespace TopiaForge.Multiplayer.Engine
                 }
 
                 if (connection.Link.State == EngineLinkState.Closed) continue;
-                connection.Link.Send(EngineChannel.Voice, datagram);
+                connection.Link.Send(EngineChannel.Voice, RouteVoicePresentation(new ParticipantId(speaker), connection.Participant.Id, datagram));
                 voiceSent++;
             }
         }
@@ -485,6 +486,12 @@ namespace TopiaForge.Multiplayer.Engine
             if (!VoicePacket.TryReadRelayed(datagram, voice.MaximumPacketBytes, out var packet))
             {
                 voiceDropped[(int)VoiceDropReason.Malformed]++;
+                return;
+            }
+
+            if (packet.Epoch != epoch)
+            {
+                voiceDropped[(int)VoiceDropReason.Stale]++;
                 return;
             }
 
@@ -511,6 +518,7 @@ namespace TopiaForge.Multiplayer.Engine
         {
             var inbox = voiceInbox;
             if (inbox == null || ProcessKind != MultiplayerProcessKind.Interactive || !localParticipantId.HasValue) return;
+            if (Role == EngineRole.Host && !CanCommunicate(speaker, localParticipantId.Value)) return;
             if (localVoiceMuteAll || localVoiceMutes.Contains(speaker.Value))
             {
                 voiceDropped[(int)VoiceDropReason.ListenerMuted]++;
@@ -525,7 +533,8 @@ namespace TopiaForge.Multiplayer.Engine
                     stream,
                     frame.Sequence,
                     frame.Timestamp,
-                    frame.Flags,
+                    Role == EngineRole.Host && IsGlobalCommunication(speaker, localParticipantId.Value)
+                        ? frame.Flags | VoiceFrameFlags.NonSpatial : frame.Flags,
                     new ArraySegment<byte>(datagram, frame.PayloadOffset, frame.PayloadLength),
                     nowMicros));
                 voiceDelivered++;

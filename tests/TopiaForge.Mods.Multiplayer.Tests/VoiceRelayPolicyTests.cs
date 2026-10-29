@@ -21,7 +21,7 @@ internal static class VoiceRelayPolicyTests
         for (var index = 0; index < 75; index++)
         {
             // 25 datagrams a second, two 50-byte frames each: 20 kbit/s of codec data.
-            var admission = policy.Admit(speaker, Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair: true), index * 40_000);
+            var admission = policy.Admit(speaker, Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair: true), index * 40_000, 0);
             Assert(admission.Verdict == VoiceVerdict.Relay && admission.Packet.Count == 2, "datagram " + index + " is relayed");
         }
 
@@ -34,19 +34,19 @@ internal static class VoiceRelayPolicyTests
         var (policy, speaker, codec) = Create();
         for (var index = 0; index < 30; index++)
         {
-            Assert(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * 1_000).Verdict == VoiceVerdict.Relay,
+            Assert(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * 1_000, 0).Verdict == VoiceVerdict.Relay,
                 "thirty datagrams in a burst pass");
         }
 
-        Expect(policy.Admit(speaker, Datagram(codec, 31, 30), 31_000), VoiceDropReason.RateLimited, struck: false, "the 31st at once");
-        Assert(policy.Admit(speaker, Datagram(codec, 32, 31), Second + 1_000).Verdict == VoiceVerdict.Relay, "a second later the rate is free again");
+        Expect(policy.Admit(speaker, Datagram(codec, 31, 30), 31_000, 0), VoiceDropReason.RateLimited, struck: false, "the 31st at once");
+        Assert(policy.Admit(speaker, Datagram(codec, 32, 31), Second + 1_000, 0).Verdict == VoiceVerdict.Relay, "a second later the rate is free again");
 
         // Bitrate: datagrams of two 160-byte frames at 25 a second are about 66 kbit/s, past the 40 kbit/s bucket.
         (policy, speaker, codec) = Create(new FakeVoiceCodec(160));
         var limited = -1;
         for (var index = 0; index < 50 && limited < 0; index++)
         {
-            var admission = policy.Admit(speaker, Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair: true), index * 40_000);
+            var admission = policy.Admit(speaker, Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair: true), index * 40_000, 0);
             if (admission.Verdict != VoiceVerdict.Relay) limited = index;
         }
 
@@ -57,22 +57,22 @@ internal static class VoiceRelayPolicyTests
         (policy, speaker, codec) = Create();
         var oversized = new byte[161];
         oversized[0] = FakeVoiceCodec.AudioHeader;
-        Expect(policy.Admit(speaker, Raw(1, 0, oversized), 0), VoiceDropReason.Oversized, struck: true, "a 161-byte frame");
-        Expect(policy.Admit(speaker, Raw(2, 1, new byte[] { 0x00, 1, 2, 3, 4, 5 }), 1_000), VoiceDropReason.InvalidPacket, struck: true,
+        Expect(policy.Admit(speaker, Raw(1, 0, oversized), 0, 0), VoiceDropReason.Oversized, struck: true, "a 161-byte frame");
+        Expect(policy.Admit(speaker, Raw(2, 1, new byte[] { 0x00, 1, 2, 3, 4, 5 }), 1_000, 0), VoiceDropReason.InvalidPacket, struck: true,
             "a frame whose header the codec refuses");
-        Expect(policy.Admit(speaker, new byte[] { 0x01, 0x05 }, 2_000), VoiceDropReason.Malformed, struck: true, "a truncated datagram");
+        Expect(policy.Admit(speaker, new byte[] { 0x03, 0x05 }, 2_000, 0), VoiceDropReason.Malformed, struck: true, "a truncated datagram");
         var relayedKind = Datagram(codec, 3, 2);
         relayedKind[0] = VoicePacket.RelayedKind;
-        Expect(policy.Admit(speaker, relayedKind, 3_000), VoiceDropReason.Malformed, struck: true, "a client posing as the relay");
-        Assert(policy.Admit(speaker, Datagram(codec, 3, 2), 4_000).Verdict == VoiceVerdict.Relay, "a valid frame still passes after them");
+        Expect(policy.Admit(speaker, relayedKind, 3_000, 0), VoiceDropReason.Malformed, struck: true, "a client posing as the relay");
+        Assert(policy.Admit(speaker, Datagram(codec, 3, 2), 4_000, 0).Verdict == VoiceVerdict.Relay, "a valid frame still passes after them");
 
         // Order: a repeat is stale and harmless; time that stands still is malformed.
-        Expect(policy.Admit(speaker, Datagram(codec, 3, 2), 5_000), VoiceDropReason.Stale, struck: false, "a repeated datagram");
-        Expect(policy.Admit(speaker, Datagram(codec, 2, 1), 6_000), VoiceDropReason.Stale, struck: false, "an older datagram");
-        Expect(policy.Admit(speaker, Datagram(codec, 4, 2), 7_000), VoiceDropReason.Malformed, struck: true, "a timestamp that does not advance");
-        Assert(policy.Admit(speaker, Datagram(codec, 5, 3), 8_000).Verdict == VoiceVerdict.Relay, "the stream carries on");
+        Expect(policy.Admit(speaker, Datagram(codec, 3, 2), 5_000, 0), VoiceDropReason.Stale, struck: false, "a repeated datagram");
+        Expect(policy.Admit(speaker, Datagram(codec, 2, 1), 6_000, 0), VoiceDropReason.Stale, struck: false, "an older datagram");
+        Expect(policy.Admit(speaker, Datagram(codec, 4, 2), 7_000, 0), VoiceDropReason.Malformed, struck: true, "a timestamp that does not advance");
+        Assert(policy.Admit(speaker, Datagram(codec, 5, 3), 8_000, 0).Verdict == VoiceVerdict.Relay, "the stream carries on");
         speaker.ResetStream(2);
-        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 9_000).Verdict == VoiceVerdict.Relay && speaker.Stream == 2,
+        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 9_000, 0).Verdict == VoiceVerdict.Relay && speaker.Stream == 2,
             "a new connection starts its sequence again, in a new stream generation");
     }
 
@@ -87,7 +87,7 @@ internal static class VoiceRelayPolicyTests
         VoiceAdmission Admit(long micros)
         {
             next += 2;
-            var admission = policy.Admit(speaker, Datagram(codec, next - 1, next - 2, pair: true), micros);
+            var admission = policy.Admit(speaker, Datagram(codec, next - 1, next - 2, pair: true), micros, 0);
             if (admission.Verdict == VoiceVerdict.Relay) relayed++;
             else dropped++;
             Assert(!admission.Struck, "datagram " + (next / 2) + " earns no strike");
@@ -107,7 +107,7 @@ internal static class VoiceRelayPolicyTests
         var verdicts = new List<VoiceAdmission>();
         for (var index = 0; index < 1_200; index++)
         {
-            verdicts.Add(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * Second / 120));
+            verdicts.Add(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * Second / 120, 0));
             if (verdicts[^1].Verdict == VoiceVerdict.AutoMute) break;
         }
 
@@ -148,7 +148,7 @@ internal static class VoiceRelayPolicyTests
             {
                 var now = index * Second / perSecond;
                 var datagram = Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair);
-                var admission = policy.Admit(speaker, datagram, now);
+                var admission = policy.Admit(speaker, datagram, now, 0);
                 if (admission.Struck && firstStrike < 0) firstStrike = now;
                 if (admission.Verdict == VoiceVerdict.AutoMute) muted = now;
                 if (admission.Verdict == VoiceVerdict.Relay) relayedBytes += datagram.Length;
@@ -180,7 +180,7 @@ internal static class VoiceRelayPolicyTests
         void Admit(long at)
         {
             next += 2;
-            var admission = policy.Admit(speaker, Datagram(codec, next - 1, next - 2, pair: true), at);
+            var admission = policy.Admit(speaker, Datagram(codec, next - 1, next - 2, pair: true), at, 0);
             Assert(!admission.Struck, "datagram " + (next / 2) + " earns no strike");
             if (admission.Verdict == VoiceVerdict.Relay) relayed++;
         }
@@ -211,17 +211,17 @@ internal static class VoiceRelayPolicyTests
         var garbage = new byte[] { 0x7F };
         for (var strike = 1; strike < 20; strike++)
         {
-            Expect(policy.Admit(speaker, garbage, strike * 1_000), VoiceDropReason.Malformed, struck: true, "strike " + strike);
+            Expect(policy.Admit(speaker, garbage, strike * 1_000, 0), VoiceDropReason.Malformed, struck: true, "strike " + strike);
         }
 
-        var muted = policy.Admit(speaker, garbage, 20_000);
+        var muted = policy.Admit(speaker, garbage, 20_000, 0);
         Assert(muted.Verdict == VoiceVerdict.AutoMute && muted.Struck, "the 20th strike within ten seconds mutes the speaker");
         Assert(speaker.IsAutoMuted(20_000) && speaker.IsMuted(20_000), "the speaker is muted automatically");
-        Expect(policy.Admit(speaker, Datagram(codec, 1, 0), 21_000), VoiceDropReason.ServerMuted, struck: false,
+        Expect(policy.Admit(speaker, Datagram(codec, 1, 0), 21_000, 0), VoiceDropReason.ServerMuted, struck: false,
             "while muted, frames are dropped on arrival and earn no strikes");
         var unmutedAt = 20_000 + (30 * Second);
         Assert(!speaker.IsMuted(unmutedAt), "the automatic mute lasts thirty seconds");
-        Assert(policy.Admit(speaker, Datagram(codec, 2, 1), unmutedAt).Verdict == VoiceVerdict.Relay, "then the speaker is heard again");
+        Assert(policy.Admit(speaker, Datagram(codec, 2, 1), unmutedAt, 0).Verdict == VoiceVerdict.Relay, "then the speaker is heard again");
 
         // A second and a third automatic mute within ten minutes remove the speaker.
         var now = unmutedAt;
@@ -231,7 +231,7 @@ internal static class VoiceRelayPolicyTests
             for (var strike = 0; strike < 20; strike++)
             {
                 now += 1_000;
-                last = policy.Admit(speaker, garbage, now);
+                last = policy.Admit(speaker, garbage, now, 0);
             }
 
             Assert(last.Verdict == (round == 2 ? VoiceVerdict.AutoMute : VoiceVerdict.Kick), "round " + round + " ends in " + last.Verdict);
@@ -242,7 +242,7 @@ internal static class VoiceRelayPolicyTests
         (policy, speaker, _) = Create();
         for (var strike = 0; strike < 100; strike++)
         {
-            Assert(policy.Admit(speaker, garbage, strike * 600_000).Verdict == VoiceVerdict.Drop, "an occasional bad frame is only dropped");
+            Assert(policy.Admit(speaker, garbage, strike * 600_000, 0).Verdict == VoiceVerdict.Drop, "an occasional bad frame is only dropped");
         }
 
         Assert(!speaker.IsMuted(100 * 600_000), "a strike every 0.6 s stays below twenty in ten seconds");
@@ -254,12 +254,12 @@ internal static class VoiceRelayPolicyTests
         speaker.ServerMuted = true;
         for (var index = 0; index < 100; index++)
         {
-            Expect(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * 100), VoiceDropReason.ServerMuted, struck: false,
+            Expect(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * 100, 0), VoiceDropReason.ServerMuted, struck: false,
                 "a muted speaker's datagram " + index);
         }
 
         speaker.ServerMuted = false;
-        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 20 * Second).Verdict == VoiceVerdict.Relay,
+        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 20 * Second, 0).Verdict == VoiceVerdict.Relay,
             "unmuted, the speaker is heard; the flood while muted spent none of the rate");
     }
 
@@ -276,7 +276,7 @@ internal static class VoiceRelayPolicyTests
             var payload = new byte[length];
             payload[0] = toc;
             next++;
-            return policy.Admit(speaker, Raw(next, next, payload), (long)next * 40_000);
+            return policy.Admit(speaker, Raw(next, next, payload), (long)next * 40_000, 0);
         }
 
         foreach (var toc in new byte[] { 0x48, 0x78, 0xF8 })
@@ -295,30 +295,35 @@ internal static class VoiceRelayPolicyTests
     {
         // Floods only just past twice a limit are cut down to the limits and never muted, because they strike too seldom.
         // Each runs for ten minutes with datagrams evenly spaced; sequences start at 16,384, so every datagram keeps the
-        // same size: two 160-byte frames make 334 bytes, one 20-byte frame 30.
+        // same size. Derive the byte counts from the wire format, including the session epoch.
         var big = new FakeVoiceCodec(160);
         var small = new FakeVoiceCodec(20);
+        var bigBytes = Datagram(big, 16_384, 16_384, pair: true, fixedIds: true).Length;
+        var smallBytes = Datagram(small, 16_384, 16_384, fixedIds: true).Length;
         foreach (var perSecond in new[] { 31, 32, 33 })
         {
             // The bitrate limit is what drops these, so the byte formula gives the first strike: 50,000 / (b - 10,000) s.
             var run = Flood(perSecond, _ => (big, true));
-            var predicted = 50_000 * Second / ((334 * perSecond) - 10_000);
+            var predicted = 50_000 * Second / ((bigBytes * perSecond) - 10_000);
             Assert(Math.Abs(run.FirstStrikeMicros - predicted) <= Second,
-                "334-byte datagrams at " + perSecond + " a second are first struck when the formula says, " + (predicted / 1_000) + " ms (" + run.Describe + ")");
+                bigBytes + "-byte datagrams at " + perSecond + " a second are first struck when the formula says, " + (predicted / 1_000) + " ms (" + run.Describe + ")");
             Assert(run.Mutes == 0 && run.WorstWindow < 20, "but never twenty times in 10 s, so never muted (" + run.Describe + ")");
             Assert(run.RelayedBytes <= (600 + 1) * 5_000, "and what passes stays within the bitrate (" + run.Describe + ")");
+            Console.WriteLine("Voice flood: " + bigBytes + " bytes at " + perSecond + "/s: " + run.Describe);
         }
 
         // One more a second is past the edge: twenty strikes fall within 10 s, and the speaker is muted.
         var past = Flood(34, _ => (big, true));
-        Assert(past.Mutes > 0 && past.FirstMuteMicros <= 50 * Second, "334-byte datagrams at 34 a second are muted within 50 s (" + past.Describe + ")");
+        Assert(past.Mutes > 0 && past.FirstMuteMicros <= 50 * Second, bigBytes + "-byte datagrams at 34 a second are muted within 50 s (" + past.Describe + ")");
+        Console.WriteLine("Voice flood: " + bigBytes + " bytes at 34/s: " + past.Describe);
 
         // Large and small datagrams in turn, 60 a second: the datagram limit drops every other one before the bitrate is
         // reached, so the bitrate allowance is never spent and nothing strikes, though the flood is about 87 kbit/s and
-        // the byte formula would put a first strike at 54 s.
+        // the byte formula alone would predict a strike, without the earlier datagram-rate drops.
         var mixed = Flood(60, index => index % 2 == 0 ? (big, true) : (small, false));
-        Assert(mixed.Strikes == 0 && mixed.Mutes == 0, "alternating 334- and 30-byte datagrams at 60 a second are never struck (" + mixed.Describe + ")");
+        Assert(mixed.Strikes == 0 && mixed.Mutes == 0, "alternating " + bigBytes + "- and " + smallBytes + "-byte datagrams at 60 a second are never struck (" + mixed.Describe + ")");
         Assert(mixed.RelayedBytes <= (600 + 1) * 5_000 && mixed.Relayed <= (600 + 1) * 30, "and what passes stays within both limits (" + mixed.Describe + ")");
+        Console.WriteLine("Voice flood: alternating " + bigBytes + "/" + smallBytes + " bytes at 60/s: " + mixed.Describe);
 
         static FloodRun Flood(int perSecond, Func<int, (FakeVoiceCodec Codec, bool Pair)> shape)
         {
@@ -334,7 +339,7 @@ internal static class VoiceRelayPolicyTests
                 var (codec, pair) = shape(index);
                 var datagram = Datagram(codec, 16_384 + (ulong)(2 * index), 16_384 + (ulong)(2 * index), pair, fixedIds: true);
                 run.OfferedBytes += datagram.Length;
-                var admission = policy.Admit(speaker, datagram, now);
+                var admission = policy.Admit(speaker, datagram, now, 0);
                 if (admission.Struck)
                 {
                     strikeTimes.Add(now);
@@ -384,14 +389,14 @@ internal static class VoiceRelayPolicyTests
         var first = fixedIds ? codec.Packet(1, 1) : codec.Packet((short)(timestamp + 1), (short)timestamp);
         var second = !pair ? Array.Empty<byte>() : fixedIds ? codec.Packet(2, 1) : codec.Packet((short)(timestamp + 2), (short)(timestamp + 1));
         var buffer = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
-        var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, first, VoiceFrameFlags.None, second);
+        var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, first, VoiceFrameFlags.None, second, 0);
         return buffer.AsSpan(0, length).ToArray();
     }
 
     private static byte[] Raw(ulong sequence, ulong timestamp, byte[] payload)
     {
         var buffer = new byte[VoicePacket.MaximumBytes(payload.Length)];
-        var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty, 0);
         return buffer.AsSpan(0, length).ToArray();
     }
 

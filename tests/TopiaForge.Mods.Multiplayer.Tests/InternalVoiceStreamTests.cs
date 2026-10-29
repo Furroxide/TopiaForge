@@ -294,6 +294,7 @@ internal static class InternalVoiceStreamTests
         var stream = voice.GetPlaybackStream(hostId);
         var calls = new (string Name, Action Call)[]
         {
+            ("CaptureSessionToken", () => _ = voice.CaptureSessionToken),
             ("Enabled", () => _ = voice.Enabled),
             ("Enabled=", () => voice.Enabled = false),
             ("Mode", () => _ = voice.Mode),

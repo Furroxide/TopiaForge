@@ -291,7 +291,7 @@ namespace TopiaForge.Multiplayer.Engine
             this.options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
-        internal VoiceAdmission Admit(VoiceSpeaker speaker, ReadOnlySpan<byte> datagram, long nowMicros)
+        internal VoiceAdmission Admit(VoiceSpeaker speaker, ReadOnlySpan<byte> datagram, long nowMicros, ulong epoch)
         {
             if (speaker.IsMuted(nowMicros)) return Dropped(VoiceDropReason.ServerMuted);
             var packetsSustained = speaker.SustainedPackets.TryTake(1, nowMicros);
@@ -309,6 +309,8 @@ namespace TopiaForge.Multiplayer.Engine
 
             // Frames are read at any size, so an oversized one is told apart from a malformed datagram.
             if (!VoicePacket.TryReadUplink(datagram, int.MaxValue, out var packet)) return Strike(speaker, VoiceDropReason.Malformed, nowMicros);
+            // Old speech must never acquire the replacement session's routing policy or sequence state.
+            if (packet.Epoch != epoch) return Dropped(VoiceDropReason.Stale);
             for (var index = 0; index < packet.Count; index++)
             {
                 var frame = packet[index];

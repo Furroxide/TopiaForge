@@ -80,7 +80,7 @@ internal static class LiveFormatFuzzTests
             var decision = policy.Evaluate(new ProviderEngine.JoinRequestContext(
                 link,
                 WireText.ToHex(fuzz.Bytes(32)),
-                new ProviderEngine.JoinRequestMessage("1.0.0", "Guest", Array.Empty<ProviderEngine.ContractEntry>(), body),
+                new ProviderEngine.JoinRequestMessage(TopiaForge.Mods.MultiplayerModule.ProtocolVersion, "Guest", Array.Empty<ProviderEngine.ContractEntry>(), body),
                 Array.Empty<ProviderEngine.ContractEntry>(),
                 1,
                 8));

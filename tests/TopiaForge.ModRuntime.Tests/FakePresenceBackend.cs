@@ -248,6 +248,8 @@ namespace TopiaForge.ModManager.TestDoubles
         /// <summary>Gets the participants the relay heard lately.</summary>
         internal HashSet<ParticipantId> Speaking { get; } = new HashSet<ParticipantId>();
 
+        public System.Threading.CancellationToken CaptureSessionToken => default;
+
         public bool Enabled { get; set; } = true;
 
         public InternalVoiceTransmitMode Mode { get; set; }

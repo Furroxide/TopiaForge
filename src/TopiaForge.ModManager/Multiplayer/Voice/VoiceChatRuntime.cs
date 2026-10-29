@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -28,6 +29,7 @@ namespace TopiaForge.ModManager.Voice
         private readonly InputBinding?[] bindings = { VoicePushToTalk.DefaultKey, VoicePushToTalk.DefaultMouseButton };
         private MultiplayerMicrophoneArbiter.Hold? hold;
         private IInternalVoiceService? applied;
+        private CancellationToken captureSession;
         private bool appliedEnabled;
         private InternalVoiceTransmitMode appliedMode = (InternalVoiceTransmitMode)(-1);
         private float appliedThreshold = float.NaN;
@@ -174,7 +176,8 @@ namespace TopiaForge.ModManager.Voice
                 return;
             }
 
-            if (!ReferenceEquals(voice, applied))
+            var changedVoice = !ReferenceEquals(voice, applied);
+            if (changedVoice)
             {
                 applied = voice;
                 appliedEnabled = false;
@@ -192,6 +195,15 @@ namespace TopiaForge.ModManager.Voice
             // voice chat off rather than talking over the game.
             var busy = arbiter.IsHeldAbove(InternalMicrophoneUse.VoiceChat);
             var cannotCheck = arbiter.NativeUnreadable;
+
+            // Unread device samples belong to the recording's original lifetime. Restart before any read, so old PCM
+            // cannot be relabelled by SubmitCapture after replacement. A higher-priority use is left to Abandon below.
+            var currentCaptureSession = voice.CaptureSessionToken;
+            if (changedVoice || currentCaptureSession != captureSession)
+            {
+                captureSession = currentCaptureSession;
+                if (!busy) capture.Close();
+            }
 
             // What the microphone recorded since the last frame goes first, under the state it was recorded in, so a release
             // keeps its last syllable. Nothing is read while another use holds the microphone: that is not voice chat's.

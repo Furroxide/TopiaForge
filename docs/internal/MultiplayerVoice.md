@@ -165,7 +165,8 @@ one older than the newest delivered is dropped, and nothing waits behind session
 
 | Field | Uplink, client to host | Relayed, host to clients |
 | --- | --- | --- |
-| Kind | `0x01` | `0x02` |
+| Kind | `0x03` | `0x04` |
+| Epoch | Varint: the reliable join/replacement epoch | The same |
 | Speaker | Absent | Varint: the host's index for the speaker |
 | Stream | Absent | Varint: the generation of the speaker's stream |
 | Sequence, timestamp | Varints, of the first frame | The same |
@@ -175,8 +176,17 @@ one older than the newest delivered is dropped, and nothing waits behind session
 A second frame's sequence and timestamp follow the first frame's by one. A reader refuses the whole datagram for an
 unknown kind, a zero speaker index, a zero sequence, a sequence or timestamp at the 64-bit maximum, unknown flags, an
 empty frame, a non-minimal varint or trailing bytes. It never throws. A one-frame relayed datagram of small numbers is
-`02 09 04 01 00 01 00 03 01 02 03`: speaker 9, stream 4, sequence 1, timestamp 0, one frame with no flags and three
-bytes of payload, so eight bytes of header; `VoicePacketTests` holds it as a vector.
+`04 00 09 04 01 00 01 00 03 01 02 03`: epoch 0, speaker 9, stream 4, sequence 1, timestamp 0, one frame with no flags and three
+bytes of payload, so nine bytes of header; `VoicePacketTests` holds it as a vector.
+
+**Replacement epochs (protocol 2).** Both directions carry the epoch announced by `JoinAccepted` or
+`SessionReplaced`. The host rejects a mismatched epoch before codec validation, stream ordering or routing; a client
+rejects it before roster lookup or delivery. Old packets cannot acquire ordinary routing when a private policy retires,
+even if either peer acknowledges first or the packet arrives after both acknowledgements. Initial admitted voice with
+the current epoch still works before acknowledgement. Epoch mismatches count as stale; format/rate bounds still apply.
+The new packet kinds independently reject legacy layouts even under a custom join policy. Protocol `2.0.0` and peer
+range `>=2.0.0 <3.0.0` are shared by the SDK, provider manifest and launcher; normal admission refuses older peers.
+There is no fallback to epoch-less voice. One extra varint is bounded by ten bytes, within the existing two-frame limits.
 
 **Stream generations.** The host gives a speaker's stream a new generation every time it starts: on every join and
 rejoin, and once for the host's own player. One counter serves every speaker, so a generation never names two streams
@@ -268,8 +278,20 @@ rate-limited and never muted: they strike too seldom, or not at all. A flood at 
 to the limit and never struck. Either way the host relays no more than the limits, so a flood that is never muted gets
 no more relayed than the limits allow any talker.
 
-Measured over the policy, with datagrams arriving evenly. The four 334-byte rows run for ten minutes, with sequences of
-three bytes:
+Current protocol-two measurements, over the existing ten-minute flood regression with evenly spaced datagrams,
+three-byte sequences/timestamps and epoch zero. Packet sizes are derived from the serializer, so the epoch byte is
+included without changing the rate limits, strike windows or timing tolerance:
+
+| Flood | First strike | Muted |
+| --- | --- | --- |
+| 335-byte datagrams, 31 a second (83 kbit/s) | After 129.032 s | Never: at most 12 strikes in any 10 s |
+| 335-byte datagrams, 32 a second (85 kbit/s) | After 69 s | Never: at most 13 strikes in any 10 s |
+| 335-byte datagrams, 33 a second (88 kbit/s) | After 47.090 s | Never: at most 18 strikes in any 10 s |
+| 335-byte datagrams, 34 a second (91 kbit/s) | After 36.235 s | After 43.941 s |
+| 335- and 31-byte datagrams in turn, 60 a second (87 kbit/s) | Never | Never |
+
+Historical protocol-one measurements below predate the epoch field and retain their original packet sizes and times.
+They are not current-format expectations. The four 334-byte rows ran for ten minutes, with three-byte sequences:
 
 | Flood | First strike | Muted |
 | --- | --- | --- |
@@ -587,18 +609,20 @@ its signed descriptor and its LAN session info, and the engine enforces it.
 - **What stays as it was.** A session that offers voice behaves, counts and sends exactly as before, its `JoinAccepted`
   byte for byte. Server mutes and listener mutes work in either kind of session: the roster and the mute sets still
   travel. Solo play offers voice, to nobody.
-- **The wire, and why the protocol stays at 1.0.0.** The setting is one byte after the join generation, `false`, written
-  only when the session offers no voice. A host that offers voice writes `JoinAccepted` exactly as before, and a reader
-  that finds nothing after the join generation reads a session that offers voice, as every earlier host did. A reader
-  never reads past the fields it knows, so one that predates the byte skips it: such a player joins a session without
-  voice as before, has whatever it sends dropped on arrival without a strike, and hears nothing, since nothing is
-  relayed. The joining checks compare major versions only (`MultiplayerSessionEngine.md`, "Protocol"), and nothing
-  branches on a peer's minor version, so a minor bump would refuse nobody and tell nobody anything; it would only move
-  the public `MultiplayerModule.ProtocolVersion`, which descriptors, LAN info and the launcher's checks all carry. No
-  released peer exists either: live sessions are still behind the developer switch. A field added to `JoinAccepted`
-  after this one needs the byte in every message, true or false, so that readers find the new field in place.
+- **The voice-offer extension.** The setting remains one byte after the join generation, `false`, written only
+  when the session offers no voice. A reader that finds nothing after the join generation reads a session that offers
+  voice. This optional field was introduced under protocol 1; protocol 2 keeps its layout while requiring the new
+  epoch-bound voice datagrams and refusing older peers at normal admission. A field added to `JoinAccepted` after
+  this one needs the byte in every message, true or false, so readers find the new field in place.
 
 ## Part 3: the voice service
+
+The service observes the engine lifetime token before capture submission and before forwarding encoded output. Every
+capture entry, end marker and encoded packet carries its original local generation. A lifetime change retires queued
+capture and output; on its next boundary the worker discards partial PCM, resampler history, voice-activation state,
+codec history and talk-spurt state without encoding an end marker. Timestamp numbering remains monotonic. An encoder
+call already running can finish without blocking the main thread, but its result retains the retired generation and
+cannot be submitted to the replacement engine. New capture resumes through the existing microphone API automatically.
 
 The provider's side of voice lives in `mods/TopiaForge.Multiplayer/Voice/`, and every type is internal. It covers
 everything between the microphone's samples and each speaker's playback samples. Part 4 supplies the Unity capture,
@@ -901,6 +925,12 @@ clip at 48 kHz, or the nearest rate the device supports, and reads only the samp
 provider still owns resampling, voice activity detection, Opus and jitter handling. No audio is written to disk.
 
 ### 4.2 Gate and arbitration
+
+Before each microphone read, the runtime compares the recording's lifetime with the voice service's
+`CaptureSessionToken`. A changed lifetime or provider closes the old recording before it can submit unread PCM;
+ordinary microphone gating then opens a fresh recording automatically under the existing consent and input state.
+The Unity clip and its unread cursor are discarded together. A higher-priority microphone use is never closed:
+voice chat abandons its recording through the existing arbiter path instead. This does not wait for the codec worker.
 
 The microphone opens only with current consent, voice enabled, and either a microphone test or permission to
 transmit. Push-to-talk also requires a held binding without text focus or binding capture; voice activation follows

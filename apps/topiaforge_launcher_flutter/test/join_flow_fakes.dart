@@ -54,7 +54,7 @@ Future<VerifiedServerDescriptor> _server({
     name: name,
     gameBuild: '2545',
     runtimeVersion: '0.1.0-rc.1',
-    protocolVersion: '1.0.0',
+    protocolVersion: TopiaForgeRuntimeVersions.multiplayerProtocolVersion,
     maxPlayers: 8,
     passwordRequired: passwordRequired,
     voice: voice,
@@ -94,7 +94,7 @@ final _environment = JoinEnvironment(
   gameBuild: '0.0.2545',
   runtimeVersion: '0.1.0-rc.1',
   sdkVersion: '0.1.0-rc.1',
-  protocolVersion: '1.0.0',
+  protocolVersion: TopiaForgeRuntimeVersions.multiplayerProtocolVersion,
   platform: 'windows',
   architecture: 'x64',
 );

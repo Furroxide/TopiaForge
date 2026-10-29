@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Multiplayer.Engine;
 
@@ -67,6 +68,8 @@ namespace TopiaForge.Multiplayer.Voice
         private float thresholdDb = VoiceActivityDetector.DefaultThresholdDb;
         private bool enabled;
         private bool transmitting;
+        private CancellationToken captureSession;
+        private long captureGeneration;
         private long lastSubmitMicros = long.MinValue;
         private long submitIntervalMicros;
         private long lastPumpMicros = long.MinValue;
@@ -100,6 +103,7 @@ namespace TopiaForge.Multiplayer.Voice
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.codec = codec ?? throw new ArgumentNullException(nameof(codec));
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            captureSession = engine.CurrentSessionToken;
             if (!engine.IsVoiceEnabled) throw new ArgumentException("The engine has no voice options.", nameof(engine));
             this.diagnostics = diagnostics;
             streamLimit = Math.Max(2, engine.Options.MaximumParticipants);
@@ -174,6 +178,7 @@ namespace TopiaForge.Multiplayer.Voice
             if (sampleRate < 8_000 || sampleRate > 192_000) throw new ArgumentOutOfRangeException(nameof(sampleRate));
             engine.RequireOwnerThread();
             if (disposed || !enabled) return;
+            ObserveCaptureSession();
             var now = clock();
 
             // An interval longer than a frame rate can be is left out, so a stall's backlog is cut to what came before it.
@@ -191,7 +196,7 @@ namespace TopiaForge.Multiplayer.Voice
             }
 
             bool added;
-            lock (inbound.Gate) added = inbound.Writable.TryAddCapture(samples, offset, count, sampleRate, now, transmitting);
+            lock (inbound.Gate) added = inbound.Writable.TryAddCapture(samples, offset, count, sampleRate, now, transmitting, captureGeneration);
             if (!added) captureOverflowSamples += count;
             worker.Signal();
         }
@@ -223,6 +228,7 @@ namespace TopiaForge.Multiplayer.Voice
         {
             if (disposed) return;
             ObserveInterval(ref lastPumpMicros, ref pumpIntervalMicros, nowMicros);
+            ObserveCaptureSession();
             ObserveSession();
             SweepUnlisted(nowMicros);
             SendEncoded(nowMicros);
@@ -316,10 +322,23 @@ namespace TopiaForge.Multiplayer.Voice
         private void EndTransmission()
         {
             if (!transmitting || !enabled) return;
+            ObserveCaptureSession();
             bool added;
-            lock (inbound.Gate) added = inbound.Writable.TryAddEndOfCapture(clock());
+            lock (inbound.Gate) added = inbound.Writable.TryAddEndOfCapture(clock(), captureGeneration);
             if (!added) captureOverflowSamples++;
             worker.Signal();
+        }
+
+        // Capture may arrive before the service pump notices a replacement. The token identifies the engine's
+        // lifetime even when a session id is reused; every queued sample and delayed result keeps its original tag.
+        private void ObserveCaptureSession()
+        {
+            var current = engine.CurrentSessionToken;
+            if (current == captureSession) return;
+            captureSession = current;
+            captureGeneration = checked(captureGeneration + 1);
+            lastSentMicros = long.MinValue;
+            worker.RetireCapture(captureGeneration);
         }
 
         private void SendEncoded(long nowMicros)
@@ -339,7 +358,7 @@ namespace TopiaForge.Multiplayer.Voice
             for (var index = 0; index < batch.Count; index++)
             {
                 ref var packet = ref batch.Packet(index);
-                if (nowMicros - packet.CapturedMicros > deadline)
+                if (packet.Generation != captureGeneration || nowMicros - packet.CapturedMicros > deadline)
                 {
                     staleFramesDropped++;
                     continue;
