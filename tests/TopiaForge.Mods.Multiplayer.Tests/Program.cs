@@ -24,6 +24,85 @@ internal static class Program
                 Console.WriteLine("Players engine: join generations, reconnect, solo and pre-flush cancellation passed.");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--map-follow-readiness")
+            {
+                SystemChannelTests.MapFollowCanHoldAfterAReplacementArrives();
+                SystemChannelTests.ReadinessHoldsDelayTheAcknowledgement();
+                Console.WriteLine("Map follow readiness passed (replacement observation, delayed acknowledgement, release, existing hold lifecycle).");
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--engine-white-box")
+            {
+                EngineWhiteBoxTests.StaleDuplicateAndOldEpochSubmissionsAreRejected();
+                EngineWhiteBoxTests.MalformedTrafficEndsOnlyTheOffendingConnection();
+                EngineWhiteBoxTests.ClientEndsWhenTheHostViolatesTheProtocol();
+                EngineWhiteBoxTests.ProtocolPrimitivesRejectMalformedInput();
+                EngineWhiteBoxTests.SoloPumpDoesNotAllocate();
+                EngineWhiteBoxTests.CatchUpStepsAreBounded();
+                EngineWhiteBoxTests.DeltasFollowTheirDeliveryKnobs();
+                EngineWhiteBoxTests.CancellationFromAnotherThreadCompletesAtTheNextPump();
+                EngineWhiteBoxTests.MismatchedContractsAreRejectedAtJoin();
+                EngineWhiteBoxTests.DepartedParticipantsExpireAfterTheGracePeriod();
+                EngineWhiteBoxTests.JoinRequestsNeedAValidDisplayName();
+                EngineWhiteBoxTests.SubmissionsWaitForTheReadyAcknowledgement();
+                EngineWhiteBoxTests.DespawnPayloadsMustDecode();
+                Console.WriteLine("Engine white-box: all 13 tests passed.");
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--engine-readiness")
+            {
+                EngineHardeningTests.UnsolicitedClockRepliesAreIgnored();
+                EngineHardeningTests.OnlyTheLatestProbeIsTimed();
+                EngineHardeningTests.ParticipantChangesReachEachClientOncePerFlush();
+                EngineHardeningTests.DepartedParticipantsMakeRoomWithinTheRecordLimit();
+                EngineHardeningTests.AJoinBeyondTheRecordLimitIsRefused();
+                EngineHardeningTests.KicksAndShutdownWaitForTheTransactionToEnd();
+                EngineHardeningTests.RateHistoryEndsWithItsValue();
+                EngineHardeningTests.NamesBeyondTheInternBudgetTravelInline();
+                EngineHardeningTests.DisposedObjectTypesRunNoInput();
+                EngineReconciliationTests.SplitFlushesReconcileOnlyAtTheirCommit();
+                EngineReconciliationTests.CancellingASentPredictionKeepsItApplied();
+                EngineReconciliationTests.ACancellationDuringAPumpWaitsForItsSettlePoint();
+                EngineReconciliationTests.ResultsQueuedBeforeAReplacementStillComplete();
+                EngineReconciliationTests.LateResultsFromAReplacedSessionMatchNothing();
+                EngineReconciliationTests.AnInputThatDespawnsItsTargetStillSucceeds();
+                EngineReconciliationTests.CommandEventsAddressTheCommandsSender();
+                EngineReconciliationTests.ReRegisteredStatesKeepTheirCanonicalValue();
+                EngineReconciliationTests.AFrameHoldsOneMaximumMessageAfterTheSoftLimit();
+                EngineOwnerTests.RetiringAnOwnerCancelsOnlyItsSubmissions();
+                EngineOwnerTests.ARegistrationOutlivedByItsFacadeIsCancelled();
+                EngineRoleTests.ASoloSessionJoinsAnotherHostAndComesBack();
+                EngineRoleTests.AnEndedClientSessionReturnsToSolo();
+                EngineRoleTests.AHostClosesItsConnectionsAndPlaysOn();
+                EngineRoleTests.RoleChangesRefuseWhatTheyCannotDo();
+                EngineRoleTests.JoinPoliciesSeeTheLinkARequestCameOver();
+                EnginePlayersTests.CancelBeforeJoinFlush();
+                HardeningRegressionTests.ASessionThatEndsMidSnapshotLeavesNothingBehind();
+                HardeningRegressionTests.AStateAdoptedThatDoesNotDecodeEndsTheSession();
+                Console.WriteLine("Engine readiness: 28 tests passed.");
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--voice-session-readiness")
+            {
+                VoiceSessionChangeTests.ASessionChangeDropsEveryJitterBuffer();
+                VoiceSessionChangeTests.AHostWhoseSessionIsReplacedDropsItsJitterBuffers();
+                VoiceSessionChangeTests.TheWorkerAppliesControlInTheOrderItWasQueued();
+                VoiceSessionChangeTests.TheWishToHearNobodyFollowsThePlayerAndNamesNobody();
+                VoiceSessionChangeTests.MutesTheEngineKeepsOutliveAnInPlaceReplacement();
+                VoiceSessionChangeTests.NamesMutedWhileJoiningStayWithTheirHost();
+                VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownSurviveAnInPlaceReplacement();
+                VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownNeverReachAnotherHost();
+                VoiceSessionChangeTests.NamesGivenWithNoHostJoinedNameNobody();
+                VoiceSessionChangeTests.NamesGivenBeforeTheNewHostListsItsPlayersNameNobodyThere();
+                VoiceSessionChangeTests.AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams();
+                Console.WriteLine("Voice session changes: 11 tests passed.");
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--voice-adjacent-readiness")
+            {
+                VoiceReadinessFocusedTests.Run();
+                return 0;
+            }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {
@@ -546,6 +625,7 @@ internal static class Program
             SystemChannelTests.MessagesFromAnEarlierSessionAreDropped();
             SystemChannelTests.ChannelsAreBoundedAndOwnedOnce();
             SystemChannelTests.HostilePeersCannotAbuseSystemMessages();
+            SystemChannelTests.MapFollowCanHoldAfterAReplacementArrives();
             SystemChannelTests.ReadinessHoldsDelayTheAcknowledgement();
             SystemChannelTests.HostsEndPlayersThatNeverBecomeReady();
             SystemChannelTests.SourcesAnswerTheSessionsLookups();

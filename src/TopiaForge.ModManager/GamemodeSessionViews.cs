@@ -52,12 +52,18 @@ namespace TopiaForge.ModManager
         public Task<OperationResult<bool>> ReturnToMainMenuAsync(CancellationToken cancellationToken = default) => owner.ReturnToMainMenuAsync(SessionId, cancellationToken);
     }
 
-    internal sealed class WorldLoadContext : IWorldLoadContext
+    internal sealed class WorldLoadContext : IWorldLoadContext, TopiaForge.Mods.Internal.IInternalMapFollowContext
     {
         private readonly SessionIdentity identity;
-        internal WorldLoadContext(SessionIdentity identity, ModContext context, ModSpawnPolicy spawn)
+        public TopiaForge.Mods.Internal.InternalMapIdentity? ExpectedMap { get; }
+        public TopiaForge.Mods.Internal.InternalMapCopy? ReadHostMap { get; }
+        public Func<OperationResult<bool>>? BeginMapHost { get; }
+        internal WorldLoadContext(SessionIdentity identity, ModContext context, ModSpawnPolicy spawn, SessionFollowPlan? follow = null, Func<OperationResult<bool>>? beginMapHost = null)
         {
             this.identity = identity;
+            BeginMapHost = beginMapHost;
+            ExpectedMap = follow?.Map;
+            ReadHostMap = follow?.ReadMap;
             Context = context;
             Transition = identity.Selection.Transition == ModTransitions.SceneReplacement ? WorldLoadTransition.SceneReplacement : WorldLoadTransition.AdditiveArena;
             SpawnPolicy = new WorldSpawnPolicy(spawn.Kind == ModSpawnPolicy.AuthoredMarkerKind ? WorldSpawnKind.AuthoredMarker : WorldSpawnKind.ProviderDefault,

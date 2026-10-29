@@ -368,10 +368,13 @@ namespace TopiaForge.ModManager.Tests
     internal sealed class FakeSessionEnvironment : IMultiplayerSessionEnvironment
     {
         private readonly RecordingSessionControl? control;
+        private readonly Func<MultiplayerRealmChange>? leaveOverride;
 
-        internal FakeSessionEnvironment(RecordingSessionControl? control)
+        internal FakeSessionEnvironment(RecordingSessionControl? control, SessionFollowStatus? follow = null, Func<MultiplayerRealmChange>? leave = null)
         {
             this.control = control;
+            Follow = follow ?? new SessionFollowStatus();
+            leaveOverride = leave;
             PhaseSource = () => Phase;
             Log = new RecordingRuntimeLog();
             Runtime = new MultiplayerRuntime(() => this.control, new MultiplayerRuntimeHost("2545", "0.2.0", Log, contentScheduler: new ManualWorkScheduler()), Log)
@@ -439,7 +442,7 @@ namespace TopiaForge.ModManager.Tests
         public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings, string? launchRequestId = null) =>
             Runtime.Join(target, settings, launchRequestId);
 
-        public MultiplayerRealmChange Leave() => Runtime.Leave();
+        public MultiplayerRealmChange Leave() => leaveOverride?.Invoke() ?? Runtime.Leave();
 
         /// <summary>One pump of the composition root, as ModRuntime runs it each frame: the realm follows the control's role.</summary>
         internal void Pump() => Runtime.BeforeModsUpdate(0.016f);
@@ -472,7 +475,7 @@ namespace TopiaForge.ModManager.Tests
         public SessionPhase LocalPhase => Phase;
 
         /// <summary>Gets the follow status the connecting overlay reads, which a test moves as a session follower would.</summary>
-        public SessionFollowStatus Follow { get; } = new SessionFollowStatus();
+        public SessionFollowStatus Follow { get; }
 
         /// <summary>Gets or sets the session this game was launched to host or join, which the screens take once.</summary>
         internal ILaunchedSession? Launched { get; set; }

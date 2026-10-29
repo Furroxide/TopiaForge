@@ -166,6 +166,26 @@ internal static class SystemChannelTests
         That(harness.Diagnostics.Count(EngineDiagnosticKind.ProtocolViolation) == 2 && !chat.TryReceive(out _), "an oversized payload ends that connection");
     }
 
+    internal static void MapFollowCanHoldAfterAReplacementArrives()
+    {
+        using var harness = new EngineHarness(MultiplayerProcessKind.Interactive);
+        var guest = harness.AddClient("alpha");
+        harness.Flush();
+        harness.Host.ReplaceSession(new MultiplayerSessionId("new-map"), new SessionSeed(7));
+        harness.Host.FlushOutbound();
+        harness.Network.DeliverDue(harness.Tick + 1);
+        guest.Engine.Pump(harness.NowMicros);
+        That(guest.Engine.SessionReplacementsReceived == 1 && guest.Engine.SessionState == MultiplayerSessionState.Synchronizing,
+            "a small replacement cannot become Ready before runtime follow observes its new stream");
+        var hold = guest.Engine.HoldReadiness();
+        guest.Engine.FlushOutbound();
+        harness.Flush();
+        That(guest.Engine.IsAwaitingLocalReadiness && !harness.Host.IsParticipantReady(new ParticipantId("alpha")),
+            "map acquisition holds the replacement on both peers");
+        hold.Dispose(); harness.Flush();
+        That(harness.Host.IsParticipantReady(new ParticipantId("alpha")), "validated map readiness completes the replacement");
+    }
+
     internal static void ReadinessHoldsDelayTheAcknowledgement()
     {
         using var harness = new EngineHarness(MultiplayerProcessKind.Interactive);

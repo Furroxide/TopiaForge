@@ -41,10 +41,20 @@ For a bundled map, use `content.file` instead of `content.map`, mark the file fo
 copying to its declared package path and pack it normally. The runtime checks the
 packed SHA-256 before parsing it. TF1011 explains invalid declarations at build time.
 
-This release enables map worlds in single player. Opening one to multiplayer is
-refused until session content identity and transfer support are available. Import,
-spawn, cancellation and cleanup use the shared world transition owner. Native catalog
-lore and respawn integration still require verification against the installed game.
+Map worlds work in single player and multiplayer. Follow automatically carries the
+running map id, selected scene, packed SHA-256, size and project revision. A joining
+player uses the verified hash cache, then a matching published copy, then the host's
+copy. Host copies are limited to 4 MiB, sent over the authenticated session in
+16 KiB chunks, and validated before native parsing. They are cached by hash without
+replacing the current published copy. Packaged maps still use verified package bytes.
+
+Restarting a map resolves the publication again and starts new multiplayer streams
+before importing or starting the mode. Every player follows the new revision. Loading
+holds readiness, reports download progress, and cancels on leaving or a newer world.
+A reconnect can reuse its verified cache. Relay-only uses the same session channel;
+no peer address or new author networking code is needed. Import, spawn, cancellation
+and cleanup use the shared world transition owner. Native catalog lore and respawn
+integration still require verification against the installed game.
 
 ## Authored entities and anchors
 

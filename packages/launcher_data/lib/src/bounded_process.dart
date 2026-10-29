@@ -76,6 +76,7 @@ Future<BoundedProcessResult> runBoundedProcess(
   int maxStderrBytes = _defaultOutputLimitBytes,
   Duration gracefulTerminationTimeout = const Duration(seconds: 1),
   Duration forcedTerminationTimeout = const Duration(seconds: 2),
+  void Function(Future<int> exitCode)? observeExit,
 }) async {
   _validateBounds(
     timeout: timeout,
@@ -96,6 +97,9 @@ Future<BoundedProcessResult> runBoundedProcess(
     mode: ProcessStartMode.normal,
   );
   final exitFuture = process.exitCode;
+  // A supervising output owner must retain ownership even when termination
+  // fails and this function returns before the child has actually exited.
+  observeExit?.call(exitFuture);
   final stdout = _BoundedOutput(maxStdoutBytes);
   final stderr = _BoundedOutput(maxStderrBytes);
   final failure = Completer<BoundedProcessFailure>();

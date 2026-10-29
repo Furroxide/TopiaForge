@@ -25,7 +25,43 @@ namespace TopiaForge.ModManager.Tests
             AnnouncesWhatTheHostIsIn(root + "-announces");
             AnArenaCarriesItsLevelAndSpawn(root + "-arena");
             AFullWindowIsCaughtUp(root + "-window");
+            MapRestartReplacesBeforeMode(root + "-map");
             Console.WriteLine("SessionFollowHostTests passed.");
+        }
+
+        private static void MapRestartReplacesBeforeMode(string root)
+        {
+            using var rig = new HostRig(root);
+            var guest = rig.AddGuest("guest");
+            rig.Frame(); rig.Received(guest);
+            var copies = new[] { MapDocumentTests.Project(), MapDocumentTests.Project("\"entry\":{\"components\":{\"spawn-location\":{}},\"name\":\"New entry\"}") };
+            foreach (var bytes in copies)
+            {
+                var before = rig.Net.Host.Channel(InternalSystemChannelKind.SceneFollow)!.Generation;
+                SessionFixture.Load = (context, _) =>
+                {
+                    var mapContext = (IInternalMapFollowContext)context;
+                    That(mapContext.BeginMapHost!().Succeeded, "map load uses the runtime's replacement seam");
+                    That(rig.Net.Host.Channel(InternalSystemChannelKind.SceneFollow)!.Generation != before,
+                        "map replacement precedes import and controller startup");
+                    return Task.FromResult(OperationResult<IWorldInstance>.Success(new MapWorld(bytes)));
+                };
+                rig.Test.Launch();
+                rig.Frame();
+                var announced = rig.Received(guest).Single();
+                That(announced.Map!.Matches(bytes), "restart announces the exact running map revision");
+                That(rig.Test.Hosted.RunningMapCopy(announced.SessionId!).Span.SequenceEqual(bytes), "host serves only its running revision");
+                That(rig.Test.Hosted.RunningMapCopy("ffffffffffffffffffffffffffffffff").IsEmpty, "another world session cannot retrieve map bytes");
+            }
+        }
+
+        private sealed class MapWorld : IInternalMapWorldInstance
+        {
+            internal MapWorld(byte[] bytes) { Identity = SessionMapStoreTests.Identity(bytes); PackedMap = bytes; }
+            public InternalMapIdentity? Identity { get; }
+            public ReadOnlyMemory<byte> PackedMap { get; }
+            public WorldReadiness Readiness { get; } = new WorldReadiness(new WorldSceneIdentity(-31, "UgcPlay"), TransformState.Identity);
+            public void Dispose() { }
         }
 
         private static void AnnouncesWhatTheHostIsIn(string root)

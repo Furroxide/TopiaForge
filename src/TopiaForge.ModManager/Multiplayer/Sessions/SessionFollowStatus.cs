@@ -179,6 +179,13 @@ namespace TopiaForge.ModManager.Sessions
             }
         }
 
+        internal static FollowFailure Map(ModErrorCode code) => Make(FollowFailureKind.WorldLoadFailed, code,
+            "The host's map could not be loaded",
+            code == ModErrorCode.Unavailable ? "The host's map revision is unavailable or too large to send. Ask the host to restart the round."
+            : code == ModErrorCode.Conflict ? "The map copy did not match the host's revision. Join again; if it repeats, ask the host to restart."
+            : code == ModErrorCode.TimedOut ? "Downloading the host's map stopped. Check the connection and join again."
+            : "The host's map could not be validated or built. Ask the host to restart the round, then join again.", true);
+
         private static FollowFailure Make(FollowFailureKind kind, ModErrorCode code, string title, string message, bool retryable) =>
             new FollowFailure(kind, code, title, message, retryable, kind == FollowFailureKind.SynchronizeFailed ? ConnectingStep.Synchronizing
                 : kind == FollowFailureKind.ParticipantFailed ? ConnectingStep.Spawning : ConnectingStep.LoadingWorld);

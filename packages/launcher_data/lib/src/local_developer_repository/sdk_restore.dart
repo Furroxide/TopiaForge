@@ -191,7 +191,17 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
     return version;
   }
 
-  Future<SdkReferencePack?> _buildSourceSdkPack({
+  Future<SdkReferencePack?> _buildSourceSdkPack({String? requiredVersion}) {
+    if (!Directory(p.join(_repositoryRoot.path, 'src')).existsSync()) {
+      return Future.value();
+    }
+    return withSourceSdkBuildLock(
+      _repositoryRoot,
+      () => _buildOwnedSourceSdkPack(requiredVersion: requiredVersion),
+    );
+  }
+
+  Future<SdkReferencePack?> _buildOwnedSourceSdkPack({
     String? requiredVersion,
   }) async {
     final projects = _sourceSdkProjects();
@@ -210,7 +220,7 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
     if (missing.isNotEmpty) {
       final dotnet = await _dotnetSdkResolver(_repositoryRoot);
       for (final project in missing) {
-        final build = await runBoundedProcess(
+        final build = await runOwnedSourceSdkBuild(
           dotnet.executable,
           [
             'build',

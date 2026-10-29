@@ -40,8 +40,11 @@ namespace TopiaForge.ModManager
         /// </param>
         internal SessionFollowPlan(string hostSessionId, LaunchRequest request, string gamemodeId, string worldId, string? worldFamilyId,
             string transition, string? baseScene, TransformState? baseSpawn, Func<CancellationToken, Task<OperationResult<bool>>> synchronize,
-            string? launchRequestId = null)
+            string? launchRequestId = null, TopiaForge.Mods.Internal.InternalMapIdentity? map = null,
+            TopiaForge.Mods.Internal.InternalMapCopy? readMap = null)
         {
+            Map = map;
+            ReadMap = readMap;
             HostSessionId = LaunchContractValues.Token(hostSessionId, nameof(hostSessionId));
             Request = request ?? throw new ArgumentNullException(nameof(request));
             GamemodeId = LaunchContractValues.Identifier(gamemodeId, nameof(gamemodeId));
@@ -60,6 +63,8 @@ namespace TopiaForge.ModManager
         /// Gets the request the launcher-planned join this follow belongs to reports under, or null: only then does the follow
         /// publish its progress and its session's end to the launcher, under that request (WS3.8).
         /// </summary>
+        internal TopiaForge.Mods.Internal.InternalMapIdentity? Map { get; }
+        internal TopiaForge.Mods.Internal.InternalMapCopy? ReadMap { get; }
         internal string? LaunchRequestId { get; }
 
         /// <summary>Gets the host's world session id, which this game's session takes, so every consumer of the world session sees the host's.</summary>

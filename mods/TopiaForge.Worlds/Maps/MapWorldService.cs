@@ -33,8 +33,17 @@ namespace TopiaForge.Worlds.Maps
         public async Task<OperationResult<IWorldInstance>> LoadAsync(IWorldLoadContext context, InternalMapWorldRequest request, CancellationToken token)
         {
             if (disposed) return OperationResult<IWorldInstance>.Failure(ModErrorCode.Cancelled, "Map loading stopped.");
-            if (context.Context is IInternalReplicationContext network && network.Replication.Realm != InternalNetRealm.Offline)
-                return OperationResult<IWorldInstance>.Failure(ModErrorCode.Unavailable, "Map worlds currently support single player. Leave the multiplayer session before playing this map.");
+            var follow = context as IInternalMapFollowContext;
+            var expected = follow?.ExpectedMap;
+            var joined = context.Context is IInternalReplicationContext network && network.Replication.Realm == InternalNetRealm.Client;
+            if ((expected != null && (request.PublishedId != expected.MapId || (request.SceneId != null && request.SceneId != expected.SceneId)))
+                || (joined && request.PublishedId != null && expected == null))
+                return OperationResult<IWorldInstance>.Failure(ModErrorCode.Conflict, "The host's map selection does not match this world.");
+            var hosting = follow?.BeginMapHost?.Invoke();
+            if (hosting != null && !hosting.Succeeded)
+                return OperationResult<IWorldInstance>.Failure(hosting.ErrorCode, "The map could not begin a new multiplayer world. Try again.");
+            InternalMapIdentity? identity = null;
+            byte[] packed = Array.Empty<byte>();
             using var progress = new MapLoadProgress(context.Context.Ui);
             string? safeFailure = null;
             OperationResult<WorldReadiness> Failure(ModErrorCode code, string? message)
@@ -51,7 +60,10 @@ namespace TopiaForge.Worlds.Maps
                         if (request.PublishedId != null)
                         {
                             store ??= new MapStore(cache, new MapEndpointPolicy(backend.PublicBase), transport);
-                            var acquired = await store.GetAsync(request.PublishedId, backend.ResolvePublished(request.PublishedId), resources.StoppingToken, progress.Download);
+                            var uri = backend.ResolvePublished(request.PublishedId);
+                            var acquired = expected == null
+                                ? await store.GetAsync(request.PublishedId, uri, resources.StoppingToken, progress.Download)
+                                : await store.GetExactAsync(expected, uri, follow!.ReadHostMap, resources.StoppingToken, progress.Download);
                             if (!acquired.TryGetValue(out var value)) return Failure(acquired.ErrorCode, acquired.ErrorMessage);
                             document = value.Document;
                             if (value.Offline)
@@ -72,14 +84,22 @@ namespace TopiaForge.Worlds.Maps
                         }
                         resources.ThrowIfStopping();
                         progress.Building();
-                        if (request.SceneId != null) document.Select(request.SceneId);
-                        var prepared = await backend.PrepareAsync(document, request.SceneId, "map:" + (request.PublishedId ?? "package"),
+                        var selectedScene = expected?.SceneId ?? request.SceneId;
+                        if (selectedScene != null) document.Select(selectedScene);
+                        var prepared = await backend.PrepareAsync(document, selectedScene, "map:" + (request.PublishedId ?? "package"),
                             preparation.Scene, resources.StoppingToken);
                         if (!prepared.TryGetValue(out var transaction)) return Failure(prepared.ErrorCode, prepared.ErrorMessage);
                         using (transaction)
                         {
                             resources.ThrowIfStopping();
                             var scene = document.Select(transaction.SceneId);
+                            if (selectedScene != null && scene.Id != selectedScene)
+                                return Failure(ModErrorCode.Conflict, "The imported map scene did not match the selected scene.");
+                            if (request.PublishedId != null)
+                            {
+                                identity = new InternalMapIdentity(request.PublishedId, scene.Id, document.Sha256, document.Packed.Length, document.Modified);
+                                packed = document.Packed;
+                            }
                             var spawn = scene.Spawn(context.SpawnPolicy.Kind == WorldSpawnKind.AuthoredMarker ? context.SpawnPolicy.MarkerName : null);
                             if (!(context.Context is IInternalSceneTransitionContext transitions))
                                 return Failure(ModErrorCode.Unavailable, "The shared map import service is unavailable. Update TopiaForge.");
@@ -117,7 +137,7 @@ namespace TopiaForge.Worlds.Maps
                     // replace failed native cleanup with an ordinary cancelled result.
                     catch (Exception) { throw new InvalidOperationException("The map could not be built or cleaned up."); }
                 });
-            return result.TryGetValue(out var instance) ? OperationResult<IWorldInstance>.Success(new MapInstance(instance)) : OperationResult<IWorldInstance>.Failure(result.ErrorCode,
+            return result.TryGetValue(out var instance) ? OperationResult<IWorldInstance>.Success(new MapInstance(instance, identity, packed)) : OperationResult<IWorldInstance>.Failure(result.ErrorCode,
                 result.ErrorCode == ModErrorCode.External && result.ErrorMessage != safeFailure
                     ? "The map could not be built or cleaned up. Update TopiaForge or restart the game."
                 : result.ErrorCode == ModErrorCode.Cancelled ? "Map loading was cancelled."
@@ -126,7 +146,10 @@ namespace TopiaForge.Worlds.Maps
         private sealed class MapInstance : IInternalMapWorldInstance
         {
             private readonly IWorldInstance inner;
-            internal MapInstance(IWorldInstance inner) { this.inner = inner; }
+            internal MapInstance(IWorldInstance inner, InternalMapIdentity? identity, byte[] packed)
+            { this.inner = inner; Identity = identity; PackedMap = packed; }
+            public InternalMapIdentity? Identity { get; }
+            public ReadOnlyMemory<byte> PackedMap { get; }
             public WorldReadiness Readiness => inner.Readiness;
             public void Dispose() => inner.Dispose();
         }

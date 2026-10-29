@@ -23,8 +23,8 @@ Playing uses the same validated download, byte-exact cache, native import, spawn
 and cleanup path as a [declared map world](MapWorlds.md). A map played through one
 route can use the same saved bytes through the other. Offline playback requires
 a previously downloaded copy. An unpublished map or missing scene gives the same
-failure as a declared map. Maps currently support single player; a loaded map
-cannot be promoted to a multiplayer host.
+failure as a declared map. Loaded maps can be opened to multiplayer; joined players
+automatically follow the same validated revision through the shared map store.
 
 Removing a source removes its reference only. Use **Settings → Clear downloaded
 maps** while the game is closed to remove downloaded bytes. Changes to saved

@@ -25,10 +25,10 @@ namespace TopiaForge.ModManager.Tests
                 Corpus(repo);
                 await Discovery(root.FullName);
                 await SharedStore(root.FullName);
-                HostRestriction(root.FullName);
-                await OnlineRefusal(root.FullName);
+                MapHosting(root.FullName);
+                await JoinedIdentityRequired(root.FullName);
                 await PublishedMapCacheIdentityTests.RunAsync(root.FullName);
-                Console.WriteLine("Published map discovery passed: shared corpus, bounded identities/listing, safe refusal, shared static/discovered cache, offline reuse, cancellation, ownership and host restriction.");
+                Console.WriteLine("Published map discovery passed: shared corpus, bounded identities/listing, safe refusal, shared static/discovered cache, offline reuse, cancellation, ownership and map hosting.");
             }
             finally { root.Delete(true); }
         }
@@ -115,7 +115,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static BuiltinWorldFixture Fixture(string root) => new BuiltinWorldFixture
         { SpawnPolicy = new WorldSpawnPolicy(WorldSpawnKind.ProviderDefault), SceneTransitions = new MapWorldServiceTests.Transitions(), MapCacheDirectory = root };
-        private static void HostRestriction(string root)
+        private static void MapHosting(string root)
         {
             using var fixture = new SessionFixture(Path.Combine(root, "host"));
             var parentLibrary = ((IInternalMapStorageContext)fixture.Parent).PublishedMapLibraryPath;
@@ -128,21 +128,23 @@ namespace TopiaForge.ModManager.Tests
                 return Task.FromResult(OperationResult<IWorldInstance>.Success(new RestrictedWorld()));
             };
             fixture.Launch();
-            Assert(!fixture.Hosted.CanHostCurrentWorld, "a nonstatic map instance cannot become a multiplayer host");
+            Assert(fixture.Hosted.CanHostCurrentWorld, "a nonstatic map instance can become a multiplayer host");
         }
-        private static async Task OnlineRefusal(string root)
+        private static async Task JoinedIdentityRequired(string root)
         {
             var net = new LoopbackNetPair(); var log = new RecordingRuntimeLog();
-            var runtime = new MultiplayerRuntime(() => net.Host, new MultiplayerRuntimeHost("2545", "0.2.0", log), log);
+            var guest = net.AddPlayer("guest");
+            var runtime = new MultiplayerRuntime(() => guest, new MultiplayerRuntimeHost("2545", "0.2.0", log), log);
             try
             {
-                Assert(runtime.Connect() && net.Host.StartHosting(new InternalHostSettings("Map fixture", 4)).Succeeded, "loopback host starts");
+                Assert(runtime.Connect(), "client runtime connects");
+                net.StartHosting(); net.Join(guest);
                 runtime.BeforeModsUpdate(0.016f); runtime.AfterModsUpdate(0.016f);
                 using var fixture = new SessionFixture(Path.Combine(root, "online"), replication: new MultiplayerReplication(runtime));
                 var backend = new MapWorldServiceTests.Backend(); using var service = new MapWorldService(new MapCache(Path.Combine(root, "never")), new Transport(), () => backend);
                 var result = await service.LoadAsync(new LoadContext(fixture.Parent), new InternalMapWorldRequest("example", "scene", null), default);
-                Assert(result.ErrorCode == ModErrorCode.Unavailable && result.ErrorMessage.Contains("single player", StringComparison.Ordinal)
-                    && backend.Imported == 0, "the shared service refuses multiplayer before native or download work");
+                Assert(result.ErrorCode == ModErrorCode.Conflict
+                    && backend.Imported == 0, "a joined published world without the host identity refuses before native or download work");
             }
             finally { runtime.Disconnect(); }
         }
@@ -159,7 +161,10 @@ namespace TopiaForge.ModManager.Tests
             public WorldSpawnPolicy SpawnPolicy => new WorldSpawnPolicy(WorldSpawnKind.ProviderDefault);
         }
         private sealed class RestrictedWorld : IInternalMapWorldInstance
-        { public WorldReadiness Readiness { get; } = new WorldReadiness(new WorldSceneIdentity(-12, "World"), TransformState.Identity); public void Dispose() { } }
+        {
+            public InternalMapIdentity? Identity => null; public ReadOnlyMemory<byte> PackedMap => ReadOnlyMemory<byte>.Empty;
+            public WorldReadiness Readiness { get; } = new WorldReadiness(new WorldSceneIdentity(-12, "World"), TransformState.Identity); public void Dispose() { }
+        }
         private sealed class Capture : IInternalMapWorldService
         {
             internal int Calls; internal InternalMapWorldRequest? Request;

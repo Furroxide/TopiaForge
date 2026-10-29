@@ -8,10 +8,13 @@ using TopiaForge.Mods.Testing;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IInternalSceneTransitionContext, IInternalWorldSessionContext, IInternalSessionContentContext, IDisposable, IWorldDiscoveryContext, IInternalMapStorageContext
+    internal sealed class BuiltinWorldFixture : IWorldLoadContext, IModContext, IInternalWorldRuntimeContext, IInternalSceneTransitionContext, IInternalWorldSessionContext, IInternalSessionContentContext, IDisposable, IInternalMapFollowContext, IWorldDiscoveryContext, IInternalMapStorageContext
     {
         internal readonly FakeModContext Fake = new FakeModContext();
         internal readonly NativeFixture Native = new NativeFixture();
+        public InternalMapIdentity? ExpectedMap { get; set; }
+        public InternalMapCopy? ReadHostMap { get; set; }
+        public Func<OperationResult<bool>>? BeginMapHost { get; set; }
         public string SessionId => "session-built-in";
         public string TargetId => "example.worlds.target";
         public string WorldId { get; set; } = "example.worlds.world";

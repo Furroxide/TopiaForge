@@ -206,6 +206,8 @@ internal static class HardeningRegressionTests
             network.Now = 1;
             network.DeliverDue(1);
             Engine.Pump(20_000);
+            // Allow the deferred Ready transition without advancing time or delivering another frame.
+            Engine.Pump(20_000);
         }
     }
 

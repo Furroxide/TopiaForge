@@ -22,6 +22,7 @@ import 'safe_zip_archive.dart';
 import 'secure_http.dart';
 import 'sdk_package_references.dart';
 import 'sdk_reference_pack.dart';
+import 'source_sdk_build_lock.dart';
 
 part 'local_developer_repository/io_helpers.dart';
 part 'local_developer_repository/template_copy.dart';
