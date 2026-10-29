@@ -29,6 +29,7 @@ internal static class EngineClientFuzzTests
     private static List<string> Run(int seed, bool record)
     {
         var fuzz = new FuzzMutator(seed);
+        var lifetimes = new Random(seed ^ 0x4c494645);
         var outcomes = new List<string>();
         var reached = 0L;
         var delivered = 0L;
@@ -37,7 +38,7 @@ internal static class EngineClientFuzzTests
         {
             for (var round = 0; round < FuzzMutator.Iterations(1_000); round++)
             {
-                var client = new FuzzedClient(fuzz, round);
+                var client = new FuzzedClient(fuzz, lifetimes, round);
                 outcomes.Add(client.Play());
                 delivered += client.Frames;
                 reached += client.Reach;
@@ -61,6 +62,7 @@ internal static class EngineClientFuzzTests
     private sealed class FuzzedClient
     {
         private readonly FuzzMutator fuzz;
+        private readonly Random lifetimes;
         private readonly VirtualEngineTransport network = new(new VirtualLinkConditions());
         private readonly RecordingDiagnostics diagnostics = new();
         private readonly SessionEngine engine;
@@ -73,9 +75,10 @@ internal static class EngineClientFuzzTests
         private bool solo;
         private bool crateRegistered;
 
-        internal FuzzedClient(FuzzMutator fuzz, int round)
+        internal FuzzedClient(FuzzMutator fuzz, Random lifetimes, int round)
         {
             this.fuzz = fuzz;
+            this.lifetimes = lifetimes;
             var pair = network.Connect("client");
             engine = SessionEngine.CreateClient(
                 new EngineOptions
@@ -83,6 +86,7 @@ internal static class EngineClientFuzzTests
                     StepRateHz = 60,
                     Diagnostics = diagnostics,
                     CallbackFailures = EngineCallbackFailureMode.Propagate,
+                    NewParticipantLifetime = NextLifetime,
                     AfterClientSessionEnds = _ =>
                     {
                         solo = true;
@@ -301,15 +305,24 @@ internal static class EngineClientFuzzTests
 
         private ParticipantEntry[] Participants()
         {
-            var entries = new List<ParticipantEntry> { new("client", "Client", true, false, MultiplayerConnectionQuality.Unknown, null, null) };
-            if (fuzz.Chance(80)) entries.Add(new ParticipantEntry("host", "Host", true, true, MultiplayerConnectionQuality.Excellent, fuzz.Random.Next(200), "key"));
+            var entries = new List<ParticipantEntry> { new("client", "Client", true, false, MultiplayerConnectionQuality.Unknown, null, null, NextLifetime()) };
+            if (fuzz.Chance(80)) entries.Add(new ParticipantEntry("host", "Host", true, true, MultiplayerConnectionQuality.Excellent, fuzz.Random.Next(200), "key", NextLifetime()));
             for (var count = fuzz.Random.Next(3); count > 0; count--)
             {
                 entries.Add(new ParticipantEntry("p" + fuzz.Random.Next(9), "Player", fuzz.Chance(50), fuzz.Chance(10),
-                    (MultiplayerConnectionQuality)fuzz.Random.Next(5), fuzz.Chance(50) ? null : fuzz.Random.Next(60_001), null));
+                    (MultiplayerConnectionQuality)fuzz.Random.Next(5), fuzz.Chance(50) ? null : fuzz.Random.Next(60_001), null, NextLifetime()));
             }
 
             return entries.ToArray();
+        }
+
+        // Lifetimes remain distinct semantic input, including when the engine returns to solo play. Keep their
+        // seeded entropy separate so generating them never changes the hostile-frame choices or mutations.
+        private Guid NextLifetime()
+        {
+            var bytes = new byte[16];
+            lifetimes.NextBytes(bytes);
+            return new Guid(bytes);
         }
     }
 
