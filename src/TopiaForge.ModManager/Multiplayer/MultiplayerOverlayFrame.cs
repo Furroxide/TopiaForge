@@ -5,7 +5,7 @@ namespace TopiaForge.ModManager
 {
     /// <summary>
     /// The multiplayer part of the manager overlay's frame, in the order the overlay runs it: the sessions presenter, then
-    /// voice chat, then what shows outside the tab (the prompts, the toasts and the connecting overlay), then the MULTIPLAYER
+    /// voice chat and player nametags, then what shows outside the tab (the prompts, the toasts and the connecting overlay), then the MULTIPLAYER
     /// tab while it shows. Each stage runs through the <see cref="MultiplayerFrameGuard"/>, so a stage that fails is logged
     /// once, redacted, and the stages after it, and the rest of the plugin's frame, run on. A frame that does not fail
     /// allocates nothing.
@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager
         private readonly Action outside;
         private readonly Action tab;
         private readonly Action? voiceTick;
+        private readonly Action? nametags;
         private float deltaTime;
 
         /// <param name="guard">Where a stage's failure is caught and logged.</param>
@@ -37,8 +38,10 @@ namespace TopiaForge.ModManager
         /// <param name="outside">Shows the prompts, the toasts and the connecting overlay.</param>
         /// <param name="tab">Ticks the MULTIPLAYER tab while it shows.</param>
         /// <param name="voice">Voice chat, which ticks every frame with the frame's seconds, overlay open or not; null for none.</param>
-        internal MultiplayerOverlayFrame(MultiplayerFrameGuard guard, MultiplayerSessionsPresenter presenter, Action outside, Action tab, Action<float>? voice = null)
+        /// <param name="nametags">Updates the presence labels independently of interactive overlays; null for none.</param>
+        internal MultiplayerOverlayFrame(MultiplayerFrameGuard guard, MultiplayerSessionsPresenter presenter, Action outside, Action tab, Action<float>? voice = null, Action? nametags = null)
         {
+            this.nametags = nametags;
             this.guard = guard ?? throw new ArgumentNullException(nameof(guard));
             if (presenter == null) throw new ArgumentNullException(nameof(presenter));
             this.outside = outside ?? throw new ArgumentNullException(nameof(outside));
@@ -53,6 +56,7 @@ namespace TopiaForge.ModManager
             deltaTime = frameSeconds;
             guard.Run(PresenterStage, presenterTick);
             if (voiceTick != null) guard.Run(VoiceStage, voiceTick);
+            if (nametags != null) guard.Run("player nametags", nametags);
             guard.Run(OutsideStage, outside);
             guard.Run(TabStage, tab);
         }
