@@ -14,12 +14,58 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             RobotSpeechNativeLifetimeTests.Run();
+            NativeRobotSpeechHostTests.Run();
+            NativeSpeechContextTests.Run();
+            NativeSpeechOwnershipTests.Run();
+            PlaybackAssociations();
+            OwnerStop();
             PrivateEarshot(); Ownership(); MalformedAndDuplicates(); Lifetimes(); Recovery(); Quotas();
             WorldAndStream(); FreshJoin(); NativeRouting(); WorldWithdrawal(); Offline(); ProviderLifetime(); ExpiryAndBackpressure();
             Console.WriteLine("Robot speech: 13 focused groups passed.");
         }
         private static void Check(bool value, string reason)
         { if (!value) throw new InvalidOperationException("Robot speech: " + reason); }
+
+        internal static void OwnerStop()
+        {
+            using var rig = new RobotSpeechRig();
+            var body = rig.Canonical;
+            var current = body.PlaybackCurrent!;
+            rig.Owner.Lifetime.BeginStop();
+            Console.WriteLine("Consuming owner BeginStop: body alive=" + body.IsAlive + ", association current=" + current());
+            Check(body.IsAlive && !current() && body.PlaybackStopping.IsCancellationRequested,
+                "stopping owner must retire playback and cancel its token before body/state cleanup");
+            using var other = new RobotSpeechRig();
+            var retained = other.Canonical;
+            var stillOwned = retained.PlaybackCurrent!;
+            var record = other.World.Host.Runtime.Spawns.Find(retained)!;
+            other.World.Host.Runtime.Spawns.Remove(record);
+            Check(retained.IsAlive && !other.Owner.Lifetime.IsStopping && !stillOwned(),
+                "lost ledger authority must retire playback even with a live consumer, body and provider state");
+            Console.WriteLine("Live consuming context with removed ledger: body alive=True, association current=False.");
+        }
+
+        private static void PlaybackAssociations()
+        {
+            using var rig = new RobotSpeechRig();
+            var host = rig.Canonical;
+            var replica = rig.Guests[0].Body;
+            var prior = host.PlaybackCurrent!;
+            Check(prior() && replica.PlaybackCurrent!(), "host and receiver canonical associations are current");
+            var other = new AuthorityMod(rig.World.Host, ModExecutionContext.GamemodeServer);
+            using var otherLifetime = other.Lifetime;
+            typeof(RobotReplication).GetMethod("BindSpeech", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .Invoke(rig.Host.Robots.Provider, new object[] { host, other.Seam });
+            Check(!prior() && !host.PlaybackCurrent!(), "a foreign consuming context cannot borrow the existing live ledger record");
+            typeof(RobotReplication).GetMethod("BindSpeech", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .Invoke(rig.Host.Robots.Provider, new object[] { host, rig.Owner.Seam });
+            Check(host.PlaybackCurrent!(), "the current ledger owner can bind a new generation");
+            rig.Host.Robots.Provider.Forget(host.Id);
+            rig.Guests[0].Robots.Provider.Forget(replica.Id);
+            Check(host.IsAlive && replica.IsAlive && !host.PlaybackCurrent!() && !replica.PlaybackCurrent!(),
+                "canonical withdrawal invalidates playback even while native bodies remain alive");
+            Console.WriteLine("Speech associations: host, receiver, consuming-context rebind and live-body withdrawal passed.");
+        }
 
         private static void PrivateEarshot()
         {

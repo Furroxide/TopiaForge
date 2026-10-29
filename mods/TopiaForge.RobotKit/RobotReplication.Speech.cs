@@ -13,6 +13,7 @@ namespace TopiaForge.RobotKit
         OperationResult<string> VoiceIdentity();
         Task<OperationResult<bool>> PlaySpeechAsync(string voice, string text, CancellationToken token);
         void BindSpeech(Func<string, CancellationToken, Task<OperationResult<bool>>> route);
+        void BindSpeechPlayback(object association, Func<bool> isCurrent, CancellationToken ownerStopping = default);
     }
 
     internal sealed partial class RobotReplication : IInternalSpeechProvider
@@ -20,9 +21,28 @@ namespace TopiaForge.RobotKit
         private void BindSpeech(IRobotAgent agent, IRuntimeReplication replication)
         {
             if (agent is IRobotNativeSpeech native)
+            {
+                BindPlayback(states[agent.Id], replication);
                 native.BindSpeech((text, token) => replication is IInternalEntitySpeech speech
                     ? speech.SayAsync(agent, RobotReplicationWire.Kind, text, token)
                     : Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Robot speech routing is unavailable.")));
+            }
+        }
+
+        private void BindPlayback(State state, IRuntimeReplication? consumer)
+        {
+            var association = new object();
+            state.SpeechAssociation = association;
+            state.SpeechConsumer = consumer;
+            var owner = consumer as IInternalEntitySpeech;
+            var ownerStopping = owner?.SpeechStoppingToken ?? default;
+            if (state.Agent is IRobotNativeSpeech native)
+                native.BindSpeechPlayback(association, () => states.TryGetValue(state.Agent.Id, out var current)
+                    && ReferenceEquals(current, state) && state.Agent.IsAlive
+                    && ReferenceEquals(state.SpeechAssociation, association) && ReferenceEquals(state.SpeechConsumer, consumer)
+                    && (consumer == null ? state.IsReplica : owner != null && !ownerStopping.IsCancellationRequested
+                        && (consumer.Realm == InternalNetRealm.Client || owner.IsCurrentSpeechOwner(state.Agent, RobotReplicationWire.Kind))),
+                    ownerStopping);
         }
 
         private IRobotNativeSpeech? Speech(IEntity entity) => states.TryGetValue(entity.Id, out var state)

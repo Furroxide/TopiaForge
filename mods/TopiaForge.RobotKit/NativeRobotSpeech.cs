@@ -1,81 +1,89 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using Cysharp.Threading.Tasks;
 using TopiaForge.Mods;
-using TopiaForge.Mods.Interop.Unity;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.RobotKit
 {
-    // Intercept only RobotKit-owned heads. Every original native author call takes the consuming context's route.
-    internal sealed class NativeRobotSpeech : IDisposable
+    // Provider-owned associations. Native signatures and interception belong exclusively to the runtime host.
+    internal sealed class NativeRobotSpeech : IDisposable, IInternalNativeSpeechRouter
     {
         private static readonly Dictionary<AgentHead, RobotAgent> agents = new Dictionary<AgentHead, RobotAgent>();
-        [ThreadStatic] private static bool playing;
-        private readonly IHarmonyLease lease;
-        internal static bool IsInstalled { get; private set; }
-        private NativeRobotSpeech(IHarmonyLease lease) { this.lease = lease; }
+        private static NativeRobotSpeech? current;
+        private IInternalNativeSpeechLease? lease;
+        internal static bool IsInstalled => current?.lease?.IsAvailable == true;
         internal static void Register(AgentHead head, RobotAgent agent) => agents[head] = agent;
-        internal static void Release(AgentHead head) => agents.Remove(head);
+        internal static void Release(AgentHead head, RobotAgent agent)
+        {
+            if (agents.TryGetValue(head, out var registered) && ReferenceEquals(registered, agent)) agents.Remove(head);
+        }
 
         internal static void Install(IModContext context)
         {
-            IHarmonyLease? lease = null;
+            if (current != null) throw new InvalidOperationException("Robot speech already has a provider.");
+            var provider = new NativeRobotSpeech();
             try
             {
-                lease = context.CreateHarmonyLease("robot-speech");
-                var simple = typeof(AgentHead).GetMethod("Say", new[] { typeof(string), typeof(HintGroup), typeof(TaskGraph),
-                    typeof(CancellationToken), typeof(FMODAudioClipAsset), typeof(bool) });
-                var named = typeof(AgentHead).GetMethod("Say", new[] { typeof(string), typeof(string), typeof(HintGroup), typeof(TaskGraph),
-                    typeof(CancellationToken), typeof(FMODAudioClipAsset), typeof(bool) });
-                if (simple == null || named == null) throw new InvalidOperationException();
-                lease.Patch(simple, prefix: typeof(NativeRobotSpeech).GetMethod(nameof(Say), BindingFlags.NonPublic | BindingFlags.Static));
-                lease.Patch(named, prefix: typeof(NativeRobotSpeech).GetMethod(nameof(SayNamed), BindingFlags.NonPublic | BindingFlags.Static));
-                context.Lifetime.Track(new NativeRobotSpeech(lease));
-                IsInstalled = true;
+                var host = (context as IInternalNativeSpeechContext)?.NativeSpeech;
+                if (host == null) throw new InvalidOperationException();
+                provider.lease = host.Install(provider);
+                current = provider;
+                context.Lifetime.Track(provider);
             }
             catch (Exception)
             {
-                lease?.Dispose(); IsInstalled = false;
+                provider.Dispose();
                 context.Logger.Warn("Robot speech bindings are unavailable; restart with compatible native speech bindings before retrying.");
             }
         }
-        private static bool Say(AgentHead __instance, string text, CancellationToken ct, FMODAudioClipAsset overrideSynth,
-            bool subtitlesOnly, ref UniTask<AgentHead.SayResult> __result)
+
+        public bool TryRoute(object head, string text, CancellationToken token, bool supported,
+            out Task<OperationResult<bool>>? result)
         {
-            if (playing || !agents.TryGetValue(__instance, out var agent)) return true;
-            __result = overrideSynth != null || subtitlesOnly ? UniTask.FromResult(AgentHead.SayResult.InvalidTarget) : Route(agent, text, ct);
-            return false;
-        }
-        private static bool SayNamed(AgentHead __instance, string text, CancellationToken ct, FMODAudioClipAsset overrideSynth,
-            bool subtitlesOnly, ref UniTask __result)
-        {
-            if (playing || !agents.TryGetValue(__instance, out var agent)) return true;
-            __result = overrideSynth != null || subtitlesOnly ? UniTask.CompletedTask : RouteNamed(agent, text, ct);
-            return false;
-        }
-        private static async UniTask<AgentHead.SayResult> Route(RobotAgent agent, string text, CancellationToken token)
-        {
+            result = null;
+            if (!(head is AgentHead native) || !agents.TryGetValue(native, out var agent)) return false;
             try
             {
-                var result = await agent.RouteSpeech(text, token);
-                return result.TryGetValue(out var heard) ? heard ? AgentHead.SayResult.Ok : AgentHead.SayResult.TooFar : AgentHead.SayResult.InvalidTarget;
+                result = supported ? agent.RouteSpeech(text, token)
+                    : Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "This native speech form is unsupported."));
             }
-            catch (Exception) { return AgentHead.SayResult.InvalidTarget; }
+            catch (Exception)
+            {
+                result = Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Native robot speech routing is unavailable."));
+            }
+            return true;
         }
-        private static async UniTask RouteNamed(RobotAgent agent, string text, CancellationToken token) => await Route(agent, text, token);
 
-        internal static async Task Play(AgentHead head, string text, CancellationToken token)
+        public bool IsCurrent(object head, object association) => head is AgentHead native
+            && agents.TryGetValue(native, out var agent) && agent.OwnsSpeechAssociation(association);
+        public CancellationToken AssociationStopping(object head, object association) => head is AgentHead native
+            && agents.TryGetValue(native, out var agent) && agent.OwnsSpeechAssociation(association)
+                ? agent.SpeechStoppingToken : new CancellationToken(true);
+
+        internal static IInternalNativeSpeechPlayback? BindPlayback(AgentHead head, RobotAgent agent, object association)
         {
-            UniTask task;
-            // Only the initial native entry bypasses routing. No callback, native task graph or audio enters a packet.
-            var previous = playing; playing = true;
-            try { task = head.Say(head.CurrentSpeakerName, text, HintGroup.FromAssets(Array.Empty<HintAsset>()), new TaskGraph("Robot speech"), token, null, false); }
-            finally { playing = previous; }
-            await task;
+            if (!agents.TryGetValue(head, out var registered) || !ReferenceEquals(registered, agent))
+                throw new InvalidOperationException("The native head belongs to another robot.");
+            return IsInstalled ? current!.lease!.Register(head, association) : null;
         }
-        public void Dispose() { IsInstalled = false; agents.Clear(); NativeRobotVoice.Clear(); lease.Dispose(); }
+
+        public void Dispose()
+        {
+            // Retain associations if unpatch fails: the reserved runtime host rejects owned calls until retry.
+            if (lease == null) OnStopped();
+            else lease.Dispose();
+        }
+
+        public void OnStopped()
+        {
+            if (ReferenceEquals(current, this))
+            {
+                current = null;
+                agents.Clear();
+                NativeRobotVoice.Clear();
+            }
+        }
     }
 }

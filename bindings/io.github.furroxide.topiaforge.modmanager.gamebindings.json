@@ -707,6 +707,182 @@
       "criticality": "Critical",
       "feature": "Native world player placement",
       "sourceRef": "mods/Shared/NativePlayerTeleport.cs"
+    },
+    {
+      "id": "robotkit.speech.speaker",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "member": "CurrentSpeakerName",
+      "returnType": "System.String",
+      "requireReadable": true,
+      "isStatic": false
+    },
+    {
+      "id": "robotkit.speech.say",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "member": "Say",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "HintGroup",
+          "constrained": true
+        },
+        {
+          "type": "TaskGraph",
+          "constrained": true
+        },
+        {
+          "type": "System.Threading.CancellationToken",
+          "constrained": true
+        },
+        {
+          "type": "FMODAudioClipAsset",
+          "constrained": true
+        },
+        {
+          "type": "System.Boolean",
+          "constrained": true
+        }
+      ],
+      "returnType": "Cysharp.Threading.Tasks.UniTask<AgentHead+SayResult>",
+      "exactParameters": true,
+      "isPublic": true,
+      "isStatic": false
+    },
+    {
+      "id": "robotkit.speech.say.named",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "member": "Say",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "HintGroup",
+          "constrained": true
+        },
+        {
+          "type": "TaskGraph",
+          "constrained": true
+        },
+        {
+          "type": "System.Threading.CancellationToken",
+          "constrained": true
+        },
+        {
+          "type": "FMODAudioClipAsset",
+          "constrained": true
+        },
+        {
+          "type": "System.Boolean",
+          "constrained": true
+        }
+      ],
+      "returnType": "Cysharp.Threading.Tasks.UniTask",
+      "exactParameters": true,
+      "isPublic": true,
+      "isStatic": false
+    },
+    {
+      "id": "robotkit.speech.hints",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "HintGroup",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "member": "FromAssets",
+      "parameters": [
+        {
+          "type": "System.Collections.Generic.IEnumerable<HintAsset>",
+          "constrained": true
+        }
+      ],
+      "returnType": "HintGroup",
+      "exactParameters": true,
+      "isPublic": true,
+      "isStatic": true
+    },
+    {
+      "id": "robotkit.speech.taskgraph",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "TaskGraph",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "isPublic": true,
+      "isStatic": false
+    },
+    {
+      "id": "robotkit.speech.result.ok",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead+SayResult",
+      "member": "Ok",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Native speech result mapping",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "expectedOrdinal": 0
+    },
+    {
+      "id": "robotkit.speech.result.toofar",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead+SayResult",
+      "member": "TooFar",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Native speech result mapping",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "expectedOrdinal": 1
+    },
+    {
+      "id": "robotkit.speech.result.invalidtarget",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead+SayResult",
+      "member": "InvalidTarget",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Native speech result mapping",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "expectedOrdinal": 2
     }
   ]
 }

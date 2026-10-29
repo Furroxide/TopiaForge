@@ -8,6 +8,8 @@ namespace TopiaForge.Mods.Internal
     internal interface IInternalEntitySpeech
     {
         Task<OperationResult<bool>> SayAsync(IEntity entity, string kind, string text, CancellationToken cancellationToken);
+        bool IsCurrentSpeechOwner(IEntity entity, string kind);
+        CancellationToken SpeechStoppingToken { get; }
     }
 
     internal interface IInternalSpeechAgent

@@ -57,6 +57,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 namespace UnityEngine {
  public class Object {
   public bool Destroyed; public static int DestroyCalls;
@@ -76,6 +77,7 @@ public class AgentHead : UnityEngine.Object { }
 namespace TopiaForge.Mods {
  public class OperationResult<T> { public static OperationResult<T> Success(T value) => new(); }
 }
+namespace TopiaForge.Mods.Internal { internal interface IInternalNativeSpeechPlayback : IDisposable { } }
 namespace TopiaForge.RobotKit {
  internal static class NativeRobotSpeech {
   /* registry */
@@ -143,6 +145,11 @@ namespace TopiaForge.RobotKit {
         internal string Voice = new string('a', 64);
         internal readonly List<CancellationToken> SpeechTokens = new List<CancellationToken>();
         internal Func<string, CancellationToken, Task<OperationResult<bool>>>? Route;
+        internal object? PlaybackAssociation;
+        internal Func<bool>? PlaybackCurrent;
+        internal CancellationToken PlaybackStopping;
+        public void BindSpeechPlayback(object association, Func<bool> isCurrent, CancellationToken ownerStopping = default)
+        { PlaybackAssociation = association; PlaybackCurrent = isCurrent; PlaybackStopping = ownerStopping; }
         public bool SpeechVisible => IsAlive && Visible;
         public OperationResult<string> VoiceIdentity() => MissingVoice
             ? OperationResult<string>.Failure(ModErrorCode.Unavailable, "No voice binding.") : OperationResult<string>.Success(Voice);
