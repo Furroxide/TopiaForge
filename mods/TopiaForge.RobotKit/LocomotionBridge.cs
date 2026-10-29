@@ -14,12 +14,6 @@ namespace TopiaForge.RobotKit
     // referenced; every entry point degrades to a safe default so a renamed/missing symbol never throws.
     internal static class LocomotionBridge
     {
-        public enum WalkPoll
-        {
-            Pending,
-            Done
-        }
-
         public enum Gait
         {
             Walk,
@@ -63,11 +57,6 @@ namespace TopiaForge.RobotKit
         private static FieldInfo? sprintingSpeedField;       // LocomotionController.sprintingSpeed
         private static FieldInfo? turnSpeedField;            // LocomotionController.turnSpeed
 
-        // Memoized from the first awaiter's runtime type. Load-bearing assumption: every BeginWalk goes through
-        // the same WalkSession.Walk -> UniTask<ActionSuccess>, so all awaiters share one type. If a future
-        // overload ever returns a differently-shaped awaiter, resolve these per-type instead.
-        private static PropertyInfo? awaiterIsCompleted;     // UniTask<ActionSuccess>.Awaiter.IsCompleted
-        private static MethodInfo? awaiterGetResult;         // UniTask<ActionSuccess>.Awaiter.GetResult()
         private static Component? cachedPathfinder;
 
         // Reachability/walkability reflection (RoboPath), resolved lazily on first use and independent of the walk
@@ -613,44 +602,9 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        // Poll a walk started by BeginWalk. Pending until the native walk task finishes (success, cancellation,
-        // retries exhausted, or any fault are all treated as Done — the caller decides whether to restart).
-        public static WalkPoll PollWalk(object awaiter)
-        {
-            try
-            {
-                var awaiterType = awaiter.GetType();
-                awaiterIsCompleted ??= awaiterType.GetProperty("IsCompleted", BindingFlags.Public | BindingFlags.Instance);
-                if (awaiterIsCompleted == null)
-                {
-                    return WalkPoll.Done;
-                }
-
-                if (awaiterIsCompleted.GetValue(awaiter) is not bool completed || !completed)
-                {
-                    return WalkPoll.Pending;
-                }
-
-                // UniTask sources are pooled/versioned: call GetResult exactly once, then drop the awaiter.
-                awaiterGetResult ??= awaiterType.GetMethod("GetResult", BindingFlags.Public | BindingFlags.Instance);
-                try
-                {
-                    awaiterGetResult?.Invoke(awaiter, null);
-                }
-                catch (Exception ex)
-                {
-                    // Cancellation/retry/fault all complete the walk; the caller restarts as appropriate.
-                    RobotKitDiagnostics.ReportOnce("native walk completion", ex);
-                }
-
-                return WalkPoll.Done;
-            }
-            catch (Exception ex)
-            {
-                RobotKitDiagnostics.ReportOnce("walk result inspection", ex);
-                return WalkPoll.Done;
-            }
-        }
+        // Completion retains the native success/ignore distinction; cancelled intents cannot arrive.
+        public static NativeWalkCompletion.Result PollWalk(object awaiter, bool cancelled = false) =>
+            NativeWalkCompletion.Poll(awaiter, cancelled);
 
         // Best-effort override of the native gait speed (the field matching the active gait) and turn speed.
         // Zero leaves the prefab's serialized value untouched.

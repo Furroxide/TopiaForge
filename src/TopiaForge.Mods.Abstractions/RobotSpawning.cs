@@ -85,7 +85,7 @@ namespace TopiaForge.Mods
         /// <summary>
         /// Which robot type (prefab) to spawn — an <see cref="RobotTypeDescriptor.Id"/> from
         /// <see cref="IRobotAgentService.RobotTypes"/>. <c>null</c> (default) spawns the default type. An unknown
-        /// id logs a warning and falls back to the default rather than failing the spawn.
+        /// id returns Unavailable without spawning a replacement body.
         /// </summary>
         public string? RobotTypeId { get; }
     }

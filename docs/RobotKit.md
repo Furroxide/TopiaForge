@@ -77,6 +77,37 @@ position rewrite. A scene transition or native player recreation can invalidate 
 check `IsAlive`, call `TryGetPlayerEntity` again, and rebind the target when that happens. Keep a
 position-based behavior as the graceful fallback when the optional capability is absent.
 
+## NPCs in imported map worlds
+
+Use the same RobotKit spawn service after the imported world's scene and navigation are ready.
+Resolve it through the consuming `Context`, so the runtime retains that context's authority and lifetime.
+For shared NPCs, spawn from the gamemode server controller. Brains run on the host; replicated bodies
+stay dormant. Entity references, late joins, pose replication and consuming-scope cleanup are automatic.
+Authors do not register a second replica factory or send spawn packets.
+
+Preflight the required cast against `RobotTypes` in the loaded scene and retain its descriptors.
+Pass the selected descriptor's `Id` as `robotTypeId`. An omitted type selects the default;
+an explicit unavailable type returns `Unavailable`, without silently substituting another robot.
+Discovery describes loaded native prefabs, not a promise that every named character exists in every map.
+Robot01 and CopBot have navigated sampled imported-map routes. MuniciPal discovery and spawning
+remain unqualified: report it unavailable if absent, rather than relabeling the default robot.
+
+`FindReachableSpawnAsync` automatically links cancellation to the consuming lifetime; an optional
+caller token can end the search sooner. Check its result, then spawn on collision-clear ground at
+the returned position. Check `Spawn` before issuing `MoveTo`.
+Retain and dispose the returned agent when its behavior ends; world replacement or scope teardown
+must retire it. An unreachable route needs a bounded retry or an explicit unavailable-order state.
+
+`HasReachedTarget` accepts a successful native walk completion as well as proximity within the
+horizontal stop threshold (at least 0.1 metres). The adapter trusts successful native completion
+even just outside the requested distance, without increasing the author's 0.75-metre stop distance.
+Ignored results, faults and cancelled/replaced intents do not count as native arrival.
+Reissuing the same destination preserves arrival; a changed destination starts a new intent.
+The existing 0.5-metre release hysteresis allows pursuit to resume when the target moves away.
+`IsMoving` remains true while a native walk is still pending, including while it settles near a target.
+
+This spawn path does not import an entity overlay or add robot speech delivery.
+
 ## Deterministic Robotopia gameplay first
 
 Remote brain text is untrusted presentation. Drive Robotopia state only from bounded, validated fields

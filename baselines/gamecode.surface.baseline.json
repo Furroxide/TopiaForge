@@ -1,5 +1,5 @@
 {
-  "capturedUtc": "2026-10-27T06:26:07.5626706Z",
+  "capturedUtc": "2026-10-28T14:59:49.6896990Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
   "gameVersion": "0.0.2545",
@@ -252,8 +252,100 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "001e7246e5a7d49a63f735088a60188429ece723caca06bbce17d65fa0c3f74b",
+  "surfaceContentHash": "12b1752dd3fee10b840abef275451627b321612cabaa16bb6af687805a58ce87",
   "types": {
+    "GameCode|ActionSuccess": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": false,
+          "parameters": [
+            "System.String",
+            "System.Boolean"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ignore",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "message",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "ActionSuccess",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "Ignore",
+          "parameters": [],
+          "returnType": "ActionSuccess"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "Success",
+          "parameters": [
+            "System.String",
+            "System.Object"
+          ],
+          "returnType": "ActionSuccess"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "SuccessRaw",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "ActionSuccess"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "SuccessWithFollowUp",
+          "parameters": [
+            "System.String",
+            "System.Object"
+          ],
+          "returnType": "ActionSuccess"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "ShouldIgnore",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
+        }
+      ],
+      "simpleName": "ActionSuccess",
+      "status": "Resolved",
+      "typeKey": "GameCode|ActionSuccess"
+    },
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [

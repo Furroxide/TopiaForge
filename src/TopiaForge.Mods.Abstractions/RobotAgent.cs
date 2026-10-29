@@ -39,7 +39,10 @@ namespace TopiaForge.Mods
 
         /// <summary>
         /// <c>true</c> when the most recent <see cref="MoveTo"/>/<see cref="Chase"/> intent is satisfied — the
-        /// robot is within <see cref="StopDistance"/> of its target.
+        /// native walk completed successfully, or the robot is within the horizontal stop distance
+        /// (at least 0.1 metres). Native path sampling may finish just outside that distance. Cancellation,
+        /// ignored results and faults do not signal arrival. Arrival releases when the target moves more
+        /// than 0.5 metres beyond the stop threshold.
         /// </summary>
         bool HasReachedTarget { get; }
 
@@ -53,7 +56,7 @@ namespace TopiaForge.Mods
         /// <summary>Optional best-effort override of the native turn speed in degrees per second; <c>0</c> keeps the prefab default.</summary>
         float TurnSpeed { get; }
 
-        /// <summary>How close (metres) to the target counts as arrived; the native walk stops there.</summary>
+        /// <summary>Requested native stop distance in metres; path sampling can complete slightly outside it.</summary>
         float StopDistance { get; }
 
         /// <summary>Which native speed tier the robot moves at (walk/run/sprint).</summary>

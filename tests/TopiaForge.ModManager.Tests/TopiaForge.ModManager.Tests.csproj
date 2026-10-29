@@ -78,6 +78,8 @@
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RoboApiClient.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotKitLog.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotKitDiagnostics.cs" />
+    <Compile Include="../../mods/TopiaForge.RobotKit/NativeWalkCompletion.cs" />
+    <Compile Include="../../mods/TopiaForge.RobotKit/RobotPrefabSelection.cs" />
     <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConfig.Defaults.cs" />
     <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConfig.Validation.cs" />

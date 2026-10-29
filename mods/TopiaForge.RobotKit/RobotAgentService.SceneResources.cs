@@ -49,31 +49,11 @@ namespace TopiaForge.RobotKit
             return catalog != null && catalog.Count > 0 ? catalog[0].Prefab : null;
         }
 
-        // The requested robot type's prefab; an unknown/stale id logs once and falls back to the default type
-        // (index 0) rather than failing the spawn.
+        // An explicit type is a requirement, including on replicas. Never substitute another body.
         private GameObject? ResolvePrefabForType(string? robotTypeId)
         {
             var catalog = ResolveCachedCatalog();
-            if (catalog == null || catalog.Count == 0)
-            {
-                return null;
-            }
-
-            if (string.IsNullOrWhiteSpace(robotTypeId))
-            {
-                return catalog[0].Prefab;
-            }
-
-            foreach (var candidate in catalog)
-            {
-                if (string.Equals(candidate.Id, robotTypeId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return candidate.Prefab;
-                }
-            }
-
-            logger.Warn("RobotKit: unknown robot type '" + robotTypeId + "' — spawning the default type instead.");
-            return catalog[0].Prefab;
+            return RobotPrefabSelection.Select(catalog, robotTypeId, candidate => candidate.Id)?.Prefab;
         }
 
         private IReadOnlyList<RobotPrefabCandidate>? ResolveCachedCatalog()
