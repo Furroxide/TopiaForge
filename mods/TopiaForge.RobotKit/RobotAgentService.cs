@@ -136,7 +136,9 @@ namespace TopiaForge.RobotKit
             {
                 return OperationResult<IRobotAgent>.Failure(
                     ModErrorCode.Unavailable,
-                    "No spawnable robot prefab is available in this scene.");
+                    string.IsNullOrWhiteSpace(request.RobotTypeId)
+                        ? "No spawnable robot prefab is available in this scene."
+                        : "The requested robot type is unavailable in this scene.");
             }
 
             EnsureRoots();

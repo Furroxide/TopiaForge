@@ -28,6 +28,8 @@ namespace TopiaForge.ModManager.Tests
             { CommunicationRuntimeTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--replica-motion-rejections") { ReplicaMotionRejectionTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--replica-state-review") { ReplicaStateReviewTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--robotkit-native-navigation")
+            { RobotNativeNavigationTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--first-party-local-robots")
             { FirstPartyLocalRobotTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--first-party-replication")
@@ -288,6 +290,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--robot-personality-bindings", StringComparison.Ordinal))
             {
                 RobotPersonalityBindingSurfaceTests.Run();
+                RobotNativeNavigationTests.Run();
                 return 0;
             }
 
@@ -375,6 +378,7 @@ namespace TopiaForge.ModManager.Tests
                 OverrideTests.Run();
                 ConversationTests.Run();
                 RobotPersonalityBindingSurfaceTests.Run();
+                RobotNativeNavigationTests.Run();
                 ObjectiveRunnerTests.Run();
                 SandboxProgramDirectorTests.Run();
                 ModServiceRegistryTests.Run();
@@ -591,6 +595,7 @@ namespace TopiaForge.ModManager.Tests
                 ConversationTests.Run();
                 ConversationDirectorTests.Run();
                 RobotPersonalityBindingSurfaceTests.Run();
+                RobotNativeNavigationTests.Run();
                 ObjectiveRunnerTests.Run();
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();

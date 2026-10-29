@@ -974,7 +974,7 @@
       "matchMode": "Uncheckable",
       "criticality": "Critical",
       "feature": "Walk completion polling",
-      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:591",
+      "sourceRef": "mods/TopiaForge.RobotKit/NativeWalkCompletion.cs",
       "returnType": "System.Boolean"
     },
     {
@@ -986,7 +986,7 @@
       "matchMode": "Uncheckable",
       "criticality": "Critical",
       "feature": "Walk result extraction",
-      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:603",
+      "sourceRef": "mods/TopiaForge.RobotKit/NativeWalkCompletion.cs",
       "parameters": [],
       "returnType": "ActionSuccess"
     },
@@ -1234,6 +1234,18 @@
       "sourceRef": "mods/TopiaForge.RobotKit/RobotCosmeticBodies.cs",
       "returnType": "System.String",
       "isStatic": true
+    },
+    {
+      "id": "robotkit.property.actionsuccess.shouldignore",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "ActionSuccess",
+      "member": "ShouldIgnore",
+      "matchMode": "DynamicInstance",
+      "criticality": "Critical",
+      "feature": "Native walk arrival result",
+      "sourceRef": "mods/TopiaForge.RobotKit/NativeWalkCompletion.cs",
+      "returnType": "System.Boolean"
     }
   ]
 }

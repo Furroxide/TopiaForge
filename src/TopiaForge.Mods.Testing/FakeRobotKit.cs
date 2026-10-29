@@ -113,6 +113,15 @@ namespace TopiaForge.Mods.Testing
                 return OperationResult<IRobotAgent>.Failure(failure, "The configured fake spawn failed.");
             }
 
+            if (!string.IsNullOrWhiteSpace(request.RobotTypeId))
+            {
+                var found = false;
+                foreach (var type in RobotTypes)
+                    if (string.Equals(type.Id, request.RobotTypeId, StringComparison.OrdinalIgnoreCase)) found = true;
+                if (!found) return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable,
+                    "The requested robot type is unavailable.");
+            }
+
             var agent = new FakeRobotAgent(
                 "fake-robot-" + (++serial).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 request,
