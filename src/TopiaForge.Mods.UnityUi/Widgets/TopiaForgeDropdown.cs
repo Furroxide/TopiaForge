@@ -119,6 +119,9 @@ namespace TopiaForge.Mods.UnityUi
             templateScroll.viewport = viewportRect;
             templateScroll.content = contentRect;
             templateScroll.horizontal = false;
+            templateScroll.vertical = true;
+            // Match ordinary kit scroll views: the Unity default moves only one pixel per wheel unit.
+            templateScroll.scrollSensitivity = 28f;
             templateScroll.movementType = ScrollRect.MovementType.Clamped;
             templateGo.SetActive(false);
 

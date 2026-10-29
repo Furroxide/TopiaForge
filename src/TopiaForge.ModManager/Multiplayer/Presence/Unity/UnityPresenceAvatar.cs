@@ -33,6 +33,7 @@ namespace TopiaForge.ModManager
         private readonly CapsuleCollider collider;
         private readonly GameObject capsule;
         private readonly Transform capsuleTransform;
+        private Material? capsuleMaterial;
         private GameObject? body;
         private IEntity? entity;
         private bool crouching;
@@ -124,6 +125,8 @@ namespace TopiaForge.ModManager
             if (disposed) return;
             disposed = true;
             if (root != null) UnityEngine.Object.Destroy(root);
+            if (capsuleMaterial != null) UnityEngine.Object.Destroy(capsuleMaterial);
+            capsuleMaterial = null;
         }
 
         private void Shape(float height)
@@ -136,10 +139,29 @@ namespace TopiaForge.ModManager
             capsuleTransform.localScale = new Vector3(Radius * 2f, height / 2f, Radius * 2f);
         }
 
-        private static void Tint(GameObject shape, PresenceTint tint)
+        private void Tint(GameObject shape, PresenceTint tint)
         {
             var renderer = shape.GetComponent<Renderer>();
             if (renderer == null) return;
+            // CreatePrimitive supplies a built-in-pipeline material. Colour overrides cannot make its
+            // shader render in HDRP. Use the same opaque shader as generated Worlds geometry, and own
+            // this material explicitly: destroying the GameObject does not destroy runtime materials.
+            var shader = Shader.Find("HDRP/Lit");
+            if (shader != null && shader.isSupported)
+            {
+                capsuleMaterial = new Material(shader)
+                {
+                    name = "TopiaForge Player Capsule",
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+                renderer.sharedMaterial = capsuleMaterial;
+            }
+            else
+            {
+                // Keep the capsule visible so an unavailable shader is observable, never a hidden peer.
+                Debug.LogError("TopiaForge: the player capsule requires a supported HDRP/Lit shader.");
+            }
+
             var block = new MaterialPropertyBlock();
             renderer.GetPropertyBlock(block);
             var colour = new UnityEngine.Color(tint.Red, tint.Green, tint.Blue, 1f);
