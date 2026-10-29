@@ -122,7 +122,7 @@ retry a fresh line after recovery. Delivery is best effort: full windows, expire
 do not replay speech. Local completion does not acknowledge remote audio. Native subtitle-only or
 pre-recorded-clip overrides are outside this replicated speech contract.
 
-See [the private speech contract](internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
+See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/c43ed92e963b0f662996eb6649f412e1d9176485/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
 
 ## Deterministic Robotopia gameplay first
 
