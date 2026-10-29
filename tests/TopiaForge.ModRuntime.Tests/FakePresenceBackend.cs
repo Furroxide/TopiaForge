@@ -117,7 +117,7 @@ namespace TopiaForge.ModManager.TestDoubles
     }
 
     /// <summary>One avatar in the fake engine: where it was placed, how it animated and what body it wore.</summary>
-    internal sealed class FakeAvatar : IPresenceAvatarObject
+    internal sealed class FakeAvatar : IPresenceAvatarObject, IPresenceAvatarPresentation
     {
         private readonly FakePresenceBackend engine;
 
@@ -128,6 +128,10 @@ namespace TopiaForge.ModManager.TestDoubles
             Tint = tint;
             Entity = new FakeEntity("avatar-" + index, () => Feet);
         }
+
+        internal AvatarAppearance? Appearance;
+        internal bool PoweredDown;
+        public void Present(AvatarAppearance appearance, bool poweredDown) { Appearance = appearance; PoweredDown = poweredDown; }
 
         internal int Index { get; }
 

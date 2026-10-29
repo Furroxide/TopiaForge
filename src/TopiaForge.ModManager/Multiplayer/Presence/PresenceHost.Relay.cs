@@ -49,6 +49,7 @@ namespace TopiaForge.ModManager
             TakeOwnPose(nowMicros);
             var open = presence.Channel;
             if (open == null) return;
+            presence.SendPresentations(open);
             if (presence.Roster.Version != rosterSent) BroadcastRoster(open);
             var all = presence.Peers;
             for (var index = 0; index < all.Count; index++)

@@ -112,6 +112,7 @@ namespace TopiaForge.ModManager
                 replication.Ui = gameplay.Ui;
                 playerContext = this.replicationServices.Players?.Bind(
                     Identity.Id, NetProfile.NetworkClass == ModNetworkClass.Shared, Logger, Lifetime, LocalPlayer, gameplay.Ui, inputActivity);
+                if (playerContext != null) playerContext.AppearanceProfile = NetProfile;
                 SceneTransitions = gameplay.SceneTransitions;
                 WorldRuntime = gameplay.WorldRuntime;
                 authoredMapInterop = gameplay.UnityInterop;

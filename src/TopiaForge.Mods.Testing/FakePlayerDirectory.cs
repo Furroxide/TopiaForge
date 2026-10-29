@@ -61,6 +61,7 @@ namespace TopiaForge.Mods.Testing
             if (id.Value == "local") throw new InvalidOperationException("A solo directory keeps its local player.");
             if (!states.TryGetValue(id, out var state)) return false;
             WorldView.RemovePlayer(id);
+            RetireAppearance(id);
             states.Remove(id);
             records.RemoveAll(record => record.Id.Equals(id)); Refresh();
             // As in the game, a player who leaves answers no modal, so each one it was asked reports a cancellation.
@@ -68,7 +69,7 @@ namespace TopiaForge.Mods.Testing
             return true;
         }
         /// <summary>Replaces the participant list generation, even if every id and key is unchanged.</summary>
-        public void ReplaceGeneration() { Check(); foreach (var id in states.Keys) WorldView.RemovePlayer(id); generation++; Refresh(); }
+        public void ReplaceGeneration() { Check(); foreach (var id in states.Keys) { WorldView.RemovePlayer(id); RetireAppearance(id); } generation++; Refresh(); }
         /// <summary>Gets a present player's configurable game services.</summary>
         public FakePlayerState State(ParticipantId id) => states.TryGetValue(id, out var state) ? state : throw new ArgumentException("The player is absent.", nameof(id));
         /// <summary>Clears all press/release edges, preserving held actions, for the next simulated tick.</summary>

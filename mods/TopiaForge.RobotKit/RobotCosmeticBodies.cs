@@ -48,9 +48,12 @@ namespace TopiaForge.RobotKit
         private readonly bool hasWalk;
         private GameObject? body;
         private float shownSpeed = -1f;
+        private readonly bool poweredDown;
+        private bool posed;
 
-        internal RobotCosmeticBody(GameObject body, string entityId, Animator? animator, string? walkParameter)
+        internal RobotCosmeticBody(GameObject body, string entityId, Animator? animator, string? walkParameter, bool poweredDown = false)
         {
+            this.poweredDown = poweredDown;
             this.body = body ?? throw new ArgumentNullException(nameof(body));
             root = new NativeEntityAdapter(entityId, body);
             this.animator = animator;
@@ -71,6 +74,17 @@ namespace TopiaForge.RobotKit
 
         public void Animate(float speedMetersPerSecond, bool crouching)
         {
+            if (poweredDown)
+            {
+                if (!posed && body != null)
+                {
+                    posed = true;
+                    if (animator != null) animator.enabled = false;
+                    body.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+                    body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                }
+                return;
+            }
             if (!hasWalk || animator == null || body == null) return;
             if (Math.Abs(speedMetersPerSecond - shownSpeed) < SpeedEpsilon) return;
             shownSpeed = speedMetersPerSecond;
@@ -130,14 +144,19 @@ namespace TopiaForge.RobotKit
             clone.SetActive(false);
             clone.name = "TopiaForge Player Body";
             GameReflection.ConfigureBrain(clone, RobotBrainMode.Dormant, logger);
+            try { RobotAvatarAppearance.Apply(clone, request.Appearance); }
+            catch
+            {
+                UnityEngine.Object.Destroy(clone);
+                throw;
+            }
             Quieten(clone);
-            Tint(clone, new Color(request.Red, request.Green, request.Blue, 1f));
             clone.transform.SetParent(root.transform, false);
             clone.SetActive(true);
             var animator = ResolveAnimator(clone);
             cosmeticCounter++;
             return OperationResult<IInternalAvatarBody>.Success(
-                new RobotCosmeticBody(clone, "robotkit:avatar-body-" + cosmeticCounter, animator, ResolveWalkParameter()));
+                new RobotCosmeticBody(clone, "robotkit:avatar-body-" + cosmeticCounter, animator, ResolveWalkParameter(), request.PoweredDown));
         }
 
         // Nothing native moves, thinks, collides or listens: the avatar moves the body, and its capsule is what others hit.
@@ -161,19 +180,6 @@ namespace TopiaForge.RobotKit
             foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
             {
                 collider.enabled = false;
-            }
-        }
-
-        private static void Tint(GameObject clone, Color color)
-        {
-            var block = new MaterialPropertyBlock();
-            foreach (var renderer in clone.GetComponentsInChildren<Renderer>(true))
-            {
-                if (renderer == null) continue;
-                renderer.GetPropertyBlock(block);
-                block.SetColor("_BaseColor", color);
-                block.SetColor("_EmissiveColor", color * 0.35f);
-                renderer.SetPropertyBlock(block);
             }
         }
 

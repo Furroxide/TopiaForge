@@ -39,8 +39,8 @@ namespace TopiaForge.ModManager
             if (slot < 0 || slot >= shown.Count) return false;
             var peer = shown[slot];
             var avatar = peer.Avatar;
-            if (avatar == null || !avatar.IsAlive) return false;
-            nametag = new PresenceNametag(peer.DisplayName, avatar.HeadPosition);
+            if (avatar == null || !avatar.IsAlive || peer.Presentation?.Visible == false) return false;
+            nametag = new PresenceNametag(peer.Presentation?.Name ?? peer.DisplayName, avatar.HeadPosition);
             return true;
         }
 
@@ -81,6 +81,7 @@ namespace TopiaForge.ModManager
                     if (avatar == null) continue;
                 }
 
+                if (peer.Presentation != null && (Realm != TopiaForge.ModManager.Core.Multiplayer.NetRealm.Client || peer.HasPresentation)) avatar.Present(peer.Presentation.Current, peer.Presentation.PoweredDown);
                 var wasWearing = avatar.IsWearingBody;
                 avatar.Dress(factory, nowMicros);
                 if (!wasWearing && avatar.IsWearingBody) Counters.BodiesWorn++;

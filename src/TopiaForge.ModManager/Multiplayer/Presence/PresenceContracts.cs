@@ -73,6 +73,11 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>One remote player's avatar in the engine. Main thread; nothing per frame allocates.</summary>
+    internal interface IPresenceAvatarPresentation
+    {
+        void Present(AvatarAppearance appearance, bool poweredDown);
+    }
+
     internal interface IPresenceAvatarObject : IDisposable
     {
         /// <summary>Gets the avatar's entity: what physics hits, what a robot's Chase follows, and what a session's TryGetAvatar names.</summary>

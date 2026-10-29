@@ -96,11 +96,22 @@ type public interface TopiaForge.Mods.IPlayer
   property System.Boolean IsPresent { get [abstract,virtual,newslot]; }
   property System.String DisplayName { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IEntity? Entity { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IPlayerAppearance Appearance { get [abstract,virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IPlayerInput Input { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IPlayerUi Ui { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IViewControls View { get [abstract,virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.MultiplayerPlayerKey Key { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.ParticipantId Id { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPlayerAppearance [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.Boolean TryGet(out TopiaForge.Mods.AvatarAppearance? appearance) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPlayerAppearanceLease> CopyFrom(TopiaForge.Mods.IPlayer source) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPlayerAppearanceLease> Set(TopiaForge.Mods.AvatarAppearance appearance) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPlayerAppearanceLease> SetNameplate(System.String? text = null, System.Boolean visible = true) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPlayerAppearanceLease> SetPoweredDown(System.Boolean poweredDown = true) [requires-topiaforge="0.2.0"]
+
+type public interface TopiaForge.Mods.IPlayerAppearanceLease : System.IDisposable [requires-topiaforge="0.2.0"]
+  property System.Boolean IsActive { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public interface TopiaForge.Mods.IPlayerDirectory
   method [abstract,virtual,newslot] System.Boolean TryGet(TopiaForge.Mods.ParticipantId id, out TopiaForge.Mods.IPlayer? player)

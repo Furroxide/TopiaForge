@@ -16,6 +16,7 @@ namespace TopiaForge.Mods.Internal
         IPlayerInput Input(ParticipantId id);
         IPlayerUi Ui(ParticipantId id);
         IViewControls View(ParticipantId id);
+        IPlayerAppearance Appearance(ParticipantId id);
         OperationResult<IScoreboardColumn> Column(ScoreboardColumnDefinition definition);
     }
 

@@ -55,7 +55,11 @@ namespace TopiaForge.ModManager
         {
             var open = presence.Channel;
             if (!active || open == null) return;
-            while (open.IsOpen && open.TryReceive(out var message)) Handle(message.Payload);
+            while (open.IsOpen && open.TryReceive(out var message))
+            {
+                if (presence.Control?.SessionSnapshot.HostParticipantId?.Equals(message.Sender) == true) Handle(message.Payload);
+                else presence.Counters.Forged++;
+            }
             while (open.IsOpen && open.TryReceiveDatagram(out var datagram))
             {
                 if (!PresenceWire.TryReadDatagramType(datagram.Payload, bits, out var type))
@@ -132,6 +136,9 @@ namespace TopiaForge.ModManager
 
             switch (type)
             {
+                case PresencePresentationWire.Message:
+                    if (payload.Length > PresencePresentationWire.MaximumBytes || !presence.TakePresentation(reader)) presence.Counters.Malformed++;
+                    return;
                 case PresenceMessages.Roster:
                     if (!PresenceWire.TryReadRoster(reader, roster))
                     {

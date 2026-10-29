@@ -87,6 +87,10 @@ namespace TopiaForge.Mods
         /// <summary>Gets host-controlled changes delivered only to this player's view.</summary>
         [RequiresTopiaForge("0.2.0")]
         IViewControls View { get; }
+
+        /// <summary>Gets host-controlled, scope-owned appearance, nameplate and cosmetic pose changes.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        IPlayerAppearance Appearance { get; }
     }
 
     /// <summary>

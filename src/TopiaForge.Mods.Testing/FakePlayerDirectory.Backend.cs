@@ -17,6 +17,7 @@ namespace TopiaForge.Mods.Testing
             public OperationResult<bool> Teleport(ParticipantId id, Vec3 position, float? yaw) => owner.BackendTeleport(id, position, yaw);
             public IPlayerInput Input(ParticipantId id) => owner.BackendInput(id);
             public IViewControls View(ParticipantId id) => owner.WorldView.ForPlayer(id, owner.lifetime, owner.IsAuthoritative);
+            public IPlayerAppearance Appearance(ParticipantId id) => owner.AppearanceFor(id);
             public IPlayerUi Ui(ParticipantId id) => owner.BackendUi(id);
             public OperationResult<IScoreboardColumn> Column(ScoreboardColumnDefinition definition) => owner.BackendColumn(definition);
         }
