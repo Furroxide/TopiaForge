@@ -314,6 +314,8 @@ namespace TopiaForge.Mods.UnityUi
     }
 
     /// <summary>Late-frame driver (after cameras move), enabled only while tags are tracked.</summary>
+    // CoreGameplayLoop interpolates presence at the default order (0). Project its final pose afterwards.
+    [DefaultExecutionOrder(10000)]
     internal sealed class TopiaForgeNametagDriver : MonoBehaviour
     {
         public TopiaForgeNametagLayer? Layer;

@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager
         private readonly MultiplayerFrameGuard multiplayerGuard;
         private readonly MultiplayerOverlayFrame multiplayerFrame;
         private readonly InSessionOverlay inSession;
+        private readonly NametagOverlay nametags;
         private UiHost? host;
         private GameObject? root;
         private TopiaForgePanel? shell;
@@ -56,7 +57,9 @@ namespace TopiaForge.ModManager
                 multiplayer.SelectTab(MultiplayerSubTab.Session);
                 ShowMultiplayer();
             });
-            multiplayerFrame = new MultiplayerOverlayFrame(multiplayerGuard, multiplayer, TickMultiplayerOutside, TickLiveTab, TickVoiceChat);
+            nametags = new NametagOverlay(() => plugin.Nametags,
+                () => ScoreboardNametagFeed.IsVisible(plugin.Multiplayer?.Control, plugin.Gameplay?.UiGameplay.IsGameplay == true));
+            multiplayerFrame = new MultiplayerOverlayFrame(multiplayerGuard, multiplayer, TickMultiplayerOutside, TickLiveTab, TickVoiceChat, nametags.Tick);
             multiplayerGuard.Run(MultiplayerOverlayFrame.StartStage, multiplayer.Start);
 
             // Voice chat that cannot start leaves VOICE saying so; the rest of the overlay runs on without it.
@@ -115,6 +118,7 @@ namespace TopiaForge.ModManager
             multiplayerGuard.Run(MultiplayerOverlayFrame.VoiceTeardownStage, StopVoiceChat);
             multiplayerGuard.Run(MultiplayerOverlayFrame.TeardownStage, () =>
             {
+                nametags.Dispose();
                 multiplayerUi?.Close();
                 inSession.Dispose();
                 multiplayer.OnHidden();

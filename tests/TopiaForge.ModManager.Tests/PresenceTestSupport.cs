@@ -24,6 +24,7 @@ namespace TopiaForge.ModManager.Tests
             PresenceAvatarTests.Run();
             PresenceBudgetTests.Run();
             PresenceSessionTests.Run();
+            PresenceNametagTests.Run();
             Console.WriteLine("Presence tests passed.");
         }
     }
