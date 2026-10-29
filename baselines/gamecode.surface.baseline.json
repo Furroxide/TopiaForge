@@ -252,8 +252,163 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "1b7db2f44c8c8471376f9f2b7414849f1b53a3bf4f7135b3b830b3f6210dcbcc",
+  "surfaceContentHash": "40e6db70379ca85e5126e31b69dc5f49f899e8d81d30d45b70fdaa60cd09327d",
   "types": {
+    "FMODUnity|FMOD.GUID": {
+      "assembly": "FMODUnity",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": [
+            "System.Guid"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Data1",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Data2",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Data3",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Data4",
+          "type": "System.Int32"
+        }
+      ],
+      "fullName": "FMOD.GUID",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Equals",
+          "parameters": [
+            "FMOD.GUID"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Equals",
+          "parameters": [
+            "System.Object"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetHashCode",
+          "parameters": [],
+          "returnType": "System.Int32"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "Parse",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "FMOD.GUID"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ToString",
+          "parameters": [],
+          "returnType": "System.String"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "IsNull",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
+        }
+      ],
+      "simpleName": "GUID",
+      "status": "Resolved",
+      "typeKey": "FMODUnity|FMOD.GUID"
+    },
+    "FMODUnity|FMODUnity.EventReference": {
+      "assembly": "FMODUnity",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Guid",
+          "type": "FMOD.GUID"
+        }
+      ],
+      "fullName": "FMODUnity.EventReference",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ToString",
+          "parameters": [],
+          "returnType": "System.String"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "IsNull",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
+        }
+      ],
+      "simpleName": "EventReference",
+      "status": "Resolved",
+      "typeKey": "FMODUnity|FMODUnity.EventReference"
+    },
     "GameCode|ActionSuccess": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -1297,6 +1452,30 @@
       "simpleName": "AgentHead",
       "status": "Resolved",
       "typeKey": "GameCode|AgentHead"
+    },
+    "GameCode|AgentHead+SayResult": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Enum",
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {
+        "InvalidTarget": 2,
+        "Ok": 0,
+        "TooFar": 1
+      },
+      "fields": [],
+      "fullName": "AgentHead+SayResult",
+      "isAbstract": false,
+      "isEnum": true,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "SayResult",
+      "status": "Resolved",
+      "typeKey": "GameCode|AgentHead+SayResult"
     },
     "GameCode|AgentState": {
       "assembly": "GameCode",
@@ -3403,6 +3582,73 @@
       "simpleName": "Health",
       "status": "Resolved",
       "typeKey": "GameCode|Health"
+    },
+    "GameCode|HintGroup": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "keyphraseToHint",
+          "type": "System.Collections.Generic.Dictionary<System.String, HintAsset>"
+        }
+      ],
+      "fullName": "HintGroup",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "FromAssets",
+          "parameters": [
+            "System.Collections.Generic.IEnumerable<HintAsset>"
+          ],
+          "returnType": "HintGroup"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "FromPersonality",
+          "parameters": [
+            "PersonalityAsset"
+          ],
+          "returnType": "HintGroup"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "MakeWordsWithHints",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Collections.Generic.IEnumerable<ChatUI+Word>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "RevealHintsIn",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "HintGroup",
+      "status": "Resolved",
+      "typeKey": "GameCode|HintGroup"
     },
     "GameCode|ICollisionEventReceiver": {
       "assembly": "GameCode",
@@ -6479,6 +6725,182 @@
       "simpleName": "OpenFeedBackURL",
       "status": "Resolved",
       "typeKey": "GameCode|OpenFeedBackURL"
+    },
+    "GameCode|OvertoneVoiceAsset": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "colonBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "commaBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "configAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "dashBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ellipsisBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "exclamationBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "fmodVoiceAsset",
+          "type": "FMODUnity.EventReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadSemaphore",
+          "type": "System.Threading.SemaphoreSlim"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadedConfigAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadedModelAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "modelAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "newlineBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "periodBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "questionBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "semicolonBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "singleDashBreakTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "speedMultiplier",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "voiceNative",
+          "type": "LeastSquares.Overtone.TTSVoiceNative"
+        }
+      ],
+      "fullName": "OvertoneVoiceAsset",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<LoadVoiceAsync>b__20_0",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "LoadVoiceAsync",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<LeastSquares.Overtone.TTSVoiceNative>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Speak",
+          "parameters": [
+            "System.String",
+            "System.Collections.Generic.List<System.Single>",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Int32>"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "FmodVoiceAsset",
+          "setterIsPublic": false,
+          "type": "FMODUnity.EventReference"
+        }
+      ],
+      "simpleName": "OvertoneVoiceAsset",
+      "status": "Resolved",
+      "typeKey": "GameCode|OvertoneVoiceAsset"
     },
     "GameCode|PerformanceLogger": {
       "assembly": "GameCode",
@@ -10295,6 +10717,99 @@
       "simpleName": "SettingsScreen",
       "status": "Resolved",
       "typeKey": "GameCode|SettingsScreen"
+    },
+    "GameCode|TaskGraph": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": [
+            "System.String"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DEPTH_INCREASE_MIN_TIME",
+          "type": "System.TimeSpan"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "allTasks",
+          "type": "System.Collections.Generic.List<TaskGraph+TaskTracker>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "depth",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "isDone",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lockObj",
+          "type": "System.Object"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "rootTask",
+          "type": "TaskGraph+TaskTracker"
+        }
+      ],
+      "fullName": "TaskGraph",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "DumpToJson",
+          "parameters": [],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Object>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Track",
+          "parameters": [
+            "System.String",
+            "TaskType"
+          ],
+          "returnType": "TaskGraph+TaskTracker"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": false,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "IsDone",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
+        }
+      ],
+      "simpleName": "TaskGraph",
+      "status": "Resolved",
+      "typeKey": "GameCode|TaskGraph"
     },
     "GameCode|UgcCatalogLoreLoader": {
       "assembly": "GameCode",

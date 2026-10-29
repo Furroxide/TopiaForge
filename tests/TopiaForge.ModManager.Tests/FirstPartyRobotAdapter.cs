@@ -41,7 +41,7 @@ namespace TopiaForge.ModManager.Tests
         private static void Check(bool value) { if (!value) throw new Exception("Robot registration failed."); }
     }
 
-    internal sealed class FirstPartyRobot : IRobotAgent, IRobotReplicaState
+    internal sealed partial class FirstPartyRobot : IRobotAgent, IRobotReplicaState
     {
         internal readonly FakeWorldObject Body;
         internal readonly FakeRobotAgent Inner;

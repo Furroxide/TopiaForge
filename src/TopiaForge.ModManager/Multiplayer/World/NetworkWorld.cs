@@ -55,12 +55,15 @@ namespace TopiaForge.ModManager
                 IsSharedMod = modId => runtime.TryGetNetworkClass(modId, out var networkClass) && networkClass == ModNetworkClass.Shared
             };
             Backend = backend;
+            Speech = new NetworkRobotSpeech(this, replication, clock);
             Motion = new NetworkWorldMotion(this, runtime, clock);
             Proxies.ParticipantReleased = Motion.Disconnect;
             WorldEvents = new Stage(this, StageKind.WorldEvents);
             HostSnapshots = new Stage(this, StageKind.HostSnapshots);
             ReplicaInterpolation = new Stage(this, StageKind.ReplicaInterpolation);
         }
+
+        internal NetworkRobotSpeech Speech { get; }
 
         internal NetworkWorldHost Host { get; }
 
@@ -111,6 +114,7 @@ namespace TopiaForge.ModManager
         {
             var world = new NetworkWorld(runtime, replication, backend, clock, findAssets);
             runtime.WorldEvents = world.WorldEvents;
+            runtime.SpeechMaintenance = world.Speech;
             runtime.HostSnapshots = world.HostSnapshots;
             runtime.ReplicaInterpolation = world.ReplicaInterpolation;
             runtime.PromotionCensus = world;
@@ -142,6 +146,7 @@ namespace TopiaForge.ModManager
 
         public void RealmChanged(NetRealm previous, NetRealm next)
         {
+            Speech.Reset();
             Motion.Reset();
             if (previous == NetRealm.ListenHost)
             {
@@ -178,6 +183,7 @@ namespace TopiaForge.ModManager
 
         public void Detaching(IInternalMultiplayerControl detaching)
         {
+            Speech.Reset();
             Motion.Reset();
             Proxies.Deactivate();
             Host.Deactivate();

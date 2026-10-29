@@ -40,6 +40,8 @@ namespace TopiaForge.ModManager
 
         // One flag per stage, so a healthy stage never re-arms the report of a failing one.
         private bool worldFailureLogged;
+        private bool speechFailureLogged;
+        internal IMultiplayerFrameStage? SpeechMaintenance { get; set; }
         private bool followFailureLogged;
         private bool presenceFailureLogged;
         private bool snapshotFailureLogged;
@@ -192,6 +194,7 @@ namespace TopiaForge.ModManager
         /// <summary>Steps 1 and 2, before the mods' Update.</summary>
         internal void BeforeModsUpdate(float deltaTime)
         {
+            Run(SpeechMaintenance, ref speechFailureLogged, deltaTime);
             var current = control;
             if (current == null) return;
             try

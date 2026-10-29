@@ -122,7 +122,7 @@ namespace TopiaForge.RobotKit
                 }
             }
 
-            private sealed class OwnerRobotAgent : IRobotAgent, IInternalOwnedNativeEntity
+            private sealed class OwnerRobotAgent : IRobotAgent, IInternalOwnedNativeEntity, IInternalSpeechAgent
             {
                 private readonly IRobotAgent agent;
                 private IDisposable? lifetimeLease;
@@ -137,6 +137,9 @@ namespace TopiaForge.RobotKit
                     NativeReadScope = readScope;
                 }
 
+                public Task<OperationResult<bool>> SayAsync(string text, CancellationToken token) =>
+                    lifetimeLease != null ? agent.SayAsync(text, token)
+                    : Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The robot scope has ended."));
                 public string Id => agent.Id;
                 public IInternalNativeEntityReadScope? NativeReadScope { get; }
                 public object? NativeObject => IsAlive ? (agent as IInternalNativeObjectEntity)?.NativeObject : null;

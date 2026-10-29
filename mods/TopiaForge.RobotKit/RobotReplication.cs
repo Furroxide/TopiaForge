@@ -33,6 +33,7 @@ namespace TopiaForge.RobotKit
                 var result = replication.RequestSpawn(descriptor, () => Make(request, replication.Realm == InternalNetRealm.Client));
                 if (!result.TryGetValue(out var entity) || !states.TryGetValue(entity.Id, out var state))
                     return OperationResult<IRobotAgent>.Failure(result.ErrorCode, result.ErrorMessage);
+                BindSpeech(state.Agent, replication);
                 return OperationResult<IRobotAgent>.Success(new RoutedRobotAgent(state.Agent, replication));
             }
             catch (ArgumentException) { return OperationResult<IRobotAgent>.Failure(ModErrorCode.InvalidArgument, "Robot spawn values must be bounded plain text and finite numbers."); }

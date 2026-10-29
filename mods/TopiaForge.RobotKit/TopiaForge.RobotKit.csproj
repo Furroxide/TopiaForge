@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Analyzers\TopiaForge.Mods.Analyzers.csproj"
@@ -32,6 +33,7 @@
 
   <ItemGroup>
     <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
+    <Reference Include="FMODUnity" HintPath="$(RobotopiaManagedDir)\FMODUnity.dll" Private="false" />
     <Reference Include="UniTask" HintPath="$(RobotopiaManagedDir)\UniTask.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />

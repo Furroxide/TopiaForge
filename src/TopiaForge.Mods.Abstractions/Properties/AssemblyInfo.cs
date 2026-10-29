@@ -10,5 +10,6 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("TopiaForge.CreatorContent")]
 [assembly: InternalsVisibleTo("TopiaForge.Prompts")]
 [assembly: InternalsVisibleTo("TopiaForge.RobotKit")]
+[assembly: InternalsVisibleTo("TopiaForge.Mods.RobotKit")]
 [assembly: InternalsVisibleTo("TopiaForge.Worlds")]
 [assembly: InternalsVisibleTo("TopiaForge.Mods.Multiplayer.Tests")]

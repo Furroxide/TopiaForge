@@ -26,6 +26,7 @@ namespace TopiaForge.RobotKit
         {
             logger = Context.Logger;
 
+            NativeRobotSpeech.Install(Context);
             service = new RobotAgentService(logger);
             Context.Lifetime.Track(service);
             OfferRobotReplication(service);

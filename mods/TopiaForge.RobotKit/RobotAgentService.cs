@@ -180,6 +180,7 @@ namespace TopiaForge.RobotKit
             identityAnchor.Initialize(agentId);
             var agent = new RobotAgent(agentId, clone, request, logger, brainSnapshot);
 
+            agent.RegisterSpeech();
             if (replica) Quieten(clone, cosmetic: false);
             clone.transform.SetParent(root.transform, true);
             clone.SetActive(true);
@@ -340,6 +341,8 @@ namespace TopiaForge.RobotKit
             {
                 if (!agents[index].IsAlive)
                 {
+                    // Detach managed speech state while native death retains ownership of the corpse.
+                    agents[index].ReleaseSpeech();
                     Replication?.Forget(agents[index].Id);
                     agentsById.Remove(agents[index].Id);
                     agents.RemoveAt(index);
