@@ -178,8 +178,8 @@ clients or update polling. Authored entities use scene/entity ids, replicated
 spawns use network ids, and avatars use player references. A local-only target
 cannot be hidden for remote players. Pending targets wait within the same
 1,024-target limit and bind automatically when they arrive or an avatar changes.
-See [private world-view delivery](internal/MultiplayerWorldView.md) for bounds and
-lifecycle details. These controls provide private presentation, not anti-cheat.
+See the [private world-view delivery implementation reference](https://github.com/Furroxide/TopiaForge/blob/f7172179072062a95be02e93bc6d8731f3321a6a/docs/internal/MultiplayerWorldView.md)
+for bounds and lifecycle details. These controls provide private presentation, not anti-cheat.
 
 Fog uses an owned HDRP override. Transitions take 0.5 seconds, or apply immediately
 with reduced motion. The adapter unsubscribes from updates at rest. Unsupported

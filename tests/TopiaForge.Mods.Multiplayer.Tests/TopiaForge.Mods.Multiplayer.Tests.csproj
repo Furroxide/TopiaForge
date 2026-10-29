@@ -103,6 +103,9 @@
   <ItemGroup>
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.WorldView.cs" Link="Runtime/Multiplayer/RuntimeReplication.WorldView.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/WorldView/RuntimeWorldViews.cs" Link="Runtime/WorldView/RuntimeWorldViews.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/RuntimeWorldViews.Projection.cs" Link="Runtime/WorldView/RuntimeWorldViews.Projection.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/WorldViewWire.cs" Link="Runtime/WorldView/WorldViewWire.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/WorldView/WorldViewLeases.cs" Link="Runtime/WorldView/WorldViewLeases.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/PlayerWorldViewControls.cs" Link="Runtime/WorldView/PlayerWorldViewControls.cs" />
   </ItemGroup>
 </Project>
