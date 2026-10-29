@@ -142,7 +142,15 @@ void main() {
       final backup = projectFile.renameSync(
         beside('topiaforge.project.json.${token(4242, old)}.bak').path,
       );
-      if (await holdInPlace(backup) == null) return;
+      final release = await holdInPlace(backup);
+      if (release == null) return;
+      // The fixture must hold a real readable file without delete sharing.
+      expect(backup.readAsStringSync(), isNotEmpty);
+      expect(
+        () => backup.renameSync('${backup.path}.moved'),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(() => backup.deleteSync(), throwsA(isA<FileSystemException>()));
 
       await expectLater(
         repository.loadDeveloperWorkspace(projectPath: projectRoot()),
@@ -159,6 +167,11 @@ void main() {
       );
       expect(backup.existsSync(), isTrue);
       expect(projectFile.existsSync(), isFalse);
+
+      await release();
+      await release();
+      expect(await loadedId(), 'test.leftovers');
+      expect(backup.existsSync(), isFalse);
     });
 
     test('the search for a project passes over a folder that cannot be '

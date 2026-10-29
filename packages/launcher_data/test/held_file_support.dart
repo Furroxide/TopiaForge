@@ -138,6 +138,30 @@ Future<Future<void> Function()?> _holdOnWindows(
     },
   );
   final errors = process.stderr.transform(utf8.decoder).join();
+  // Keep draining stdout for the child's lifetime. Stream.first cancels its
+  // subscription before completing, coupling readiness to pipe shutdown.
+  final ready = Completer<void>();
+  final output = process.stdout
+      .transform(utf8.decoder)
+      .transform(const LineSplitter())
+      .listen(
+        (line) {
+          if (ready.isCompleted) return;
+          if (line == 'held') {
+            ready.complete();
+          } else {
+            ready.completeError(StateError('Unexpected holder response.'));
+          }
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!ready.isCompleted) ready.completeError(error, stack);
+        },
+        onDone: () {
+          if (!ready.isCompleted) {
+            ready.completeError(StateError('Holder exited before readiness.'));
+          }
+        },
+      );
   Future<void> release() async {
     releaseFlag.writeAsStringSync('release');
     await process.exitCode.timeout(
@@ -147,21 +171,24 @@ Future<Future<void> Function()?> _holdOnWindows(
         return process.exitCode;
       },
     );
+    await output.cancel();
     flags.deleteSync(recursive: true);
   }
 
   try {
-    final line = await process.stdout
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .first
-        .timeout(const Duration(seconds: 60));
-    if (line != 'held') throw StateError('The holder answered "$line".');
-  } on Object {
-    process.kill();
-    await process.exitCode;
+    await ready.future.timeout(const Duration(seconds: 60));
+  } on Object catch (error) {
+    final killed = process.kill();
+    final exitCode = await process.exitCode;
+    await output.cancel();
     flags.deleteSync(recursive: true);
-    throw StateError('The file could not be held: ${await errors}');
+    // Child stderr may contain the private fixture path. Retain failure
+    // classification and lifecycle facts without publishing its contents.
+    final hasErrors = (await errors).trim().isNotEmpty;
+    throw StateError(
+      'The file could not be held: ${error.runtimeType}; '
+      'exit $exitCode; killed $killed; stderr present $hasErrors.',
+    );
   }
   return release;
 }
