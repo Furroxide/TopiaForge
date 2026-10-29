@@ -478,6 +478,7 @@ type public sealed class TopiaForge.Mods.Testing.FakePlayerDirectory : System.Ob
   property System.Collections.Generic.IReadOnlyList<System.String> CallbackErrors { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IPlayer> Players { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IPlayer? Local { get [virtual,final,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Testing.FakeWorldView WorldView { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.Testing.FakePlayerInput : System.Object, TopiaForge.Mods.IPlayerInput [requires-topiaforge="0.2.0"]
   constructor .ctor() [requires-topiaforge="0.2.0"]
@@ -762,6 +763,10 @@ type public sealed class TopiaForge.Mods.Testing.FakeWorldSessionService : Syste
 
 type public sealed class TopiaForge.Mods.Testing.FakeWorldView : System.Object, System.IDisposable, TopiaForge.Mods.IViewControls, TopiaForge.Mods.IWorldView [requires-topiaforge="0.2.0"]
   constructor .ctor(System.Collections.Generic.IEnumerable<System.String>? presets = null, System.String originalEnvironment = "") [requires-topiaforge="0.2.0"]
+  method System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IEntity> GetHiddenEntities(TopiaForge.Mods.ParticipantId player) [requires-topiaforge="0.2.0"]
+  method System.Nullable<TopiaForge.Mods.VisionFog> GetFog(TopiaForge.Mods.ParticipantId player) [requires-topiaforge="0.2.0"]
+  method System.String GetEnvironment(TopiaForge.Mods.ParticipantId player) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.IViewControls ForPlayer(TopiaForge.Mods.ParticipantId player, TopiaForge.Mods.Testing.FakeModLifetime scope, System.Boolean authoritative = true) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.IWorldView ForScope(TopiaForge.Mods.Testing.FakeModLifetime scope, System.Boolean participant = false, TopiaForge.Mods.Testing.GamemodeSessionRole role = 0 (SinglePlayer)) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Void Dispose() [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IViewLease> Environment(System.String preset) [requires-topiaforge="0.2.0"]

@@ -267,6 +267,7 @@ namespace TopiaForge.ModManager
                 var ready = record.Instance!.Readiness ?? throw new FollowStop(FollowFailureKind.WorldLoadFailed, stage, ModErrorCode.InvalidState,
                     "The world provider returned no readiness evidence.");
                 record.Readiness = ready;
+                await dispatcher.InvokeAsync(() => ActivateView(record));
 
                 stage = SessionFollowStage.Synchronizing;
                 Reach(reached, stage, 0, 0);

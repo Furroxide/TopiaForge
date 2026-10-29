@@ -15,6 +15,7 @@ namespace TopiaForge.Mods.Internal
         OperationResult<bool> Teleport(ParticipantId id, Vec3 position, float? yaw);
         IPlayerInput Input(ParticipantId id);
         IPlayerUi Ui(ParticipantId id);
+        IViewControls View(ParticipantId id);
         OperationResult<IScoreboardColumn> Column(ScoreboardColumnDefinition definition);
     }
 

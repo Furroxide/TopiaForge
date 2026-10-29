@@ -115,7 +115,7 @@ or failed imports release their content. Test with `FakeAuthoredMap.FromProject`
 its builder, or `GamemodeSessionRunner.WithMap(map)`; keep native checks separate
 from fake results.
 
-## The single-player world view
+## The world view
 
 The Worlds SDK provides `session.View()` from the server controller's context.
 These APIs require stable TopiaForge 0.2.0. Keep a required Worlds dependency and
@@ -140,7 +140,8 @@ override.
 
 For environment changes, first inspect `view.EnvironmentPresets`, then call
 `view.Environment(key)`. The list comes from the running game's asset map; do not
-guess keys. The newest live environment lease wins. Releasing the last restores
+guess keys. The newest applicable per-player environment lease wins, ahead of
+shared leases; otherwise the newest shared lease wins. Releasing the last restores
 the imported map's original preset. Missing keys return `NotFound` with a bounded
 list of available keys; worlds without environment support return `Unavailable`.
 
@@ -148,15 +149,37 @@ Hiding suppresses the target's own renderers, excluding nested authored entities
 Colliders, lights, audio and active state remain unchanged. Overlapping hides
 combine until their last lease ends. Restoration preserves renderer values that
 the game changed in the meantime. A view supports 1,024 distinct hidden targets
-and 4,096 total leases; exceeding either returns `RateLimited`. Preset keys have a
+and the world supports 4,096 total leases; exceeding either returns `RateLimited`. Preset keys have a
 64-character bound. Dead or foreign targets fail explicitly.
 
+Use `player.View` to address one player, or `players.View()` to capture the players
+listed now under one disposable lease. Shared and targeted fog always combine by
+the shortest distance, and hides form a union; no lease can reveal what another
+lease hides. Check each operation result. A failed audience call releases the
+leases it acquired before failing.
+
+```csharp
+var restricted = players.Where(player => ShouldLimitVision(player));
+var result = restricted.View().Fog(VisionFog.Blackout);
+// Keep role decisions in authoritative code. Only effective views are delivered.
+```
+
 Leases end on disposal, caller scope end, provider unload, world teardown or
-leaving single player. Participant code receives `NotAuthoritative` in every
-role, including offline. TF1014 follows participant entry points and visible
-helpers and also warns about participant blockers. Multiplayer view delivery is
-not available in this API stage: online calls return `Unavailable`, and no view
-state is transmitted. Do not use a participant to bypass session authority.
+network-session end. A targeted lease survives reconnect grace and ends when its
+player expires. Opening a solo world to guests preserves its existing shared view.
+Participant code receives `NotAuthoritative` in every role, including offline.
+TF1014 follows participant entry points and visible helpers. Joined scripted code
+receives a successful shadow lease; player intent must send a command to the host.
+Client-local and standalone mods cannot publish networked views.
+
+The runtime automatically delivers each player's effective view only to that
+player. Authors write no serializers, baseline handlers, audience filters on
+clients or update polling. Authored entities use scene/entity ids, replicated
+spawns use network ids, and avatars use player references. A local-only target
+cannot be hidden for remote players. Pending targets wait within the same
+1,024-target limit and bind automatically when they arrive or an avatar changes.
+See the [private world-view delivery implementation reference](https://github.com/Furroxide/TopiaForge/blob/f7172179072062a95be02e93bc6d8731f3321a6a/docs/internal/MultiplayerWorldView.md)
+for bounds and lifecycle details. These controls provide private presentation, not anti-cheat.
 
 Fog uses an owned HDRP override. Transitions take 0.5 seconds, or apply immediately
 with reduced motion. The adapter unsubscribes from updates at rest. Unsupported
@@ -170,4 +193,6 @@ which preset assets ship.
 synthetic preset list with `WithView(new FakeWorldView(keys, originalPreset))`.
 Inspect `EffectiveFog`, `EffectiveEnvironment` and `HiddenEntities`. `ForScope`
 binds another caller to the same derived view, with runtime-equivalent scope and
-participant rules. Synthetic presets in tests are not a native preset catalogue.
+participant rules. `FakePlayerDirectory.WorldView` exposes its shared controls;
+`GetFog(player.Id)`, `GetEnvironment(player.Id)` and `GetHiddenEntities(player.Id)`
+inspect effective per-player values. `ForPlayer` binds custom fake scopes. Synthetic presets in tests are not a native preset catalogue.

@@ -10,6 +10,7 @@ namespace TopiaForge.ModManager
 
         IPlayerDirectory IInternalPlayerContext.CreatePlayers(IMultiplayerSession session, Func<ulong> generation)
         {
+            if (playerContext != null) playerContext.ViewContext = this;
             var logger = Logger;
             var directory = new PlayerDirectory(() => session.Snapshot, generation, playerContext,
                 exception => logger.Error(exception, "A player join or leave handler failed."));

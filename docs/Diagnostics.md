@@ -573,7 +573,7 @@ the change to the gamemode's server controller. The runtime refuses participant
 calls in single player too. The analyzer follows participant session parameters,
 participant controllers and calls to visible helpers. It cannot prove arbitrary
 reflection, dynamic dispatch or code in another assembly. Ordinary server calls
-remain valid. See [the world view](MapWorlds.md#the-single-player-world-view).
+remain valid. See [the world view](MapWorlds.md#the-world-view).
 
 ### TF1015
 

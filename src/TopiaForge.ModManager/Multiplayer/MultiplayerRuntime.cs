@@ -48,6 +48,8 @@ namespace TopiaForge.ModManager
         private bool avatarFailureLogged;
         private bool playersFailureLogged;
         private bool inputFailureLogged;
+        private bool viewFailureLogged;
+        internal IMultiplayerFrameStage? WorldViews { get; set; }
 
         internal IMultiplayerFrameStage? PlayersReceive { get; set; }
         internal IMultiplayerFrameStage? PlayersSend { get; set; }
@@ -219,6 +221,7 @@ namespace TopiaForge.ModManager
         /// <summary>Step 4, after the mods' Update: sample player input, then send online traffic and flush the provider.</summary>
         internal void AfterModsUpdate(float deltaTime)
         {
+            Run(WorldViews, ref viewFailureLogged, deltaTime);
             if (control != null) Run(PlayersSend, ref inputFailureLogged, deltaTime);
             if (role == InternalSessionRole.Solo) return;
             var current = control;

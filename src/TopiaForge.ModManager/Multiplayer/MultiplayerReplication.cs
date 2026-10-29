@@ -125,13 +125,15 @@ namespace TopiaForge.ModManager
         internal MultiplayerReplication(MultiplayerRuntime runtime)
         {
             Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            Views = new RuntimeWorldViews(this);
             runtime.AddObserver(Views);
+            runtime.WorldViews = Views;
         }
 
         /// <summary>Gets the composition root: the realm, and the ledger spawns are recorded in.</summary>
         internal MultiplayerRuntime Runtime { get; }
 
-        internal RuntimeWorldViews Views { get; } = new RuntimeWorldViews();
+        internal RuntimeWorldViews Views { get; }
 
         internal IMultiplayerMotion? Motion { get; set; }
         internal MultiplayerPlayers? Players { get; set; }
@@ -276,15 +278,19 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal MultiplayerPresence? Presence { get; set; }
+
         internal bool TryCreateRef(IEntity entity, out InternalNetRef reference)
         {
             reference = default;
             if (Players?.TryCreateReference(entity, out reference) == true) return true;
-            var source = References;
-            if (source == null) return false;
             try
             {
-                var made = source.TryCreateRef(entity, out reference);
+                // The installed directory owns connection lifetimes; presence is only a standalone fallback.
+                if (Players == null && Presence?.TryCreatePlayerRef(entity, out reference) == true) return true;
+                var source = References;
+                if (source == null) return false;
+                var made = source.TryCreateRef(entity, out reference) && reference.Kind == InternalNetRefKind.Entity;
                 referenceFailureLogged = false;
                 if (!made) reference = default;
                 return made;
@@ -300,12 +306,14 @@ namespace TopiaForge.ModManager
         internal bool TryResolveRef(InternalNetRef reference, out IEntity? entity)
         {
             entity = null;
-            if (reference.Kind == InternalNetRefKind.Player) return Players?.TryResolveReference(reference, out entity) == true;
-            var source = References;
-            if (source == null || !reference.IsSpecified) return false;
+            if (reference.Kind == InternalNetRefKind.Player && Players != null) return Players.TryResolveReference(reference, out entity);
+            if (!reference.IsSpecified) return false;
             try
             {
-                var found = source.TryResolveRef(reference, out entity);
+                var source = References;
+                var found = reference.Kind == InternalNetRefKind.Player
+                    ? Presence?.TryResolvePlayerRef(reference, out entity) == true
+                    : source != null && source.TryResolveRef(reference, out entity);
                 referenceFailureLogged = false;
                 if (!found) entity = null;
                 return found && entity != null;

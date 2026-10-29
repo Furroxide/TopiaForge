@@ -8,7 +8,7 @@ namespace TopiaForge.Worlds
 {
     internal sealed class WorldViewProvider : IWorldView, IOwnerContextBoundExtensionFactory
     {
-        private readonly ConditionalWeakTable<WorldReadiness, IInternalWorldViewRenderer> worlds = new ConditionalWeakTable<WorldReadiness, IInternalWorldViewRenderer>();
+        private readonly ConditionalWeakTable<WorldReadiness, Binding> worlds = new ConditionalWeakTable<WorldReadiness, Binding>();
         private readonly IModContext provider;
         private readonly Func<WorldReadiness, IModContext, IInternalWorldViewRenderer> createRenderer;
         internal WorldViewProvider(IModContext provider, Func<WorldReadiness, IModContext, IInternalWorldViewRenderer> createRenderer)
@@ -20,7 +20,22 @@ namespace TopiaForge.Worlds
         public OperationResult<IViewLease> Fog(VisionFog fog) => Unavailable();
         public OperationResult<IViewLease> Hide(IEntity entity) => Unavailable();
         private static OperationResult<IViewLease> Unavailable() => OperationResult<IViewLease>.Failure(ModErrorCode.Unavailable, "No active world view is available.");
-        private sealed class Facade : IWorldView
+        private sealed class Binding : IInternalWorldViewBinding
+        {
+            private readonly IAuthoredMap? map;
+            internal Binding(WorldReadiness world, IInternalWorldViewRenderer renderer) { map = world.Map; Renderer = renderer; }
+            public string WorldId { get; set; } = "";
+            public IInternalWorldViewRenderer Renderer { get; }
+            public bool TryNameAuthored(IEntity entity, out string scene, out string id)
+            {
+                scene = ""; id = "";
+                if (map == null || !map.TryGetAuthored(entity, out var authored) || authored == null) return false;
+                scene = map.SceneId; id = authored.Id; return true;
+            }
+            public IEntity? ResolveAuthored(string scene, string id) => map != null && map.SceneId == scene
+                && map.TryGetEntity(id, out var target) && target?.Entity.IsAlive == true ? target.Entity : null;
+        }
+        private sealed class Facade : IWorldView, IInternalWorldViewFacade
         {
             private readonly WorldViewProvider owner;
             private readonly IModContext context;
@@ -29,7 +44,7 @@ namespace TopiaForge.Worlds
             {
                 if (context.Lifetime.IsStopping || owner.provider.Lifetime.IsStopping || !(context is IInternalWorldViewContext current)
                     || !current.TryGetViewWorld(out var world, out var lifetime) || world == null || lifetime == null) return null;
-                if (owner.worlds.TryGetValue(world, out var found)) return found;
+                if (owner.worlds.TryGetValue(world, out var found)) return found.Renderer;
                 IInternalWorldViewRenderer renderer;
                 try { renderer = owner.createRenderer(world, owner.provider); }
                 catch { return null; }
@@ -44,24 +59,41 @@ namespace TopiaForge.Worlds
                 renderer.Stopped += End;
                 try { worldTracking = lifetime.Track(renderer); providerTracking = owner.provider.Lifetime.Track(renderer); }
                 catch { try { renderer.Dispose(); } catch { } return null; }
-                owner.worlds.Add(world, renderer);
+                owner.worlds.Add(world, new Binding(world, renderer));
                 return renderer;
+            }
+            public void Activate(string worldId)
+            {
+                if (Renderer() == null || !(context is IInternalWorldViewContext current)
+                    || !current.TryGetViewWorld(out var world, out _) || world == null
+                    || !(context is IInternalReplicationContext runtime)) return;
+                var binding = owner.worlds.GetValue(world, _ => throw new InvalidOperationException());
+                binding.WorldId = worldId;
+                runtime.Replication.ActivateWorldView(binding);
+            }
+            public IViewControls ForPlayer(string player) => new Target(this, player);
+            private sealed class Target : IViewControls
+            {
+                private readonly Facade owner;
+                private readonly string player;
+                internal Target(Facade owner, string player) { this.owner = owner; this.player = player; }
+                public OperationResult<IViewLease> Environment(string preset) => owner.Change(v => v.Environment(preset), player);
+                public OperationResult<IViewLease> Fog(VisionFog fog) => owner.Change(v => v.Fog(fog), player);
+                public OperationResult<IViewLease> Hide(IEntity entity) => owner.Change(v => v.Hide(entity), player);
             }
             public bool IsAvailable => context is IInternalReplicationContext runtime
                 && runtime.Replication.ExecutionContext != InternalExecutionContext.Participant
-                && runtime.Replication.Realm == InternalNetRealm.Offline && Renderer()?.IsAlive == true;
+                && Renderer()?.IsAlive == true;
             public IReadOnlyList<string> EnvironmentPresets => Renderer()?.Presets ?? Array.Empty<string>();
-            private OperationResult<IViewLease> Change(Func<IViewControls, OperationResult<IViewLease>> change)
+            private OperationResult<IViewLease> Change(Func<IViewControls, OperationResult<IViewLease>> change, string? player = null)
             {
                 if (!(context is IInternalReplicationContext runtime)) return Unavailable();
                 if (runtime.Replication.ExecutionContext == InternalExecutionContext.Participant)
                     return OperationResult<IViewLease>.Failure(ModErrorCode.NotAuthoritative, "Move world view changes to the gamemode's server controller.");
                 if (context.Lifetime.IsStopping || owner.provider.Lifetime.IsStopping)
                     return OperationResult<IViewLease>.Failure(ModErrorCode.Cancelled, "The view's scope or provider is stopping.");
-                if (runtime.Replication.Realm != InternalNetRealm.Offline)
-                    return OperationResult<IViewLease>.Failure(ModErrorCode.Unavailable, "World view changes currently require single player.");
                 var renderer = Renderer();
-                return renderer == null ? Unavailable() : change(runtime.Replication.WorldView(renderer));
+                return renderer == null ? Unavailable() : change(player == null ? runtime.Replication.WorldView(renderer) : runtime.Replication.PlayerWorldView(renderer, player));
             }
             public OperationResult<IViewLease> Environment(string preset) => Change(view => view.Environment(preset));
             public OperationResult<IViewLease> Fog(VisionFog fog) => Change(view => view.Fog(fog));

@@ -18,7 +18,6 @@ namespace TopiaForge.ModManager
         private readonly List<PresencePeer> shown = new List<PresencePeer>();
         private int nametagVersion;
         private int shownVersion = -1;
-        private int sceneVersionSeen;
         private bool avatarFailureLogged;
         private bool bodyFailureLogged;
 
@@ -54,26 +53,27 @@ namespace TopiaForge.ModManager
         /// <summary>
         /// Moves every remote player's avatar to its pose for now, before the mods' LateUpdate: an avatar is made the first
         /// time a player's pose arrives, wears a provider's body when one can be made, and is made again if the game
-        /// destroyed it. A scene change takes bodies off for new ones. Nothing here allocates once the avatars exist.
+        /// destroyed it. A world or scene change retires the root and creates a current avatar.
+        /// Nothing here allocates once the avatars exist.
         /// </summary>
         internal void DriveAvatars(long nowMicros, float deltaTime)
         {
             var factory = BodyFactory;
             var sceneVersion = SceneVersion?.Invoke() ?? 0;
-            var sceneChanged = sceneVersion != sceneVersionSeen;
-            sceneVersionSeen = sceneVersion;
+            var world = RunningWorld?.Invoke();
             for (var index = 0; index < peers.Count; index++)
             {
                 var peer = peers[index];
                 var buffer = peer.Buffer;
-                if (peer.IsLocal || !peer.HasPose || buffer == null) continue;
+                if (peer.IsLocal) continue;
                 var avatar = peer.Avatar;
-                if (avatar != null && !avatar.IsAlive)
+                if (avatar != null && (!avatar.IsAlive || peer.AvatarWorld != world || peer.AvatarSceneVersion != sceneVersion))
                 {
                     DisposeAvatar(peer);
                     avatar = null;
                 }
 
+                if (!peer.HasPose || buffer == null) continue;
                 if (avatar == null)
                 {
                     if (nowMicros < peer.NextAvatarMicros) continue;
@@ -81,7 +81,6 @@ namespace TopiaForge.ModManager
                     if (avatar == null) continue;
                 }
 
-                if (sceneChanged) avatar.Undress();
                 var wasWearing = avatar.IsWearingBody;
                 avatar.Dress(factory, nowMicros);
                 if (!wasWearing && avatar.IsWearingBody) Counters.BodiesWorn++;
@@ -126,6 +125,8 @@ namespace TopiaForge.ModManager
             {
                 var made = new RemotePlayerAvatar(Backend.CreateAvatar(peer.Index, tint), tint);
                 peer.Avatar = made;
+                peer.AvatarWorld = RunningWorld?.Invoke();
+                peer.AvatarSceneVersion = SceneVersion?.Invoke() ?? 0;
                 Counters.AvatarsMade++;
                 nametagVersion++;
                 avatarFailureLogged = false;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace TopiaForge.ModManager.Core
 {
@@ -10,8 +11,9 @@ namespace TopiaForge.ModManager.Core
         internal const int MaximumHiddenTargets = 1024;
         internal readonly struct Entry
         {
-            internal Entry(string? environment, float distance, int tint, T? hidden)
-            { Environment = environment; Distance = distance; Tint = tint; Hidden = hidden; }
+            internal Entry(string? environment, float distance, int tint, T? hidden, string? player = null)
+            { Environment = environment; Distance = distance; Tint = tint; Hidden = hidden; Player = player; }
+            internal string? Player { get; }
             internal string? Environment { get; }
             internal float Distance { get; }
             internal int Tint { get; }
@@ -27,7 +29,18 @@ namespace TopiaForge.ModManager.Core
         internal long Add(Entry entry)
         {
             if (Count >= MaximumLeases || next == long.MaxValue) return 0;
-            if (entry.Hidden != null && !hidden.ContainsKey(entry.Hidden) && hidden.Count >= MaximumHiddenTargets) return 0;
+            if (entry.Hidden != null)
+            {
+                // A shared hide must fit every existing targeted view as well as future players' shared view.
+                var audiences = entry.Player == null
+                    ? entries.Values.Select(e => e.Player).Append(null).Distinct(StringComparer.Ordinal)
+                    : new[] { entry.Player };
+                foreach (var player in audiences)
+                {
+                    var targets = new HashSet<T>(HiddenFor(player), hidden.Comparer);
+                    if (!targets.Contains(entry.Hidden) && targets.Count >= MaximumHiddenTargets) return 0;
+                }
+            }
             var id = ++next;
             entries.Add(id, entry);
             if (entry.Hidden != null) hidden[entry.Hidden] = hidden.TryGetValue(entry.Hidden, out var count) ? count + 1 : 1;
@@ -45,20 +58,35 @@ namespace TopiaForge.ModManager.Core
             return true;
         }
         internal bool Contains(long id) => entries.ContainsKey(id);
-        internal string? Environment
+        internal string? Environment => EnvironmentFor(null);
+        internal (float Distance, int Tint) Fog => FogFor(null);
+        internal IEnumerable<long> ForPlayer(string player)
+        { foreach (var row in entries) if (row.Value.Player == player) yield return row.Key; }
+        internal IEnumerable<T> HiddenFor(string? player)
         {
-            get { string? result = null; foreach (var entry in entries.Values) if (entry.Environment != null) result = entry.Environment; return result; }
+            var targets = new HashSet<T>(hidden.Comparer);
+            foreach (var entry in entries.Values)
+                if ((entry.Player == null || entry.Player == player) && entry.Hidden != null && targets.Add(entry.Hidden)) yield return entry.Hidden;
         }
-        internal (float Distance, int Tint) Fog
+        internal string? EnvironmentFor(string? player)
         {
-            get
-            {
-                var distance = 0f; var tint = 0;
-                foreach (var entry in entries.Values)
-                    if (entry.Distance > 0 && (distance == 0 || entry.Distance < distance || entry.Distance == distance && entry.Tint < tint))
-                    { distance = entry.Distance; tint = entry.Tint; }
-                return (distance, tint);
-            }
+            string? shared = null, targeted = null;
+            foreach (var entry in entries.Values)
+                if (entry.Environment != null)
+                {
+                    if (entry.Player == null) shared = entry.Environment;
+                    else if (entry.Player == player) targeted = entry.Environment;
+                }
+            return targeted ?? shared;
+        }
+        internal (float Distance, int Tint) FogFor(string? player)
+        {
+            var distance = 0f; var tint = 0;
+            foreach (var entry in entries.Values)
+                if ((entry.Player == null || entry.Player == player) && entry.Distance > 0
+                    && (distance == 0 || entry.Distance < distance || entry.Distance == distance && entry.Tint < tint))
+                { distance = entry.Distance; tint = entry.Tint; }
+            return (distance, tint);
         }
         internal void Clear() { entries.Clear(); hidden.Clear(); }
         internal static bool ValidPreset(string? value)

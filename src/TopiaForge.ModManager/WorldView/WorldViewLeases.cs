@@ -13,29 +13,52 @@ namespace TopiaForge.ModManager
     {
         private readonly IInternalWorldViewRenderer renderer;
         private readonly WorldViewLedger<IEntity> ledger = new WorldViewLedger<IEntity>(EntityIdentity.Instance);
-        private readonly Dictionary<IEntity, IDisposable> hidden = new Dictionary<IEntity, IDisposable>(EntityIdentity.Instance);
+        private readonly Dictionary<IEntity, Hidden> hidden = new Dictionary<IEntity, Hidden>(EntityIdentity.Instance);
         private readonly Dictionary<long, Lease> leases = new Dictionary<long, Lease>();
         private string? environment;
+        private string? appliedPlayer;
+        private readonly HashSet<IEntity> waiting = new HashSet<IEntity>(EntityIdentity.Instance);
         private VisionFog? fog;
         private bool disposed;
-        internal WorldViewLeases(IInternalWorldViewRenderer renderer)
-        { this.renderer = renderer; renderer.Stopped += Dispose; }
-        internal IViewControls Bind(IModLifetime lifetime, Func<ModErrorCode> authority, Action assertThread) =>
-            new Controls(this, lifetime, authority, assertThread);
+        private readonly Func<string?> localPlayer;
+        private readonly Func<IEntity, string?, bool>? canHide;
+        private readonly Func<IEntity, IEntity?> resolve;
+        private readonly Action<IEntity>? addedTarget;
+        private readonly Action<IEntity>? removedTarget;
+        internal long Version { get; private set; }
+        internal event Action Ended = delegate { };
+        internal WorldViewLeases(IInternalWorldViewRenderer renderer, Func<string?>? localPlayer = null, Func<IEntity, string?, bool>? canHide = null,
+            Func<IEntity, IEntity?>? resolve = null, Action<IEntity>? addedTarget = null, Action<IEntity>? removedTarget = null)
+        {
+            this.renderer = renderer; this.localPlayer = localPlayer ?? (() => null); this.canHide = canHide;
+            this.resolve = resolve ?? (entity => entity.IsAlive ? entity : null); this.addedTarget = addedTarget; this.removedTarget = removedTarget;
+            renderer.Stopped += Dispose;
+        }
+        internal string? EnvironmentFor(string? player) => ledger.EnvironmentFor(player);
+        internal VisionFog? FogFor(string? player)
+        { var value = ledger.FogFor(player); return value.Distance == 0 ? (VisionFog?)null : VisionFog.Radius(value.Distance, (FogTint)value.Tint); }
+        internal IEntity[] HiddenFor(string? player) => ledger.HiddenFor(player).ToArray();
+        internal void RemovePlayer(string player)
+        { foreach (var id in ledger.ForPlayer(player).ToArray()) if (leases.TryGetValue(id, out var lease)) lease.Dispose(); }
+        internal void RefreshLocal()
+        {
+            if (disposed || !renderer.IsAlive) return;
+            var changed = appliedPlayer != localPlayer();
+            foreach (var item in hidden) if (!ReferenceEquals(resolve(item.Key), item.Value.Entity)) { changed = true; break; }
+            if (!changed) foreach (var target in waiting) if (resolve(target) != null) { changed = true; break; }
+            if (changed) Apply();
+        }
+        internal IViewControls Bind(IModLifetime lifetime, Func<ModErrorCode> authority, Action assertThread, string? player = null) =>
+            new Controls(this, lifetime, authority, assertThread, player);
         private OperationResult<IViewLease> Add(Controls caller, WorldViewLedger<IEntity>.Entry entry)
         {
             var id = ledger.Add(entry);
+            Version++;
             if (id == 0) return Failure(ModErrorCode.RateLimited, "A view supports at most 1,024 hidden objects and 4,096 active leases.");
             try
             {
-                OperationResult<bool> applied;
-                if (entry.Hidden != null && !hidden.ContainsKey(entry.Hidden))
-                {
-                    var result = renderer.Hide(entry.Hidden);
-                    if (!result.TryGetValue(out var resource)) { ledger.Remove(id); return Failure(result.ErrorCode, result.ErrorMessage); }
-                    hidden.Add(entry.Hidden, resource);
-                }
-                applied = Apply();
+                if (entry.Hidden != null) addedTarget?.Invoke(entry.Hidden);
+                var applied = Apply();
                 if (!applied.Succeeded)
                 { Remove(id, entry.Hidden); return Failure(applied.ErrorCode, applied.ErrorMessage); }
                 var lease = new Lease(this, id, entry.Hidden, caller.AssertThread);
@@ -55,9 +78,24 @@ namespace TopiaForge.ModManager
         }
         private OperationResult<bool> Apply()
         {
-            var nextEnvironment = ledger.Environment;
-            var value = ledger.Fog;
-            VisionFog? nextFog = value.Distance == 0 ? (VisionFog?)null : VisionFog.Radius(value.Distance, (FogTint)value.Tint);
+            var player = localPlayer();
+            appliedPlayer = player;
+            waiting.Clear();
+            var desired = new HashSet<IEntity>(ledger.HiddenFor(player), EntityIdentity.Instance);
+            foreach (var target in hidden.Keys.ToArray())
+                if (!desired.Contains(target) || !ReferenceEquals(resolve(target), hidden[target].Entity))
+                { var hold = hidden[target]; hidden.Remove(target); hold.Lease.Dispose(); }
+            foreach (var target in desired)
+                if (!hidden.ContainsKey(target))
+                {
+                    var entity = resolve(target);
+                    if (entity == null) { waiting.Add(target); continue; }
+                    var result = renderer.Hide(entity);
+                    if (!result.TryGetValue(out var hold)) return OperationResult<bool>.Failure(result.ErrorCode, result.ErrorMessage);
+                    hidden.Add(target, new Hidden(entity, hold));
+                }
+            var nextEnvironment = ledger.EnvironmentFor(player);
+            var nextFog = FogFor(player);
             if (environment != nextEnvironment)
             {
                 var result = renderer.SetEnvironment(nextEnvironment);
@@ -75,14 +113,16 @@ namespace TopiaForge.ModManager
         private void Remove(long id, IEntity? target)
         {
             if (!ledger.Remove(id)) return;
+            Version++;
             leases.TryGetValue(id, out var lease); leases.Remove(id);
             try
             {
                 if (target != null && !ledger.IsHidden(target) && hidden.TryGetValue(target, out var resource))
-                { hidden.Remove(target); resource.Dispose(); }
+                { hidden.Remove(target); resource.Lease.Dispose(); }
             }
             finally
             {
+                if (target != null && !ledger.IsHidden(target)) removedTarget?.Invoke(target);
                 try
                 {
                     if (!disposed && renderer.IsAlive)
@@ -99,16 +139,17 @@ namespace TopiaForge.ModManager
             if (disposed) return;
             disposed = true;
             renderer.Stopped -= Dispose;
-            ledger.Clear();
+            ledger.Clear(); Version++;
             var failures = new List<Exception>();
             void Attempt(Action action) { try { action(); } catch { failures.Add(new InvalidOperationException("A view resource could not be restored.")); } }
-            foreach (var resource in hidden.Values) Attempt(resource.Dispose);
-            hidden.Clear();
+            foreach (var resource in hidden.Values) Attempt(resource.Lease.Dispose);
+            hidden.Clear(); waiting.Clear();
             foreach (var lease in leases.Values.ToArray()) Attempt(lease.Detach);
             leases.Clear();
             if (renderer.IsAlive && environment != null) Attempt(() => RequireRestore(renderer.SetEnvironment(null)));
             if (renderer.IsAlive && fog != null) Attempt(() => RequireRestore(renderer.SetFog(null)));
             environment = null; fog = null;
+            Attempt(Ended); Ended = delegate { };
             if (failures.Count > 0) throw new AggregateException(failures);
         }
         private static void RequireRestore(OperationResult<bool> result)
@@ -120,15 +161,16 @@ namespace TopiaForge.ModManager
             private readonly Func<ModErrorCode> authority;
             internal readonly IModLifetime Lifetime;
             internal readonly Action AssertThread;
-            internal Controls(WorldViewLeases owner, IModLifetime lifetime, Func<ModErrorCode> authority, Action assertThread)
-            { this.owner = owner; Lifetime = lifetime; this.authority = authority; AssertThread = assertThread; }
+            private readonly string? player;
+            internal Controls(WorldViewLeases owner, IModLifetime lifetime, Func<ModErrorCode> authority, Action assertThread, string? player)
+            { this.owner = owner; Lifetime = lifetime; this.authority = authority; AssertThread = assertThread; this.player = player; }
             private OperationResult<IViewLease>? Refused()
             {
                 AssertThread();
                 var code = authority();
                 if (code == ModErrorCode.NotAuthoritative) return Failure(code, "Only session authority changes the world view. Move this call to the gamemode's server controller.");
                 if (Lifetime.IsStopping || owner.disposed) return Failure(ModErrorCode.Cancelled, "The part of the mod that asked for this is stopping.");
-                if (code != ModErrorCode.None) return Failure(code, "World view changes currently require single player.");
+                if (code != ModErrorCode.None) return Failure(code, "This view is unavailable in the current context.");
                 if (!owner.renderer.IsAlive) return Failure(ModErrorCode.Unavailable, "This world's view is no longer available.");
                 return null;
             }
@@ -139,7 +181,7 @@ namespace TopiaForge.ModManager
                 if (!owner.renderer.EnvironmentAvailable) return Failure(ModErrorCode.Unavailable, "This world has no environment presets; imported maps provide them.");
                 if (!owner.renderer.HasPreset(preset)) return Failure(ModErrorCode.NotFound,
                     "There is no environment '" + preset + "'. This game has: " + string.Join(", ", owner.renderer.Presets.Take(16)) + ".");
-                return owner.Add(this, new WorldViewLedger<IEntity>.Entry(preset, 0, 0, null));
+                return owner.Add(this, new WorldViewLedger<IEntity>.Entry(preset, 0, 0, null, player));
             }
             public OperationResult<IViewLease> Fog(VisionFog fog)
             {
@@ -148,14 +190,16 @@ namespace TopiaForge.ModManager
                     || fog.Tint < FogTint.Dark || fog.Tint > FogTint.Smoke)
                     return Failure(ModErrorCode.InvalidArgument, "Create fog with VisionFog.Radius between one and 500 metres.");
                 if (!owner.renderer.FogAvailable) return Failure(ModErrorCode.Unavailable, "This game build's renderer has no usable fog. Update TopiaForge.");
-                return owner.Add(this, new WorldViewLedger<IEntity>.Entry(null, fog.VisibleDistance, (int)fog.Tint, null));
+                return owner.Add(this, new WorldViewLedger<IEntity>.Entry(null, fog.VisibleDistance, (int)fog.Tint, null, player));
             }
             public OperationResult<IViewLease> Hide(IEntity entity)
             {
                 var refused = Refused(); if (refused != null) return refused;
                 if (entity == null) return Failure(ModErrorCode.InvalidArgument, "An entity is required.");
                 if (!entity.IsAlive) return Failure(ModErrorCode.NotFound, "The entity no longer exists.");
-                return owner.Add(this, new WorldViewLedger<IEntity>.Entry(null, 0, 0, entity));
+                if (owner.canHide != null && !owner.canHide(entity, player)) return Failure(ModErrorCode.InvalidArgument,
+                    "This object cannot be named on other players. Spawn it through Context.Assets, or hide a map entity.");
+                return owner.Add(this, new WorldViewLedger<IEntity>.Entry(null, 0, 0, entity, player));
             }
         }
         private sealed class Lease : IViewLease
@@ -170,6 +214,12 @@ namespace TopiaForge.ModManager
             public bool IsActive => !owner.disposed && owner.renderer.IsAlive && owner.ledger.Contains(id);
             public void Dispose() { assertThread(); owner.Remove(id, target); }
             internal void Detach() { var value = Tracking; Tracking = null; value?.Dispose(); }
+        }
+        private sealed class Hidden
+        {
+            internal readonly IEntity Entity;
+            internal readonly IDisposable Lease;
+            internal Hidden(IEntity entity, IDisposable lease) { Entity = entity; Lease = lease; }
         }
         private sealed class EntityIdentity : IEqualityComparer<IEntity>
         {

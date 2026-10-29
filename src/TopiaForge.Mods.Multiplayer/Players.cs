@@ -83,6 +83,10 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets UI addressed to this player.</summary>
         IPlayerUi Ui { get; }
+
+        /// <summary>Gets host-controlled changes delivered only to this player's view.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        IViewControls View { get; }
     }
 
     /// <summary>

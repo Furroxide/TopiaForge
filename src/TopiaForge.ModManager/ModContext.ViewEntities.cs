@@ -5,6 +5,11 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class ModContext : IInternalViewEntityContext
     {
+        public bool IsCurrentViewAvatar(IEntity entity, IInternalWorldViewRenderer renderer)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            return !Lifetime.IsStopping && replicationServices.Views.IsCurrentAvatar(entity, renderer);
+        }
         public object? UnwrapViewEntity(IEntity entity)
         {
             UnityMainThreadGuard.AssertCurrent();

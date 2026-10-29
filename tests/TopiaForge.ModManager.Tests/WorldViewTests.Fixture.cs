@@ -7,8 +7,12 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class WorldViewTests
     {
-        private sealed class ViewFixture : IModContext, IInternalWorldViewContext, IInternalReplicationContext, IDisposable
+        private sealed class ViewFixture : IModContext, IInternalWorldViewContext, IInternalReplicationContext, IInternalViewEntityContext, IDisposable
         {
+            internal Func<IEntity, object?> Unwrap = _ => null;
+            internal Func<IEntity, IInternalWorldViewRenderer, bool> CurrentAvatar = (_, _) => false;
+            public object? UnwrapViewEntity(IEntity entity) => Unwrap(entity);
+            public bool IsCurrentViewAvatar(IEntity entity, IInternalWorldViewRenderer renderer) => CurrentAvatar(entity, renderer);
             internal readonly FakeModContext Fake = new FakeModContext();
             public IRuntimeReplication Replication { get; set; } = null!;
             internal WorldReadiness? ViewReadiness;

@@ -9,6 +9,8 @@ namespace TopiaForge.ModManager
     internal sealed partial class PlayerContext : IInternalPlayerBackend, IDisposable
     {
         internal readonly MultiplayerPlayers Runtime;
+        internal IModContext? ViewContext;
+        public IViewControls View(ParticipantId id) => new PlayerWorldViewControls(ViewContext, id);
         internal readonly string Mod;
 
         /// <summary>Whether every player runs this mod, so its actions and UI can reach them: false for a client-local or server-only mod.</summary>
