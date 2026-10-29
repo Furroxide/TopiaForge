@@ -139,6 +139,8 @@ namespace TopiaForge.ModManager.Tests
         {
             public WorldSceneIdentity Scene { get; } = new WorldSceneIdentity(23, "City");
             public TransformState? NativeDefaultSpawn => TransformState.Identity;
+            public OperationResult<IInternalNativeSceneOperation> TryDispatchContent(IInternalNativeSceneDispatch dispatch, CancellationToken token) =>
+                throw new NotSupportedException();
             public Action? OnDispose { get; set; }
             public int Disposals { get; private set; }
             public int Finishes { get; private set; }

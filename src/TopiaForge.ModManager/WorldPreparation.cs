@@ -16,6 +16,9 @@ namespace TopiaForge.ModManager
         private readonly CancellationToken token;
         private IInternalSceneTransitionLease? admission;
         private IInternalNativeSceneOperation? operation;
+        private OperationResult<IInternalNativeSceneOperation>? contentDispatchFailure;
+        private TaskCompletionSource<bool>? contentDispatch;
+        private CancellationTokenSource? contentCancellation;
         private WorldSceneIdentity? scene;
         private Task? cleanup;
         private bool finishing;
@@ -45,16 +48,57 @@ namespace TopiaForge.ModManager
             return OperationResult<bool>.Success(true);
         }
 
+        public OperationResult<IInternalNativeSceneOperation> TryDispatchContent(
+            IInternalNativeSceneDispatch dispatch, CancellationToken cancellationToken)
+        {
+            if (!dispatcher.IsCurrent)
+                return Failure<IInternalNativeSceneOperation>(ModErrorCode.InvalidState, "Content dispatch belongs to the host thread.");
+            if (cleanup != null || Token.IsCancellationRequested || cancellationToken.IsCancellationRequested)
+                return Failure<IInternalNativeSceneOperation>(ModErrorCode.Cancelled, "The prepared world stopped.");
+            if (scene == null || !NativeDefaultSpawn.HasValue || admission == null || finishing || contentDispatch != null)
+                return Failure<IInternalNativeSceneOperation>(ModErrorCode.InvalidState, "Content can be dispatched once between preparation and readiness.");
+            if (dispatch == null)
+                return Failure<IInternalNativeSceneOperation>(ModErrorCode.InvalidArgument, "A content dispatch is required.");
+            var valid = native.ValidateScene();
+            if (!valid.Succeeded) return Failure<IInternalNativeSceneOperation>(valid.ErrorCode, valid.ErrorMessage);
+            if (cleanup != null || Token.IsCancellationRequested || cancellationToken.IsCancellationRequested)
+                return Failure<IInternalNativeSceneOperation>(ModErrorCode.Cancelled, "The prepared world stopped.");
+            // Publish before Begin: a native adapter can synchronously stop/dispose its owner.
+            // Cleanup waits for this handoff before observing the newly admitted operation.
+            contentCancellation = CancellationTokenSource.CreateLinkedTokenSource(Token, cancellationToken);
+            contentDispatch = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                var dispatched = admission.Transitions.TryDispatch(new NativeSceneRequest(Scene.Name, false,
+                    "prepared world content", observeSceneArrival: false), dispatch, contentCancellation.Token);
+                if (dispatched.TryGetValue(out var started)) operation = started;
+                else contentDispatchFailure = dispatched;
+                return dispatched;
+            }
+            finally { contentDispatch.TrySetResult(true); }
+        }
+
         public Task<OperationResult<WorldReadiness>> FinishAsync(WorldSpawnPolicy policy, IEntity? contentRoot,
             TransformState? providerSpawn, CancellationToken token) => dispatcher.InvokeCallbackAsync(async () =>
         {
             if (cleanup != null || Token.IsCancellationRequested || token.IsCancellationRequested)
                 return Failure<WorldReadiness>(ModErrorCode.Cancelled, "The prepared world stopped.");
             if (finishing || scene == null) return Failure<WorldReadiness>(ModErrorCode.InvalidState, "World readiness can be completed once after preparation.");
+            if (contentDispatch != null && (!contentDispatch.Task.IsCompleted || operation?.NativeDrained.IsCompleted == false))
+                return Failure<WorldReadiness>(ModErrorCode.Conflict, "Content must finish draining before world readiness.");
             finishing = true;
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(Token, token);
             try
             {
+                if (contentDispatchFailure != null)
+                    return Failure<WorldReadiness>(contentDispatchFailure.ErrorCode, contentDispatchFailure.ErrorMessage);
+                if (contentDispatch != null && operation != null)
+                {
+                    var terminal = await operation.NativeCompletion;
+                    if (!terminal.Succeeded) return Failure<WorldReadiness>(terminal.ErrorCode, terminal.ErrorMessage);
+                    var caller = await operation.Completion;
+                    if (!caller.Succeeded) return Failure<WorldReadiness>(caller.ErrorCode, caller.ErrorMessage);
+                }
                 if (policy == null) return Failure<WorldReadiness>(ModErrorCode.InvalidArgument, "A world spawn policy is required.");
                 var content = native.ValidateContent(contentRoot);
                 if (!content.Succeeded) return Failure<WorldReadiness>(content.ErrorCode, content.ErrorMessage);
@@ -126,6 +170,7 @@ namespace TopiaForge.ModManager
         {
             var failures = new List<Exception>();
             try { stopping.Cancel(); } catch (Exception error) { failures.Add(error); }
+            if (contentDispatch != null) await contentDispatch.Task;
             if (operation != null)
             {
                 var drained = false;
@@ -144,6 +189,7 @@ namespace TopiaForge.ModManager
             }
             try { ReleaseAdmission(); } catch (Exception error) { failures.Add(error); }
             try { await dispatcher.InvokeAsync(native.Dispose); } catch (Exception error) { failures.Add(error); }
+            try { contentCancellation?.Dispose(); } catch (Exception error) { failures.Add(error); }
             try { stopping.Dispose(); } catch (Exception error) { failures.Add(error); }
             if (failures.Count == 1) throw failures[0];
             if (failures.Count > 1) throw new AggregateException("World preparation cleanup failed.", failures);

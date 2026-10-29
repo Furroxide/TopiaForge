@@ -26,7 +26,8 @@ namespace TopiaForge.ModManager.Tests
         public WorldLoadTransition Transition { get; set; } = WorldLoadTransition.SceneReplacement;
         public WorldSpawnPolicy SpawnPolicy { get; set; } = new WorldSpawnPolicy(WorldSpawnKind.AuthoredMarker, "Spawn");
         public IModContext Context => this;
-        public IInternalWorldRuntimeService WorldRuntime => Native;
+        internal IInternalWorldRuntimeService? WorldRuntimeOverride;
+        public IInternalWorldRuntimeService WorldRuntime => WorldRuntimeOverride ?? Native;
         public IInternalSceneTransitionService SceneTransitions { get; set; } = null!;
         public IWorldSessionService Sessions => throw new NotSupportedException();
         public IInternalWorldSessionOperations ContentOperations { get; set; } = null!;
@@ -72,6 +73,8 @@ namespace TopiaForge.ModManager.Tests
             internal Action? OnPrepare;
             public WorldSceneIdentity Scene { get; } = new WorldSceneIdentity(42, "ActualLoadedScene");
             public TransformState? NativeDefaultSpawn => TransformState.Identity;
+            public OperationResult<IInternalNativeSceneOperation> TryDispatchContent(IInternalNativeSceneDispatch dispatch, CancellationToken token) =>
+                new MapWorldServiceTests.Transitions().TryDispatch(new NativeSceneRequest(Scene.Name, false, "prepared content", observeSceneArrival: false), dispatch, token);
             public Task<OperationResult<IReadOnlyList<NativeWorldEntry>>> DiscoverAsync(NativeWorldSource source, int maximumResults, CancellationToken cancellationToken) =>
                 throw new InvalidOperationException("Built-in worlds never run discovery.");
             public Task<OperationResult<IInternalWorldPreparation>> PrepareAsync(NativeWorldLoadRequest request, CancellationToken cancellationToken)

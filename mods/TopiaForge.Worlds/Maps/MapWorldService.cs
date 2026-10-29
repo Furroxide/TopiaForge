@@ -101,10 +101,7 @@ namespace TopiaForge.Worlds.Maps
                                 packed = document.Packed;
                             }
                             var spawn = scene.Spawn(context.SpawnPolicy.Kind == WorldSpawnKind.AuthoredMarker ? context.SpawnPolicy.MarkerName : null);
-                            if (!(context.Context is IInternalSceneTransitionContext transitions))
-                                return Failure(ModErrorCode.Unavailable, "The shared map import service is unavailable. Update TopiaForge.");
-                            var imported = await LocalWorldImportOperation.RunAsync(transitions.SceneTransitions, preparation.Scene,
-                                resources.StoppingToken, transaction);
+                            var imported = await LocalWorldImportOperation.RunAsync(preparation, resources.StoppingToken, transaction);
                             if (!imported.TryGetValue(out var content)) return Failure(imported.ErrorCode, "The map could not be built. Try again or choose another map.");
                             resources.Add(content);
                             var map = resources.Add(transaction.CreateMap(document,
