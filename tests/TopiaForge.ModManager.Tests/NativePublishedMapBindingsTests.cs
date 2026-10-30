@@ -39,8 +39,8 @@ namespace TopiaForge.ModManager.Tests
             private const string ManifestFileName = "manifest.json";
             public static bool Foreign;
             static Current() { initializations++; }
-            public static bool TryResolveManifestUrl(string input, out string manifest, out string id, out string robotopia, out string error)
-            { id = input; manifest = ProductionMapsBaseUrl + "map/" + input + "/" + ManifestFileName; robotopia = error = ""; return true; }
+            public static bool TryResolveManifestUrl(string input, out string manifest, out string id, out string publicUrl, out string error)
+            { id = input; manifest = ProductionMapsBaseUrl + "map/" + input + "/" + ManifestFileName; publicUrl = error = ""; return true; }
             public static string ReadProjectUrl(string manifestUrl, string manifestJson)
             {
                 Assert(manifestUrl.EndsWith("/manifest.json", StringComparison.Ordinal) && manifestJson == "opaque native manifest", "native reader arguments are ordered");

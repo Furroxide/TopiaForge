@@ -21,7 +21,7 @@ namespace TopiaForge.Mods.GameBridge
 
         /// <param name="lastRunType">The game's <c>UgcPlayLauncherLastRun</c> type (null degrades to false).</param>
         /// <param name="launchRequestType">The game's <c>UgcPlayLaunchRequest</c> type (null degrades to false).</param>
-        /// <param name="emptyFolderName">Per-caller temp folder prefix, so callers do not share import folders.</param>
+        /// <param name="emptyFolderName">Per-caller application-owned folder prefix, so callers do not share import folders.</param>
         /// <param name="logDebug">Debug sink for the (non-fatal) failure path.</param>
         /// <param name="validateExport">Native parser preflight; missing or failed validation never arms a request.</param>
         public static bool TryQueue(Type? lastRunType, Type? launchRequestType, string emptyFolderName, Action<string>? logDebug, Func<string, bool>? validateExport = null)
@@ -49,7 +49,8 @@ namespace TopiaForge.Mods.GameBridge
                     null, new[] { lastRunType }, null);
                 if (mode?.FieldType != typeof(string) || folder?.FieldType != typeof(string)
                     || selected?.FieldType != typeof(string) || create == null) return false;
-                var trustedRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), FolderRootName));
+                // The host selects this application base; ambient TEMP/TMP must not select bootstrap storage.
+                var trustedRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, FolderRootName));
                 var emptyImportFolder = Path.GetFullPath(Path.Combine(trustedRoot, emptyFolderName));
                 if (!emptyImportFolder.StartsWith(trustedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)) return false;
                 var export = Path.GetFullPath(Path.Combine(emptyImportFolder, ExportFileName));

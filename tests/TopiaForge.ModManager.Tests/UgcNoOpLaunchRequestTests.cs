@@ -16,10 +16,26 @@ namespace TopiaForge.ModManager.Tests
             string? secondPath = null;
             try
             {
-                Assert(UgcNoOpLaunchRequest.TryQueue(
-                        typeof(FakeLastRun), typeof(FakeLaunchRequest), firstName, _ => { }, ValidateExport),
-                    "the no-op request should be queued");
-                firstPath = FakeLaunchRequest.Last?.ImportFolderPath;
+                var originalTemp = Environment.GetEnvironmentVariable("TEMP");
+                var originalTmp = Environment.GetEnvironmentVariable("TMP");
+                var foreignTemp = Path.Combine(AppContext.BaseDirectory, "ForeignTemp-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Environment.SetEnvironmentVariable("TEMP", foreignTemp);
+                    Environment.SetEnvironmentVariable("TMP", foreignTemp);
+                    Assert(UgcNoOpLaunchRequest.TryQueue(
+                            typeof(FakeLastRun), typeof(FakeLaunchRequest), firstName, _ => { }, ValidateExport),
+                        "the no-op request should be queued without trusting ambient temp settings");
+                    firstPath = FakeLaunchRequest.Last?.ImportFolderPath;
+                    Assert(string.Equals(firstPath, Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+                        UgcNoOpLaunchRequest.FolderRootName, firstName)), StringComparison.Ordinal)
+                        && !Directory.Exists(foreignTemp), "ambient temp settings cannot redirect bootstrap writes");
+                }
+                finally
+                {
+                    Environment.SetEnvironmentVariable("TEMP", originalTemp);
+                    Environment.SetEnvironmentVariable("TMP", originalTmp);
+                }
                 Assert(!string.IsNullOrWhiteSpace(firstPath) && Directory.Exists(firstPath),
                     "the queued request should point at an existing folder");
                 var requiredFirstPath = firstPath!;
@@ -60,7 +76,21 @@ namespace TopiaForge.ModManager.Tests
                     Assert(!UgcNoOpLaunchRequest.TryQueue(typeof(FakeLastRun), typeof(FakeLaunchRequest), invalid, _ => { }, _ => { validated = true; return true; })
                         && !validated && ReferenceEquals(before, FakeLaunchRequest.Last), "unsafe caller leaf refuses before filesystem validation or request creation");
                 }
-                var ownedRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), UgcNoOpLaunchRequest.FolderRootName));
+                var ownedRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, UgcNoOpLaunchRequest.FolderRootName));
+                var blockedName = firstName + "-blocked";
+                var blockedPath = Path.Combine(ownedRoot, blockedName);
+                File.WriteAllText(blockedPath, "occupied");
+                try
+                {
+                    var validated = false;
+                    Assert(!UgcNoOpLaunchRequest.TryQueue(typeof(FakeLastRun), typeof(FakeLaunchRequest), blockedName,
+                        _ => { }, _ => { validated = true; return true; }) && !validated
+                        && ReferenceEquals(before, FakeLaunchRequest.Last), "unavailable owned storage refuses before validation or request creation");
+                }
+                finally
+                {
+                    File.Delete(blockedPath);
+                }
                 Assert(!ValidateExport(Path.Combine(ownedRoot, "..", "outside", UgcNoOpLaunchRequest.ExportFileName))
                     && !ValidateExport(Path.Combine(ownedRoot + "-sibling", UgcNoOpLaunchRequest.ExportFileName))
                     && !ValidateExport(Path.Combine(ownedRoot, firstName, "foreign.roboworld")), "callback rejects traversal, sibling-prefix and foreign-leaf paths before reading");
@@ -75,7 +105,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static bool ValidateExport(string path)
         {
-            var trustedRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), UgcNoOpLaunchRequest.FolderRootName));
+            var trustedRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, UgcNoOpLaunchRequest.FolderRootName));
             var canonical = Path.GetFullPath(path);
             if (!canonical.StartsWith(trustedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
                 || !string.Equals(Path.GetFileName(canonical), UgcNoOpLaunchRequest.ExportFileName, StringComparison.Ordinal)) return false;
