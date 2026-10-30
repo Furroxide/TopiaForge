@@ -57,7 +57,7 @@ namespace TopiaForge.ModManager
             if (!active || open == null) return;
             while (open.IsOpen && open.TryReceive(out var message))
             {
-                if (presence.Control?.SessionSnapshot.HostParticipantId?.Equals(message.Sender) == true) Handle(message.Payload);
+                if ((presence.Control?.SessionSnapshot.HostParticipantId ?? InternalSystemMessage.HeadlessHostSender).Equals(message.Sender)) Handle(message.Payload);
                 else presence.Counters.Forged++;
             }
             while (open.IsOpen && open.TryReceiveDatagram(out var datagram))

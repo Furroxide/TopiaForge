@@ -6,6 +6,7 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--presence-host-identity") { PresenceHostIdentityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--private-commit") { PerPlayerStateTests.CommitRegressions(); return 0; }
             if (args.Length == 1 && args[0] == "--voice-retirement-contract") { VoiceEpochContractTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--voice-device-retirement") { VoiceDeviceRetirementTests.Run(); return 0; }
@@ -669,6 +670,7 @@ internal static class Program
             SystemStreamTests.HonestSendersAreNeverDropped();
             SystemStreamTests.PeersThatBreakTheirWindowsLoseTheirConnection();
             InternalControlTests.PlayersHostJoinAndLeaveThroughTheSpi();
+            PresenceHostIdentityTests.Run();
             InternalControlTests.HostsKickBanUnbanAndMuteThroughTheSpi();
             InternalControlTests.PasswordJoinsWaitForThePlayerThroughTheSpi();
             InternalControlTests.JoinsWaitForTheIdentityAndRetryAfterItFails();
