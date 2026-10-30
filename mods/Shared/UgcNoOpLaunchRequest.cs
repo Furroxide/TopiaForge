@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace TopiaForge.Mods.GameBridge
 {
@@ -13,6 +14,9 @@ namespace TopiaForge.Mods.GameBridge
     internal static class UgcNoOpLaunchRequest
     {
         private const string EmptyProject = "{\"version\":\"1.0\",\"name\":\"TopiaForge Empty Bootstrap\",\"created\":\"1970-01-01T00:00:00Z\",\"modified\":\"1970-01-01T00:00:00Z\",\"assets\":{},\"local-assets\":{},\"scenes\":{\"main\":{\"id\":\"main\",\"name\":\"Empty Bootstrap\",\"entities\":{}}}}";
+        internal const string FolderRootName = "TopiaForgeBootstrap";
+        internal const string ExportFileName = "bootstrap.roboworld";
+        internal const string FolderLeafPattern = @"\A[A-Za-z0-9_-]{1,128}\z";
         private static readonly object FolderGate = new object();
 
         /// <param name="lastRunType">The game's <c>UgcPlayLauncherLastRun</c> type (null degrades to false).</param>
@@ -35,11 +39,8 @@ namespace TopiaForge.Mods.GameBridge
                     return false;
                 }
 
-                if (string.IsNullOrWhiteSpace(emptyFolderName)
-                    || !string.Equals(Path.GetFileName(emptyFolderName), emptyFolderName, StringComparison.Ordinal))
-                {
-                    throw new ArgumentException("The empty-folder name must be one non-empty path segment.", nameof(emptyFolderName));
-                }
+                if (emptyFolderName == null || !Regex.IsMatch(emptyFolderName, FolderLeafPattern, RegexOptions.CultureInvariant))
+                    return false;
 
                 var mode = lastRunType.GetField("Mode");
                 var folder = lastRunType.GetField("ImportFolderPath");
@@ -48,11 +49,16 @@ namespace TopiaForge.Mods.GameBridge
                     null, new[] { lastRunType }, null);
                 if (mode?.FieldType != typeof(string) || folder?.FieldType != typeof(string)
                     || selected?.FieldType != typeof(string) || create == null) return false;
-                var emptyImportFolder = Path.Combine(Path.GetTempPath(), emptyFolderName);
+                var trustedRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), FolderRootName));
+                var emptyImportFolder = Path.GetFullPath(Path.Combine(trustedRoot, emptyFolderName));
+                if (!emptyImportFolder.StartsWith(trustedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)) return false;
+                var export = Path.GetFullPath(Path.Combine(emptyImportFolder, ExportFileName));
+                if (!export.StartsWith(emptyImportFolder + Path.DirectorySeparatorChar, StringComparison.Ordinal)) return false;
                 lock (FolderGate)
                 {
+                    if ((Directory.Exists(trustedRoot) && (File.GetAttributes(trustedRoot) & FileAttributes.ReparsePoint) != 0)
+                        || (Directory.Exists(emptyImportFolder) && (File.GetAttributes(emptyImportFolder) & FileAttributes.ReparsePoint) != 0)) return false;
                     PrepareEmptyFolder(emptyImportFolder);
-                    var export = Path.Combine(emptyImportFolder, "bootstrap.roboworld");
                     File.WriteAllText(export, EmptyProject, new UTF8Encoding(false));
                     if (!validateExport(export)) return false; // Never arm a request the native parser rejects.
                     mode.SetValue(values, "SelectedFile");
@@ -84,12 +90,16 @@ namespace TopiaForge.Mods.GameBridge
                 Directory.CreateDirectory(path);
                 foreach (var file in Directory.EnumerateFiles(path))
                 {
+                    if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                        throw new IOException("The bootstrap folder contains an unsupported link.");
                     File.SetAttributes(file, FileAttributes.Normal);
                     File.Delete(file);
                 }
 
                 foreach (var directory in Directory.EnumerateDirectories(path))
                 {
+                    if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                        throw new IOException("The bootstrap folder contains an unsupported link.");
                     Directory.Delete(directory, recursive: true);
                 }
             }

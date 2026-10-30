@@ -43,7 +43,7 @@ namespace TopiaForge.ModManager.Tests
                 Assert(!string.Equals(firstPath, secondPath, StringComparison.Ordinal),
                     "different callers must not share a no-op import folder");
                 var queued = FakeLaunchRequest.Last;
-                Assert(queued != null && queued.Mode == "SelectedFile" && File.Exists(queued.SelectedExportFilePath),
+                Assert(queued != null && queued.Mode == "SelectedFile" && ValidateExport(queued.SelectedExportFilePath),
                     "SelectedFile must carry a real nonempty selected export before native Awake");
                 var before = queued;
                 Assert(!UgcNoOpLaunchRequest.TryQueue(typeof(FakeLastRun), typeof(FakeLaunchRequest), firstName, _ => { }, _ => false)
@@ -54,6 +54,16 @@ namespace TopiaForge.ModManager.Tests
                 Assert(!UgcNoOpLaunchRequest.TryQueue(typeof(FakeLastRun), typeof(FakeLaunchRequest), firstName, message => debug = message, _ => throw new Exception("private native text"))
                     && ReferenceEquals(before, FakeLaunchRequest.Last), "validator faults remain pre-dispatch failures");
                 Assert(debug != null && !debug.Contains("private native text", StringComparison.Ordinal), "preflight diagnostics omit native text");
+                foreach (var invalid in new[] { "", ".", "..", "../outside", @"..\outside", "safe/child", @"safe\child", "safe:stream", "safe.name", "safe name", new string('a', 129), Path.GetTempPath() })
+                {
+                    var validated = false;
+                    Assert(!UgcNoOpLaunchRequest.TryQueue(typeof(FakeLastRun), typeof(FakeLaunchRequest), invalid, _ => { }, _ => { validated = true; return true; })
+                        && !validated && ReferenceEquals(before, FakeLaunchRequest.Last), "unsafe caller leaf refuses before filesystem validation or request creation");
+                }
+                var ownedRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), UgcNoOpLaunchRequest.FolderRootName));
+                Assert(!ValidateExport(Path.Combine(ownedRoot, "..", "outside", UgcNoOpLaunchRequest.ExportFileName))
+                    && !ValidateExport(Path.Combine(ownedRoot + "-sibling", UgcNoOpLaunchRequest.ExportFileName))
+                    && !ValidateExport(Path.Combine(ownedRoot, firstName, "foreign.roboworld")), "callback rejects traversal, sibling-prefix and foreign-leaf paths before reading");
                 Console.WriteLine("UgcNoOpLaunchRequestTests passed: real selected empty export, stale cleanup, independent folders, validator rejection/fault and privacy.");
             }
             finally
@@ -65,8 +75,16 @@ namespace TopiaForge.ModManager.Tests
 
         private static bool ValidateExport(string path)
         {
-            Assert(File.Exists(path) && Path.GetExtension(path) == ".roboworld", "generated export exists before validation");
-            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            var trustedRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), UgcNoOpLaunchRequest.FolderRootName));
+            var canonical = Path.GetFullPath(path);
+            if (!canonical.StartsWith(trustedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || !string.Equals(Path.GetFileName(canonical), UgcNoOpLaunchRequest.ExportFileName, StringComparison.Ordinal)) return false;
+            var parent = Path.GetDirectoryName(canonical);
+            if (parent == null || !string.Equals(Path.GetDirectoryName(parent), trustedRoot, StringComparison.Ordinal)) return false;
+            if (!File.Exists(canonical) || (File.GetAttributes(canonical) & FileAttributes.ReparsePoint) != 0
+                || (File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0
+                || (File.GetAttributes(trustedRoot) & FileAttributes.ReparsePoint) != 0) return false;
+            using var document = JsonDocument.Parse(File.ReadAllText(canonical));
             var root = document.RootElement;
             Assert(root.GetProperty("version").GetString() == "1.0" && !root.GetProperty("assets").EnumerateObject().Any()
                 && !root.GetProperty("local-assets").EnumerateObject().Any(), "bootstrap has no assets or external sources");
@@ -111,7 +129,7 @@ namespace TopiaForge.ModManager.Tests
             public static void Create(FakeLastRun values)
             {
                 Assert(values.Mode == "SelectedFile" && !string.IsNullOrWhiteSpace(values.SelectedExportFilePath)
-                    && File.Exists(values.SelectedExportFilePath), "the native SelectedFile contract must never see an empty selection");
+                    && ValidateExport(values.SelectedExportFilePath), "the native SelectedFile contract must never see an empty selection");
                 Last = values;
             }
         }
