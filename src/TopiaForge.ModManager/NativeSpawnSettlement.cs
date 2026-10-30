@@ -14,7 +14,12 @@ namespace TopiaForge.ModManager
         private int stable;
         private int samples;
         internal NativeSpawnSettlement(TransformState requested, float height, float fixedTime)
-        { this.requested = requested; this.height = height; this.fixedTime = fixedTime; previous = requested.Position; }
+        {
+            this.requested = requested;
+            this.height = height;
+            this.fixedTime = fixedTime;
+            previous = requested.Position;
+        }
         internal OperationResult<TransformState>? Probe(TransformState actual, float currentFixedTime)
         {
             if (!Finite(height) || height <= 0f || !Finite(fixedTime) || !Finite(currentFixedTime))
@@ -22,13 +27,15 @@ namespace TopiaForge.ModManager
             if (!actual.Position.IsFinite || !actual.Rotation.IsFinite)
                 return Refused();
             var delta = actual.Position - requested.Position;
-            var rotation = actual.Rotation; var expected = requested.Rotation;
+            var rotation = actual.Rotation;
+            var expected = requested.Rotation;
             var dot = Math.Abs(rotation.X * expected.X + rotation.Y * expected.Y + rotation.Z * expected.Z + rotation.W * expected.W);
             if (!delta.IsFinite || delta.X * delta.X + delta.Z * delta.Z > 0.0001f || dot < 0.9999f
                 || (delta.Y < 0f && delta.Y * delta.Y > 0.0001f) || delta.Y > height || currentFixedTime < fixedTime)
                 return Refused();
             if (currentFixedTime == fixedTime) return null;
-            fixedTime = currentFixedTime; samples++;
+            fixedTime = currentFixedTime;
+            samples++;
             stable = (actual.Position - previous).LengthSquared <= 0.0001f ? stable + 1 : 0;
             previous = actual.Position;
             if (stable >= 2) return OperationResult<TransformState>.Success(actual);
