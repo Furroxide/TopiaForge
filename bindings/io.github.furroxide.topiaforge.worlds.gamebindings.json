@@ -593,29 +593,29 @@
       "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Map.cs"
     },
     {
-      "id": "worlds.map.UgcPublishedProjectLoader.DefaultPublicBaseUrl",
+      "id": "worlds.map.UgcPublishedProjectLoader.ProductionMapsBaseUrl",
       "kind": "Field",
       "assembly": "GameCode",
       "declaringType": "UgcPublishedProjectLoader",
       "matchMode": "StaticFullName",
       "criticality": "Critical",
       "feature": "Map world loading",
-      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Map.cs",
-      "member": "DefaultPublicBaseUrl",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "ProductionMapsBaseUrl",
       "returnType": "System.String",
-      "isPublic": true,
+      "isPublic": false,
       "isStatic": true
     },
     {
-      "id": "worlds.map.UgcPublishedProjectLoader.TryResolveProjectUrl",
+      "id": "worlds.map.UgcPublishedProjectLoader.TryResolveManifestUrl",
       "kind": "Method",
       "assembly": "GameCode",
       "declaringType": "UgcPublishedProjectLoader",
       "matchMode": "StaticFullName",
       "criticality": "Critical",
       "feature": "Map world loading",
-      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Map.cs",
-      "member": "TryResolveProjectUrl",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "TryResolveManifestUrl",
       "returnType": "System.Boolean",
       "isPublic": true,
       "isStatic": true,
@@ -1259,6 +1259,46 @@
       "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
       "parameters": [],
       "exactParameters": true
+    },
+    {
+      "id": "worlds.map.UgcPublishedProjectLoader.ManifestFileName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPublishedProjectLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map manifest protocol",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "ManifestFileName",
+      "returnType": "System.String",
+      "isPublic": false,
+      "isStatic": true
+    },
+    {
+      "id": "worlds.map.UgcPublishedProjectLoader.ReadProjectUrl",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcPublishedProjectLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map manifest protocol",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "ReadProjectUrl",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
     }
   ]
 }

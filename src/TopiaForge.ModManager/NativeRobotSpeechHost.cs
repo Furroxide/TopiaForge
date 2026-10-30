@@ -34,13 +34,11 @@ namespace TopiaForge.ModManager
             try
             {
                 lifetime.Track(installation);
-                var simple = typeof(AgentHead).GetMethod("Say", new[] { typeof(string), typeof(HintGroup), typeof(TaskGraph),
-                    typeof(CancellationToken), typeof(FMODAudioClipAsset), typeof(bool) });
-                var named = typeof(AgentHead).GetMethod("Say", new[] { typeof(string), typeof(string), typeof(HintGroup), typeof(TaskGraph),
-                    typeof(CancellationToken), typeof(FMODAudioClipAsset), typeof(bool) });
-                if (simple == null || named == null) throw new InvalidOperationException("Native robot speech bindings are unavailable.");
-                lease.Patch(simple, prefix: typeof(NativeRobotSpeechHost).GetMethod(nameof(Say), BindingFlags.NonPublic | BindingFlags.Static));
-                lease.Patch(named, prefix: typeof(NativeRobotSpeechHost).GetMethod(nameof(SayNamed), BindingFlags.NonPublic | BindingFlags.Static));
+                var bindings = NativeRobotSpeechBindings.Resolve(typeof(AgentHead), typeof(TaskGraph), typeof(FMODAudioClipAsset),
+                    typeof(UniTask<AgentHead.SayResult>), typeof(UniTask));
+                installation.Bindings = bindings;
+                lease.Patch(bindings.Simple, prefix: typeof(NativeRobotSpeechHost).GetMethod(nameof(Say), BindingFlags.NonPublic | BindingFlags.Static));
+                lease.Patch(bindings.Named, prefix: typeof(NativeRobotSpeechHost).GetMethod(nameof(SayNamed), BindingFlags.NonPublic | BindingFlags.Static));
                 installation.Ready();
                 return installation;
             }
@@ -113,6 +111,7 @@ namespace TopiaForge.ModManager
             private readonly CancellationToken ownerStopping;
             private bool ready, closed;
             internal IInternalNativeSpeechRouter? Router { get; private set; }
+            internal NativeRobotSpeechBindings? Bindings { get; set; }
             internal Installation(OwnerHarmonyLease patches, IInternalNativeSpeechRouter router, CancellationToken ownerStopping)
             { this.patches = patches; Router = router; this.ownerStopping = ownerStopping; }
             public bool IsAvailable => ready && !closed && !ownerStopping.IsCancellationRequested;
@@ -145,7 +144,11 @@ namespace TopiaForge.ModManager
                 UniTask task;
                 var previous = entering;
                 entering = new Playback(head, text, linked.Token);
-                try { task = head.Say(head.CurrentSpeakerName, text, HintGroup.FromAssets(Array.Empty<HintAsset>()), new TaskGraph("Robot speech"), linked.Token, null, false); }
+                try
+                {
+                    task = (UniTask)(Bindings ?? throw new InvalidOperationException("Native robot speech bindings are unavailable."))
+                        .InvokeNamed(head, head.CurrentSpeakerName, text, new TaskGraph("Robot speech"), linked.Token);
+                }
                 finally { entering = previous; }
                 await task;
                 linked.Token.ThrowIfCancellationRequested();

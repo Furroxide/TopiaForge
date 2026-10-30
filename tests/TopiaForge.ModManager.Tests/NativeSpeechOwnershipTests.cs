@@ -11,6 +11,12 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            RunVersion(false);
+            RunVersion(true);
+        }
+
+        private static void RunVersion(bool keywords)
+        {
             var root = Program.FindRepoRoot();
             string Read(string path) => File.ReadAllText(Path.Combine(root, path));
             var host = Read("src/TopiaForge.ModManager/NativeRobotSpeechHost.cs")
@@ -20,8 +26,15 @@ namespace TopiaForge.ModManager.Tests
             var methods = string.Join("\n", speech.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
                 .Where(m => m.Identifier.Text is "BindSpeechPlayback" or "OwnsSpeechAssociation" or "PlaySpeechAsync").Select(m => m.ToFullString()));
             boundary = boundary.Replace("/* binding methods */", methods);
-            var sources = new[] { host, Read("mods/TopiaForge.RobotKit/NativeRobotSpeech.cs"),
-                Read("src/TopiaForge.Mods.Abstractions/Internal/IInternalNativeSpeechHost.cs"), boundary, Scenarios };
+            var scenarios = Scenarios;
+            if (keywords)
+            {
+                boundary = boundary.Replace("HintGroup", "KeywordGroup").Replace("HintAsset", "KeywordAsset")
+                    .Replace("public sealed class KeywordGroup", "public readonly struct KeywordGroup");
+                scenarios = scenarios.Replace("HintGroup", "KeywordGroup").Replace("HintAsset", "KeywordAsset");
+            }
+            var sources = new[] { host, Read("src/TopiaForge.ModManager/NativeRobotSpeechBindings.cs"), Read("mods/TopiaForge.RobotKit/NativeRobotSpeech.cs"),
+                Read("src/TopiaForge.Mods.Abstractions/Internal/IInternalNativeSpeechHost.cs"), boundary, scenarios };
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(p => !Path.GetFileName(p).StartsWith("UnityEngine", StringComparison.Ordinal)
                     && !Path.GetFileName(p).StartsWith("TopiaForge", StringComparison.Ordinal))

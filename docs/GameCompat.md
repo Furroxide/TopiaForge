@@ -74,7 +74,7 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2545 metadata capture currently contains 60 types and 15 simple-name lookups. Offline metadata verification
+The build 2597 metadata capture currently contains 60 types and 15 simple-name lookups. Offline metadata verification
 resolves 222 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings, errors, or
 warnings; installed verification last ran before presence added nine of them. All 44 Manager and 34 Worlds bindings
 are verifiable. The remaining uncheckable

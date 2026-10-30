@@ -1,9 +1,9 @@
 {
-  "capturedUtc": "2026-10-29T11:57:21.5772157Z",
+  "capturedUtc": "2026-10-30T13:49:40.8357558Z",
   "extractorVersion": "1.1.0-rc.1",
-  "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
-  "gameVersion": "0.0.2545",
-  "gameVersionLabel": "build 2545",
+  "gameCodeMvid": "ca6b3eab-422a-43f6-80bb-88ac23255cd7",
+  "gameVersion": "0.0.2597",
+  "gameVersionLabel": "build 2597",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "40e6db70379ca85e5126e31b69dc5f49f899e8d81d30d45b70fdaa60cd09327d",
+  "surfaceContentHash": "3d605fd8e3cd13a6c6c23360a0cc01086bfdf531e2c659595566a0ff1ef678f1",
   "types": {
     "FMODUnity|FMOD.GUID": {
       "assembly": "FMODUnity",
@@ -913,7 +913,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<Say>b__98_0",
+          "name": "<Say>b__101_0",
           "parameters": [],
           "returnType": "System.Void"
         },
@@ -933,6 +933,18 @@
           "isStatic": false,
           "name": "Awake",
           "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "BroadcastSayEvent",
+          "parameters": [
+            "System.String",
+            "Megaphone",
+            "AgentHead"
+          ],
           "returnType": "System.Void"
         },
         {
@@ -981,6 +993,17 @@
         },
         {
           "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "DispatchSayEvent",
+          "parameters": [
+            "System.String",
+            "AgentHead"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
           "name": "EnableSendEchoEvents",
@@ -994,6 +1017,14 @@
           "name": "EnableTalkTo",
           "parameters": [],
           "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "FindHeldMegaphone",
+          "parameters": [],
+          "returnType": "Megaphone"
         },
         {
           "genericArity": 0,
@@ -1183,7 +1214,7 @@
           "name": "Say",
           "parameters": [
             "System.String",
-            "HintGroup",
+            "KeywordGroup",
             "TaskGraph",
             "System.Threading.CancellationToken",
             "FMODAudioClipAsset",
@@ -1199,7 +1230,7 @@
           "parameters": [
             "System.String",
             "System.String",
-            "HintGroup",
+            "KeywordGroup",
             "TaskGraph",
             "System.Threading.CancellationToken",
             "FMODAudioClipAsset",
@@ -3022,6 +3053,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "knowledgeAssets",
+          "type": "KnowledgeAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "levelEntryPoints",
           "type": "LevelEntryPoints"
         },
@@ -3066,6 +3103,12 @@
           "isStatic": false,
           "name": "parkDollarIncreaseSound",
           "type": "FMODAudioClipAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "questAssets",
+          "type": "QuestAsset[]"
         },
         {
           "isPublic": false,
@@ -3289,6 +3332,16 @@
           "getterIsPublic": true,
           "indexParameterCount": 0,
           "isStatic": true,
+          "name": "Knowledge",
+          "setterIsPublic": false,
+          "type": "System.Collections.Generic.IReadOnlyList<KnowledgeAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
           "name": "LevelEntryPoints",
           "setterIsPublic": false,
           "type": "LevelEntryPoints"
@@ -3372,6 +3425,16 @@
           "name": "QuestMarkerPrefab",
           "setterIsPublic": false,
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
+          "name": "Quests",
+          "setterIsPublic": false,
+          "type": "System.Collections.Generic.IReadOnlyList<QuestAsset>"
         },
         {
           "canRead": true,
@@ -3583,73 +3646,6 @@
       "status": "Resolved",
       "typeKey": "GameCode|Health"
     },
-    "GameCode|HintGroup": {
-      "assembly": "GameCode",
-      "baseChainSimpleNames": [
-        "ValueType",
-        "Object"
-      ],
-      "constructors": [],
-      "enumMembers": {},
-      "fields": [
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "keyphraseToHint",
-          "type": "System.Collections.Generic.Dictionary<System.String, HintAsset>"
-        }
-      ],
-      "fullName": "HintGroup",
-      "isAbstract": false,
-      "isEnum": false,
-      "isInterface": false,
-      "methods": [
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": true,
-          "name": "FromAssets",
-          "parameters": [
-            "System.Collections.Generic.IEnumerable<HintAsset>"
-          ],
-          "returnType": "HintGroup"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": true,
-          "name": "FromPersonality",
-          "parameters": [
-            "PersonalityAsset"
-          ],
-          "returnType": "HintGroup"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
-          "name": "MakeWordsWithHints",
-          "parameters": [
-            "System.String"
-          ],
-          "returnType": "System.Collections.Generic.IEnumerable<ChatUI+Word>"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
-          "name": "RevealHintsIn",
-          "parameters": [
-            "System.String"
-          ],
-          "returnType": "System.Void"
-        }
-      ],
-      "properties": [],
-      "simpleName": "HintGroup",
-      "status": "Resolved",
-      "typeKey": "GameCode|HintGroup"
-    },
     "GameCode|ICollisionEventReceiver": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [],
@@ -3688,6 +3684,73 @@
       "simpleName": "ICollisionEventReceiver",
       "status": "Resolved",
       "typeKey": "GameCode|ICollisionEventReceiver"
+    },
+    "GameCode|KeywordGroup": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "keyphraseToKeyword",
+          "type": "System.Collections.Generic.Dictionary<System.String, KeywordAsset>"
+        }
+      ],
+      "fullName": "KeywordGroup",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ApplyKeywordsIn",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "FromAssets",
+          "parameters": [
+            "System.Collections.Generic.IEnumerable<KeywordAsset>"
+          ],
+          "returnType": "KeywordGroup"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "FromPersonality",
+          "parameters": [
+            "PersonalityAsset"
+          ],
+          "returnType": "KeywordGroup"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "MakeWordsWithKeywords",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Collections.Generic.IEnumerable<ChatUI+Word>"
+        }
+      ],
+      "properties": [],
+      "simpleName": "KeywordGroup",
+      "status": "Resolved",
+      "typeKey": "GameCode|KeywordGroup"
     },
     "GameCode|Killed": {
       "assembly": "GameCode",
@@ -3861,6 +3924,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "currentScene",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "devEnvironmentOverride",
           "type": "System.Func<AgentEnvironmentRaw>"
         },
@@ -4012,7 +4081,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<Awake>b__159_0",
+          "name": "<Awake>b__162_0",
           "parameters": [
             "AgentHead"
           ],
@@ -4022,7 +4091,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<EnterStandbyImpl>b__118_0",
+          "name": "<EnterStandbyImpl>b__121_0",
           "parameters": [
             "IStandbyReceiver"
           ],
@@ -4032,7 +4101,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<OnDisable>b__169_0",
+          "name": "<OnDisable>b__174_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -4042,7 +4111,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<OnEnable>b__162_0",
+          "name": "<OnEnable>b__165_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -4052,7 +4121,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<UpdateThinking>b__103_0",
+          "name": "<UpdateThinking>b__106_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -4062,7 +4131,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<WaitUntilIdle>b__129_0",
+          "name": "<WaitUntilIdle>b__132_0",
           "parameters": [],
           "returnType": "System.Boolean"
         },
@@ -4719,10 +4788,28 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
+          "name": "StartQueuedTurn",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
           "name": "StartTurn",
           "parameters": [
             "AgentHead",
             "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SubscribeTurnTaker",
+          "parameters": [
+            "LLMAgent+OnImportantAgentEvent"
           ],
           "returnType": "System.Void"
         },
@@ -4876,6 +4963,16 @@
           "name": "CurrentRequestId",
           "setterIsPublic": false,
           "type": "System.Nullable<Id64>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "CurrentScene",
+          "setterIsPublic": false,
+          "type": "System.String"
         },
         {
           "canRead": true,
@@ -5523,6 +5620,18 @@
         {
           "isPublic": false,
           "isStatic": true,
+          "name": "VERTICAL_SEGMENT_MAX_XZ",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "VERTICAL_SEGMENT_MAX_XZ_SQR",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
           "name": "WALK_PARAMETER_NAME",
           "type": "System.String"
         },
@@ -5878,7 +5987,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<DelayKill>b__122_0",
+          "name": "<DelayKill>b__124_0",
           "parameters": [
             "System.Threading.CancellationToken"
           ],
@@ -5888,7 +5997,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<TeleportTo>g__SetAllKinematic|105_0",
+          "name": "<TeleportTo>g__SetAllKinematic|107_0",
           "parameters": [
             "System.Boolean"
           ],
@@ -5898,7 +6007,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<WaitTransformSync>g__CloseEnough|148_0",
+          "name": "<WaitTransformSync>g__CloseEnough|150_0",
           "parameters": [],
           "returnType": "System.Boolean"
         },
@@ -7026,7 +7135,7 @@
           "isPublic": false,
           "isStatic": false,
           "name": "hints",
-          "type": "HintAsset[]"
+          "type": "KeywordAsset[]"
         },
         {
           "isPublic": false,
@@ -7231,9 +7340,9 @@
           "getterIsPublic": true,
           "indexParameterCount": 0,
           "isStatic": false,
-          "name": "Hints",
+          "name": "Keywords",
           "setterIsPublic": false,
-          "type": "System.Collections.Generic.IEnumerable<HintAsset>"
+          "type": "System.Collections.Generic.IEnumerable<KeywordAsset>"
         },
         {
           "canRead": true,
@@ -7244,6 +7353,16 @@
           "name": "Knowledge",
           "setterIsPublic": false,
           "type": "System.Collections.Generic.IEnumerable<LoreAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "KnowledgeSlots",
+          "setterIsPublic": false,
+          "type": "System.Collections.Generic.IReadOnlyList<LoreAsset>"
         },
         {
           "canRead": true,
@@ -7590,6 +7709,18 @@
           "name": "ConfirmReply",
           "parameters": [],
           "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "DispatchSayEvent",
+          "parameters": [
+            "AgentHead",
+            "System.String",
+            "System.Boolean"
+          ],
+          "returnType": "System.Boolean"
         },
         {
           "genericArity": 0,
@@ -8020,6 +8151,18 @@
           "name": "SendGiveItemEvent",
           "parameters": [
             "AgentHead"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SendMegaphoneEvent",
+          "parameters": [
+            "AgentHead",
+            "System.String",
+            "Megaphone"
           ],
           "returnType": "System.Void"
         },
@@ -10888,9 +11031,8 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": true,
-          "name": "CollectEntityLoreUris",
+          "name": "CollectEntityAssetUris",
           "parameters": [
-            "UgcExportProject",
             "UgcExportEntity",
             "UgcPrefabSceneMap",
             "System.Collections.Generic.List<System.String>"
@@ -10899,9 +11041,9 @@
         },
         {
           "genericArity": 0,
-          "isPublic": true,
+          "isPublic": false,
           "isStatic": true,
-          "name": "CollectReferencedLoreUris",
+          "name": "CollectReferencedAssetUris",
           "parameters": [
             "UgcExportProject",
             "UgcPrefabSceneMap"
@@ -12844,25 +12986,13 @@
         {
           "isPublic": false,
           "isStatic": true,
-          "name": "DefaultPublicBaseUri",
-          "type": "System.Uri"
-        },
-        {
-          "isPublic": true,
-          "isStatic": true,
-          "name": "DefaultPublicBaseUrl",
-          "type": "System.String"
-        },
-        {
-          "isPublic": false,
-          "isStatic": true,
           "name": "DownloadTimeout",
           "type": "System.TimeSpan"
         },
         {
           "isPublic": false,
           "isStatic": true,
-          "name": "LocalStackWebsiteHost",
+          "name": "ManifestFileName",
           "type": "System.String"
         },
         {
@@ -12874,7 +13004,19 @@
         {
           "isPublic": false,
           "isStatic": true,
-          "name": "ProjectFileName",
+          "name": "OldProductionUgcHost",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ProductionMapsBaseUri",
+          "type": "System.Uri"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ProductionMapsBaseUrl",
           "type": "System.String"
         },
         {
@@ -12923,30 +13065,9 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": true,
-          "name": "BuildDefaultProjectUrl",
-          "parameters": [
-            "System.String"
-          ],
-          "returnType": "System.String"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": true,
-          "name": "BuildProjectUrl",
+          "name": "BuildManifestUrl",
           "parameters": [
             "System.String",
-            "System.String"
-          ],
-          "returnType": "System.String"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": true,
-          "name": "BuildPublicBaseUrl",
-          "parameters": [
-            "System.Uri",
             "System.String"
           ],
           "returnType": "System.String"
@@ -12970,6 +13091,17 @@
             "System.String"
           ],
           "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DownloadAsync",
+          "parameters": [
+            "System.String",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Byte[]>"
         },
         {
           "genericArity": 0,
@@ -13006,19 +13138,9 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": true,
-          "name": "IsLocalTestingPublicUri",
+          "name": "IsProductionMapHost",
           "parameters": [
             "System.Uri"
-          ],
-          "returnType": "System.Boolean"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": true,
-          "name": "IsLocalTestingPublicUrl",
-          "parameters": [
-            "System.String"
           ],
           "returnType": "System.Boolean"
         },
@@ -13037,16 +13159,6 @@
           "isPublic": false,
           "isStatic": true,
           "name": "IsSiteHost",
-          "parameters": [
-            "System.Uri"
-          ],
-          "returnType": "System.Boolean"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": true,
-          "name": "IsTrustedPublicUgcHost",
           "parameters": [
             "System.Uri"
           ],
@@ -13075,9 +13187,20 @@
         },
         {
           "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ReadProjectUrl",
+          "parameters": [
+            "System.String",
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
           "isPublic": false,
           "isStatic": true,
-          "name": "ResolveDefaultPublicBaseUrl",
+          "name": "ResolveDefaultMapsBaseUrl",
           "parameters": [],
           "returnType": "System.String"
         },
@@ -13085,9 +13208,8 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": true,
-          "name": "ResolvePublicBaseUrl",
+          "name": "ResolveMapsBaseUrl",
           "parameters": [
-            "System.String",
             "System.String"
           ],
           "returnType": "System.String"
@@ -13143,7 +13265,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": true,
-          "name": "TryResolveEnvPublicBaseUrl",
+          "name": "TryResolveEnvMapsBaseUrl",
           "parameters": [
             "System.String",
             "System.String&",
@@ -13155,7 +13277,7 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": true,
-          "name": "TryResolveProjectUrl",
+          "name": "TryResolveManifestUrl",
           "parameters": [
             "System.String",
             "System.String&",

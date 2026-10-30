@@ -10,7 +10,7 @@ namespace TopiaForge.Worlds.Maps
     internal sealed partial class MapStore
     {
         internal async Task<OperationResult<MapAcquisition>> GetExactAsync(InternalMapIdentity expected, Uri uri,
-            InternalMapCopy? hostCopy, CancellationToken token, IProgress<long>? progress = null)
+            InternalMapCopy? hostCopy, CancellationToken token, IProgress<long>? progress = null, IMapTransport? requestTransport = null)
         {
             try
             {
@@ -22,7 +22,7 @@ namespace TopiaForge.Worlds.Maps
                     token.ThrowIfCancellationRequested();
                     return Success(document, false, string.Empty);
                 }
-                var live = await GetAsync(expected.MapId, uri, token, progress).ConfigureAwait(false);
+                var live = await GetAsync(expected.MapId, uri, token, progress, requestTransport).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
                 if (live.TryGetValue(out var current) && expected.Matches(current.Document.Packed))
                     return Success(ValidateExact(expected, current.Document.Packed), false, string.Empty);

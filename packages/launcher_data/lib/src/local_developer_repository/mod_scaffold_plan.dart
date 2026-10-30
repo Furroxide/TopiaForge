@@ -139,7 +139,7 @@ extension LocalDeveloperModScaffoldPlan on LocalDeveloperRepository {
       'entryType': '${tokens['ASSEMBLY_NAME']}.${tokens['TYPE_NAME']}Mod',
       'dependencies': <String, Object?>{},
       'optionalDependencies': <String, Object?>{},
-      'supportedGameVersionRange': '>=0.0.2545 <0.0.2600',
+      'supportedGameVersionRange': '>=0.0.2597 <0.0.2600',
       'supportedLoaderVersionRange': _compatibleMinorRange(
         TopiaForgeRuntimeVersions.loaderVersion,
       ),

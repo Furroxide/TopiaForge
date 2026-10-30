@@ -9,38 +9,16 @@ using TopiaForge.Worlds.Maps;
 
 namespace TopiaForge.Worlds
 {
-    internal sealed partial class UgcImportHostBridge : ILocalAuthoredMapBackend
+    internal sealed partial class UgcImportHostBridge : ILocalAuthoredMapBackend, IMapManifestBackend
     {
-        public Uri PublicBase
-        {
-            get
-            {
-                var type = Type.GetType("UgcPublishedProjectLoader, GameCode", false);
-                var baseField = type?.GetField("DefaultPublicBaseUrl", PublicStatic);
-                if (baseField?.FieldType != typeof(string) || !(baseField.GetValue(null) is string value) ||
-                    !Uri.TryCreate(value, UriKind.Absolute, out var uri)) throw Unavailable();
-                return uri;
-            }
-        }
-
-        public Uri ResolvePublished(string id)
-        {
-            if (!MapDocument.IsId(id, 64)) throw new MapProblem(ModErrorCode.InvalidArgument, "Choose a valid published map id.");
-            var type = Type.GetType("UgcPublishedProjectLoader, GameCode", false);
-            var byRef = typeof(string).MakeByRefType();
-            var resolve = type?.GetMethod("TryResolveProjectUrl", PublicStatic, null,
-                new[] { typeof(string), byRef, byRef, byRef, byRef }, null);
-            if (resolve?.ReturnType != typeof(bool)) throw Unavailable();
-            var arguments = new object?[] { id, null, null, null, null };
-            if (!(resolve.Invoke(null, arguments) is bool success) || !success)
-                throw new MapProblem(ModErrorCode.InvalidArgument, "The game could not resolve this published map. Check its id or ask the mod's author for an update.");
-            var policy = new MapEndpointPolicy(PublicBase);
-            // Select the resolved project URL, never the separate public-base URL or a diagnostic string.
-            foreach (var value in arguments.Skip(1).OfType<string>())
-                if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.AbsolutePath.EndsWith("/project.roboworld", StringComparison.Ordinal))
-                { policy.Require(uri); return uri; }
-            throw Unavailable();
-        }
+        private NativePublishedMapBindings? published;
+        private NativePublishedMapBindings Published => published ??= new NativePublishedMapBindings(
+            Type.GetType("UgcPublishedProjectLoader, GameCode", false) ?? throw Unavailable());
+        public Uri PublicBase => Published.PublicBase;
+        public Uri ResolvePublished(string id) => Published.Resolve(id);
+        public IMapTransport PublishedTransport(IMapTransport transport) => Published.UsesManifest
+            ? new MapManifestTransport(transport, new MapEndpointPolicy(PublicBase), Published.ReadProject,
+                SynchronizationContext.Current ?? throw Unavailable()) : transport;
 
         public Task<OperationResult<IMapImportTransaction>> PrepareAsync(MapDocument document, string? sceneId,
             string label, WorldSceneIdentity scene, CancellationToken token)

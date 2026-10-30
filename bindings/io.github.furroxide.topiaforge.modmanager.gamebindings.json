@@ -730,7 +730,7 @@
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechBindings.cs",
       "member": "Say",
       "parameters": [
         {
@@ -738,7 +738,7 @@
           "constrained": true
         },
         {
-          "type": "HintGroup",
+          "type": "KeywordGroup",
           "constrained": true
         },
         {
@@ -771,7 +771,7 @@
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechBindings.cs",
       "member": "Say",
       "parameters": [
         {
@@ -783,7 +783,7 @@
           "constrained": true
         },
         {
-          "type": "HintGroup",
+          "type": "KeywordGroup",
           "constrained": true
         },
         {
@@ -812,19 +812,19 @@
       "id": "robotkit.speech.hints",
       "kind": "Method",
       "assembly": "GameCode",
-      "declaringType": "HintGroup",
+      "declaringType": "KeywordGroup",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
+      "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechBindings.cs",
       "member": "FromAssets",
       "parameters": [
         {
-          "type": "System.Collections.Generic.IEnumerable<HintAsset>",
+          "type": "System.Collections.Generic.IEnumerable<KeywordAsset>",
           "constrained": true
         }
       ],
-      "returnType": "HintGroup",
+      "returnType": "KeywordGroup",
       "exactParameters": true,
       "isPublic": true,
       "isStatic": true
@@ -883,6 +883,46 @@
       "feature": "Native speech result mapping",
       "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
       "expectedOrdinal": 2
+    },
+    {
+      "id": "manager.type.UgcExportProject",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Validated empty UGC bootstrap",
+      "sourceRef": "src/TopiaForge.ModManager/UnityWorldRuntimeBackend.Loading.cs"
+    },
+    {
+      "id": "manager.noop.validate-export",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Validated empty UGC bootstrap",
+      "sourceRef": "src/TopiaForge.ModManager/UnityWorldRuntimeBackend.Loading.cs",
+      "member": "TryLoadProject",
+      "returnType": "System.Boolean",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UgcExportProject&",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0
     }
   ]
 }

@@ -77,8 +77,8 @@ namespace TopiaForge.ModManager
                         if (lastRun?.GetField("Mode")?.FieldType != typeof(string)
                             || lastRun.GetField("ImportFolderPath")?.FieldType != typeof(string)
                             || lastRun.GetField("SelectedExportFilePath")?.FieldType != typeof(string)
-                            || !TopiaForge.Mods.GameBridge.UgcNoOpLaunchRequest.TryQueue(lastRun, launchRequest, "TopiaForgeSessionSandbox", null))
-                            throw new InvalidOperationException("Open Sandbox could not suppress the native content importer.");
+                            || !TopiaForge.Mods.GameBridge.UgcNoOpLaunchRequest.TryQueue(lastRun, launchRequest, "TopiaForgeSessionSandbox", null, ValidateBootstrapExport))
+                            throw new InvalidOperationException("The native empty bootstrap export could not be validated.");
                     }
                 }
                 catch (Exception error)
@@ -141,6 +141,17 @@ namespace TopiaForge.ModManager
                 var valid = ValidateScene();
                 return valid.Succeeded ? OperationResult<WorldSceneIdentity>.Success(new WorldSceneIdentity(captured!.Value.handle, captured.Value.name))
                     : Failure<WorldSceneIdentity>(valid.ErrorCode, valid.ErrorMessage);
+            }
+            private static bool ValidateBootstrapExport(string file)
+            {
+                var loader = Type.GetType("UgcExportLoader, GameCode", false);
+                var project = Type.GetType("UgcExportProject, GameCode", false);
+                if (loader == null || project == null) return false;
+                var validate = loader.GetMethod("TryLoadProject", PublicStatic, null,
+                    new[] { typeof(string), project.MakeByRefType(), typeof(string).MakeByRefType() }, null);
+                if (validate?.ReturnType != typeof(bool)) return false;
+                var arguments = new object?[] { file, null, null };
+                return validate.Invoke(null, arguments) is bool valid && valid && project.IsInstanceOfType(arguments[1]);
             }
             public OperationResult<bool> ValidateScene()
             {

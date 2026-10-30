@@ -8,7 +8,7 @@ void main() {
   test('launcher compatibility versions match the bundled runtime', () {
     expect(TopiaForgeRuntimeVersions.loaderVersion, '0.2.0');
     expect(TopiaForgeRuntimeVersions.sdkVersion, '0.2.0');
-    expect(TopiaForgeRuntimeVersions.gameVersion, '0.0.2545');
+    expect(TopiaForgeRuntimeVersions.gameVersion, '0.0.2597');
     final policyFile = [
       File('release/release-policy.json'),
       File('../../release/release-policy.json'),

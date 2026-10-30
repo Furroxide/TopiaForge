@@ -70,7 +70,7 @@ void _devCliTests(_CliTestHarness Function() currentHarness) {
       File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('unity');
       File(
         p.join(game.path, 'installed-build.json'),
-      ).writeAsStringSync(jsonEncode({'id': '2545'}));
+      ).writeAsStringSync(jsonEncode({'id': '2597'}));
 
       final result = await currentHarness().runCli([
         'dev',
@@ -178,7 +178,7 @@ void _devCliTests(_CliTestHarness Function() currentHarness) {
     File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('unity');
     File(
       p.join(game.path, 'installed-build.json'),
-    ).writeAsStringSync(jsonEncode({'id': '2545'}));
+    ).writeAsStringSync(jsonEncode({'id': '2597'}));
     final result = await harness.runCli([
       'install',
       package.path,

@@ -13,6 +13,8 @@ namespace TopiaForge.ModManager
         {
             private Transform? placedPlayer;
             private TransformState? requestedSpawn;
+            private NativeSpawnSettlement? settlement;
+            private CharacterController? spawnController;
             public OperationResult<TransformState>? ReadDefaultSpawn()
             {
                 UnityMainThreadGuard.AssertCurrent();
@@ -84,19 +86,39 @@ namespace TopiaForge.ModManager
                         if (placedPlayer == null || placedPlayer != player || requestedSpawn.Value != spawn)
                             return Failure<TransformState>(ModErrorCode.Conflict, "The player or selected spawn changed during readiness.");
                         var actual = ReadTransform(player);
-                        var rotation = actual.Rotation; var expected = spawn.Rotation;
-                        var dot = Math.Abs(rotation.X * expected.X + rotation.Y * expected.Y + rotation.Z * expected.Z + rotation.W * expected.W);
-                        if ((actual.Position - spawn.Position).LengthSquared > 0.0001f || dot < 0.9999f)
-                            return Failure<TransformState>(ModErrorCode.External, "The native player did not retain the applied spawn position and rotation.");
-                        return OperationResult<TransformState>.Success(actual);
+                        if (spawnController == null || !spawnController.enabled || player.GetComponent<CharacterController>() != spawnController || settlement == null)
+                        {
+                            WarnSpawnOffset(actual, spawn, "refused");
+                            return Failure<TransformState>(ModErrorCode.Unavailable, "The native player collision shape is unavailable during spawn settling.");
+                        }
+                        var result = settlement.Probe(actual, Time.fixedTime);
+                        if (result != null) WarnSpawnOffset(actual, spawn, result.Succeeded ? "accepted" : "refused");
+                        return result;
                     }
+                    var controller = player.GetComponent<CharacterController>();
+                    var scale = player.lossyScale;
+                    if (controller == null || !controller.enabled || !controller.gameObject.activeInHierarchy
+                        || !NativeSpawnSettlement.Finite(scale.x) || !NativeSpawnSettlement.Finite(scale.y)
+                        || !NativeSpawnSettlement.Finite(scale.z) || scale.x <= 0f || scale.x != scale.y || scale.x != scale.z
+                        || !NativeSpawnSettlement.Finite(controller.height) || controller.height <= 0f
+                        || !NativeSpawnSettlement.Finite(controller.height * scale.y) || !NativeSpawnSettlement.Finite(Time.fixedTime))
+                        return Failure<TransformState>(ModErrorCode.Unavailable, "The native player collision height is unavailable for spawn settling.");
                     TopiaForge.Mods.GameBridge.NativePlayerTeleport.Place(player,
                         new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z),
                         new Quaternion(spawn.Rotation.X, spawn.Rotation.Y, spawn.Rotation.Z, spawn.Rotation.W));
+                    spawnController = controller;
+                    settlement = new NativeSpawnSettlement(spawn, controller.height * scale.y, Time.fixedTime);
+                    try { WarnSpawnOffset(ReadTransform(player), spawn, "applied"); }
+                    catch (Exception) { }
                     placedPlayer = player; requestedSpawn = spawn;
-                    return null; // Read back on a later frame after native player code has run.
+                    return null; // Observe settling on subsequent fixed-time epochs within the existing readiness deadline.
                 }
                 catch (Exception error) { return Failure<TransformState>(ModErrorCode.External, Unwrap(error).Message); }
+            }
+            private static void WarnSpawnOffset(TransformState actual, TransformState spawn, string stage)
+            {
+                try { UnityEngine.Debug.LogWarning(NativeSpawnSettlement.DescribeOffset(actual, spawn, stage)); }
+                catch (Exception) { } // Optional relative telemetry cannot affect placement/readiness ownership.
             }
             private static Transform? ResolvePlayer()
             {
