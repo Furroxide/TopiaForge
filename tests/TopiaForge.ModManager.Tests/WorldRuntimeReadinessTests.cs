@@ -11,6 +11,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            NativeSpawnSettlementTests.Run();
+            UgcNoOpLaunchRequestTests.Run();
             using var test = new Fixture();
             var preparing = test.Service.PrepareAsync(NativeWorldLoadRequest.OpenSandbox(WorldLoadTransition.SceneReplacement), default);
             Assert(!preparing.IsCompleted, "Preparing waits for native completion.");

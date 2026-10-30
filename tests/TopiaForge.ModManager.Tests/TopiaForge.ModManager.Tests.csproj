@@ -62,6 +62,7 @@
   <!-- Compile shared Unity-free mod helpers directly into the test assembly so they can be unit-tested
        on net10.0 without loading a UnityEngine-referencing assembly. -->
   <ItemGroup>
+    <Compile Include="../../src/TopiaForge.ModManager/NativeSpawnSettlement.cs" Link="NativeSpawnSettlement.cs" />
     <Compile Include="../../mods/Shared/DiagnosticPathRedactor.cs" />
     <Compile Include="..\..\mods\Shared\SafeEvent.cs" />
     <Compile Include="..\..\mods\Shared\UgcNoOpLaunchRequest.cs" />

@@ -1,29 +1,30 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Text;
 
 namespace TopiaForge.Mods.GameBridge
 {
     /// <summary>
-    /// Shared clean-room reflection helper: queues the game's <c>UgcPlayLaunchRequest</c> pointed at an empty
-    /// temp folder, so a subsequent load of the UGC play scene imports no user content (the scene's bootstrap
-    /// still runs and spawns the player — only the content import is neutralized). Source-linked into every
-    /// mod that loads the play scene (TopiaForge.Worlds) so the request shape lives in
-    /// exactly one place. Unity-free on purpose; degrades silently when the game symbols are missing.
+    /// Queues a native-validated single-scene, zero-entity file for the initial UGC bootstrap.
+    /// The ordinary native import and error paths remain active. Unity-free and source-linked;
+    /// the authoritative Manager transition is the current production caller.
     /// </summary>
     internal static class UgcNoOpLaunchRequest
     {
+        private const string EmptyProject = "{\"version\":\"1.0\",\"name\":\"TopiaForge Empty Bootstrap\",\"created\":\"1970-01-01T00:00:00Z\",\"modified\":\"1970-01-01T00:00:00Z\",\"assets\":{},\"local-assets\":{},\"scenes\":{\"main\":{\"id\":\"main\",\"name\":\"Empty Bootstrap\",\"entities\":{}}}}";
         private static readonly object FolderGate = new object();
 
         /// <param name="lastRunType">The game's <c>UgcPlayLauncherLastRun</c> type (null degrades to false).</param>
         /// <param name="launchRequestType">The game's <c>UgcPlayLaunchRequest</c> type (null degrades to false).</param>
         /// <param name="emptyFolderName">Per-caller temp folder prefix, so callers do not share import folders.</param>
         /// <param name="logDebug">Debug sink for the (non-fatal) failure path.</param>
-        public static bool TryQueue(Type? lastRunType, Type? launchRequestType, string emptyFolderName, Action<string>? logDebug)
+        /// <param name="validateExport">Native parser preflight; missing or failed validation never arms a request.</param>
+        public static bool TryQueue(Type? lastRunType, Type? launchRequestType, string emptyFolderName, Action<string>? logDebug, Func<string, bool>? validateExport = null)
         {
             try
             {
-                if (lastRunType == null || launchRequestType == null)
+                if (lastRunType == null || launchRequestType == null || validateExport == null)
                 {
                     return false;
                 }
@@ -40,25 +41,32 @@ namespace TopiaForge.Mods.GameBridge
                     throw new ArgumentException("The empty-folder name must be one non-empty path segment.", nameof(emptyFolderName));
                 }
 
-                // Reuse one stable folder per caller instead of leaking a GUID-named directory on every start/stop.
-                // Clear it immediately before arming the request so a stale export left by an interrupted run can
-                // never be imported. Caller-specific names keep Worlds, live sync, and stopped-request state apart.
+                var mode = lastRunType.GetField("Mode");
+                var folder = lastRunType.GetField("ImportFolderPath");
+                var selected = lastRunType.GetField("SelectedExportFilePath");
+                var create = launchRequestType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static,
+                    null, new[] { lastRunType }, null);
+                if (mode?.FieldType != typeof(string) || folder?.FieldType != typeof(string)
+                    || selected?.FieldType != typeof(string) || create == null) return false;
                 var emptyImportFolder = Path.Combine(Path.GetTempPath(), emptyFolderName);
-                PrepareEmptyFolder(emptyImportFolder);
-                lastRunType.GetField("Mode")?.SetValue(values, "SelectedFile");
-                lastRunType.GetField("ImportFolderPath")?.SetValue(values, emptyImportFolder);
-                lastRunType.GetField("SelectedExportFilePath")?.SetValue(values, string.Empty);
-
-                var create = launchRequestType.GetMethod(
-                    "Create", BindingFlags.Public | BindingFlags.Static, null, new[] { lastRunType }, null);
-                create?.Invoke(null, new[] { values });
-                return create != null;
+                lock (FolderGate)
+                {
+                    PrepareEmptyFolder(emptyImportFolder);
+                    var export = Path.Combine(emptyImportFolder, "bootstrap.roboworld");
+                    File.WriteAllText(export, EmptyProject, new UTF8Encoding(false));
+                    if (!validateExport(export)) return false; // Never arm a request the native parser rejects.
+                    mode.SetValue(values, "SelectedFile");
+                    folder.SetValue(values, emptyImportFolder);
+                    selected.SetValue(values, export);
+                    create.Invoke(null, new[] { values });
+                    return true;
+                }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 try
                 {
-                    logDebug?.Invoke("Could not queue a no-op UGC launch request: " + ex.Message);
+                    logDebug?.Invoke("Could not queue the validated empty UGC bootstrap request.");
                 }
                 catch
                 {

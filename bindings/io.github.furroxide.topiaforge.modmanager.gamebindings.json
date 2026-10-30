@@ -883,6 +883,36 @@
       "feature": "Native speech result mapping",
       "sourceRef": "src/TopiaForge.ModManager/NativeRobotSpeechHost.cs:1",
       "expectedOrdinal": 2
+    },
+    {
+      "id": "manager.noop.validate-export",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Validated empty UGC bootstrap",
+      "sourceRef": "src/TopiaForge.ModManager/UnityWorldRuntimeBackend.Loading.cs",
+      "member": "TryLoadProject",
+      "returnType": "System.Boolean",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UgcExportProject&",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0
     }
   ]
 }
