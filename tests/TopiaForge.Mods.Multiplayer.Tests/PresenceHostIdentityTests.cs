@@ -79,9 +79,11 @@ internal static class PresenceHostIdentityTests
         var bits = new NetBitWriter(PresenceMessages.PoseBytes);
         PresenceWire.WritePose(bits, new PresencePoseRecord
         {
-            Millis = (uint)(rig.NowMicros / 1000), Correction = correction,
+            Millis = (uint)(rig.NowMicros / 1000),
+            Correction = correction,
             Position = NetQuantization.QuantizePosition(new NetVector3(500, 0, 500)),
-            Rotation = NetQuantization.IdentityRotationBits, EyeCentimeters = 160
+            Rotation = NetQuantization.IdentityRotationBits,
+            EyeCentimeters = 160
         });
         Check(first.Control.Inbox!.SendDatagram(bits.AsSegment(), InternalSystemTarget.Host).Succeeded,
             "an impossible unflagged pose enters the production channel");
