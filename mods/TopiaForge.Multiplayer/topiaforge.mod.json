@@ -11,7 +11,7 @@
   "entryAssembly": "TopiaForge.Multiplayer.dll",
   "entryType": "TopiaForge.Multiplayer.MultiplayerMod",
   "dependencies": {},
-  "supportedGameVersionRange": ">=0.0.2545 <0.0.2600",
+  "supportedGameVersionRange": ">=0.0.2597 <0.0.2600",
   "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "category": "Framework",

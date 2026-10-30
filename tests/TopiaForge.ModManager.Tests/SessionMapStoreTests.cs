@@ -15,6 +15,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task RunAsync()
         {
+            NativePublishedMapBindingsTests.Run();
+            await MapManifestTransportTests.RunAsync();
             var root = Directory.CreateTempSubdirectory("exact-maps-");
             try
             {

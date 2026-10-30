@@ -61,9 +61,10 @@ namespace TopiaForge.Worlds.Maps
                         {
                             store ??= new MapStore(cache, new MapEndpointPolicy(backend.PublicBase), transport);
                             var uri = backend.ResolvePublished(request.PublishedId);
+                            var requestTransport = (backend as IMapManifestBackend)?.PublishedTransport(transport);
                             var acquired = expected == null
-                                ? await store.GetAsync(request.PublishedId, uri, resources.StoppingToken, progress.Download)
-                                : await store.GetExactAsync(expected, uri, follow!.ReadHostMap, resources.StoppingToken, progress.Download);
+                                ? await store.GetAsync(request.PublishedId, uri, resources.StoppingToken, progress.Download, requestTransport)
+                                : await store.GetExactAsync(expected, uri, follow!.ReadHostMap, resources.StoppingToken, progress.Download, requestTransport);
                             if (!acquired.TryGetValue(out var value)) return Failure(acquired.ErrorCode, acquired.ErrorMessage);
                             document = value.Document;
                             if (value.Offline)

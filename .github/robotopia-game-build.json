@@ -1,22 +1,22 @@
 {
-  "buildId": 2545,
+  "buildId": 2597,
   "baseUrl": "https://builds.tomatocake.dev",
   "manifestUrl": "https://builds.tomatocake.dev/latest-build.json",
   "sourcePlatform": "windows",
   "windowsFilesManifest": {
     "path": "filelist.json",
-    "sha256": "2172c2554e040c5bae2c85262c8f94bf610598349c299e7fc86db06f54c151d1",
+    "sha256": "6738221493e6b30ec7ceec0773328921887969233521165a2f0f36f15312bf1d",
     "fileCount": 416,
-    "gameExecutableSha256": "c2a34751224673d9311ff363d249f3bddc6f049cd4eb4b8f09bee2172112fed2"
+    "gameExecutableSha256": "c83e7b5c17c52cc172500c18a20d9297a7e9668578080a63c8bb090dd0186c4c"
   },
   "archives": {
     "windows": {
-      "path": "Robotopia-v02545-Win64.7z",
-      "sha256": "1ec578d19960423b458e0e4d3e5302edc6c7997183678b9656f376a4e937fb22"
+      "path": "Robotopia-v02597-Win64.7z",
+      "sha256": "7cd43ba77572a45f75da6c9b0f7b67140b6e1103c0d331c754a2de97bad8754f"
     },
     "mac": {
-      "path": "Robotopia-v02545-Mac.7z",
-      "sha256": "96883a3a39972ac8947dfc422e52193295d84aae545147d4bea92817fb9f84f1"
+      "path": "Robotopia-v02597-Mac.7z",
+      "sha256": "a9290da9f3aa0e433ae91562c935a8a933ab3ae88f18cbab41458d5fb2d47e20"
     }
   }
 }

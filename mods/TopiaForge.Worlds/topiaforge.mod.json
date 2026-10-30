@@ -11,7 +11,7 @@
   "entryAssembly": "TopiaForge.Worlds.dll",
   "entryType": "TopiaForge.Worlds.WorldsMod",
   "dependencies": {},
-  "supportedGameVersionRange": "0.0.2545",
+  "supportedGameVersionRange": "0.0.2597",
   "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "category": "Framework",

@@ -16,18 +16,18 @@ namespace TopiaForge.Worlds.Maps
         internal MapStore(MapCache cache, MapEndpointPolicy endpoints, IMapTransport transport)
         { this.cache = cache; this.endpoints = endpoints; this.transport = transport; }
 
-        internal async Task<OperationResult<MapAcquisition>> GetAsync(string id, Uri uri, CancellationToken token, IProgress<long>? progress = null)
+        internal async Task<OperationResult<MapAcquisition>> GetAsync(string id, Uri uri, CancellationToken token, IProgress<long>? progress = null, IMapTransport? requestTransport = null)
         {
             if (!MapDocument.IsId(id, 64)) return Failure(ModErrorCode.InvalidArgument, "Choose a valid published map id.");
             try { endpoints.Require(uri); }
             catch (FormatException error) { return Failure(ModErrorCode.InvalidArgument, error.Message); }
             try { await gate.WaitAsync(token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }
-            try { return await LoadAsync(id, uri, token, progress).ConfigureAwait(false); }
+            try { return await LoadAsync(id, uri, token, progress, requestTransport ?? transport).ConfigureAwait(false); }
             finally { gate.Release(); }
         }
 
-        private async Task<OperationResult<MapAcquisition>> LoadAsync(string id, Uri uri, CancellationToken token, IProgress<long>? progress)
+        private async Task<OperationResult<MapAcquisition>> LoadAsync(string id, Uri uri, CancellationToken token, IProgress<long>? progress, IMapTransport requestTransport)
         {
             var cached = cache.Read(id);
             MapDocument? previous = null;
@@ -41,7 +41,7 @@ namespace TopiaForge.Worlds.Maps
             deadline.CancelAfter(TimeSpan.FromSeconds(previous == null ? 30 : 5));
             try
             {
-                using var response = await transport.FetchAsync(uri, cached?.Record, deadline.Token).ConfigureAwait(false);
+                using var response = await requestTransport.FetchAsync(uri, cached?.Record, deadline.Token).ConfigureAwait(false);
                 deadline.Token.ThrowIfCancellationRequested();
                 if (response.Status == 304 && previous != null) return Success(previous, false, cached!.Record.SavedUtc);
                 if (response.Status == 404 || response.Status == 410)
