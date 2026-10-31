@@ -46,7 +46,8 @@ namespace TopiaForge.RobotKit
             if (result.TryGetValue(out var sent) && sent) (agent as IRobotReplicaState)?.ReplicaState?.Await(motion);
             return result;
         }
-        public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => Send(RobotCommand.Brain, writer => writer.Write((byte)mode));
+        public OperationResult<bool> SetBrainMode(RobotBrainMode mode) =>
+            RobotReplication.BrainRefusal(replication, mode) ?? Send(RobotCommand.Brain, writer => writer.Write((byte)mode));
         public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) => Send(RobotCommand.Movement, writer =>
         { writer.Write((byte)settings.Gait); writer.Write(settings.MoveSpeed); writer.Write(settings.TurnSpeed); writer.Write(settings.StopDistance); });
         public OperationResult<bool> MoveTo(Vec3 position) => replication.Realm != InternalNetRealm.Client
@@ -65,6 +66,8 @@ namespace TopiaForge.RobotKit
         public OperationResult<bool> SetScale(float scale) => Send(RobotCommand.Scale, writer => writer.Write(scale));
         public OperationResult<bool> SetInteraction(RobotInteractionOptions options)
         {
+            var refusal = RobotReplication.TalkRefusal(replication, options);
+            if (refusal != null) return refusal;
             if (options.CustomInteraction != null)
                 return replication.Realm != InternalNetRealm.Client ? agent.SetInteraction(options)
                     : OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, "Custom robot interactions must be installed by the host.");

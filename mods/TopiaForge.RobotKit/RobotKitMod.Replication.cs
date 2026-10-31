@@ -29,7 +29,7 @@ namespace TopiaForge.RobotKit
                     return new TransformState(new Vec3(p.x, p.y, p.z), new Quat(q.x, q.y, q.z, q.w), new Vec3(s.x, s.y, s.z));
                 }
                 return TransformState.Identity;
-            });
+            }, seam);
             var factory = seam.RegisterReplicaFactory(RobotReplicationWire.Kind, provider);
             if (!factory.Succeeded) throw new InvalidOperationException(factory.ErrorMessage);
             var handler = seam.RegisterSpawnHandler(RobotReplicationWire.Kind, provider);

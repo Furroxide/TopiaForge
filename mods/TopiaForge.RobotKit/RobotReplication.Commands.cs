@@ -21,7 +21,8 @@ namespace TopiaForge.RobotKit
                     {
                         case RobotCommand.Brain:
                             var brain = RobotReplicationWire.Enum<RobotBrainMode>(reader, 1);
-                            return () => Update(state, agent.SetBrainMode(brain), Copy(state.Request, brain: brain));
+                            return () => BrainRefusal(provider, brain, state.IsReplica) ??
+                                Update(state, agent.SetBrainMode(brain), Copy(state.Request, brain: brain));
                         case RobotCommand.Movement:
                             var gait = RobotReplicationWire.Enum<RobotGait>(reader, 2);
                             var movement = new RobotMovementSettings(gait, RobotReplicationWire.Number(reader, 0, 100),
@@ -54,7 +55,8 @@ namespace TopiaForge.RobotKit
                         case RobotCommand.Interaction:
                             var talk = RobotReplicationWire.Boolean(reader); var distance = RobotReplicationWire.Number(reader, 0, 100);
                             var interaction = talk ? RobotInteractionOptions.NativeTalkAtDistance(distance) : RobotInteractionOptions.DisableNativeTalk();
-                            return () => Update(state, agent.SetInteraction(interaction), Copy(state.Request, interaction: interaction));
+                            return () => TalkRefusal(provider, interaction, state.IsReplica) ??
+                                Update(state, agent.SetInteraction(interaction), Copy(state.Request, interaction: interaction));
                         case RobotCommand.Damage:
                             var amount = RobotReplicationWire.Number(reader, 0, 100000);
                             var damage = RobotReplicationWire.Enum<RobotDamageType>(reader, 4);

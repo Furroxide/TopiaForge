@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager.Tests
         internal FirstPartyRobots(WorldPeer peer)
         {
             peer.Scene.ProviderObject = entity => Agents.TryGetValue(entity.Id, out var robot) ? robot.Body : null;
+            var seam = peer.Replication.Bind("io.example.robot-provider", new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Process), peer.Lifetime);
             Provider = new RobotReplication((request, replica) =>
             {
                 var body = peer.Scene.Add(peer.Scene.ActiveScene!, request.Name ?? "Robot", rigidbody: true,
@@ -33,8 +34,7 @@ namespace TopiaForge.ModManager.Tests
                 var robot = Agents[entity.Id];
                 var q = robot.Body.Rotation;
                 return new TransformState(robot.Position, new Quat(q.X, q.Y, q.Z, q.W), new Vec3(robot.Inner.Scale, robot.Inner.Scale, robot.Inner.Scale));
-            });
-            var seam = peer.Replication.Bind("io.example.robot-provider", new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Process), peer.Lifetime);
+            }, seam);
             Check(seam.RegisterReplicaFactory(RobotReplicationWire.Kind, Provider).Succeeded);
             Check(seam.RegisterSpawnHandler(RobotReplicationWire.Kind, Provider).Succeeded);
         }
@@ -48,6 +48,7 @@ namespace TopiaForge.ModManager.Tests
         internal readonly bool Replica;
         internal readonly RobotAgentSpawnRequest Request;
         internal IEntity? Chased;
+        internal int BrainCalls, InteractionCalls;
         internal FirstPartyRobot(FakeWorldObject body, RobotAgentSpawnRequest request, bool replica)
         {
             Body = body; Replica = replica; Request = request; Inner = (FakeRobotAgent)new FakeRobotAgentService(new FakeModLifetime()).Spawn(request).Value!;
@@ -66,7 +67,7 @@ namespace TopiaForge.ModManager.Tests
         public float TurnSpeed => ReplicaState?.TurnSpeed ?? Inner.TurnSpeed;
         public float StopDistance => ReplicaState?.StopDistance ?? Inner.StopDistance;
         public RobotGait Gait => ReplicaState?.Gait ?? Inner.Gait;
-        public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => Inner.SetBrainMode(mode);
+        public OperationResult<bool> SetBrainMode(RobotBrainMode mode) { BrainCalls++; return Inner.SetBrainMode(mode); }
         public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) => Replica ? Refuse() : Inner.ConfigureMovement(settings);
         public OperationResult<bool> MoveTo(Vec3 position) => Replica ? Refuse() : Inner.MoveTo(position);
         public OperationResult<bool> Chase(IEntity target) { if (Replica) return Refuse(); Chased = target; return Inner.Chase(target); }
@@ -75,7 +76,7 @@ namespace TopiaForge.ModManager.Tests
         public OperationResult<bool> SetEmote(string emojiShortcode) => Inner.SetEmote(emojiShortcode);
         public OperationResult<bool> SetName(string name) => Inner.SetName(name);
         public OperationResult<bool> SetScale(float scale) => Inner.SetScale(scale);
-        public OperationResult<bool> SetInteraction(RobotInteractionOptions options) => Inner.SetInteraction(options);
+        public OperationResult<bool> SetInteraction(RobotInteractionOptions options) { InteractionCalls++; return Inner.SetInteraction(options); }
         public OperationResult<bool> ApplyDamage(float amount, RobotDamageType type, string source) => Inner.ApplyDamage(amount, type, source);
         public OperationResult<bool> Kill(RobotDamageType type, string source) => Inner.Kill(type, source);
         public OperationResult<bool> Ragdoll() => Inner.Ragdoll();

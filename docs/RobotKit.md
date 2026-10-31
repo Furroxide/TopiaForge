@@ -149,3 +149,10 @@ and leak-free reload.
 
 See [Specialist modules](Modules.md#robotkit), [Privacy and capability disclosure](PrivacyAndCapabilities.md),
 and the generated C# API reference.
+
+### Native brains in multiplayer
+
+Guest-origin robot spawns use `RobotBrainMode.Dormant` with native talk disabled on the host and every replica.
+A guest's `SetBrainMode(Autonomous)` or native-talk-enabling `SetInteraction` returns `NotAuthoritative`.
+Movement, appearance and other non-AI controls remain available within the usual ownership and lifetime rules.
+Host-owned, offline and trusted server operations retain Autonomous brains and native conversation support.

@@ -79,6 +79,10 @@ namespace TopiaForge.ModManager
             motionLeases.Clear();
         }
 
+        /// <summary>Whether this call retains a forwarded participant's authority across nested synchronous scopes.</summary>
+        internal bool HasForwardedParticipant => recording && IntentFlowRules.ActsForParticipants(realm) &&
+            Scope.HasForwardedParticipant(epoch);
+
         /// <summary>What <paramref name="modId"/>'s code observes now: its own intent, on the main thread, from this epoch; else null.</summary>
         internal IntentRecord? VisibleTo(string modId) => IntentFlowRules.Observe(Scope.Flowing, modId, epoch, Scope.IsOwnerThread);
 

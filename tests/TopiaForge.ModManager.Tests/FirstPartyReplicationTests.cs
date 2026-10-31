@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager.Tests
             RobotSpeechTests.Run();
             FirstPartyPlayerReferenceTests.Run();
             FirstPartyBrainAuthorityTests.Run();
+            FirstPartyGuestBrainTests.Run();
             FirstPartyLocalRobotTests.Run();
             SoloPromotesSameBody();
             HostOwnedRobots();
@@ -96,7 +97,8 @@ namespace TopiaForge.ModManager.Tests
             Check(handle.SetName("Before adoption").Succeeded, "immediate commands wait automatically for adoption");
             Check(rig.Run(() => owner.Peer.Client.OwnedObjects == 1), "spawn is adopted");
             var canonical = host.Agents.Values.Single();
-            Check(!canonical.Replica && canonical.BrainMode == RobotBrainMode.Autonomous, "only the canonical body runs its brain");
+            Check(!canonical.Replica && canonical.BrainMode == RobotBrainMode.Dormant &&
+                canonical.Request.Interaction.NativeTalkMode == RobotNativeTalkMode.Disabled, "guest canonical body has no autonomous brain or native talk");
             Check(rig.Run(() => canonical.Name == "Before adoption" && handle.Name == "Before adoption") && handle.IsAlive,
                 "immediate mutation preserves the adopted handle");
             Check(handle.SetName("Changed").Succeeded && handle.SetScale(2).Succeeded, "commands are accepted");
