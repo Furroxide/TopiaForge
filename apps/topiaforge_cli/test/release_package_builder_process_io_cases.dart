@@ -203,4 +203,48 @@ void _registerReleaseProcessAndIoTests() {
       isEmpty,
     );
   });
+  test('nested CLI builds use the current pinned Dart VM', () async {
+    final repo = _writeFixtureRepo(temp);
+    final launcher = Directory(p.join(temp.path, 'launcher'))
+      ..createSync(recursive: true);
+    File(
+      p.join(launcher.path, 'topiaforge_launcher.exe'),
+    ).writeAsStringSync('launcher');
+    _writeFile(launcher, [
+      'data',
+      'flutter_assets',
+      'NOTICES.Z',
+    ], 'Flutter notices');
+    final runner = _RecordingProcessRunner(
+      onRun: (call) async {
+        if (call.executable == Platform.resolvedExecutable &&
+            call.arguments.contains('compile')) {
+          final output = _argAfter(call.arguments, '-o');
+          File(output)
+            ..parent.createSync(recursive: true)
+            ..writeAsStringSync('compiled cli');
+        }
+      },
+    );
+
+    await ReleasePackageBuilder(
+      repositoryRoot: repo.path,
+      platform: ReleasePackagePlatform.windows,
+      outputRoot: p.join(temp.path, 'out'),
+      prebuiltLauncher: launcher.path,
+      rebuildRuntimePayload: false,
+      processRunner: runner,
+    ).build();
+
+    final dartCalls = runner.calls
+        .where((call) => call.executable == Platform.resolvedExecutable)
+        .toList();
+    expect(dartCalls, hasLength(2));
+    expect(dartCalls.first.arguments, ['pub', 'get', '--enforce-lockfile']);
+    expect(dartCalls.last.arguments, containsAllInOrder(['compile', 'exe']));
+    expect(
+      dartCalls.last.arguments,
+      contains('-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev'),
+    );
+  });
 }
