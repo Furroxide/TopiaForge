@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
 
@@ -119,6 +120,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private readonly IntentLogicalStore? logical;
         private readonly string slot;
         private readonly int ownerThread;
+        // Synchronous ancestors are separate from the mod-visible/async-flowing record. Replacing or clearing
+        // that record must not upgrade a forwarded caller's authority inside a nested SDK callback.
+        private readonly List<IntentRecord?> ancestors = new List<IntentRecord?>();
 
         /// <summary>Creates a scope owned by the calling thread, running records the way this runtime does best.</summary>
         internal IntentScope()
@@ -179,6 +183,23 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         internal IntentRecord? Flowing => IsOwnerThread ? Read() : null;
 
         /// <summary>
+        /// Whether the current call or a still-active synchronous ancestor carries forwarded authority in this epoch.
+        /// This does not expose another mod's intent or change what async/deferred work captures. Like scope tokens,
+        /// ancestors belong to the owner thread and end in LIFO order; old realm records confer no authority.
+        /// </summary>
+        internal bool HasForwardedParticipant(long epoch)
+        {
+            if (!IsOwnerThread) return false;
+            if (Forwarded(Read(), epoch)) return true;
+            for (var index = ancestors.Count - 1; index >= 0; index--)
+                if (Forwarded(ancestors[index], epoch)) return true;
+            return false;
+        }
+
+        private static bool Forwarded(IntentRecord? record, long epoch) =>
+            record != null && record.Epoch == epoch && record.ParticipantId != null;
+
+        /// <summary>
         /// Gets the record the execution context carries to the calling code on whichever thread it runs, for work handed
         /// back to the main thread (<see cref="IntentFlow.WorkerHandBack"/>): a worker the intent's own code started never
         /// observes it, but what it schedules through the SDK scheduler captures it. Nothing else reads it.
@@ -219,19 +240,23 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 var outer = ExecutionContext.Capture();
                 if (outer != null)
                 {
-                    ExecutionContext.Run(InnerFor(record, outer), callback, state);
+                    ancestors.Add(flowing);
+                    try { ExecutionContext.Run(InnerFor(record, outer), callback, state); }
+                    finally { ancestors.RemoveAt(ancestors.Count - 1); }
                     return;
                 }
             }
 
             Write(record);
+            ancestors.Add(flowing);
             try
             {
                 callback(state);
             }
             finally
             {
-                Write(flowing);
+                try { Write(flowing); }
+                finally { ancestors.RemoveAt(ancestors.Count - 1); }
             }
         }
 
@@ -246,6 +271,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             var flowing = Read();
             if (ReferenceEquals(flowing, record)) return default;
             Write(record);
+            ancestors.Add(flowing);
             return new Token(this, (object?)flowing ?? RestoreNone);
         }
 
@@ -256,7 +282,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         internal void Restore(object? restore)
         {
             if (restore == null || !IsOwnerThread) return;
-            Write(ReferenceEquals(restore, RestoreNone) ? null : (IntentRecord)restore);
+            try { Write(ReferenceEquals(restore, RestoreNone) ? null : (IntentRecord)restore); }
+            finally { ancestors.RemoveAt(ancestors.Count - 1); }
         }
 
         private IntentRecord? Read() => logical != null ? logical.Get(slot) as IntentRecord : current.Value;

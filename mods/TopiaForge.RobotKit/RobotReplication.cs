@@ -10,11 +10,12 @@ namespace TopiaForge.RobotKit
     {
         private readonly Func<RobotAgentSpawnRequest, bool, OperationResult<IRobotAgent>> spawn;
         private readonly Func<IEntity, TransformState> transform;
+        private readonly IRuntimeReplication provider;
         private readonly Dictionary<string, State> states = new Dictionary<string, State>(StringComparer.Ordinal);
 
         internal RobotReplication(Func<RobotAgentSpawnRequest, bool, OperationResult<IRobotAgent>> spawn,
-            Func<IEntity, TransformState> transform)
-        { this.spawn = spawn; this.transform = transform; }
+            Func<IEntity, TransformState> transform, IRuntimeReplication provider)
+        { this.spawn = spawn; this.transform = transform; this.provider = provider; }
 
         internal OperationResult<IRobotAgent> Spawn(IRuntimeReplication replication, RobotAgentSpawnRequest request)
         {
@@ -26,8 +27,13 @@ namespace TopiaForge.RobotKit
             try
             {
                 var payload = RobotReplicationWire.Spawn(request);
-                // Validate local requests with exactly the receiver's limits before creating anything.
+                // Validate the original arguments before canonicalization can erase invalid brain/talk values.
                 RobotReplicationWire.Spawn(payload);
+                if (IsGuestOrigin(replication))
+                {
+                    request = WithoutNativeBrain(request);
+                    payload = RobotReplicationWire.Spawn(request);
+                }
                 var descriptor = new InternalSpawnDescriptor(RobotReplicationWire.Kind,
                     new TransformState(request.Position, Facing(request.Facing), new Vec3(request.Scale, request.Scale, request.Scale)), payload);
                 var result = replication.RequestSpawn(descriptor, () => Make(request, replication.Realm == InternalNetRealm.Client));
@@ -63,7 +69,8 @@ namespace TopiaForge.RobotKit
 
         private OperationResult<IEntity> Make(RobotAgentSpawnRequest request, bool replica)
         {
-            var made = spawn(replica ? Copy(request, brain: RobotBrainMode.Dormant, interaction: RobotInteractionOptions.DisableNativeTalk()) : request, replica);
+            if (replica || IsGuestOrigin(provider)) request = WithoutNativeBrain(request);
+            var made = spawn(request, replica);
             if (!made.TryGetValue(out var agent)) return OperationResult<IEntity>.Failure(made.ErrorCode, made.ErrorMessage);
             var state = new State(agent, request, replica);
             states.Add(agent.Id, state);
@@ -104,7 +111,7 @@ namespace TopiaForge.RobotKit
         {
             if (!states.TryGetValue(target.Id, out var state)) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "Robot body is unavailable.");
             var decoded = RobotReplicationWire.Spawn(descriptor.Payload);
-            var request = decoded.Request;
+            var request = WithoutNativeBrain(decoded.Request);
             // No host brain or native conversation is enabled on this path, even if the host asks for one.
             state.Agent.SetBrainMode(RobotBrainMode.Dormant);
             state.Agent.SetInteraction(RobotInteractionOptions.DisableNativeTalk());
@@ -113,7 +120,7 @@ namespace TopiaForge.RobotKit
             if (request.Name != null) state.Agent.SetName(request.Name);
             if (decoded.Emote != state.Emote) state.Agent.SetEmote(decoded.Emote);
             (state.Agent as IRobotReplicaState)?.ReplicaState?.Apply(request, decoded.Moving, decoded.Reached, decoded.Motion);
-            state.Request = request; state.Emote = decoded.Emote;
+            state.Request = request; state.Emote = decoded.Emote; state.Descriptor = null;
             return OperationResult<bool>.Success(true);
         }
 

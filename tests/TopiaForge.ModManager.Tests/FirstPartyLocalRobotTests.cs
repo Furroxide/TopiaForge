@@ -38,6 +38,8 @@ namespace TopiaForge.ModManager.Tests
             Check(robot.SetName("Local helper").Succeeded && body.Name == "Local helper", "SetName applies offline");
             Check(robot.SetBrainMode(RobotBrainMode.Autonomous).Succeeded && body.BrainMode == RobotBrainMode.Autonomous,
                 "SetBrainMode applies offline");
+            Check(robot.SetInteraction(RobotInteractionOptions.NativeTalk()).Succeeded && body.InteractionCalls == 1,
+                "native talk remains available offline");
             Check(robot.SetScale(2).Succeeded && body.Inner.Scale == 2, "SetScale applies offline");
             Check(robot.SetEmote("wave").Succeeded, "SetEmote applies offline");
             Check(robot.MoveTo(new Vec3(2, 0, 0)).Succeeded && robot.Stop().Succeeded, "direct movement remains usable");
