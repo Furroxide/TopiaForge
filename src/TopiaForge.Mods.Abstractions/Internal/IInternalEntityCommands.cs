@@ -7,6 +7,9 @@ namespace TopiaForge.Mods.Internal
 
     internal interface IInternalEntityCommands
     {
+        // Runtime-derived current caller, across provider/consumer identities. Never supplied by a payload.
+        // Includes guest-local calls, forwarded participant callbacks and intent-free remote spawns.
+        bool IsGuestOrigin { get; }
         OperationResult<bool> SubmitEntityCommand(IEntity target, string kind, byte[] payload);
     }
 

@@ -8,6 +8,9 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class RuntimeReplication : IInternalEntityCommands
     {
+        public bool IsGuestOrigin => services.Runtime.Realm == NetRealm.Client || services.MakingForPlayer ||
+            services.Runtime.Intents.HasForwardedParticipant;
+
         // Non-recorded profiles still own local bodies, but must never enter the shared ledger or client routing.
         private List<(IEntity Entity, string Kind)>? localCommandTargets;
 
