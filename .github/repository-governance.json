@@ -303,6 +303,42 @@
           "type": "tag"
         }
       ]
+    },
+    {
+      "name": "control-plane-staging",
+      "can_admins_bypass": false,
+      "protected_branches": false,
+      "custom_branch_policies": true,
+      "reviewer_ids": [
+        221987073
+      ],
+      "prevent_self_review": false,
+      "branch_policies": [
+        {
+          "name": "dev",
+          "type": "branch"
+        },
+        {
+          "name": "main",
+          "type": "branch"
+        }
+      ]
+    },
+    {
+      "name": "control-plane-production",
+      "can_admins_bypass": false,
+      "protected_branches": false,
+      "custom_branch_policies": true,
+      "reviewer_ids": [
+        221987073
+      ],
+      "prevent_self_review": false,
+      "branch_policies": [
+        {
+          "name": "main",
+          "type": "branch"
+        }
+      ]
     }
   ],
   "manual_controls": [

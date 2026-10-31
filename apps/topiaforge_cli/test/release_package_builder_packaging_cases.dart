@@ -201,6 +201,10 @@ void _registerReleasePackagingTests() {
     expect(dartCalls, hasLength(2));
     expect(dartCalls.first.arguments, ['pub', 'get', '--enforce-lockfile']);
     expect(dartCalls.last.arguments, containsAllInOrder(['compile', 'exe']));
+    expect(
+      dartCalls.last.arguments,
+      contains('-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev'),
+    );
   });
 
   test('validator rejects a package without launcher output', () async {

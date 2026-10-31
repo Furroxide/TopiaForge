@@ -374,3 +374,27 @@ must say so before Internet play is enabled.
 | Relay-only joins fail while other relay joins work | The joiner receives a `candidates-withheld` notice for its relay candidates, so the relay addresses it was given lie outside `RELAY_ADDRESS_RANGES`. Compare the list with Cloudflare's (section 4.1). |
 | `measurementFailures` climbs | The analytics token lacks Account Analytics read, `ANALYTICS_ACCOUNT_ID` is wrong, or the dataset query changed; run `POST /v1/admin/spend/measure` after each fix. The query is in `src/relay/usage-api.ts`. |
 | Admin answers `429` | Admin requests are limited per prefix (30 a minute); wait a minute. |
+
+## Client builds and separate deployment credentials
+
+Use `python tools/multiplayer-build.py -- build windows --release` for a local
+launcher build (substitute `linux` or `macos` as needed). The default is staging.
+Use `--kind dart -- compile exe bin/topiaforge.dart -o <output>` for the CLI.
+The helper runs from either directory, checks service readiness, and supplies
+`TOPIAFORGE_CONTROL_PLANE_ORIGIN` to compilation. A raw Flutter or Dart build
+without this define remains offline. `--environment offline` explicitly builds
+without Internet services; `--environment production` selects production.
+
+The reusable launcher workflow selects staging on development branches and
+production on main/release branches. Release packaging always selects production
+for both clients. An unavailable or disabled service stops these builds. The
+check verifies service feature flags, not an end-to-end game or TURN session.
+Rebuild the launcher and launch the game through it to project the address into
+the game's preferences. An already running game must restart to read it.
+
+Keep local deployments on the workstation's Wrangler OAuth login. CI uses an
+independently revocable API token in each protected GitHub deployment environment.
+Never copy the local OAuth or refresh token to CI. Neither deployment credential
+is embedded in a game or launcher: those receive only the public HTTPS origin.
+Production still requires deployment from main and its own Worker secrets and
+TURN key; selecting its address does not provision those resources.

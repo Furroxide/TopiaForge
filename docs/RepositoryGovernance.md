@@ -262,3 +262,12 @@ GitHub references: [rulesets](https://docs.github.com/en/repositories/configurin
 [deployment environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments),
 [Dependabot configuration](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference),
 and [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
+
+## Multiplayer deployment environments
+
+The protected `control-plane-staging` environment permits `dev` and `main`;
+`control-plane-production` permits only `main`. Both require maintainer review
+and prohibit administrator bypass. Each holds `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_API_TOKEN`, with a public `CONTROL_PLANE_ORIGIN` variable. The CI
+deployment token is separate from the workstation's Wrangler OAuth login.
+Client compilation needs no Cloudflare credentials.

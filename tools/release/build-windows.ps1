@@ -343,6 +343,9 @@ $flutterCommand = Get-Command $FlutterPath -CommandType Application -ErrorAction
     Select-Object -First 1
 $dartCommand = Get-Command $DartPath -CommandType Application -ErrorAction SilentlyContinue |
     Select-Object -First 1
+if ($null -eq (Get-Command python -CommandType Application -ErrorAction SilentlyContinue)) {
+    throw "Python 3 is required for the multiplayer service build check."
+}
 if ($null -eq $flutterCommand -or $null -eq $dartCommand) {
     throw "The pinned Dart and Flutter command paths must resolve to applications."
 }
@@ -436,8 +439,10 @@ Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
     -Arguments @("clean")
 Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
     -Arguments @("pub", "get", "--enforce-lockfile")
-Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
+Invoke-Checked -FilePath "python" -WorkingDirectory $launcherProject `
     -Arguments @(
+        (Join-Path $repository "tools/multiplayer-build.py"),
+        "--environment", "production", "--executable", $flutter, "--",
         "build", "windows", "--release",
         "--dart-define=TOPIAFORGE_PRODUCT_VERSION=$Version"
     )
@@ -484,8 +489,10 @@ Remove-OwnedProjectDirectory -Path (Join-Path $cliProject ".dart_tool") `
     -ProjectRoot $cliProject -ExpectedName ".dart_tool"
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments @("pub", "get", "--enforce-lockfile")
-Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
-    -Arguments @("compile", "exe", "bin/topiaforge.dart", "-o", $compiledCli)
+Invoke-Checked -FilePath "python" -WorkingDirectory $cliProject `
+    -Arguments @((Join-Path $repository "tools/multiplayer-build.py"),
+        "--environment", "production", "--kind", "dart", "--executable", $dart, "--",
+        "compile", "exe", "bin/topiaforge.dart", "-o", $compiledCli)
 $buildPackageArguments = @(
     "run", "bin/topiaforge.dart", "release", "build-package",
     "--platform", "windows", "--output", $output, "--configuration", "Release",

@@ -402,6 +402,9 @@ jobs:
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
 
+      - name: Test multiplayer build configuration
+        run: python3 tools/test_multiplayer_build.py
+
       - name: Test protected release evidence gates
         run: |
           bash tools/test-verify-release-tag.sh
