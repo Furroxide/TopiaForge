@@ -37,6 +37,7 @@ namespace TopiaForge.ModManager.Tests
             rig.OpenToMultiplayer();
             var player = rig.AddPlayer("loading-player");
             player.World = null;
+            player.Phase = SessionPhase.LoadingWorld;
             var bodies = new FakeBodyFactory();
             That(Seam(player, new OwnerModLifetime()).RegisterAvatarBodyFactory(bodies).Succeeded, "the body provider is available throughout loading");
             rig.Join(player);
@@ -47,11 +48,13 @@ namespace TopiaForge.ModManager.Tests
                 "buffered poses during loading create neither physical avatars nor native cosmetic bodies");
 
             player.World = rig.Host.World;
+            player.Phase = SessionPhase.Running;
             That(rig.RunUntil(() => player.AvatarOf(rig.Host)?.IsWearingBody == true, 20), "the committed world admits its avatar and body without a new connection");
             var previous = player.AvatarOf(rig.Host)!;
             That(bodies.Made.Count == 1, "readiness constructs one body");
 
             player.World = null;
+            player.Phase = SessionPhase.Stopping;
             player.SceneVersion++;
             rig.Frames(1);
             That(previous.Destroyed && bodies.Made[0].Disposed && player.AvatarOf(rig.Host) == null,
@@ -61,9 +64,36 @@ namespace TopiaForge.ModManager.Tests
                 "continued host traffic cannot immediately recreate an avatar during the replacement load");
 
             player.World = rig.Host.World;
+            player.Phase = SessionPhase.Running;
             That(rig.RunUntil(() => player.AvatarOf(rig.Host)?.IsWearingBody == true, 20), "a subsequent committed world reconstructs the presentation");
             That(!ReferenceEquals(previous, player.AvatarOf(rig.Host)) && bodies.Made.Count == 2 && player.Backend.Avatars.Count == 2,
                 "the new world gets a fresh independently owned avatar and body");
+
+            // A native level can have trusted poses without an authored world session. Null world identity is
+            // not a loading signal: real ModRuntime reports Idle there, and Players host placement can establish trust.
+            player.World = null;
+            player.Phase = SessionPhase.Idle;
+            That(rig.RunUntil(() => player.AvatarOf(rig.Host)?.IsWearingBody == true && bodies.Made.Count == 3, 20),
+                "a settled native level without an authored session retains ordinary trusted peer avatars");
+            foreach (var phase in new[] { SessionPhase.Preparing, SessionPhase.LoadingWorld, SessionPhase.StartingMode, SessionPhase.Stopping, SessionPhase.Running })
+            {
+                player.Phase = phase;
+                rig.Frames(2);
+                That(player.AvatarOf(rig.Host) == null && bodies.Requests == 3,
+                    "uncommitted or invalidated readiness cannot recreate native bodies in phase " + phase);
+            }
+            player.World = rig.Host.World;
+            foreach (var phase in new[] { SessionPhase.Preparing, SessionPhase.LoadingWorld, SessionPhase.StartingMode, SessionPhase.Stopping })
+            {
+                player.Phase = phase;
+                rig.Frames(2);
+                That(player.AvatarOf(rig.Host) == null && bodies.Requests == 3,
+                    "a stale non-null world identity cannot bypass a transition phase " + phase);
+            }
+            player.World = null;
+            player.Phase = SessionPhase.Idle;
+            That(rig.RunUntil(() => player.AvatarOf(rig.Host)?.IsWearingBody == true && bodies.Made.Count == 4, 20),
+                "finishing a native scene operation restores ordinary no-session presentation");
         }
 
         private static void AvatarsWearTheOfferedBody()
