@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
             var agent = Read("RobotAgent.cs");
             var native = Read("NativeRobotSpeech.cs");
             var source = Contract.Replace("/* speech fields */", string.Join("\n", speech.DescendantNodes().OfType<FieldDeclarationSyntax>()))
+                .Replace("/* visibility */", speech.DescendantNodes().OfType<PropertyDeclarationSyntax>().Single(p => p.Identifier.Text == "SpeechVisible").ToFullString() + Methods(speech, "OwnsSpeechAssociation"))
                 .Replace("/* agent methods */", Methods(speech, "RegisterSpeech", "ReleaseSpeech", "BindSpeech") + Methods(agent, "Despawn"))
                 .Replace("/* composed destroy */", Methods(Read("RobotComposedLifetime.cs"), "DestroyActor"))
                 .Replace("/* alive */", agent.DescendantNodes().OfType<PropertyDeclarationSyntax>().Single(p => p.Identifier.Text == "IsAlive").ToFullString())
@@ -54,9 +55,11 @@ namespace TopiaForge.ModManager.Tests
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 namespace UnityEngine {
@@ -68,18 +71,27 @@ namespace UnityEngine {
   public override bool Equals(object? other) => ReferenceEquals(this,other);
   public override int GetHashCode() => RuntimeHelpers.GetHashCode(this);
   public static void Destroy(Object o) { DestroyCalls++; o.Destroyed=true; }
+  public static void DontDestroyOnLoad(GameObject go) { go.Scene=-1; }
  }
  public class GameObject : Object {
   public AgentHead Head=new(); public bool Killed;
-  public Transform transform=new();
+  public int Scene=1; public int scene => transform.parent?.Owner?.scene ?? Scene;
+  public bool activeSelf=true; public bool activeInHierarchy => activeSelf && (transform.parent?.Owner?.activeInHierarchy ?? true);
+  public Renderer[] Renderers=Array.Empty<Renderer>();
+  public T[] GetComponentsInChildren<T>(bool inactive) => Renderers.OfType<T>().ToArray();
+  public Transform transform;
+  public GameObject() { transform=new Transform { Owner=this }; }
   public T GetComponentInChildren<T>(bool inactive) where T:class => (Head as T)!;
  }
+ public class Renderer : Object { public bool enabled=true; public GameObject gameObject=new(); }
  public class Transform {
-  public Transform? parent;
+  public Transform? parent; public GameObject? Owner;
+  public void SetParent(Transform value, bool preserve) { parent=value; }
   internal TopiaForge.RobotKit.RobotComposedLifetime? Lease;
   public T? GetComponent<T>() where T:class => Lease as T;
  }
 }
+namespace UnityEngine.SceneManagement { public static class SceneManager { public static int GetActiveScene()=>1; } }
 public class AgentHead : UnityEngine.Object { }
 namespace TopiaForge.Mods {
  public class OperationResult<T> { public static OperationResult<T> Success(T value) => new(); }
@@ -109,6 +121,11 @@ namespace TopiaForge.RobotKit {
   internal int Steps;
   /* speech fields */
   /* alive */
+  private Renderer[]? renderers;
+  /* visibility */
+  internal void Associate(Func<bool> current, CancellationToken stopping=default) {
+   speechAssociation=new object(); speechAssociationCurrent=current; speechOwnerStopping=stopping;
+  }
   /* agent methods */
   internal void Step() { Steps++; }
   private void ReleaseWalk() { }
@@ -124,6 +141,25 @@ namespace TopiaForge.RobotKit {
   private void Add(RobotAgent a) { agents.Add(a); agentsById.Add(a.Id,a); }
   private static void Check(bool ok,string message) { if(!ok) throw new InvalidOperationException(message); }
   public static void Scenarios() {
+   { var root=new GameObject(); UnityEngine.Object.DontDestroyOnLoad(root);
+     var a=new RobotAgent(); a.go.transform.SetParent(root.transform,true);
+     var renderedChild=new GameObject(); renderedChild.transform.SetParent(a.go.transform,true);
+     var renderer=new Renderer { gameObject=renderedChild }; a.go.Renderers=new[]{renderer};
+     var currentWorld=true; a.Associate(()=>currentWorld);
+     Check(a.go.scene!=SceneManager.GetActiveScene(),"DDOL boundary models the actual persistent parent scene");
+     Check(a.SpeechVisible,"DdolProductionVisibility: current owned DDOL child must be speech-visible");
+     root.activeSelf=false; Check(!a.SpeechVisible,"inactive persistent parent refuses"); root.activeSelf=true;
+     renderer.enabled=false; Check(!a.SpeechVisible,"hidden renderer refuses"); renderer.enabled=true;
+     renderedChild.activeSelf=false; Check(!a.SpeechVisible,"inactive rendered child refuses"); renderedChild.activeSelf=true;
+     a.go.activeSelf=false; Check(!a.SpeechVisible,"inactive body refuses"); a.go.activeSelf=true;
+     currentWorld=false; Check(!a.SpeechVisible,"old owning world refuses despite live persistent body"); currentWorld=true;
+     using var stopping=new CancellationTokenSource(); a.Associate(()=>true,stopping.Token); stopping.Cancel();
+     Check(!a.SpeechVisible,"stopped owning context refuses"); a.Associate(()=>true);
+     a.ReleaseSpeech(); Check(!a.SpeechVisible,"released body association refuses");
+     var disposed=new RobotAgent(); disposed.go.Renderers=new[]{new Renderer {gameObject=disposed.go}};
+     disposed.Associate(()=>true); disposed.Despawn(); Check(!disposed.SpeechVisible,"disposed body refuses");
+     Console.WriteLine("DdolProductionVisibility: passed actual getter and association lifetime negatives.");
+   }
    // Both native death with a retained corpse and outright destruction must release speech during prune.
    foreach(var destroyBody in new[]{false,true}) {
     var service=new RobotAgentService(); var dead=new RobotAgent(); var live=new RobotAgent();
@@ -168,6 +204,7 @@ namespace TopiaForge.RobotKit {
         internal int SpeechPlays;
         internal bool Visible = true, MissingVoice;
         internal string Voice = new string('a', 64);
+        internal readonly List<TaskCompletionSource<OperationResult<bool>>> SpeechCompletions = new();
         internal readonly List<CancellationToken> SpeechTokens = new List<CancellationToken>();
         internal Func<string, CancellationToken, Task<OperationResult<bool>>>? Route;
         internal object? PlaybackAssociation;
@@ -183,6 +220,7 @@ namespace TopiaForge.RobotKit {
             if (MissingVoice || voice != Voice) return Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "No matching voice."));
             SpeechPlays++; SpeechTokens.Add(token);
             var completion = new TaskCompletionSource<OperationResult<bool>>();
+            SpeechCompletions.Add(completion);
             token.Register(() => completion.TrySetResult(OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Stopped.")));
             return completion.Task;
         }

@@ -24,7 +24,7 @@ namespace TopiaForge.ModManager
         private readonly TokenBucket outgoing, incoming;
         private ulong nonce, seenNonce, generation, instance;
         private string challenge = "";
-        private bool readySent;
+        private bool readySent, resetting;
         private long nextReady;
         private NetRealm realm;
         private string? runningWorld;
@@ -39,12 +39,14 @@ namespace TopiaForge.ModManager
             world.Channel.Register(RobotSpeechWire.Line, this);
             world.Channel.Register(RobotSpeechWire.Cancel, this);
             world.Channel.Register(RobotSpeechWire.Withdraw, this);
+            world.Channel.Register(RobotSpeechWire.Finished, this);
         }
         public void Run(float deltaTime) => Tick();
 
         internal Task<OperationResult<bool>> SayAsync(RuntimeReplication context, IEntity entity, string kind,
             string text, Func<bool> owns, CancellationToken token)
         {
+            if (resetting) return Unavailable();
             Tick();
             if (token.IsCancellationRequested) return Result(ModErrorCode.Cancelled, "Robot speech was cancelled.");
             if (!RobotSpeechWire.Text(text)) return Result(ModErrorCode.InvalidArgument, "Robot speech needs 1 to 512 plain-text characters.");
@@ -66,7 +68,6 @@ namespace TopiaForge.ModManager
             var operation = new Playback(entity, provider, ++nonce, clock(), CancellationTokenSource.CreateLinkedTokenSource(token, context.Lifetime.StoppingToken), Current) { WireId = id };
             active.Add(operation);
             speechPaces[entity] = new SpeechPace(clock(), Current);
-            var reached = false;
             var presence = services.Players?.Presence;
             if (shared && presence != null)
             {
@@ -79,16 +80,15 @@ namespace TopiaForge.ModManager
                     writer.WriteUInt64(gate.Stamp);
                     writer.WriteString(context.OwnerModId); writer.WriteString(kind); writer.WriteString(voice); writer.WriteString(text);
                     if (!world.Channel.TrySendTo(peer.Id, writer, writer.Length)) continue;
-                    operation.Recipients.Add(new Recipient(peer.Id, gate, id)); reached = true;
+                    operation.Recipients.Add(new Recipient(peer.Id, gate, id));
                 }
             }
             if (LocalEligible(entity))
             {
                 operation.LocalCancellation = CancellationTokenSource.CreateLinkedTokenSource(operation.Cancellation.Token);
                 operation.Task = SafePlay(provider, entity, voice, text, operation.LocalCancellation.Token);
-                return operation.Task;
             }
-            return Task.FromResult(OperationResult<bool>.Success(reached));
+            return operation.Completion.Task;
         }
 
         private bool Eligible(ParticipantId participant, IEntity entity)
@@ -153,6 +153,7 @@ namespace TopiaForge.ModManager
             internal readonly ParticipantId Id;
             internal readonly ReadyPeer Gate;
             internal readonly uint Entity;
+            internal bool Completed;
             internal Recipient(ParticipantId id, ReadyPeer gate, uint entity) { Id = id; Gate = gate; Entity = entity; }
         }
         private sealed class Playback
@@ -164,7 +165,9 @@ namespace TopiaForge.ModManager
             internal readonly CancellationTokenSource Cancellation;
             internal readonly Func<bool> Current;
             internal readonly List<Recipient> Recipients = new List<Recipient>();
+            internal readonly TaskCompletionSource<OperationResult<bool>> Completion = new TaskCompletionSource<OperationResult<bool>>();
             internal Task<OperationResult<bool>>? Task;
+            internal OperationResult<bool>? Failure;
             internal CancellationTokenSource? LocalCancellation;
             internal uint WireId;
             internal Playback(IEntity entity, IInternalSpeechProvider provider, ulong nonce, long started, CancellationTokenSource cancellation, Func<bool> current)

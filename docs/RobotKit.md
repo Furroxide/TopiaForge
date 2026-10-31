@@ -121,7 +121,11 @@ originate NPC speech and their replicas remain dormant. Authors write no packet,
 Lines allow up to 512 plain-text characters. A new line replaces the previous one; cancellation,
 despawn, scope disposal, hiding and world changes stop playback. Missing bindings return `Unavailable`;
 retry a fresh line after recovery. Delivery is best effort: full windows, expired lines and late joins
-do not replay speech. Local completion does not acknowledge remote audio. Native subtitle-only or
+do not replay speech. A successful await waits for every admitted listener's native playback completion (remote listeners
+report theirs) and the one-second speech pace. `true` means those playback tasks completed; `false`
+means no listener was admitted and the pace elapsed without synthesis. Sequential awaited lines do not
+cut off their predecessor, including when the host is far away. Missing reports or listener loss fail
+within the 15-second lifetime; task completion is not proof of audible sound. Native subtitle-only or
 pre-recorded-clip overrides are outside this replicated speech contract.
 
 See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/c43ed92e963b0f662996eb6649f412e1d9176485/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
