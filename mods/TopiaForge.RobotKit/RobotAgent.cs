@@ -366,7 +366,7 @@ namespace TopiaForge.RobotKit
             ResetInteractionOverrides();
             if (go != null)
             {
-                UnityEngine.Object.Destroy(go);
+                RobotComposedLifetime.DestroyActor(go);
             }
 
             return OperationResult<bool>.Success(true);

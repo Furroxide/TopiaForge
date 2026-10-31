@@ -29,8 +29,13 @@ namespace TopiaForge.RobotKit
             logger = Context.Logger;
 
             NativeRobotSpeech.Install(Context);
-            service = new RobotAgentService(logger);
+            // Resolve the dependency once. Context-bound Current creates ownership wrappers, so cache its
+            // committed notifications instead of re-reading it per actor/frame.
+            var sessions = Context.TryGetExtension<IWorldSessionService>(out var worlds) ? worlds : null;
+            var robotWorld = new RobotWorldObservation(sessions, () => service?.InvalidateComposedDiscovery());
+            service = new RobotAgentService(logger, () => robotWorld.Current);
             Context.Lifetime.Track(service);
+            Context.Lifetime.Track(robotWorld);
             OfferRobotReplication(service);
             bodies = new RobotBodyService(service.CreatePersistentBody, Context as IInternalNativeEntityReadContext);
             Context.Lifetime.Track(bodies);

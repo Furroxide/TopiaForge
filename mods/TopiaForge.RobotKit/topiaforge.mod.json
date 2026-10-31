@@ -12,10 +12,12 @@
   "entryType": "TopiaForge.RobotKit.RobotKitMod",
   "dependencies": {},
   "optionalDependencies": {
-    "io.github.furroxide.topiaforge.prompts": ">=0.2.0 <0.3.0"
+    "io.github.furroxide.topiaforge.prompts": ">=0.2.0 <0.3.0",
+    "io.github.furroxide.topiaforge.worlds": ">=0.2.0 <0.3.0"
   },
   "loadAfter": [
-    "io.github.furroxide.topiaforge.prompts"
+    "io.github.furroxide.topiaforge.prompts",
+    "io.github.furroxide.topiaforge.worlds"
   ],
   "supportedGameVersionRange": "0.0.2597",
   "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
