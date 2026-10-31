@@ -143,7 +143,12 @@ void main() {
     final flutterCall = runner.calls.singleWhere(
       (call) => call.executable == localFlutter,
     );
-    expect(flutterCall.arguments, ['build', 'windows', '--release']);
+    expect(flutterCall.arguments, [
+      'build',
+      'windows',
+      '--release',
+      '--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev',
+    ]);
   });
 
   test(

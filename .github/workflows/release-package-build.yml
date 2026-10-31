@@ -243,7 +243,7 @@ jobs:
         working-directory: apps/topiaforge_cli
         run: |
           dart pub get --enforce-lockfile
-          dart compile exe bin/topiaforge.dart -o "$RUNNER_TEMP/topiaforge-macos-x64"
+          python ../../tools/multiplayer-build.py --environment production --kind dart -- compile exe bin/topiaforge.dart -o "$RUNNER_TEMP/topiaforge-macos-x64"
           chmod +x "$RUNNER_TEMP/topiaforge-macos-x64"
 
       - name: Upload x64 CLI
@@ -369,7 +369,7 @@ jobs:
           dart pub get --enforce-lockfile
           cli_dir="$RUNNER_TEMP/topiaforge-macos-cli"
           mkdir -p "$cli_dir"
-          dart compile exe bin/topiaforge.dart -o "$cli_dir/topiaforge-arm64"
+          python ../../tools/multiplayer-build.py --environment production --kind dart -- compile exe bin/topiaforge.dart -o "$cli_dir/topiaforge-arm64"
           cp "$RUNNER_TEMP/macos-x64-cli/topiaforge-macos-x64" \
             "$cli_dir/topiaforge-x64"
           chmod +x "$cli_dir/topiaforge-arm64" "$cli_dir/topiaforge-x64"
