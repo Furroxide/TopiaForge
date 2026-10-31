@@ -20,6 +20,7 @@ namespace TopiaForge.RobotKit
     {
         private readonly IModLogger logger;
         private readonly RobotPrefabResolver prefabResolver;
+        private readonly Func<WorldSessionSnapshot?>? world;
         internal RobotReplication? Replication { get; set; }
         private readonly List<RobotAgent> agents = new List<RobotAgent>();
         private readonly Dictionary<string, RobotAgent> agentsById =
@@ -42,14 +43,15 @@ namespace TopiaForge.RobotKit
         private bool loggedSpawnMode;
         private bool disposed;
 
-        public RobotAgentService(IModLogger logger)
+        public RobotAgentService(IModLogger logger, Func<WorldSessionSnapshot?>? world = null)
         {
             this.logger = logger;
+            this.world = world;
             RobotKitDiagnostics.Configure(logger);
             prefabResolver = new RobotPrefabResolver(logger);
         }
 
-        public bool IsAvailable => !disposed && LocomotionBridge.LocomotionAvailable() && ResolveCachedPrefab() != null;
+        public bool IsAvailable => !disposed && LocomotionBridge.LocomotionAvailable() && ResolveCachedCatalog()?.Count > 0;
 
         public bool IsNavigationAvailable => LocomotionBridge.NavAvailable();
 
@@ -131,8 +133,8 @@ namespace TopiaForge.RobotKit
                     "RobotKit has been disposed.");
             }
 
-            var prefab = ResolvePrefabForType(request.RobotTypeId);
-            if (prefab == null)
+            var candidate = RobotPrefabSelection.Select(ResolveCachedCatalog(), request.RobotTypeId, item => item.Id);
+            if (candidate == null)
             {
                 return OperationResult<IRobotAgent>.Failure(
                     ModErrorCode.Unavailable,
@@ -163,45 +165,63 @@ namespace TopiaForge.RobotKit
             // Instantiate under the inactive incubator so no native Awake/OnEnable fires before the brain is
             // configured, set the requested brain mode while inactive, then reparent to the live root and activate
             // as a fully native (but mod-driven) robot.
-            var clone = UnityEngine.Object.Instantiate(prefab, position, rotation, incubator.transform);
-            clone.SetActive(false);
-            clone.name = request.Name ?? "RobotKit Agent";
-
-            // Capture the brain's pristine state before any dormant writes, so a later SetBrainMode(Autonomous)
-            // can restore what the prefab shipped with.
-            var brainSnapshot = GameReflection.CaptureBrainState(clone);
-            GameReflection.ConfigureBrain(clone, request.BrainMode, logger);
-            EnsureKinematicRoot(clone);
-            var agentId = NextId();
-            // Reuse a marker if a resolver ever hands us an already-marked clone; two anchors on one object make
-            // interface-based GetComponent selection ambiguous. The new clone begins a new entity lifetime/id.
-            var identityAnchor = clone.GetComponent<RobotAgentEntityIdentityAnchor>()
-                ?? clone.AddComponent<RobotAgentEntityIdentityAnchor>();
-            identityAnchor.Initialize(agentId);
-            var agent = new RobotAgent(agentId, clone, request, logger, brainSnapshot);
-
-            agent.RegisterSpeech();
-            if (replica) Quieten(clone, cosmetic: false);
-            clone.transform.SetParent(root.transform, true);
-            clone.SetActive(true);
-            agent.OnActivated();
-            if (replica) agent.MakeReplica(ResolveAnimator(clone), ResolveWalkParameter());
-            if (request.Scale != 1f)
+            GameObject? clone = null;
+            RobotAgent? agent = null;
+            try
             {
-                agent.SetScale(request.Scale);
-            }
+                clone = candidate.Create(incubator.transform);
+                clone.SetActive(false);
+                clone.transform.SetPositionAndRotation(position, rotation);
+                clone.name = request.Name ?? "RobotKit Agent";
 
-            if (request.Tint is { } tint)
+                // Capture the brain's pristine state before any dormant writes, so a later SetBrainMode(Autonomous)
+                // can restore what the prefab shipped with.
+                var brainSnapshot = GameReflection.CaptureBrainState(clone);
+                GameReflection.ConfigureBrain(clone, request.BrainMode, logger);
+                EnsureKinematicRoot(clone);
+                var agentId = NextId();
+                // Reuse a marker if a resolver ever hands us an already-marked clone; two anchors on one object make
+                // interface-based GetComponent selection ambiguous. The new clone begins a new entity lifetime/id.
+                var identityAnchor = clone.GetComponent<RobotAgentEntityIdentityAnchor>()
+                    ?? clone.AddComponent<RobotAgentEntityIdentityAnchor>();
+                identityAnchor.Initialize(agentId);
+                agent = new RobotAgent(agentId, clone, request, logger, brainSnapshot);
+
+                agent.RegisterSpeech();
+                if (replica) Quieten(clone, cosmetic: false);
+                RobotComposedLifetime.Activate(clone, root.transform);
+                agent.OnActivated();
+                if (replica) agent.MakeReplica(ResolveAnimator(clone), ResolveWalkParameter());
+                if (request.Scale != 1f)
+                {
+                    agent.SetScale(request.Scale);
+                }
+
+                if (request.Tint is { } tint)
+                {
+                    agent.SetTint(tint);
+                }
+
+                agents.Add(agent);
+                agentsById.Add(agent.Id, agent);
+                activeDirty = true;
+
+                LogSpawnModeOnce();
+                return OperationResult<IRobotAgent>.Success(agent);
+            }
+            catch (Exception ex)
             {
-                agent.SetTint(tint);
+                if (agent != null)
+                {
+                    agents.Remove(agent);
+                    agentsById.Remove(agent.Id);
+                    activeDirty = true;
+                    agent.Despawn();
+                }
+                else if (clone != null) RobotComposedLifetime.DestroyActor(clone);
+                RobotKitDiagnostics.ReportOnce("robot native construction", ex);
+                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, "The requested robot could not be constructed in this scene.");
             }
-
-            agents.Add(agent);
-            agentsById.Add(agent.Id, agent);
-            activeDirty = true;
-
-            LogSpawnModeOnce();
-            return OperationResult<IRobotAgent>.Success(agent);
         }
 
         public bool TryGetPlayerPosition(out Vec3 position)

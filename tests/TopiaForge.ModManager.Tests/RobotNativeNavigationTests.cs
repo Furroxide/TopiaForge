@@ -17,6 +17,7 @@ namespace TopiaForge.ModManager.Tests
 
         internal static void Run()
         {
+            RobotComposedSceneTests.Run();
             RobotNativeDriverTests.Run();
             assertions = 0;
             foreach (var distance in new[] { 0.771f, 0.793f, 0.805f })

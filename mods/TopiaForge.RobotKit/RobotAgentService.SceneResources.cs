@@ -6,6 +6,10 @@ namespace TopiaForge.RobotKit
 {
     internal sealed partial class RobotAgentService
     {
+        // StartingMode is committed before the gamemode factory runs. A catalog observed during world load
+        // must retry composition on that notification, without waiting for the ordinary two-second throttle.
+        internal void InvalidateComposedDiscovery() => nextPrefabScan = 0f;
+
         private void ClearAgents()
         {
             foreach (var agent in agents)
@@ -14,6 +18,10 @@ namespace TopiaForge.RobotKit
             }
 
             agents.Clear();
+            // Native death can remove an agent handle before its corpse is destroyed. Its fresh builder parent
+            // still belongs to this scene lifetime and must not survive a provider reset.
+            if (root != null)
+                foreach (var composition in root.GetComponentsInChildren<RobotComposedLifetime>(true)) composition.Dispose();
             agentsById.Clear();
             activeDirty = true;
         }
@@ -46,37 +54,56 @@ namespace TopiaForge.RobotKit
         private GameObject? ResolveCachedPrefab()
         {
             var catalog = ResolveCachedCatalog();
-            return catalog != null && catalog.Count > 0 ? catalog[0].Prefab : null;
-        }
-
-        // An explicit type is a requirement, including on replicas. Never substitute another body.
-        private GameObject? ResolvePrefabForType(string? robotTypeId)
-        {
-            var catalog = ResolveCachedCatalog();
-            return RobotPrefabSelection.Select(catalog, robotTypeId, candidate => candidate.Id)?.Prefab;
+            if (catalog != null)
+                foreach (var candidate in catalog) if (candidate.Prefab != null) return candidate.Prefab;
+            return null;
         }
 
         private IReadOnlyList<RobotPrefabCandidate>? ResolveCachedCatalog()
         {
-            if (cachedCatalog != null && cachedCatalog.Count > 0)
+            if (cachedCatalog != null)
             {
-                return cachedCatalog;
+                var staleComposition = false;
+                foreach (var candidate in cachedCatalog)
+                {
+                    if (candidate.Prefab != null) continue;
+                    if (candidate.IsCurrent) return cachedCatalog;
+                    staleComposition = true;
+                }
+                if (staleComposition)
+                {
+                    var retained = new List<RobotPrefabCandidate>();
+                    foreach (var candidate in cachedCatalog) if (candidate.Prefab != null) retained.Add(candidate);
+                    cachedCatalog = retained;
+                    cachedTypes = null;
+                    nextPrefabScan = 0f;
+                }
             }
-
             // ResolveAll does full Resources scans, which are expensive; throttle re-scans while nothing is
             // found (e.g. before a gameplay level has loaded any robots). Reset on scene change.
             if (Time.unscaledTime < nextPrefabScan)
             {
-                return null;
+                return cachedCatalog;
             }
 
-            cachedCatalog = prefabResolver.ResolveAll();
-            if (cachedCatalog.Count == 0)
+            // A map can finish loading after ordinary prefab discovery has already succeeded. Retry composed
+            // discovery too, without changing the existing default-prefab order or rescanning every frame.
+            var catalog = new List<RobotPrefabCandidate>();
+            if (cachedCatalog != null)
+                foreach (var candidate in cachedCatalog) if (candidate.Prefab != null) catalog.Add(candidate);
+            if (catalog.Count == 0) catalog.AddRange(prefabResolver.ResolveAll());
+            var composed = RobotComposedScene.Discover(world);
+            if (composed != null && !catalog.Exists(candidate => string.Equals(candidate.Id, composed.Id, StringComparison.OrdinalIgnoreCase)))
+                catalog.Add(composed);
+            var changed = cachedCatalog == null || catalog.Count != cachedCatalog.Count;
+            if (changed) cachedCatalog = catalog;
+            nextPrefabScan = Time.unscaledTime + 2f;
+            if (cachedCatalog == null || cachedCatalog.Count == 0)
             {
                 cachedCatalog = null;
                 nextPrefabScan = Time.unscaledTime + 2f;
             }
-            else
+            else if (changed)
             {
                 cachedTypes = null;
             }

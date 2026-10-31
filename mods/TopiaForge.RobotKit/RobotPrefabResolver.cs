@@ -19,8 +19,21 @@ namespace TopiaForge.RobotKit
 
         public string Id { get; }
         public string DisplayName { get; }
-        public GameObject Prefab { get; }
+        public GameObject? Prefab { get; }
         public int Score { get; }
+        private readonly Func<Transform, GameObject>? compose;
+        private readonly Func<bool>? current;
+
+        internal RobotPrefabCandidate(string id, string displayName, Func<Transform, GameObject> compose, Func<bool> current)
+        { Id = id; DisplayName = displayName; this.compose = compose; this.current = current; Score = 0; }
+
+        internal bool IsCurrent
+        {
+            get { try { return current?.Invoke() ?? Prefab != null; } catch (Exception) { return false; } }
+        }
+
+        internal GameObject Create(Transform incubator) => compose != null ? compose(incubator)
+            : UnityEngine.Object.Instantiate(Prefab!, incubator, false);
     }
 
     // Resolves spawnable robot prefab assets (not live scene instances) from the loaded game, scoring candidates

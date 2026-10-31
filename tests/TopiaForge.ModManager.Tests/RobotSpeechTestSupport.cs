@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager.Tests
             var native = Read("NativeRobotSpeech.cs");
             var source = Contract.Replace("/* speech fields */", string.Join("\n", speech.DescendantNodes().OfType<FieldDeclarationSyntax>()))
                 .Replace("/* agent methods */", Methods(speech, "RegisterSpeech", "ReleaseSpeech", "BindSpeech") + Methods(agent, "Despawn"))
+                .Replace("/* composed destroy */", Methods(Read("RobotComposedLifetime.cs"), "DestroyActor"))
                 .Replace("/* alive */", agent.DescendantNodes().OfType<PropertyDeclarationSyntax>().Single(p => p.Identifier.Text == "IsAlive").ToFullString())
                 .Replace("/* registry */", native.DescendantNodes().OfType<FieldDeclarationSyntax>()
                     .Single(f => f.Declaration.Variables.Any(v => v.Identifier.Text == "agents")).ToFullString() + Methods(native, "Register", "Release"))
@@ -46,7 +47,7 @@ namespace TopiaForge.ModManager.Tests
             if (!emitted.Success) throw new InvalidOperationException(string.Join("\n", emitted.Diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.RobotKit.RobotAgentService", true)!;
             ((Action)probe.GetMethod("Scenarios")!.CreateDelegate(typeof(Action)))();
-            Console.WriteLine("Robot speech native lifetime: 4 production-path scenarios passed.");
+            Console.WriteLine("Robot speech native lifetime: 6 production-path scenarios passed.");
         }
 
         private const string Contract = """
@@ -70,7 +71,13 @@ namespace UnityEngine {
  }
  public class GameObject : Object {
   public AgentHead Head=new(); public bool Killed;
+  public Transform transform=new();
   public T GetComponentInChildren<T>(bool inactive) where T:class => (Head as T)!;
+ }
+ public class Transform {
+  public Transform? parent;
+  internal TopiaForge.RobotKit.RobotComposedLifetime? Lease;
+  public T? GetComponent<T>() where T:class => Lease as T;
  }
 }
 public class AgentHead : UnityEngine.Object { }
@@ -79,6 +86,14 @@ namespace TopiaForge.Mods {
 }
 namespace TopiaForge.Mods.Internal { internal interface IInternalNativeSpeechPlayback : IDisposable { } }
 namespace TopiaForge.RobotKit {
+ // Only the native owner boundary is replaced. DestroyActor below is read from the shipped source,
+ // so the test catches both a missing harness dependency and incorrect owned-parent routing.
+ internal sealed class RobotComposedLifetime : UnityEngine.Object {
+  internal GameObject? Actor;
+  internal int DisposeCalls;
+  internal void Dispose() { DisposeCalls++; UnityEngine.Object.Destroy(Actor!); }
+  /* composed destroy */
+ }
  internal static class NativeRobotSpeech {
   /* registry */
   internal static bool Contains(AgentHead head) => agents.ContainsKey(head);
@@ -132,6 +147,16 @@ namespace TopiaForge.RobotKit {
      Check(!NativeRobotSpeech.Contains(head!) && token.IsCancellationRequested && a.SpeechDetached,"explicit despawn removes a managed dead head"); }
    { var a=new RobotAgent(); var token=a.SpeechToken; a.ReleaseSpeech(); a.ReleaseSpeech(); a.Despawn();
      Check(token.IsCancellationRequested && NativeRobotSpeech.Count==0 && a.SpeechDetached,"missing head cleanup is idempotent too"); }
+   // Explicit composed despawn must route to its exact owner's cleanup, without destroying a sibling.
+   { var a=new RobotAgent(); var sibling=new GameObject(); var lease=new RobotComposedLifetime { Actor=a.go };
+     a.go.transform.parent=new Transform { Lease=lease }; a.RegisterSpeech(); var token=a.SpeechToken;
+     a.Despawn(); a.Despawn();
+     Check(lease.DisposeCalls==1 && a.go.Destroyed && !sibling.Destroyed,"composed despawn releases its matching owner once");
+     Check(token.IsCancellationRequested && a.SpeechDetached && NativeRobotSpeech.Count==0,"composed ownership preserves speech teardown"); }
+   // A parent lease belonging to another actor is not permission to release that actor's assets.
+   { var a=new RobotAgent(); var other=new GameObject(); var lease=new RobotComposedLifetime { Actor=other };
+     a.go.transform.parent=new Transform { Lease=lease }; a.Despawn();
+     Check(a.go.Destroyed && !other.Destroyed && lease.DisposeCalls==0,"foreign composition ownership falls back to exact actor destruction"); }
   }
  }
 }
