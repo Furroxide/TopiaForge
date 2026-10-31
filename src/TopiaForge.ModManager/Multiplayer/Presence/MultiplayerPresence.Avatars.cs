@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods.Internal;
 
@@ -61,19 +62,24 @@ namespace TopiaForge.ModManager
             var factory = BodyFactory;
             var sceneVersion = SceneVersion?.Invoke() ?? 0;
             var world = RunningWorld?.Invoke();
+            var phase = runtime.SessionPhaseSource();
+            // Native levels outside an authored session are Idle and still present trusted peers. The runtime
+            // reports native scene operations as Stopping; authored loads wait for their committed Running world.
+            var canPresent = phase == SessionPhase.Idle || phase == SessionPhase.Running && world != null;
             for (var index = 0; index < peers.Count; index++)
             {
                 var peer = peers[index];
                 var buffer = peer.Buffer;
                 if (peer.IsLocal) continue;
                 var avatar = peer.Avatar;
-                if (avatar != null && (!avatar.IsAlive || peer.AvatarWorld != world || peer.AvatarSceneVersion != sceneVersion))
+                if (avatar != null && (!canPresent || !avatar.IsAlive || peer.AvatarWorld != world || peer.AvatarSceneVersion != sceneVersion))
                 {
                     DisposeAvatar(peer);
                     avatar = null;
                 }
 
-                if (!peer.HasPose || buffer == null) continue;
+                // Host poses can arrive while this peer still loads and settles its native player.
+                if (!canPresent || !peer.HasPose || buffer == null) continue;
                 if (avatar == null)
                 {
                     if (nowMicros < peer.NextAvatarMicros) continue;
