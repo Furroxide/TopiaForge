@@ -10,7 +10,9 @@ delivery, synthesis and cancellation. No author networking, serialization or tok
 ## Audience and disclosure
 
 Only currently synchronized listeners in the same running world, with fresh host-validated positions
-within a spherical 20-metre radius, receive text. The source must be a live, visible active-scene body.
+within a spherical 20-metre radius, receive text. The source must be a live, visible body with a current owning speech association.
+RobotKit's persistent parent belongs to Unity's DontDestroyOnLoad scene; that scene is not the owning
+world. Association lifetime, active hierarchy and enabled renderers determine speech visibility.
 The host uses the same earshot rule for its own synthesis. Receivers recheck their local position,
 world, replica lifetime and native visibility before synthesis and while playback remains active.
 Moving the host out of earshot stops only its local playback; other eligible listeners continue.
@@ -38,9 +40,10 @@ retrying a fresh line. Missing receiver assets never cause historical speech to 
 
 ## Private wire and compatibility
 
-The existing world channel's version 1 permits additive message types. Private speech schema 1 uses
-72 (readiness), 73 (line), 74 (cancel) and 75 (withdrawal). Older peers never send readiness, so receive no
-speech. Existing spawn/command payloads and public interfaces keep their signatures. The new extension
+The existing world channel's version 1 permits additive message types. Private speech schema 2 uses
+72 (readiness), 73 (line), 74 (cancel), 75 (withdrawal) and 76 (finished). Speech schema 1 peers cannot
+exchange readiness with schema 2 peers, so mixed versions receive no speech rather than claiming
+unacknowledged completion. Existing spawn/command payloads and public interfaces keep their signatures. The new extension
 API is marked `RequiresTopiaForge("0.2.0")`; the RobotKit assembly identity remains `0.1.0.0`.
 
 Every frame starts with the world-channel version/type and speech schema, nonzero world instance,
@@ -48,6 +51,8 @@ Every frame starts with the world-channel version/type and speech schema, nonzer
 field for the recipient's monotonic timestamp, has entity id zero, and appends its current world key.
 Lines append that timestamp, consuming mod, provider kind, 64-character lowercase voice digest and text.
 Cancellation identifies the same entity/line without text; withdrawal has zero nonce/entity fields.
+Finished identifies the same entity/line and appends exactly one byte: 1 for native task completion,
+0 for failure. A receiver emits it on the frame thread only after completion or cancellation.
 Decoding requires minimal integers, strict UTF-8, bounded fields and complete payload consumption before effects.
 
 The authenticated transport supplies the sender. Only the host can send lines/cancellation. The receiver
@@ -69,10 +74,38 @@ recipient timestamp expires after two seconds, bounding transport backlog age wi
 
 There is no outbound speech retry queue or late-join replay. A full window drops that recipient's event.
 Immediate spawn-and-speak announces the descriptor first. A receiver without that descriptor drops the
-line rather than retaining secret text for later. Success is admission/local completion, not remote audio
-acknowledgement. Replacement, despawn, context/provider disposal, world/scene changes and stream loss cancel
-outstanding work. Cancellation is best effort over the wire; the receiver also enforces its own deadline.
+line rather than retaining secret text for later. Replacement, despawn, context/provider disposal,
+world/scene changes and stream loss cancel outstanding work. Cancellation is best effort over the wire; the receiver also enforces its own deadline.
 The native serializer allows only the newest uncancelled line to wait for the prior native call to unwind.
+
+## Completion contract
+
+`Success(true)` means every admitted listener's native playback task completed successfully. The host
+waits for its local task (if in earshot) and a finished report from each remote recipient to which the
+line was sent. The same rule applies regardless of the host's position. Native task completion is not
+proof of physical audible output; a remote report is a statement by that authenticated participant,
+not acoustic attestation. No estimated speech duration is used to claim playback completion.
+
+Successful calls also wait until the existing one-second per-robot pace expires. When no listener is
+admitted (including no one in earshot, incompatible peers, or no successful sends), `Success(false)`
+waits that same second without synthesis. There is no fictitious playback or retained line for a later
+listener. Thus an ordinary sequential `await SayAsync(...)` can start the next line without cutting off
+the first or hitting its pace, even for an empty audience. Concurrent traffic still shares the unchanged
+global budget and active cap; callers must handle admission failures.
+
+A finished report is accepted once only from the admitted authenticated remote sender, for the exact
+world instance, connection generation, readiness challenge, entity and line nonce. Current ownership,
+readiness and earshot must still hold. Wrong senders, stale streams/worlds, duplicates, malformed
+statuses and surplus bytes are rejected. Reports contain no text. The host retains only bounded
+per-operation recipient metadata; acknowledgements do not add a queue or late-join history.
+
+Listener failure, loss of eligibility or disconnection records failure while other admitted listeners
+finish. Local earshot loss cancels only local playback. Caller cancellation, replacement or source
+ownership/provider/world loss cancels the whole operation. A missing report or stalled native task
+expires at the existing 15-second deadline; timeouts never count as success. Settlement and all world,
+Unity and transport access occur on the frame thread. Reset settles pending callers and rejects
+reentrant speech admission until teardown completes. A full acknowledgement window is not retried;
+the host times out. Successful operations retire before releasing a sequential caller.
 
 ## Verification and remaining native checks
 

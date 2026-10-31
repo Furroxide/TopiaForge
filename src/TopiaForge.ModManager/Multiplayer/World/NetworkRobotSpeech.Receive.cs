@@ -10,19 +10,29 @@ namespace TopiaForge.ModManager
     {
         internal void Reset()
         {
-            if (realm == NetRealm.Client && readySent)
+            if (resetting) return;
+            resetting = true;
+            try
             {
-                RobotSpeechWire.Header(writer, RobotSpeechWire.Withdraw, instance, challenge, 0, 0);
-                world.Channel.TrySendToHost(writer);
+                if (realm == NetRealm.Client && readySent)
+                {
+                    RobotSpeechWire.Header(writer, RobotSpeechWire.Withdraw, instance, challenge, 0, 0);
+                    world.Channel.TrySendToHost(writer);
+                }
+                var retired = active.ToArray();
+                active.Clear();
+                foreach (var operation in retired)
+                {
+                    operation.Cancel();
+                    foreach (var recipient in operation.Recipients) SendCancel(operation, recipient);
+                    operation.LocalCancellation?.Dispose(); operation.Cancellation.Dispose();
+                }
+                ready.Clear(); handshakePaces.Clear(); speechPaces.Clear(); expiredPaces.Clear(); removed.Clear();
+                challenge = ""; readySent = false; seenNonce = 0; nextReady = 0;
+                foreach (var operation in retired)
+                    operation.Completion.TrySetResult(OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Robot speech was cancelled."));
             }
-            foreach (var operation in active)
-            {
-                operation.Cancel();
-                foreach (var recipient in operation.Recipients) SendCancel(operation, recipient);
-                operation.LocalCancellation?.Dispose(); operation.Cancellation.Dispose();
-            }
-            active.Clear(); ready.Clear(); handshakePaces.Clear(); speechPaces.Clear(); expiredPaces.Clear(); removed.Clear();
-            challenge = ""; readySent = false; seenNonce = 0; nextReady = 0;
+            finally { resetting = false; }
         }
 
         internal void Tick()
@@ -54,24 +64,50 @@ namespace TopiaForge.ModManager
             {
                 var operation = active[i];
                 var valid = operation.Current() && operation.Entity.IsAlive && operation.Provider.IsSpeechVisible(operation.Entity);
-                if (!valid || clock() - operation.Started >= 15_000_000
-                    || (realm == NetRealm.Client && (!LocalEligible(operation.Entity) || operation.Task?.IsCompleted == true))) operation.Cancel();
+                if (!valid || clock() - operation.Started >= 15_000_000) operation.Cancel();
+                if (operation.Task != null && !operation.Task.IsCompleted && !LocalEligible(operation.Entity))
+                {
+                    try { operation.LocalCancellation?.Cancel(); } catch (Exception) { }
+                    if (realm == NetRealm.Client) operation.Cancel();
+                }
                 for (var p = operation.Recipients.Count - 1; p >= 0; p--)
                 {
                     var recipient = operation.Recipients[p];
                     if (!operation.Cancellation.IsCancellationRequested && Eligible(recipient.Id, operation.Entity)
                         && recipient.Gate.Generation == world.Channel.GetGeneration(recipient.Id)
                         && ready.TryGetValue(recipient.Id, out var currentGate) && currentGate.Challenge == recipient.Gate.Challenge) continue;
-                    // Cancellation carries no speech text; a blocked stream still expires locally after 15 seconds.
+                    // An admitted listener that departs cannot certify completion. Stop its copy, but let
+                    // the remaining listeners finish. The caller receives failure, never partial success.
                     SendCancel(operation, recipient);
+                    operation.Failure = OperationResult<bool>.Failure(ModErrorCode.Cancelled, "A robot speech listener became unavailable.");
                     operation.Recipients.RemoveAt(p);
                 }
-                if (operation.Task != null && !operation.Task.IsCompleted && !LocalEligible(operation.Entity))
+                var localDone = operation.Task == null || operation.Task.IsCompleted;
+                if (operation.Task?.IsCompleted == true)
                 {
-                    try { operation.LocalCancellation?.Cancel(); } catch (Exception) { }
+                    var localResult = operation.Task.Result;
+                    if (!localResult.Succeeded) operation.Failure = localResult;
+                    else if (!localResult.Value) operation.Failure = OperationResult<bool>.Failure(ModErrorCode.Unavailable,
+                        "Native robot speech did not complete playback.");
                 }
-                if (!operation.Cancellation.IsCancellationRequested) continue;
-                active.RemoveAt(i); operation.LocalCancellation?.Dispose(); operation.Cancellation.Dispose();
+                var remoteDone = true;
+                foreach (var recipient in operation.Recipients) if (!recipient.Completed) remoteDone = false;
+                var cancelled = operation.Cancellation.IsCancellationRequested;
+                if (realm == NetRealm.Client)
+                {
+                    if (!cancelled && !localDone) continue;
+                    // Send on the frame thread only, after the native task settles. No Unity or channel
+                    // access occurs on a cancellation callback or worker continuation.
+                    SendFinished(operation, !cancelled && operation.Task?.Result.Succeeded == true && operation.Task.Result.Value);
+                }
+                else if (!cancelled && (!localDone || !remoteDone || clock() - operation.Started < 1_000_000)) continue;
+                active.RemoveAt(i);
+                operation.LocalCancellation?.Dispose(); operation.Cancellation.Dispose();
+                var result = cancelled ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Robot speech was cancelled.")
+                    : operation.Failure ?? OperationResult<bool>.Success(operation.Task != null || operation.Recipients.Count != 0);
+                // Retire before waking a sequential caller, which may start another line synchronously.
+                operation.Completion.TrySetResult(result);
+                i = active.Count;
             }
             if (handshakePaces.Count != 0)
             {
@@ -93,7 +129,7 @@ namespace TopiaForge.ModManager
 
         public bool Handle(byte type, ParticipantId sender, WorldWireReader reader)
         {
-            if (reader.Remaining > RobotSpeechWire.MaximumBytes - 2 || !reader.TryReadByte(out var version) || version != 1
+            if (reader.Remaining > RobotSpeechWire.MaximumBytes - 2 || !reader.TryReadByte(out var version) || version != RobotSpeechWire.Version
                 || !reader.TryReadUInt64(out var messageWorld) || messageWorld == 0
                 || !reader.TryReadString(32, out var messageChallenge) || !RobotSpeechWire.Hex(messageChallenge, 32)
                 || !reader.TryReadUInt64(out var lineNonce) || !reader.TryReadVarUInt(uint.MaxValue, out var entityId)) return false;
@@ -122,6 +158,8 @@ namespace TopiaForge.ModManager
                 ready[sender] = new ReadyPeer(stream, instance, messageChallenge, lineNonce, clock());
                 return true;
             }
+            if (type == RobotSpeechWire.Finished)
+                return ReceiveFinished(sender, reader, messageWorld, messageChallenge, lineNonce, (uint)entityId);
             var mod = ""; var kind = ""; var voice = ""; var text = "";
             ulong stamp = 0;
             if (type == RobotSpeechWire.Line && (!reader.TryReadUInt64(out stamp) || stamp > long.MaxValue

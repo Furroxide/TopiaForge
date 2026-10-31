@@ -6,7 +6,8 @@ namespace TopiaForge.ModManager
 {
     internal static class RobotSpeechWire
     {
-        internal const byte Ready = 72, Line = 73, Cancel = 74, Withdraw = 75;
+        internal const byte Ready = 72, Line = 73, Cancel = 74, Withdraw = 75, Finished = 76;
+        internal const byte Version = 2;
         internal const int MaximumBytes = 2560, MaximumText = 512;
         internal const float Earshot = 20;
         internal static bool Text(string text)
@@ -24,7 +25,7 @@ namespace TopiaForge.ModManager
         }
         internal static void Header(WorldWireWriter writer, byte type, ulong world, string challenge, ulong nonce, uint entity)
         {
-            writer.Begin(type); writer.WriteByte(1); writer.WriteUInt64(world); writer.WriteString(challenge);
+            writer.Begin(type); writer.WriteByte(Version); writer.WriteUInt64(world); writer.WriteString(challenge);
             writer.WriteUInt64(nonce); writer.WriteVarUInt(entity);
         }
     }

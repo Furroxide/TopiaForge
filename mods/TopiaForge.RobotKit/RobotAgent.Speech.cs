@@ -24,7 +24,9 @@ namespace TopiaForge.RobotKit
         {
             get
             {
-                if (!IsAlive || !go.activeInHierarchy || go.scene != SceneManager.GetActiveScene()) return false;
+                // RobotKit bodies live under a persistent root. The owning world/context association,
+                // not that root's special Unity scene, determines whether this body is current.
+                if (speechAssociation == null || !OwnsSpeechAssociation(speechAssociation) || !go.activeInHierarchy) return false;
                 renderers ??= go.GetComponentsInChildren<Renderer>(true);
                 foreach (var renderer in renderers)
                     if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy) return true;
