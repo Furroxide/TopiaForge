@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            BufferedPosesWaitForTheCommittedWorld();
             AvatarsWearTheOfferedBody();
             BodiesThatFailAreAskedForAgain();
             AvatarsTheGameDestroysAreMadeAgain();
@@ -29,6 +30,41 @@ namespace TopiaForge.ModManager.Tests
 
         private static RuntimeReplication Seam(PresenceNode node, OwnerModLifetime lifetime) =>
             node.Replication.Bind("io.example.robots", new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Process), lifetime);
+
+        private static void BufferedPosesWaitForTheCommittedWorld()
+        {
+            var rig = new PresenceRig();
+            rig.OpenToMultiplayer();
+            var player = rig.AddPlayer("loading-player");
+            player.World = null;
+            var bodies = new FakeBodyFactory();
+            That(Seam(player, new OwnerModLifetime()).RegisterAvatarBodyFactory(bodies).Succeeded, "the body provider is available throughout loading");
+            rig.Join(player);
+            rig.Frames(10);
+            var host = player.PeerOf(rig.Host);
+            That(host?.HasPose == true && host.Buffer != null && host.Buffer.Count > 0, "the host's genuine relayed pose is buffered before world readiness");
+            That(player.AvatarOf(rig.Host) == null && player.Backend.Avatars.Count == 0 && bodies.Requests == 0,
+                "buffered poses during loading create neither physical avatars nor native cosmetic bodies");
+
+            player.World = rig.Host.World;
+            That(rig.RunUntil(() => player.AvatarOf(rig.Host)?.IsWearingBody == true, 20), "the committed world admits its avatar and body without a new connection");
+            var previous = player.AvatarOf(rig.Host)!;
+            That(bodies.Made.Count == 1, "readiness constructs one body");
+
+            player.World = null;
+            player.SceneVersion++;
+            rig.Frames(1);
+            That(previous.Destroyed && bodies.Made[0].Disposed && player.AvatarOf(rig.Host) == null,
+                "leaving the committed world retires the previous physical avatar and body");
+            rig.Frames(20);
+            That(bodies.Requests == 1 && player.Backend.Avatars.Count == 1,
+                "continued host traffic cannot immediately recreate an avatar during the replacement load");
+
+            player.World = rig.Host.World;
+            That(rig.RunUntil(() => player.AvatarOf(rig.Host)?.IsWearingBody == true, 20), "a subsequent committed world reconstructs the presentation");
+            That(!ReferenceEquals(previous, player.AvatarOf(rig.Host)) && bodies.Made.Count == 2 && player.Backend.Avatars.Count == 2,
+                "the new world gets a fresh independently owned avatar and body");
+        }
 
         private static void AvatarsWearTheOfferedBody()
         {

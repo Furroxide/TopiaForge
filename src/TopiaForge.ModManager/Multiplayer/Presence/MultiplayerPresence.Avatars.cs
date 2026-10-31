@@ -67,13 +67,15 @@ namespace TopiaForge.ModManager
                 var buffer = peer.Buffer;
                 if (peer.IsLocal) continue;
                 var avatar = peer.Avatar;
-                if (avatar != null && (!avatar.IsAlive || peer.AvatarWorld != world || peer.AvatarSceneVersion != sceneVersion))
+                if (avatar != null && (world == null || !avatar.IsAlive || peer.AvatarWorld != world || peer.AvatarSceneVersion != sceneVersion))
                 {
                     DisposeAvatar(peer);
                     avatar = null;
                 }
 
-                if (!peer.HasPose || buffer == null) continue;
+                // Host poses can arrive while this peer still loads and settles its native player. Only a
+                // committed running world may create physical avatars or activate their native cosmetic bodies.
+                if (world == null || !peer.HasPose || buffer == null) continue;
                 if (avatar == null)
                 {
                     if (nowMicros < peer.NextAvatarMicros) continue;
