@@ -24,6 +24,8 @@ namespace TopiaForge.ModManager.Tests
             ConstructionRollbackAndProviderLimit();
             LifetimeAndCatchup();
             ProviderRecovery();
+            CachedFacadeWorldRecovery();
+            RobotComposedCurrentnessTests.Run();
             ViewTargets();
             TestingKit();
             NativeConstructionContract();
@@ -100,8 +102,10 @@ namespace TopiaForge.ModManager.Tests
             var nextService = provider.Bind(next);
             Check(nextService.Spawn(Request()).Succeeded, "new scope has fresh quota");
             provider.Provider.EndWorld();
+            provider.Refuse = true; // The replacement world is not ready yet.
             Check(nextService.Spawn(Request()).ErrorCode == ModErrorCode.Unavailable, "old facade cannot enter next world");
             Check(provider.Native.All(body => !body.IsAlive), "world ends actual bodies");
+            provider.Refuse = false;
             rig.OpenToMultiplayer();
             var player = rig.AddPlayer("guest"); using var guest = new Bodies(player);
             rig.JoinAndSynchronize(player);

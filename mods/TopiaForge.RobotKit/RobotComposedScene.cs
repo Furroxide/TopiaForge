@@ -13,21 +13,16 @@ namespace TopiaForge.RobotKit
     internal sealed class RobotComposedScene
     {
         private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
-        private readonly Func<WorldSessionSnapshot?> world;
-        private readonly Component host;
-        private readonly object config, sceneRoot, project, entity;
-        private readonly Transform mapRoot;
-        private readonly string sessionId;
-        private readonly int sceneHandle;
+        private readonly object config, project, entity;
+        private readonly RobotComposedCurrentness currentness;
         private readonly Type builderType, ownerType;
         private readonly MethodInfo build, addOwner, destroyAssets;
 
         private RobotComposedScene(Func<WorldSessionSnapshot?> world, WorldSessionSnapshot state,
             Component host, object config, object sceneRoot, Transform mapRoot, object project, object entity)
         {
-            this.world = world; this.host = host; this.config = config; this.sceneRoot = sceneRoot;
-            this.mapRoot = mapRoot; this.project = project; this.entity = entity;
-            sessionId = state.Session!.SessionId; sceneHandle = state.World!.Scene.InstanceId;
+            this.config = config; this.project = project; this.entity = entity;
+            currentness = new RobotComposedCurrentness(world, state, host, config, sceneRoot, mapRoot);
             builderType = Native("UgcSceneBuilder"); ownerType = Native("UgcRuntimeAssetOwner");
             build = RequireMethod(builderType, "BuildEntity", false, typeof(GameObject), project.GetType(), entity.GetType(), typeof(Transform));
             addOwner = RequireMethod(builderType, "GetOrAddAssetOwner", true, ownerType, typeof(Transform));
@@ -96,7 +91,7 @@ namespace TopiaForge.RobotKit
 
         private GameObject Create(Transform incubator)
         {
-            Require(IsCurrent());
+            Require(IsCurrent() && currentness.IsVerified);
             var parent = new GameObject("RobotKit Composed Agent");
             parent.SetActive(false);
             parent.transform.SetParent(incubator, false);
@@ -112,7 +107,7 @@ namespace TopiaForge.RobotKit
                 var actor = build.Invoke(builder, new[] { project, entity, parent.transform }) as GameObject;
                 Require(actor != null && actor.transform.IsChildOf(parent.transform) && !actor.activeInHierarchy);
                 lease.Actor = actor;
-                Require(IsCurrent() && GameReflection.HasComponent(actor!, "RobotBody")
+                Require(IsCurrent() && currentness.IsVerified && GameReflection.HasComponent(actor!, "RobotBody")
                     && GameReflection.HasComponent(actor!, "LLMAgent") && GameReflection.HasComponent(actor!, "AgentHead")
                     && GameReflection.HasComponent(actor!, "LocomotionController"));
                 actor!.SetActive(false);
@@ -123,13 +118,7 @@ namespace TopiaForge.RobotKit
 
         private bool IsCurrent()
         {
-            var state = world();
-            return state != null && CanSpawn(state.Phase) && state.Session?.SessionId == sessionId
-                && state.World?.Scene.InstanceId == sceneHandle && state.World.Map?.IsAlive == true
-                && host != null && host.gameObject.scene.handle == sceneHandle && mapRoot != null
-                && ReferenceEquals(Property(host, "RuntimeAssetConfig", config.GetType()), config)
-                && ReferenceEquals(Property(host, "SceneRoot", sceneRoot.GetType()), sceneRoot)
-                && ReferenceEquals(Property(sceneRoot, "ActiveImportRoot", typeof(Transform)), mapRoot);
+            return currentness.IsCurrent();
         }
 
         private static bool CanSpawn(WorldSessionPhase phase) => phase == WorldSessionPhase.StartingMode || phase == WorldSessionPhase.Running;
