@@ -68,9 +68,11 @@ namespace TopiaForge.RobotKit
                     // Re-serialize parsed data: the native serializer receives plain data and explicit safe settings.
                     var sceneId = data!.TryGetValue("id", out var id) ? id as string : null;
                     if (string.IsNullOrEmpty(sceneId)) return null;
-                    var envelope = new Dictionary<string, object?> {
+                    var envelope = new Dictionary<string, object?>
+                    {
                         ["scenes"] = new Dictionary<string, object?> { [sceneId!] = data },
-                        ["assets"] = new Dictionary<string, object?>(), ["local-assets"] = new Dictionary<string, object?>()
+                        ["assets"] = new Dictionary<string, object?>(),
+                        ["local-assets"] = new Dictionary<string, object?>()
                     };
                     var project = DeserializeProject(MiniJson.Serialize(envelope));
                     var nativeScenes = GameReflection.GetFieldValue(project, "scenes") as IDictionary;
