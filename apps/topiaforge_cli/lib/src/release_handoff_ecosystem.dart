@@ -17,7 +17,7 @@ Future<String> _embeddedEcosystemDigest(
   final input = InputFileStream(file.path);
   final Archive archive;
   try {
-    archive = ZipDecoder().decodeStream(input);
+    archive = ZipDecoder().decodeStream(input, throwOnError: true);
   } finally {
     await input.close();
   }

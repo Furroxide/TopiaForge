@@ -176,7 +176,10 @@ class ReleaseArchivePolicy {
       maxBytes: ReleaseZipMetadataPolicy.maxCompressedBytes,
     );
     _zipMetadataPolicy.validateForExtraction(compressedBytes);
-    final archive = ZipDecoder().decodeBytes(compressedBytes);
+    final archive = ZipDecoder().decodeBytes(
+      compressedBytes,
+      throwOnError: true,
+    );
     final destinationRoot = p.normalize(destination.absolute.path);
     final validatedEntries = <MapEntry<ArchiveFile, String>>[];
     final symlinkNames = <String>{};
