@@ -49,6 +49,7 @@ namespace TopiaForge.ModManager
         internal void ClearPose()
         {
             HasPose = false;
+            ActivityRelayMicros = long.MinValue;
             HasFed = false;
             HasClockOffset = false;
             Buffer?.Reset();
@@ -56,6 +57,9 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets the pose's time on the host's clock, in microseconds.</summary>
         internal long PoseMicros { get; private set; }
+
+        // Activity is stamped by relay time independently of the held transform's sample time.
+        internal long ActivityRelayMicros { get; set; } = long.MinValue;
 
         internal NetQuantizedPosition Position { get; private set; }
 
@@ -141,6 +145,16 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets or sets the scheduler that picks which poses this player receives each tick (host only).</summary>
         internal ReplicationScheduler? Scheduler { get; set; }
+
+        // Per-recipient projected activity changes must wake resting poses without touching their timestamps.
+        internal readonly PresenceFlags[] RelayedFlags = new PresenceFlags[256];
+
+        internal void SetActivityFlags(PresenceFlags flags)
+        {
+            if (Flags == flags) return;
+            Flags = flags;
+            PoseVersion++;
+        }
 
         /// <summary>Takes a pose; returns whether it differs from the one held, which moves <see cref="PoseVersion"/>.</summary>
         internal bool SetPose(long micros, NetQuantizedPosition position, uint rotation, NetQuantizedVelocity velocity, byte eyeCentimeters, PresenceFlags flags)

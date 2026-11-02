@@ -33,6 +33,7 @@ namespace TopiaForge.ModManager
         private readonly List<PresencePeer> picks = new List<PresencePeer>();
         private readonly List<PresenceStateRecord> states = new List<PresenceStateRecord>();
         private readonly List<ParticipantId> skipped = new List<ParticipantId>();
+        private readonly PresenceFlags[] pickFlags = new PresenceFlags[PresenceMessages.MaximumRecords];
         private long nextRelayMicros;
         private long nextStatesMicros;
         private int rosterSent = -1;
@@ -205,6 +206,7 @@ namespace TopiaForge.ModManager
             for (var index = 0; index < all.Count; index++)
             {
                 var peer = all[index];
+                peer.SetActivityFlags(presence.CanonicalActivityFlags(peer));
                 peer.MovedThisTick = peer.PoseVersion != peer.TickVersion;
                 peer.TickVersion = peer.PoseVersion;
             }
@@ -220,8 +222,10 @@ namespace TopiaForge.ModManager
                 {
                     var candidate = all[other];
                     if (ReferenceEquals(candidate, recipient) || !candidate.HasPose || candidate.Index == 0 || candidate.Removed) continue;
+                    var flags = presence.ActivityFlagsFor(candidate, recipient.Id);
+                    var flagsChanged = recipient.RelayedFlags[candidate.Index] != flags;
                     candidates.Add(new ReplicationCandidate(new NetworkEntityId(candidate.Index), PriorityOf(recipient, candidate),
-                        PresenceMessages.RelayRecordBytes, !candidate.MovedThisTick));
+                        PresenceMessages.RelayRecordBytes, !candidate.MovedThisTick && !flagsChanged));
                 }
 
                 scheduler.Schedule(candidates, selected);
@@ -239,11 +243,12 @@ namespace TopiaForge.ModManager
                 for (var pick = 0; pick < picks.Count; pick++)
                 {
                     var shown = picks[pick];
+                    pickFlags[pick] = presence.ActivityFlagsFor(shown, recipient.Id);
                     var record = new PresencePoseRecord
                     {
                         Index = shown.Index,
                         AgeMillis = (ushort)Math.Min(ushort.MaxValue, Math.Max(0, (nowMicros - shown.PoseMicros) / 1000)),
-                        Flags = shown.Flags,
+                        Flags = pickFlags[pick],
                         EyeCentimeters = shown.EyeCentimeters,
                         Position = shown.Position,
                         Rotation = shown.Rotation,
@@ -255,6 +260,7 @@ namespace TopiaForge.ModManager
                 var payload = relay.AsSegment();
                 var sent = open.SendDatagram(payload, InternalSystemTarget.Only(recipient.Id));
                 if (!sent.Succeeded || sent.Value == 0) continue;
+                for (var pick = 0; pick < picks.Count; pick++) recipient.RelayedFlags[picks[pick].Index] = pickFlags[pick];
                 presence.Counters.RelaysSent++;
                 presence.Counters.RelayedPoses += picks.Count;
                 presence.Counters.DatagramBytes += payload.Count;

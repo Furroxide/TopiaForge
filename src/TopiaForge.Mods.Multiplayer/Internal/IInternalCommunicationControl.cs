@@ -8,6 +8,14 @@ namespace TopiaForge.Mods.Internal
         bool CanCommunicate(ParticipantId sender, ParticipantId listener);
     }
 
+    /// <summary>Optional host-only activity projection, derived from admitted voice rather than playback.</summary>
+    internal interface IInternalCommunicationActivityControl
+    {
+        bool IsVoiceActive(ParticipantId sender);
+        bool HasVoiceActivity(ParticipantId sender, ParticipantId listener);
+        void ClearVoiceActivity();
+    }
+
     internal interface IInternalCommunicationContext
     {
         OperationResult<ICommunicationRouting> RouteCommunications(CommunicationPolicy policy);

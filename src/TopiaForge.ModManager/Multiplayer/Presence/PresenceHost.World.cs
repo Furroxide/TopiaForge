@@ -25,6 +25,8 @@ namespace TopiaForge.ModManager
             var world = presence.RunningWorld?.Invoke();
             var scene = presence.SceneVersion?.Invoke() ?? 0;
             var changed = !string.Equals(world, worldSeen, StringComparison.Ordinal) || scene != sceneSeen;
+            if (changed && presence.Control is TopiaForge.Mods.Internal.IInternalCommunicationActivityControl activity)
+                activity.ClearVoiceActivity();
             worldSeen = world;
             sceneSeen = scene;
             var spawn = world == null ? null : presence.RunningSpawn?.Invoke();

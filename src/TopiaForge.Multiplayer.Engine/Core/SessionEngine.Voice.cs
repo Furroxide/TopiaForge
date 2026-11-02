@@ -387,6 +387,8 @@ namespace TopiaForge.Multiplayer.Engine
             var voice = speaker?.Voice;
             if (speaker == null || voice == null) return VoiceSubmitResult.NotConnected;
             var relayed = VoicePacket.WriteRelayed(voiceScratch, voice.Index, voice.Stream, sequence, timestamp, firstFlags, first, secondFlags, second, epoch);
+            NoteVoiceActivity(voice, firstFlags, first);
+            if (!second.IsEmpty) NoteVoiceActivity(voice, secondFlags, second);
             RelayVoice(speaker.Id.Value, new ArraySegment<byte>(voiceScratch, 0, relayed), null);
             return VoiceSubmitResult.Sent;
         }
@@ -416,6 +418,11 @@ namespace TopiaForge.Multiplayer.Engine
                 case VoiceVerdict.Relay:
                     voiceRelayed++;
                     var packet = admission.Packet;
+                    for (var index = 0; index < packet.Count; index++)
+                    {
+                        var frame = packet[index];
+                        NoteVoiceActivity(speaker, frame.Flags, datagram.AsSpan(frame.PayloadOffset, frame.PayloadLength));
+                    }
                     var length = VoicePacket.WriteRelayed(
                         voiceScratch,
                         speaker.Index,

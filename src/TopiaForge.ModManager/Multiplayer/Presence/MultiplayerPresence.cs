@@ -204,7 +204,10 @@ namespace TopiaForge.ModManager
         {
             pose = default;
             if (Realm == NetRealm.Offline || !peersById.TryGetValue(participant, out var peer) || !peer.HasPose) return false;
-            pose = PoseOf(peer);
+            var flags = Realm == NetRealm.ListenHost
+                ? LocalParticipant.HasValue ? ActivityFlagsFor(peer, LocalParticipant.Value) : peer.Flags & ~(PresenceFlags.Talking | PresenceFlags.Typing)
+                : peer.Flags;
+            pose = PoseOf(peer, flags);
             return true;
         }
 
@@ -227,7 +230,7 @@ namespace TopiaForge.ModManager
         internal bool TryGetPeer(ParticipantId participant, out PresencePeer? peer) => peersById.TryGetValue(participant, out peer);
 
         /// <summary>The public pose a peer's held pose and state stand for.</summary>
-        internal static MultiplayerPose PoseOf(PresencePeer peer)
+        internal static MultiplayerPose PoseOf(PresencePeer peer, PresenceFlags flags)
         {
             var feet = NetQuantization.DequantizePosition(peer.Position);
             var view = NetQuantization.DequantizeRotation(peer.Rotation);
@@ -243,7 +246,7 @@ namespace TopiaForge.ModManager
                 new Vec3(velocity.X, velocity.Y, velocity.Z),
                 health,
                 maximum,
-                (MultiplayerPoseFlags)(int)(peer.Flags & (PresenceFlags.Crouching | PresenceFlags.Talking | PresenceFlags.Typing | PresenceFlags.Away)),
+                (MultiplayerPoseFlags)(int)(flags & (PresenceFlags.Crouching | PresenceFlags.Talking | PresenceFlags.Typing | PresenceFlags.Away)),
                 peer.HeldItem);
         }
 
@@ -291,6 +294,8 @@ namespace TopiaForge.ModManager
                     nametagVersion++;
                 }
 
+                if (peer.IsConnected != participant.IsConnected || peer.PresentationLifetime != participant.LifetimeId)
+                    peer.SetActivityFlags(peer.Flags & ~(PresenceFlags.Talking | PresenceFlags.Typing));
                 if (peer.PresentationLifetime != participant.LifetimeId)
                 {
                     peer.PresentationLifetime = participant.LifetimeId;

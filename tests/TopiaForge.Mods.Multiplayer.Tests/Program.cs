@@ -14,6 +14,7 @@ internal static class Program
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--ui-session-clock") { UiSessionClockTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--presence-activity") { PresenceActivityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--presence-host-identity") { PresenceHostIdentityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--private-commit") { PerPlayerStateTests.CommitRegressions(); return 0; }
             if (args.Length == 1 && args[0] == "--voice-retirement-contract") { VoiceEpochContractTests.Run(); return 0; }
@@ -680,6 +681,7 @@ internal static class Program
             SystemStreamTests.PeersThatBreakTheirWindowsLoseTheirConnection();
             InternalControlTests.PlayersHostJoinAndLeaveThroughTheSpi();
             PresenceHostIdentityTests.Run();
+            PresenceActivityTests.Run();
             InternalControlTests.HostsKickBanUnbanAndMuteThroughTheSpi();
             InternalControlTests.PasswordJoinsWaitForThePlayerThroughTheSpi();
             InternalControlTests.JoinsWaitForTheIdentityAndRetryAfterItFails();

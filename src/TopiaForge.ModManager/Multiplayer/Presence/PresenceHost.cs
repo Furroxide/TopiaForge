@@ -10,7 +10,7 @@ namespace TopiaForge.ModManager
     /// Presence on a listen host (WS3.10). It gives every participant a presence index, takes each joined player's poses
     /// and states and checks them by the host's rules (<see cref="PresencePlausibility"/>, <see cref="PresenceHealth"/>):
     /// a pose that breaks one is corrected, and a player that keeps breaking them is removed. It replaces a player's talking
-    /// claim with what its own voice relay heard, relays every accepted pose to the other players within each one's byte
+    /// claim with authenticated admitted voice, relays every accepted pose to the other players within each one's byte
     /// budget (the other part of this class), and places each player on the spawn ring when it arrives in the host's world.
     /// It takes a pose only from the player it belongs to: the channel names the sender, and a player's payload in the
     /// host's format, which would speak for others, is refused. Main thread only.
@@ -165,8 +165,8 @@ namespace TopiaForge.ModManager
                     var flags = check.Flags;
                     if ((pose.Flags & PresenceFlags.Away) != 0 && (flags & PresenceFlags.Away) == 0) presence.Counters.FlagsRefused++;
 
-                    // Whether a player talks is what the host's own voice relay heard, never what the player says.
-                    var heard = presence.IsHeard(peer);
+                    // Whether a player talks is authenticated admitted voiced frames, never what the player says.
+                    var heard = presence.IsVoiceActive(peer);
                     if ((flags & PresenceFlags.Talking) != 0 && !heard) presence.Counters.FlagsRefused++;
                     flags = heard ? flags | PresenceFlags.Talking : flags & ~PresenceFlags.Talking;
                     peer.SetPose(mapped, pose.Position, pose.Rotation, pose.Velocity, pose.EyeCentimeters, flags);

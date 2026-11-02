@@ -223,8 +223,17 @@ namespace TopiaForge.ModManager
                     continue;
                 }
 
+                var relayMicros = (long)hostMillis * 1000;
+                if (relayMicros <= peer.ActivityRelayMicros)
+                {
+                    presence.Counters.PosesStale++;
+                    continue;
+                }
+                peer.ActivityRelayMicros = relayMicros;
                 if (peer.HasPose && micros <= peer.PoseMicros)
                 {
+                    const PresenceFlags activity = PresenceFlags.Talking | PresenceFlags.Typing;
+                    peer.SetActivityFlags((peer.Flags & ~activity) | (record.Flags & activity));
                     presence.Counters.PosesStale++;
                     continue;
                 }
