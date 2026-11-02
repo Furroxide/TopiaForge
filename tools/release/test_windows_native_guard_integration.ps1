@@ -1,7 +1,6 @@
 param([string]$Source, [string]$Output, [string]$Msbuild)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$RepositoryRoot = $Output
 $scriptFile = Join-Path $Source 'tools/release/build-windows.ps1'
 $guard = Join-Path $Source 'tools/release/windows-native-path-guard.targets'
 $parseErrors = $null
@@ -42,12 +41,12 @@ try {
     } catch { $refused = $true }
     Check ($refused -and (HookRestored)) 'child failure restores hook'
     $refused = $false
-    try { Invoke-Checked -FilePath $pwsh -NativePathGuard (Join-Path $Output 'absent.targets') }
+    try { Invoke-Checked -FilePath $pwsh -WorkingDirectory $Output -NativePathGuard (Join-Path $Output 'absent.targets') }
     catch { $refused = $true }
     Check ($refused -and (HookRestored)) 'missing guard refuses before child'
     [Environment]::SetEnvironmentVariable('ForceImportBeforeCppTargets','existing-hook','Process')
     $refused = $false
-    try { Invoke-Checked -FilePath $pwsh -NativePathGuard $guard }
+    try { Invoke-Checked -FilePath $pwsh -WorkingDirectory $Output -NativePathGuard $guard }
     catch { $refused = $true }
     Check ($refused -and $env:ForceImportBeforeCppTargets -eq 'existing-hook') 'existing hook is preserved and refused'
 } finally {
