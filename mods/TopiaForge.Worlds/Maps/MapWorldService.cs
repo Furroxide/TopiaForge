@@ -27,6 +27,7 @@ namespace TopiaForge.Worlds.Maps
         private readonly Func<IMapNativeBackend> createBackend;
         private MapStore? store;
         private bool disposed;
+        private int cacheWarningLogged;
         internal MapWorldService(MapCache cache, IMapTransport transport, Func<IMapNativeBackend> createBackend)
         { this.cache = cache; this.transport = transport; this.createBackend = createBackend; }
 
@@ -67,13 +68,16 @@ namespace TopiaForge.Worlds.Maps
                                 : await store.GetExactAsync(expected, uri, follow!.ReadHostMap, resources.StoppingToken, progress.Download, requestTransport);
                             if (!acquired.TryGetValue(out var value)) return Failure(acquired.ErrorCode, acquired.ErrorMessage);
                             document = value.Document;
+                            if (value.CacheWriteFailed && Interlocked.Exchange(ref cacheWarningLogged, 1) == 0)
+                            {
+                                context.Context.Logger.Warn("The map is playing from memory, but its offline copy could not be saved. Check available storage and folder permissions before playing offline.");
+                            }
                             if (value.Offline)
                             {
                                 var saved = DateTime.TryParse(value.SavedUtc, System.Globalization.CultureInfo.InvariantCulture,
                                     System.Globalization.DateTimeStyles.RoundtripKind, out var date)
                                     ? date.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture) : "an earlier play";
-                                context.Context.Ui.ShowToast("Playing the copy of " + document.Name + " saved on " + saved +
-                                    "; robotopia.gg could not be reached.", UiTone.Warning);
+                                MapNotices.Offline(context.Context.Ui, request.DisplayName, saved, value.OfflineReason);
                             }
                         }
                         else
