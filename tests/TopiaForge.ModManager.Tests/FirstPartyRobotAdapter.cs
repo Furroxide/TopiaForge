@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal readonly Dictionary<string, FirstPartyRobot> Agents = new Dictionary<string, FirstPartyRobot>();
         internal readonly RobotReplication Provider;
-        internal FirstPartyRobots(WorldPeer peer)
+        internal FirstPartyRobots(WorldPeer peer, Func<IRobotAgent, RobotAgentSpawnRequest, IRobotAgent>? decorate = null)
         {
             peer.Scene.ProviderObject = entity => Agents.TryGetValue(entity.Id, out var robot) ? robot.Body : null;
             var seam = peer.Replication.Bind("io.example.robot-provider", new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Process), peer.Lifetime);
@@ -28,7 +28,7 @@ namespace TopiaForge.ModManager.Tests
                 }
                 var robot = new FirstPartyRobot(body, request, replica);
                 Agents.Add(robot.Id, robot);
-                return OperationResult<IRobotAgent>.Success(robot);
+                return OperationResult<IRobotAgent>.Success(decorate?.Invoke(robot, request) ?? robot);
             }, entity =>
             {
                 var robot = Agents[entity.Id];

@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var failures = 0;
             foreach (var test in new Action[] { ForgedSpawn, DirectCommands, ForwardedBrain, ForwardedTalk, TrustedAndForwardedHost, Replica,
-                InvalidSpawnArguments, GuestBrainUiAuthorityTests.Run, GuestBrainScopeTests.Run })
+                InvalidSpawnArguments, GuestBrainUiAuthorityTests.Run, GuestBrainScopeTests.Run, RobotInteractionAuthorityTests.Run })
             {
                 try { test(); Console.WriteLine("Guest brain authority: " + test.Method.Name + " passed."); }
                 catch (Exception error) { failures++; Console.WriteLine("Guest brain authority: " + test.Method.Name + " FAILED: " + error.Message); }

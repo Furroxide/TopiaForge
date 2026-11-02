@@ -53,6 +53,8 @@ namespace TopiaForge.ModManager.Tests
             { NativeEntityPoseTests.Run(); return 0; }
             if (args.Length == 2 && args[0] == "--native-entity-pose-before")
             { NativeEntityPoseTests.Run(args[1]); return 0; }
+            if (args.Length == 1 && args[0] == "--robot-interaction-authority")
+            { RobotInteractionAuthorityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--guest-brain-authority")
             { FirstPartyGuestBrainTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--first-party-local-robots")

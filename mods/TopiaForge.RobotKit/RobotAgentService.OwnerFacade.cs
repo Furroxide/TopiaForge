@@ -87,10 +87,18 @@ namespace TopiaForge.RobotKit
                         "The mod is stopping and cannot spawn robots.");
                 }
 
+                if (request == null) throw new ArgumentNullException(nameof(request));
+
                 // Capture before spawning: a subsequent world, even in the same scene, must never adopt this handle.
                 var readScope = nativeReadContext?.CaptureNativeEntityReadScope();
+                OwnerRobotAgent? wrapper = null;
+                // Native activation may query the bridge before ownership settles. Until then callbacks are inert.
+                var interaction = OwnerRobotAgent.BindInteraction(request.Interaction, () => wrapper);
+                var boundRequest = new RobotAgentSpawnRequest(request.Position, request.Facing, request.BrainMode,
+                    request.Gait, request.MoveSpeed, request.TurnSpeed, request.StopDistance, request.Tint,
+                    request.Name, request.Scale, interaction, request.RobotTypeId);
                 var result = replication != null && service.Replication != null
-                    ? service.Replication.Spawn(replication, request) : service.Spawn(request);
+                    ? service.Replication.Spawn(replication, boundRequest) : service.Spawn(boundRequest);
                 if (!result.TryGetValue(out var agent))
                 {
                     return result;
@@ -98,7 +106,7 @@ namespace TopiaForge.RobotKit
 
                 try
                 {
-                    var wrapper = new OwnerRobotAgent(agent, lifetime.Track(agent), lifetime, readScope);
+                    wrapper = new OwnerRobotAgent(agent, lifetime.Track(agent), lifetime, readScope);
                     ownedAgents.Add(wrapper);
                     return OperationResult<IRobotAgent>.Success(wrapper);
                 }
@@ -137,14 +145,17 @@ namespace TopiaForge.RobotKit
                     NativeReadScope = readScope;
                 }
 
-                public Task<OperationResult<bool>> SayAsync(string text, CancellationToken token) =>
-                    lifetimeLease != null ? agent.SayAsync(text, token)
-                    : Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The robot scope has ended."));
+                public Task<OperationResult<bool>> SayAsync(string text, CancellationToken token)
+                {
+                    var refusal = ScopeRefusal();
+                    return refusal != null ? Task.FromResult(refusal) : agent.SayAsync(text, token);
+                }
                 public string Id => agent.Id;
                 public IInternalNativeEntityReadScope? NativeReadScope { get; }
                 public object? NativeObject => IsAlive ? (agent as IInternalNativeObjectEntity)?.NativeObject : null;
                 public string Name => agent.Name;
-                public bool IsAlive => lifetimeLease != null && !lifetime.IsStopping && agent.IsAlive;
+                public bool IsAlive => lifetimeLease != null && !lifetime.IsStopping &&
+                    (NativeReadScope == null || NativeReadScope.IsCurrent(lifetime)) && agent.IsAlive;
                 public Vec3 Position => agent.Position;
                 public Vec3 HeadPosition => agent.HeadPosition;
                 public RobotBrainMode BrainMode => agent.BrainMode;
@@ -155,28 +166,62 @@ namespace TopiaForge.RobotKit
                 public float StopDistance => agent.StopDistance;
                 public RobotGait Gait => agent.Gait;
 
+                private OperationResult<bool>? ScopeRefusal()
+                {
+                    if (lifetimeLease == null || lifetime.IsStopping)
+                        return OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The robot scope has ended.");
+                    if (NativeReadScope != null && !NativeReadScope.IsCurrent(lifetime))
+                        return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The robot belongs to a retired world.");
+                    return null;
+                }
+
+                internal static RobotInteractionOptions BindInteraction(RobotInteractionOptions options,
+                    Func<IRobotAgent?> resolve)
+                {
+                    if (options == null) throw new ArgumentNullException(nameof(options));
+                    var custom = options.CustomInteraction;
+                    if (custom == null) return options;
+
+                    RobotInteractionContext Rebind(IRobotAgent owner, RobotInteractionContext context) =>
+                        new RobotInteractionContext(owner, context.AgentPosition, context.HandPosition, context.Distance);
+
+                    // The bridge's native context never escapes to author callbacks. The retained owner handle
+                    // continues to use its routed agent, so guest origin is checked when a later call is made.
+                    return RobotInteractionOptions.Custom(new RobotCustomInteraction(custom.Prompt, context =>
+                    {
+                        var owner = resolve();
+                        if (owner?.IsAlive == true) custom.Interact?.Invoke(Rebind(owner, context));
+                    }, custom.Distance, custom.ScreenRectExpansion, context =>
+                    {
+                        var owner = resolve();
+                        return owner?.IsAlive == true && (custom.CanInteract?.Invoke(Rebind(owner, context)) ?? true);
+                    }));
+                }
+
                 public bool Wraps(IEntity entity) => ReferenceEquals(agent, entity);
-                public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => agent.SetBrainMode(mode);
+                public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => ScopeRefusal() ?? agent.SetBrainMode(mode);
                 public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) =>
-                    agent.ConfigureMovement(settings);
-                public OperationResult<bool> MoveTo(Vec3 position) => agent.MoveTo(position);
+                    ScopeRefusal() ?? agent.ConfigureMovement(settings);
+                public OperationResult<bool> MoveTo(Vec3 position) => ScopeRefusal() ?? agent.MoveTo(position);
                 public OperationResult<bool> Chase(IEntity target) =>
-                    agent.Chase(target is OwnerRobotAgent wrapper ? wrapper.agent : target);
-                public OperationResult<bool> Stop() => agent.Stop();
-                public OperationResult<bool> SetTint(RobotColor color) => agent.SetTint(color);
-                public OperationResult<bool> SetEmote(string emojiShortcode) => agent.SetEmote(emojiShortcode);
-                public OperationResult<bool> SetName(string name) => agent.SetName(name);
-                public OperationResult<bool> SetScale(float scale) => agent.SetScale(scale);
+                    ScopeRefusal() ?? agent.Chase(target is OwnerRobotAgent wrapper ? wrapper.agent : target);
+                public OperationResult<bool> Stop() => ScopeRefusal() ?? agent.Stop();
+                public OperationResult<bool> SetTint(RobotColor color) => ScopeRefusal() ?? agent.SetTint(color);
+                public OperationResult<bool> SetEmote(string emojiShortcode) => ScopeRefusal() ?? agent.SetEmote(emojiShortcode);
+                public OperationResult<bool> SetName(string name) => ScopeRefusal() ?? agent.SetName(name);
+                public OperationResult<bool> SetScale(float scale) => ScopeRefusal() ?? agent.SetScale(scale);
                 public OperationResult<bool> SetInteraction(RobotInteractionOptions options) =>
-                    agent.SetInteraction(options);
+                    ScopeRefusal() ?? agent.SetInteraction(BindInteraction(options, () => this));
                 public OperationResult<bool> ApplyDamage(float amount, RobotDamageType type, string source) =>
-                    agent.ApplyDamage(amount, type, source);
-                public OperationResult<bool> Kill(RobotDamageType type, string source) => agent.Kill(type, source);
-                public OperationResult<bool> Ragdoll() => agent.Ragdoll();
-                public OperationResult<bool> Knockback(Vec3 impulse) => agent.Knockback(impulse);
+                    ScopeRefusal() ?? agent.ApplyDamage(amount, type, source);
+                public OperationResult<bool> Kill(RobotDamageType type, string source) => ScopeRefusal() ?? agent.Kill(type, source);
+                public OperationResult<bool> Ragdoll() => ScopeRefusal() ?? agent.Ragdoll();
+                public OperationResult<bool> Knockback(Vec3 impulse) => ScopeRefusal() ?? agent.Knockback(impulse);
 
                 public OperationResult<bool> Despawn()
                 {
+                    var refusal = ScopeRefusal();
+                    if (refusal != null) return refusal;
                     var result = agent.Despawn();
                     if (result.Succeeded) Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
                     return result;

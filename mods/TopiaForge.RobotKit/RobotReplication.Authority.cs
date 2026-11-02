@@ -10,7 +10,8 @@ namespace TopiaForge.RobotKit
             replication is IInternalEntityCommands commands && commands.IsGuestOrigin;
 
         private static RobotAgentSpawnRequest WithoutNativeBrain(RobotAgentSpawnRequest request) =>
-            Copy(request, brain: RobotBrainMode.Dormant, interaction: RobotInteractionOptions.DisableNativeTalk());
+            Copy(request, brain: RobotBrainMode.Dormant, interaction: request.Interaction.CustomInteraction != null
+                ? request.Interaction : RobotInteractionOptions.DisableNativeTalk());
 
         internal static OperationResult<bool>? BrainRefusal(IRuntimeReplication replication, RobotBrainMode brain, bool replica = false) =>
             brain == RobotBrainMode.Autonomous && (replica || IsGuestOrigin(replication)) ? NativeBrainRefusal() : null;
