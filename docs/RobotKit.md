@@ -92,7 +92,18 @@ Pass the selected descriptor's `Id` as `robotTypeId`. An omitted type selects th
 an explicit unavailable type returns `Unavailable`, without silently substituting another robot.
 Discovery describes loaded native prefabs, not a promise that every named character exists in every map.
 Robot01 and CopBot have navigated sampled imported-map routes. MuniciPal discovery and spawning
-remain unqualified: report it unavailable if absent, rather than relabeling the default robot.
+remain unqualified on build 2597: report it unavailable if absent, rather than relabeling the default robot.
+The synchronous composed factory uses 2597's private all-asset collector, not the removed public lore-only
+collector. Each returned URI must exactly match a body part or voice already resolved by its native map.
+Unknown references (including unresolved lore or material assets) refuse discovery; symbolic material values
+are passed unchanged and are not counted as resolved assets. Prompt fields are preserved. This proves a
+bounded reference preflight, not that the native builder has fetched lore or that a 2597 character is qualified.
+
+Refusals appear at Info as `RobotKit composed discovery refused: <code>.`, at most once per code for the
+current world/session. Codes identify unavailable scenes, host count, map root, entry budget, malformed scene,
+missing scene identity, entity shape, asset references, ambiguous identity, absent character or native binding
+failure. They contain no asset identifiers, native payloads, paths or session values. Check game compatibility
+for `NativeBinding`; for structural/reference codes check the imported world's supported composition data.
 
 `FindReachableSpawnAsync` automatically links cancellation to the consuming lifetime; an optional
 caller token can end the search sooner. Check its result, then spawn on collision-clear ground at
