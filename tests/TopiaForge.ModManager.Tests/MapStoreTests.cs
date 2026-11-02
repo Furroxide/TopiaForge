@@ -133,6 +133,11 @@ namespace TopiaForge.ModManager.Tests
             Check(await store.GetAsync("example", Project, default), ModErrorCode.InvalidArgument);
             transport.Bytes = Encoding.UTF8.GetBytes("not JSON");
             Check(await store.GetAsync("example", Project, default), ModErrorCode.InvalidArgument);
+            transport.Bytes = DamagedGzip();
+            var damaged = await store.GetAsync("example", Project, default);
+            Check(damaged, ModErrorCode.InvalidArgument);
+            Assert(damaged.ErrorMessage.Contains("damaged") && !damaged.ErrorMessage.Contains("disk")
+                && !damaged.ErrorMessage.Contains("://"), "damaged gzip is reported as input data, not storage or a native failure");
             using var cancellation = new CancellationTokenSource();
             transport.Stream = new Drip(cancellation);
             Check(await store.GetAsync("example", Project, cancellation.Token), ModErrorCode.Cancelled);
