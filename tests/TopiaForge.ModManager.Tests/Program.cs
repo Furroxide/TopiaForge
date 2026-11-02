@@ -215,6 +215,10 @@ namespace TopiaForge.ModManager.Tests
                 }
                 finally { TryDelete(spawnRoot); }
             }
+            if (args.Length == 1 && args[0] == "--world-runtime-readiness")
+            { WorldRuntimeReadinessTests.Run(); SpawnReadbackPrecisionTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--spawn-readback-precision")
+            { SpawnReadbackPrecisionTests.Run(); return 0; }
             if (args.Length == 1 && string.Equals(args[0], "--world-readiness-contract", StringComparison.Ordinal))
             {
                 var readinessRoot = Directory.CreateTempSubdirectory("TopiaForgeReadinessTests-").FullName;
@@ -628,6 +632,7 @@ namespace TopiaForge.ModManager.Tests
                 RuntimeSessionSelectionTests.Run();
                 BuiltinWorldProviderTests.Run();
                 WorldRuntimeReadinessTests.Run();
+                SpawnReadbackPrecisionTests.Run();
                 WorldReadinessContractTests.Run(root + "-readiness-contract");
                 DuplicateSelectionTests.Run();
                 NativeWorldReflectionTests.Run();

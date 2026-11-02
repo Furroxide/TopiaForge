@@ -127,9 +127,11 @@ namespace TopiaForge.Mods
         {
             get
             {
-                var length = (float)Math.Sqrt(LengthSquared);
+                // Avoid rounding the norm to float before dividing a rotation read
+                // back from native placement.
+                var length = Math.Sqrt((double)X * X + (double)Y * Y + (double)Z * Z + (double)W * W);
                 return length > 0.000001f
-                    ? new Quat(X / length, Y / length, Z / length, W / length)
+                    ? new Quat((float)(X / length), (float)(Y / length), (float)(Z / length), (float)(W / length))
                     : Identity;
             }
         }
