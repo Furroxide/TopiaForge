@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager
         internal void Attach(IUiSurface surface) => inner = surface;
         internal bool Prepare(string text, UiNode? node, bool visible)
         { Payload = Encode(text, node, visible); return Payload != null; }
+        internal void RefreshClockBinding() => owner.Change(this, Encode(body, content, shown));
         private byte[]? Encode(string text, UiNode? node, bool visible)
         {
             InvalidComposition = null;

@@ -6,5 +6,6 @@ namespace TopiaForge.Mods.Internal
         string UiClockEpoch { get; }
         double UiClockTime { get; }
         void BeginUiWorld();
+        bool TryAdoptUiClock(double elapsedSeconds);
     }
 }

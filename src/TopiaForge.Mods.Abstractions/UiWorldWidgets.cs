@@ -26,7 +26,8 @@ namespace TopiaForge.Mods
     [RequiresTopiaForge("0.2.0")]
     public sealed class UiCountdown : UiNode
     {
-        internal string? ClockEpoch { get; set; }
+        internal UiClockBinding.EpochIdentity? ClockIdentity { get; set; }
+        internal string? ClockEpoch => ClockIdentity?.Value;
         /// <summary>Creates a countdown ending at <paramref name="endsAt"/> on <see cref="IUiService.ClockTime"/>.</summary>
         public UiCountdown(double endsAt, string label = "", UiTone tone = UiTone.Neutral, string? id = null) : base(id)
         {

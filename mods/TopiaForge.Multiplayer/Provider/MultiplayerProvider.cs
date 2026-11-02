@@ -55,6 +55,8 @@ namespace TopiaForge.Multiplayer
 
         internal SessionEngine Engine => engine;
 
+        internal bool TryAdoptUiClock(double elapsedSeconds) => engine.TryAdoptUiClock(elapsedSeconds, clockMicros());
+
         public MultiplayerSessionSnapshot Snapshot => reserved.Snapshot;
 
         public System.Threading.CancellationToken CurrentSessionToken => reserved.CurrentSessionToken;

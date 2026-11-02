@@ -522,8 +522,8 @@ These run in the multiplayer test project, and every one is deterministic:
   burst of 1,000 bounded by the 128 the link holds; a hostile host that says it offers no voice and relays voice anyway,
   none of it played and all of it counted; a join shown without voice staying without it on a host that offers voice,
   across a reconnect, until a return to solo play; three hosting runs, voice off, on and off, each applying its own
-  setting, fixed while a player is connected; and `JoinAccepted`'s bytes, unchanged for a session that offers voice and
-  one byte longer for one that offers none.
+  setting, fixed while a player is connected; and `JoinAccepted`'s exact voice and UI-clock bytes, plus the legacy
+  optional voice-tail decode cases.
 
 ### 2.10 The budget
 
@@ -606,14 +606,13 @@ its signed descriptor and its LAN session info, and the engine enforces it.
 - **What the player sees.** `IInternalVoiceService.TransmitState` reads `NotOffered` while this game hosts, or has
   joined, such a session, ahead of every state but `Failed`, for the transmit indicator. Until the voice slice fills
   VOICE, its placeholder says "This session offers no voice chat." then.
-- **What stays as it was.** A session that offers voice behaves, counts and sends exactly as before, its `JoinAccepted`
-  byte for byte. Server mutes and listener mutes work in either kind of session: the roster and the mute sets still
+- **Voice behavior.** Server mutes and listener mutes work in either kind of session: the roster and mute sets still
   travel. Solo play offers voice, to nobody.
-- **The voice-offer extension.** The setting remains one byte after the join generation, `false`, written only
-  when the session offers no voice. A reader that finds nothing after the join generation reads a session that offers
-  voice. This optional field was introduced under protocol 1; protocol 2 keeps its layout while requiring the new
-  epoch-bound voice datagrams and refusing older peers at normal admission. A field added to `JoinAccepted` after
-  this one needs the byte in every message, true or false, so readers find the new field in place.
+- **The voice-offer extension.** The setting remains one byte after the join generation. Current `JoinAccepted`
+  writers always emit it, true or false, before the UI world generation and elapsed microseconds. Legacy messages
+  may end before this byte (voice offered) or immediately after it (explicit voice setting). A current reader rejects
+  incomplete known clock fields and leaves later unknown fields inside the envelope unread. Protocol 2 retains the
+  voice setting while requiring epoch-bound voice datagrams and refusing older peers at normal admission.
 
 ## Part 3: the voice service
 

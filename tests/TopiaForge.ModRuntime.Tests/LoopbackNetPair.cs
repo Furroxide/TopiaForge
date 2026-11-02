@@ -137,6 +137,7 @@ namespace TopiaForge.ModManager.TestDoubles
         internal void ReplaceSession()
         {
             Host.LifetimeId = Guid.NewGuid();
+            Host.RefreshUiClockIdentity();
             SessionVersion++;
             foreach (var player in players)
             {
@@ -196,6 +197,7 @@ namespace TopiaForge.ModManager.TestDoubles
             this.network = network;
             Id = id;
             IsHost = isHost;
+            if (isHost) RefreshUiClockIdentity();
         }
 
         internal ParticipantId Id { get; }
@@ -207,16 +209,28 @@ namespace TopiaForge.ModManager.TestDoubles
         internal long StreamId { get; set; }
         private ulong uiWorldGeneration;
         private long uiWorldOrigin;
-        private string uiClockIdentity = "loopback-clock:0";
+        private string uiClockIdentity = string.Empty;
+        private double uiClockOffset;
+        private bool uiClockAdopted;
+        internal void RefreshUiClockIdentity() => uiClockIdentity = "loopback-clock:" + LifetimeId.ToString("N") + ":" +
+            uiWorldGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        public bool TryAdoptUiClock(double elapsedSeconds)
+        {
+            if (!IsHost || Role != InternalSessionRole.Solo || uiClockAdopted || uiWorldGeneration != 0) return false;
+            uiClockOffset = elapsedSeconds - (uiClockPumps - uiWorldOrigin) / 60d;
+            uiClockAdopted = true;
+            return true;
+        }
         public void BeginUiWorld()
         {
             network.Host.uiWorldGeneration++;
             network.Host.uiWorldOrigin = network.Host.uiClockPumps;
-            network.Host.uiClockIdentity = "loopback-clock:" + network.Host.uiWorldGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            network.Host.uiClockOffset = 0;
+            network.Host.RefreshUiClockIdentity();
         }
         public string UiClockEpoch => network.Host.uiClockIdentity;
         private long uiClockPumps;
-        public double UiClockTime => (network.Host.uiClockPumps - network.Host.uiWorldOrigin) / 60d;
+        public double UiClockTime => network.Host.uiClockOffset + (network.Host.uiClockPumps - network.Host.uiWorldOrigin) / 60d;
 
         /// <summary>Gets or sets the role the next pump takes, as the provider's own role changes at a pump.</summary>
         internal InternalSessionRole NextRole { get; set; }

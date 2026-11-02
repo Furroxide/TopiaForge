@@ -498,6 +498,7 @@ namespace TopiaForge.ModManager.Tests
                     return 0;
                 }
 
+                if (args.Length == 0) UiCountdownWireTests.RunCore();
                 TestInstallSuccess(root);
                 TestLegacyPackageExtensionRejected(root);
                 TestUpdatePreservesDisabledState(root);

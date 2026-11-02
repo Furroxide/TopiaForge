@@ -11,6 +11,22 @@ namespace TopiaForge.Multiplayer.Engine
         private ulong uiClockGeneration = ulong.MaxValue;
         private ulong uiWorldGeneration, seenUiWorldGeneration;
         private long? uiWorldOrigin;
+        private bool uiClockAdopted;
+        internal bool TryAdoptUiClock(double elapsedSeconds, long observedNowMicros)
+        {
+            RequireOwnerThread();
+            if (Role != EngineRole.Host || uiClockAdopted || uiWorldGeneration != 0) return false;
+            if (double.IsNaN(elapsedSeconds) || double.IsInfinity(elapsedSeconds) ||
+                elapsedSeconds < 0 || elapsedSeconds > long.MaxValue / 1_000_000d)
+                throw new ArgumentOutOfRangeException(nameof(elapsedSeconds));
+            _ = UiClockEpoch;
+            // The provider may not have pumped since construction. Anchor at its current monotonic reading,
+            // so the first pump does not count package-loading time for a second time.
+            uiWorldOrigin = Math.Max(nowMicros, observedNowMicros) - (long)(elapsedSeconds * 1_000_000d);
+            uiClockLast = elapsedSeconds;
+            uiClockAdopted = true;
+            return true;
+        }
         internal ulong UiWorldGeneration => uiWorldGeneration;
         internal long UiTimelineMicros => (long)(UiClockTime * 1_000_000d);
         internal void BeginUiWorld()

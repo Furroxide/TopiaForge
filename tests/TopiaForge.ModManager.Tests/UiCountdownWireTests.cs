@@ -9,13 +9,65 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            RunCore();
+            PlayersRemoteContractTests.CountdownWidgets();
+            PresentationRuntimeTests.CountdownWidgets();
+            Console.WriteLine("Countdown wire: shared codec, malformed/epoch refusal, delayed/paused scopes, targeted UI, shared HUD and late join passed.");
+        }
+
+        internal static void RunCore()
+        {
             RoundTripAndEpoch();
             MalformedAndWholeComposition();
             DelayedFakeScopesAndPause();
             FakeRemoteValidation();
-            PlayersRemoteContractTests.CountdownWidgets();
-            PresentationRuntimeTests.CountdownWidgets();
-            Console.WriteLine("Countdown wire: shared codec, malformed/epoch refusal, delayed/paused scopes, targeted UI, shared HUD and late join passed.");
+            InitialEpochAdoptionBoundaries();
+            LoopbackReplacement();
+            Console.WriteLine("Countdown core: wire, malformed compositions, shared fake clocks and replacement passed.");
+        }
+
+        private static void InitialEpochAdoptionBoundaries()
+        {
+            var initial = "initial:" + Guid.NewGuid().ToString("N");
+            var retired = "retired:" + Guid.NewGuid().ToString("N");
+            var provider = "provider:" + Guid.NewGuid().ToString("N");
+            var currentTimer = new UiCountdown(30);
+            var retiredTimer = new UiCountdown(30);
+            UiClockBinding.Bind(currentTimer, initial);
+            UiClockBinding.Bind(retiredTimer, retired);
+            UiClockBinding.AdoptInitialEpoch(initial, provider);
+            That(UiClockBinding.IsCurrent(currentTimer, provider) && currentTimer.EndsAt == 30,
+                "initial adoption preserves the exact already-bound deadline");
+            That(!UiClockBinding.IsCurrent(retiredTimer, provider), "initial adoption does not revive a previous world");
+            Refused(() => UiClockBinding.Bind(retiredTimer, provider), "retired epoch cannot be adopted");
+            Refused(() => UiClockBinding.Bind(currentTimer, "replacement"), "adopted countdown still expires on replacement");
+        }
+
+        private static void LoopbackReplacement()
+        {
+            var network = new TopiaForge.ModManager.TestDoubles.LoopbackNetPair();
+            using var lifetime = new FakeModLifetime();
+            var ui = new FakeUiService(lifetime);
+            ((IUiClockReceiver)ui).FollowClock(() => network.Host.UiClockTime, () => network.Host.UiClockEpoch);
+            for (var i = 0; i < 120; i++) network.Host.Pump();
+            var countdown = new UiCountdown(ui.ClockTime + 30, id: "timer");
+            var created = ui.CreateSurface(new UiSurfaceRequest("replacement", "Timer", "", content: countdown));
+            That(created.Succeeded, "loopback replacement starts with a bound timer");
+            var epoch = network.Host.UiClockEpoch;
+            var elapsed = ui.ClockTime;
+            network.ReplaceSession();
+            That(network.Host.UiClockEpoch != epoch && ui.ClockTime == elapsed,
+                "loopback session replacement changes identity while preserving elapsed time");
+            That(created.Value!.SetContent(countdown).ErrorCode == ModErrorCode.InvalidArgument,
+                "loopback session replacement refuses the previous countdown");
+            That(((FakeUiSurface)created.Value).TryGetCountdownSeconds("timer", out var remaining) && remaining == 0,
+                "an already displayed loopback timer expires at replacement");
+            That(created.Value.SetContent(new UiCountdown(ui.ClockTime + 5, id: "timer")).Succeeded,
+                "loopback replacement accepts a fresh deadline");
+            epoch = network.Host.UiClockEpoch;
+            network.Host.BeginUiWorld();
+            That(network.Host.UiClockEpoch != epoch && ui.ClockTime == 0,
+                "a new world separately resets the loopback timeline origin");
         }
 
         private static void RoundTripAndEpoch()

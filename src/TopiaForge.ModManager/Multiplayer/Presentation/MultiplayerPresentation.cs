@@ -94,6 +94,12 @@ namespace TopiaForge.ModManager
         internal bool ChangeVisibility(MirroredHudPresenter hud, byte[]? payload, bool commit = true) =>
             !surfaces.Contains(hud) || Change(hud, payload, commit);
 
+        internal void RefreshClockBindings()
+        {
+            for (var i = surfaces.Count - 1; i >= 0; i--)
+                if (surfaces[i].IsAlive) surfaces[i].RefreshClockBinding();
+        }
+
         internal void Send()
         {
             if (!Hosting) return;

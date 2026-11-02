@@ -254,7 +254,7 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | Type | Direction | Message |
 | --- | --- | --- |
 | `0x01` | client → host | `JoinRequest`: protocol version, display name, registered contracts, opaque content descriptor |
-| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence, whether the host kept the player's record, opaque admission report, join generation, and, only for a session that offers no voice chat, a `false` byte saying so (`MultiplayerVoice.md`, section 2.12) |
+| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence, whether the host kept the player's record, opaque admission report, join generation, explicit voice-offered boolean, UI world generation, and unscaled UI elapsed microseconds (`MultiplayerVoice.md`, section 2.12) |
 | `0x03` | host → client | `JoinRejected`: end reason, message, opaque admission report |
 | `0x04`, `0x05` | host → client | `SnapshotBegin` (epoch), `SnapshotEnd` |
 | `0x06` | client → host | `ReadyAck` (epoch) |
@@ -369,6 +369,17 @@ cannot manufacture RTT samples. A joined peer starts with the authenticated elap
 the periodic elapsed sample plus half the measured RTT. Samples advance on the network pump independently of gameplay
 scale. The estimate is monotonic within an epoch; a lower correction may briefly hold the displayed clock.
 Initial join estimates and asymmetric links carry uncertainty and are not an authority signal.
+
+Current `JoinAccepted` writers always emit the voice boolean before the UI generation and elapsed-time varints.
+A legacy message may end before that boolean (voice offered), or immediately after it (explicit voice setting);
+in either case the clock falls back to tick divided by step rate. A started clock tail must contain both complete
+varints. Unknown future fields after the complete current tail remain skippable within the envelope.
+
+Mods can create countdowns during `OnLoad`, before the runtime connects its published solo provider. On the first
+successful attachment only, that provider can adopt the already-observed runtime elapsed time, anchored at its
+current monotonic timestamp rather than its last pump. The exact initial epoch's bound nodes adopt the provider
+identity without changing their deadlines; cached shared HUD payloads are refreshed before promotion. Other epochs
+are untouched. Later world/session replacements and provider detachments cannot repeat this initial adoption.
 
 The internal UI clock identity combines the authenticated session ID, replacement epoch and UI world generation. A solo `Preparing` transition
 rotates the UI world generation and resets its origin without resetting unrelated replicated state. Opening that

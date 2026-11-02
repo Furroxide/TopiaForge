@@ -6,6 +6,13 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--join-clock-frames")
+            {
+                VoiceMuteTests.JoinAcceptedSaysWhetherTheHostKeptTheRecord();
+                VoiceOfferTests.JoinAcceptedSaysWhenTheSessionOffersNoVoice();
+                Console.WriteLine("JoinAccepted voice/clock frames and legacy tails passed.");
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--ui-session-clock") { UiSessionClockTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--presence-host-identity") { PresenceHostIdentityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--private-commit") { PerPlayerStateTests.CommitRegressions(); return 0; }

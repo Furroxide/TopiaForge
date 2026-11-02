@@ -61,6 +61,8 @@ namespace TopiaForge.ModManager
 
         public void Attached(IInternalMultiplayerControl control)
         {
+            // A first solo attachment may have adopted an already-bound runtime timeline.
+            Presentation?.RefreshClockBindings();
             var opened = control.OpenSystemChannel(InternalSystemChannelKind.Players);
             if (opened.TryGetValue(out var channel)) Channel = channel;
             else runtime.Log.Warn("Multiplayer: player actions are unavailable; restart before hosting or joining.");

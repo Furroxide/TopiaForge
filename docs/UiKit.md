@@ -133,7 +133,8 @@ at zero, and ends with its composition or surface. No author frame callback is n
 and countdown nodes use the surface's semantic tones, UI scale and high-contrast theme.
 
 Progress and countdown widgets also work in targeted player UI and shared HUDs. The original deadline travels
-unchanged, including in late-join baselines. Opening a later UI scope never restarts the clock. Offline scopes
+unchanged, including in late-join baselines. A countdown created during `OnLoad` keeps its deadline when the initial
+solo multiplayer provider attaches, and opening that same world to peers retains its timeline. Opening a later UI scope never restarts the clock. Offline scopes
 share one origin; joined players estimate the host timeline from authenticated network samples, with a half-RTT
 latency correction. Estimates may differ temporarily because of latency, asymmetric links, frame scheduling or
 drift; corrections never move the current clock backwards. A timer is presentation, not proof that a remote
