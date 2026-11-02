@@ -199,6 +199,22 @@ namespace TopiaForge.ModManager.Tests
             { ManifestActivationSerializationTests.Run(); return 0; }
             if (args.Length == 1 && string.Equals(args[0], "--duplicate-selection", StringComparison.Ordinal))
             { DuplicateSelectionTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--settled-world-spawn")
+            {
+                var spawnRoot = Directory.CreateTempSubdirectory("TopiaForgeSettledSpawn-").FullName;
+                try
+                {
+                    WorldReadinessContractTests.Run(spawnRoot);
+                    WorldRuntimeReadinessTests.RunSpawnContract();
+                    NativeSpawnSettlementTests.Run();
+                    MapPreparationContractTests.Run();
+                    AuthoredMapReviewTests.Run("package");
+                    PresenceSessionTests.Run();
+                    SessionFollowHostTests.Run(Path.Combine(spawnRoot, "follow"));
+                    return 0;
+                }
+                finally { TryDelete(spawnRoot); }
+            }
             if (args.Length == 1 && string.Equals(args[0], "--world-readiness-contract", StringComparison.Ordinal))
             {
                 var readinessRoot = Directory.CreateTempSubdirectory("TopiaForgeReadinessTests-").FullName;

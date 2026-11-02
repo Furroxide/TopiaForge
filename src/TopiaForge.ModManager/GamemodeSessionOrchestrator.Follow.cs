@@ -76,6 +76,7 @@ namespace TopiaForge.ModManager
             if (descriptor.Transition == ModTransitions.AdditiveArena && readiness != null && SessionFollowWire.IsSceneName(readiness.Scene.Name))
             {
                 level = readiness.Scene.Name;
+                // This places a follower in the base scene; authored content keeps its own coordinates.
                 if (SessionFollowWire.IsSpawn(readiness.Spawn)) spawn = readiness.Spawn;
             }
 

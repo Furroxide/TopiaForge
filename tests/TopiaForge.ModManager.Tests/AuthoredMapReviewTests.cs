@@ -32,23 +32,31 @@ namespace TopiaForge.ModManager.Tests
                 var map = source.ForPackage(_ => OperationResult<byte[]>.Success(Encoding.UTF8.GetBytes(Anchors("provider"))));
                 SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new MapWorld(map)));
                 IAuthoredMap? notification = null;
+                WorldReadiness? notifiedWorld = null;
                 fixture.Parent.Sessions.StateChanged += snapshot =>
                 {
-                    if (snapshot.Phase == WorldSessionPhase.Running) notification = snapshot.World!.RequireMap();
+                    if (snapshot.Phase == WorldSessionPhase.Running) { notification = snapshot.World!.RequireMap(); notifiedWorld = snapshot.World; }
                 };
                 fixture.Launch();
                 var session = SessionFixture.ModeSession!;
+                Assert(session.World.Spawn == MapWorld.Settled && session.World.RequestedSpawn == TransformState.Identity,
+                    "the direct package projection preserves the accepted pose and requested marker separately");
                 Assert(session.World.RequireMap().ResolveAnchors("anchors.json")["choice"].Id == "consumer", "direct session uses consumer package");
                 IWorldSessionService sessions = ((IInternalWorldSessionContext)session.Context).Sessions;
                 var retained = sessions.Current.World!.RequireMap();
+                Assert(sessions.Current.World!.Spawn == MapWorld.Settled && sessions.Current.World!.RequestedSpawn == TransformState.Identity
+                    && notifiedWorld!.Spawn == MapWorld.Settled && notifiedWorld.RequestedSpawn == TransformState.Identity,
+                    "snapshot and notification projections retain both spawn values");
                 Assert(retained.ResolveAnchors("anchors.json")["choice"].Id == "consumer", "snapshot anchors must use the consuming package, not the provider");
                 Assert(notification!.ResolveAnchors("anchors.json")["choice"].Id == "consumer", "notification anchors use the consuming package");
                 var stop = session.StopAsync(); fixture.Wait(stop);
                 Assert(!retained.IsAlive && !retained.TryGetEntity("consumer", out _), "retained snapshot cannot access ended map");
                 Assert(retained.ResolveAnchors("anchors.json").ErrorCode == ModErrorCode.InvalidState, "ended snapshot refuses anchor reads");
                 using var successor = IndexedMap();
-                SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new MapWorld(successor)));
+                SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new MapWorld(successor, knownRequest: false)));
                 fixture.Launch("next-map");
+                Assert(SessionFixture.ModeSession!.World.RequestedSpawn == null && notifiedWorld!.RequestedSpawn == null,
+                    "replacement projections must not inherit the previous world's known request");
                 Assert(!retained.IsAlive && SessionFixture.ModeSession!.World.RequireMap().Entity("consumer").Entity.IsAlive,
                     "old snapshot cannot become a handle into the next generation");
             }
@@ -91,8 +99,9 @@ namespace TopiaForge.ModManager.Tests
         private sealed class MapWorld : IWorldInstance
         {
             private readonly AuthoredMapIndex map;
-            internal MapWorld(AuthoredMapIndex map)
-            { this.map = map; Readiness = new WorldReadiness(new WorldSceneIdentity(-12, "World"), TransformState.Identity, map); }
+            internal static readonly TransformState Settled = new TransformState(new Vec3(0, 0.13f, 0), Quat.Identity, new Vec3(1, 1, 1));
+            internal MapWorld(AuthoredMapIndex map, bool knownRequest = true)
+            { this.map = map; Readiness = new WorldReadiness(new WorldSceneIdentity(-12, "World"), Settled, knownRequest ? TransformState.Identity : (TransformState?)null, map); }
             public WorldReadiness Readiness { get; }
             public void Dispose() => map.Dispose();
         }

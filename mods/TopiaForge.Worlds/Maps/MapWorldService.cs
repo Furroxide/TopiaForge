@@ -125,7 +125,7 @@ namespace TopiaForge.Worlds.Maps
                                     "; sha256=" + document.Sha256 + "; bytes=" + document.Packed.Length + "; modified=" + modified);
                             }
                             return ready.TryGetValue(out var readiness)
-                                ? OperationResult<WorldReadiness>.Success(new WorldReadiness(readiness.Scene, readiness.Spawn, map)) : ready;
+                                ? OperationResult<WorldReadiness>.Success(new WorldReadiness(readiness.Scene, readiness.Spawn, readiness.RequestedSpawn, map)) : ready;
                         }
                     }
                     catch (OperationCanceledException) { return Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }

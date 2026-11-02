@@ -34,6 +34,7 @@ namespace TopiaForge.Worlds
                 if (player == null || expectedPlayer == null || player != expectedPlayer || stopping.IsCancellationRequested
                     || player.position.y >= readiness.Spawn.Position.Y - Depth) return;
                 nextRespawn = Time.unscaledTime + 2f;
+                // Recover to the accepted player placement; this does not move or redefine authored map geometry.
                 var spawn = readiness.Spawn;
                 NativeWorldPlayer.Place(player, new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z),
                     new Quaternion(spawn.Rotation.X, spawn.Rotation.Y, spawn.Rotation.Z, spawn.Rotation.W));

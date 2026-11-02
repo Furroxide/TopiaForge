@@ -102,7 +102,7 @@ namespace TopiaForge.Mods.Testing
         public GamemodeSessionRunner WithMap(IAuthoredMap map)
         {
             if (started || finished || World.Map != null) throw new InvalidOperationException("Supply one map before starting the runner.");
-            World = new WorldReadiness(World.Scene, World.Spawn, map ?? throw new ArgumentNullException(nameof(map)));
+            World = new WorldReadiness(World.Scene, World.Spawn, World.RequestedSpawn, map ?? throw new ArgumentNullException(nameof(map)));
             return this;
         }
 

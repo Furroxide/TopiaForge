@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            RunSpawnContract();
             NativeSpawnSettlementTests.Run();
             UgcNoOpLaunchRequestTests.Run();
             using var test = new Fixture();
@@ -40,6 +41,29 @@ namespace TopiaForge.ModManager.Tests
             TestProviderRetainsLateFailure();
             TestAdapterThrowRemainsTerminal();
             Console.WriteLine("WorldRuntimeReadinessTests passed.");
+        }
+
+        internal static void RunSpawnContract()
+        {
+            foreach (var source in new[] { "native-default", "provider-default", "authored-marker" })
+            {
+                using var test = new Fixture();
+                test.Load.RequiresDispatch = false;
+                test.Load.DefaultSpawn = TransformState.Identity;
+                test.Load.SettleOffset = 0.13f;
+                var preparing = test.Service.PrepareAsync(NativeWorldLoadRequest.Scene("Scene", WorldLoadTransition.SceneReplacement), default);
+                test.Wait(preparing);
+                var policy = new WorldSpawnPolicy(source == "authored-marker" ? WorldSpawnKind.AuthoredMarker : WorldSpawnKind.ProviderDefault,
+                    source == "authored-marker" ? "Spawn" : null);
+                var request = source == "native-default" ? TransformState.Identity : Spawn;
+                var finish = preparing.Result.Value!.FinishAsync(policy, null, source == "provider-default" ? Spawn : (TransformState?)null, default);
+                test.Wait(finish);
+                var settled = new TransformState(new Vec3(request.Position.X, request.Position.Y + 0.13f, request.Position.Z), request.Rotation, request.Scale);
+                Assert(finish.Result.Succeeded && finish.Result.Value!.RequestedSpawn == request && finish.Result.Value.Spawn == settled,
+                    source + ": the actual provider request survives separately from accepted settled placement.");
+                preparing.Result.Value.Dispose();
+            }
+            Console.WriteLine("Requested and settled runtime spawn tests passed (3 sources).");
         }
 
         private static void TestMarkersAndPlacement()
@@ -270,6 +294,7 @@ namespace TopiaForge.ModManager.Tests
             internal TransformState? DefaultSpawn;
             internal IReadOnlyList<TransformState> Markers = new[] { Spawn };
             internal bool PlayerReady = true;
+            internal float SettleOffset;
             internal bool ContentValid = true;
             internal bool RequireManaged;
             internal int Disposals; internal int Applied; internal bool ThrowOnDispose;
@@ -285,7 +310,12 @@ namespace TopiaForge.ModManager.Tests
             public OperationResult<TransformState>? ReadDefaultSpawn() => DefaultSpawn.HasValue ? OperationResult<TransformState>.Success(DefaultSpawn.Value) : null;
             public OperationResult<IReadOnlyList<TransformState>> FindSpawnMarkers(IEntity? root, string marker) => OperationResult<IReadOnlyList<TransformState>>.Success(Markers);
             public OperationResult<TransformState>? ApplySpawn(TransformState spawn)
-            { if (!PlayerReady) return null; Applied++; return OperationResult<TransformState>.Success(spawn); }
+            {
+                if (!PlayerReady) return null;
+                Applied++;
+                return OperationResult<TransformState>.Success(new TransformState(
+                    new Vec3(spawn.Position.X, spawn.Position.Y + SettleOffset, spawn.Position.Z), spawn.Rotation, spawn.Scale));
+            }
             public void Dispose() { Disposals++; if (ThrowOnDispose) throw new InvalidOperationException("Synthetic preparation cleanup failure."); }
         }
         private sealed class Clock : IWorldRuntimeClock
