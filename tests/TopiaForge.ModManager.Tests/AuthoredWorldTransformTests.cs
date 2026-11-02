@@ -23,6 +23,14 @@ namespace TopiaForge.ModManager.Tests
             Near(child.WorldTransform.Scale, new Vec3((float)Math.Sqrt(6.5), (float)Math.Sqrt(26), 4), "lossy scale from full basis");
             Near(child.WorldTransform.Rotation * new Vec3(1, 0, 0), new Vec3(-sqrt2 / 2, -sqrt2 / 2, 0), "quaternion chain");
             Near(child.Entity.Position, child.WorldTransform.Position, "fake live initial pose composes parents");
+            using var lifetime = new FakeModLifetime();
+            var liveEntities = new FakeEntityService(lifetime);
+            liveEntities.Add((FakeEntity)child.Entity);
+            Assert(liveEntities.TryGetTransform(child.Entity, out var livePose), "parented fake has a readable live transform");
+            Near(livePose.Scale, new Vec3(1, 2, 1), "live fake scale remains parent-local under scaled rotated parent");
+            Near(livePose.Position, child.WorldTransform.Position, "live read retains composed world position");
+            Near(livePose.Rotation * new Vec3(1, 0, 0), child.WorldTransform.Rotation * new Vec3(1, 0, 0), "live read retains composed world rotation");
+            Assert(!livePose.Scale.Equals(child.WorldTransform.Scale), "live local scale and authored lossy world scale stay distinct");
             Assert(!vent.Entity.IsAlive, "no synthetic live handle for absent marker");
             Near(child.EditorTransform.Position, new Vec3(1, 2, 3), "editor remains parent-local");
             Near(map.ToWorld(child.EditorTransform).Position, new Vec3(-1, 2, 3), "legacy conversion remains root-level");

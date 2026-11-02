@@ -41,8 +41,9 @@ namespace TopiaForge.Mods.Testing
             records.Add(new AuthoredRecord(id, SceneId, name, parentId, modelId, prefabUri, value, components));
             var world = (parentId == null ? AuthoredAffine.Identity : authoredBases[parentId]).Append(ConvertAffine(value));
             authoredBases.Add(id, world);
+            // Live reads match Unity's world position/rotation and parent-local scale.
             if (hasMarker) markers.Add(new AuthoredMarker(id, new FakeEntity("fake:" + id, name, world.Position)
-            { Rotation = world.Rotation, Scale = world.LossyScale }, assetResolved));
+            { Rotation = world.Rotation, Scale = value.Scale }, assetResolved));
             return this;
         }
         /// <summary>Supplies one package-relative anchors file without filesystem access.</summary>

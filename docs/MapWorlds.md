@@ -82,8 +82,10 @@ parity still require in-game qualification.
 physics or import-root movement: use `context.Entities.TryGetTransform` with the
 live entity for that. Legacy `map.ToWorld(Vec3/MapTransform)` still converts only
 root-level editor values and cannot infer an entity's parents. The testing kit
-uses the same affine composition for authored poses and initial fake live poses,
-with the editor-X reflection. The index does no per-frame work. After teardown
+uses the same affine composition for authored poses and initial fake live positions
+and rotations, with the editor-X reflection. Live `IEntityService.TryGetTransform`
+reads retain parent-local `Scale`, matching the native adapter;
+`WorldTransform.Scale` is the lossy world scale. The index does no per-frame work. After teardown
 its lookups and retained `WorldTransform` getters refuse, and entity handles die.
 
 Collapsed authored scales remain valid map records. If a node, ancestor or import
