@@ -41,6 +41,7 @@ namespace TopiaForge.ModManager.Tests
                 Assert(false, "the checked-in baseline no longer satisfies " + errors.Count + " critical binding(s):\n  " + detail);
             }
 
+            RobotComposedBindingTests.Run();
             AssertDamageTypeOrdinalsMatchSdk(baseline);
             AssertDifferDetectsBreakage(baseline, manifests);
             AssertSimpleNameWalkValidatesMembers();

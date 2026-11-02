@@ -23,7 +23,7 @@ namespace TopiaForge.RobotKit
         {
             this.config = config; this.project = project; this.entity = entity;
             currentness = new RobotComposedCurrentness(world, state, host, config, sceneRoot, mapRoot);
-            builderType = Native("UgcSceneBuilder"); ownerType = Native("UgcRuntimeAssetOwner");
+            builderType = Type.GetType("UgcSceneBuilder, GameCode", true)!; ownerType = Type.GetType("UgcRuntimeAssetOwner, GameCode", true)!;
             build = RequireMethod(builderType, "BuildEntity", false, typeof(GameObject), project.GetType(), entity.GetType(), typeof(Transform));
             addOwner = RequireMethod(builderType, "GetOrAddAssetOwner", true, ownerType, typeof(Transform));
             destroyAssets = RequireMethod(ownerType, "DestroyOwnedAssets", false, typeof(void));
@@ -33,9 +33,10 @@ namespace TopiaForge.RobotKit
         internal static RobotPrefabCandidate? Discover(Func<WorldSessionSnapshot?>? world)
         {
             if (world == null) return null;
+            WorldSessionSnapshot? state = null;
             try
             {
-                var state = world();
+                state = world();
                 if (state == null || !CanSpawn(state.Phase) || state.Session == null || state.World?.Map?.IsAlive != true) return null;
                 var scene = default(Scene);
                 for (var index = 0; index < SceneManager.sceneCount; index++)
@@ -43,26 +44,26 @@ namespace TopiaForge.RobotKit
                     var candidate = SceneManager.GetSceneAt(index);
                     if (candidate.handle == state.World.Scene.InstanceId) { scene = candidate; break; }
                 }
-                if (!scene.IsValid() || !scene.isLoaded) return null;
-                var hosts = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren(Native("UgcImportHostSceneController"), true)).ToArray();
-                if (hosts.Length != 1) return null;
+                if (!scene.IsValid() || !scene.isLoaded) return Refuse(state, RobotComposedRefusal.SceneUnavailable);
+                var hosts = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren(Type.GetType("UgcImportHostSceneController, GameCode", true)!, true)).ToArray();
+                if (hosts.Length != 1) return Refuse(state, RobotComposedRefusal.HostCount);
                 var host = hosts[0];
-                var config = Property(host, "RuntimeAssetConfig", Native("UgcRuntimeAssetConfig"));
-                var sceneRoot = Property(host, "SceneRoot", Native("UgcSceneRoot"));
+                var config = Property(host, "RuntimeAssetConfig", Type.GetType("UgcRuntimeAssetConfig, GameCode", true)!);
+                var sceneRoot = Property(host, "SceneRoot", Type.GetType("UgcSceneRoot, GameCode", true)!);
                 var mapRoot = Property(sceneRoot, "ActiveImportRoot", typeof(Transform)) as Transform;
-                if (mapRoot == null || mapRoot.gameObject.scene.handle != scene.handle) return null;
-                var map = Property(config, "PrefabSceneMap", Native("UgcPrefabSceneMap"));
-                var entries = Property(map, "Entries", Native("UgcPrefabSceneMap+Entry").MakeArrayType()) as Array;
-                if (entries == null || entries.Length > 256) return null;
+                if (mapRoot == null || mapRoot.gameObject.scene.handle != scene.handle) return Refuse(state, RobotComposedRefusal.MapRoot);
+                var map = Property(config, "PrefabSceneMap", Type.GetType("UgcPrefabSceneMap, GameCode", true)!);
+                var entries = Property(map, "Entries", Type.GetType("UgcPrefabSceneMap+Entry, GameCode", true)!.MakeArrayType()) as Array;
+                if (entries == null || entries.Length > 256) return Refuse(state, RobotComposedRefusal.EntryBudget);
                 RobotComposedScene? selected = null;
                 foreach (var entry in entries)
                 {
-                    if (entry == null || !(GameReflection.GetFieldValue(entry, "sceneJson") is string json)
-                        || !RobotComposedSceneShape.TryRead(json, out var data)) continue;
-                    if (!RobotComposedSceneShape.IsMunicipalPath(GameReflection.GetFieldValue(entry, "scenePath") as string)) continue;
+                    if (entry == null || !RobotComposedSceneShape.IsMunicipalPath(GameReflection.GetFieldValue(entry, "scenePath") as string)) continue;
+                    if (!(GameReflection.GetFieldValue(entry, "sceneJson") is string json)
+                        || !RobotComposedSceneShape.TryRead(json, out var data)) return Refuse(state, RobotComposedRefusal.SceneShape);
                     // Re-serialize parsed data: the native serializer receives plain data and explicit safe settings.
                     var sceneId = data!.TryGetValue("id", out var id) ? id as string : null;
-                    if (string.IsNullOrEmpty(sceneId)) return null;
+                    if (string.IsNullOrEmpty(sceneId)) return Refuse(state, RobotComposedRefusal.SceneIdentity);
                     var envelope = new Dictionary<string, object?>
                     {
                         ["scenes"] = new Dictionary<string, object?> { [sceneId!] = data },
@@ -70,23 +71,37 @@ namespace TopiaForge.RobotKit
                         ["local-assets"] = new Dictionary<string, object?>()
                     };
                     var project = DeserializeProject(MiniJson.Serialize(envelope));
+                    // Check the native alias and serializer result as well as the input envelope. This
+                    // synchronous factory owns no asset catalogue and must not acquire one through defaults.
+                    if (!(GameReflection.GetFieldValue(project, "assets") is IDictionary assets) || assets.Count != 0
+                        || !(GameReflection.GetFieldValue(project, "localAssets") is IDictionary localAssets) || localAssets.Count != 0)
+                        return Refuse(state, RobotComposedRefusal.AssetReferences);
                     var nativeScenes = GameReflection.GetFieldValue(project, "scenes") as IDictionary;
                     var nativeScene = nativeScenes?[sceneId!];
-                    var entities = nativeScene == null ? null : GameReflection.GetFieldValue(nativeScene, "entities") as IDictionary;
-                    if (entities?.Count != 1) return null;
+                    if (nativeScene == null || nativeScene.GetType() != Type.GetType("UgcExportScene, GameCode", true)!)
+                        return Refuse(state, RobotComposedRefusal.EntityShape);
+                    var entities = GameReflection.GetFieldValue(nativeScene, "entities") as IDictionary;
+                    if (entities?.Count != 1) return Refuse(state, RobotComposedRefusal.EntityShape);
                     var entity = entities.Values.Cast<object>().Single();
-                    if (!ReferencesResolve(config, map, project, entity)) return null;
+                    if (entity == null || entity.GetType() != Type.GetType("UgcExportEntity, GameCode", true)!)
+                        return Refuse(state, RobotComposedRefusal.EntityShape);
+                    if (!ReferencesResolve(config, map, project, entity)) return Refuse(state, RobotComposedRefusal.AssetReferences);
                     // Ambiguous catalog identities are unavailable rather than chosen by ordering.
-                    if (selected != null) return null;
+                    if (selected != null) return Refuse(state, RobotComposedRefusal.AmbiguousIdentity);
                     selected = new RobotComposedScene(world, state, host, config, sceneRoot, mapRoot, project, entity);
                 }
-                return selected == null ? null : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.IsCurrent);
+                return selected == null ? Refuse(state, RobotComposedRefusal.NotPresent) : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.IsCurrent);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                RobotKitDiagnostics.ReportOnce("composed robot discovery", ex);
-                return null;
+                return Refuse(state, RobotComposedRefusal.NativeBinding);
             }
+        }
+
+        private static RobotPrefabCandidate? Refuse(WorldSessionSnapshot? state, RobotComposedRefusal reason)
+        {
+            RobotKitDiagnostics.ReportComposedDiscovery(state, reason);
+            return null;
         }
 
         private GameObject Create(Transform incubator)
@@ -126,8 +141,10 @@ namespace TopiaForge.RobotKit
         private static bool ReferencesResolve(object config, object sceneMap, object project, object entity)
         {
             var components = GameReflection.GetFieldValue(entity, "components");
-            if (components == null || !(GameReflection.GetFieldValue(components, "humanoidBodyParts") is IDictionary parts)) return false;
-            var builder = Native("UgcSceneBuilder");
+            if (components == null || components.GetType() != Type.GetType("UgcExportEntityComponents, GameCode", true)!
+                || !(GameReflection.GetFieldValue(components, "humanoidBodyParts") is IDictionary parts)) return false;
+            var allowedAssets = new HashSet<string>(StringComparer.Ordinal);
+            var builder = Type.GetType("UgcSceneBuilder, GameCode", true)!;
             string Literal(string name)
             {
                 var field = builder.GetField(name, BindingFlags.NonPublic | BindingFlags.Static);
@@ -135,8 +152,8 @@ namespace TopiaForge.RobotKit
                 return (string)field!.GetRawConstantValue()!;
             }
             var plastic = Literal("PlasticMaterialField"); var metal = Literal("MetalMaterialField");
-            var partMap = Property(config, "RobotPartMap", Native("UgcRobotPartMap"));
-            var partType = Native("ComposerPartType");
+            var partMap = Property(config, "RobotPartMap", Type.GetType("UgcRobotPartMap, GameCode", true)!);
+            var partType = Type.GetType("ComposerPartType, GameCode", true)!;
             var resolve = RequireMethod(partMap.GetType(), "TryResolve", false, typeof(bool), typeof(string), partType.MakeByRefType(), typeof(GameObject).MakeByRefType());
             foreach (DictionaryEntry part in parts)
             {
@@ -149,21 +166,24 @@ namespace TopiaForge.RobotKit
                 var args = new object?[] { uri, null, null };
                 if (!(resolve.Invoke(partMap, args) is true) || !Equals(args[1], Enum.Parse(partType, names[0]))
                     || !(args[2] is GameObject prefab) || prefab == null || prefab.scene.IsValid()) return false;
+                allowedAssets.Add(uri);
             }
             var agent = GameReflection.GetFieldValue(components, "agent");
-            if (agent == null) return false;
+            if (agent == null || agent.GetType() != Type.GetType("UgcAgentComponent, GameCode", true)!) return false;
             var voice = GameReflection.GetFieldValue(agent, "voiceset") as string;
             if (!string.IsNullOrEmpty(voice))
             {
-                var voiceMap = Property(config, "VoiceMap", Native("UgcVoiceMap"));
+                var voiceMap = Property(config, "VoiceMap", Type.GetType("UgcVoiceMap, GameCode", true)!);
                 var args = new object?[] { voice, null };
-                var method = RequireMethod(voiceMap.GetType(), "TryResolve", false, typeof(bool), typeof(string), Native("OvertoneVoiceAsset").MakeByRefType());
+                var method = RequireMethod(voiceMap.GetType(), "TryResolve", false, typeof(bool), typeof(string), Type.GetType("OvertoneVoiceAsset, GameCode", true)!.MakeByRefType());
                 if (!(method.Invoke(voiceMap, args) is true) || !(args[1] is UnityEngine.Object asset) || asset == null) return false;
+                allowedAssets.Add(voice!);
             }
-            var lore = RequireMethod(Native("UgcCatalogLoreLoader"), "CollectReferencedLoreUris", true,
-                typeof(IReadOnlyList<string>), project.GetType(), sceneMap.GetType()).Invoke(null, new[] { project, sceneMap }) as IReadOnlyList<string>;
-            // This synchronous spawn path cannot fetch unresolved lore. No fields are stripped to hide it.
-            return lore != null && lore.Count == 0;
+            var collector = Type.GetType("UgcCatalogLoreLoader, GameCode", true)!.GetMethod("CollectReferencedAssetUris",
+                BindingFlags.NonPublic | BindingFlags.Static, null, new[] { project.GetType(), sceneMap.GetType() }, null);
+            Require(collector != null && collector.ReturnType == typeof(IReadOnlyList<string>));
+            var assets = collector!.Invoke(null, new[] { project, sceneMap }) as IReadOnlyList<string>;
+            return RobotComposedReferences.AllAssetsResolved(assets, allowedAssets);
         }
 
         private static object DeserializeProject(string json)
@@ -178,10 +198,9 @@ namespace TopiaForge.RobotKit
             settingsType.GetProperty("MaxDepth")!.SetValue(settings, (int?)16);
             var convert = Type.GetType("Newtonsoft.Json.JsonConvert, Newtonsoft.Json", true)!;
             return RequireMethod(convert, "DeserializeObject", true, typeof(object), typeof(string), typeof(Type), settingsType)
-                .Invoke(null, new[] { json, (object)Native("UgcExportProject"), settings }) ?? throw new InvalidOperationException();
+                .Invoke(null, new[] { json, (object)Type.GetType("UgcExportProject, GameCode", true)!, settings }) ?? throw new InvalidOperationException();
         }
 
-        private static Type Native(string name) => Type.GetType(name + ", GameCode", true)!;
         private static object Property(object instance, string name, Type type)
         {
             var property = instance.GetType().GetProperty(name, PublicInstance);

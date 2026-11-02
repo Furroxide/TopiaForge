@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             WorldObservation();
+            RobotComposedDiscoveryTests.Run();
+            DiscoveryDiagnostics();
             // Synthetic structure only: no native character data or asset identifiers are reproduced.
             const string json = "{\"id\":\"test\",\"entities\":{\"actor\":{\"components\":{\"transform\":{},\"agent\":{},\"humanoid-body-parts\":{\"Head\":\"test-part\"}}}}}";
             Check(RobotComposedSceneShape.TryRead(json, out var scene) && scene != null, "one native composed actor is eligible");
@@ -30,6 +32,50 @@ namespace TopiaForge.ModManager.Tests
             Check(RobotComposedSceneShape.IsMunicipalPath("MuniciPal/actor.json"), "a native folder token is sufficient without a filename assumption");
             Check(RobotComposedSceneShape.IsMunicipalPath("characters/municipal.json"), "native inventory classification ignores case");
             Check(!RobotComposedSceneShape.IsMunicipalPath(null), "missing identity is unavailable");
+        }
+
+        private static void DiscoveryDiagnostics()
+        {
+            var logger = new DiscoveryLogger();
+            RobotKitDiagnostics.Configure(logger);
+            try
+            {
+                var session = new Session();
+                var ready = new WorldReadiness(new WorldSceneIdentity(7, "private-world"), TransformState.Identity);
+                var state = new WorldSessionSnapshot(WorldSessionPhase.Running, session, ready, 1);
+                foreach (var reason in Enum.GetValues<RobotComposedRefusal>())
+                {
+                    for (var i = 0; i < 1000; i++) RobotKitDiagnostics.ReportComposedDiscovery(state, reason);
+                    Check(logger.Messages.Last() == "RobotKit composed discovery refused: " + reason + ".",
+                        "only a static refusal code reaches Info diagnostics");
+                }
+                var count = Enum.GetValues<RobotComposedRefusal>().Length;
+                Check(logger.Messages.Count == count, "each refusal is bounded per world/session");
+                var rebound = new WorldSessionSnapshot(WorldSessionPhase.Running, session,
+                    new WorldReadiness(ready.Scene, TransformState.Identity), 2);
+                RobotKitDiagnostics.ReportComposedDiscovery(rebound, RobotComposedRefusal.HostCount);
+                Check(logger.Messages.Count == count, "snapshot/readiness rebinding does not reset diagnostics");
+                var next = new WorldSessionSnapshot(WorldSessionPhase.Running, session,
+                    new WorldReadiness(new WorldSceneIdentity(7, "private-world"), TransformState.Identity), 3);
+                RobotKitDiagnostics.ReportComposedDiscovery(next, RobotComposedRefusal.HostCount);
+                Check(logger.Messages.Count == count + 1, "real world lifetime replacement reports again even with reused numeric scene handle");
+                RobotKitDiagnostics.ReportComposedDiscovery(null, RobotComposedRefusal.HostCount);
+                Check(logger.Messages.Count == count + 1, "missing observation cannot reset a real world diagnostic budget");
+                var replacement = new WorldSessionSnapshot(WorldSessionPhase.Running, new Session("private-replacement"), next.World, 4);
+                RobotKitDiagnostics.ReportComposedDiscovery(replacement, RobotComposedRefusal.HostCount);
+                Check(logger.Messages.Count == count + 2, "actual session replacement reports again with the same world identity");
+            }
+            finally { RobotKitDiagnostics.Clear(logger); }
+        }
+
+        private sealed class DiscoveryLogger : IModLogger
+        {
+            internal readonly System.Collections.Generic.List<string> Messages = new();
+            public void Info(string message) => Messages.Add(message);
+            public void Debug(string message) => throw new InvalidOperationException("Discovery must log at Info.");
+            public void Warn(string message) => throw new InvalidOperationException("Unexpected warning.");
+            public void Error(string message) => throw new InvalidOperationException("Unexpected error.");
+            public void Error(Exception exception, string message) => throw new InvalidOperationException("Raw exception escaped.");
         }
 
         private static void WorldObservation()
@@ -76,7 +122,9 @@ namespace TopiaForge.ModManager.Tests
 
         private sealed class Session : IWorldSession
         {
-            public string SessionId => "test.session";
+            private readonly string id;
+            internal Session(string id = "test.session") { this.id = id; }
+            public string SessionId => id;
             public string TargetId => "test.target";
             public string GamemodeId => "test.mode";
             public string WorldId => "test.world";

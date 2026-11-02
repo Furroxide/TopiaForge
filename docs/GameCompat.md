@@ -192,3 +192,19 @@ allowlisted advanced mod genuinely needs a new native binding:
   looked up by name on a captured type is covered by the full surface diff, not by `verify`, until it is declared.
 - The live check needs both a Robotopia installation and this tool present, so for most end users the update-time signal
   arrives through the launcher (see the launcher Diagnostics integration), not the raw CLI.
+
+
+### Composition metadata extension for build 2597
+
+The composition surface extension was captured from cached build 2597 assembly metadata at
+`2026-11-02T16:47:14.0743853Z`, GameCode MVID `ca6b3eab-422a-43f6-80bb-88ac23255cd7`.
+It adds nine complete type records: `UgcAgentComponent`, `UgcExportEntity`, `UgcExportEntityComponents`,
+`UgcPrefabSceneMap`, `UgcPrefabSceneMap+Entry`, `UgcRobotPartMap`, `UgcRuntimeAssetOwner`, `UgcSceneBuilder`
+and `UgcVoiceMap`. Every existing type record, reference identity, version and simple-name lookup is unchanged;
+the baseline's top-level capture time retains the original records' provenance. The merged canonical surface
+hash is `c16e396f97d1a96ea243a3756afc4867f47d91a0ff68900a8d100d07621bd94b`.
+This metadata-only extension declares Critical composition dependencies, including the private
+`CollectReferencedAssetUris` signature. It does not inspect method bodies or establish native startup,
+builder behavior, material interpretation or cleanup acceptance. Field snapshots capture type, visibility and
+static shape, not constant values or constness; the composition binder additionally requires its two native
+material-field symbols to be literal strings before reading them.

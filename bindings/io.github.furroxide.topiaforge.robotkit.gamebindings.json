@@ -1689,6 +1689,619 @@
       "feature": "Native voice identity and scoped playback",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
       "returnType": "System.Int32"
+    },
+    {
+      "id": "robotkit.composed.type.ugcscenebuilder",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneBuilder",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcruntimeassetowner",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetOwner",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcimporthostscenecontroller",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcruntimeassetconfig",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcsceneroot",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneRoot",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcprefabscenemap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcPrefabSceneMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcprefabscenemap.entry",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcPrefabSceneMap+Entry",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcrobotpartmap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcRobotPartMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcvoicemap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcVoiceMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugccatalogloreloader",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcCatalogLoreLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcexportproject",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcexportscene",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcexportentity",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportEntity",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcexportentitycomponents",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportEntityComponents",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcagentcomponent",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcAgentComponent",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.composerparttype",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "ComposerPartType",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.overtonevoiceasset",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "OvertoneVoiceAsset",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.ugcscenebuilder.plasticmaterialfield",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneBuilder",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "PlasticMaterialField",
+      "isStatic": true,
+      "isPublic": false,
+      "returnType": "System.String"
+    },
+    {
+      "id": "robotkit.composed.ugcscenebuilder.metalmaterialfield",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneBuilder",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "MetalMaterialField",
+      "isStatic": true,
+      "isPublic": false,
+      "returnType": "System.String"
+    },
+    {
+      "id": "robotkit.composed.ugcprefabscenemap.entry.scenejson",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPrefabSceneMap+Entry",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "sceneJson",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.String"
+    },
+    {
+      "id": "robotkit.composed.ugcprefabscenemap.entry.scenepath",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPrefabSceneMap+Entry",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "scenePath",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.String"
+    },
+    {
+      "id": "robotkit.composed.ugcexportproject.assets",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "assets",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.Collections.Generic.Dictionary<System.String, System.String>"
+    },
+    {
+      "id": "robotkit.composed.ugcexportproject.localassets",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "localAssets",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.Collections.Generic.Dictionary<System.String, Newtonsoft.Json.Linq.JToken>"
+    },
+    {
+      "id": "robotkit.composed.ugcexportproject.scenes",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "scenes",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.Collections.Generic.Dictionary<System.String, UgcExportScene>"
+    },
+    {
+      "id": "robotkit.composed.ugcexportscene.entities",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "entities",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.Collections.Generic.Dictionary<System.String, UgcExportEntity>"
+    },
+    {
+      "id": "robotkit.composed.ugcexportentity.components",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportEntity",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "components",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcExportEntityComponents"
+    },
+    {
+      "id": "robotkit.composed.ugcexportentitycomponents.humanoidbodyparts",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportEntityComponents",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "humanoidBodyParts",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.Collections.Generic.Dictionary<System.String, System.String>"
+    },
+    {
+      "id": "robotkit.composed.ugcexportentitycomponents.agent",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportEntityComponents",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "agent",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcAgentComponent"
+    },
+    {
+      "id": "robotkit.composed.ugcagentcomponent.voiceset",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcAgentComponent",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "voiceset",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "System.String"
+    },
+    {
+      "id": "robotkit.composed.ugcimporthostscenecontroller.runtimeassetconfig",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "RuntimeAssetConfig",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcRuntimeAssetConfig",
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.composed.ugcimporthostscenecontroller.sceneroot",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "SceneRoot",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcSceneRoot",
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.composed.ugcsceneroot.activeimportroot",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneRoot",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "ActiveImportRoot",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UnityEngine.Transform",
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.composed.ugcruntimeassetconfig.prefabscenemap",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "PrefabSceneMap",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcPrefabSceneMap",
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.composed.ugcruntimeassetconfig.robotpartmap",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "RobotPartMap",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcRobotPartMap",
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.composed.ugcruntimeassetconfig.voicemap",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "VoiceMap",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcVoiceMap",
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.composed.ugcprefabscenemap.entries",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcPrefabSceneMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "Entries",
+      "isStatic": false,
+      "isPublic": true,
+      "returnType": "UgcPrefabSceneMap+Entry[]",
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "robotkit.composed.ugcscenebuilder.buildentity",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneBuilder",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "BuildEntity",
+      "isStatic": false,
+      "isPublic": true,
+      "parameters": [
+        {
+          "type": "UgcExportProject",
+          "constrained": true
+        },
+        {
+          "type": "UgcExportEntity",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.Transform",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "returnType": "UnityEngine.GameObject"
+    },
+    {
+      "id": "robotkit.composed.ugcscenebuilder.getoraddassetowner",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneBuilder",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "GetOrAddAssetOwner",
+      "isStatic": true,
+      "isPublic": true,
+      "parameters": [
+        {
+          "type": "UnityEngine.Transform",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "returnType": "UgcRuntimeAssetOwner"
+    },
+    {
+      "id": "robotkit.composed.ugcruntimeassetowner.destroyownedassets",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetOwner",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "DestroyOwnedAssets",
+      "isStatic": false,
+      "isPublic": true,
+      "parameters": [],
+      "exactParameters": true,
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.composed.ugcrobotpartmap.tryresolve",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRobotPartMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "TryResolve",
+      "isStatic": false,
+      "isPublic": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "ComposerPartType&",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject&",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.composed.ugcvoicemap.tryresolve",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcVoiceMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "TryResolve",
+      "isStatic": false,
+      "isPublic": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "OvertoneVoiceAsset&",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.composed.ugccatalogloreloader.collectreferencedasseturis",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcCatalogLoreLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "member": "CollectReferencedAssetUris",
+      "isStatic": true,
+      "isPublic": false,
+      "parameters": [
+        {
+          "type": "UgcExportProject",
+          "constrained": true
+        },
+        {
+          "type": "UgcPrefabSceneMap",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "returnType": "System.Collections.Generic.IReadOnlyList<System.String>"
+    },
+    {
+      "id": "robotkit.composed.ugcscenebuilder.ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneBuilder",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "isPublic": true,
+      "parameters": [
+        {
+          "type": "UgcRuntimeAssetConfig",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true
     }
   ]
 }

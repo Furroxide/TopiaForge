@@ -14,6 +14,9 @@ namespace TopiaForge.RobotKit
         private static readonly object Gate = new object();
         private static readonly HashSet<string> Reported = new HashSet<string>(StringComparer.Ordinal);
         private static IModLogger? logger;
+        private static object? discoveryWorld;
+        private static string? discoverySession;
+        private static readonly HashSet<RobotComposedRefusal> discoveryReasons = new HashSet<RobotComposedRefusal>();
 
         public static void Configure(IModLogger value)
         {
@@ -26,6 +29,7 @@ namespace TopiaForge.RobotKit
             {
                 logger = value;
                 Reported.Clear();
+                discoveryWorld = null; discoverySession = null; discoveryReasons.Clear();
             }
         }
 
@@ -37,8 +41,29 @@ namespace TopiaForge.RobotKit
                 {
                     logger = null;
                     Reported.Clear();
+                    discoveryWorld = null; discoverySession = null; discoveryReasons.Clear();
                 }
             }
+        }
+
+        public static void ReportComposedDiscovery(WorldSessionSnapshot? state, RobotComposedRefusal reason)
+        {
+            // Session/world identities are compared only in memory; diagnostics contain static codes only.
+            if (state?.Session == null || state.World == null) return;
+            IModLogger? sink;
+            lock (Gate)
+            {
+                if (!ReferenceEquals(discoveryWorld, state.World.Scene) || discoverySession != state.Session.SessionId)
+                {
+                    discoveryWorld = state.World.Scene;
+                    discoverySession = state.Session.SessionId;
+                    discoveryReasons.Clear();
+                }
+                sink = logger;
+                if (sink == null || !discoveryReasons.Add(reason)) return;
+            }
+            try { sink.Info("RobotKit composed discovery refused: " + reason + "."); }
+            catch { /* A diagnostic cannot break discovery. */ }
         }
 
         public static void ReportOnce(string operation, Exception exception)

@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "3d605fd8e3cd13a6c6c23360a0cc01086bfdf531e2c659595566a0ff1ef678f1",
+  "surfaceContentHash": "c16e396f97d1a96ea243a3756afc4867f47d91a0ff68900a8d100d07621bd94b",
   "types": {
     "FMODUnity|FMOD.GUID": {
       "assembly": "FMODUnity",
@@ -10954,6 +10954,54 @@
       "status": "Resolved",
       "typeKey": "GameCode|TaskGraph"
     },
+    "GameCode|UgcAgentComponent": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "about",
+          "type": "System.String[]"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "personality",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "visualDescription",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "voiceset",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcAgentComponent",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcAgentComponent",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcAgentComponent"
+    },
     "GameCode|UgcCatalogLoreLoader": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -11254,6 +11302,132 @@
       "simpleName": "Entry",
       "status": "Resolved",
       "typeKey": "GameCode|UgcEnvironmentPrefabMap+Entry"
+    },
+    "GameCode|UgcExportEntity": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "components",
+          "type": "UgcExportEntityComponents"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "id",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "name",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "parent",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcExportEntity",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcExportEntity",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcExportEntity"
+    },
+    "GameCode|UgcExportEntityComponents": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "agent",
+          "type": "UgcAgentComponent"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "aoi",
+          "type": "UgcAoiComponent"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "extraComponents",
+          "type": "System.Collections.Generic.IDictionary<System.String, Newtonsoft.Json.Linq.JToken>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "humanoidBodyParts",
+          "type": "System.Collections.Generic.Dictionary<System.String, System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "modelRenderer",
+          "type": "UgcModelRendererComponent"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "poi",
+          "type": "UgcPoiComponent"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "prefabInstance",
+          "type": "UgcPrefabInstanceComponent"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "spawnLocation",
+          "type": "UgcSpawnLocationComponent"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "transform",
+          "type": "UgcTransformComponent"
+        }
+      ],
+      "fullName": "UgcExportEntityComponents",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcExportEntityComponents",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcExportEntityComponents"
     },
     "GameCode|UgcExportLoader": {
       "assembly": "GameCode",
@@ -12975,6 +13149,123 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcPrefabAssetMap+Entry"
     },
+    "GameCode|UgcPrefabSceneMap": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "BuiltinPrefabScenesFolder",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "UgcPrefabSceneMap+Entry[]"
+        }
+      ],
+      "fullName": "UgcPrefabSceneMap",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ReadBuiltinPrefabScenes",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "UgcPrefabSceneMap+Entry[]"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetEntries",
+          "parameters": [
+            "UgcPrefabSceneMap+Entry[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryResolve",
+          "parameters": [
+            "System.String",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "Entries",
+          "setterIsPublic": false,
+          "type": "UgcPrefabSceneMap+Entry[]"
+        }
+      ],
+      "simpleName": "UgcPrefabSceneMap",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcPrefabSceneMap"
+    },
+    "GameCode|UgcPrefabSceneMap+Entry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "sceneJson",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "scenePath",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcPrefabSceneMap+Entry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "Entry",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcPrefabSceneMap+Entry"
+    },
     "GameCode|UgcPublishedProjectLoader": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -13293,6 +13584,61 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcPublishedProjectLoader"
     },
+    "GameCode|UgcRobotPartMap": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "UgcRobotPartMap+Entry[]"
+        }
+      ],
+      "fullName": "UgcRobotPartMap",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetEntries",
+          "parameters": [
+            "UgcRobotPartMap+Entry[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryResolve",
+          "parameters": [
+            "System.String",
+            "ComposerPartType&",
+            "UnityEngine.GameObject&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcRobotPartMap",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcRobotPartMap"
+    },
     "GameCode|UgcRotationHelper": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -13608,6 +13954,112 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcRuntimeAssetConfig"
     },
+    "GameCode|UgcRuntimeAssetOwner": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "embeddingWarmupRunning",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ownedAssets",
+          "type": "System.Collections.Generic.List<UnityEngine.Object>"
+        }
+      ],
+      "fullName": "UgcRuntimeAssetOwner",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "AddAsset",
+          "parameters": [
+            "UnityEngine.Object"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "DestroyOwnedAssets",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DestroyRuntimeAsset",
+          "parameters": [
+            "UnityEngine.Object"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "EndEmbeddingWarmup",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnDestroy",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryBeginEmbeddingWarmup",
+          "parameters": [
+            "UnityEngine.Object[]&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "Assets",
+          "setterIsPublic": false,
+          "type": "System.Collections.Generic.IReadOnlyList<UnityEngine.Object>"
+        }
+      ],
+      "simpleName": "UgcRuntimeAssetOwner",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcRuntimeAssetOwner"
+    },
     "GameCode|UgcRuntimeSpawnPointFactory": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -13680,6 +14132,389 @@
       "simpleName": "UgcRuntimeSpawnPointFactory",
       "status": "Resolved",
       "typeKey": "GameCode|UgcRuntimeSpawnPointFactory"
+    },
+    "GameCode|UgcSceneBuilder": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": [
+            "UgcRuntimeAssetConfig"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "EmptyModelAssetId",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "MetalMaterialField",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "PlasticMaterialField",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "RobotModelAssetId",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "runtimeAssetConfig",
+          "type": "UgcRuntimeAssetConfig"
+        }
+      ],
+      "fullName": "UgcSceneBuilder",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ApplyAgentComponent",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "UgcAgentComponent",
+            "UgcExportProject",
+            "UgcRuntimeAssetOwner"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ApplyAoiComponent",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "UgcAoiComponent",
+            "UgcExportProject",
+            "UgcRuntimeAssetOwner"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ApplyBodyPartMaterial",
+          "parameters": [
+            "RobotBodyComposer",
+            "ComposerPartMaterial",
+            "System.String",
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ApplyEntityDisplayName",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "UgcExportEntity"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ApplyHumanoidBodyParts",
+          "parameters": [
+            "UgcExportProject",
+            "UnityEngine.GameObject",
+            "System.Collections.Generic.Dictionary<System.String, System.String>"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ApplyPoiComponent",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "UgcPoiComponent",
+            "UgcExportProject",
+            "UgcRuntimeAssetOwner"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ApplyPrefabInstance",
+          "parameters": [
+            "UgcExportProject",
+            "UnityEngine.GameObject",
+            "UgcPrefabInstanceComponent"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ApplyTransform",
+          "parameters": [
+            "UnityEngine.Transform",
+            "UgcTransformComponent"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ApplyVisuals",
+          "parameters": [
+            "UgcExportProject",
+            "UnityEngine.GameObject",
+            "UgcExportEntityComponents"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ApplyVoiceset",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "AttachVisual",
+          "parameters": [
+            "UgcExportProject",
+            "UnityEngine.Transform",
+            "System.String",
+            "System.String"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "BuildEntity",
+          "parameters": [
+            "UgcExportProject",
+            "UgcExportEntity",
+            "UnityEngine.Transform"
+          ],
+          "returnType": "UnityEngine.GameObject"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "BuildEntity",
+          "parameters": [
+            "UgcExportProject",
+            "UgcExportEntity",
+            "UnityEngine.Transform",
+            "System.Boolean",
+            "System.Boolean&"
+          ],
+          "returnType": "UnityEngine.GameObject"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "BuildIntoRoot",
+          "parameters": [
+            "UgcExportProject",
+            "UgcExportScene",
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "BuildScene",
+          "parameters": [
+            "UgcExportProject",
+            "UgcExportScene",
+            "UgcSceneRoot"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CanMove",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CaptureImportedVisualRoot",
+          "parameters": [
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "CollectActiveRuntimeAssets",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "UnityEngine.Object[]"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CreatePlaceholderVisual",
+          "parameters": [
+            "UgcExportProject",
+            "System.String"
+          ],
+          "returnType": "UnityEngine.GameObject"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "GetOrAddAssetOwner",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "UgcRuntimeAssetOwner"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "HasConfiguredHumanoidBodyPart",
+          "parameters": [
+            "System.Collections.Generic.Dictionary<System.String, System.String>"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsInsideNestedImportedEntity",
+          "parameters": [
+            "UnityEngine.Transform",
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "MarkStaticShadowCasters",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ResetImportedVisualRoots",
+          "parameters": [
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ResolveEntityDisplayName",
+          "parameters": [
+            "UgcExportEntity"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ResolvePrefabSceneJson",
+          "parameters": [
+            "UgcPrefabInstanceComponent"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ResolveSourceAssetId",
+          "parameters": [
+            "UgcExportEntityComponents"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "WarmUpRuntimeEmbeddings",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "WarnAboutUnsupportedComponents",
+          "parameters": [
+            "UgcExportEntity"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcSceneBuilder",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcSceneBuilder"
     },
     "GameCode|UgcSceneEnvironmentApplier": {
       "assembly": "GameCode",
@@ -13948,6 +14783,60 @@
       "simpleName": "UgcVector3Value",
       "status": "Resolved",
       "typeKey": "GameCode|UgcVector3Value"
+    },
+    "GameCode|UgcVoiceMap": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "UgcVoiceMap+Entry[]"
+        }
+      ],
+      "fullName": "UgcVoiceMap",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetEntries",
+          "parameters": [
+            "UgcVoiceMap+Entry[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryResolve",
+          "parameters": [
+            "System.String",
+            "OvertoneVoiceAsset&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcVoiceMap",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcVoiceMap"
     },
     "GameCode|WalkSession": {
       "assembly": "GameCode",
