@@ -75,18 +75,25 @@ namespace TopiaForge.Worlds.Maps
         private static byte[] Unpack(byte[] bytes)
         {
             if (bytes.Length < 2 || bytes[0] != 0x1f || bytes[1] != 0x8b) return bytes;
-            using var input = new MemoryStream(bytes, false);
-            using var gzip = new GZipStream(input, CompressionMode.Decompress);
-            using var output = new MemoryStream();
-            var buffer = new byte[16384];
-            int count;
-            while ((count = gzip.Read(buffer, 0, buffer.Length)) != 0)
+            try
             {
-                if (output.Length + count > MaximumJsonBytes)
-                    throw new FormatException("The map exceeds the 32 MiB expanded limit. Choose another map.");
-                output.Write(buffer, 0, count);
+                using var input = new MemoryStream(bytes, false);
+                using var gzip = new GZipStream(input, CompressionMode.Decompress);
+                using var output = new MemoryStream();
+                var buffer = new byte[16384];
+                int count;
+                while ((count = gzip.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    if (output.Length + count > MaximumJsonBytes)
+                        throw new FormatException("The map exceeds the 32 MiB expanded limit. Choose another map.");
+                    output.Write(buffer, 0, count);
+                }
+                return output.ToArray();
             }
-            return output.ToArray();
+            catch (Exception error) when (error is InvalidDataException || error is IOException)
+            {
+                throw new FormatException("The compressed map data is damaged. Try a fresh copy or another map.");
+            }
         }
 
         internal static string Hash(byte[] bytes)

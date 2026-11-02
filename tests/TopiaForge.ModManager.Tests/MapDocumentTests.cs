@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             Expect<FormatException>(() => new MapDocument(Array.Empty<byte>()));
             Expect<FormatException>(() => new MapDocument(new byte[MapDocument.MaximumPackedBytes + 1]));
             Expect<FormatException>(() => new MapDocument(Gzip(new byte[MapDocument.MaximumJsonBytes + 1])), contains: "32 MiB");
+            Expect<FormatException>(() => new MapDocument(DamagedGzip()), contains: "damaged");
             foreach (var json in new[] { "{\"a\":1,\"a\":2}", "{\"a\":1,\"\\u0061\":2}", "{\"n\":NaN}",
                 "{\"n\":01}", "{\"n\":+1}", "{\"n\":1.}", "{\"n\":1e999}", "{\"n\":true,}",
                 "{\"a\": [1,]}", "{\"a\":\"\\ud800\"}", "{\"a\":\"\\u 041\"}", "{} {}", "\u00a0{}",
@@ -45,6 +46,12 @@ namespace TopiaForge.ModManager.Tests
             Expect<MapProblem>(() => two.Select("scene").Spawn(null), ModErrorCode.InvalidState);
             Assert(two.Select("scene").Spawn("Exit").Id == "b", "named editor spawn wins exactly");
             Console.WriteLine("MapDocumentTests passed (strict JSON, size and identity bounds, synthetic 296-entity fixture, spawn selection).");
+        }
+        internal static byte[] DamagedGzip()
+        {
+            var bytes = Gzip(Project());
+            bytes[2] = 0x7f; // Invalid gzip compression method; retain the gzip signature and real payload.
+            return bytes;
         }
         internal static byte[] Gzip(byte[] data)
         {
