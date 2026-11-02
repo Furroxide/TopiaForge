@@ -5,9 +5,11 @@ using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed partial class OwnerUiService
+    internal sealed partial class OwnerUiService : IUiClockReceiver
     {
         private Func<double> clock = () => 0;
+        private Func<string> clockEpoch = () => "offline";
+        public void FollowClock(Func<double> value, Func<string> epoch) { clock = value; clockEpoch = epoch; }
         private UnityWorldLabels? labels;
         private UnityEntityRegistry? labelEntities;
         public double ClockTime { get { UnityMainThreadGuard.AssertCurrent(); return clock(); } }
@@ -24,14 +26,12 @@ namespace TopiaForge.ModManager
         }
         internal void AttachWorldWidgets(UnityEntityRegistry entities)
         {
-            // A mod may create its first countdown before the gameplay loop samples its first frame.
-            var origin = UnityEngine.Time.realtimeSinceStartupAsDouble;
-            clock = () => Math.Max(0, UnityEngine.Time.realtimeSinceStartupAsDouble - origin);
             labelEntities = entities;
         }
         private sealed partial class UnityUiSurface
         {
-            internal void SetClock(Func<double> value) { callbacks.Clock = value; }
+            internal void SetClock(Func<double> value, Func<string> epoch)
+            { callbacks.Clock = value; callbacks.ClockEpoch = epoch; }
         }
         private static void RenderProgress(UiProgress progress, TopiaForgeContainer parent)
         {

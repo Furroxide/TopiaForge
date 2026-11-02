@@ -359,3 +359,22 @@ TopiaForge's runtime drives the provider's engine through the internal SPI
   cadence.
 - **The local name.** `SetLocalDisplayName` renames a hosting engine's own player; every joined player hears it at the
   next flush.
+
+
+### UI timeline samples
+
+`ClockSync` retains its authenticated host timestamp, network tick and measured RTT, then appends the host's
+unscaled elapsed microseconds and UI world generation. Its reply still echoes the original timestamp exactly, so unsolicited replies
+cannot manufacture RTT samples. A joined peer starts with the authenticated elapsed-time and UI world-generation fields in `JoinAccepted`, then uses
+the periodic elapsed sample plus half the measured RTT. Samples advance on the network pump independently of gameplay
+scale. The estimate is monotonic within an epoch; a lower correction may briefly hold the displayed clock.
+Initial join estimates and asymmetric links carry uncertainty and are not an authority signal.
+
+The internal UI clock identity combines the authenticated session ID, replacement epoch and UI world generation. A solo `Preparing` transition
+rotates the UI world generation and resets its origin without resetting unrelated replicated state. Opening that
+world to peers retains its timeline; joining peers receive its current generation. Without a multiplayer provider,
+the same runtime lifecycle subscription resets the shared offline clock. Widget type 12
+(progress) and type 13 (countdown) each carry schema version 1, an optional stable node ID, their value, plain
+caption and semantic tone. Countdown values are exact binary64 deadlines followed by the clock identity;
+receivers reject a different epoch before creating or updating a surface. Baselines retain the original
+deadline. Targeted UI, shared HUDs and test validation use the same bounded composition codec.

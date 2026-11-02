@@ -42,7 +42,7 @@ namespace TopiaForge.ModManager
                 var visibility = (UiHudVisibility)UiNodeWireCodec.Byte(read, 1);
                 var visible = UiNodeWireCodec.Byte(read, 1) != 0;
                 if (width < 80 || width > 1920 || height < 80 || height > 1440) return false;
-                var content = UiNodeWireCodec.Read(read, IgnoreControl);
+                var content = UiNodeWireCodec.Read(read, IgnoreControl, UiClockEpoch);
                 if (UiComposition.ContainsInteractive(content)) return false;
                 UiNodeWireCodec.End(read);
                 var request = new UiSurfaceRequest("shared-" + token, title, body, UiSurfaceKind.Hud, width, height, content)

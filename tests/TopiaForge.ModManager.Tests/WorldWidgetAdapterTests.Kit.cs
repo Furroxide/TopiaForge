@@ -113,7 +113,7 @@ namespace TopiaForge.ModManager.Tests
                     { var parent = new TopiaForgeContainer(); RenderCountdown(node, parent, clock); return parent.Children[0]; }
                     internal TopiaForgeContainer Render(UiProgress node)
                     { var parent = new TopiaForgeContainer(); RenderProgress(node, parent); return parent.Children[0]; }
-                    private sealed class UiCallbackGate { internal Func<double> Clock = () => 0; }
+                    private sealed class UiCallbackGate { internal Func<double> Clock = () => 0; internal Func<string> ClockEpoch = () => "offline"; }
                     private sealed partial class UnityUiSurface { private readonly UiCallbackGate callbacks = new UiCallbackGate(); }
                 }
             }

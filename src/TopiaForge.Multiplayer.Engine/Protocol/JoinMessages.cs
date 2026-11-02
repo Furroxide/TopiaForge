@@ -48,6 +48,8 @@ namespace TopiaForge.Multiplayer.Engine
         internal string? HostParticipantId;
         internal ulong Tick;
         internal int StepRateHz;
+        internal ulong UiClockGeneration;
+        internal long UiClockMicros;
         internal ulong NextSequence;
 
         /// <summary>
@@ -144,7 +146,9 @@ namespace TopiaForge.Multiplayer.Engine
             body.WriteBool(message.RecordKept);
             body.WriteBytes(message.Report);
             body.WriteVarUInt(message.Generation);
-            if (!message.VoiceOffered) body.WriteBool(false);
+            body.WriteBool(message.VoiceOffered);
+            body.WriteVarUInt(message.UiClockGeneration);
+            body.WriteVarUInt((ulong)Math.Max(0, message.UiClockMicros));
             frame.WriteEnvelope(MessageType.JoinAccepted, body);
         }
 
@@ -167,6 +171,12 @@ namespace TopiaForge.Multiplayer.Engine
 
             // Written only for a session that offers no voice chat; a host that leaves it out offers voice.
             message.VoiceOffered = reader.AtEnd || reader.ReadBool();
+            if (!reader.AtEnd)
+            {
+                message.UiClockGeneration = reader.ReadVarUInt();
+                message.UiClockMicros = (long)reader.ReadVarUInt(long.MaxValue);
+            }
+            else message.UiClockMicros = (long)(message.Tick * 1_000_000d / Math.Max(1, message.StepRateHz));
             if (message.StepRateHz < 1) throw new ProtocolException("The host announced a step rate of zero.");
             return message;
         }

@@ -68,7 +68,7 @@ namespace TopiaForge.ModManager
             var content = UiNodeWireCodec.Read(r, (control, value) =>
             {
                 if (!ui.Disposed && ui.Surface?.IsVisible == true && ui.Revision == revision) Reply(context, sender, token, revision, control, value, 14);
-            });
+            }, UiClockEpoch);
             UiNodeWireCodec.End(r);
             var surfaceRequest = new UiSurfaceRequest("remote-" + token, title, body, surfaceKind, width, height, content);
             if (surfaceKind == UiSurfaceKind.Hud) surfaceRequest = surfaceRequest.WithHudAnchor(anchor).WithHudVisibility(visibility);

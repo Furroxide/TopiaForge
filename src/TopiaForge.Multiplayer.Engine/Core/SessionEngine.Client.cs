@@ -230,6 +230,11 @@ namespace TopiaForge.Multiplayer.Engine
                 case MessageType.ClockSync:
                     var hostMicros = body.ReadVarUInt();
                     ObserveHostTick(body.ReadVarUInt());
+                    var roundTrip = body.ReadVarUInt(long.MaxValue);
+                    var timeline = body.AtEnd ? (double)lastHostTick / hostClock!.RateHz
+                        : body.ReadVarUInt(long.MaxValue) / 1_000_000d;
+                    if (!body.AtEnd) uiWorldGeneration = body.ReadVarUInt();
+                    ObserveUiClock(timeline, (long)roundTrip);
                     current.PendingClockReply = hostMicros;
                     break;
                 default:
@@ -268,6 +273,8 @@ namespace TopiaForge.Multiplayer.Engine
             hostClock = new FixedStepClock(message.StepRateHz);
             if (message.NextSequence > 0 && message.NextSequence - 1 > nextSequence) nextSequence = message.NextSequence - 1;
             ObserveHostTick(message.Tick);
+            uiWorldGeneration = message.UiClockGeneration;
+            ObserveUiClock(message.UiClockMicros / 1_000_000d);
             joinedBefore = true;
             current.Phase = ClientPhase.Synchronizing;
             current.VoiceMutesPending = options.Voice != null && (localVoiceMuteAll || localVoiceMutes.Count > 0);
@@ -609,7 +616,9 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void BeginReplacement(ClientChannel current, SessionReplacedMessage message)
         {
+            var previousTime = UiClockTime;
             ResetLocalSession(new MultiplayerSessionId(message.SessionId), new SessionSeed(message.Seed), message.Epoch, "The multiplayer session was replaced.");
+            ObserveUiClock(previousTime);
             current.RestartStreams();
             clientStreamGeneration = ++systemGeneration;
             current.Phase = ClientPhase.Synchronizing;

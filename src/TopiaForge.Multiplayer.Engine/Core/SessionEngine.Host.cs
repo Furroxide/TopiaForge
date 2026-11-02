@@ -443,7 +443,9 @@ namespace TopiaForge.Multiplayer.Engine
                 RecordKept = recordKept,
                 Report = decision.Report,
                 Generation = connection.JoinGeneration,
-                VoiceOffered = VoiceOfferedToPlayers
+                VoiceOffered = VoiceOfferedToPlayers,
+                UiClockGeneration = UiWorldGeneration,
+                UiClockMicros = UiTimelineMicros
             }));
             connection.Enqueue(CaptureSnapshot());
             connection.ClearPendingDeltas();

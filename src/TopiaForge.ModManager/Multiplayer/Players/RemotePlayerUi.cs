@@ -45,7 +45,11 @@ namespace TopiaForge.ModManager
             Check();
             if (Closed || !Target.IsPresent) return MultiplayerPlayers.Gone<bool>();
             if (content == null) throw new ArgumentNullException(nameof(content));
-            UiComposition.Validate(content);
+            try { UiComposition.Validate(content); }
+            catch (ArgumentException exception)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
+            }
             if (Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Put interactive controls in a window.");
             var old = Content;

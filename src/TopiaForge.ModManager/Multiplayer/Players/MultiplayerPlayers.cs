@@ -21,6 +21,8 @@ namespace TopiaForge.ModManager
         internal MultiplayerSessionSnapshot? Snapshot => runtime.Control?.SessionSnapshot;
         internal bool IsHost => runtime.Role != InternalSessionRole.Client;
         internal long Now => Presence.Now();
+        internal string UiClockEpoch => runtime.UiClockEpoch;
+        internal double UiClockTime => runtime.UiClockTime;
         internal NetRealm Realm => runtime.Realm;
         internal MultiplayerPresentation? Presentation { get; set; }
 
@@ -38,6 +40,7 @@ namespace TopiaForge.ModManager
 
         internal PlayerContext Bind(string mod, bool networked, IModLogger logger, IModLifetime lifetime, ILocalPlayerService local, IUiService ui, ModInputActivity input)
         {
+            if (ui is IUiClockReceiver receiver) receiver.FollowClock(() => runtime.UiClockTime, () => runtime.UiClockEpoch);
             var context = new PlayerContext(this, mod, networked, logger, lifetime, local, ui, input);
             contexts.Add(context);
             lifetime.Track(context);

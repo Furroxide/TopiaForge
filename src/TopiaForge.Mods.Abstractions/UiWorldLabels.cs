@@ -8,8 +8,10 @@ namespace TopiaForge.Mods
         [RequiresTopiaForge("0.2.0")]
         IUiWorldLabels Labels => UnavailableUiWorldLabels.Instance;
         /// <summary>
-        /// Gets unscaled seconds since this UI scope began. A gamemode scope starts a new local session clock;
-        /// pause and world slow motion do not stop it. Use this clock for <see cref="UiCountdown"/> deadlines.
+        /// Gets unscaled monotonic seconds on the current host world/session timeline, shared by all UI scopes.
+        /// Joined players estimate that timeline from authenticated host samples; network delay and clock drift cause
+        /// uncertainty. This is not wall-clock or Unix time. Gameplay pause and slow motion do not stop it.
+        /// Use this clock for <see cref="UiCountdown"/> deadlines and create new deadlines after session replacement.
         /// </summary>
         [RequiresTopiaForge("0.2.0")]
         double ClockTime => throw new NotSupportedException("This UI host does not provide a session clock. Update its implementation.");

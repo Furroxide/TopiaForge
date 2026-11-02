@@ -23,8 +23,20 @@ namespace TopiaForge.ModManager
         private ulong version = 1, publishedVersion, nextToken;
         private int surfaceBytes;
         internal long Now => players.Now;
+        internal string UiClockEpoch => players.UiClockEpoch;
         internal bool Hosting => players.Realm == NetRealm.ListenHost && players.Channel != null;
-        private PresentationSink Receiver => receiver ??= receiverFactory();
+        private PresentationSink Receiver
+        {
+            get
+            {
+                if (receiver == null)
+                {
+                    receiver = receiverFactory();
+                    if (receiver.Ui is IUiClockReceiver target) target.FollowClock(() => players.UiClockTime, () => UiClockEpoch);
+                }
+                return receiver;
+            }
+        }
 
         internal MultiplayerPresentation(MultiplayerPlayers players, Func<PresentationSink> receiverFactory)
         {
@@ -41,6 +53,8 @@ namespace TopiaForge.ModManager
             var token = Token();
             var hud = new MirroredHudPresenter(this, context, request, token);
             var prepared = hud.Prepare(request.Body, request.Content, true);
+            if (Hosting && hud.InvalidComposition != null)
+                return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, hud.InvalidComposition);
             if (Hosting && (!prepared || surfaces.Count >= MaximumSurfaces || surfaceBytes + hud.Bytes > MaximumBytes))
                 return Limit<IUiSurface>();
             var result = local.CreateSurface(request);

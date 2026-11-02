@@ -17,6 +17,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             var failures = new List<string>();
+            Check(failures, CountdownWidgets);
             Check(failures, DisposingARemoteModalCancelsIt);
             Check(failures, APlayerWhoLeavesCancelsItsModal);
             Check(failures, AnEndingScopeCancelsItsRemoteModals);

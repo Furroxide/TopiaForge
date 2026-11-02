@@ -127,7 +127,21 @@ namespace TopiaForge.Mods.Testing
             internal FakeTargetUi(FakePlayerDirectory owner, ParticipantId id) { this.owner = owner; this.id = id; }
             public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral) => owner.Allowed(id) ? owner.State(id).Ui.ShowToast(message, tone) : Refused<bool>();
             public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => owner.Allowed(id) ? owner.State(id).Ui.ShowModal(request, completed) : Refused<IUiModal>();
-            public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => owner.Allowed(id) ? owner.State(id).Ui.CreateSurface(request) : Refused<IUiSurface>();
+            public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)
+            {
+                if (!owner.Allowed(id)) return Refused<IUiSurface>();
+                if (id.Value != "local")
+                {
+                    try { UiWireCodec.Measure(request.Content, owner.State(id).Ui.WidgetEpoch(), 32 * 1024); }
+                    catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
+                    catch (InvalidOperationException) { return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "The remote UI composition is too large; shorten its content."); }
+                    if (owner.State(id).Ui.Surfaces.Count + owner.State(id).Ui.Modals.Count >= 64)
+                        return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "This player's UI is full; close a surface.");
+                }
+                var result = owner.State(id).Ui.CreateSurface(request);
+                if (result.TryGetValue(out var surface) && surface is FakeUiSurface fake) fake.WireBounded = id.Value != "local";
+                return result;
+            }
         }
     }
 }

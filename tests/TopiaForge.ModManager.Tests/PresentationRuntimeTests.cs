@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            CountdownWidgets();
             RoutesAndPromotes();
             CoalescesAndRestores();
             LocalFailureDoesNotPublish();

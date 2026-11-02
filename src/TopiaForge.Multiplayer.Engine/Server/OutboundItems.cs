@@ -214,15 +214,19 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly long hostMicros;
         private readonly ulong tick;
         private readonly long rttMicros;
+        private readonly long timelineMicros;
+        private readonly ulong uiGeneration;
 
-        internal ClockSyncItem(long hostMicros, ulong tick, long rttMicros)
+        internal ClockSyncItem(long hostMicros, ulong tick, long rttMicros, long timelineMicros, ulong uiGeneration)
         {
             this.hostMicros = hostMicros;
             this.tick = tick;
             this.rttMicros = rttMicros;
+            this.timelineMicros = timelineMicros;
+            this.uiGeneration = uiGeneration;
         }
 
         internal override void Write(HostConnection connection, FlushContext context) =>
-            SessionMessages.WriteClockSync(context.Frame, context.Body, hostMicros, tick, rttMicros);
+            SessionMessages.WriteClockSync(context.Frame, context.Body, hostMicros, tick, rttMicros, timelineMicros, uiGeneration);
     }
 }

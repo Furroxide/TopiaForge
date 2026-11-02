@@ -116,11 +116,17 @@ namespace TopiaForge.Mods.Testing
 
             try
             {
-                UiComposition.Validate(content);
+                if (WireBounded) UiWireCodec.Measure(content, widgetEpoch(), 32 * 1024);
+                UiClockBinding.Bind(content, widgetEpoch());
             }
             catch (ArgumentException exception)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
+            }
+
+            catch (InvalidOperationException)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.RateLimited, "The remote UI composition is too large; shorten its content.");
             }
 
             Content = content;
