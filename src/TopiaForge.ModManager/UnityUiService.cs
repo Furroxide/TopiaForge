@@ -97,6 +97,9 @@ namespace TopiaForge.ModManager
                     "The mod is stopping and cannot create UI surfaces.");
             }
 
+            try { UiClockBinding.Bind(request.Content, clockEpoch()); }
+            catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
+
             if (!surfaceIds.Add(request.Id))
             {
                 return OperationResult<IUiSurface>.Failure(
@@ -153,7 +156,7 @@ namespace TopiaForge.ModManager
                     nativeRoot = null;
                 }
 
-                surface.SetClock(clock);
+                surface.SetClock(clock, clockEpoch);
                 if (request.Content != null)
                 {
                     var contentResult = surface.SetContent(request.Content);

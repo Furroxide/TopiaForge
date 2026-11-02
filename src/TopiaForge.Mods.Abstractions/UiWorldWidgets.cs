@@ -22,10 +22,12 @@ namespace TopiaForge.Mods
         public UiTone Tone { get; }
     }
 
-    /// <summary>A countdown rendered automatically on the owning UI service's local session clock.</summary>
+    /// <summary>A countdown rendered automatically on the shared host world/session timeline.</summary>
     [RequiresTopiaForge("0.2.0")]
     public sealed class UiCountdown : UiNode
     {
+        internal UiClockBinding.EpochIdentity? ClockIdentity { get; set; }
+        internal string? ClockEpoch => ClockIdentity?.Value;
         /// <summary>Creates a countdown ending at <paramref name="endsAt"/> on <see cref="IUiService.ClockTime"/>.</summary>
         public UiCountdown(double endsAt, string label = "", UiTone tone = UiTone.Neutral, string? id = null) : base(id)
         {
@@ -33,7 +35,7 @@ namespace TopiaForge.Mods
             UiWidgetValues.Text(label, nameof(label)); UiWidgetValues.Tone(tone);
             EndsAt = endsAt; Label = label; Tone = tone;
         }
-        /// <summary>Gets the deadline in local session-clock seconds.</summary>
+        /// <summary>Gets the original deadline in shared host timeline seconds, unchanged by replication or late joining.</summary>
         public double EndsAt { get; }
         /// <summary>Gets the caption preceding the remaining whole seconds.</summary>
         public string Label { get; }

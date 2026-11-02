@@ -12,6 +12,8 @@ namespace TopiaForge.ModManager
             const string id = "topiaforge.presentation";
             var gameplay = coreGameplayServices.Create(id, string.Empty, paths.GetDataPath(id), presentationLifetime,
                 logger.ForMod(id), new ModNetProfile(ModNetworkClass.ClientLocal, ModExecutionContext.Process));
+            if (gameplay.Ui is OwnerUiService owner)
+                owner.FollowClock(() => multiplayer.UiClockTime, () => multiplayer.UiClockEpoch);
             return new PresentationSink(gameplay.Ui, gameplay.Audio);
         }
     }

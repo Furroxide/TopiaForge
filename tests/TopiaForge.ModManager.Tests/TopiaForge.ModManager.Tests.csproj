@@ -63,6 +63,7 @@
        on net10.0 without loading a UnityEngine-referencing assembly. -->
   <ItemGroup>
     <Compile Include="../../src/TopiaForge.ModManager/NativeSpawnSettlement.cs" Link="NativeSpawnSettlement.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/MultiplayerUiWorldLifetime.cs" Link="Runtime/MultiplayerUiWorldLifetime.cs" />
     <Compile Include="../../mods/Shared/DiagnosticPathRedactor.cs" />
     <Compile Include="..\..\mods\Shared\SafeEvent.cs" />
     <Compile Include="..\..\mods\Shared\UgcNoOpLaunchRequest.cs" />

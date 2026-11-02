@@ -21,7 +21,7 @@ namespace TopiaForge.ModManager
                 return;
             }
             if (node is UiProgress progress) { RenderProgress(progress, parent); return; }
-            if (node is UiCountdown countdown) { RenderCountdown(countdown, parent, callbacks.Clock); return; }
+            if (node is UiCountdown countdown) { RenderCountdown(countdown, parent, () => countdown.ClockEpoch == callbacks.ClockEpoch() ? callbacks.Clock() : countdown.EndsAt); return; }
 
             if (node is UiColumn column)
             {
@@ -219,6 +219,7 @@ namespace TopiaForge.ModManager
         private sealed class UiCallbackGate
         {
             internal Func<double> Clock { get; set; } = () => 0;
+            internal Func<string> ClockEpoch { get; set; } = () => "offline";
             private readonly IModLifetime lifetime;
             private readonly IModLogger logger;
             private int active = 1;

@@ -117,7 +117,7 @@ update only when their displayed value changes.
 ## Local world widgets (0.2)
 
 `UiProgress` renders a bounded fraction through the kit's progress bar. `UiCountdown` takes an
-end time on `Context.Ui.ClockTime`, the unscaled clock of the owning UI scope, and updates itself:
+end time on `Context.Ui.ClockTime`, the unscaled host timeline shared by every UI scope, and updates itself:
 
 ```csharp
 var content = new UiColumn(
@@ -127,10 +127,33 @@ var result = Context.Ui.CreateSurface(new UiSurfaceRequest(
     "status", "Status", "", UiSurfaceKind.Hud, content: content));
 ```
 
-The clock starts when the mod or gamemode scope starts. It continues during pause and slow motion;
-it is local, not a synchronized multiplayer clock. A countdown rounds remaining seconds up, stops
+The clock uses the current host world/session timeline, shared across UI scopes, with the same
+origin for offline scopes. It continues during pause and slow motion. A countdown rounds remaining seconds up, stops
 at zero, and ends with its composition or surface. No author frame callback is needed. Progress
 and countdown nodes use the surface's semantic tones, UI scale and high-contrast theme.
+
+Progress and countdown widgets also work in targeted player UI and shared HUDs. The original deadline travels
+unchanged, including in late-join baselines. A countdown created during `OnLoad` keeps its deadline when the initial
+solo multiplayer provider attaches, and opening that same world to peers retains its timeline. Opening a later UI scope never restarts the clock. Offline scopes
+share one origin; joined players estimate the host timeline from authenticated network samples, with a half-RTT
+latency correction. Estimates may differ temporarily because of latency, asymmetric links, frame scheduling or
+drift; corrections never move the current clock backwards. A timer is presentation, not proof that a remote
+player has reached a deadline. Keep authoritative round decisions on the host.
+
+This corrects the pre-release per-scope clock semantics. The clock is neither Unix time nor local wall time,
+and gameplay pause/slow motion does not pause it. To pause a round timer, display the held remaining value
+and create a fresh deadline when resuming. A new session invalidates previously bound countdown nodes. Recreate
+deadlines from the new `ClockTime` rather than reusing an old numeric `EndsAt`. Internally replicated deadlines
+carry the session epoch, so a replacement cannot
+accept a previous session's timer.
+
+Remote compositions are validated in full before any surface is created. Unsupported nodes, unknown widget
+versions and invalid shapes are refused; authored shape failures return `InvalidArgument` with the cause.
+`RateLimited` means an actual surface, byte or update quota was exhausted. Graph canvases are local-only and
+must be placed in a local surface instead of targeted remote UI. The testing kit uses the same bounded widget
+encoder for remote-player validation. To test delayed scopes deterministically, construct multiple
+`FakeUiService` instances with the same `IGameTime`; its unscaled elapsed time provides their shared origin.
+
 
 Place a label through `Context.Ui.Labels.Add(UiWorldLabelRequest.At(position, "Marker"))`, or use
 `UiWorldLabelRequest.For(entity, "Panel")` to follow an entity automatically. Check the returned

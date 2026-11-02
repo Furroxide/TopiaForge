@@ -163,6 +163,7 @@ namespace TopiaForge.ModManager
                 return false;
             }
 
+            AttachUiClock(candidate);
             control = candidate;
             role = candidate.Role;
             ReportIntentMode();
@@ -175,6 +176,7 @@ namespace TopiaForge.ModManager
         {
             var current = control;
             if (current == null) return;
+            ResetOfflineUiClock();
             control = null;
             role = InternalSessionRole.Solo;
             FollowRealm();

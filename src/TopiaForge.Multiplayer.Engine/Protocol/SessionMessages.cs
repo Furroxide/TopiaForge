@@ -153,12 +153,14 @@ namespace TopiaForge.Multiplayer.Engine
             frame.WriteEnvelope(MessageType.Commit, body);
         }
 
-        internal static void WriteClockSync(ProtocolWriter frame, ProtocolWriter body, long hostMicros, ulong tick, long rttMicros)
+        internal static void WriteClockSync(ProtocolWriter frame, ProtocolWriter body, long hostMicros, ulong tick, long rttMicros, long? timelineMicros = null, ulong uiGeneration = 0)
         {
             body.Reset();
             body.WriteVarUInt((ulong)Math.Max(0, hostMicros));
             body.WriteVarUInt(tick);
             body.WriteVarUInt((ulong)Math.Max(0, rttMicros));
+            body.WriteVarUInt((ulong)Math.Max(0, timelineMicros ?? hostMicros));
+            body.WriteVarUInt(uiGeneration);
             frame.WriteEnvelope(MessageType.ClockSync, body);
         }
 

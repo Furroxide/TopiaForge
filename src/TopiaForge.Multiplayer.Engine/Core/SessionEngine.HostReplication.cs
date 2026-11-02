@@ -130,7 +130,7 @@ namespace TopiaForge.Multiplayer.Engine
                 connection.NextClockSyncAt = nowMicros + options.ClockSyncIntervalMicros;
                 connection.ProbePending = true;
                 connection.ProbeMicros = nowMicros;
-                connection.Enqueue(new ClockSyncItem(nowMicros, tick, connection.Participant?.RttMicros ?? -1));
+                connection.Enqueue(new ClockSyncItem(nowMicros, tick, connection.Participant?.RttMicros ?? -1, UiTimelineMicros, UiWorldGeneration));
             }
         }
 

@@ -22,7 +22,8 @@ namespace TopiaForge.ModManager.Tests
                     SceneManager.Active = new Scene { Data = new SceneData() };
                     Physics.Results = Array.Empty<RaycastHit>(); Physics.Calls = 0;
                     entities = new UnityEntityRegistry();
-                    var service = new OwnerUiService(); service.AttachWorldWidgets(entities); return service;
+                    var service = new OwnerUiService(); service.AttachWorldWidgets(entities);
+                    service.FollowClock(() => Math.Max(0, Time.realtimeSinceStartupAsDouble - 100), () => "world"); return service;
                 }
                 private static TopiaForgeHudLayer Root(OwnerUiService service) => service.host.Roots.Last();
                 private static TopiaForgeNametag LastTag(OwnerUiService service) => Root(service).Layer!.Tags.Last();
@@ -51,7 +52,7 @@ namespace TopiaForge.ModManager.Tests
                     view.Go.Destroy(); Time.realtimeSinceStartupAsDouble += 10;
                     var reads = Time.Reads; driver.Frame("Update");
                     Check(text.Writes == writes && Time.Reads == reads, "Destroyed countdown driver releases its targets.");
-                    var next = Start(out _); Check(next.ClockTime == 0, "A new scope has its own clock origin.");
+                    var next = Start(out _); Check(next.ClockTime == service.ClockTime && next.ClockTime > 16, "A delayed scope shares the existing world origin.");
                     var progress = service.Render(new UiProgress(0.25f, "Tasks", UiTone.Success));
                     Check(progress.Progress!.Fraction == 0.25f && progress.Progress.Color == TopiaForgeTone.Success && progress.Text!.Plain,
                         "Progress sends fraction, tone and plain caption to the kit.");

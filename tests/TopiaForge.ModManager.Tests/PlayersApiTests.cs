@@ -117,9 +117,10 @@ namespace TopiaForge.ModManager.Tests
             try { UiNodeWireCodec.Read(reader, (_, _) => { }); } catch (ArgumentException) { bounded = true; }
             Assert(bounded, "depth is bounded before descending into hostile input");
             var graphWriter = new WorldWireWriter(32768);
-            UiNodeWireCodec.Write(graphWriter, new UiGraphCanvas("graph", Array.Empty<UiGraphNode>(), Array.Empty<UiGraphEdge>(), _ => clicks++));
-            reader.Reset(graphWriter.Segment.ToArray());
-            Assert(UiNodeWireCodec.Read(reader, (_, _) => clicks++) is UiText placeholder && placeholder.Text.Contains("host only", StringComparison.Ordinal), "graph canvases become a noninteractive placeholder");
+            var graphRefused = false;
+            try { UiNodeWireCodec.Write(graphWriter, new UiGraphCanvas("graph", Array.Empty<UiGraphNode>(), Array.Empty<UiGraphEdge>(), _ => clicks++)); }
+            catch (ArgumentException exception) { graphRefused = exception.Message.Contains("UiGraphCanvas", StringComparison.Ordinal); }
+            Assert(graphRefused && graphWriter.Length == 0, "graph canvases are refused by name before writing a placeholder or partial surface");
             var oversized = false;
             try { UiNodeWireCodec.Write(new WorldWireWriter(32768), new UiText(new string('x', 4097))); }
             catch (ArgumentException) { oversized = true; }

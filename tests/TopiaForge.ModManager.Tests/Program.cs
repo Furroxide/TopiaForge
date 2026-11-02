@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--countdown-wire") { UiCountdownWireTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-world-lifetime")
             { RobotBodyTests.RunWorldRecovery(); RobotComposedCurrentnessTests.Run(); RobotComposedSceneTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-body-views")
@@ -497,6 +498,7 @@ namespace TopiaForge.ModManager.Tests
                     return 0;
                 }
 
+                if (args.Length == 0) UiCountdownWireTests.RunCore();
                 TestInstallSuccess(root);
                 TestLegacyPackageExtensionRejected(root);
                 TestUpdatePreservesDisabledState(root);

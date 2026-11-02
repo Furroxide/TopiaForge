@@ -11,6 +11,8 @@ namespace TopiaForge.ModManager
     internal sealed partial class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource, IGameClockSource
     {
         private readonly UnityGameClock gameClock = new UnityGameClock();
+        private readonly double uiClockOrigin = UnityEngine.Time.realtimeSinceStartupAsDouble;
+        private readonly string uiClockEpoch = Guid.NewGuid().ToString("N");
         private readonly UnityInputRegistry input = new UnityInputRegistry();
         private readonly UnityEntityRegistry entities = new UnityEntityRegistry();
         private readonly UnityGameTime time = new UnityGameTime();
@@ -102,6 +104,7 @@ namespace TopiaForge.ModManager
             var ownerScheduler = new OwnerScheduler(lifetime, scheduler, logger);
             var ui = new OwnerUiService(ownerModId, dataPath, lifetime, logger, uiGameplay, hudPlacement);
             ui.AttachWorldWidgets(entities);
+            ui.FollowClock(() => Math.Max(0, UnityEngine.Time.realtimeSinceStartupAsDouble - uiClockOrigin), () => uiClockEpoch);
             return new GameplayContextServices(
                 new OwnerInputService(ownerModId, lifetime, input),
                 new OwnerPlayerService(lifetime, player),

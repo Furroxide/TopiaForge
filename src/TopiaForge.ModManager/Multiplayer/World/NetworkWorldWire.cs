@@ -67,8 +67,13 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>A fixed buffer world replication writes one message into. It never allocates after construction.</summary>
-    internal sealed class WorldWireWriter
+    internal sealed class WorldWireWriter : Mods.IUiWireWriter
     {
+        void Mods.IUiWireWriter.WriteByte(byte value) => WriteByte(value);
+        void Mods.IUiWireWriter.WriteSingle(float value) => WriteSingle(value);
+        void Mods.IUiWireWriter.WriteUInt64(ulong value) => WriteUInt64(value);
+        void Mods.IUiWireWriter.WriteVarUInt(ulong value) => WriteVarUInt(value);
+        void Mods.IUiWireWriter.WriteString(string value) => WriteString(value);
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
         private readonly byte[] buffer;
         private readonly NetBitWriter record = new NetBitWriter(32);
@@ -189,8 +194,15 @@ namespace TopiaForge.ModManager
     /// and reports failure instead of throwing, varints must be minimal, strings valid UTF-8, and a message must end
     /// exactly where its last field does.
     /// </summary>
-    internal sealed class WorldWireReader
+    internal sealed class WorldWireReader : Mods.IUiWireReader
     {
+        bool Mods.IUiWireReader.AtEnd => AtEnd;
+        bool Mods.IUiWireReader.TryReadByte(out byte value) => TryReadByte(out value);
+        bool Mods.IUiWireReader.TryReadSingle(out float value) => TryReadSingle(out value);
+        bool Mods.IUiWireReader.TryReadUInt64(out ulong value) => TryReadUInt64(out value);
+        bool Mods.IUiWireReader.TryReadVarUInt(ulong maximum, out ulong value) => TryReadVarUInt(maximum, out value);
+        bool Mods.IUiWireReader.TryReadInt32(int maximum, out int value) => TryReadInt32(maximum, out value);
+        bool Mods.IUiWireReader.TryReadString(int maximumBytes, out string value) => TryReadString(maximumBytes, out value);
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
         private readonly NetBitReader record = new NetBitReader();
         private byte[] data = Array.Empty<byte>();

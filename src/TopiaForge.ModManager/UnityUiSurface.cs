@@ -173,7 +173,7 @@ namespace TopiaForge.ModManager
                 UiGraphRetentionTransaction? graphTransaction = null;
                 try
                 {
-                    UiComposition.Validate(content);
+                    UiClockBinding.Bind(content, callbacks.ClockEpoch());
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
                     RenderNode(content, next, callbacks, graphTransaction);

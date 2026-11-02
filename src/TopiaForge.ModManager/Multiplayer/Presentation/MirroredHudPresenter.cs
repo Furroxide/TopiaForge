@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager
         private bool shown = true, disposed;
         private ulong revision;
         internal byte[]? Payload;
+        internal string? InvalidComposition;
         internal IDisposable? Tracking;
         internal int Bytes => (Payload?.Length ?? 0) + 4;
 
@@ -24,26 +25,30 @@ namespace TopiaForge.ModManager
         internal void Attach(IUiSurface surface) => inner = surface;
         internal bool Prepare(string text, UiNode? node, bool visible)
         { Payload = Encode(text, node, visible); return Payload != null; }
+        internal void RefreshClockBinding() => owner.Change(this, Encode(body, content, shown));
         private byte[]? Encode(string text, UiNode? node, bool visible)
         {
+            InvalidComposition = null;
             try
             {
+                UiWireValidation.Validate(node);
                 if (!MultiplayerPlayers.Finite(request.Width) || !MultiplayerPlayers.Finite(request.Height) ||
                     request.Width < 80 || request.Width > 1920 || request.Height < 80 || request.Height > 1440 ||
-                    UiComposition.ContainsInteractive(node)) return null;
+                    UiComposition.ContainsInteractive(node))
+                    throw new ArgumentException("Shared HUDs need a finite 80-1920 by 80-1440 size and read-only content.");
                 var w = new WorldWireWriter(MultiplayerPresentation.MaximumBytes);
                 w.Begin(0); w.WriteVarUInt(token); UiNodeWireCodec.Text(w, request.Title);
                 UiNodeWireCodec.Text(w, text); w.WriteSingle(request.Width); w.WriteSingle(request.Height);
                 w.WriteByte((byte)request.HudAnchor); w.WriteByte((byte)request.HudVisibility);
-                w.WriteByte(visible ? (byte)1 : (byte)0); UiNodeWireCodec.Write(w, node);
+                w.WriteByte(visible ? (byte)1 : (byte)0); UiNodeWireCodec.Write(w, node, owner.UiClockEpoch);
                 return MultiplayerPresentation.Copy(w);
             }
-            catch (ArgumentException) { return null; }
+            catch (ArgumentException exception) { InvalidComposition = exception.Message; return null; }
             catch (InvalidOperationException) { return null; }
         }
         public string Id => inner.Id;
         public bool IsVisible => !disposed && inner.IsVisible;
-        internal bool IsAlive => !disposed && MultiplayerPresentation.SurfaceAlive(inner);
+        internal bool IsAlive => !disposed && MultiplayerPresentation.SurfaceAlive(inner) && UiClockBinding.IsCurrent(content, owner.UiClockEpoch);
         public event Action? Dismissed
         {
             add { if (inner is IUiSurfaceDismissalSource source) source.Dismissed += value; }
@@ -97,6 +102,7 @@ namespace TopiaForge.ModManager
             if (UiComposition.ContainsInteractive(value)) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
                 "HUD surfaces are read-only; put controls in a window or a player's targeted UI.");
             var payload = Encode(body, value, shown);
+            if (owner.Hosting && InvalidComposition != null) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, InvalidComposition);
             if (owner.Hosting && payload == null) return MultiplayerPresentation.Limit<bool>();
             if (!owner.Change(this, payload, false)) return MultiplayerPresentation.Limit<bool>();
             var result = inner.SetContent(value);

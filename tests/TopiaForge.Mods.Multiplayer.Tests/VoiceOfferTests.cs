@@ -211,18 +211,33 @@ internal static class VoiceOfferTests
 
     internal static void JoinAcceptedSaysWhenTheSessionOffersNoVoice()
     {
-        // VoiceMuteTests' vector, a session that offers voice, is unchanged; a session that offers none adds one byte.
-        var offered = new byte[] { 0x02, 0x10, 0x01, 0x73, 0x07, 0x01, 0x02, 0x70, 0x31, 0x01, 0x01, 0x68, 0x05, 0x14, 0x03, 0x01, 0x00, 0x00 };
-        var withoutVoice = new byte[] { 0x02, 0x11, 0x01, 0x73, 0x07, 0x01, 0x02, 0x70, 0x31, 0x01, 0x01, 0x68, 0x05, 0x14, 0x03, 0x01, 0x00, 0x00, 0x00 };
-        Assert(Write(voiceOffered: true).SequenceEqual(offered), "a session that offers voice writes the bytes it always did");
-        Assert(Write(voiceOffered: false).SequenceEqual(withoutVoice), "one that offers none adds a false byte after the join generation");
-        Assert(Read(offered).VoiceOffered && !Read(withoutVoice).VoiceOffered, "and each reads back as written");
+        // The current tail always includes voice, UI world generation 9 and 250,000 elapsed microseconds.
+        var offered = new byte[] { 0x02, 0x15, 0x01, 0x73, 0x07, 0x01, 0x02, 0x70, 0x31, 0x01, 0x01, 0x68, 0x05, 0x14, 0x03, 0x01, 0x00, 0x00, 0x01, 0x09, 0x90, 0xa1, 0x0f };
+        var withoutVoice = new byte[] { 0x02, 0x15, 0x01, 0x73, 0x07, 0x01, 0x02, 0x70, 0x31, 0x01, 0x01, 0x68, 0x05, 0x14, 0x03, 0x01, 0x00, 0x00, 0x00, 0x09, 0x90, 0xa1, 0x0f };
+        Assert(Write(voiceOffered: true).SequenceEqual(offered), "voice offered is explicit before the UI clock fields");
+        Assert(Write(voiceOffered: false).SequenceEqual(withoutVoice), "voice disabled retains its false byte before the UI clock fields");
+        Assert(Read(offered) is { VoiceOffered: true, UiClockGeneration: 9, UiClockMicros: 250000 } &&
+            Read(withoutVoice) is { VoiceOffered: false, UiClockGeneration: 9, UiClockMicros: 250000 },
+            "both voice settings and the exact UI clock fields read back");
 
-        // A reader never reads past the fields it knows: one more field after this one is skipped, as this one is by a
-        // reader that predates it.
+        var legacyOffered = new byte[] { 0x02, 0x10, 0x01, 0x73, 0x07, 0x01, 0x02, 0x70, 0x31, 0x01, 0x01, 0x68, 0x05, 0x14, 0x03, 0x01, 0x00, 0x00 };
+        var legacyWithoutVoice = legacyOffered.Concat(new byte[] { 0x00 }).ToArray();
+        legacyWithoutVoice[1] = 0x11;
+        Assert(Read(legacyOffered) is { VoiceOffered: true, UiClockGeneration: 0, UiClockMicros: 250000 } &&
+            Read(legacyWithoutVoice) is { VoiceOffered: false, UiClockGeneration: 0, UiClockMicros: 250000 },
+            "legacy absent/false voice tails retain their semantics and derive time from tick/rate");
+
+        // Future fields are skipped only after all current fields. A started clock tail must be complete.
         var extended = withoutVoice.Concat(new byte[] { 0x07 }).ToArray();
-        extended[1] = 0x12;
-        Assert(Read(extended) is { VoiceOffered: false, Generation: 0, RecordKept: true }, "a byte after it is left unread");
+        extended[1] = 0x16;
+        Assert(Read(extended) is { VoiceOffered: false, Generation: 0, RecordKept: true, UiClockGeneration: 9, UiClockMicros: 250000 },
+            "an extension after the complete current tail remains forward compatible");
+        var missingClockTime = legacyWithoutVoice.Concat(new byte[] { 0x07 }).ToArray();
+        missingClockTime[1] = 0x12;
+        Throws<ProtocolException>(() => Read(missingClockTime), "a world generation without clock time is refused");
+        var truncatedClockTime = legacyWithoutVoice.Concat(new byte[] { 0x07, 0x80 }).ToArray();
+        truncatedClockTime[1] = 0x13;
+        Throws<ProtocolException>(() => Read(truncatedClockTime), "an unterminated clock time is refused");
         withoutVoice[18] = 0x02;
         try
         {
@@ -239,7 +254,7 @@ internal static class VoiceOfferTests
         Assert(!Accepted(rig, "raw-1").VoiceOffered, "a host that offers no voice says so in JoinAccepted");
         rig.Host.CloseConnections(MultiplayerSessionEndReason.HostEnded, "The host stopped hosting.");
         rig.Flush();
-        Assert(Accepted(rig, "raw-2").VoiceOffered, "and one that offers voice writes nothing more");
+        Assert(Accepted(rig, "raw-2").VoiceOffered, "and one that offers voice announces it explicitly");
 
         static byte[] Write(bool voiceOffered)
         {
@@ -256,7 +271,9 @@ internal static class VoiceOfferTests
                 StepRateHz = 20,
                 NextSequence = 3,
                 RecordKept = true,
-                VoiceOffered = voiceOffered
+                VoiceOffered = voiceOffered,
+                UiClockGeneration = 9,
+                UiClockMicros = 250000
             });
             return frame.ToArray();
         }

@@ -17,6 +17,7 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--ui-clock-attachment") return RunUiClockCases();
             if (args.Length == 1 && args[0] == "--world-view") { SessionWorldViewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--blockers")
             {
@@ -84,6 +85,7 @@ namespace TopiaForge.ModRuntime.Tests
                 TestReceiptRecheckedImmediatelyBeforeLoad(root);
                 TestResolverLifetime(root);
                 TestGeneratedMultiplayerAutoBinding();
+                TestUiClockAcrossInitialAttachment(root);
                 TestMultiplayerRuntime(root);
                 TestMultiplayerIntent(root);
                 TestPauseAndTime(root);
@@ -113,7 +115,8 @@ namespace TopiaForge.ModRuntime.Tests
             return reference;
         }
 
-        private static Fixture NewFixture(string root, string name, string entryType, string assemblyName = FixtureAssembly)
+        private static Fixture NewFixture(string root, string name, string entryType, string assemblyName = FixtureAssembly,
+            string? packageId = null)
         {
             var testRoot = Path.Combine(root, name);
             var packagePath = Path.Combine(testRoot, "package");
@@ -127,7 +130,7 @@ namespace TopiaForge.ModRuntime.Tests
             var manifest = new ModManifest
             {
                 SchemaVersion = 6,
-                Id = "tests." + name,
+                Id = packageId ?? "tests." + name,
                 Name = "Runtime " + name,
                 Version = "1.0.0",
                 EntryAssembly = assemblyName,
@@ -288,11 +291,12 @@ namespace TopiaForge.ModRuntime.Tests
         private sealed class CapturedRuntimeLogger : IModRuntimeLogger
         {
             public List<string> Errors { get; } = new List<string>();
+            public List<string> Warnings { get; } = new List<string>();
             public bool ThrowOnError { get; set; }
 
             public IModLogger ForMod(string modId) => new CapturedModLogger(this, modId);
             public void Info(string message) { }
-            public void Warn(string message) { }
+            public void Warn(string message) => Warnings.Add(message);
             public void Error(string message) => Errors.Add(message);
             public void Error(Exception exception, string message)
             {
@@ -313,7 +317,7 @@ namespace TopiaForge.ModRuntime.Tests
 
                 public void Debug(string message) { }
                 public void Info(string message) { }
-                public void Warn(string message) { }
+                public void Warn(string message) => owner.Warnings.Add("[" + modId + "] " + message);
                 public void Error(string message) => owner.Errors.Add("[" + modId + "] " + message);
                 public void Error(Exception exception, string message) =>
                     owner.Errors.Add("[" + modId + "] " + message + ": " + exception.Message);

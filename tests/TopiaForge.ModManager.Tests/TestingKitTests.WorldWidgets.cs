@@ -55,7 +55,7 @@ namespace TopiaForge.ModManager.Tests
             surface.Dispose();
             Assert(!surface.TryGetCountdownSeconds("round-time", out _), "disposed surfaces expose no timer");
             using var other = new FakeModContext();
-            Assert(other.Ui.ClockTime == 0, "a new session scope starts its own local clock");
+            Assert(other.Ui.ClockTime == 0, "an independent test session starts at zero");
         }
         private static void WorldWidgetLabels()
         {

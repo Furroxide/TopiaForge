@@ -107,12 +107,14 @@ namespace TopiaForge.Mods.Testing
                 }
             }
 
+            try { UiClockBinding.Bind(request.Content, WidgetEpoch()); }
+            catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
             var scenesNow = scenes;
             var surface = new FakeUiSurface(
                 request,
                 value => surfaces.Remove(value),
                 scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay);
-            surface.SetClock(() => ClockTime);
+            surface.SetClock(() => ClockTime, () => WidgetEpoch());
             if (pendingContentFailures.TryGetValue(request.Id, out var contentFailure))
             {
                 pendingContentFailures.Remove(request.Id);

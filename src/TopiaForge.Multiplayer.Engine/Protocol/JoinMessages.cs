@@ -48,6 +48,8 @@ namespace TopiaForge.Multiplayer.Engine
         internal string? HostParticipantId;
         internal ulong Tick;
         internal int StepRateHz;
+        internal ulong UiClockGeneration;
+        internal long UiClockMicros;
         internal ulong NextSequence;
 
         /// <summary>
@@ -65,11 +67,10 @@ namespace TopiaForge.Multiplayer.Engine
         internal ulong Generation;
 
         /// <summary>
-        /// Whether the session offers voice chat, as its host chose when it started hosting. It travels as one byte after
-        /// the join generation, written only when the session offers none, so a session that offers voice sends the bytes
-        /// it always did. A reader that finds nothing there reads a session that offers voice, as every host before the
-        /// field was; a reader that predates it never reads past the fields it knows, so it skips the byte. A field added
-        /// after this one needs the byte in every message, true or false, so that readers find the new field in place.
+        /// Whether the session offers voice chat. Current messages always write this byte after the join generation,
+        /// followed by the UI world generation and elapsed microseconds. Legacy messages may end before this flag
+        /// (voice offered), or immediately after it (the explicit voice setting). Readers skip future fields only
+        /// after consuming the complete current tail.
         /// </summary>
         internal bool VoiceOffered = true;
     }
@@ -144,7 +145,9 @@ namespace TopiaForge.Multiplayer.Engine
             body.WriteBool(message.RecordKept);
             body.WriteBytes(message.Report);
             body.WriteVarUInt(message.Generation);
-            if (!message.VoiceOffered) body.WriteBool(false);
+            body.WriteBool(message.VoiceOffered);
+            body.WriteVarUInt(message.UiClockGeneration);
+            body.WriteVarUInt((ulong)Math.Max(0, message.UiClockMicros));
             frame.WriteEnvelope(MessageType.JoinAccepted, body);
         }
 
@@ -165,8 +168,14 @@ namespace TopiaForge.Multiplayer.Engine
                 Generation = reader.ReadVarUInt()
             };
 
-            // Written only for a session that offers no voice chat; a host that leaves it out offers voice.
+            // Legacy hosts may omit this flag; current hosts always precede their clock tail with it.
             message.VoiceOffered = reader.AtEnd || reader.ReadBool();
+            if (!reader.AtEnd)
+            {
+                message.UiClockGeneration = reader.ReadVarUInt();
+                message.UiClockMicros = (long)reader.ReadVarUInt(long.MaxValue);
+            }
+            else message.UiClockMicros = (long)(message.Tick * 1_000_000d / Math.Max(1, message.StepRateHz));
             if (message.StepRateHz < 1) throw new ProtocolException("The host announced a step rate of zero.");
             return message;
         }

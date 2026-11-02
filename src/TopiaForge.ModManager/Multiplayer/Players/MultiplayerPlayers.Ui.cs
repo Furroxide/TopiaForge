@@ -39,6 +39,8 @@ namespace TopiaForge.ModManager
             if (!context.Networked) return Unshared<IUiSurface>();
             if (request.Id.Length > 128 || !Finite(request.Width) || !Finite(request.Height) || request.Width < 80 || request.Width > 1920 || request.Height < 80 || request.Height > 1440)
                 return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, "Use a short surface id and a window between 80 and 1920 units wide and 80 and 1440 units high.");
+            try { UiWireValidation.Validate(request.Content); UiClockBinding.Bind(request.Content, UiClockEpoch); }
+            catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
             if (UiFull(player)) return Limit<IUiSurface>();
             var surface = new RemoteUiSurface(this, context, Target(context, player), ++nextUiToken, request);
             var sent = SendSurface(surface);
@@ -74,7 +76,7 @@ namespace TopiaForge.ModManager
                 if (sent.Succeeded) modal.Stream = Channel?.GetGeneration(modal.Target.Id) ?? 0;
                 return sent;
             }
-            catch (ArgumentException) { return Limit<bool>(); }
+            catch (ArgumentException exception) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
             catch (InvalidOperationException) { return Limit<bool>(); }
         }
         internal OperationResult<bool> Toast(PlayerContext context, ParticipantId player, string message, UiTone tone)
@@ -100,12 +102,12 @@ namespace TopiaForge.ModManager
                 Writer.WriteByte((byte)request.Kind); Writer.WriteSingle(request.Width); Writer.WriteSingle(request.Height);
                 Writer.WriteByte((byte)request.HudAnchor); Writer.WriteByte((byte)request.HudVisibility);
                 Writer.WriteByte(surface.Visible ? (byte)1 : (byte)0);
-                UiNodeWireCodec.Write(Writer, surface.Content);
+                UiNodeWireCodec.Write(Writer, surface.Content, UiClockEpoch);
                 var result = SendUi(surface.Target.Id);
                 if (result.Succeeded) { surface.Dirty = false; surface.Stream = Channel?.GetGeneration(surface.Target.Id) ?? 0; }
                 return result;
             }
-            catch (ArgumentException) { return Limit<bool>(); }
+            catch (ArgumentException exception) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
             catch (InvalidOperationException) { return Limit<bool>(); }
         }
         private void BeginUi(byte kind, PlayerContext context, ParticipantId player, ulong token, ulong revision)

@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager
             AttachSessionLifecycle(activeSessions, nativeDispatcher);
             activeSessions.DiagnosticFailure += error => logger.Error(error, "Session lifecycle failure.");
             InstallSessionFollow(activeSessions);
+            multiplayer.FollowUiWorldSessions(activeSessions);
 
             // A world session that starts numbers its mods' shadowable spawns afresh, as a joined player following it does (WS3.7).
             activeSessions.StateChanged += state =>
