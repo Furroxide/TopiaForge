@@ -538,6 +538,9 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
 
+      - name: Test multiplayer build configuration on Windows
+        run: python tools/test_multiplayer_build.py
+
   # CI-triggered Pages publishing waits for a successful complete CI run through deploy-pages.yml.
   # This documentation check needs no outputs from C# or the release scaffolds, so it starts at once.
   docs:

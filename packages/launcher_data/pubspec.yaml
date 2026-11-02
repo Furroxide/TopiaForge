@@ -7,7 +7,9 @@ environment:
   sdk: ^3.11.1
 
 dependencies:
-  archive: ^4.0.7
+  # 4.6 changes damaged-data decoding to return partial output by default.
+  # Preserve strict ZIP rejection until all readers migrate to its new API.
+  archive: '>=4.0.7 <4.6.0'
   crypto: ^3.0.6
   cryptography: ^2.9.0
   launcher_domain:

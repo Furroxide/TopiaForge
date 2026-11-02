@@ -4,6 +4,9 @@ import unittest
 from unittest.mock import Mock, patch
 import io
 import json
+import os
+import sys
+import tempfile
 
 spec = importlib.util.spec_from_file_location('multiplayer_build', Path(__file__).with_name('multiplayer-build.py'))
 build = importlib.util.module_from_spec(spec)
@@ -11,6 +14,39 @@ spec.loader.exec_module(build)
 
 
 class MultiplayerBuildTests(unittest.TestCase):
+    def test_default_executable_uses_path_and_platform_extensions(self):
+        suffixes = ('.exe', '.bat') if os.name == 'nt' else ('',)
+        for kind, arguments in (('dart', ['compile', 'exe', 'bin/topiaforge.dart']),
+                                ('flutter', ['build', 'windows'])):
+            for suffix in suffixes:
+                with self.subTest(kind=kind, suffix=suffix), tempfile.TemporaryDirectory() as folder:
+                    executable = Path(folder) / (kind + suffix)
+                    executable.touch(mode=0o755)
+                    with patch.dict(os.environ, PATH=folder, PATHEXT='.EXE;.BAT'), \
+                         patch.object(sys, 'argv', ['multiplayer-build.py', '--environment', 'offline',
+                                                   '--kind', kind, '--', *arguments]), \
+                         patch.object(build.subprocess, 'call', return_value=0) as call:
+                        self.assertEqual(build.main(), 0)
+                        self.assertEqual(Path(call.call_args.args[0][0]), executable)
+
+    def test_explicit_executable_is_preserved(self):
+        with patch.object(sys, 'argv', ['multiplayer-build.py', '--environment', 'offline',
+                                       '--kind', 'dart', '--executable', '/pinned/dart',
+                                       '--', 'compile', 'exe', 'bin/topiaforge.dart']), \
+             patch.object(build.shutil, 'which') as which, \
+             patch.object(build.subprocess, 'call', return_value=7) as call:
+            self.assertEqual(build.main(), 7)
+            self.assertEqual(call.call_args.args[0][0], '/pinned/dart')
+            which.assert_not_called()
+
+    def test_missing_executable_refuses_without_starting_build(self):
+        with patch.object(sys, 'argv', ['multiplayer-build.py', '--environment', 'offline',
+                                       '--kind', 'dart', '--', 'compile', 'exe', 'bin/topiaforge.dart']), \
+             patch.object(build.shutil, 'which', return_value=None), \
+             patch.object(build.subprocess, 'call') as call:
+            self.assertEqual(build.main(), 1)
+            call.assert_not_called()
+
     def test_both_clients_receive_same_origin(self):
         for environment, origin in build.ORIGINS.items():
             with self.subTest(environment=environment):

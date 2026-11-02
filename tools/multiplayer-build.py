@@ -2,8 +2,8 @@
 """Build multiplayer clients with a public service origin, never credentials."""
 import argparse
 import json
-import os
 from pathlib import Path
+import shutil
 import subprocess
 import urllib.request
 
@@ -62,7 +62,9 @@ def main():
         arguments = args.arguments
         if arguments[:1] == ["--"]:
             arguments = arguments[1:]
-        executable = args.executable or args.kind + (".bat" if os.name == "nt" else "")
+        executable = args.executable or shutil.which(args.kind)
+        if not executable:
+            raise FileNotFoundError("The selected build tool is not on PATH.")
         command = build_command(args.kind, executable, arguments, origin)
         root = Path(__file__).resolve().parents[1]
         project = "topiaforge_launcher_flutter" if args.kind == "flutter" else "topiaforge_cli"
