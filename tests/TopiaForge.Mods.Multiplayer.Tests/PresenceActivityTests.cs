@@ -185,9 +185,15 @@ internal static class PresenceActivityTests
         internal void RawPose(Node n, PresenceFlags flags)
         {
             var w = new NetBitWriter(PresenceMessages.PoseBytes);
-            PresenceWire.WritePose(w, new PresencePoseRecord { Millis = (uint)(Engine.NowMicros / 1000),
-                Correction = n.Presence.Client.Correction, Position = NetQuantization.QuantizePosition(n.Backend.Feet),
-                Rotation = NetQuantization.IdentityRotationBits, EyeCentimeters = 160, Flags = flags });
+            PresenceWire.WritePose(w, new PresencePoseRecord
+            {
+                Millis = (uint)(Engine.NowMicros / 1000),
+                Correction = n.Presence.Client.Correction,
+                Position = NetQuantization.QuantizePosition(n.Backend.Feet),
+                Rotation = NetQuantization.IdentityRotationBits,
+                EyeCentimeters = 160,
+                Flags = flags
+            });
             Check(n.Control.Inbox!.SendDatagram(w.AsSegment(), InternalSystemTarget.Host).Succeeded, "raw pose enters actual channel");
         }
         public void Dispose() { foreach (var n in Nodes) n.Presence.Detaching(n.Control); Engine.Dispose(); }
@@ -210,7 +216,8 @@ internal static class PresenceActivityTests
     }
     private sealed class QuietLog : IMultiplayerLog
     {
-        public void Info(string message) { } public void Warn(string message) { }
+        public void Info(string message) { }
+        public void Warn(string message) { }
         public void Error(string message) => throw new InvalidOperationException(message);
     }
 }
