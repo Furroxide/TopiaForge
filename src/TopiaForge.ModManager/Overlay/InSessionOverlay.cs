@@ -85,9 +85,13 @@ namespace TopiaForge.ModManager
             connection = new ConnectionIndicator(column, screen);
             // Chat is a transient interactive pane, not a permanent empty HUD reservation.
             // Its fading lines and full composer keep their space without moving other HUDs.
-            var chatLayer = host.Layer("chat", TopiaForgeLayerBand.Window, TopiaForgeScheme.Hud, interactive: true, persistent: true);
+            // Render beneath manager windows; ChatOverlay retains its own Window-band input dismissal.
+            var chatLayer = host.Layer("chat", TopiaForgeLayerBand.Hud, TopiaForgeScheme.Hud, interactive: true, persistent: true);
             chatRoot = chatLayer.Stack("Chat").Size(600f, 330f);
             chatRoot.Dock(TopiaForgeCorner.BottomRight);
+            var reserve = UiHudAnchors.SubtitleReserve(TopiaForgeCorner.BottomRight);
+            var anchor = new UnityEngine.Vector2(chatRoot.Rect.anchorMin.x, reserve);
+            chatRoot.Rect.anchorMin = chatRoot.Rect.anchorMax = anchor;
             chat = new ChatOverlay(chatRoot, screen);
         }
 

@@ -15,7 +15,10 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             var file = Path.Combine(Program.FindRepoRoot(), "src/TopiaForge.ModManager/Overlay/InSessionOverlay.cs");
-            var sources = new[] { File.ReadAllText(file), Contracts, Probe };
+            var root = Program.FindRepoRoot();
+            var sources = new[] { File.ReadAllText(file),
+                File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager/UiHudAnchors.cs")),
+                File.ReadAllText(Path.Combine(root, "src/TopiaForge.Mods.UnityUi/Layout/TopiaForgeAnchors.cs")), Contracts, Probe };
             var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
             var references = trusted.Concat(new[] { typeof(TopiaForgeHudDock).Assembly.Location,
                 typeof(InputActionDefinition).Assembly.Location }).Distinct(StringComparer.OrdinalIgnoreCase)
@@ -31,7 +34,7 @@ namespace TopiaForge.ModManager.Tests
             var assembly = Assembly.Load(bytes.ToArray());
             try { assembly.GetType("HudProbe")!.GetMethod("Run")!.Invoke(null, null); }
             catch (TargetInvocationException error) { throw error.InnerException!; }
-            Console.WriteLine("InSessionHudLayoutTests passed: real overlay build/tick/loss/disposal, join/rehost and open/closed geometry.");
+            Console.WriteLine("InSessionHudLayoutTests passed: actual overlay/anchors/band allocator, manager occlusion, subtitle reserve, join/rehost and cleanup.");
         }
 
         private const string Contracts = """
@@ -42,6 +45,17 @@ namespace TopiaForge.ModManager.Tests
             namespace UnityEngine
             {
                 public class GameObject { public bool activeInHierarchy = true; public bool Destroyed; }
+                public struct Vector2
+                {
+                    public float x, y;
+                    public Vector2(float x, float y) { this.x = x; this.y = y; }
+                    public static Vector2 zero => new Vector2(0, 0);
+                    public static Vector2 one => new Vector2(1, 1);
+                }
+                public class RectTransform
+                {
+                    public Vector2 anchorMin, anchorMax, pivot, anchoredPosition, sizeDelta, offsetMin, offsetMax;
+                }
             }
             namespace UnityEngine.SceneManagement
             {
@@ -57,19 +71,21 @@ namespace TopiaForge.ModManager.Tests
             }
             namespace TopiaForge.Mods.UnityUi
             {
-                public sealed class ProbeRect { public float Width, Height; public TopiaForgeCorner Corner; }
+                public sealed class ProbeRect : UnityEngine.RectTransform { public float Width, Height; public TopiaForgeCorner Corner; }
                 public class TopiaForgeContainer
                 {
                     public readonly UnityEngine.GameObject Go = new UnityEngine.GameObject();
                     public readonly ProbeRect Rect = new ProbeRect();
                     public readonly TopiaForgeLayerBand Band;
-                    public TopiaForgeContainer(TopiaForgeLayerBand band) { Band = band; }
-                    public TopiaForgeContainer Stack(string name) => new TopiaForgeContainer(Band);
-                    public TopiaForgeContainer Size(float width, float height) { Rect.Width = width; Rect.Height = height; return this; }
-                    public TopiaForgeContainer Column(TopiaForgeGap gap) => new TopiaForgeContainer(Band);
+                    public readonly int SortOrder;
+                    public TopiaForgeContainer(TopiaForgeLayerBand band, int sortOrder) { Band = band; SortOrder = sortOrder; }
+                    public TopiaForgeContainer Stack(string name) => new TopiaForgeContainer(Band, SortOrder);
+                    public TopiaForgeContainer Size(float width, float height)
+                    { Rect.Width = width; Rect.Height = height; Rect.sizeDelta = new UnityEngine.Vector2(width, height); return this; }
+                    public TopiaForgeContainer Column(TopiaForgeGap gap) => new TopiaForgeContainer(Band, SortOrder);
                     public void Stretch() { }
                     public TopiaForgeContainer Flex(float x, float y) => this;
-                    public void Dock(TopiaForgeCorner corner) { Rect.Corner = corner; }
+                    public void Dock(TopiaForgeCorner corner) { Rect.Corner = corner; TopiaForgeAnchors.Dock(Rect, corner); }
                     public void SetShown(bool shown) { Go.activeInHierarchy = shown; }
                 }
                 public sealed class TopiaForgeUiOptions { public string OwnerId = ""; }
@@ -77,11 +93,16 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public event Action<UnityEngine.GameObject>? LayerLost;
                     public bool Disposed;
-                    public TopiaForgeContainer Layer(string name, TopiaForgeLayerBand band, TopiaForgeScheme scheme, bool interactive, bool persistent) => new TopiaForgeContainer(band);
+                    public TopiaForgeContainer Layer(string name, TopiaForgeLayerBand band, TopiaForgeScheme scheme, bool interactive, bool persistent)
+                    { if (!TopiaForgeUi.Bands.TryAllocate(band, out var order)) throw new InvalidOperationException("probe band exhausted"); return new TopiaForgeContainer(band, order); }
                     public void Lose() { LayerLost?.Invoke(new UnityEngine.GameObject()); }
                     public void Dispose() { Disposed = true; }
                 }
-                public static class TopiaForgeUi { public static UiHost? Last; public static UiHost Create(TopiaForgeUiOptions options) => Last = new UiHost(); }
+                public static class TopiaForgeUi
+                {
+                    public static readonly TopiaForgeLayerBands Bands = new TopiaForgeLayerBands();
+                    public static UiHost? Last; public static UiHost Create(TopiaForgeUiOptions options) => Last = new UiHost();
+                }
                 public static class TopiaForgeDismissStack { public static int Count => 0; }
             }
             namespace TopiaForge.ModManager.Sessions
@@ -148,13 +169,16 @@ namespace TopiaForge.ModManager.Tests
 
         private const string Probe = """
             using System;
+            using System.Collections.Generic;
             using System.Reflection;
             using TopiaForge.ModManager;
             using TopiaForge.ModManager.Sessions;
             using TopiaForge.Mods.UnityUi;
             public static class HudProbe
             {
-                private static void Check(bool value, string reason) { if (!value) throw new InvalidOperationException("HUD regression: " + reason); }
+                private static readonly List<string> failures = new List<string>();
+                private static void Check(bool value, string reason) { if (!value && !failures.Contains(reason)) failures.Add(reason); }
+                private static bool Near(float actual, float expected) => Math.Abs(actual - expected) < .001f;
                 private static TopiaForgeContainer? Field(InSessionOverlay overlay, string name) =>
                     (TopiaForgeContainer?)typeof(InSessionOverlay).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(overlay);
                 public static void Run()
@@ -163,10 +187,12 @@ namespace TopiaForge.ModManager.Tests
                     {
                         var plugin = new TopiaForgeModManagerPlugin(); var screen = new MultiplayerSessionsPresenter();
                         var placement = plugin.Gameplay.HudPlacement; var dock = placement.Dock;
+                        var managerBefore = new UiHost().Layer("manager-before", TopiaForgeLayerBand.Window, TopiaForgeScheme.Paper, true, true);
                         using var overlay = new InSessionOverlay(plugin, screen, () => { });
                         var round = 0; var card = 0;
                         if (!early) { round = Add(dock, 300); card = Add(dock, 540); }
                         overlay.Tick();
+                        var managerAfter = new UiHost().Layer("manager-after", TopiaForgeLayerBand.Window, TopiaForgeScheme.Paper, true, true);
                         for (var cycle = 0; cycle < 2; cycle++)
                         {
                             if (cycle == 1 || early) { round = Add(dock, 300); card = Add(dock, 540); }
@@ -187,9 +213,24 @@ namespace TopiaForge.ModManager.Tests
                                 Check(Field(overlay, "root")?.Go.activeInHierarchy == true,
                                     "connection status remains visible with chat open or closed");
                                 var chat = ChatOverlay.Parent!;
-                                Check(chat.Band == TopiaForgeLayerBand.Window && chat.Rect.Corner == TopiaForgeCorner.BottomRight,
-                                    "open chat is a separate window pane, not a shared HUD reservation");
+                                Check(chat.Band == TopiaForgeLayerBand.Hud && chat.SortOrder < managerBefore.SortOrder && chat.SortOrder < managerAfter.SortOrder,
+                                    "chat must render below manager for either creation order");
+                                Check(chat.Rect.Corner == TopiaForgeCorner.BottomRight && Near(chat.Rect.anchorMin.x, 1) && Near(chat.Rect.anchorMax.x, 1)
+                                    && Near(chat.Rect.pivot.x, 1) && Near(chat.Rect.pivot.y, 0), "chat keeps bottom-right anchors and pivot");
+                                Check(Near(chat.Rect.anchorMin.y, .12f) && Near(chat.Rect.anchorMax.y, .12f),
+                                    "subtitle reserve follows both anchors");
                                 Check(chat.Rect.Width == 600 && chat.Rect.Height == 330, "recent lines and full composer keep usable geometry");
+                                foreach (var height in new[] { 1080f, 1440f })
+                                foreach (var uiScale in new[] { .5f, 1f, 2f })
+                                {
+                                    var scale = height / 1080f * uiScale; var width = height * 16f / 9f;
+                                    var bottom = chat.Rect.anchorMin.y * height + chat.Rect.anchoredPosition.y * scale - chat.Rect.pivot.y * chat.Rect.Height * scale;
+                                    var left = chat.Rect.anchorMin.x * width + chat.Rect.anchoredPosition.x * scale - chat.Rect.pivot.x * chat.Rect.Width * scale;
+                                    Check(Near(bottom, height * .12f + TopiaForgeTokens.SafeMargin * scale),
+                                        "chat clears the subtitle reserve independent of display size and UI scale");
+                                    Check(bottom >= 0 && bottom + chat.Rect.Height * scale <= height && left >= 0 && left + chat.Rect.Width * scale <= width,
+                                        "detached chat remains inside the viewport at both sizes");
+                                }
                             }
                             dock.Remove(round); dock.Remove(card); // Same persistent connection HUD, fresh mode HUDs on rehost.
                         }
@@ -210,6 +251,7 @@ namespace TopiaForge.ModManager.Tests
                         Check(TopiaForgeUi.Last!.Disposed && placement.Entries.Count == 0 && Field(overlay, "root") == null && Field(overlay, "chatRoot") == null,
                             "dispose retires both roots and the reservation");
                     }
+                    if (failures.Count != 0) throw new InvalidOperationException("HUD regression: " + string.Join(" | ", failures));
                 }
                 private static int Add(TopiaForgeHudDock dock, float height)
                 { var handle = dock.Add(TopiaForgeCorner.BottomLeft, height, 1); dock.SetShown(handle, true); return handle; }
