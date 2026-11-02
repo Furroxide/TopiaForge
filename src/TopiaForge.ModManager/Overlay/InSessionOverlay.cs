@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager
         private ChatOverlay? chat;
         private ConnectionIndicator? connection;
         private TopiaForgeContainer? root;
+        private TopiaForgeContainer? chatRoot;
         private int dock = -1;
         private int scene;
 
@@ -53,6 +54,7 @@ namespace TopiaForge.ModManager
             chat?.Tick(inGame);
             connection?.Tick(inGame);
             root?.SetShown(inGame && screen.IsAvailable);
+            chatRoot?.SetShown(inGame && screen.IsAvailable);
             if (dock >= 0) gameplay!.HudPlacement.SetShown(dock, inGame && screen.IsAvailable);
             if (plugin.Multiplayer != null) plugin.Multiplayer.IsLocalPlayerTyping = screen.IsTyping;
         }
@@ -75,14 +77,22 @@ namespace TopiaForge.ModManager
         {
             host = TopiaForgeUi.Create(new TopiaForgeUiOptions { OwnerId = Owner });
             host.LayerLost += Lost;
-            var layer = host.Layer("chat", TopiaForgeLayerBand.Hud, TopiaForgeScheme.Hud, interactive: true, persistent: true);
-            root = layer.Stack("InSession").Size(600f, 330f);
-            if (gameplay != null) dock = gameplay.HudPlacement.Add(host, root.Rect, TopiaForgeCorner.BottomLeft, 330f);
+            var layer = host.Layer("connection", TopiaForgeLayerBand.Hud, TopiaForgeScheme.Hud, interactive: false, persistent: true);
+            root = layer.Stack("InSession").Size(600f, 28f);
+            if (gameplay != null) dock = gameplay.HudPlacement.Add(host, root.Rect, TopiaForgeCorner.BottomLeft, 28f);
             var column = root.Column(TopiaForgeGap.Sm);
             column.Stretch();
             connection = new ConnectionIndicator(column, screen);
-            var body = column.Stack("Chat").Flex(1f, 1f);
-            chat = new ChatOverlay(body, screen);
+            // Chat is a transient interactive pane, not a permanent empty HUD reservation.
+            // Its fading lines and full composer keep their space without moving other HUDs.
+            // Render beneath manager windows; ChatOverlay retains its own Window-band input dismissal.
+            var chatLayer = host.Layer("chat", TopiaForgeLayerBand.Hud, TopiaForgeScheme.Hud, interactive: true, persistent: true);
+            chatRoot = chatLayer.Stack("Chat").Size(600f, 330f);
+            chatRoot.Dock(TopiaForgeCorner.BottomRight);
+            var reserve = UiHudAnchors.SubtitleReserve(TopiaForgeCorner.BottomRight);
+            var anchor = new UnityEngine.Vector2(chatRoot.Rect.anchorMin.x, reserve);
+            chatRoot.Rect.anchorMin = chatRoot.Rect.anchorMax = anchor;
+            chat = new ChatOverlay(chatRoot, screen);
         }
 
         private void Lost(UnityEngine.GameObject lost)
@@ -94,6 +104,7 @@ namespace TopiaForge.ModManager
             chat = null;
             connection = null;
             root = null;
+            chatRoot = null;
             if (dock >= 0) gameplay!.HudPlacement.Remove(dock);
             dock = -1;
             var previous = host;
@@ -112,6 +123,10 @@ namespace TopiaForge.ModManager
             if (dock >= 0) gameplay!.HudPlacement.Remove(dock);
             dock = -1;
             if (host != null) { host.LayerLost -= Lost; host.Dispose(); host = null; }
+            root = null;
+            chatRoot = null;
+            chat = null;
+            connection = null;
         }
     }
 }
