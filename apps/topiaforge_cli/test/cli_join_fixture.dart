@@ -11,6 +11,8 @@ final class JoinFixture implements LauncherRepository, MultiplayerJoinGateway {
   final cancel = Completer<void>();
   final messages = <String>[], prompts = <String>[];
   final steps = <JoinStage>[];
+  final answerStates = <JoinSessionState>[];
+  JoinEvent? Function(JoinSessionState)? answerForState;
   final install = const GameInstall(
     path: 'fixture',
     executablePath: 'fixture/game.exe',
@@ -116,7 +118,10 @@ final class JoinFixture implements LauncherRepository, MultiplayerJoinGateway {
   }) async {
     answers++;
     steps.add(state.stage);
+    answerStates.add(state);
     await beforeAnswer?.call(state.stage);
+    final overridden = answerForState?.call(state);
+    if (overridden != null) return overridden;
     if (throwAnswer) throw StateError('private 203.0.113.99 endpoint');
     if (state.stage == failureStage) return failure;
     // An install drains and returns its terminal event even after cancellation.
