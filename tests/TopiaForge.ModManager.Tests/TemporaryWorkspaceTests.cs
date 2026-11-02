@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     string? workspace = null;
                     var actual = IsolatedTestProcess.RunChild(
-                        new[] { "--temporary-workspace-probe", exitCode.ToString(), outer },
+                        new[] { "--temporary-workspace-probe", exitCode.ToString(), Path.GetFileName(outer) },
                         created => workspace = created);
                     Check(actual == exitCode, "Workspace supervision must preserve the test exit code.");
                     Check(workspace != null && !Directory.Exists(workspace),
@@ -27,6 +27,8 @@ namespace TopiaForge.ModManager.Tests
                     Check(File.ReadAllText(sentinel) == "retain unrelated data",
                         "Workspace cleanup must preserve unrelated data and symbolic-link targets.");
                 }
+                var rejected = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "0", "../not-owned" });
+                Check(rejected == 64, "Workspace probes must reject paths outside the owned sibling fixture.");
                 if (OperatingSystem.IsWindows()) RejectSuccessfulExitWhenCleanupIsBlocked(outer);
                 Console.WriteLine("Temporary workspace cleanup tests passed.");
             }
@@ -38,13 +40,16 @@ namespace TopiaForge.ModManager.Tests
             var workspace = Path.TrimEndingDirectorySeparator(Path.GetTempPath());
             Check(workspace.StartsWith(Path.GetDirectoryName(workspace) + Path.DirectorySeparatorChar +
                 "TopiaForgeHarness-", StringComparison.Ordinal), "A fresh child must use its parent's private workspace.");
+            var outsideName = Path.GetFileName(args[2]);
+            if (outsideName != args[2] || !outsideName.StartsWith("TopiaForgeWorkspaceTests-", StringComparison.Ordinal)) return 64;
+            var outside = Path.Combine(Path.GetDirectoryName(workspace)!, outsideName);
             if (args[1] == "empty") return 0;
             var root = Directory.CreateTempSubdirectory("fixture-").FullName;
             Directory.CreateDirectory(root + "-sibling");
             var file = Path.Combine(root, "read-only.txt");
             File.WriteAllText(file, "generated fixture");
             File.SetAttributes(file, FileAttributes.ReadOnly);
-            try { Directory.CreateSymbolicLink(Path.Combine(workspace, "outside"), args[2]); }
+            try { Directory.CreateSymbolicLink(Path.Combine(workspace, "outside"), outside); }
             catch (UnauthorizedAccessException) when (OperatingSystem.IsWindows())
             { Console.WriteLine("Symbolic-link coverage requires privileges; the other workspace cases still run."); }
             catch (IOException error) when (OperatingSystem.IsWindows() && (error.HResult & 0xffff) == 1314)
@@ -61,7 +66,7 @@ namespace TopiaForge.ModManager.Tests
             FileStream? blocked = null;
             try
             {
-                var code = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "empty", outer }, created =>
+                var code = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "empty", Path.GetFileName(outer) }, created =>
                 {
                     workspace = created;
                     blocked = new FileStream(Path.Combine(created, "parent-held.txt"), FileMode.Create,
