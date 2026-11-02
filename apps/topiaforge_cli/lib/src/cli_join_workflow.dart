@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'cli_join_consent.dart';
 import 'cli_join_options.dart';
@@ -12,7 +13,7 @@ import 'cli_multiplayer_text.dart';
 /// and one admission re-plan. A spawned game is never killed by stopping the CLI.
 Future<int> runCliJoin({
   required LauncherRepository launcher,
-  required MultiplayerJoinGateway multiplayer,
+  required MultiplayerRepository multiplayer,
   required GameInstall install,
   required Set<String> profileIds,
   required bool developerMode,
@@ -202,6 +203,35 @@ Future<int> runCliJoin({
         return refuse(
           'The server identity changed while direct consent was open. Ask the host for a fresh invite and try again.',
         );
+      }
+      if (state.stage == JoinStage.fetchingDescriptor &&
+          state.target.resolvesThroughService &&
+          state.privacy == MultiplayerAddressPrivacy.relayOnly) {
+        final service = await multiplayer.readServiceStatus(
+          cancellation: token,
+        );
+        if (stopped) return await cancel();
+        final features = service.features;
+        if (features == null || !features.signaling) {
+          take(
+            JoinFailed(
+              JoinFailureCode.serviceUnavailable,
+              detail:
+                  'Internet joining is unavailable right now. Retry later or join a local session.',
+            ),
+          );
+          continue;
+        }
+        if (!features.relayAvailable) {
+          take(
+            JoinFailed(
+              JoinFailureCode.directNotAllowed,
+              detail:
+                  'The relay is unavailable. This Internet join requires a direct connection.',
+            ),
+          );
+          continue;
+        }
       }
       if (state.stage == JoinStage.awaitingConsent) {
         final nowRunning = await multiplayer.joinGameRunning(install);
