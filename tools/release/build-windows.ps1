@@ -64,17 +64,35 @@ function Invoke-Checked {
         [Parameter()]
         [string[]]$Arguments = @(),
         [Parameter()]
-        [string]$WorkingDirectory = $RepositoryRoot
+        [string]$WorkingDirectory = $RepositoryRoot,
+        [Parameter()]
+        [string]$NativePathGuard = ""
     )
 
+    $guardApplied = $false
+    $previousImport = $null
     Push-Location $WorkingDirectory
     try {
+        if (-not [string]::IsNullOrEmpty($NativePathGuard)) {
+            $previousImport = [Environment]::GetEnvironmentVariable("ForceImportBeforeCppTargets", "Process")
+            if (-not [string]::IsNullOrEmpty($previousImport)) {
+                throw "A native C++ import override is already configured; use a clean build environment."
+            }
+            if (-not (Test-Path -LiteralPath $NativePathGuard -PathType Leaf)) {
+                throw "The native path guard is missing."
+            }
+            [Environment]::SetEnvironmentVariable("ForceImportBeforeCppTargets", $NativePathGuard, "Process")
+            $guardApplied = $true
+        }
         & $FilePath @Arguments
         if ($LASTEXITCODE -ne 0) {
             throw "'$FilePath' failed with exit code $LASTEXITCODE."
         }
     }
     finally {
+        if ($guardApplied) {
+            [Environment]::SetEnvironmentVariable("ForceImportBeforeCppTargets", $previousImport, "Process")
+        }
         Pop-Location
     }
 }
@@ -452,7 +470,9 @@ $launcherMultiplayerArguments = @(
         "build", "windows", "--release",
         "--dart-define=TOPIAFORGE_PRODUCT_VERSION=$Version"
     )
+# The inherited C++ hook reaches the runner, Flutter and generated plugin projects.
 Invoke-Checked -FilePath "python" -WorkingDirectory $launcherProject `
+    -NativePathGuard (Join-Path $PSScriptRoot "windows-native-path-guard.targets") `
     -Arguments $launcherMultiplayerArguments
 $launcherBuild = Join-Path $launcherProject "build/windows/x64/runner/Release"
 if (-not (Test-Path -LiteralPath $launcherBuild -PathType Container)) {
