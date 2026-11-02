@@ -22,6 +22,8 @@ final class _Rig
   final choices = HostingChoices(
     defaults: MultiplayerHostingDefaults(name: 'Evening'),
   );
+  HostingChoices? reviewedChoices;
+  bool? disclosureSaved;
   Completer<HostingPreparation>? prepareGate;
   Completer<void>? startGate;
   Completer<void>? saveGate;
@@ -53,7 +55,7 @@ final class _Rig
   HostingPlan plan() => HostingPlan(
     profile: profile,
     preferences: preferences,
-    choices: choices,
+    choices: reviewedChoices ?? choices,
     installIdentity: 'install',
     packageDigest: 'digest',
     joinability: 'Local network only.',
@@ -108,6 +110,7 @@ final class _Rig
     required CancellationToken cancellation,
   }) async {
     token = cancellation;
+    reviewedChoices = choices;
     return prepareGate == null ? plan() : prepareGate!.future;
   }
 
@@ -121,6 +124,7 @@ final class _Rig
     required CancellationToken cancellation,
   }) async {
     token = cancellation;
+    disclosureSaved = acknowledgeDisclosure;
     await startGate?.future;
     if (cancellation.isCancelled) {
       return const LaunchResult(started: false, message: 'Cancelled');

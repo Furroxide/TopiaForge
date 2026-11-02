@@ -15,8 +15,14 @@ final class HostingPreferencesLoaded extends HostingEvent {
 }
 
 final class HostingReviewRequested extends HostingEvent {
-  const HostingReviewRequested(this.choices);
+  const HostingReviewRequested(
+    this.choices, {
+    this.acknowledgeDisclosure = false,
+  });
   final HostingChoices choices;
+
+  /// Disclosure read in this hosting flow; persisted only when hosting starts.
+  final bool acknowledgeDisclosure;
 }
 
 final class HostingPrepared extends HostingEvent {

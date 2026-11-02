@@ -119,20 +119,24 @@ Future<int> runCliJoin({
         );
       }
     }
-    if (options.allowDirect) {
+    var initial = JoinSession.start(
+      options.target,
+      privacy: SessionPrivacy.relayOnly,
+    );
+    if (options.allowDirect &&
+        initial.outcome?.failure?.code == JoinFailureCode.directNotAllowed) {
       write('Allow a direct connection?');
       write(CliMultiplayerText.direct);
       if (!await consent('Allow for this session [y/N]') || stopped) {
         return await cancel();
       }
+      initial = JoinSession.start(
+        options.target,
+        privacy: preferences.settings.privacyForSession(allowDirect: true),
+      );
     }
     final consentSettings = jsonEncode(preferences.settings.toJson());
-    join = JoinSession.start(
-      options.target,
-      privacy: preferences.settings.privacyForSession(
-        allowDirect: options.allowDirect,
-      ),
-    );
+    join = initial;
     subscription = launcher.launchActivities.listen(
       (activity) => receipt?.accept(activity),
       onError: (Object _) {
