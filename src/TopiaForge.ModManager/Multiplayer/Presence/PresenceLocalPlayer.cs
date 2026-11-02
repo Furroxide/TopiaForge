@@ -36,6 +36,7 @@ namespace TopiaForge.ModManager
 
         private readonly IPresenceBackend backend;
         private bool hasPrevious;
+        private bool poseRequested;
         private NetQuantizedPosition previousPosition;
         private long previousMicros;
         private bool hasSent;
@@ -87,6 +88,8 @@ namespace TopiaForge.ModManager
         internal float MaximumHealth { get; private set; }
 
         internal string? HeldItem { get; private set; }
+
+        internal void RequestPose() => poseRequested = true;
 
         /// <summary>Starts afresh, as at a change of realm: nothing has been sent yet.</summary>
         internal void Restart()
@@ -156,7 +159,7 @@ namespace TopiaForge.ModManager
             if (!HasPlayer) return false;
             if (hasSent && nowMicros < poseDueMicros) return false;
             var elapsed = nowMicros - sentMicros;
-            var changed = !hasSent || teleportPending || !Position.Equals(sentPosition) || Rotation != sentRotation ||
+            var changed = poseRequested || !hasSent || teleportPending || !Position.Equals(sentPosition) || Rotation != sentRotation ||
                           Flags != sentFlags || EyeCentimeters != sentEye || !sentVelocity.Equals(default(NetQuantizedVelocity));
             if (!changed && elapsed < HeartbeatMicros) return false;
             var velocity = !hasSent || teleportPending || elapsed <= 0
@@ -173,6 +176,7 @@ namespace TopiaForge.ModManager
             // a whole beat behind, at rest or stalled, starts the beat again from now rather than catching up in a burst.
             poseDueMicros = !hasSent || nowMicros - poseDueMicros >= SendIntervalMicros ? nowMicros + SendIntervalMicros : poseDueMicros + SendIntervalMicros;
             hasSent = true;
+            poseRequested = false;
             sentPosition = Position;
             sentRotation = Rotation;
             sentFlags = Flags;

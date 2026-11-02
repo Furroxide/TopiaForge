@@ -38,6 +38,10 @@ namespace TopiaForge.ModManager
 
         internal bool IsConnected { get; set; } = true;
 
+        // A replacement lifetime cannot accept its preceding roster index while the fresh roster is pending.
+        internal byte RetiredIndex { get; set; }
+        internal bool NeedsWorldArrival { get; set; }
+
         /// <summary>Gets or sets the presence index the host gave the participant, zero until one is known.</summary>
         internal byte Index { get; set; }
 
@@ -49,6 +53,7 @@ namespace TopiaForge.ModManager
         internal void ClearPose()
         {
             HasPose = false;
+            SetActivityFlags(Flags & ~(PresenceFlags.Talking | PresenceFlags.Typing));
             ActivityRelayMicros = long.MinValue;
             HasFed = false;
             HasClockOffset = false;

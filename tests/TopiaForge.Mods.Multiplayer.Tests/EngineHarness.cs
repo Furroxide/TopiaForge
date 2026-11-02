@@ -86,6 +86,14 @@ internal sealed class EngineHarness : IDisposable
         return new RawPeer(pair.ClientEnd);
     }
 
+    // Advance real transport/engine time without pumping, so runtime frame ordering can be exercised after a stall.
+    internal void AdvanceClockOnly(int ticks = 1)
+    {
+        Tick += (ulong)ticks;
+        Network.Now = Tick;
+        Network.DeliverDue(Tick);
+    }
+
     internal void Advance(int ticks = 1)
     {
         for (var index = 0; index < ticks; index++)

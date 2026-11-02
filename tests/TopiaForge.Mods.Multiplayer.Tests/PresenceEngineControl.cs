@@ -9,6 +9,7 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 internal sealed class PresenceEngineControl(SessionEngine engine) : IInternalMultiplayerControl, IInternalCommunicationControl, IInternalCommunicationActivityControl
 {
     internal PresenceInbox? Inbox { get; private set; }
+    internal Action? PumpAction;
     public bool HasCommunicationRouting => engine.HasCommunicationRouting;
     public bool CanCommunicate(ParticipantId sender, ParticipantId listener) => engine.CanCommunicate(sender, listener);
     public OperationResult<ICommunicationRouting> RouteCommunications(IModLifetime lifetime, CommunicationPolicy policy) => engine.RouteCommunications(lifetime, policy);
@@ -30,10 +31,10 @@ internal sealed class PresenceEngineControl(SessionEngine engine) : IInternalMul
     }
     public IDisposable SetAvatarSource(IInternalAvatarSource source) => engine.SetAvatarSource(source);
     private sealed class EmptyLease : IDisposable { public void Dispose() { } }
-    public bool AttachRuntime(IInternalMultiplayerRuntimeHost runtime) => throw new NotSupportedException();
-    public void DetachRuntime(IInternalMultiplayerRuntimeHost runtime) => throw new NotSupportedException();
-    public void Pump() => throw new NotSupportedException();
-    public void Flush() => throw new NotSupportedException();
+    public bool AttachRuntime(IInternalMultiplayerRuntimeHost runtime) => PumpAction != null ? true : throw new NotSupportedException();
+    public void DetachRuntime(IInternalMultiplayerRuntimeHost runtime) { if (PumpAction == null) throw new NotSupportedException(); }
+    public void Pump() { if (PumpAction == null) throw new NotSupportedException(); PumpAction(); }
+    public void Flush() => engine.FlushOutbound();
     public InternalLiveStatus GetStatus() => throw new NotSupportedException();
     public OperationResult<bool> StartHosting(InternalHostSettings settings) => throw new NotSupportedException();
     public void StopHosting() => throw new NotSupportedException();
@@ -63,6 +64,10 @@ internal sealed class PresenceEngineControl(SessionEngine engine) : IInternalMul
 // Inject only at the receive boundary for negative tests; honest traffic retains its engine envelope.
 internal sealed class PresenceInbox(IInternalSystemChannel inner) : IInternalSystemChannel
 {
+    internal bool HoldReliable;
+    internal bool HoldDatagrams;
+    internal ParticipantId? ZeroReliableTo;
+    internal int ReceivedRosters;
     internal readonly Queue<InternalSystemMessage> Injected = new();
     internal readonly Queue<InternalSystemDatagram> InjectedDatagrams = new();
     internal readonly List<ParticipantId> ReceivedSenders = new();
@@ -71,11 +76,17 @@ internal sealed class PresenceInbox(IInternalSystemChannel inner) : IInternalSys
     public ulong Generation => inner.Generation;
     public ulong GetGeneration(ParticipantId peer) => inner.GetGeneration(peer);
     public bool CanSend(InternalSystemTarget target, int payloadBytes) => inner.CanSend(target, payloadBytes);
-    public OperationResult<int> Send(ArraySegment<byte> payload, InternalSystemTarget target, ICollection<ParticipantId>? skipped = null) => inner.Send(payload, target, skipped);
+    public OperationResult<int> Send(ArraySegment<byte> payload, InternalSystemTarget target, ICollection<ParticipantId>? skipped = null)
+    {
+        if (ZeroReliableTo.HasValue && target.Participant.Equals(ZeroReliableTo.Value)) return OperationResult<int>.Success(0);
+        return inner.Send(payload, target, skipped);
+    }
     public bool TryReceive(out InternalSystemMessage message)
     {
+        if (HoldReliable) { message = default; return false; }
         if (Injected.TryDequeue(out message)) return true;
         if (!inner.TryReceive(out message)) return false;
+        if (message.Payload.Length > 1 && message.Payload[1] == TopiaForge.ModManager.PresenceMessages.Roster) ReceivedRosters++;
         ReceivedSenders.Add(message.Sender);
         return true;
     }
@@ -103,8 +114,11 @@ internal sealed class PresenceInbox(IInternalSystemChannel inner) : IInternalSys
         }
         return inner.SendDatagram(payload, target);
     }
-    public bool TryReceiveDatagram(out InternalSystemDatagram datagram) =>
-        InjectedDatagrams.TryDequeue(out datagram) || inner.TryReceiveDatagram(out datagram);
+    public bool TryReceiveDatagram(out InternalSystemDatagram datagram)
+    {
+        if (HoldDatagrams) { datagram = default; return false; }
+        return InjectedDatagrams.TryDequeue(out datagram) || inner.TryReceiveDatagram(out datagram);
+    }
     public InternalSystemChannelStatistics GetStatistics() => inner.GetStatistics();
     public void Dispose() => inner.Dispose();
 }

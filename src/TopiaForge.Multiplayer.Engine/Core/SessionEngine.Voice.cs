@@ -368,6 +368,8 @@ namespace TopiaForge.Multiplayer.Engine
             VoiceFrameFlags secondFlags,
             ReadOnlySpan<byte> second)
         {
+            // A held frame is admitted again when it actually leaves, after any intervening mute or role change.
+            if (!CanTalk(out var refused)) return refused;
             if (Role == EngineRole.Client)
             {
                 if (channel == null || channel.Link.State == EngineLinkState.Closed) return VoiceSubmitResult.NotConnected;
@@ -387,8 +389,8 @@ namespace TopiaForge.Multiplayer.Engine
             var voice = speaker?.Voice;
             if (speaker == null || voice == null) return VoiceSubmitResult.NotConnected;
             var relayed = VoicePacket.WriteRelayed(voiceScratch, voice.Index, voice.Stream, sequence, timestamp, firstFlags, first, secondFlags, second, epoch);
-            NoteVoiceActivity(voice, firstFlags, first);
-            if (!second.IsEmpty) NoteVoiceActivity(voice, secondFlags, second);
+            NoteVoiceActivity(speaker.Id, voice, firstFlags, first);
+            if (!second.IsEmpty) NoteVoiceActivity(speaker.Id, voice, secondFlags, second);
             RelayVoice(speaker.Id.Value, new ArraySegment<byte>(voiceScratch, 0, relayed), null);
             return VoiceSubmitResult.Sent;
         }
@@ -421,7 +423,7 @@ namespace TopiaForge.Multiplayer.Engine
                     for (var index = 0; index < packet.Count; index++)
                     {
                         var frame = packet[index];
-                        NoteVoiceActivity(speaker, frame.Flags, datagram.AsSpan(frame.PayloadOffset, frame.PayloadLength));
+                        NoteVoiceActivity(record.Id, speaker, frame.Flags, datagram.AsSpan(frame.PayloadOffset, frame.PayloadLength));
                     }
                     var length = VoicePacket.WriteRelayed(
                         voiceScratch,

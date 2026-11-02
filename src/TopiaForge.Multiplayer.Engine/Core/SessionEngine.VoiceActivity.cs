@@ -7,8 +7,9 @@ namespace TopiaForge.Multiplayer.Engine
     {
         private const long VoiceActivityMicros = 250_000;
 
-        private void NoteVoiceActivity(VoiceSpeaker speaker, VoiceFrameFlags flags, ReadOnlySpan<byte> payload)
+        private void NoteVoiceActivity(ParticipantId sender, VoiceSpeaker speaker, VoiceFrameFlags flags, ReadOnlySpan<byte> payload)
         {
+            if (Role != EngineRole.Host || IsEnded || !voiceOffered || speaker.IsMuted(nowMicros) || !IsParticipantReady(sender)) return;
             // Neither a claimed presence bit nor a forged DTX flag can create voiced activity.
             if ((flags & VoiceFrameFlags.Discontinuous) != 0 || options.Voice!.Codec.IsDiscontinuous(payload)) return;
             speaker.LastAdmittedVoiceMicros = nowMicros;
@@ -44,6 +45,7 @@ namespace TopiaForge.Multiplayer.Engine
         {
             RequireOwnerThread();
             if (Role != EngineRole.Host) return;
+            DiscardHeldVoice();
             foreach (var record in participantRecords)
                 if (record.Voice != null) record.Voice.LastAdmittedVoiceMicros = long.MinValue;
         }

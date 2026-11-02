@@ -1,4 +1,5 @@
 using TopiaForge.ModManager;
+using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
@@ -8,7 +9,7 @@ using TopiaForge.Multiplayer.Engine;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
-internal static class PresenceActivityTests
+internal static partial class PresenceActivityTests
 {
     private const MultiplayerPoseFlags Activity = MultiplayerPoseFlags.Talking | MultiplayerPoseFlags.Typing;
     private static CommunicationMember Member(string id, byte group) => new(new ParticipantId(id), group);
@@ -16,6 +17,7 @@ internal static class PresenceActivityTests
     {
         UnityMainThreadGuard.CaptureCurrentThread();
         PrivateAudiences(); FarHost(); ExpiryMutesAndRest(); SchedulerSkip(); Backpressure(); HostileAndLifetimes();
+        ReviewRegressions();
         Console.WriteLine("Presence activity: 6 groups passed (private audiences/host projection, far host, expiry/mutes/rest, scheduler skip/backpressure, forged voice/lifetimes).");
     }
     private static void PrivateAudiences()
@@ -136,15 +138,15 @@ internal static class PresenceActivityTests
         Flags(listener, speaker, MultiplayerPoseFlags.Typing, "codec silence with forged voiced flag cannot create Talking");
         r.Speak(speaker); r.Frames(6); Flags(listener, speaker, Activity, "admitted voice works without a new claimed pose");
         r.Engine.Network.Sever(speaker.Link!); r.Frames(2);
-        Flags(r.Host, speaker, 0, "disconnect clears both activity claims");
+        NoActivity(r.Host, speaker, "disconnect clears both activity claims");
         speaker.Presence.Detaching(speaker.Control); r.Nodes.Remove(speaker);
         var rejoined = r.Add("speaker"); rejoined.SendEnabled = false; r.Frames(3);
         Check(!r.Engine.Host.IsVoiceActive(rejoined.Id), "new stream within grace forgets admitted activity");
-        Flags(r.Host, rejoined, 0, "rejoin never inherits old typing or talking");
+        NoActivity(r.Host, rejoined, "rejoin never inherits old typing or talking");
         rejoined.SendEnabled = true; r.Frames(8); r.Speak(rejoined); r.Frames(6);
         Flags(listener, rejoined, MultiplayerPoseFlags.Talking, "fresh rejoined stream speech works");
-        r.Host.World = null; Flags(r.Host, rejoined, 0, "world stop hides held activity immediately"); r.Frames(2);
-        r.Host.World = "world-one"; r.Frames(3);
+        r.Host.Phase = SessionPhase.Stopping; r.Host.World = null; NoActivity(r.Host, rejoined, "world stop hides held activity immediately"); r.Frames(2);
+        r.Host.World = "world-one"; r.Host.Phase = SessionPhase.Running; r.Frames(3);
         Check(!r.Engine.Host.IsVoiceActive(rejoined.Id), "world restart cannot revive preceding activity");
         r.Speak(r.Host); Check(r.Engine.Host.IsVoiceActive(r.Host.Id), "host activity admitted before replacement");
         r.Engine.Host.ReplaceSession(new MultiplayerSessionId("replacement"), new SessionSeed(8));
@@ -162,9 +164,11 @@ internal static class PresenceActivityTests
     {
         internal readonly FakeVoiceCodec Codec = new(); internal readonly EngineHarness Engine;
         internal readonly List<Node> Nodes = new(); internal readonly Node Host;
-        internal Rig()
+        internal readonly bool RuntimeDriven;
+        internal Rig(int maximumParticipants = 16, bool runtimeDriven = false)
         {
-            Engine = new EngineHarness(MultiplayerProcessKind.Interactive, o => o.Voice = new VoiceOptions(Codec));
+            RuntimeDriven = runtimeDriven;
+            Engine = new EngineHarness(MultiplayerProcessKind.Interactive, o => { o.Voice = new VoiceOptions(Codec); o.MaximumParticipants = maximumParticipants; });
             Host = new Node(Engine.Host, this); Nodes.Add(Host);
         }
         internal Node Add(string identity)
@@ -176,8 +180,17 @@ internal static class PresenceActivityTests
         {
             for (var i = 0; i < count; i++)
             {
-                Engine.Advance(); foreach (var n in Nodes) n.Presence.Receive.Run(1f / 60);
-                foreach (var n in Nodes) if (n.SendEnabled) n.Presence.Send.Run(1f / 60);
+                if (RuntimeDriven)
+                {
+                    Engine.AdvanceClockOnly();
+                    foreach (var n in Nodes) n.Runtime.BeforeModsUpdate(1f / 60);
+                    foreach (var n in Nodes) if (n.SendEnabled) n.Runtime.AfterModsUpdate(1f / 60);
+                }
+                else
+                {
+                    Engine.Advance(); foreach (var n in Nodes) n.Presence.Receive.Run(1f / 60);
+                    foreach (var n in Nodes) if (n.SendEnabled) n.Presence.Send.Run(1f / 60);
+                }
             }
         }
         internal void Speak(Node n, bool silence = false) => Check(n.Engine.SubmitVoiceFrame(++n.Timestamp,
@@ -196,21 +209,42 @@ internal static class PresenceActivityTests
             });
             Check(n.Control.Inbox!.SendDatagram(w.AsSegment(), InternalSystemTarget.Host).Succeeded, "raw pose enters actual channel");
         }
-        public void Dispose() { foreach (var n in Nodes) n.Presence.Detaching(n.Control); Engine.Dispose(); }
+        public void Dispose()
+        {
+            foreach (var n in Nodes)
+                if (RuntimeDriven) n.Runtime.Disconnect(); else n.Presence.Detaching(n.Control);
+            Engine.Dispose();
+        }
     }
     private sealed class Node
     {
+        internal readonly MultiplayerRuntime Runtime;
         internal readonly SessionEngine Engine; internal readonly PresenceEngineControl Control;
         internal readonly FakePresenceBackend Backend = new(); internal readonly MultiplayerPresence Presence;
         internal readonly ParticipantId Id;
         internal VirtualLinkEnd? Link; internal ulong Timestamp; internal bool SendEnabled = true; internal string? World = "world-one";
+        internal int SceneVersion;
+        internal SessionPhase Phase = SessionPhase.Running;
         internal Node(SessionEngine engine, Rig r)
         {
             Engine = engine; Id = engine.Snapshot.LocalParticipantId!.Value; Control = new PresenceEngineControl(engine); var log = new QuietLog();
             var runtime = new MultiplayerRuntime(() => Control, new MultiplayerRuntimeHost("2545", "0.2.0", log), log);
+            Runtime = runtime;
+            runtime.SessionPhaseSource = () => Phase;
             Presence = MultiplayerPresence.Install(runtime, new MultiplayerReplication(runtime), Backend, () => r.Engine.NowMicros);
-            Presence.RunningWorld = () => World; Presence.RunningSpawn = () => TransformState.Identity; Presence.Attached(Control);
-            Presence.RealmChanged(NetRealm.Offline, engine.Role == EngineRole.Host ? NetRealm.ListenHost : NetRealm.Client);
+            Presence.RunningWorld = () => World; Presence.RunningSpawn = () => TransformState.Identity;
+            Presence.SceneVersion = () => SceneVersion;
+            if (r.RuntimeDriven)
+            {
+                Control.PumpAction = () => engine.Pump(r.Engine.NowMicros);
+                Check(runtime.Attach(Control), "actual runtime attaches the engine control");
+                runtime.BeforeModsUpdate(0);
+            }
+            else
+            {
+                Presence.Attached(Control);
+                Presence.RealmChanged(NetRealm.Offline, engine.Role == EngineRole.Host ? NetRealm.ListenHost : NetRealm.Client);
+            }
             if (engine.Role == EngineRole.Host) Control.Inbox!.RecordPoses = true;
         }
     }

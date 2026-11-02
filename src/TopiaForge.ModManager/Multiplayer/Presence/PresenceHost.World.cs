@@ -8,9 +8,12 @@ namespace TopiaForge.ModManager
     {
         private string? worldSeen;
         private int sceneSeen;
+        private bool worldInitialized;
 
         internal bool IsCurrentWorld => string.Equals(worldSeen, presence.RunningWorld?.Invoke(), StringComparison.Ordinal)
             && sceneSeen == (presence.SceneVersion?.Invoke() ?? 0);
+
+        internal void BeforePump(long nowMicros) => FollowWorld(nowMicros);
 
         /// <summary>Synchronizes native/world transitions before recording a successful host action in the current scene.</summary>
         internal void ExpectPlacement(PresencePeer peer, NetQuantizedPosition position, long nowMicros)
@@ -27,6 +30,13 @@ namespace TopiaForge.ModManager
             var changed = !string.Equals(world, worldSeen, StringComparison.Ordinal) || scene != sceneSeen;
             if (changed && presence.Control is TopiaForge.Mods.Internal.IInternalCommunicationActivityControl activity)
                 activity.ClearVoiceActivity();
+            var invalidate = changed && worldInitialized;
+            worldInitialized = true;
+            if (invalidate)
+            {
+                presence.Local.Typing = false;
+                presence.Local.RequestPose();
+            }
             worldSeen = world;
             sceneSeen = scene;
             var spawn = world == null ? null : presence.RunningSpawn?.Invoke();
@@ -35,6 +45,7 @@ namespace TopiaForge.ModManager
             for (var index = 0; index < all.Count; index++)
             {
                 var peer = all[index];
+                if (invalidate) InvalidateIndex(peer, nowMicros);
                 if (peer.IsLocal) continue;
                 if (changed)
                 {

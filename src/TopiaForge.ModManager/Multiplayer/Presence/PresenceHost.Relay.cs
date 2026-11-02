@@ -47,6 +47,7 @@ namespace TopiaForge.ModManager
         internal void Send(long nowMicros)
         {
             if (!active) return;
+            RetryIndices(nowMicros);
             TakeOwnPose(nowMicros);
             var open = presence.Channel;
             if (open == null) return;
@@ -79,6 +80,7 @@ namespace TopiaForge.ModManager
         /// <summary>The host's own player is canonical: its pose and state stand as sampled, with no check.</summary>
         private void TakeOwnPose(long nowMicros)
         {
+            if (!presence.CanAcceptWorldPose) return;
             var local = presence.LocalParticipant;
             if (local == null || !presence.TryGetPeer(local.Value, out var own) || own == null) return;
             var sampler = presence.Local;
@@ -152,7 +154,9 @@ namespace TopiaForge.ModManager
         {
             var target = InternalSystemTarget.Only(peer.Id);
             PresenceWire.WriteRoster(writer, presence.Roster.List());
-            if (!open.CanSend(target, writer.Length) || !open.Send(writer.Segment, target).Succeeded) return;
+            if (!open.CanSend(target, writer.Length)) return;
+            var rosterResult = open.Send(writer.Segment, target);
+            if (!rosterResult.Succeeded || rosterResult.Value == 0) return;
             states.Clear();
             var all = presence.Peers;
             for (var index = 0; index < all.Count; index++)
@@ -164,7 +168,9 @@ namespace TopiaForge.ModManager
             if (states.Count > 0)
             {
                 PresenceWire.WriteStates(writer, states);
-                if (!open.CanSend(target, writer.Length) || !open.Send(writer.Segment, target).Succeeded) return;
+                if (!open.CanSend(target, writer.Length)) return;
+                var stateResult = open.Send(writer.Segment, target);
+                if (!stateResult.Succeeded || stateResult.Value == 0) return;
             }
 
             peer.NeedsCatchUp = false;
