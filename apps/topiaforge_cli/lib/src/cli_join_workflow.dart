@@ -119,24 +119,10 @@ Future<int> runCliJoin({
         );
       }
     }
-    var initial = JoinSession.start(
-      options.target,
-      privacy: SessionPrivacy.relayOnly,
-    );
-    if (options.allowDirect &&
-        initial.outcome?.failure?.code == JoinFailureCode.directNotAllowed) {
-      write('Allow a direct connection?');
-      write(CliMultiplayerText.direct);
-      if (!await consent('Allow for this session [y/N]') || stopped) {
-        return await cancel();
-      }
-      initial = JoinSession.start(
-        options.target,
-        privacy: preferences.settings.privacyForSession(allowDirect: true),
-      );
-    }
     final consentSettings = jsonEncode(preferences.settings.toJson());
-    join = initial;
+    var offeredDirect = false;
+    String? directServerId;
+    join = JoinSession.start(options.target, privacy: SessionPrivacy.relayOnly);
     subscription = launcher.launchActivities.listen(
       (activity) => receipt?.accept(activity),
       onError: (Object _) {
@@ -150,6 +136,41 @@ Future<int> runCliJoin({
         if (failure != null) stage = cliJoinStage(failure.stage);
         if (failure?.code == JoinFailureCode.cancelled || stopped) {
           return await cancel();
+        }
+        if (failure?.code == JoinFailureCode.directNotAllowed) {
+          if (started != null || receipt != null) {
+            return refuse(
+              'A direct connection is required after the game has started. Robotopia was left running. Stop this join in the game before retrying with a direct connection.',
+              3,
+            );
+          }
+          if (options.allowDirect &&
+              !offeredDirect &&
+              state.privacy == MultiplayerAddressPrivacy.relayOnly) {
+            offeredDirect = true;
+            write('Allow a direct connection?');
+            write(CliMultiplayerText.direct);
+            if (!await consent('Allow for this session [y/N]') || stopped) {
+              return await cancel();
+            }
+            final current = await multiplayer.loadPreferences();
+            if (stopped) return await cancel();
+            if (!current.readable ||
+                jsonEncode(current.settings.toJson()) != consentSettings) {
+              return refuse(
+                'Multiplayer settings changed while direct consent was open. Run join again to review the current choices.',
+              );
+            }
+            directServerId = state.serverId;
+            join = JoinSession.start(
+              options.target,
+              privacy: current.settings.privacyForSession(allowDirect: true),
+              trustedServerId: options.target is JoinAddressTarget
+                  ? directServerId
+                  : null,
+            );
+            continue;
+          }
         }
         return refuse(
           failure == null
@@ -174,6 +195,13 @@ Future<int> runCliJoin({
       }
       if (stopped && !JoinSession.deferredCancelStages.contains(state.stage)) {
         return await cancel();
+      }
+      if (directServerId != null &&
+          state.serverId != null &&
+          state.serverId != directServerId) {
+        return refuse(
+          'The server identity changed while direct consent was open. Ask the host for a fresh invite and try again.',
+        );
       }
       if (state.stage == JoinStage.awaitingConsent) {
         final nowRunning = await multiplayer.joinGameRunning(install);
