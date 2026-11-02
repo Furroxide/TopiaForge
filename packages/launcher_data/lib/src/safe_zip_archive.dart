@@ -68,7 +68,7 @@ class SafeZipArchive {
         label,
         allowContainedLinks,
       );
-      final decoded = ZipDecoder().decodeBytes(bytes);
+      final decoded = ZipDecoder().decodeBytes(bytes, throwOnError: true);
       _validateEntries(decoded, policy, label, allowContainedLinks, linkNames);
       return SafeZipArchive._(
         decoded,
@@ -258,20 +258,14 @@ class SafeZipEntry {
     }
   }
 
-  /// Decodes into [output], refusing an entry that cannot be read in the
-  /// launcher's own words. Since archive 4.5 the decoder enforces the
-  /// declared size itself: on an overrun it throws its own
-  /// [ArchiveException] before the bounded output sees the extra bytes, so
-  /// that is refused against the declared size, as the length check refuses
-  /// it on older versions. Any other decoding failure, such as deflate data
-  /// that dart:io's decoder rejects with a plain [FormatException], means the
-  /// entry is damaged, whatever size it declares. An entry this reader
-  /// admits, stored or deflated and unencrypted, raises no other
-  /// [ArchiveException] while it decodes.
+  /// Keeps decoding failures visible instead of accepting partial or empty data.
+  /// Resource limits still run through the bounded output; a decoder limit
+  /// reports the declared size, while malformed compressed data names the entry
+  /// as damaged without blaming that size.
   void _decodeInto(OutputStream output, String label) {
     try {
       _entry.writeContent(output, freeMemory: false);
-    } on ArchiveException catch (error) {
+    } on ArchiveLimitException catch (error) {
       throw StateError(
         '$label could not be decoded within the $size bytes it declared: '
         '$name (${error.message}).',
