@@ -257,7 +257,7 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
             environment["name"] for environment in self.policy["environments"]
         }
 
-        self.assertEqual({"release", "github-pages"}, environment_names)
+        self.assertEqual({"release", "github-pages", "control-plane-staging", "control-plane-production"}, environment_names)
         self.assertNotIn(
             "game-ci/unity-builder@*",
             self.policy["actions"]["selected_actions"]["patterns_allowed"],

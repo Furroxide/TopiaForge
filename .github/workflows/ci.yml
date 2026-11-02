@@ -402,6 +402,9 @@ jobs:
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
 
+      - name: Test multiplayer build configuration
+        run: python3 tools/test_multiplayer_build.py
+
       - name: Test protected release evidence gates
         run: |
           bash tools/test-verify-release-tag.sh
@@ -534,6 +537,9 @@ jobs:
       - name: Test the Tomato Cake launcher state helper
         shell: pwsh
         run: pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
+
+      - name: Test multiplayer build configuration on Windows
+        run: python tools/test_multiplayer_build.py
 
   # CI-triggered Pages publishing waits for a successful complete CI run through deploy-pages.yml.
   # This documentation check needs no outputs from C# or the release scaffolds, so it starts at once.

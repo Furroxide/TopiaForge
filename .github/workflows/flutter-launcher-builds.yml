@@ -74,13 +74,14 @@ jobs:
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
           LAUNCHER_PLATFORM: ${{ matrix.platform }}
+          MULTIPLAYER_ENVIRONMENT: ${{ (github.ref_name == 'main' || startsWith(github.ref_name, 'release/')) && 'production' || 'staging' }}
         run: |
           set -euo pipefail
           flutter pub get --enforce-lockfile
           product_version=$(jq -er \
             '.versioning.productVersion' \
             ../../release/release-policy.json)
-          flutter build "$LAUNCHER_PLATFORM" --release \
+          python ../../tools/multiplayer-build.py --environment "$MULTIPLAYER_ENVIRONMENT" -- build "$LAUNCHER_PLATFORM" --release \
             --dart-define="TOPIAFORGE_PRODUCT_VERSION=$product_version"
 
       - name: Verify unsigned macOS launcher policy
@@ -138,6 +139,7 @@ jobs:
         shell: bash
         env:
           LAUNCHER_PLATFORM: ${{ matrix.platform }}
+          MULTIPLAYER_ENVIRONMENT: ${{ (github.ref_name == 'main' || startsWith(github.ref_name, 'release/')) && 'production' || 'staging' }}
         run: |
           set -euo pipefail
           artifact_dir="${RUNNER_TEMP//\\//}/launcher-artifact"

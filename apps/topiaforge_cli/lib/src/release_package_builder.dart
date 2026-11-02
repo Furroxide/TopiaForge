@@ -216,6 +216,7 @@ class ReleasePackageBuilder {
       'build',
       platform.id,
       '--release',
+      '--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev',
     ], workingDirectory: launcherApp);
     await _copyBuiltLauncher(launcherApp, stageRoot);
   }
@@ -327,6 +328,7 @@ class ReleasePackageBuilder {
     await _runDart([
       'compile',
       'exe',
+      '-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev',
       p.join('bin', 'topiaforge.dart'),
       '-o',
       destination,
