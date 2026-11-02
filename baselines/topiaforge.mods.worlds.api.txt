@@ -34,6 +34,7 @@ type public sealed class TopiaForge.Mods.AuthoredEntity : System.Object [require
   property TopiaForge.Mods.AuthoredComponents Components { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IEntity Entity { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.MapTransform EditorTransform { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.TransformState WorldTransform { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.DiscoveredWorldDescriptor : System.Object
   constructor .ctor(System.String id, System.String familyId, System.String name, System.String? description = null)

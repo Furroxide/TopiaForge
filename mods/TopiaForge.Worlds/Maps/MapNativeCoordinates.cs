@@ -1,6 +1,8 @@
 using System;
 using System.Reflection;
+using System.Collections.Generic;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.Worlds.Maps
@@ -33,17 +35,35 @@ namespace TopiaForge.Worlds.Maps
         internal TransformState Transform(MapTransform editor)
         {
             if (root == null) throw Unavailable();
+            var local = LocalTransform(editor);
+            var rotation = root.rotation * new Quaternion(local.Rotation.X, local.Rotation.Y, local.Rotation.Z, local.Rotation.W);
+            var scale = root.lossyScale;
+            return new TransformState(Position(editor.Position), new Quat(rotation.x, rotation.y, rotation.z, rotation.w),
+                new Vec3(scale.x * editor.Scale.X, scale.y * editor.Scale.Y, scale.z * editor.Scale.Z));
+        }
+        internal IReadOnlyDictionary<string, AuthoredAffine> AuthoredTransforms(AuthoredScene scene)
+        {
+            if (root == null) throw Unavailable();
+            var rotation = root.rotation;
+            var affine = new AuthoredAffine(Value(root.position), Value(root.TransformVector(Vector3.right)),
+                Value(root.TransformVector(Vector3.up)), Value(root.TransformVector(Vector3.forward)),
+                new Quat(rotation.x, rotation.y, rotation.z, rotation.w));
+            return AuthoredAffine.Compose(scene.Records, LocalTransform, affine);
+        }
+        private AuthoredAffine LocalTransform(MapTransform editor)
+        {
             var quaternion = editor.QuaternionRotation;
+            if (quaternion.HasValue) quaternion = AuthoredAffine.NormalizeRotation(quaternion.Value);
             var value = VectorValue(rotationType, quaternion.HasValue
                 ? new Vec3(quaternion.Value.X, quaternion.Value.Y, quaternion.Value.Z) : editor.EulerDegrees!.Value);
             var w = rotationType.GetField("w", BindingFlags.Public | BindingFlags.Instance);
             if (w?.FieldType != typeof(float?)) throw Unavailable();
             w.SetValue(value, quaternion.HasValue ? (object)quaternion.Value.W : null);
-            var rotation = root.rotation * (Quaternion)convertRotation.Invoke(null, new[] { value })!;
-            var scale = root.lossyScale;
-            return new TransformState(Position(editor.Position), new Quat(rotation.x, rotation.y, rotation.z, rotation.w),
-                new Vec3(scale.x * editor.Scale.X, scale.y * editor.Scale.Y, scale.z * editor.Scale.Z));
+            var rotation = (Quaternion)convertRotation.Invoke(null, new[] { value })!;
+            var position = (Vector3)convertPosition.Invoke(VectorValue(vectorType, editor.Position), null)!;
+            return AuthoredAffine.From(Value(position), new Quat(rotation.x, rotation.y, rotation.z, rotation.w), editor.Scale);
         }
+        private static Vec3 Value(Vector3 value) => new Vec3(value.x, value.y, value.z);
         private static object VectorValue(Type type, Vec3 vector)
         {
             var value = Activator.CreateInstance(type) ?? throw Unavailable();

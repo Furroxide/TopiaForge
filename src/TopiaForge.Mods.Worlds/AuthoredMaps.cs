@@ -30,9 +30,9 @@ namespace TopiaForge.Mods
         bool TryGetAuthored(IEntity entity, out AuthoredEntity? authored);
         /// <summary>Gets authored records using the given model id.</summary>
         IReadOnlyList<AuthoredEntity> FindByModel(string modelId);
-        /// <summary>Converts an editor position through the game's coordinate adapter.</summary>
+        /// <summary>Converts a root-level editor position; use AuthoredEntity.WorldTransform for a parented record.</summary>
         Vec3 ToWorld(Vec3 editorPosition);
-        /// <summary>Converts an editor transform through the game's coordinate adapter.</summary>
+        /// <summary>Converts a root-level editor transform; no authored parent chain is inferred.</summary>
         TransformState ToWorld(MapTransform editorTransform);
         /// <summary>Resolves a bounded anchors file from the consuming gamemode's package.</summary>
         MapAnchorResolution ResolveAnchors(string packagePath);
@@ -46,11 +46,13 @@ namespace TopiaForge.Mods
     {
         private readonly IEntity live;
         private readonly Func<bool> alive;
-        internal AuthoredEntity(AuthoredRecord record, IEntity live, bool assetResolved, Func<bool> alive)
+        private readonly AuthoredAffine worldTransform;
+        internal AuthoredEntity(AuthoredRecord record, IEntity live, bool assetResolved, Func<bool> alive, AuthoredAffine worldTransform)
         {
             Id = record.Id; SceneId = record.SceneId; Name = record.Name; ParentId = record.ParentId;
             ModelId = record.ModelId; PrefabUri = record.PrefabUri; EditorTransform = record.Transform;
             Components = record.Components; this.live = live; this.alive = alive; AssetResolved = assetResolved;
+            this.worldTransform = worldTransform;
         }
         /// <summary>Gets the authored id, bounded to 64 ASCII characters.</summary>
         public string Id { get; }
@@ -64,8 +66,15 @@ namespace TopiaForge.Mods
         public string? ModelId { get; }
         /// <summary>Gets the authored prefab URI, or null.</summary>
         public string? PrefabUri { get; }
-        /// <summary>Gets the exact editor transform.</summary>
+        /// <summary>Gets the exact parent-local editor transform, or root-level editor transform when ParentId is null.</summary>
         public MapTransform EditorTransform { get; }
+        /// <summary>Gets the imported authored world pose, including all authored parents and the import root, even without a live marker.</summary>
+        /// <remarks>Captured at indexing; does not track later physics or root movement. Position uses the full affine chain.
+        /// Rotation is the normalized product of converted quaternions. Scale is lossy basis length, with an odd reflection
+        /// assigned to X; this TRS cannot represent shear. Use IEntityService.TryGetTransform for current live movement.</remarks>
+        /// <exception cref="InvalidOperationException">The map's world session has ended, or the composed pose has a zero scale axis or non-finite values
+        /// that TransformState cannot represent. Such authored records remain indexed; inspect EditorTransform and the parent chain.</exception>
+        public TransformState WorldTransform => alive() ? worldTransform.Pose : throw new InvalidOperationException("This map's world session has ended.");
         /// <summary>Gets the authored component flags.</summary>
         public AuthoredComponents Components { get; }
         /// <summary>Gets the live handle, or a dead handle for a missing marker or ended session.</summary>

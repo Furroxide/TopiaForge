@@ -67,11 +67,33 @@ resolves an interaction or raycast handle back to its authored id. `FindByModel`
 finds all records using a model; repeated names are not identities.
 
 `MapTransform` preserves editor position, scale and Euler-or-quaternion rotation.
-Use `map.ToWorld(...)` for world-space coordinates. The native adapter calls the
-game's conversion helpers and applies the imported root transform. The testing
-kit pins the editor-X reflection; native root, rotation and prefab expansion
-behavior still needs in-game qualification. The index is built once, with no
-per-frame work. After teardown its lookups refuse and entity handles are dead.
+`entity.EditorTransform` is relative to its authored parent (root-level only when
+`ParentId` is null). Use `entity.WorldTransform` for its imported authored world
+pose, including the complete parent chain and import root, even without a live
+marker. The native adapter converts each local transform with the game's helpers.
+Position preserves the full affine chain, including rotated, nonuniform and
+reflected scales. Rotation is the normalized product of converted quaternions;
+lossy scale is the length of each world basis axis, assigning an odd reflection to
+X. A position/rotation/scale value cannot encode shear; do not reconstruct parent
+matrices from it to place descendants. Native lossy-scale and prefab-expansion
+parity still require in-game qualification.
+
+`WorldTransform` is captured when the index is built. It does not follow later
+physics or import-root movement: use `context.Entities.TryGetTransform` with the
+live entity for that. Legacy `map.ToWorld(Vec3/MapTransform)` still converts only
+root-level editor values and cannot infer an entity's parents. The testing kit
+uses the same affine composition for authored poses and initial fake live positions
+and rotations, with the editor-X reflection. Live `IEntityService.TryGetTransform`
+reads retain parent-local `Scale`, matching the native adapter;
+`WorldTransform.Scale` is the lossy world scale. The index does no per-frame work. After teardown
+its lookups and retained `WorldTransform` getters refuse, and entity handles die.
+
+Collapsed authored scales remain valid map records. If a node, ancestor or import
+root collapses an axis, or the composed world values overflow, `WorldTransform`
+throws an actionable `InvalidOperationException`: the existing `TransformState`
+contract cannot represent that pose. Import and metadata access still succeed;
+inspect `EditorTransform` and the parent chain, and choose a non-collapsed marker
+for placement. No identity pose or unit scale is substituted.
 
 Survey a declared world and track selected objects in a copied anchors file:
 
@@ -95,7 +117,9 @@ topiaforge world survey example.mode.map --anchors map-anchors.json --update
 Include it as `<None Update="map-anchors.json" CopyToOutputDirectory="PreserveNewest" />`.
 `map.ResolveAnchors("map-anchors.json")` reads from the consuming gamemode's
 package. It matches ids first, then an exact name and model within the configured
-editor-space distance (1 metre by default). Two candidates are ambiguous. Required
+parent-local editor-space distance (1 metre by default). `editorPosition` continues
+to mean `EditorTransform.Position`, with no ancestor transforms or scale applied;
+existing anchor files are not reinterpreted as world coordinates. Two candidates are ambiguous. Required
 anchors need a usable live entity. Read `IsComplete` and `Report` before indexing a
 resolved key. Missing or malformed files return `InvalidArgument` with file/field
 guidance. Never treat map names as rich text or use authored ids as paths.

@@ -34,6 +34,7 @@ namespace TopiaForge.Mods.Internal
         private readonly Func<bool> nativeAlive;
         private readonly Func<string, OperationResult<byte[]>>? readAnchors;
         internal AuthoredMapIndex(string mapId, AuthoredScene scene, MapRevision revision, IEnumerable<AuthoredMarker> markers,
+            IReadOnlyDictionary<string, AuthoredAffine> worldTransforms,
             Func<Vec3, Vec3> position, Func<MapTransform, TransformState> transform, Func<bool>? nativeAlive = null,
             Func<string, OperationResult<byte[]>>? readAnchors = null)
         {
@@ -59,7 +60,7 @@ namespace TopiaForge.Mods.Internal
                 var usable = marker != null && !duplicates.Contains(record.Id) && marker.Entity.IsAlive;
                 if (!usable) MissingMarkers++;
                 var entity = new AuthoredEntity(record, usable ? marker!.Entity : DeadAuthoredEntity.Instance,
-                    usable && marker!.AssetResolved, () => IsAlive);
+                    usable && marker!.AssetResolved, () => IsAlive, worldTransforms[record.Id]);
                 entities.Add(record.Id, entity); ordered.Add(entity);
                 if (usable && !live.ContainsKey(marker!.Entity.Id)) live.Add(marker.Entity.Id, entity);
             }

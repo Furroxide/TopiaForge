@@ -29,11 +29,11 @@ namespace TopiaForge.Mods
         public string? Name { get; }
         /// <summary>Gets the exact surveyed model id, or null when fallback matching is unavailable.</summary>
         public string? ModelId { get; }
-        /// <summary>Gets the surveyed position in editor axes.</summary>
+        /// <summary>Gets the surveyed parent-local position in editor axes, matching EditorTransform.Position, not WorldTransform.Position.</summary>
         public Vec3? EditorPosition { get; }
         /// <summary>Gets whether failure to match makes the resolution incomplete.</summary>
         public bool Required { get; }
-        /// <summary>Gets the maximum fallback distance in editor metres.</summary>
+        /// <summary>Gets the maximum fallback distance in parent-local editor metres; ancestor scale is not applied.</summary>
         public float PositionTolerance { get; }
     }
 

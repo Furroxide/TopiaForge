@@ -13,6 +13,7 @@ namespace TopiaForge.Mods.Testing
     {
         private readonly List<AuthoredRecord> records = new List<AuthoredRecord>();
         private readonly List<AuthoredMarker> markers = new List<AuthoredMarker>();
+        private readonly Dictionary<string, AuthoredAffine> authoredBases = new Dictionary<string, AuthoredAffine>(StringComparer.Ordinal);
         private readonly Dictionary<string, byte[]> files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         private AuthoredMapIndex? index;
         private bool disposed;
@@ -38,8 +39,11 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentException("Entity ids must be unique and parents must be added first.");
             var value = editorTransform ?? MapTransform.Identity;
             records.Add(new AuthoredRecord(id, SceneId, name, parentId, modelId, prefabUri, value, components));
-            if (hasMarker) markers.Add(new AuthoredMarker(id, new FakeEntity("fake:" + id, name, Position(value.Position))
-            { Rotation = Convert(value).Rotation, Scale = value.Scale }, assetResolved));
+            var world = (parentId == null ? AuthoredAffine.Identity : authoredBases[parentId]).Append(ConvertAffine(value));
+            authoredBases.Add(id, world);
+            // Live reads match Unity's world position/rotation and parent-local scale.
+            if (hasMarker) markers.Add(new AuthoredMarker(id, new FakeEntity("fake:" + id, name, world.Position)
+            { Rotation = world.Rotation, Scale = value.Scale }, assetResolved));
             return this;
         }
         /// <summary>Supplies one package-relative anchors file without filesystem access.</summary>
@@ -65,7 +69,7 @@ namespace TopiaForge.Mods.Testing
             return map;
         }
         private AuthoredMapIndex Index => index ??= new AuthoredMapIndex(MapId,
-            new AuthoredScene(SceneId, SceneName, Environment, records.AsReadOnly()), Revision, markers,
+            new AuthoredScene(SceneId, SceneName, Environment, records.AsReadOnly()), Revision, markers, authoredBases,
             Position, Convert, () => !disposed, path => files.TryGetValue(path, out var bytes)
                 ? OperationResult<byte[]>.Success((byte[])bytes.Clone()) : OperationResult<byte[]>.Failure(ModErrorCode.NotFound, "Anchor file missing."));
         internal AuthoredMapIndex Inner => Index;
@@ -73,7 +77,12 @@ namespace TopiaForge.Mods.Testing
         private static TransformState Convert(MapTransform value)
         {
             var rotation = value.QuaternionRotation ?? Euler(value.EulerDegrees ?? Vec3.Zero);
-            return new TransformState(Position(value.Position), new Quat(rotation.X, -rotation.Y, -rotation.Z, rotation.W).Normalized, value.Scale);
+            return new TransformState(Position(value.Position), AuthoredAffine.NormalizeRotation(new Quat(rotation.X, -rotation.Y, -rotation.Z, rotation.W)), value.Scale);
+        }
+        private static AuthoredAffine ConvertAffine(MapTransform value)
+        {
+            var rotation = value.QuaternionRotation ?? Euler(value.EulerDegrees ?? Vec3.Zero);
+            return AuthoredAffine.From(Position(value.Position), new Quat(rotation.X, -rotation.Y, -rotation.Z, rotation.W), value.Scale);
         }
         private static Quat Euler(Vec3 degrees)
         {

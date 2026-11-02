@@ -85,6 +85,7 @@ namespace TopiaForge.ModManager.Tests
             return new AuthoredMapIndex("example-map", project.Scenes["scene"], new MapRevision(new string('a', 64), 100, ""),
                 new[] { new AuthoredMarker("provider", new FakeEntity("provider", "Provider", Vec3.Zero), true),
                     new AuthoredMarker("consumer", new FakeEntity("consumer", "Consumer", Vec3.Zero), true) },
+                AuthoredAffine.Compose(project.Scenes["scene"].Records, _ => AuthoredAffine.Identity, AuthoredAffine.Identity),
                 p => p, _ => TransformState.Identity);
         }
         private sealed class MapWorld : IWorldInstance
