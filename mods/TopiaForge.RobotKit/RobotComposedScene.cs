@@ -30,8 +30,11 @@ namespace TopiaForge.RobotKit
             Require(builderType.GetConstructor(new[] { config.GetType() }) != null);
         }
 
-        internal static RobotPrefabCandidate? Discover(Func<WorldSessionSnapshot?>? world)
+        internal static RobotPrefabCandidate? Discover(Func<WorldSessionSnapshot?>? world) => Discover(world, out _);
+
+        internal static RobotPrefabCandidate? Discover(Func<WorldSessionSnapshot?>? world, out bool notPresent)
         {
+            notPresent = false;
             if (world == null) return null;
             WorldSessionSnapshot? state = null;
             try
@@ -90,6 +93,7 @@ namespace TopiaForge.RobotKit
                     if (selected != null) return Refuse(state, RobotComposedRefusal.AmbiguousIdentity);
                     selected = new RobotComposedScene(world, state, host, config, sceneRoot, mapRoot, project, entity);
                 }
+                notPresent = selected == null;
                 return selected == null ? Refuse(state, RobotComposedRefusal.NotPresent) : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.IsCurrent);
             }
             catch (Exception)

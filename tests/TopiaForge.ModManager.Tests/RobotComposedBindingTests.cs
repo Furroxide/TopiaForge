@@ -84,6 +84,14 @@ namespace TopiaForge.ModManager.Tests
                 Check(broken.Findings.Any(f => f.BindingId == id && f.Severity == Severity.Error),
                     "native dependency deletion did not fail the Critical binding: " + id);
             }
+            var arrival = manifest.Bindings.Single(b => b.Id == "robotkit.property.actionsuccess.shouldignore");
+            var missingArrival = SurfaceSnapshot.Parse(baseline.ToCanonicalJson());
+            var arrivalType = missingArrival.FindType(arrival.TypeKey)!;
+            foreach (var property in arrivalType.Properties.Where(value => value.Name == arrival.Member).ToArray())
+                arrivalType.Properties.Remove(property);
+            Check(SurfaceDiffer.ResolveManifests(new[] { manifest }, missingArrival).Findings
+                .Any(finding => finding.BindingId == arrival.Id && finding.Severity == Severity.Error),
+                "missing native ShouldIgnore must fail the Critical compatibility gate");
             Check(!manifest.Bindings.Any(b => b.Member == "CollectReferencedLoreUris"), "removed lore API must not remain a dependency");
             Console.WriteLine("Composed Critical metadata contracts: " + expected.Length + " dependency deletions detected.");
         }
