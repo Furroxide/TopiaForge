@@ -85,9 +85,10 @@ extension LauncherHostingActions on LauncherBloc {
             phase: HostingPhase.editing,
             preferences: _hosting.preferences,
             choices: _hosting.choices,
+            disclosureAcknowledged: _hosting.disclosureAcknowledged,
           ),
         );
-      case HostingReviewRequested(:final choices):
+      case HostingReviewRequested(:final choices, :final acknowledgeDisclosure):
         if (gateway is! MultiplayerHostingGateway ||
             install == null ||
             profile == null ||
@@ -104,6 +105,8 @@ extension LauncherHostingActions on LauncherBloc {
             phase: HostingPhase.preparing,
             preferences: _hosting.preferences,
             choices: choices,
+            disclosureAcknowledged:
+                acknowledgeDisclosure || _hosting.disclosureAcknowledged,
           ),
         );
         _beside<HostingPreparation>(
@@ -135,6 +138,7 @@ extension LauncherHostingActions on LauncherBloc {
                 ? preparation.preferences
                 : _hosting.preferences,
             choices: _hosting.choices,
+            disclosureAcknowledged: _hosting.disclosureAcknowledged,
             plan: preparation is HostingPlan ? preparation : null,
             message: preparation is HostingRefused ? preparation.message : '',
             canAllowDirect:
