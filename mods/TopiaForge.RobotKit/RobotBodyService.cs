@@ -96,19 +96,18 @@ namespace TopiaForge.RobotKit
             private readonly RobotBodyService service;
             private readonly IModLifetime lifetime;
             private readonly IRuntimeReplication? replication;
-            private readonly int generation;
             private readonly IInternalNativeEntityReadContext? readContext;
             internal readonly HashSet<Body> Bodies = new HashSet<Body>();
 
             internal Facade(RobotBodyService service, IModLifetime lifetime, IRuntimeReplication? replication,
                 IInternalNativeEntityReadContext? readContext)
-            { this.service = service; this.lifetime = lifetime; this.replication = replication; this.readContext = readContext; generation = service.generation; }
+            { this.service = service; this.lifetime = lifetime; this.replication = replication; this.readContext = readContext; }
 
             public OperationResult<IRobotBody> Spawn(RobotBodyRequest request)
             {
                 if (request == null) throw new ArgumentNullException(nameof(request));
                 if (lifetime.IsStopping) return Fail(ModErrorCode.Cancelled, "The body scope has stopped.");
-                if (service.disposed || generation != service.generation) return Fail(ModErrorCode.Unavailable, "The body provider or world has changed.");
+                if (service.disposed) return Fail(ModErrorCode.Unavailable, "The body provider has stopped.");
                 if (replication == null) return Fail(ModErrorCode.Unavailable, "Persistent body replication is unavailable.");
                 if (replication.Realm == InternalNetRealm.Client || replication.ExecutionContext != InternalExecutionContext.GamemodeServer
                     || replication.NetworkClass != InternalNetworkClass.Shared)

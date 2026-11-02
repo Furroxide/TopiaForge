@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--robot-world-lifetime")
+            { RobotBodyTests.RunWorldRecovery(); RobotComposedCurrentnessTests.Run(); RobotComposedSceneTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-body-views")
             { RobotBodyTests.RunViews(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-bodies")
