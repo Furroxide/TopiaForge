@@ -206,7 +206,7 @@ namespace TopiaForge.ModManager.Tests
             rig.Frames(10);
             That(host.Presence.TryGetPose(player.Id, out typing) && (typing.Flags & MultiplayerPoseFlags.Typing) == 0, "and stops showing it");
 
-            // Talking is what the voice service says: the player's own transmitting, checked by what the host's relay heard.
+            // Playback and a local transmitting claim cannot authenticate host presence activity.
             var playerVoice = new FakeVoice { State = InternalVoiceTransmitState.Transmitting };
             var hostVoice = new FakeVoice();
             player.Control.Voice = playerVoice;
@@ -214,11 +214,11 @@ namespace TopiaForge.ModManager.Tests
             player.Step(0.5f, 0f, 0f);
             rig.Frames(10);
             That(host.Presence.TryGetPose(player.Id, out var talking) && (talking.Flags & MultiplayerPoseFlags.Talking) == 0 && host.Counters.FlagsRefused > 0,
-                "a player that says it talks while the host's relay hears nothing is not shown talking");
+                "a player claiming transmission without admitted host activity is not shown talking");
             hostVoice.Speaking.Add(player.Id);
             player.Step(0.5f, 0f, 0f);
             rig.Frames(10);
-            That(host.Presence.TryGetPose(player.Id, out talking) && (talking.Flags & MultiplayerPoseFlags.Talking) != 0, "heard by the host's relay, it is");
+            That(host.Presence.TryGetPose(player.Id, out talking) && (talking.Flags & MultiplayerPoseFlags.Talking) == 0, "host playback cannot substitute for authenticated voice admission");
             That(player.Presence.TryGetPose(player.Id, out var mine) && (mine.Flags & MultiplayerPoseFlags.Talking) != 0, "and its own pose says so too");
         }
 

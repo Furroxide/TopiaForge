@@ -186,13 +186,13 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool ServerMuted
         {
             get => Moderation.ServerMuted;
-            set => Moderation.ServerMuted = value;
+            set { Moderation.ServerMuted = value; if (value) LastAdmittedVoiceMicros = long.MinValue; }
         }
 
         internal long AutoMutedUntilMicros
         {
             get => Moderation.AutoMutedUntilMicros;
-            set => Moderation.AutoMutedUntilMicros = value;
+            set { Moderation.AutoMutedUntilMicros = value; if (value != long.MinValue) LastAdmittedVoiceMicros = long.MinValue; }
         }
 
         internal bool AutoMuteAnnounced
@@ -201,6 +201,8 @@ namespace TopiaForge.Multiplayer.Engine
             set => Moderation.AutoMuteAnnounced = value;
         }
 
+        internal long LastAdmittedVoiceMicros { get; set; } = long.MinValue;
+        internal ulong ActivityEpoch { get; set; }
         internal bool HasStream { get; set; }
         internal ulong LastSequence { get; set; }
         internal ulong LastTimestamp { get; set; }
@@ -233,6 +235,7 @@ namespace TopiaForge.Multiplayer.Engine
         /// </summary>
         internal void ResetStream(ulong stream)
         {
+            LastAdmittedVoiceMicros = long.MinValue;
             HasStream = false;
             LastSequence = 0;
             LastTimestamp = 0;

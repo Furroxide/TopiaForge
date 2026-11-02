@@ -47,8 +47,11 @@ namespace TopiaForge.ModManager
         internal bool IsCurrentViewAvatar(IEntity entity, string world)
         {
             if (string.IsNullOrEmpty(world) || RunningWorld?.Invoke() != world || !TryCreatePlayerRef(entity, out _)) return false;
+            // Existing avatars were created from validated presence. A replacement stream invalidates gameplay
+            // pose/index/activity, while an owned view hold may resume on this exact live root after participant
+            // admission returns. Its session/key, world and scene affinity remain mandatory.
             foreach (var peer in peers)
-                if (!peer.IsLocal && peer.HasPose && peer.Avatar?.IsAlive == true && ReferenceEquals(peer.Avatar.Entity, entity))
+                if (!peer.IsLocal && peer.Avatar?.IsAlive == true && ReferenceEquals(peer.Avatar.Entity, entity))
                     return peer.AvatarWorld == world && peer.AvatarSceneVersion == (SceneVersion?.Invoke() ?? 0)
                         && (Realm != NetRealm.ListenHost || Host.IsCurrentWorld);
             return false;

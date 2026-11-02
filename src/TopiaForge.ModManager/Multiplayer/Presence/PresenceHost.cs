@@ -10,7 +10,7 @@ namespace TopiaForge.ModManager
     /// Presence on a listen host (WS3.10). It gives every participant a presence index, takes each joined player's poses
     /// and states and checks them by the host's rules (<see cref="PresencePlausibility"/>, <see cref="PresenceHealth"/>):
     /// a pose that breaks one is corrected, and a player that keeps breaking them is removed. It replaces a player's talking
-    /// claim with what its own voice relay heard, relays every accepted pose to the other players within each one's byte
+    /// claim with authenticated admitted voice, relays every accepted pose to the other players within each one's byte
     /// budget (the other part of this class), and places each player on the spawn ring when it arrives in the host's world.
     /// It takes a pose only from the player it belongs to: the channel names the sender, and a player's payload in the
     /// host's format, which would speak for others, is refused. Main thread only.
@@ -42,6 +42,7 @@ namespace TopiaForge.ModManager
         internal void Activate()
         {
             active = true;
+            worldInitialized = false;
             nextRelayMicros = 0;
             nextStatesMicros = 0;
             rosterSent = -1;
@@ -59,6 +60,34 @@ namespace TopiaForge.ModManager
             peer.HealthCheck = new PresenceHealth(presence.Policy);
             peer.Scheduler = new ReplicationScheduler(RelayBudgetBytesPerTick);
             peer.NeedsCatchUp = true;
+        }
+
+        /// <summary>Invalidates the old presentation index without forgetting the participant's grace identity or movement checks.</summary>
+        internal void InvalidateIndex(PresencePeer peer, long nowMicros)
+        {
+            presence.Roster.Release(peer.Id, nowMicros);
+            peer.Index = 0;
+            peer.ClearPose();
+            peer.NeedsWorldArrival = !peer.IsLocal && presence.RunningWorld?.Invoke() != null;
+        }
+
+        private void RetryIndices(long nowMicros)
+        {
+            var all = presence.Peers;
+            for (var index = 0; index < all.Count; index++)
+            {
+                var peer = all[index];
+                if (peer.Index == 0 && !peer.Removed && presence.Roster.TryAssign(peer.Id, nowMicros, out var assigned))
+                    peer.Index = assigned;
+            }
+        }
+
+        // A roster may arrive after every initial unreliable pose. A fresh arrival re-arms existing rest confirmations.
+        private void RefreshRecipient(PresencePeer recipient)
+        {
+            var all = presence.Peers;
+            for (var index = 0; index < all.Count; index++)
+                if (all[index].Index != 0) recipient.Scheduler?.Refresh(new NetworkEntityId(all[index].Index));
         }
 
         /// <summary>A participant left the session for good: its index rests, and its slot frees with it.</summary>
@@ -151,6 +180,7 @@ namespace TopiaForge.ModManager
 
         private void TakePose(PresencePeer peer, in PresencePoseRecord pose, long nowMicros, in PresenceBounds bounds)
         {
+            if (!presence.CanAcceptWorldPose) return;
             var mapped = MapClock(peer, pose.Millis, nowMicros);
             if (peer.HasPose && mapped <= peer.PoseMicros)
             {
@@ -163,10 +193,12 @@ namespace TopiaForge.ModManager
             {
                 case PresenceVerdict.Accepted:
                     var flags = check.Flags;
+                    // Readiness validates transforms before Arrived; preceding chat focus does not cross that boundary.
+                    if (peer.NeedsWorldArrival) flags &= ~PresenceFlags.Typing;
                     if ((pose.Flags & PresenceFlags.Away) != 0 && (flags & PresenceFlags.Away) == 0) presence.Counters.FlagsRefused++;
 
-                    // Whether a player talks is what the host's own voice relay heard, never what the player says.
-                    var heard = presence.IsHeard(peer);
+                    // Whether a player talks is authenticated admitted voiced frames, never what the player says.
+                    var heard = presence.IsVoiceActive(peer);
                     if ((flags & PresenceFlags.Talking) != 0 && !heard) presence.Counters.FlagsRefused++;
                     flags = heard ? flags | PresenceFlags.Talking : flags & ~PresenceFlags.Talking;
                     peer.SetPose(mapped, pose.Position, pose.Rotation, pose.Velocity, pose.EyeCentimeters, flags);
@@ -226,7 +258,10 @@ namespace TopiaForge.ModManager
         private void Arrive(PresencePeer peer, string world, long nowMicros)
         {
             var running = presence.RunningWorld?.Invoke();
-            if (running == null || !string.Equals(world, running, StringComparison.Ordinal) || string.Equals(peer.PlacedWorld, world, StringComparison.Ordinal)) return;
+            if (running == null || !string.Equals(world, running, StringComparison.Ordinal)) return;
+            peer.NeedsWorldArrival = false;
+            RefreshRecipient(peer);
+            if (string.Equals(peer.PlacedWorld, world, StringComparison.Ordinal)) return;
             peer.PlacedWorld = world;
             peer.Slot = -1;
             peer.PlacementDue = false;

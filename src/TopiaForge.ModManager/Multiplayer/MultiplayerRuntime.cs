@@ -107,6 +107,10 @@ namespace TopiaForge.ModManager
         /// </summary>
         internal IMultiplayerFrameStage? PresenceReceive { get; set; }
 
+        // Retire world-bound capture before the provider can flush queued voice.
+        internal IMultiplayerFrameStage? PresenceBeforePump { get; set; }
+        private bool presenceBeforePumpFailureLogged;
+
         /// <summary>LateUpdate, online only, before the replicas: other players' avatars move to their poses (WS3.10).</summary>
         internal IMultiplayerFrameStage? AvatarInterpolation { get; set; }
 
@@ -199,6 +203,7 @@ namespace TopiaForge.ModManager
             Run(SpeechMaintenance, ref speechFailureLogged, deltaTime);
             var current = control;
             if (current == null) return;
+            Run(PresenceBeforePump, ref presenceBeforePumpFailureLogged, deltaTime);
             try
             {
                 current.Pump();

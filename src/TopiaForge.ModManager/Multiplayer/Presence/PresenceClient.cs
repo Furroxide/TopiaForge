@@ -62,6 +62,11 @@ namespace TopiaForge.ModManager
             }
             while (open.IsOpen && open.TryReceiveDatagram(out var datagram))
             {
+                if (!(presence.Control?.SessionSnapshot.HostParticipantId ?? InternalSystemMessage.HeadlessHostSender).Equals(datagram.Sender))
+                {
+                    presence.Counters.Forged++;
+                    continue;
+                }
                 if (!PresenceWire.TryReadDatagramType(datagram.Payload, bits, out var type))
                 {
                     presence.Counters.Malformed++;
@@ -150,9 +155,22 @@ namespace TopiaForge.ModManager
                     var all = presence.Peers;
                     for (var index = 0; index < all.Count; index++)
                     {
-                        all[index].Index = presence.Roster.TryGetIndex(all[index].Id, out var assigned) ? assigned : (byte)0;
+                        var peer = all[index];
+                        var assigned = presence.Roster.TryGetIndex(peer.Id, out var mapped) ? mapped : (byte)0;
+                        if (assigned != 0 && assigned == peer.RetiredIndex) assigned = 0;
+                        if (peer.Index != assigned)
+                        {
+                            peer.ClearPose();
+                            if (peer.IsLocal) presence.Local.Typing = false;
+                        }
+                        peer.Index = assigned;
+                        if (assigned != 0) peer.RetiredIndex = 0;
                     }
 
+                    // Receiving a roster is progress even if its poses overtook it. Notify the host again and
+                    // request a stationary pose on the existing 50 ms beat so its confirmations can be re-armed.
+                    arrivedWorld = null;
+                    presence.Local.RequestPose();
                     return;
                 case PresenceMessages.States:
                     if (!PresenceWire.TryReadStates(reader, states))
@@ -218,13 +236,23 @@ namespace TopiaForge.ModManager
             {
                 PresenceWire.TryReadRelay(bits, out var record);
                 var micros = (long)hostMillis * 1000 - record.AgeMillis * 1000L;
-                if (micros < 0 || !presence.Roster.TryGetParticipant(record.Index, out var id) || !presence.TryGetPeer(id, out var peer) || peer == null || peer.IsLocal)
+                if (micros < 0 || !presence.Roster.TryGetParticipant(record.Index, out var id) || !presence.TryGetPeer(id, out var peer) || peer == null || peer.IsLocal
+                    || !peer.IsConnected || peer.Removed || peer.Index != record.Index)
                 {
                     continue;
                 }
 
+                var relayMicros = (long)hostMillis * 1000;
+                if (relayMicros <= peer.ActivityRelayMicros)
+                {
+                    presence.Counters.PosesStale++;
+                    continue;
+                }
+                peer.ActivityRelayMicros = relayMicros;
                 if (peer.HasPose && micros <= peer.PoseMicros)
                 {
+                    const PresenceFlags activity = PresenceFlags.Talking | PresenceFlags.Typing;
+                    peer.SetActivityFlags((peer.Flags & ~activity) | (record.Flags & activity));
                     presence.Counters.PosesStale++;
                     continue;
                 }

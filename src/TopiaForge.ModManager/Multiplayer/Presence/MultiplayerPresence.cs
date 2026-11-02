@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -118,6 +119,7 @@ namespace TopiaForge.ModManager
         {
             var presence = new MultiplayerPresence(runtime, replication, backend, clock);
             replication.Presence = presence;
+            runtime.PresenceBeforePump = new Stage(presence, StageKind.BeforePump);
             runtime.PresenceReceive = presence.Receive;
             runtime.PresenceSend = presence.Send;
             runtime.AvatarInterpolation = presence.Avatars;
@@ -126,6 +128,11 @@ namespace TopiaForge.ModManager
         }
 
         internal long Now() => clock();
+
+        // A settled native level has no authored world token; transitional phases still withhold public presentation.
+        internal bool CanPresentWorld => runtime.SessionPhaseSource() == SessionPhase.Idle
+            || runtime.SessionPhaseSource() == SessionPhase.Running && RunningWorld?.Invoke() != null;
+        internal bool CanAcceptWorldPose => RunningWorld?.Invoke() != null || runtime.SessionPhaseSource() == SessionPhase.Idle;
 
         public void Attached(IInternalMultiplayerControl attached)
         {
@@ -203,8 +210,13 @@ namespace TopiaForge.ModManager
         public bool TryGetPose(ParticipantId participant, out MultiplayerPose pose)
         {
             pose = default;
-            if (Realm == NetRealm.Offline || !peersById.TryGetValue(participant, out var peer) || !peer.HasPose) return false;
-            pose = PoseOf(peer);
+            if (Realm == NetRealm.Offline || !peersById.TryGetValue(participant, out var peer) || !peer.HasPose || peer.Index == 0
+                || !peer.IsConnected || peer.Removed || !CanPresentWorld
+                || Realm == NetRealm.ListenHost && !Host.IsCurrentWorld) return false;
+            var flags = Realm == NetRealm.ListenHost
+                ? LocalParticipant.HasValue ? ActivityFlagsFor(peer, LocalParticipant.Value) : peer.Flags & ~(PresenceFlags.Talking | PresenceFlags.Typing)
+                : peer.Flags;
+            pose = PoseOf(peer, flags);
             return true;
         }
 
@@ -227,7 +239,7 @@ namespace TopiaForge.ModManager
         internal bool TryGetPeer(ParticipantId participant, out PresencePeer? peer) => peersById.TryGetValue(participant, out peer);
 
         /// <summary>The public pose a peer's held pose and state stand for.</summary>
-        internal static MultiplayerPose PoseOf(PresencePeer peer)
+        internal static MultiplayerPose PoseOf(PresencePeer peer, PresenceFlags flags)
         {
             var feet = NetQuantization.DequantizePosition(peer.Position);
             var view = NetQuantization.DequantizeRotation(peer.Rotation);
@@ -243,7 +255,7 @@ namespace TopiaForge.ModManager
                 new Vec3(velocity.X, velocity.Y, velocity.Z),
                 health,
                 maximum,
-                (MultiplayerPoseFlags)(int)(peer.Flags & (PresenceFlags.Crouching | PresenceFlags.Talking | PresenceFlags.Typing | PresenceFlags.Away)),
+                (MultiplayerPoseFlags)(int)(flags & (PresenceFlags.Crouching | PresenceFlags.Talking | PresenceFlags.Typing | PresenceFlags.Away)),
                 peer.HeldItem);
         }
 
@@ -291,6 +303,20 @@ namespace TopiaForge.ModManager
                     nametagVersion++;
                 }
 
+                if (peer.IsConnected != participant.IsConnected || peer.PresentationLifetime != participant.LifetimeId)
+                {
+                    if (Realm == NetRealm.ListenHost && peer.PresentationLifetime != participant.LifetimeId)
+                        Host.InvalidateIndex(peer, nowMicros);
+                    else
+                    {
+                        peer.ClearPose();
+                        if (Realm == NetRealm.Client && peer.PresentationLifetime != participant.LifetimeId)
+                        {
+                            peer.RetiredIndex = peer.Index;
+                            peer.Index = 0;
+                        }
+                    }
+                }
                 if (peer.PresentationLifetime != participant.LifetimeId)
                 {
                     peer.PresentationLifetime = participant.LifetimeId;
@@ -386,6 +412,7 @@ namespace TopiaForge.ModManager
 
         private enum StageKind
         {
+            BeforePump,
             Receive,
             Send,
             Avatars
@@ -408,6 +435,9 @@ namespace TopiaForge.ModManager
                 var now = presence.Now();
                 switch (kind)
                 {
+                    case StageKind.BeforePump:
+                        if (presence.Host.IsActive) presence.Host.BeforePump(now);
+                        break;
                     case StageKind.Receive:
                         presence.Reconcile(now);
                         if (presence.Realm == NetRealm.ListenHost) presence.Host.Receive(now);

@@ -58,7 +58,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 2 && args[0] == "--authored-review")
             { AuthoredMapReviewTests.Run(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "--world-view")
-            { WorldViewTests.Run(); TopiaForge.ModRuntime.Tests.SessionWorldViewTests.Run(); return 0; }
+            { WorldViewTests.Run(); PresenceViewRootReconnectTests.Run(); TopiaForge.ModRuntime.Tests.SessionWorldViewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--managed-assembly-validation")
             {
                 var validationRoot = Directory.CreateTempSubdirectory("TopiaForgeAssemblyValidation-").FullName;
@@ -645,6 +645,7 @@ namespace TopiaForge.ModManager.Tests
                 MapDocumentTests.Run(FindRepoRoot());
                 AuthoredMapTests.Run(FindRepoRoot());
                 WorldViewTests.Run();
+                PresenceViewRootReconnectTests.Run();
                 TopiaForge.ModRuntime.Tests.SessionWorldViewTests.Run();
                 AuthoredMapImportTests.RunAsync().GetAwaiter().GetResult();
                 AuthoredMapReviewTests.Run("all");
