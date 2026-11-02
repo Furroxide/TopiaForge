@@ -169,7 +169,7 @@ extension LocalDeveloperMultiplayerContractLock on LocalDeveloperRepository {
       ];
       final build = await runBoundedProcess(
         dotnet.executable,
-        arguments,
+        _boundedDeveloperDotnetArguments(arguments),
         workingDirectory: buildRoot.path,
         runInShell:
             Platform.isWindows &&

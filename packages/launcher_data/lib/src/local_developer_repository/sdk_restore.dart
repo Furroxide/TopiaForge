@@ -68,13 +68,13 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
       snapshots[project.path] = NuGetLockFileSnapshot.of(project);
       final restore = await runBoundedProcess(
         dotnet.executable,
-        [
+        _boundedDeveloperDotnetArguments([
           'restore',
           project.path,
           '--use-lock-file',
           '--force-evaluate',
           '--nologo',
-        ],
+        ]),
         workingDirectory: root,
         timeout: const Duration(minutes: 5),
         maxStdoutBytes: 8 * 1024 * 1024,
@@ -222,14 +222,14 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
       for (final project in missing) {
         final build = await runOwnedSourceSdkBuild(
           dotnet.executable,
-          [
+          _boundedDeveloperDotnetArguments([
             'build',
             project.projectFile.path,
             '-c',
             'Release',
             '-p:GenerateDocumentationFile=true',
             if (!project.isAnalyzer) '-p:ProduceReferenceAssembly=true',
-          ],
+          ]),
           workingDirectory: _repositoryRoot.path,
           timeout: const Duration(minutes: 5),
           maxStdoutBytes: 8 * 1024 * 1024,

@@ -460,3 +460,14 @@ bool _isTopiaForgeRoot(Directory directory) {
       Directory(p.join(directory.path, 'templates')).existsSync() &&
       Directory(p.join(directory.path, 'dist')).existsSync();
 }
+
+// Each CLI build owns its worker lifetime; outer process limits do not bind
+// MSBuild instances started by a nested restore/build command.
+List<String> _boundedDeveloperDotnetArguments(List<String> arguments) => [
+  arguments.first,
+  '--disable-build-servers',
+  '-m:1',
+  '-nr:false',
+  if (arguments.first == 'build') '-p:UseSharedCompilation=false',
+  ...arguments.skip(1),
+];
