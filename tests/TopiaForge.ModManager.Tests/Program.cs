@@ -13,6 +13,8 @@ namespace TopiaForge.ModManager.Tests
     {
         private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--temporary-test-directories")
+            { FocusedHarnessDirectoryTests.Run(); return 0; }
             UnityMainThreadGuard.CaptureCurrentThread();
             if (args.Length == 1 && args[0] == "--countdown-wire") { UiCountdownWireTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-world-lifetime")
@@ -251,10 +253,8 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--sdk-lifecycle", StringComparison.Ordinal))
             {
-                var lifecycleRoot = Path.Combine(
-                    Path.GetTempPath(),
-                    "TopiaForgeSdkLifecycleTests-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(lifecycleRoot);
+                var lifecycleDirectory = Directory.CreateTempSubdirectory("TopiaForgeSdkLifecycleTests-");
+                var lifecycleRoot = lifecycleDirectory.FullName;
                 try
                 {
                     SdkLifecycleTests.Run(lifecycleRoot);
@@ -268,7 +268,7 @@ namespace TopiaForge.ModManager.Tests
                 }
                 finally
                 {
-                    TryDelete(lifecycleRoot);
+                    lifecycleDirectory.Delete(recursive: true);
                 }
             }
 
@@ -365,10 +365,8 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && string.Equals(args[0], "--manifest-v6", StringComparison.Ordinal))
             {
-                var manifestRoot = Path.Combine(
-                    Path.GetTempPath(),
-                    "TopiaForgeManifestV6Tests-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(manifestRoot);
+                var manifestDirectory = Directory.CreateTempSubdirectory("TopiaForgeManifestV6Tests-");
+                var manifestRoot = manifestDirectory.FullName;
                 try
                 {
                     TestStrictManifestExtensions();
@@ -378,7 +376,7 @@ namespace TopiaForge.ModManager.Tests
                 }
                 finally
                 {
-                    TryDelete(manifestRoot);
+                    manifestDirectory.Delete(recursive: true);
                 }
             }
 
@@ -727,6 +725,7 @@ namespace TopiaForge.ModManager.Tests
                 PluginQuitCoordinatorTests.Run(root);
                 PluginQuitHandlerTests.Run(root);
                 LauncherQuitTests.Run();
+                FocusedHarnessDirectoryTests.Run();
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }

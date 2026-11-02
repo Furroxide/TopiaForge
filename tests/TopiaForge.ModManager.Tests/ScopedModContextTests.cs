@@ -15,8 +15,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run(string root)
         {
-            ScopedConstructionDrainTests.Run(root + "-constructor-drain");
-            ScopedCleanupReentrancyTests.Run(root + "-reentrant-cleanup");
+            ScopedConstructionDrainTests.Run(Path.Combine(root, "constructor-drain"));
+            ScopedCleanupReentrancyTests.Run(Path.Combine(root, "reentrant-cleanup"));
             TestConcurrentCancellation();
             TestRebindingAndEvents(Path.Combine(root, "scope-events"));
             TestCancellationAndCleanup(Path.Combine(root, "scope-cleanup"));
