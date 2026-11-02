@@ -107,7 +107,8 @@ namespace TopiaForge.ModManager.Tests
             {
                 if (IndexFails) throw new InvalidOperationException("Synthetic native indexing fault.");
                 return new AuthoredMapIndex(mapId, document.Authored.Scenes[SceneId], new MapRevision(document.Sha256, document.Packed.Length, ""),
-                    Array.Empty<AuthoredMarker>(), p => p, t => TransformState.Identity);
+                    Array.Empty<AuthoredMarker>(), AuthoredAffine.Compose(document.Authored.Scenes[SceneId].Records,
+                        _ => AuthoredAffine.Identity, AuthoredAffine.Identity), p => p, t => TransformState.Identity);
             }
             public OperationResult<TransformState> PlaceRespawn(string id) => throw new NotSupportedException();
             public void Dispose() { }

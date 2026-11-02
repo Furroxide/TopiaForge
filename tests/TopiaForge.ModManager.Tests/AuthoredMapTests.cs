@@ -22,6 +22,8 @@ namespace TopiaForge.ModManager.Tests
             MarkerJoin(json);
             Hostile(json);
             CoordinatesAndLifetime();
+            AuthoredWorldTransformTests.Run();
+            AuthoredNativeCoordinatesTests.Run(repo);
             Console.WriteLine("AuthoredMapTests passed (8 shared anchor outcomes, reader bounds, marker joins, coordinates and lifetime).");
         }
         private static void Conformance(string folder, string json)
@@ -61,6 +63,7 @@ namespace TopiaForge.ModManager.Tests
             using var map = new AuthoredMapIndex("example-map", project.Scenes["workshop"], new MapRevision(new string('a', 64), 100, ""),
                 new[] { new AuthoredMarker("entry", entity, false), new AuthoredMarker("unknown", new FakeEntity("extra", "Extra", Vec3.Zero), true),
                     new AuthoredMarker("crate", new FakeEntity("one", "One", Vec3.Zero), true), new AuthoredMarker("crate", new FakeEntity("two", "Two", Vec3.Zero), true) },
+                AuthoredAffine.Compose(project.Scenes["workshop"].Records, _ => AuthoredAffine.Identity, AuthoredAffine.Identity),
                 p => p, t => TransformState.Identity);
             Assert(map.Entities.Count == 7 && map.MissingMarkers == 6 && map.UnknownMarkers == 1 && map.DuplicateMarkers == 1, "records are retained without unique live markers");
             Assert(!map.Entity("crate").Entity.IsAlive && !map.Entity("entry").AssetResolved, "duplicate and unresolved assets never pretend success");

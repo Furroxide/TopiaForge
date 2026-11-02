@@ -40,6 +40,7 @@ namespace TopiaForge.Worlds.Maps
             var conversion = new MapNativeCoordinates(root);
             var map = new AuthoredMapIndex(mapId, document.Authored.Scenes[sceneId],
                 new MapRevision(document.Sha256, document.Packed.Length, document.Modified), markers,
+                conversion.AuthoredTransforms(document.Authored.Scenes[sceneId]),
                 conversion.Position, conversion.Transform, () => root != null, bridge.ReadAnchorFile);
             context.Logger.Info("Map index: records=" + map.Entities.Count + "; missing markers=" + map.MissingMarkers +
                 "; unknown markers=" + map.UnknownMarkers + "; duplicate marker ids=" + map.DuplicateMarkers + ".");

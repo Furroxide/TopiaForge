@@ -226,7 +226,8 @@ namespace TopiaForge.ModManager.Tests
             {
                 if (ThrowIndex) throw new InvalidOperationException("Synthetic indexing failure.");
                 Map = new AuthoredMapIndex(mapId, document.Authored.Scenes[SceneId], new MapRevision(document.Sha256, document.Packed.Length, document.Modified),
-                    Array.Empty<AuthoredMarker>(), value => value, value => TransformState.Identity, () => MapAlive);
+                    Array.Empty<AuthoredMarker>(), AuthoredAffine.Compose(document.Authored.Scenes[SceneId].Records,
+                        _ => AuthoredAffine.Identity, AuthoredAffine.Identity), value => value, value => TransformState.Identity, () => MapAlive);
                 OnIndex?.Invoke();
                 return Map;
             }
