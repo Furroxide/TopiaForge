@@ -17,7 +17,8 @@ namespace TopiaForge.ModManager.Tests
         {
             if (args.Length == 1 && args[0] == "--temporary-test-directories")
             { FocusedHarnessDirectoryTests.Run(); return 0; }
-            if (args.Length == 3 && args[0] == "--temporary-workspace-probe") return TemporaryWorkspaceTests.Probe(args);
+            if (args.Length > 0 && args[0] == "--temporary-workspace-probe")
+                return args.Length == 2 ? TemporaryWorkspaceTests.Probe(args) : 64;
             if (args.Length == 1 && args[0] == "--temporary-workspaces") { TemporaryWorkspaceTests.Run(); return 0; }
             UnityMainThreadGuard.CaptureCurrentThread();
             if (args.Length == 1 && args[0] == "--menu-presentation")

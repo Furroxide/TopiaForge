@@ -13,22 +13,25 @@ namespace TopiaForge.ModManager.Tests
             var outer = Directory.CreateTempSubdirectory("TopiaForgeWorkspaceTests-").FullName;
             try
             {
-                var sentinel = Path.Combine(outer, "unrelated.txt");
+                var outside = Directory.CreateDirectory(Path.Combine(outer, "outside")).FullName;
+                var sentinel = Path.Combine(outside, "unrelated.txt");
                 File.WriteAllText(sentinel, "retain unrelated data");
                 foreach (var exitCode in new[] { 0, 23 })
                 {
                     string? workspace = null;
                     var actual = IsolatedTestProcess.RunChild(
-                        new[] { "--temporary-workspace-probe", exitCode.ToString(), Path.GetFileName(outer) },
-                        created => workspace = created);
+                        new[] { "--temporary-workspace-probe", exitCode.ToString() },
+                        created => workspace = created, temporaryParent: outer);
                     Check(actual == exitCode, "Workspace supervision must preserve the test exit code.");
                     Check(workspace != null && !Directory.Exists(workspace),
                         "Both successful and failed tests must remove their owned temporary workspace.");
                     Check(File.ReadAllText(sentinel) == "retain unrelated data",
                         "Workspace cleanup must preserve unrelated data and symbolic-link targets.");
                 }
-                var rejected = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "0", "../not-owned" });
-                Check(rejected == 64, "Workspace probes must reject paths outside the owned sibling fixture.");
+                var rejected = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "../not-owned" }, temporaryParent: outer);
+                Check(rejected == 64, "Workspace probes must reject unrecognized probe modes.");
+                rejected = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "0", "../not-owned" }, temporaryParent: outer);
+                Check(rejected == 64, "Workspace probes must not accept a filesystem path argument.");
                 if (OperatingSystem.IsWindows()) RejectSuccessfulExitWhenCleanupIsBlocked(outer);
                 Console.WriteLine("Temporary workspace cleanup tests passed.");
             }
@@ -40,9 +43,8 @@ namespace TopiaForge.ModManager.Tests
             var workspace = Path.TrimEndingDirectorySeparator(Path.GetTempPath());
             Check(workspace.StartsWith(Path.GetDirectoryName(workspace) + Path.DirectorySeparatorChar +
                 "TopiaForgeHarness-", StringComparison.Ordinal), "A fresh child must use its parent's private workspace.");
-            var outsideName = Path.GetFileName(args[2]);
-            if (outsideName != args[2] || !outsideName.StartsWith("TopiaForgeWorkspaceTests-", StringComparison.Ordinal)) return 64;
-            var outside = Path.Combine(Path.GetDirectoryName(workspace)!, outsideName);
+            if (args[1] != "0" && args[1] != "23" && args[1] != "empty") return 64;
+            var outside = Path.Combine(Path.GetDirectoryName(workspace)!, "outside");
             if (args[1] == "empty") return 0;
             var root = Directory.CreateTempSubdirectory("fixture-").FullName;
             Directory.CreateDirectory(root + "-sibling");
@@ -66,12 +68,12 @@ namespace TopiaForge.ModManager.Tests
             FileStream? blocked = null;
             try
             {
-                var code = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "empty", Path.GetFileName(outer) }, created =>
+                var code = IsolatedTestProcess.RunChild(new[] { "--temporary-workspace-probe", "empty" }, created =>
                 {
                     workspace = created;
                     blocked = new FileStream(Path.Combine(created, "parent-held.txt"), FileMode.Create,
                         FileAccess.Write, FileShare.None);
-                });
+                }, temporaryParent: outer);
                 Check(code != 0 && Directory.Exists(workspace),
                     "A cleanup failure must remain visible and must not report a successful test run.");
             }

@@ -16,9 +16,11 @@ namespace TopiaForge.TestSupport
         internal static int Run(string[] args, Func<string[], int> tests) =>
             Environment.GetEnvironmentVariable(ChildMarker) == "1" ? tests(args) : RunChild(args);
 
-        internal static int RunChild(string[] args, Action<string>? observeWorkspace = null)
+        internal static int RunChild(string[] args, Action<string>? observeWorkspace = null, string? temporaryParent = null)
         {
-            var workspace = Directory.CreateTempSubdirectory("TopiaForgeHarness-").FullName;
+            var workspace = temporaryParent == null
+                ? Directory.CreateTempSubdirectory("TopiaForgeHarness-").FullName
+                : Directory.CreateDirectory(Path.Combine(temporaryParent, "TopiaForgeHarness-" + Guid.NewGuid().ToString("N"))).FullName;
             var code = 1;
             var safeToClean = true;
             try
