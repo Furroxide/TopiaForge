@@ -52,7 +52,9 @@ namespace TopiaForge.ModManager.Tests
                 public static void Run()
                 {
                     var show = false; var source = new Source(); IPresenceNametagSource current = source;
-                    using var overlay = new NametagOverlay(() => current, () => show);
+                    var failVisibility = false;
+                    using var overlay = new NametagOverlay(() => current,
+                        () => failVisibility ? throw new InvalidOperationException("visibility unavailable") : show);
                     overlay.Tick(); Check(UiHost.Created == 0, "hidden gameplay does not create a pool");
                     show = true; current = null; overlay.Tick(); Check(UiHost.Created == 0, "missing source does not create a pool");
                     current = source; overlay.Tick();
@@ -63,6 +65,7 @@ namespace TopiaForge.ModManager.Tests
                     Check(tags[0].Anchor.TryGetPosition(out var moved) && moved.X == 8 && tags[0].Name == "Replacement", "positions and names follow source changes");
                     FrameOrder(overlay, source, layer.Tags);
                     RosterChanges(overlay, source, layer.Tags, value => current = value);
+                    FailedUpdates(overlay, source, layer.Tags, value => current = value, value => failVisibility = value);
                     show = false; overlay.Tick(); Check(!layer.Shown && tags.All(tag => !tag.Anchor.TryGetPosition(out _)), "gameplay departure hides all tags");
                     show = true; current = null; overlay.Tick(); Check(!layer.Shown, "source loss hides layer");
                     current = source; overlay.Tick(); Check(UiHost.Created == 1 && layer.Shown, "return reuses pool");
@@ -146,6 +149,38 @@ namespace TopiaForge.ModManager.Tests
                     overlay.Tick(); layer.Tick();
                     Check(layer.Items[0].Visible, "a later stable frame recovers after lookup-time change");
                     Console.WriteLine("Nametag frame binding: four roster changes, equal-version source replacement and lookup-time change pass.");
+                }
+                private static void FailedUpdates(NametagOverlay overlay, Source source, TopiaForgeNametagLayer layer,
+                    Action<Source> select, Action<bool> failVisibility)
+                {
+                    foreach (var replaceSource in new[] { false, true })
+                    {
+                        select(source); source.Name = "Before failure"; source.Version++; overlay.Tick();
+                        var next = replaceSource ? new Source { Count = source.Count, Version = source.Version } : source;
+                        next.Name = "After failure"; next.X = 120; next.Version++;
+                        select(next); failVisibility(true);
+                        var threw = false;
+                        try { overlay.Tick(); } catch (InvalidOperationException) { threw = true; }
+                        finally { failVisibility(false); }
+                        Check(threw, "the visibility failure reaches the surrounding frame guard");
+                        layer.Tick();
+                        Check(!layer.Items[0].Visible, "failed Update hides labels after visibility failure");
+                        overlay.Tick(); layer.Tick();
+                        Check(layer.Items[0].Visible && layer.Items[0].Name == "After failure" && layer.Items[0].Projected.X == 120,
+                            "a successful Update recovers source and text after visibility failure");
+                    }
+                    select(source); source.Name = "Before dispatch failure"; source.Version++; overlay.Tick();
+                    source.Name = "After dispatch failure"; source.Version++;
+                    TopiaForgeNametag.FailName = true;
+                    var dispatchThrew = false;
+                    try { overlay.Tick(); } catch (InvalidOperationException) { dispatchThrew = true; }
+                    finally { TopiaForgeNametag.FailName = false; }
+                    Check(dispatchThrew, "the name dispatch failure reaches the surrounding frame guard");
+                    layer.Tick();
+                    Check(!layer.Items[0].Visible, "failed Update hides labels after name dispatch failure");
+                    overlay.Tick(); layer.Tick();
+                    Check(layer.Items[0].Visible && layer.Items[0].Name == "After dispatch failure", "successful name dispatch commits a fresh binding");
+                    Console.WriteLine("Nametag failed Update: two visibility failures and name dispatch failure hide until recovery.");
                 }
                 private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
                 private sealed class Source : IPresenceNametagSource

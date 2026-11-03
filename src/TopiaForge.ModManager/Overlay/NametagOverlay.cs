@@ -29,9 +29,11 @@ namespace TopiaForge.ModManager
         internal void Tick()
         {
             if (disposed) return;
-            frameSource = source();
-            frameVersion = frameSource?.NametagVersion ?? 0;
-            feed.Tick(frameSource, visible());
+            // A failed frame must never expose an old label through a newly sampled source.
+            frameSource = null;
+            var current = source();
+            var version = current?.NametagVersion ?? 0;
+            feed.Tick(current, visible());
             var any = false;
             for (var i = 0; i < feed.Active.Length; i++) any |= feed.Active[i];
             if (host == null && any) Build();
@@ -43,6 +45,8 @@ namespace TopiaForge.ModManager
                 if (!feed.Active[i]) continue;
                 tags[i]?.SetName(feed.Names[i]);
             }
+            frameVersion = version;
+            frameSource = current;
         }
 
         // The kit queries these after avatar interpolation, rather than retaining Update's pose.

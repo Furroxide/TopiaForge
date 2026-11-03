@@ -107,7 +107,12 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public ITopiaForgeNametagAnchor Anchor; public string Name; public float Offset;
                     public bool Visible; public Vec3 Projected;
-                    public void SetName(string value) => Name = value;
+                    public static bool FailName;
+                    public void SetName(string value)
+                    {
+                        if (FailName) throw new InvalidOperationException("name dispatch unavailable");
+                        Name = value;
+                    }
                 }
             }
             """;
