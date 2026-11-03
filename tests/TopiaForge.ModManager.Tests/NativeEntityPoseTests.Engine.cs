@@ -15,6 +15,11 @@ using TopiaForge.Mods.Testing;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 namespace UnityEngine {
+ public static class NativeAccess {
+  private static int count;
+  public static int Count=>Volatile.Read(ref count);
+  public static void Touch()=>Interlocked.Increment(ref count);
+ }
  public struct Vector3 { public float x,y,z; public Vector3(float x,float y,float z) { this.x=x;this.y=y;this.z=z; } }
  public struct Quaternion { public float x,y,z,w; public Quaternion(float x,float y,float z,float w) { this.x=x;this.y=y;this.z=z;this.w=w; } }
  public sealed class Transform {
@@ -23,8 +28,8 @@ namespace UnityEngine {
  }
  public sealed class GameObject {
   public bool Destroyed, Throw; private Transform value=new();
-  public Transform transform => Throw ? throw new MissingReferenceException() : value;
-  public static bool operator ==(GameObject? a,GameObject? b) => ReferenceEquals(a,b) || (b is null && a?.Destroyed==true);
+  public Transform transform { get { NativeAccess.Touch();return Throw ? throw new MissingReferenceException() : value; } }
+  public static bool operator ==(GameObject? a,GameObject? b) { NativeAccess.Touch();return ReferenceEquals(a,b) || (b is null && a?.Destroyed==true); }
   public static bool operator !=(GameObject? a,GameObject? b) => !(a==b);
   public override bool Equals(object? o) => ReferenceEquals(this,o); public override int GetHashCode() => base.GetHashCode();
  }
@@ -35,7 +40,7 @@ namespace UnityEngine.SceneManagement {
  public struct Scene { public int handle; public string name; public bool isLoaded; public bool IsValid() => handle!=0; }
  public static class SceneManager {
   public static Scene World=new(){handle=7,name="World",isLoaded=true};
-  public static int sceneCount=>1; public static Scene GetSceneAt(int index)=>World;
+  public static int sceneCount { get { NativeAccess.Touch();return 1; } } public static Scene GetSceneAt(int index) { NativeAccess.Touch();return World; }
  }
 }
 namespace TopiaForge.ModManager {
@@ -61,6 +66,12 @@ namespace TopiaForge.ModManager {
   /* registry */
  }
  /* owner service */
+ internal sealed class NetReader {
+  private readonly IEntityService inner;
+  internal NetReader(IEntityService inner) { this.inner=inner; }
+  /* net read */
+ }
+
  internal sealed class ModContext : IInternalWorldViewContext, IInternalNativeEntityReadContext {
   public IModLifetime Lifetime=new FakeModLifetime(); public IModLifetime WorldLifetime=new FakeModLifetime();
   public WorldReadiness? World=new(new WorldSceneIdentity(7,"World"),TransformState.Identity);
