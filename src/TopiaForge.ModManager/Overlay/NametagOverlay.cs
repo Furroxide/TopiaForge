@@ -16,6 +16,8 @@ namespace TopiaForge.ModManager
         private readonly TopiaForgeNametag?[] tags = new TopiaForgeNametag?[ScoreboardNametagFeed.Capacity];
         private UiHost? host;
         private TopiaForgeHudLayer? names;
+        private IPresenceNametagSource? frameSource;
+        private int frameVersion;
         private bool disposed;
 
         internal NametagOverlay(Func<IPresenceNametagSource?> source, Func<bool> visible)
@@ -27,7 +29,11 @@ namespace TopiaForge.ModManager
         internal void Tick()
         {
             if (disposed) return;
-            feed.Tick(source(), visible());
+            // A failed frame must never expose an old label through a newly sampled source.
+            frameSource = null;
+            var current = source();
+            var version = current?.NametagVersion ?? 0;
+            feed.Tick(current, visible());
             var any = false;
             for (var i = 0; i < feed.Active.Length; i++) any |= feed.Active[i];
             if (host == null && any) Build();
@@ -39,6 +45,8 @@ namespace TopiaForge.ModManager
                 if (!feed.Active[i]) continue;
                 tags[i]?.SetName(feed.Names[i]);
             }
+            frameVersion = version;
+            frameSource = current;
         }
 
         // The kit queries these after avatar interpolation, rather than retaining Update's pose.
@@ -55,7 +63,10 @@ namespace TopiaForge.ModManager
                 position = Vec3.Zero;
                 if (!Active || owner.disposed || !owner.visible()) return false;
                 var current = owner.source();
-                if (current == null || slot >= current.NametagCount || !current.TryGetNametag(slot, out var tag)) return false;
+                // Read the current interpolated pose only while Update's name still belongs to this roster.
+                if (current == null || !ReferenceEquals(current, owner.frameSource) || current.NametagVersion != owner.frameVersion
+                    || slot >= current.NametagCount || !current.TryGetNametag(slot, out var tag)
+                    || current.NametagVersion != owner.frameVersion) return false;
                 position = new Vec3(tag.Anchor.X, tag.Anchor.Y, tag.Anchor.Z);
                 return true;
             }
@@ -89,7 +100,7 @@ namespace TopiaForge.ModManager
         private void DropHost()
         {
             var previous = host;
-            host = null; names = null;
+            host = null; names = null; frameSource = null;
             if (previous != null) { previous.LayerLost -= Lost; previous.Dispose(); }
             Array.Clear(anchors, 0, anchors.Length);
             Array.Clear(tags, 0, tags.Length);
