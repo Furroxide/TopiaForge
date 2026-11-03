@@ -41,7 +41,11 @@ namespace TopiaForge.ModManager
         internal WorldViewLeases For(IInternalWorldViewRenderer renderer)
         {
             if (worlds.TryGetValue(renderer, out var value)) return value;
-            value = new WorldViewLeases(renderer, () => Local, (entity, player) =>
+            return CreateWorld(renderer);
+        }
+        private WorldViewLeases CreateWorld(IInternalWorldViewRenderer renderer)
+        {
+            var value = new WorldViewLeases(renderer, () => Local, (entity, player) =>
                 (!names.TryGetValue(entity, out var known) || known.Kind != 3 || ReferenceEquals(Resolve(known), entity))
                 && (services.Runtime.Realm == NetRealm.Offline || player == Local || TryName(entity, out _)),
                 entity => names.TryGetValue(entity, out var target) ? Resolve(target) : entity.IsAlive ? entity : null,
@@ -108,6 +112,8 @@ namespace TopiaForge.ModManager
                 if (retry >= .25f) { retry = 0; ApplyReceived(); }
                 return;
             }
+            var snapshot = services.Runtime.Control?.SessionSnapshot;
+            if (snapshot != null) RefreshRoster(snapshot);
             retry += deltaTime;
             if (retry >= .25f && names.Count != 0)
             { retry = 0; foreach (var world in worlds.Values) world.RefreshLocal(); }
@@ -117,21 +123,7 @@ namespace TopiaForge.ModManager
         {
             var snapshot = services.Runtime.Control?.SessionSnapshot;
             if (snapshot == null || channel == null) return;
-            if (session.IsValid && !session.Equals(snapshot.Id))
-            {
-                Reset(true);
-            }
-            session = snapshot.Id;
-            if (!ReferenceEquals(seenRoster, snapshot))
-            {
-                seenRoster = snapshot;
-                foreach (var player in admitted.ToArray())
-                    if (!snapshot.Participants.Any(p => p.Id.Value == player.Key && p.PlayerKey.Equals(player.Value)))
-                    { foreach (var world in worlds.Values) world.RemovePlayer(player.Key); admitted.Remove(player.Key); }
-                foreach (var id in deliveries.Keys.ToArray())
-                    if (!snapshot.TryGetParticipant(id, out _)) deliveries.Remove(id);
-                foreach (var player in snapshot.Participants) admitted[player.Id.Value] = player.PlayerKey;
-            }
+            RefreshRoster(snapshot);
             for (var index = 0; index < snapshot.Participants.Count; index++)
             {
                 var player = snapshot.Participants[index];
@@ -161,6 +153,43 @@ namespace TopiaForge.ModManager
                 }
             }
         }
+        private void RefreshRoster(MultiplayerSessionSnapshot snapshot)
+        {
+            if (session.IsValid && !session.Equals(snapshot.Id))
+            {
+                Reset(true);
+            }
+            session = snapshot.Id;
+            if (!ReferenceEquals(seenRoster, snapshot))
+            {
+                seenRoster = snapshot;
+                foreach (var player in admitted.ToArray())
+                    if (!snapshot.Participants.Any(p => p.Id.Value == player.Key && p.PlayerKey.Equals(player.Value)))
+                    { foreach (var world in worlds.Values) world.RemovePlayer(player.Key); admitted.Remove(player.Key); }
+                foreach (var id in deliveries.Keys.ToArray())
+                    if (!snapshot.TryGetParticipant(id, out _)) deliveries.Remove(id);
+                foreach (var player in snapshot.Participants) admitted[player.Id.Value] = player.PlayerKey;
+                // Refresh names before RefreshLocal resolves a retained root through its previous lifetime.
+                var namesChanged = false;
+                foreach (var entity in names.Keys.ToArray())
+                    if (names[entity].Kind == 3 && TryPlayerName(entity, out var current) && !names[entity].Equals(current))
+                    {
+                        names[entity] = current;
+                        namesChanged = true;
+                    }
+                // Quality-only or equivalent roster publications must not restart a backpressured baseline.
+                if (namesChanged)
+                    foreach (var delivery in deliveries.Values)
+                    {
+                        // A new begin supersedes partial wire snapshots; never reuse old fragments with new names.
+                        delivery.Pending = null;
+                        delivery.Bytes = null;
+                        delivery.Step = 0;
+                        delivery.Version = long.MinValue;
+                    }
+            }
+        }
+
         private ViewSnapshot Derive(string player)
         {
             if (binding == null || !binding.Renderer.IsAlive) return ViewSnapshot.Empty;
@@ -177,7 +206,16 @@ namespace TopiaForge.ModManager
             if (binding?.TryNameAuthored(entity, out var scene, out var id) == true)
             { target = new ViewTarget(1, scene, id); return true; }
             if (!services.TryCreateRef(entity, out var reference)) return false;
-            target = new ViewTarget(reference.Kind == InternalNetRefKind.Player ? (byte)3 : (byte)2, "", reference.Value!); return true;
+            if (reference.Kind == InternalNetRefKind.Player) return TryPlayerName(entity, out target);
+            target = new ViewTarget(2, "", reference.Value!); return true;
+        }
+        private bool TryPlayerName(IEntity entity, out ViewTarget target)
+        {
+            target = default;
+            if (!services.TryCreateRef(entity, out var reference) || reference.Kind != InternalNetRefKind.Player
+                || !services.TryResolveRef(reference, out var current) || !ReferenceEquals(current, entity)) return false;
+            target = new ViewTarget(3, "", reference.Value!);
+            return true;
         }
         private IEntity? Resolve(ViewTarget target)
         {
