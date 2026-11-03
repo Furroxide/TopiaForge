@@ -62,6 +62,7 @@ namespace TopiaForge.ModManager.Tests
                     source.X = 8; source.Name = "Replacement"; overlay.Tick();
                     Check(tags[0].Anchor.TryGetPosition(out var moved) && moved.X == 8 && tags[0].Name == "Replacement", "positions and names follow source changes");
                     FrameOrder(overlay, source, layer.Tags);
+                    RosterChanges(overlay, source, layer.Tags, value => current = value);
                     show = false; overlay.Tick(); Check(!layer.Shown && tags.All(tag => !tag.Anchor.TryGetPosition(out _)), "gameplay departure hides all tags");
                     show = true; current = null; overlay.Tick(); Check(!layer.Shown, "source loss hides layer");
                     current = source; overlay.Tick(); Check(UiHost.Created == 1 && layer.Shown, "return reuses pool");
@@ -113,14 +114,51 @@ namespace TopiaForge.ModManager.Tests
                     source.Count = 8;
                     Console.WriteLine("Nametag frame order: 3 current-pose projections; 1 render-time departure; production LateUpdate callbacks.");
                 }
+                private static void RosterChanges(NametagOverlay overlay, Source source, TopiaForgeNametagLayer layer, Action<Source> select)
+                {
+                    foreach (var change in new[]
+                    {
+                        (9, "Inserted", 20f, "insertion"),
+                        (7, "Retained", 30f, "removal"),
+                        (7, "Retained", 40f, "same-count replacement with the same name"),
+                        (7, "Renamed", 50f, "rename"),
+                    })
+                    {
+                        overlay.Tick();
+                        var previous = layer.Items[0].Name;
+                        source.Count = change.Item1; source.Name = change.Item2; source.X = change.Item3; source.Version++;
+                        layer.Tick();
+                        Check(!layer.Items[0].Visible, "roster " + change.Item4 + " between Update and LateUpdate hides stale names");
+                        Check(layer.Items[0].Name == previous, "a rejected anchor does not mutate captured text");
+                        overlay.Tick(); layer.Tick();
+                        Check(layer.Items[0].Visible && layer.Items[0].Name == change.Item2 && layer.Items[0].Projected.X == change.Item3,
+                            "the next Update binds current text and position after " + change.Item4);
+                    }
+                    overlay.Tick();
+                    var replacement = new Source { Count = source.Count, Name = source.Name, Version = source.Version, X = 90 };
+                    select(replacement); layer.Tick();
+                    Check(!layer.Items[0].Visible, "a different source with equal version and text cannot reuse the captured anchor");
+                    overlay.Tick(); layer.Tick();
+                    Check(layer.Items[0].Visible && layer.Items[0].Projected.X == 90, "the next Update binds the replacement source");
+                    select(source); overlay.Tick();
+                    source.ChangeVersionOnRead = true; layer.Tick();
+                    Check(!layer.Items[0].Visible, "a roster change during anchor lookup refuses the returned position");
+                    overlay.Tick(); layer.Tick();
+                    Check(layer.Items[0].Visible, "a later stable frame recovers after lookup-time change");
+                    Console.WriteLine("Nametag frame binding: four roster changes, equal-version source replacement and lookup-time change pass.");
+                }
                 private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
                 private sealed class Source : IPresenceNametagSource
                 {
                     public int Count = 8; public float X; public float Y = 2; public string Name = "Sam";
                     public int NametagCount => Count;
-                    public int NametagVersion => 0;
+                    public int Version; public bool ChangeVersionOnRead;
+                    public int NametagVersion => Version;
                     public bool TryGetNametag(int slot, out PresenceNametag tag)
-                    { tag = new PresenceNametag(Name, new TopiaForge.ModManager.Core.Multiplayer.NetVector3(X, Y, slot)); return true; }
+                    {
+                        if (ChangeVersionOnRead) { ChangeVersionOnRead = false; Version++; }
+                        tag = new PresenceNametag(Name, new TopiaForge.ModManager.Core.Multiplayer.NetVector3(X, Y, slot)); return true;
+                    }
                 }
             }
             """;
