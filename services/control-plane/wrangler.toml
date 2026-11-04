@@ -22,7 +22,15 @@ enabled = false
 
 # Hourly relay-spend measurement. Minute 7 gives the usage analytics time to settle.
 [triggers]
-crons = ["7 * * * *"]
+crons = ["7 * * * *", "*/5 * * * *"]
+
+[[durable_objects.bindings]]
+name = "ACTIVITY_SHARDS"
+class_name = "ActivityShard"
+
+[[durable_objects.bindings]]
+name = "ACTIVITY_SNAPSHOTS"
+class_name = "ActivitySnapshot"
 
 [[durable_objects.bindings]]
 name = "HOST_SESSIONS"
@@ -48,6 +56,10 @@ class_name = "RateLimiter"
 tag = "v1"
 new_sqlite_classes = ["HostSession", "DirectoryShard", "InviteShard", "SpendGuard", "RateLimiter"]
 
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["ActivityShard", "ActivitySnapshot"]
+
 # RELAY_ADDRESS_RANGES must cover the ranges Realtime TURN allocates relay addresses from, and as little else as it can:
 # a relay-only side's candidates must lie inside it. It is Cloudflare's published lists (cloudflare.com/ips-v4, then
 # ips-v6) with 104.16.0.0/13 and 104.24.0.0/14 widened to Cloudflare's registered 104.16.0.0/12: on 2026-10-16 staging
@@ -70,6 +82,14 @@ routes = [{ pattern = "mp-staging.topiaforge.dev", custom_domain = true }]
 
 [env.staging.observability]
 enabled = false
+
+[[env.staging.durable_objects.bindings]]
+name = "ACTIVITY_SHARDS"
+class_name = "ActivityShard"
+
+[[env.staging.durable_objects.bindings]]
+name = "ACTIVITY_SNAPSHOTS"
+class_name = "ActivitySnapshot"
 
 [[env.staging.durable_objects.bindings]]
 name = "HOST_SESSIONS"
@@ -108,6 +128,14 @@ routes = [{ pattern = "mp.topiaforge.dev", custom_domain = true }]
 
 [env.production.observability]
 enabled = false
+
+[[env.production.durable_objects.bindings]]
+name = "ACTIVITY_SHARDS"
+class_name = "ActivityShard"
+
+[[env.production.durable_objects.bindings]]
+name = "ACTIVITY_SNAPSHOTS"
+class_name = "ActivitySnapshot"
 
 [[env.production.durable_objects.bindings]]
 name = "HOST_SESSIONS"

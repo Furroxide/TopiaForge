@@ -8,8 +8,16 @@ import type { HostSession } from "./objects/host-session";
 import type { InviteShard } from "./objects/invite-shard";
 import type { RateLimiter } from "./objects/rate-limiter";
 import type { SpendGuard } from "./objects/spend-guard";
+import type { ActivityShard } from "./objects/activity-shard";
+import type { ActivitySnapshot } from "./objects/activity-snapshot";
 
 export interface Env {
+  readonly ACTIVITY_SHARDS: DurableObjectNamespace<ActivityShard>;
+  readonly ACTIVITY_SNAPSHOTS: DurableObjectNamespace<ActivitySnapshot>;
+  /** Dedicated read-only aggregate credential, never ADMIN_TOKEN. */
+  readonly MONITOR_ACTIVITY_TOKEN?: string;
+  /** Whitespace-separated synthetic signing-key hashes, configured before enabling monitoring. */
+  readonly MONITOR_SERVER_IDS?: string;
   readonly HOST_SESSIONS: DurableObjectNamespace<HostSession>;
   readonly DIRECTORY_SHARDS: DurableObjectNamespace<DirectoryShard>;
   readonly INVITE_SHARDS: DurableObjectNamespace<InviteShard>;
