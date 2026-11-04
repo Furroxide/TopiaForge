@@ -115,6 +115,8 @@ namespace TopiaForge.ModManager
 
         public void Dispose()
         {
+            // A pending menu callback must not keep a destroyed tab's controls alive.
+            foreach (var tab in tabs) if (tab is GamemodesTab menu) menu.OnHidden();
             multiplayerGuard.Run(MultiplayerOverlayFrame.VoiceTeardownStage, StopVoiceChat);
             multiplayerGuard.Run(MultiplayerOverlayFrame.TeardownStage, () =>
             {
