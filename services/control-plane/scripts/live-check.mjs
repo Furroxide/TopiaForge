@@ -34,7 +34,7 @@ function check(name, ok, detail = "") {
   results.push({ name, ok });
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` (${detail})` : ""}`);
 }
-const shape = (token) => (typeof token === "string" ? `${token.slice(0, 5)}… ${token.length} chars` : String(token));
+const shape = (token) => (typeof token === "string" ? `${token.length} chars` : String(token));
 
 // ---- canonical JSON (MultiplayerLiveSessions.md section 2; ASCII text only here) ----
 function canonical(value) {
@@ -202,7 +202,7 @@ try {
     await a.bind(); await b.bind();
     try {
       const ra = await a.allocate(); const rb = await b.allocate();
-      check("relay addresses are IPv4", ra.family === 4 && rb.family === 4, `${ra.address}:${ra.port}, ${rb.address}:${rb.port}`);
+      check("relay addresses are IPv4", ra.family === 4 && rb.family === 4, "two IPv4 relay allocations");
       check("relay addresses lie inside RELAY_ADDRESS_RANGES", inRanges(ra.address, ranges) && inRanges(rb.address, ranges));
       check("relay ports lie in 9024-65535", ra.port >= 9024 && rb.port >= 9024);
       check("permissions granted", (await a.permit(rb)) && (await b.permit(ra)));

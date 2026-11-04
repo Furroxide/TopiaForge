@@ -23,6 +23,65 @@ const snapshots = () =>
 const monitorToken = "test-only-activity-token-not-a-real-secret";
 
 describe("activity leases and publication", () => {
+  it("waits fifteen minutes after the last shard finishes collecting", async () => {
+    const snapshot = snapshots();
+    await snapshot.collect();
+    scenario.clock.advance(300);
+    await runInDurableObject(snapshot, async (instance) => {
+      const holder = instance as unknown as { env: typeof env };
+      const original = holder.env;
+      let release!: () => void, arrived!: () => void;
+      const ready = new Promise<void>((r) => {
+          arrived = r;
+        }),
+        gate = new Promise<void>((r) => {
+          release = r;
+        });
+      holder.env = {
+        ...original,
+        ACTIVITY_SHARDS: {
+          idFromName() {
+            return "test";
+          },
+          get() {
+            return {
+              async totals() {
+                arrived();
+                await gate;
+                return { sessions: 1, players: 2 };
+              },
+            };
+          },
+        },
+      } as unknown as typeof env;
+      try {
+        const collecting = instance.collect();
+        await ready;
+        scenario.clock.advance(300);
+        release();
+        await collecting;
+        scenario.clock.advance(600);
+        const released = instance.released();
+        assertNoPrematureSnapshot(
+          released,
+          Math.floor((scenario.clock.now() / 1000 - 900) / 300) * 300,
+        );
+        scenario.clock.advance(300);
+        expect(instance.released()?.state).toBe("available");
+      } finally {
+        holder.env = original;
+        release();
+      }
+    });
+  });
+  it("does not release stale snapshots when collection stops", async () => {
+    const snapshot = snapshots();
+    await snapshot.collect();
+    scenario.clock.advance(300);
+    await snapshot.collect();
+    scenario.clock.advance(86401);
+    expect(await snapshot.released()).toBeNull();
+  });
   it("replaces duplicate leases, rejects reordered heartbeats, honors ends and expires abandoned hosts", async () => {
     const s = shard(),
       serverId = "0".repeat(64),
@@ -304,3 +363,13 @@ describe("activity leases and publication", () => {
     expect(await snapshots().released()).toBeNull();
   });
 });
+function assertNoPrematureSnapshot(
+  snapshot: { sampledAt: number } | null,
+  latestPrematureSlot: number,
+): void {
+  // An older already-released warmup row is permitted, but the delayed
+  // collection must remain private until 900 seconds after completion.
+  expect(snapshot === null || snapshot.sampledAt < latestPrematureSlot).toBe(
+    true,
+  );
+}

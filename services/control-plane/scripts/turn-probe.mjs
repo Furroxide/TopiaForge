@@ -39,16 +39,45 @@ function parseStun(buffer) {
     return null;
   const type = buffer.readUInt16BE(0),
     length = buffer.readUInt16BE(2);
-  if (length % 4 || length + 20 > buffer.length) return null;
+  if (length % 4 || length + 20 !== buffer.length) return null;
   const attributes = new Map();
+  let integrityOffset = null,
+    integrity = null;
   for (let at = 20; at + 4 <= 20 + length; ) {
     const attrType = buffer.readUInt16BE(at),
       size = buffer.readUInt16BE(at + 2);
     if (at + 4 + size > 20 + length) return null;
-    attributes.set(attrType, buffer.subarray(at + 4, at + 4 + size));
+    if (integrityOffset === null) {
+      if (attributes.has(attrType)) return null;
+      attributes.set(attrType, buffer.subarray(at + 4, at + 4 + size));
+      if (attrType === 0x0008) {
+        if (size !== 20) return null;
+        integrityOffset = at;
+        integrity = buffer.subarray(at + 4, at + 24);
+      }
+    } else if (attrType === 0x0008) return null;
+    // RFC8489: attributes after MESSAGE-INTEGRITY cannot affect authenticated
+    // semantics. In particular, never overwrite XOR-RELAYED-ADDRESS after it.
     at += 4 + size + ((4 - (size % 4)) % 4);
   }
-  return { type, transaction: buffer.subarray(8, 20), attributes };
+  return {
+    type,
+    transaction: buffer.subarray(8, 20),
+    attributes,
+    integrityOffset,
+    integrity,
+  };
+}
+function authenticResponse(packet, parsed, key) {
+  if (parsed.integrityOffset === null || parsed.integrity === null)
+    return false;
+  const authenticated = Buffer.from(packet.subarray(0, parsed.integrityOffset));
+  authenticated.writeUInt16BE(parsed.integrityOffset + 4, 2);
+  const expected = crypto
+    .createHmac("sha1", key)
+    .update(authenticated)
+    .digest();
+  return crypto.timingSafeEqual(expected, parsed.integrity);
 }
 function xorAddress(value, transaction) {
   if (!value || value.length < 8) throw new Error("Malformed relay address");
@@ -132,7 +161,11 @@ export class TurnAllocation {
         return;
       }
       const waiter = this.pending.get(parsed.transaction.toString("hex"));
-      if (waiter) waiter.resolve(parsed);
+      if (
+        waiter &&
+        (!waiter.key || authenticResponse(message, parsed, waiter.key))
+      )
+        waiter.resolve(parsed);
     });
   }
   bind(address = "0.0.0.0") {
@@ -190,6 +223,7 @@ export class TurnAllocation {
       this.pending.set(id, {
         resolve: (parsed) => finish(resolve, parsed),
         reject: fail,
+        key: signed && this.key ? Buffer.from(this.key) : null,
       });
       send();
     });

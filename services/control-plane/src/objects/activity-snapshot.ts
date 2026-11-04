@@ -63,17 +63,20 @@ export class ActivitySnapshot extends DurableObject<Env> {
       }
     }
     // Suppression occurs before storage and publication, and each time slot is immutable.
+    // Shard RPCs may stall: the privacy delay starts after the last result,
+    // never from the earlier nominal sample time.
+    const completedAt = nowSeconds();
     this.ctx.storage.sql.exec(
       "INSERT OR IGNORE INTO snapshot VALUES (?,?,?,?,?)",
       slot,
-      now,
+      completedAt,
       state,
       sessions,
       players,
     );
     this.ctx.storage.sql.exec(
       "DELETE FROM snapshot WHERE sampled_at < ?",
-      now - 86400,
+      completedAt - 86400,
     );
   }
   released(): ActivitySnapshotValue | null {
@@ -83,7 +86,11 @@ export class ActivitySnapshot extends DurableObject<Env> {
         state: ActivitySnapshotValue["state"];
         sessions: number | null;
         players: number | null;
-      }>("SELECT * FROM snapshot WHERE collected_at <= ? ORDER BY sampled_at DESC LIMIT 1", nowSeconds() - 900)
+      }>(
+        "SELECT * FROM snapshot WHERE collected_at <= ? AND collected_at >= ? ORDER BY sampled_at DESC LIMIT 1",
+        nowSeconds() - 900,
+        nowSeconds() - 86400,
+      )
       .toArray()[0];
     return row
       ? {
