@@ -13,6 +13,8 @@ import * as invites from "./api/invites";
 import * as servers from "./api/servers";
 import * as sessions from "./api/sessions";
 import { status } from "./api/status";
+import { activity } from "./api/activity";
+import { ACTIVITY_CRON } from "./activity";
 import type { Env } from "./env";
 
 export { DirectoryShard } from "./objects/directory-shard";
@@ -20,6 +22,8 @@ export { HostSession } from "./objects/host-session";
 export { InviteShard } from "./objects/invite-shard";
 export { RateLimiter } from "./objects/rate-limiter";
 export { SpendGuard } from "./objects/spend-guard";
+export { ActivityShard } from "./objects/activity-shard";
+export { ActivitySnapshot } from "./objects/activity-snapshot";
 
 type Handler = (context: RequestContext, ...parameters: string[]) => Promise<Response>;
 
@@ -34,6 +38,7 @@ const ID = "([0-9a-f]{64})";
 
 export const ROUTES: readonly Route[] = [
   { pattern: /^\/v1\/status$/, methods: { GET: status } },
+  { pattern: /^\/v1\/monitor\/activity$/, methods: { GET: activity } },
   { pattern: /^\/v1\/hosts\/challenge$/, methods: { POST: hosts.challenge } },
   { pattern: /^\/v1\/hosts$/, methods: { POST: hosts.register } },
   { pattern: new RegExp(`^/v1/hosts/${ID}$`), methods: { GET: hosts.hostView, DELETE: hosts.endHost } },
@@ -83,8 +88,12 @@ export default {
     return handle(request, env);
   },
 
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const guard = env.SPEND_GUARD.get(env.SPEND_GUARD.idFromName("spend-guard"));
-    ctx.waitUntil(guard.measure().then(() => undefined));
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if(controller.cron===ACTIVITY_CRON) {
+      ctx.waitUntil(env.ACTIVITY_SNAPSHOTS.get(env.ACTIVITY_SNAPSHOTS.idFromName("snapshots")).collect());
+    } else if(controller.cron==="7 * * * *") {
+      const guard = env.SPEND_GUARD.get(env.SPEND_GUARD.idFromName("spend-guard"));
+      ctx.waitUntil(guard.measure().then(() => undefined));
+    }
   },
 } satisfies ExportedHandler<Env>;

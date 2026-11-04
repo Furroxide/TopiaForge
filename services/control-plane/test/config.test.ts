@@ -8,6 +8,8 @@ import { inRanges, parseIp } from "../src/shared/ip";
 const CLASSES = ["HostSession", "DirectoryShard", "InviteShard", "SpendGuard", "RateLimiter"];
 const BINDINGS: Record<string, string> = {
   HOST_SESSIONS: "HostSession",
+  ACTIVITY_SHARDS: "ActivityShard",
+  ACTIVITY_SNAPSHOTS: "ActivitySnapshot",
   DIRECTORY_SHARDS: "DirectoryShard",
   INVITE_SHARDS: "InviteShard",
   SPEND_GUARD: "SpendGuard",
@@ -53,8 +55,9 @@ describe("wrangler.toml", () => {
 
   it("declares every Durable Object class once, as SQLite-backed, in one migration", () => {
     expect(wranglerToml).toContain(`new_sqlite_classes = [${CLASSES.map((name) => `"${name}"`).join(", ")}]`);
-    expect(wranglerToml.match(/^\[\[migrations\]\]$/gm)).toHaveLength(1);
-    for (const name of CLASSES) expect(typeof (worker as Record<string, unknown>)[name]).toBe("function");
+    expect(wranglerToml.match(/^\[\[migrations\]\]$/gm)).toHaveLength(2);
+    expect(wranglerToml).toContain('new_sqlite_classes = ["ActivityShard", "ActivitySnapshot"]');
+    for (const name of [...CLASSES,"ActivityShard","ActivitySnapshot"]) expect(typeof (worker as Record<string, unknown>)[name]).toBe("function");
   });
 
   it("binds the same objects and the same vars in every environment, apart from its name", () => {
@@ -103,6 +106,6 @@ describe("wrangler.toml", () => {
     for (const secret of ["SERVICE_KEY", "ADMIN_TOKEN", "TURN_KEY_ID", "TURN_KEY_API_TOKEN", "ANALYTICS_API_TOKEN", "ANALYTICS_ACCOUNT_ID", "TURN_DAILY_CAP_GB", "TURN_TICKET_CAP_GB"]) {
       expect(wranglerToml).not.toMatch(new RegExp(`^${secret}\\s*=`, "m"));
     }
-    expect(wranglerToml).toContain('crons = ["7 * * * *"]');
+    expect(wranglerToml).toContain('crons = ["7 * * * *", "*/5 * * * *"]');
   });
 });

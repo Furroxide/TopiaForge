@@ -15,6 +15,7 @@
  */
 import { DurableObject } from "cloudflare:workers";
 import { readConfig } from "../config";
+import { ActivityReporter } from "../activity";
 import type { Env } from "../env";
 import type { ErrorCode } from "../api/http";
 import { stringify } from "../shared/canonical-json";
@@ -117,12 +118,14 @@ const fail = <T>(error: ErrorCode, retryAfter?: number): Outcome<T> =>
 
 export class HostSession extends DurableObject<Env> {
   private readonly store: HostStore;
+  private readonly activity: ActivityReporter;
   private queue: Promise<unknown> = Promise.resolve();
   private frames: Promise<void> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.store = new HostStore(ctx.storage.sql);
+    this.activity = new ActivityReporter(ctx,env);
   }
 
   register(input: Registration): Promise<Outcome<SessionStatus & { readonly invite: InviteRow }>> {
@@ -358,6 +361,7 @@ export class HostSession extends DurableObject<Env> {
   }
 
   override async alarm(): Promise<void> {
+    await this.activity.flush().catch(() => undefined);
     await this.serial(async () => {
       const now = nowSeconds();
       const session = this.store.session();
@@ -455,6 +459,7 @@ export class HostSession extends DurableObject<Env> {
       directory = (await this.directory(wanted).upsert(session.serverId, body, session.expiresAt)) ? wanted : null;
     }
     this.store.saveSession({ ...session, directory });
+    this.activity.record(session);
     closeStaleHosts(this.ctx, session.tokenHash);
     return directory !== null;
   }
@@ -478,6 +483,7 @@ export class HostSession extends DurableObject<Env> {
     for (const code of this.store.allInviteCodes()) await this.invites(code).revoke(code, session.serverId);
     closeRoom(this.ctx, CLOSE.sessionEnded, reason);
     this.store.deleteSession();
+    this.activity.record(session,true);
     await this.tidy();
   }
 
@@ -487,7 +493,7 @@ export class HostSession extends DurableObject<Env> {
     this.store.purgeExpired(now);
     expirePeers(this.ctx, now);
     await this.enforceAdmissions();
-    if (this.store.isEmpty() && !this.ctx.getWebSockets().some(isOpen)) {
+    if (this.store.isEmpty() && this.activity.nextDue()===null && !this.ctx.getWebSockets().some(isOpen)) {
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
       this.store.wiped();
@@ -499,7 +505,7 @@ export class HostSession extends DurableObject<Env> {
   private async scheduleAlarm(): Promise<void> {
     const due = this.store.nextDue();
     const peers = expirePeers(this.ctx, nowSeconds());
-    const next = [due, peers].filter((value): value is number => value !== null);
+    const next = [due, peers, this.activity.nextDue()].filter((value): value is number => value !== null);
     if (next.length === 0) {
       await this.ctx.storage.deleteAlarm();
       return;

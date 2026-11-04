@@ -9,7 +9,7 @@
     "node": ">=24.16.0"
   },
   "scripts": {
-    "test": "tsc --noEmit && vitest run",
+    "test": "tsc --noEmit && vitest run && vitest run --config vitest.activity.config.ts",
     "typecheck": "tsc --noEmit",
     "dry-run": "wrangler deploy --dry-run --outdir dist/staging --env staging && wrangler deploy --dry-run --outdir dist/production --env production"
   },

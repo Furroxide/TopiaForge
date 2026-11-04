@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 
 // Every secret below is a test-only placeholder. Real values are set out of band with `wrangler secret put`
 // (docs/internal/ControlPlaneOperations.md); nothing here reaches a deployment.
-export default defineConfig({
+export function makeConfig(activity = false) { return defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.toml" },
@@ -20,14 +20,20 @@ export default defineConfig({
           TURN_DAILY_CAP_GB: "2",
           TURN_TICKET_CAP_GB: "1",
           FLAG_CACHE_SECONDS: "0",
+          ...(activity ? {
+            MONITOR_ACTIVITY_TOKEN: "test-only-activity-token-not-a-real-secret",
+            MONITOR_SERVER_IDS: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          } : {}),
         },
       },
     }),
   ],
   test: {
-    include: ["test/**/*.test.ts"],
+    include: activity ? ["test/activity.test.ts"] : ["test/**/*.test.ts"],
+    exclude: activity ? [] : ["test/activity.test.ts"],
     // Above the 5-second event timers in test/support/sockets.ts, so a frame or a close that never arrives
     // fails saying which, instead of as a bare test timeout, and a slow runner does not fail a correct test.
     testTimeout: 20_000,
   },
-});
+}); }
+export default makeConfig();
