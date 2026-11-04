@@ -307,6 +307,13 @@ namespace TopiaForge.ModManager
             MultiplayerSpawnRecord? record;
             try
             {
+                // Replay the provider's canonical values, never the untrusted request it may have coerced.
+                if (spawn.Handler is IInternalReplicaCommands commands)
+                {
+                    var canonical = commands.Describe(entity);
+                    if (canonical.Kind != spawn.Kind) throw new InvalidOperationException("A spawn cannot change entity kind.");
+                    description = canonical;
+                }
                 record = ledger.Record(entity, new MultiplayerSpawnDescription(spawn.ModId, new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Participant),
                     MultiplayerSpawnSource.SdkSpawn, spawn.Kind, null, spawn.Transform, description), proxy, 0, proxy.Slot);
             }

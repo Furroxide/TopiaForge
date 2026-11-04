@@ -136,3 +136,20 @@ Qualify the real Robot, Copbot and MuniciPal bodies, imported-map pathfinding, n
 colliders, replicated speed animation and zero steady-state allocation in the game. No physical-device or two-machine
 result follows from controlled adapters. Per-player optional-mod availability and canonical input tick constraints
 remain unchanged. CreatorContent, Sandbox, Worlds and Zombies integration is separate from this RobotKit contract.
+
+## Guest native-brain authority
+
+Guest-origin shared spawns are canonicalized to Dormant with native talk disabled before native construction.
+The canonical request, ledger and replay descriptions retain those values. Brain commands requesting Autonomous
+and interaction commands enabling native talk return `NotAuthoritative` before invoking native effects. This applies
+to guest-local calls and host execution of forwarded requests, including callbacks through a shared provider.
+Dormant and non-AI controls retain their existing ownership, framing, world, lifetime and quota checks.
+
+The internal command seam derives caller origin from the runtime realm, the existing remote-spawn scope and the
+current forwarded participant scope, including still-active synchronous ancestors when a nested command or UI
+activation replaces the visible intent. Unlike mod-filtered `CurrentIntent`, this authority bit crosses consuming-mod
+and provider boundaries; no payload supplies it. Ancestors follow the existing owner-thread, realm-epoch and LIFO
+scope rules; the mod-visible record and existing async/deferred capture rules remain unchanged. Validated remote
+window dismissals enter forwarded authority just like control replies; a host's own dismissal remains local. It describes the current call, not permanent entity ownership.
+Host-local, offline and trusted server calls can still start Autonomous brains and native talk. Replicas remain
+Dormant with native talk disabled, including when applying host updates. The remote spawn wire format is unchanged.

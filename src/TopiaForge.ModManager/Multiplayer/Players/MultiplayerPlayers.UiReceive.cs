@@ -123,8 +123,11 @@ namespace TopiaForge.ModManager
                     // Revisions retire controls, not the player's choice to close the same window. A content update
                     // can cross that dismissal in flight; accept its earlier revision, never an unseen future one.
                     if (revision == 0 || revision > surface.Revision) return false;
-                    try { surface.Hide(); }
-                    catch (Exception exception) { ReportCallback(context, "window dismissal", exception); }
+                    using (runtime.Intents.EnterForwarded(context.Mod, IntentSource.UiCallback, sender.Value))
+                    {
+                        try { surface.Hide(); }
+                        catch (Exception exception) { ReportCallback(context, "window dismissal", exception); }
+                    }
                     return true;
                 }
                 if (surface.Revision != revision) return false;
