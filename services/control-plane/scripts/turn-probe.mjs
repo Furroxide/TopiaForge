@@ -137,11 +137,11 @@ export class TurnAllocation {
     this.socket.on("message", (message, sender) => {
       if (
         sender.address !== this.server.address ||
-        sender.port !== this.server.port ||
-        this.received.length >= 64
+        sender.port !== this.server.port
       )
         return;
       if (message.length >= 4 && message[0] >= 0x40 && message[0] <= 0x4f) {
+        if (this.received.length >= 64) return;
         if (message.readUInt16BE(2) > message.length - 4) return;
         this.received.push({
           kind: "channel",
@@ -154,6 +154,7 @@ export class TurnAllocation {
       if (!parsed) return;
       if (parsed.type === 0x0017) {
         // Data indication
+        if (this.received.length >= 64) return;
         this.received.push({
           kind: "indication",
           data: parsed.attributes.get(0x0013)?.toString() ?? "",

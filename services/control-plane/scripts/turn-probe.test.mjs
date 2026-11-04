@@ -14,10 +14,10 @@ function attribute(type, value) {
     Buffer.alloc((4 - (value.length % 4)) % 4),
   ]);
 }
-function signedReply(transaction, key, before = [], after = []) {
+function signedReply(transaction, key, before = [], after = [], type = 0x0108) {
   const body = Buffer.concat(before),
     header = Buffer.alloc(20);
-  header.writeUInt16BE(0x0108);
+  header.writeUInt16BE(type);
   header.writeUInt16BE(body.length + 24, 2);
   header.writeUInt32BE(0x2112a442, 4);
   transaction.copy(header, 8);
@@ -45,6 +45,55 @@ function fixtureAllocation() {
   a.key = Buffer.alloc(16, 7);
   return a;
 }
+
+test("a full application buffer preserves authenticated permission, channel and release replies", async () => {
+  const a = fixtureAllocation(),
+    sender = { address: a.server.address, port: a.server.port },
+    channel = Buffer.from([0x40, 0, 0, 1, 0x61]),
+    data = attribute(0x0013, Buffer.from("b")),
+    indication = Buffer.alloc(20);
+  indication.writeUInt16BE(0x0017);
+  indication.writeUInt16BE(data.length, 2);
+  indication.writeUInt32BE(0x2112a442, 4);
+  const frame = Buffer.concat([indication, data]);
+  const requests = [];
+  a.socket.send = (bytes) => {
+    const type = bytes.readUInt16BE(0);
+    requests.push(type);
+    a.socket.emit(
+      "message",
+      signedReply(bytes.subarray(8, 20), a.key, [], [], type | 0x0100),
+      sender,
+    );
+  };
+  let permitted = null;
+  for (let i = 0; i < 66; i++)
+    a.socket.emit("message", i % 2 ? frame : channel, sender);
+  assert.equal(a.received.length, 64);
+  const blockedByOldCap = a
+    .permit({ address: "127.0.0.1", port: 20000 })
+    .then((value) => {
+      permitted = value;
+    });
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(permitted, true);
+    assert.equal(
+      await a.channel(0x4000, { address: "127.0.0.1", port: 20000 }),
+      true,
+    );
+    a.bound = true;
+    await a.release();
+    assert.deepEqual(requests, [0x0008, 0x0009, 0x0004]);
+    assert.equal(a.pending.size, 0);
+    assert.equal(a.received.length, 64);
+    assert.equal(a.closed, true);
+  } finally {
+    a.bound = false;
+    await a.release();
+    await blockedByOldCap.catch(() => {});
+  }
+});
 
 test("authenticated response validation accepts the independent RFC 5769 IPv4 response", async () => {
   // Published data vector and short-term key, RFC5769 section2.2.
