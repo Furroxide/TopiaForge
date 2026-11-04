@@ -11,23 +11,25 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class GamemodeSessionOrchestrator
     {
+        private MenuLoadPresentation? menuPresentation;
+        internal MenuLoadPresentation MenuPresentation => menuPresentation ??= new MenuLoadPresentation(dispatcher, () => !shuttingDown);
         /// <summary>
         /// Ends the session and loads the main menu. A joined player's session is the host's world (WS3.8), which this game
         /// cannot keep alone, so its own request to go to the main menu leaves the joined session first, and the menu loads
         /// as the session follower's, which the multiplayer authority policy allows while this game is joined.
         /// </summary>
         internal Task<OperationResult<bool>> ReturnToMainMenuAsync(string? sessionId = null, CancellationToken cancellationToken = default, string? requestedId = null) =>
-            ReplaceWorldAsync(sessionId, cancellationToken, requestedId, followed: false, environment.LoadMainMenuAsync);
+            ReplaceWorldAsync(sessionId, cancellationToken, requestedId, followed: false, environment.LoadMainMenuAsync, showMenuNotice: true);
 
         /// <summary>
         /// Loads the main menu for the session follower: after this game left a joined session, or when the host itself is
         /// at the main menu. It ends whatever session runs, as a return to the menu does, and publishes no launch outcome.
         /// </summary>
         internal Task<OperationResult<bool>> FollowMainMenuAsync(CancellationToken cancellationToken = default) =>
-            ReplaceWorldAsync(null, cancellationToken, null, followed: true, environment.LoadMainMenuAsync);
+            ReplaceWorldAsync(null, cancellationToken, null, followed: true, environment.LoadMainMenuAsync, showMenuNotice: true);
 
         private Task<OperationResult<bool>> ReplaceWorldAsync(string? sessionId, CancellationToken cancellationToken, string? requestedId,
-            bool followed, Func<IInternalSceneTransitionService, CancellationToken, Task<OperationResult<bool>>> load)
+            bool followed, Func<IInternalSceneTransitionService, CancellationToken, Task<OperationResult<bool>>> load, bool showMenuNotice = false)
         {
             var completion = Completion();
             var requestId = requestedId ?? Guid.NewGuid().ToString("N");
@@ -62,10 +64,11 @@ namespace TopiaForge.ModManager
                     Finish(completion, requestId, followed, Failure(reserved));
                     return;
                 }
+                var notice = showMenuNotice ? MenuPresentation.Begin(requestId) : null;
                 if (!followed)
                     Publish(Progress, new LaunchProgress(requestId, NextSequence(), current == null ? "idle" : "stopping",
                         current?.Identity.SessionId, nativeBusy: true));
-                RunDriver(() => MainMenuAsync(current, lease!, reservation, owner, requestId, cancellationToken, completion, followed, load), followed: follow);
+                RunDriver(() => MainMenuAsync(current, lease!, reservation, owner, requestId, cancellationToken, completion, followed, load, notice), followed: follow);
             });
             return completion.Task;
         }
@@ -73,7 +76,7 @@ namespace TopiaForge.ModManager
         private async Task<bool> MainMenuAsync(SessionRecord? previous, SessionOperationLease lease,
             INativeTransitionReservation reservation, string owner, string requestId, CancellationToken cancellationToken,
             TaskCompletionSource<OperationResult<bool>> completion, bool followed,
-            Func<IInternalSceneTransitionService, CancellationToken, Task<OperationResult<bool>>> load)
+            Func<IInternalSceneTransitionService, CancellationToken, Task<OperationResult<bool>>> load, MenuLoadPresentation.Attempt? notice)
         {
             var result = OperationResult<bool>.Success(true);
             var failures = new List<Exception>();
@@ -92,7 +95,7 @@ namespace TopiaForge.ModManager
                 if (shuttingDown) cancellation.Cancel();
                 cancellation.Token.ThrowIfCancellationRequested();
                 using (var grant = reservation.BorrowFor(owner, requestId))
-                    result = await dispatcher.InvokeCallbackAsync(() => load(grant.SceneTransitions, cancellation.Token));
+                    result = await dispatcher.InvokeCallbackAsync(() => load(notice == null ? grant.SceneTransitions : MenuPresentation.ObserveTransitions(grant.SceneTransitions, notice), cancellation.Token));
             }
             catch (Exception error)
             {
@@ -120,6 +123,7 @@ namespace TopiaForge.ModManager
                 Publish(Progress, new LaunchProgress(requestId, NextSequence(), PhaseName(lifecycle.Current.Phase),
                     current?.Identity.SessionId, native.IsSceneBusy));
             lifecycle.Release(lease);
+            if (notice != null) MenuPresentation.Complete(notice, result);
             Finish(completion, requestId, followed, result);
             return result.Succeeded;
         }

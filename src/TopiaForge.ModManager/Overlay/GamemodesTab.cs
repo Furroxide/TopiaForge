@@ -7,17 +7,27 @@ using TopiaForge.Mods.UnityUi;
 namespace TopiaForge.ModManager
 {
     /// <summary>Policy-permitted target choices, durable repair, and live resolver admission.</summary>
-    internal sealed class GamemodesTab : IManagerTab
+    internal sealed class GamemodesTab : IManagerTab, IManagerLiveTab
     {
         private readonly Dictionary<string, LaunchRequest?> drafts = new Dictionary<string, LaunchRequest?>(StringComparer.OrdinalIgnoreCase);
+        private readonly MenuNoticeBinding menuBinding = new MenuNoticeBinding();
+        private TopiaForgeModManagerPlugin? plugin;
+        private TopiaForgeLabel? menuNotice;
+        private TopiaForgeButton? menuButton;
+        private object? currentBuild;
         public string Title => "GAMEMODES";
         public void Build(TopiaForgeContainer content, ManagerTabContext context)
         {
+            OnHidden();
+            plugin = context.Plugin;
+            var build = new object();
+            currentBuild = build;
             content.Label("LAUNCH TARGETS", TopiaForgeTextStyle.Display).FixedHeight(34f);
             content.Label("Choose a target and a permitted world. Launch completes when gameplay is ready.",
                 TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).FixedHeight(30f);
             var session = context.Plugin.GetSessionService()?.Current;
             if (session != null) content.Label("Session: " + session.Phase, TopiaForgeTextStyle.Caption).FixedHeight(24f);
+            menuNotice = content.Label(string.Empty, TopiaForgeTextStyle.Body).PlainText();
             var saved = context.Plugin.ReadLaunchSelection();
             var remembered = context.Plugin.ResolveRememberedSelection();
             var scroll = content.Scroll(TopiaForgeGap.Sm);
@@ -48,12 +58,35 @@ namespace TopiaForge.ModManager
                 drafts.Clear(); context.SetStatus("Main Menu saved."); context.Refresh();
             }).FixedHeight(TopiaForgeTokens.ControlHeight);
             saveMenu.SetEnabled(context.Plugin.CanSaveState);
-            menu.Button("MAIN MENU", async () =>
+            menuButton = menu.Button("MAIN MENU", async () =>
             {
-                var (ok, message) = await context.Plugin.ReturnToMainMenu();
+                if (!ReferenceEquals(currentBuild, build) || !ReferenceEquals(plugin, context.Plugin)) return;
+                var owner = context.Plugin.MenuNoticeOwner;
+                menuNotice?.SetText(MenuLoadPresentation.OpeningText);
+                var pending = context.Plugin.ReturnToMainMenu();
+                var presentation = context.Plugin.MenuNotice;
+                var attempt = presentation?.CurrentAttempt;
+                Tick();
+                var (ok, message) = await pending;
+                if (!ReferenceEquals(plugin, context.Plugin)
+                    || !MenuNoticeBinding.CanFinish(currentBuild, build, context.Plugin.MenuNoticeOwner, owner, context.Plugin.MenuNotice, presentation, attempt)) return;
+                menuNotice?.SetText(message);
                 context.SetStatus(message);
-                if (ok) context.Close(); else TopiaForgeToasts.Show(message, TopiaForgeTone.Danger, 5f);
-            }).FixedHeight(TopiaForgeTokens.ControlHeight);
+                if (ok) context.Close(); else TopiaForgeToasts.ShowPlain(message, TopiaForgeTone.Danger, 5f);
+            });
+            menuButton.FixedHeight(TopiaForgeTokens.ControlHeight);
+            Tick();
+        }
+        public void Tick()
+        {
+            if (!menuBinding.TryRead(plugin?.MenuNotice, out var text, out var pending)) return;
+            menuNotice?.SetText(text);
+            menuButton?.SetEnabled(!pending);
+        }
+        public void OnHidden()
+        {
+            plugin = null; menuNotice = null; menuButton = null; currentBuild = null;
+            menuBinding.Reset();
         }
         private void BuildTarget(TopiaForgeContainer content, ManagerTabContext context, LaunchTargetPreview target,
             LaunchSelection saved, LaunchSelectionResolution remembered)

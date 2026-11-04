@@ -207,6 +207,9 @@
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Cleanup.cs" Link="Runtime/GamemodeSessionOrchestrator.Cleanup.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Operations.cs" Link="Runtime/GamemodeSessionOrchestrator.Operations.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.MainMenu.cs" Link="Runtime/GamemodeSessionOrchestrator.MainMenu.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/MenuLoadPresentation.cs" Link="Runtime/MenuLoadPresentation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/MenuLoadPresentation.Transitions.cs" Link="Runtime/MenuLoadPresentation.Transitions.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/MenuNoticeBinding.cs" Link="Runtime/MenuNoticeBinding.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Follow.cs" Link="Runtime/GamemodeSessionOrchestrator.Follow.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/SessionFollowPlan.cs" Link="Runtime/SessionFollowPlan.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Participant.cs" Link="Runtime/GamemodeSessionOrchestrator.Participant.cs" />

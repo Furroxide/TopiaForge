@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--menu-presentation")
+            { MenuLoadPresentationTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--countdown-wire") { UiCountdownWireTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-world-lifetime")
             { RobotBodyTests.RunWorldRecovery(); RobotComposedCurrentnessTests.Run(); RobotComposedSceneTests.Run(); return 0; }
@@ -660,6 +662,7 @@ namespace TopiaForge.ModManager.Tests
                 AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult();
                 LocalImportOperationTests.RunAsync().GetAwaiter().GetResult();
                 WorldLaunchArmingTests.Run();
+                MenuLoadPresentationTests.Run();
                 RoboWorldImportPlanTests.Run();
                 WorldsSafetyTests.Run();
                 PendingOperationTests.Run();

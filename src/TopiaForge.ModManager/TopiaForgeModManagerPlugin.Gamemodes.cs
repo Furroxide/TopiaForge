@@ -22,6 +22,8 @@ namespace TopiaForge.ModManager
             var snapshot = runtime.CaptureSessionRuntime();
             return LaunchTargetPreviewBuilder.Build(snapshot.Profile, snapshot.Observation, snapshot.Bindings);
         }
+        internal object MenuNoticeOwner => (object?)runtime ?? this;
+        internal MenuLoadPresentation? MenuNotice => ready ? runtime?.Sessions.MenuPresentation : null;
         public IWorldSessionService? GetSessionService() => runtime == null ? null : runtime.Sessions;
         public LaunchSelection ReadLaunchSelection() => state.LaunchSelection ?? LaunchSelection.UnresolvedLegacy("{}");
         public LaunchSelectionResolution ResolveRememberedSelection()
@@ -144,10 +146,10 @@ namespace TopiaForge.ModManager
                     CancelPendingStartup();
                     if (!ready) return (false, "The runtime is not ready to return to the main menu.");
                     var result = await runtime.Sessions.ReturnToMainMenuAsync();
-                    return (result.Succeeded, result.Succeeded ? "Returned to the main menu." : result.ErrorMessage);
+                    return (result.Succeeded, result.Succeeded ? MenuLoadPresentation.CompletedText : MenuLoadPresentation.TerminalText(result.ErrorCode));
                 });
             }
-            catch (Exception error) { return (false, "Return to menu failed: " + error.Message); }
+            catch (Exception) { return (false, MenuLoadPresentation.FailedText); }
         }
     }
 }
