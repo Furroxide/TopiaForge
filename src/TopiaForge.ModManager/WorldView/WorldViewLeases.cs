@@ -37,6 +37,8 @@ namespace TopiaForge.ModManager
         internal string? EnvironmentFor(string? player) => ledger.EnvironmentFor(player);
         internal VisionFog? FogFor(string? player)
         { var value = ledger.FogFor(player); return value.Distance == 0 ? (VisionFog?)null : VisionFog.Radius(value.Distance, (FogTint)value.Tint); }
+        internal bool IsHiddenFor<TState>(string? player, TState state, Func<IEntity, TState, bool> matches) =>
+            ledger.IsHiddenFor(player, state, matches);
         internal IEntity[] HiddenFor(string? player) => ledger.HiddenFor(player).ToArray();
         internal void RemovePlayer(string player)
         { foreach (var id in ledger.ForPlayer(player).ToArray()) if (leases.TryGetValue(id, out var lease)) lease.Dispose(); }

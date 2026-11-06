@@ -478,7 +478,6 @@
     <Compile Include="../../src/TopiaForge.ModManager/ModContext.WorldView.cs" Link="Runtime/ModContext.WorldView.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/ModContext.ViewEntities.cs" Link="Runtime/ModContext.ViewEntities.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/View/OwnedEnvironment.cs" Link="Worlds/OwnedEnvironment.cs" />
-    <Compile Include="../../mods/TopiaForge.Worlds/View/OwnedRendererVisibility.cs" Link="Worlds/OwnedRendererVisibility.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/View/NativeViewTarget.cs" Link="Worlds/NativeViewTarget.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/View/ViewRendererSelection.cs" Link="Worlds/ViewRendererSelection.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/View/WorldViewProvider.cs" Link="Worlds/WorldViewProvider.cs" />
