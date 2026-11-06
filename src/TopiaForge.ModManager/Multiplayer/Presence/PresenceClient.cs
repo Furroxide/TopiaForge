@@ -249,9 +249,11 @@ namespace TopiaForge.ModManager
                     continue;
                 }
                 peer.ActivityRelayMicros = relayMicros;
-                if (peer.HasPose && micros <= peer.PoseMicros)
+                // Once the wire age saturates, a confirmation of the same pose cannot establish a newer sample time.
+                if (peer.HasPose && (micros <= peer.PoseMicros || record.AgeMillis == ushort.MaxValue &&
+                    peer.HasSamePublicPose(record.Position, record.Rotation, record.Velocity, record.EyeCentimeters, record.Flags)))
                 {
-                    const PresenceFlags activity = PresenceFlags.Talking | PresenceFlags.Typing;
+                    const PresenceFlags activity = PresencePeer.ActivityMask;
                     peer.SetActivityFlags((peer.Flags & ~activity) | (record.Flags & activity));
                     presence.Counters.PosesStale++;
                     continue;
