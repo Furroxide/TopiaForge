@@ -7,8 +7,8 @@ to deploy and update it, how to rotate its secrets, how to use and recover from 
 spend, and what the service keeps and for how long. The API is in [ControlPlaneApi.md](ControlPlaneApi.md).
 
 **This is the only document that carries the control plane's budget figures.** Keep spend ceilings and money out of
-the API document, the code and every player-facing page. The relay pricing facts themselves are recorded once, in
-[MultiplayerTransportOptions.md](MultiplayerTransportOptions.md), section 1.
+the API document, the code and every player-facing page. Check Cloudflare's current TURN pricing before changing a
+budget.
 
 ## 1. What runs where
 
@@ -16,8 +16,8 @@ the API document, the code and every player-facing page. The relay pricing facts
 | --- | --- |
 | Worker `topiaforge-control-plane-staging` | Cloudflare, deployed from `dev` or `main`, served at `https://mp-staging.topiaforge.dev` |
 | Worker `topiaforge-control-plane-production` | Cloudflare, deployed from `main` only, served at `https://mp.topiaforge.dev` |
-| Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter` | Inside each Worker, SQLite-backed, created by migration `v1` on the first deploy |
-| Hourly cron (minute 7) | Each Worker; measures relay usage and can trip the kill switch |
+| Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter`, `ActivityShard`, `ActivitySnapshot` | Inside each Worker, SQLite-backed, created by migrations on the first deploy |
+| Five-minute cron | Each Worker; measures relay usage and can trip the kill switch |
 | Relay | Cloudflare Realtime TURN, one key per environment |
 | Deploy | `.github/workflows/control-plane.yml`, manual dispatch through a protected GitHub environment; staging may also be deployed from a maintainer's machine (section 3) |
 

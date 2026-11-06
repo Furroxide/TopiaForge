@@ -7,7 +7,7 @@ credentials. It is a Cloudflare Worker with SQLite-backed Durable Objects, in `s
 and direct connections never touch it, and a client with no service configured contacts nothing.
 
 This document is the contract the game's provider and the launcher implement against. The identity, the signed server
-descriptor, canonical JSON and invite codes are defined in [MultiplayerLiveSessions.md](MultiplayerLiveSessions.md);
+descriptor, canonical JSON and invite codes are enforced by the shared multiplayer fixtures and implementation;
 nothing here redefines them. How the service is deployed and operated is in
 [ControlPlaneOperations.md](ControlPlaneOperations.md).
 
