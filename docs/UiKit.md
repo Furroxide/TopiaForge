@@ -294,8 +294,17 @@ On Paper, labels and ghost buttons read in every tone on every surface. Muted te
 AAA) against the sunken paper a tool's content sits on. Faint text, and body text in a status or
 brand tone, keep 4.5:1 (AA) against the darkest surface text sits on: the tint, or sunken paper
 under the kit's pressed tint. High contrast raises all of them to 7:1. Status and brand colors keep
-their own values for fills, rings, badges and display type, so a `Warning` label reads darker than
-a warning badge.
+their own values for fills, rings and display type, so a `Warning` label reads darker than a
+warning fill.
+
+Badges read in every tone of both schemes too, at 4.5:1, or 7:1 in high contrast, against the badge
+itself. On Paper a badge is a wash of its tone with a ring in it, and its label is the tone darkened
+until it reads on that wash over the darkest surface. On the HUD a badge is solid in its tone, so
+the world behind it cannot change it, and its label is the HUD's text or a dark one, whichever
+reads; an accent neither reads on is lightened or darkened until one does. A card's corner badge
+sits on its preview, so on Paper its wash is flattened onto sunken paper and a picture cannot show
+through. A badge's label is always opaque, whatever opacity a mod's accent carries, and its contrast
+is checked on the colors as uGUI draws them, in 256 steps a channel.
 
 Toasts reuse a few pooled views. Each toast is placed and brought in afresh, whatever its view
 showed before and under reduced motion too, and shows above every window and dialog, stacked up from

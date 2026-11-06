@@ -27,6 +27,7 @@ namespace TopiaForge.ModManager.Tests
             WindowMath();
             LayerBandAllocation();
             UiKitToastStackTests.Run();
+            UiKitChipContrastTests.Run();
             Console.WriteLine("UiKitCoreTests passed.");
         }
 
