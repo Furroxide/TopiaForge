@@ -109,13 +109,14 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>
         /// Gets a slider handle's color. On Paper a white handle vanished, at 1.02:1 on the surface and 1.13:1 on its
         /// track, so the handle takes the accent, darkened if it must be until it reads at the mark ratio on the darkest
-        /// surface text sits on; pressing it only darkens it. On the HUD it stays white, which reads on the HUD's dark
-        /// track and surfaces, pressed too.
+        /// surface text sits on; pressing it only darkens it. The handle is opaque whatever alpha a mod gives its accent,
+        /// since the ratio is measured on opaque colors and a transparent handle would not show at all. On the HUD it
+        /// stays white, which reads on the HUD's dark track and surfaces, pressed too.
         /// </summary>
         internal static TopiaForgeRgba SliderHandle(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             return scheme == TopiaForgeScheme.Paper
-                ? TopiaForgeContrast.DarkenForPaper(colors.Accent, TopiaForgeSchemes.DarkestTextSurface, MarkRatio(highContrast))
+                ? TopiaForgeContrast.DarkenForPaper(colors.Accent.WithAlpha(1f), TopiaForgeSchemes.DarkestTextSurface, MarkRatio(highContrast))
                 : TopiaForgePalette.White;
         }
 
