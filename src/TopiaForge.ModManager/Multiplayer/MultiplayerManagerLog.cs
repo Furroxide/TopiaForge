@@ -22,7 +22,7 @@ namespace TopiaForge.ModManager
         {
             try
             {
-                sink(message);
+                sink(MultiplayerDiagnosticRedactor.Redact(message));
             }
             catch
             {
