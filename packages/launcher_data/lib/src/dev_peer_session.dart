@@ -107,7 +107,6 @@ final class DevPeerSession {
         environment: {
           'TOPIAFORGE_LIVE_MULTIPLAYER': '1',
           'TOPIAFORGE_DEV_PEERS': runId,
-          'TOPIAFORGE_DATA_ROOT': overlay.launcherRoot,
           // Do not inherit the obsolete environment-driven host/join switch.
           'TOPIAFORGE_MULTIPLAYER_HOST': '', 'TOPIAFORGE_MULTIPLAYER_JOIN': '',
         },
@@ -137,11 +136,15 @@ final class DevPeerSession {
       request,
     );
     _launch = result;
-    if (!result.processStarted ||
-        result.process == null ||
-        result.requestId == null) {
+    if (!result.processStarted) {
       throw StateError(
-        'The development peer did not start. Check its package dependencies and runtime installation.',
+        'The development peer did not start. ${_devPeerLaunchFailure(result)}',
+      );
+    }
+    if (result.process == null || result.requestId == null) {
+      throw StateError(
+        'The development peer started without a complete ownership receipt. '
+        'Its state is retained until cleanup can be verified.',
       );
     }
   }
@@ -290,4 +293,31 @@ final class DevPeerSession {
       await repository.dispose();
     }
   }
+}
+
+String _devPeerLaunchFailure(LaunchResult result) {
+  // Other launch messages can contain native exceptions, paths or package text.
+  // Only fixed refusals and closed resolution codes are safe on CLI stderr.
+  const safeMessages = {
+    'TopiaForge could not be started. No mod state was changed.',
+    'The launcher repository is closed.',
+    'The launch stopped before process creation.',
+    'The Robotopia game was not found.',
+    'TopiaForge runtime is missing or stale. Repair Runtime before launch.',
+    'TopiaForge is Busy preparing another launch for this install.',
+    'TopiaForge is Busy preparing a launch in another launcher or CLI instance.',
+    'TopiaForge is Busy: this install has a running or unverified process.',
+    'TopiaForge is Busy: this install already has a running or unverified process.',
+    'Installed launch content changed during preflight. Refresh the selection and launch again.',
+    'The reviewed host packages changed. Review hosting again.',
+  };
+  if (safeMessages.contains(result.message)) return result.message;
+  if (result.blocks.isNotEmpty) {
+    final codes = result.blocks.map((block) => block.code.name).toSet().toList()
+      ..sort();
+    return 'Launch selection was refused: ${codes.join(', ')}. '
+        'Check the selected target and its required packages.';
+  }
+  return 'Launch preparation failed. Check the development overlay and its '
+      'selected packages, then retry.';
 }
