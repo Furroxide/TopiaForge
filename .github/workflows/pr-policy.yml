@@ -128,7 +128,7 @@ jobs:
           git fetch --force --no-tags origin "$BASE_SHA"
           while IFS= read -r path; do
             case "$path" in
-              services/control-plane/*|tests/fixtures/multiplayer/control-plane/*|tests/fixtures/multiplayer/descriptor/*|tests/fixtures/multiplayer/links/*|.github/workflows/control-plane.yml|.github/workflows/pr-policy.yml|.github/workflows/ci.yml|.github/workflows/release-dry-run.yml|.github/workflows/release-package-build.yml|.github/repository-governance.json|.github/scripts/test_audit_repository_governance.py|docs/internal/ControlPlaneApi.md|docs/internal/ControlPlaneOperations.md|docs/RepositoryGovernance.md) ;;
+              services/control-plane/*|tests/fixtures/multiplayer/control-plane/*|tests/fixtures/multiplayer/descriptor/*|tests/fixtures/multiplayer/links/*|packages/launcher_data/test/package_archive_validation_test.dart|.github/workflows/control-plane.yml|.github/workflows/pr-policy.yml|.github/workflows/ci.yml|.github/workflows/release-dry-run.yml|.github/workflows/release-package-build.yml|.github/repository-governance.json|.github/scripts/test_audit_repository_governance.py|docs/internal/ControlPlaneApi.md|docs/internal/ControlPlaneOperations.md|docs/RepositoryGovernance.md) ;;
               *) echo "::error::Out-of-scope production service file: $path"; exit 1 ;;
             esac
           done < <(git diff --name-only --no-renames "$BASE_SHA" HEAD)
