@@ -15,7 +15,8 @@ namespace TopiaForge.ModManager
         private UiNode? content;
         private bool shown = true, disposed;
         private ulong revision;
-        internal byte[]? Payload;
+        internal EncodedHud? Encoded;
+        internal byte[]? Payload => Encoded?.Bytes;
         internal string? InvalidComposition;
         internal IDisposable? Tracking;
         internal int Bytes => (Payload?.Length ?? 0) + 4;
@@ -24,9 +25,15 @@ namespace TopiaForge.ModManager
         { this.owner = owner; Context = context; this.request = request; this.token = token; body = request.Body; content = request.Content; }
         internal void Attach(IUiSurface surface) => inner = surface;
         internal bool Prepare(string text, UiNode? node, bool visible)
-        { Payload = Encode(text, node, visible); return Payload != null; }
-        internal void RefreshClockBinding() => owner.Change(this, Encode(body, content, shown));
-        private byte[]? Encode(string text, UiNode? node, bool visible)
+        { Encoded = Encode(text, node, visible, owner.UiClockEpoch); return Encoded.HasValue; }
+        internal void RefreshClockBinding(string epoch)
+        {
+            if (Encoded?.ClockEpoch is not string previous || previous == epoch) return;
+            if (owner.Change(this, Encode(body, content, shown, epoch, retained: true))) return;
+            // Keep the host handle usable even if a changed wire encoding cannot fit the shared budget.
+            owner.Remove(this); Encoded = null;
+        }
+        private EncodedHud? Encode(string text, UiNode? node, bool visible, string epoch, bool retained = false)
         {
             InvalidComposition = null;
             try
@@ -40,15 +47,16 @@ namespace TopiaForge.ModManager
                 w.Begin(0); w.WriteVarUInt(token); UiNodeWireCodec.Text(w, request.Title);
                 UiNodeWireCodec.Text(w, text); w.WriteSingle(request.Width); w.WriteSingle(request.Height);
                 w.WriteByte((byte)request.HudAnchor); w.WriteByte((byte)request.HudVisibility);
-                w.WriteByte(visible ? (byte)1 : (byte)0); UiNodeWireCodec.Write(w, node, owner.UiClockEpoch);
-                return MultiplayerPresentation.Copy(w);
+                w.WriteByte(visible ? (byte)1 : (byte)0);
+                var timed = retained ? UiNodeWireCodec.WriteRetained(w, node, epoch) : UiNodeWireCodec.Write(w, node, epoch);
+                return new EncodedHud(MultiplayerPresentation.Copy(w), timed ? epoch : null);
             }
             catch (ArgumentException exception) { InvalidComposition = exception.Message; return null; }
             catch (InvalidOperationException) { return null; }
         }
         public string Id => inner.Id;
         public bool IsVisible => !disposed && inner.IsVisible;
-        internal bool IsAlive => !disposed && MultiplayerPresentation.SurfaceAlive(inner) && UiClockBinding.IsCurrent(content, owner.UiClockEpoch);
+        internal bool IsAlive => !disposed && MultiplayerPresentation.SurfaceAlive(inner);
         public event Action? Dismissed
         {
             add { if (inner is IUiSurfaceDismissalSource source) source.Dismissed += value; }
@@ -71,7 +79,7 @@ namespace TopiaForge.ModManager
         {
             RequireActive();
             if (shown == visible) { if (visible) inner.Show(); else inner.Hide(); return; }
-            var payload = Encode(body, content, visible);
+            var payload = Encode(body, content, visible, owner.UiClockEpoch, retained: true);
             // A solo HUD outside the shared bounds still owns a fully usable local surface.
             if (!owner.ChangeVisibility(this, payload, false)) throw TooLarge();
             var previous = shown;
@@ -90,7 +98,7 @@ namespace TopiaForge.ModManager
         {
             RequireActive(); value ??= string.Empty;
             if (body == value) return;
-            var payload = Encode(value, content, shown);
+            var payload = Encode(value, content, shown, owner.UiClockEpoch, retained: true);
             if (!owner.Change(this, payload, false)) throw TooLarge();
             inner.SetBody(value);
             if (!disposed) { body = value; revision++; owner.Change(this, payload); }
@@ -101,7 +109,7 @@ namespace TopiaForge.ModManager
             if (ReferenceEquals(content, value)) return OperationResult<bool>.Success(true);
             if (UiComposition.ContainsInteractive(value)) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
                 "HUD surfaces are read-only; put controls in a window or a player's targeted UI.");
-            var payload = Encode(body, value, shown);
+            var payload = Encode(body, value, shown, owner.UiClockEpoch);
             if (owner.Hosting && InvalidComposition != null) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, InvalidComposition);
             if (owner.Hosting && payload == null) return MultiplayerPresentation.Limit<bool>();
             if (!owner.Change(this, payload, false)) return MultiplayerPresentation.Limit<bool>();
@@ -117,5 +125,12 @@ namespace TopiaForge.ModManager
         }
         private static InvalidOperationException TooLarge() => new InvalidOperationException(
             "The shared HUD is too large; shorten its content before updating it.");
+
+        internal readonly struct EncodedHud
+        {
+            internal readonly byte[] Bytes;
+            internal readonly string? ClockEpoch;
+            internal EncodedHud(byte[] bytes, string? clockEpoch) { Bytes = bytes; ClockEpoch = clockEpoch; }
+        }
     }
 }
