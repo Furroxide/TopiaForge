@@ -12,6 +12,8 @@ namespace TopiaForge.ModManager
     /// </summary>
     internal sealed class PresencePeer
     {
+        internal const PresenceFlags ActivityMask = PresenceFlags.Talking | PresenceFlags.Typing;
+
         internal PresencePeer(ParticipantId id, string displayName, bool isLocal)
         {
             Id = id;
@@ -54,7 +56,7 @@ namespace TopiaForge.ModManager
         {
             HasPose = false;
             Avatar?.Hide();
-            SetActivityFlags(Flags & ~(PresenceFlags.Talking | PresenceFlags.Typing));
+            SetActivityFlags(Flags & ~ActivityMask);
             ActivityRelayMicros = long.MinValue;
             HasFed = false;
             HasClockOffset = false;
@@ -63,6 +65,9 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets the pose's time on the host's clock, in microseconds.</summary>
         internal long PoseMicros { get; private set; }
+
+        // Relay confirmations keep the timestamp of the public pose even if a newer activity or heartbeat arrived.
+        internal long RelayPoseMicros { get; private set; }
 
         // Activity is stamped by relay time independently of the held transform's sample time.
         internal long ActivityRelayMicros { get; set; } = long.MinValue;
@@ -77,7 +82,7 @@ namespace TopiaForge.ModManager
 
         internal PresenceFlags Flags { get; private set; }
 
-        /// <summary>Gets a number that moves whenever the pose changes, so the host relays only what moved.</summary>
+        /// <summary>Gets a number that moves whenever the pose changes outside of activity.</summary>
         internal int PoseVersion { get; private set; }
 
         /// <summary>Gets or sets the pose version the host's last relay tick saw.</summary>
@@ -155,18 +160,16 @@ namespace TopiaForge.ModManager
         // Per-recipient projected activity changes must wake resting poses without touching their timestamps.
         internal readonly PresenceFlags[] RelayedFlags = new PresenceFlags[256];
 
-        internal void SetActivityFlags(PresenceFlags flags)
-        {
-            if (Flags == flags) return;
-            Flags = flags;
-            PoseVersion++;
-        }
+        internal void SetActivityFlags(PresenceFlags flags) => Flags = flags;
+
+        internal bool HasSamePublicPose(NetQuantizedPosition position, uint rotation, NetQuantizedVelocity velocity, byte eyeCentimeters, PresenceFlags flags) =>
+            HasPose && position.Equals(Position) && rotation == Rotation && velocity.Equals(Velocity) &&
+            eyeCentimeters == EyeCentimeters && ((flags ^ Flags) & ~ActivityMask) == 0;
 
         /// <summary>Takes a pose; returns whether it differs from the one held, which moves <see cref="PoseVersion"/>.</summary>
         internal bool SetPose(long micros, NetQuantizedPosition position, uint rotation, NetQuantizedVelocity velocity, byte eyeCentimeters, PresenceFlags flags)
         {
-            var changed = !HasPose || !position.Equals(Position) || rotation != Rotation || !velocity.Equals(Velocity) ||
-                          eyeCentimeters != EyeCentimeters || flags != Flags;
+            var changed = !HasSamePublicPose(position, rotation, velocity, eyeCentimeters, flags);
             HasPose = true;
             PoseMicros = micros;
             Position = position;
@@ -174,7 +177,11 @@ namespace TopiaForge.ModManager
             Velocity = velocity;
             EyeCentimeters = eyeCentimeters;
             Flags = flags;
-            if (changed) PoseVersion++;
+            if (changed)
+            {
+                RelayPoseMicros = micros;
+                PoseVersion++;
+            }
             return changed;
         }
 

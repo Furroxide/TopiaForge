@@ -217,7 +217,7 @@ namespace TopiaForge.ModManager
                 peer.TickVersion = peer.PoseVersion;
             }
 
-            var hostMillis = unchecked((uint)(nowMicros / 1000));
+            var nowMillis = nowMicros / 1000;
             for (var index = 0; index < all.Count; index++)
             {
                 var recipient = all[index];
@@ -245,7 +245,7 @@ namespace TopiaForge.ModManager
                 }
 
                 if (picks.Count == 0) continue;
-                PresenceWire.BeginPoses(relay, hostMillis, picks.Count);
+                PresenceWire.BeginPoses(relay, unchecked((uint)nowMillis), picks.Count);
                 for (var pick = 0; pick < picks.Count; pick++)
                 {
                     var shown = picks[pick];
@@ -253,7 +253,7 @@ namespace TopiaForge.ModManager
                     var record = new PresencePoseRecord
                     {
                         Index = shown.Index,
-                        AgeMillis = (ushort)Math.Min(ushort.MaxValue, Math.Max(0, (nowMicros - shown.PoseMicros) / 1000)),
+                        AgeMillis = (ushort)Math.Min(ushort.MaxValue, Math.Max(0, nowMillis - shown.RelayPoseMicros / 1000)),
                         Flags = pickFlags[pick],
                         EyeCentimeters = shown.EyeCentimeters,
                         Position = shown.Position,
