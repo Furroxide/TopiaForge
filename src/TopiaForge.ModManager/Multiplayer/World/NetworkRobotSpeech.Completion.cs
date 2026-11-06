@@ -24,7 +24,7 @@ namespace TopiaForge.ModManager
             foreach (var operation in active)
             {
                 if (operation.Nonce != lineNonce || operation.WireId != entityId
-                    || operation.Cancellation.IsCancellationRequested || !operation.Current()) continue;
+                    || operation.CancellationRequested || !operation.Current()) continue;
                 foreach (var recipient in operation.Recipients)
                 {
                     if (!recipient.Id.Equals(sender) || recipient.Completed || recipient.Gate.World != messageWorld
