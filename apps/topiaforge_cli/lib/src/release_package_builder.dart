@@ -24,6 +24,7 @@ class ReleasePackageBuilder {
     this.rebuildRuntimePayload = true,
     this.requireMacSigning = false,
     this.requireWindowsSigning = false,
+    this.multiplayerEnvironment = 'staging',
     this.isAotExecutable = _isAotExecutable,
     this.processRunner = const ReleaseProcessRunner(),
     this.dotnetSdkResolver = resolveRepositoryDotnetSdk,
@@ -39,12 +40,27 @@ class ReleasePackageBuilder {
   final bool rebuildRuntimePayload;
   final bool requireMacSigning;
   final bool requireWindowsSigning;
+  final String multiplayerEnvironment;
   final bool isAotExecutable;
   final ReleaseProcessRunner processRunner;
   final RepositoryDotnetSdkResolver dotnetSdkResolver;
   final ReleaseFileOps fileOps;
 
   Future<String> build() async {
+    if (multiplayerEnvironment != 'staging' &&
+        multiplayerEnvironment != 'production') {
+      throw StateError('Unknown multiplayer build environment.');
+    }
+    if (multiplayerEnvironment == 'production') {
+      final version = SemanticVersion.tryParse(
+        TopiaForgeReleasePolicy.load(repositoryRoot).productVersion,
+      );
+      if (version == null || version.isPrerelease) {
+        throw StateError(
+          'Production multiplayer requires a stable release policy.',
+        );
+      }
+    }
     final windowsPolicy = _admitWindowsPolicy();
     final output = Directory(outputRoot)..createSync(recursive: true);
     final assetName = platform.archiveName;
@@ -216,7 +232,7 @@ class ReleasePackageBuilder {
       'build',
       platform.id,
       '--release',
-      '--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev',
+      '--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=${_multiplayerOrigin()}',
     ], workingDirectory: launcherApp);
     await _copyBuiltLauncher(launcherApp, stageRoot);
   }
@@ -328,13 +344,17 @@ class ReleasePackageBuilder {
     await _runDart([
       'compile',
       'exe',
-      '-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev',
+      '-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=${_multiplayerOrigin()}',
       p.join('bin', 'topiaforge.dart'),
       '-o',
       destination,
     ], workingDirectory: cliApp);
     await fileOps.setExecutableBit(destination);
   }
+
+  String _multiplayerOrigin() => multiplayerEnvironment == 'production'
+      ? 'https://mp.topiaforge.dev'
+      : 'https://mp-staging.topiaforge.dev';
 
   Future<void> _copyMacCliPair(String destinationRoot) async {
     final source = Directory(prebuiltCli);

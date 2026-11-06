@@ -40,7 +40,9 @@ param(
     [string]$GameDirectory,
 
     [Parameter(Mandatory = $true)]
-    [string]$AcceptanceIsolationRecord
+    [string]$AcceptanceIsolationRecord,
+
+    [switch]$ProductionStable
 )
 
 . (Join-Path $PSScriptRoot "acceptance-isolation.ps1")
@@ -49,6 +51,11 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $AcceptanceIsolationRecord = [System.IO.Path]::GetFullPath($AcceptanceIsolationRecord)
+if ($ProductionStable -and $Version.Contains('-')) {
+    throw "Production multiplayer requires a stable release version."
+}
+$multiplayerEnvironment = if ($ProductionStable) { "production" } else { "staging" }
+$multiplayerBuildOptions = if ($ProductionStable) { @() } else { @("--build-only") }
 
 function Invoke-Checked {
     param(
@@ -439,13 +446,14 @@ Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
     -Arguments @("clean")
 Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
     -Arguments @("pub", "get", "--enforce-lockfile")
-Invoke-Checked -FilePath "python" -WorkingDirectory $launcherProject `
-    -Arguments @(
+$launcherMultiplayerArguments = @(
         (Join-Path $repository "tools/multiplayer-build.py"),
-        "--environment", "production", "--build-only", "--executable", $flutter, "--",
+        "--environment", $multiplayerEnvironment) + $multiplayerBuildOptions + @("--executable", $flutter, "--",
         "build", "windows", "--release",
         "--dart-define=TOPIAFORGE_PRODUCT_VERSION=$Version"
     )
+Invoke-Checked -FilePath "python" -WorkingDirectory $launcherProject `
+    -Arguments $launcherMultiplayerArguments
 $launcherBuild = Join-Path $launcherProject "build/windows/x64/runner/Release"
 if (-not (Test-Path -LiteralPath $launcherBuild -PathType Container)) {
     $launcherBuild = Join-Path $launcherProject "build/windows/runner/Release"
@@ -489,10 +497,11 @@ Remove-OwnedProjectDirectory -Path (Join-Path $cliProject ".dart_tool") `
     -ProjectRoot $cliProject -ExpectedName ".dart_tool"
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments @("pub", "get", "--enforce-lockfile")
-Invoke-Checked -FilePath "python" -WorkingDirectory $cliProject `
-    -Arguments @((Join-Path $repository "tools/multiplayer-build.py"),
-        "--environment", "production", "--build-only", "--kind", "dart", "--executable", $dart, "--",
+$cliMultiplayerArguments = @((Join-Path $repository "tools/multiplayer-build.py"),
+        "--environment", $multiplayerEnvironment) + $multiplayerBuildOptions + @("--kind", "dart", "--executable", $dart, "--",
         "compile", "exe", "bin/topiaforge.dart", "-o", $compiledCli)
+Invoke-Checked -FilePath "python" -WorkingDirectory $cliProject `
+    -Arguments $cliMultiplayerArguments
 $buildPackageArguments = @(
     "run", "bin/topiaforge.dart", "release", "build-package",
     "--platform", "windows", "--output", $output, "--configuration", "Release",

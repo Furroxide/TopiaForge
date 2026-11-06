@@ -329,7 +329,8 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
         'Usage: topiaforge release build-package --platform windows|linux|macos '
         '--output <dir> [--configuration Release] [--prebuilt-launcher <path>] '
         '[--prebuilt-cli <file-or-macos-pair-dir>] [--require-macos-signing] '
-        '[--prebuilt-dist <dir>] [--require-windows-signing] [--skip-runtime-build]',
+        '[--prebuilt-dist <dir>] [--require-windows-signing] [--skip-runtime-build] '
+        '[--production-stable]',
       );
     }
     final builder = ReleasePackageBuilder(
@@ -343,6 +344,9 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       rebuildRuntimePayload: !args.contains('--skip-runtime-build'),
       requireMacSigning: args.contains('--require-macos-signing'),
       requireWindowsSigning: args.contains('--require-windows-signing'),
+      multiplayerEnvironment: args.contains('--production-stable')
+          ? 'production'
+          : 'staging',
     );
     stdout.writeln(await builder.build());
     return 0;

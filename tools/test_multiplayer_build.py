@@ -14,11 +14,12 @@ spec.loader.exec_module(build)
 
 
 class MultiplayerBuildTests(unittest.TestCase):
-    def test_production_build_only_compiles_without_contacting_service(self):
-        for kind, arguments in (('flutter', ['build', 'windows', '--release']),
-                                ('dart', ['compile', 'exe', 'bin/topiaforge.dart'])):
-            with self.subTest(kind=kind), \
-                 patch.object(sys, 'argv', ['multiplayer-build.py', '--environment', 'production',
+    def test_build_only_compiles_selected_service_without_contacting_it(self):
+        for environment in ('staging',):
+          for kind, arguments in (('flutter', ['build', 'windows', '--release']),
+                                  ('dart', ['compile', 'exe', 'bin/topiaforge.dart'])):
+            with self.subTest(environment=environment, kind=kind), \
+                 patch.object(sys, 'argv', ['multiplayer-build.py', '--environment', environment,
                                            '--build-only', '--kind', kind, '--executable', kind,
                                            '--', *arguments]), \
                  patch.object(build.urllib.request, 'build_opener', side_effect=OSError('unavailable')) as opener, \
@@ -27,7 +28,7 @@ class MultiplayerBuildTests(unittest.TestCase):
                 self.assertEqual(build.main(), 7)
                 opener.assert_not_called()
                 define = ('--dart-define=' if kind == 'flutter' else '-D') + \
-                    'TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev'
+                    'TOPIAFORGE_CONTROL_PLANE_ORIGIN=' + build.ORIGINS[environment]
                 self.assertIn(define, call.call_args.args[0])
                 self.assertIn('readiness not checked', output.getvalue())
 
@@ -43,9 +44,10 @@ class MultiplayerBuildTests(unittest.TestCase):
                 self.assertEqual(build.main(), 1)
                 call.assert_not_called()
 
-    def test_build_only_cannot_skip_staging_run_or_check_only(self):
-        cases = [([], ['build', 'windows']),
-                 (['--environment', 'offline'], ['build', 'windows']),
+    def test_build_only_cannot_skip_run_or_check_only(self):
+        cases = [(['--environment', 'offline'], ['build', 'windows']),
+                 (['--environment', 'production'], ['build', 'windows']),
+                 ([], ['run']),
                  (['--environment', 'production'], ['run']),
                  (['--environment', 'production', '--check-only'], ['build', 'windows']),
                  (['--environment', 'production', '--kind', 'dart'], ['run', 'bin/topiaforge.dart'])]

@@ -7,7 +7,7 @@ usage() {
     '  --version <semver> --canonical-archive <tar>' \
     '  --canonical-ecosystem-sha256 <tree-sha256>' \
     '  --canonical-archive-sha256 <transport-sha256>' \
-    '  --output <dir> [--expected-mac-team-id <team-id>]'
+    '  --output <dir> [--expected-mac-team-id <team-id>] [--production-stable]'
 }
 
 platform=''
@@ -19,6 +19,7 @@ canonical_ecosystem_sha256=''
 canonical_archive_sha256=''
 output=''
 expected_mac_team_id=''
+production_stable=false
 
 while (($#)); do
   case "$1" in
@@ -31,6 +32,7 @@ while (($#)); do
     --canonical-archive-sha256) canonical_archive_sha256=${2-}; shift 2 ;;
     --output) output=${2-}; shift 2 ;;
     --expected-mac-team-id) expected_mac_team_id=${2-}; shift 2 ;;
+    --production-stable) production_stable=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) printf 'Unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
@@ -44,6 +46,19 @@ if [[ "$platform" != linux && "$platform" != macos ]] ||
       -z "$output" ]]; then
   usage >&2
   exit 2
+fi
+
+multiplayer_environment=staging
+multiplayer_origin=https://mp-staging.topiaforge.dev
+multiplayer_build_options=(--build-only)
+if [[ "$production_stable" == true ]]; then
+  if [[ "$version" == *-* ]]; then
+    printf 'Production multiplayer requires a stable release version.\n' >&2
+    exit 2
+  fi
+  multiplayer_environment=production
+  multiplayer_origin=https://mp.topiaforge.dev
+  multiplayer_build_options=()
 fi
 
 repo=$(cd "$repo" && pwd -P)
@@ -343,7 +358,7 @@ if [[ "$platform" == macos ]]; then
   export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
   export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
 fi
-python3 "$repo/tools/multiplayer-build.py" --environment production --build-only --executable "$flutter_command" -- build "$platform" --release \
+python3 "$repo/tools/multiplayer-build.py" --environment "$multiplayer_environment" "${multiplayer_build_options[@]}" --executable "$flutter_command" -- build "$platform" --release \
   --dart-define="TOPIAFORGE_PRODUCT_VERSION=$version"
 popd >/dev/null
 
@@ -352,7 +367,7 @@ pushd "$cli_project" >/dev/null
 if [[ "$platform" == linux ]]; then
   cp -R "$repo/apps/topiaforge_launcher_flutter/build/linux/x64/release/bundle/." \
     "$work/launcher/"
-  python3 "$repo/tools/multiplayer-build.py" --environment production --build-only --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart -o "$work/cli/topiaforge"
+  python3 "$repo/tools/multiplayer-build.py" --environment "$multiplayer_environment" "${multiplayer_build_options[@]}" --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart -o "$work/cli/topiaforge"
   package_args=(
     release build-package --platform linux --output "$output"
     --configuration Release --prebuilt-launcher "$work/launcher"
@@ -367,11 +382,11 @@ if [[ "$platform" == linux ]]; then
 else
   cp -R "$repo/apps/topiaforge_launcher_flutter/build/macos/Build/Products/Release/TopiaForge.app" \
     "$work/launcher/"
-  python3 "$repo/tools/multiplayer-build.py" --environment production --build-only --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart \
+  python3 "$repo/tools/multiplayer-build.py" --environment "$multiplayer_environment" "${multiplayer_build_options[@]}" --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart \
     -o "$work/cli/topiaforge-arm64"
   arch -x86_64 "$TOPIAFORGE_DART_X64" pub get --enforce-lockfile
   arch -x86_64 "$TOPIAFORGE_DART_X64" compile exe \
-    -DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev bin/topiaforge.dart \
+    -DTOPIAFORGE_CONTROL_PLANE_ORIGIN="$multiplayer_origin" bin/topiaforge.dart \
     -o "$work/cli/topiaforge-x64"
   [[ "$(lipo -archs "$work/cli/topiaforge-arm64")" == arm64 ]]
   [[ "$(lipo -archs "$work/cli/topiaforge-x64")" == x86_64 ]]
