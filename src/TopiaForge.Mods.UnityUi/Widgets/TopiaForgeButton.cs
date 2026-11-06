@@ -122,11 +122,13 @@ namespace TopiaForge.Mods.UnityUi
             button.targetGraphic = fill;
             button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "Button click"));
 
+            // The resolved theme holds a filled or danger button's label to its fill at these tints, the lightest and the
+            // darkest the fill goes.
             var colors = button.colors;
             colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.06f, 1.06f, 1.06f, 1f);
-            colors.pressedColor = new Color(0.94f, 0.94f, 0.94f, 1f);
-            colors.selectedColor = new Color(1.04f, 1.04f, 1.04f, 1f);
+            colors.highlightedColor = Tint(TopiaForgeOnColors.ButtonHoveredTint);
+            colors.pressedColor = Tint(TopiaForgeOnColors.ButtonPressedTint);
+            colors.selectedColor = Tint(TopiaForgeOnColors.ButtonSelectedTint);
             colors.disabledColor = Color.white; // disabled visuals are theme-driven, not multiplied
             button.colors = colors;
 
@@ -226,13 +228,16 @@ namespace TopiaForge.Mods.UnityUi
 
             switch (style)
             {
+                // A label on a fill takes the color that reads on it: dark on the brand orange, where white read at 2.6:1.
                 case TopiaForgeButtonStyle.Filled:
-                    fill.color = theme.Primary;
-                    SetContentColor(theme.OnPrimary);
+                    theme.FillColors(TopiaForgeFillRole.FilledButton, out var primaryFill, out var onPrimary);
+                    fill.color = primaryFill;
+                    SetContentColor(onPrimary);
                     break;
                 case TopiaForgeButtonStyle.Danger:
-                    fill.color = theme.Danger;
-                    SetContentColor(theme.OnStatus);
+                    theme.FillColors(TopiaForgeFillRole.DangerButton, out var dangerFill, out var onDanger);
+                    fill.color = dangerFill;
+                    SetContentColor(onDanger);
                     break;
                 case TopiaForgeButtonStyle.Outline:
                     fill.color = theme.Surface;
@@ -255,6 +260,11 @@ namespace TopiaForge.Mods.UnityUi
             {
                 shadow.color = theme.Shadow;
             }
+        }
+
+        private static Color Tint(float value)
+        {
+            return new Color(value, value, value, 1f);
         }
 
         private void SetContentColor(Color color)

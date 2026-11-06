@@ -6,8 +6,10 @@ using UImage = UnityEngine.UI.Image;
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
-    /// Labeled switch (brand: launch-orange track when on, tinted when off, white
-    /// thumb — the launcher SwitchTheme). Checkbox() gives the boxed-check variant.
+    /// Labeled switch (brand: launch-orange track when on, tinted when off, as the launcher
+    /// SwitchTheme). Its thumb, and a checkbox's check, take the color that reads on the track:
+    /// dark on the orange, where white read at 2.6:1, and a faint grey on the tint. Checkbox()
+    /// gives the boxed-check variant.
     /// </summary>
     public sealed class TopiaForgeToggle : TopiaForgeWidget, ITopiaForgeThemeAware
     {
@@ -141,27 +143,31 @@ namespace TopiaForge.Mods.UnityUi
 
         private void Repaint()
         {
+            // The toggle keeps uGUI's default color block, which darkens the track while pressed; the thumb and the check
+            // are resolved against the track at that tint too.
             var theme = Theme;
             if (checkbox)
             {
-                track.color = value ? theme.Primary : theme.SurfaceSunken;
+                theme.FillColors(TopiaForgeFillRole.ControlOn, out var onFill, out var onCheck);
+                track.color = value ? onFill : theme.SurfaceSunken;
                 if (boxRing != null)
                 {
-                    boxRing.color = value ? theme.Primary : theme.Outline;
+                    boxRing.color = value ? onFill : theme.Outline;
                 }
 
                 if (check != null)
                 {
-                    check.color = theme.OnPrimary;
+                    check.color = onCheck;
                     check.enabled = value;
                 }
             }
             else
             {
-                track.color = value ? theme.Primary : theme.Tint;
+                theme.FillColors(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff, out var trackFill, out var thumbColor);
+                track.color = trackFill;
                 if (thumb != null && thumbRect != null)
                 {
-                    thumb.color = value ? theme.OnPrimary : theme.TextFaint;
+                    thumb.color = thumbColor;
                     var x = value ? TrackWidth - (ThumbSize / 2f) - 3f : (ThumbSize / 2f) + 3f;
                     thumbRect.anchoredPosition = new Vector2(x, 0f);
                 }
