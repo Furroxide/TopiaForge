@@ -71,8 +71,8 @@ namespace TopiaForge.Mods.UnityUi
         public Color FocusRing { get; }
 
         /// <summary>
-        /// Gets a slider handle's color: on Paper the accent, darkened if it must be, so the handle shows on its light
-        /// track and surface; on the HUD white, which shows on the HUD's dark ones.
+        /// Gets a slider handle's color: on Paper the accent, opaque and darkened if it must be, so the handle shows on its
+        /// light track and surface; on the HUD white, which shows on the HUD's dark ones.
         /// </summary>
         internal Color SliderHandle { get; }
 

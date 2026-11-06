@@ -203,7 +203,9 @@ namespace TopiaForge.ModManager.Tests
                     var colors = TopiaForgeSchemes.ResolvePaper(accent, highContrast);
                     var handle = TopiaForgeOnColors.SliderHandle(TopiaForgeScheme.Paper, colors, highContrast);
                     var surfaces = new[] { colors.Surface, colors.SurfaceAlt, colors.SurfaceSunken, colors.Tint, colors.SelectedTint, colors.SurfaceSunken.Scale(TopiaForgeSchemes.PressedTint) };
-                    AssertHandleReads(handle, surfaces, highContrast, "Paper" + (highContrast ? " high contrast" : string.Empty) + (accent.HasValue ? " with accent " + accent.Value : string.Empty));
+                    var context = "Paper" + (highContrast ? " high contrast" : string.Empty) + (accent.HasValue ? " with accent " + accent.Value : string.Empty);
+                    Assert(handle.A == 1f, context + ": the slider handle is opaque, whatever alpha the accent has");
+                    AssertHandleReads(handle, surfaces, highContrast, context);
                 }
 
                 var hud = TopiaForgeSchemes.ResolveHud(null, highContrast);
@@ -283,6 +285,10 @@ namespace TopiaForge.ModManager.Tests
             {
                 yield return TopiaForgeRgba.Hex(hex);
             }
+
+            // A mod can give SetAccent any alpha: a transparent accent and a translucent one.
+            yield return TopiaForgeRgba.Hex(0x008080, 0f);
+            yield return TopiaForgeRgba.Hex(0xFFE14D, 0.5f);
         }
 
         private static TopiaForgeRgba Content(TopiaForgeFillRole role, TopiaForgeSchemeColors colors, bool highContrast) =>
