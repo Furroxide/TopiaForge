@@ -10,17 +10,24 @@ namespace TopiaForge.ModManager
         private readonly TransformState requested;
         private readonly float height;
         private float fixedTime;
+        private int renderedFrame;
+        private bool hasFixedSample;
         private Vec3 previous;
         private int stable;
         private int samples;
         internal NativeSpawnSettlement(TransformState requested, float height, float fixedTime)
+            : this(requested, height, fixedTime, 0) { }
+        internal NativeSpawnSettlement(TransformState requested, float height, float fixedTime, int renderedFrame)
         {
+            this.renderedFrame = renderedFrame;
             this.requested = requested;
             this.height = height;
             this.fixedTime = fixedTime;
             previous = requested.Position;
         }
-        internal OperationResult<TransformState>? Probe(TransformState actual, float currentFixedTime)
+        internal OperationResult<TransformState>? Probe(TransformState actual, float currentFixedTime) =>
+            Probe(actual, currentFixedTime, renderedFrame, false);
+        internal OperationResult<TransformState>? Probe(TransformState actual, float currentFixedTime, int currentRenderedFrame, bool paused)
         {
             if (!Finite(height) || height <= 0f || !Finite(fixedTime) || !Finite(currentFixedTime))
                 return OperationResult<TransformState>.Failure(ModErrorCode.Unavailable, "The native player collision height or fixed clock is unavailable for spawn settling.");
@@ -33,8 +40,14 @@ namespace TopiaForge.ModManager
             if (!delta.IsFinite || delta.X * delta.X + delta.Z * delta.Z > 0.0001f || dot < 0.9999f
                 || (delta.Y < 0f && delta.Y * delta.Y > 0.0001f) || delta.Y > height || currentFixedTime < fixedTime)
                 return Refused();
-            if (currentFixedTime == fixedTime) return null;
+            var advanced = currentFixedTime != fixedTime;
+            // Paused render frames may confirm stability only after physics has observed this placement.
+            // Record frames for both modes so switching to paused cannot count the same observation twice.
+            if (!advanced && (!paused || !hasFixedSample)) return null;
+            if (paused && currentRenderedFrame == renderedFrame) return null;
+            hasFixedSample |= advanced;
             fixedTime = currentFixedTime;
+            renderedFrame = currentRenderedFrame;
             samples++;
             stable = (actual.Position - previous).LengthSquared <= 0.0001f ? stable + 1 : 0;
             previous = actual.Position;
