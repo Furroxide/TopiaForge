@@ -227,7 +227,22 @@ void main() {
     });
 
     test('finishes long values within the budget', () {
-      for (final value in [
+      const names = [
+        'semicolons',
+        'stars',
+        'questions',
+        'star-a-tail',
+        'xml-semicolons',
+        'ampersands',
+        'unclosed-entity',
+        'numeric-reference',
+        'percent-signs',
+        'percent-escapes',
+        'expressions',
+        'package-list',
+      ];
+      final fixtureWatch = Stopwatch()..start();
+      final values = [
         ';' * 200000,
         '*' * 200000,
         '?' * 200000,
@@ -240,9 +255,30 @@ void main() {
         '%73' * 70000,
         '\$(' * 70000,
         '$_abstractions;' * 13000,
-      ]) {
+      ];
+      fixtureWatch.stop();
+      expect(values, hasLength(names.length));
+      for (final (index, value) in values.indexed) {
         for (final attribute in const ['Include', 'Update']) {
-          withinBudget(() => _naming(attribute, value));
+          // Keep the original combined boundary and strict 100 ms gate.
+          // Diagnostics and assertions run only after this watch stops.
+          final watch = Stopwatch()..start();
+          final result = _naming(attribute, value);
+          watch.stop();
+          final elapsed = watch.elapsed;
+          final reason = StringBuffer(
+            '${names[index]}/$attribute (${value.length} code units); '
+            'fixture list: ${fixtureWatch.elapsedMicroseconds} us; '
+            'original combined: ${elapsed.inMicroseconds} us; '
+            'result: ${result.name}',
+          );
+          expect(elapsed, lessThan(scanBudget), reason: reason.toString());
+          final expected = names[index] == 'package-list'
+              ? PackageNaming.alone
+              : names[index] == 'stars' && attribute == 'Update'
+              ? PackageNaming.shared
+              : PackageNaming.none;
+          expect(result, expected, reason: '${names[index]}/$attribute');
         }
       }
     });
