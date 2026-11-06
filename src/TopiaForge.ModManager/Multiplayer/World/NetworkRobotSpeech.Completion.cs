@@ -31,7 +31,7 @@ namespace TopiaForge.ModManager
                         || recipient.Gate.Challenge != messageChallenge
                         || recipient.Gate.Generation != world.Channel.GetGeneration(sender)
                         || !ready.TryGetValue(sender, out var gate) || gate.Challenge != messageChallenge
-                        || gate.Generation != recipient.Gate.Generation || !Eligible(sender, operation.Entity)) continue;
+                        || gate.Generation != recipient.Gate.Generation || !Eligible(sender, operation.Entity, entityId)) continue;
                     recipient.Completed = true;
                     if (completed == 0) operation.Failure = OperationResult<bool>.Failure(ModErrorCode.Unavailable,
                         "A robot speech listener could not complete playback.");
