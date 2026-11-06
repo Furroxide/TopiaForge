@@ -39,7 +39,7 @@ Do the steps in order: the deploy workflow refuses to run until the GitHub envir
    `topiaforge-control-plane-staging`. Verify neither token can edit the other Worker, then revoke the broad token.
 3. **TURN keys.** In the dashboard, open Realtime, then TURN, and create one key for staging and one for production.
    Each gives a key id and an API token; keep them for section 2.3.
-4. **Analytics token.** Create an API token with Account Analytics read only. The hourly measurement uses it to read
+4. **Analytics token.** Create an API token with Account Analytics read only. The five-minute measurement uses it to read
    the `callsTurnUsageAdaptiveGroups` dataset. One token can serve both environments.
 5. **Origin.** Each environment is served only from its custom domain on the `topiaforge.dev` zone,
    `mp-staging.topiaforge.dev` and `mp.topiaforge.dev`, which the `routes` lines in `wrangler.toml` name. The first
@@ -118,8 +118,8 @@ prompts for the value, so it never lands in shell history. The first deploy must
 | `ADMIN_TOKEN` | At least 32 random characters: `openssl rand -base64 48 \| tr '+/' '-_' \| tr -d '='` | Admin answers `401` |
 | `TURN_KEY_ID` | The environment's TURN key id | Relay is unavailable |
 | `TURN_KEY_API_TOKEN` | That key's API token | Relay is unavailable |
-| `ANALYTICS_ACCOUNT_ID` | The account id (32 hexadecimal characters) | The hourly measurement fails (section 5.2) |
-| `ANALYTICS_API_TOKEN` | The analytics token | The hourly measurement fails |
+| `ANALYTICS_ACCOUNT_ID` | The account id (32 hexadecimal characters) | The five-minute measurement fails (section 5.2) |
+| `ANALYTICS_API_TOKEN` | The analytics token | The five-minute measurement fails |
 | `TURN_DAILY_CAP_GB` | Decimal gigabytes (section 6.2) | Relay is unavailable |
 | `TURN_TICKET_CAP_GB` | Decimal gigabytes (section 6.2) | Relay is unavailable |
 
@@ -308,7 +308,7 @@ The hourly cron trips the kill switch itself, with a reason in admin state:
 | Reason | Cause |
 | --- | --- |
 | `spend-cap` | Today's measured relay egress reached `TURN_DAILY_CAP_GB` |
-| `measurement-failed` | `TURN_MEASUREMENT_FAILURE_LIMIT` (3) hourly measurements in a row failed |
+| `measurement-failed` | `TURN_MEASUREMENT_FAILURE_LIMIT` (3) five-minute measurements in a row failed |
 
 An automatic trip stays engaged until you release it: nothing re-enables relay on its own. Failing closed on a failed
 measurement is deliberate, because the relay has no spend cap of its own. Setting `TURN_MEASUREMENT_FAILURE_LIMIT` to
@@ -329,7 +329,7 @@ default ten-minute lifetime:
 
 A mint is refused when it would take the ticket past `TURN_TICKET_CAP_GB` or `TURN_TICKET_MAX_MINTS` (36), when the
 caller's prefix has minted five in the last minute or twenty in the last hour, or when today's measured egress plus
-every reservation the last measurement cannot have seen would pass `TURN_DAILY_CAP_GB`. The hourly measurement
+every reservation the last measurement cannot have seen would pass `TURN_DAILY_CAP_GB`. The five-minute measurement
 replaces reservations with real usage once credentials have expired, so the daily gate tightens only while relayed
 traffic is unmeasured. A credential whose measured egress passes twice its reservation is revoked and its ticket
 blocked. A mint that ticket is still waiting on is refused once the provider answers, and its credential is revoked
@@ -341,11 +341,13 @@ without reaching the client.
 | --- | --- | --- | --- |
 | `TURN_DAILY_CAP_GB` | 2 | 30 | 30 GB a day is 900 GB in a 30-day month, inside the 1,000 GB monthly free allowance |
 | `TURN_TICKET_CAP_GB` | 1 | 6 | About 20 credentials, three hours and twenty minutes, for a full relay-only host at the ceiling rate |
-| `TURN_CREDENTIAL_TTL_SECONDS` | 600 | 600 | The kill switch revokes at once, so the lifetime bounds only abuse between hourly measurements |
+| `TURN_CREDENTIAL_TTL_SECONDS` | 600 | 600 | The kill switch revokes measured abuse; the lifetime limits further use of an issued credential |
 
-At $0.05 per GB past the free allowance, the production cap bounds relay spend at $1.50 a day if the allowance is
-already used up, and about $45 in a 30-day month. Real sessions sit well below the 256 kbit/s ceiling, so measured
-usage is usually a small fraction of what is reserved. Raise the caps as measured volume grows, and revisit
+At $0.05 per GB past the free allowance, 30 GB of measured egress costs $1.50 if the allowance is already used up.
+These are issuance and measured-usage thresholds, not a provider-enforced egress or billing limit. A credential can
+relay above the 256 kbit/s planning rate before analytics arrive and the kill switch revokes it; Cloudflare describes
+per-allocation traffic above 50–100 Mbps before packet dropping. Monitor actual usage and billing during launch,
+especially after synthetic TURN checks. Raise the thresholds only with measured volume, and revisit
 self-hosting only on the terms in MultiplayerTransportOptions.md, section 6.
 
 ### 6.3 Watching it
@@ -353,7 +355,8 @@ self-hosting only on the terms in MultiplayerTransportOptions.md, section 6.
 - `GET /v1/admin/state` reports today's mints, reserved and outstanding bytes, measured bytes and when they were
   measured, consecutive measurement failures, live credentials and pending revocations.
 - The Cloudflare dashboard's Realtime TURN analytics show egress by key and by credential username.
-- Check both weekly, and after any release that changes relay behaviour.
+- Check both after deployment and synthetic relay checks, then daily during launch. Revisit the cadence after real
+  usage and billing are understood.
 
 ### 6.4 When spend trips the kill switch
 

@@ -131,7 +131,7 @@ jobs:
               services/control-plane/*|tests/fixtures/multiplayer/control-plane/*|tests/fixtures/multiplayer/descriptor/*|tests/fixtures/multiplayer/links/*|.github/workflows/control-plane.yml|.github/workflows/pr-policy.yml|.github/workflows/release-dry-run.yml|.github/repository-governance.json|.github/scripts/test_audit_repository_governance.py|docs/internal/ControlPlaneApi.md|docs/internal/ControlPlaneOperations.md|docs/RepositoryGovernance.md) ;;
               *) echo "::error::Out-of-scope production service file: $path"; exit 1 ;;
             esac
-          done < <(git diff --name-only "$BASE_SHA" HEAD)
+          done < <(git diff --name-only --no-renames "$BASE_SHA" HEAD)
 
       - name: Validate release source against the product version
         if: github.base_ref == 'main' && github.head_ref != 'service/production-multiplayer'
