@@ -484,15 +484,50 @@ jobs:
           expected=$'feat: exercise hook\n\nCo-authored-by: Human Developer <human@example.invalid>'
           test "$(<"$message")" = "$expected"
 
+      - name: Test analyzer archive preparation
+        run: python3 .github/scripts/test_prepare_psscriptanalyzer.py
+
+      - name: Resolve analyzer cache key
+        id: analyzer-cache
+        run: python3 .github/scripts/prepare_psscriptanalyzer.py --runner-temp "$RUNNER_TEMP" --output "$GITHUB_OUTPUT" --cache-info
+
+      - name: Restore analyzer archive
+        id: restore-analyzer
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.analyzer-cache.outputs.archive }}
+          key: ${{ steps.analyzer-cache.outputs.key }}
+
+      - name: Verify and extract analyzer archive
+        id: analyzer
+        env:
+          ANALYZER_CACHE_HIT: ${{ steps.restore-analyzer.outputs.cache-hit }}
+        run: |
+          python3 .github/scripts/prepare_psscriptanalyzer.py --runner-temp "$RUNNER_TEMP" \
+            --output "$GITHUB_OUTPUT" --cache-hit "$ANALYZER_CACHE_HIT"
+
+      - name: Verify analyzer pass and fail behavior
+        env:
+          ANALYZER_MANIFEST: ${{ steps.analyzer.outputs.manifest }}
+          ANALYZER_VERSION: ${{ steps.analyzer.outputs.version }}
+        run: python3 .github/scripts/test_prepare_psscriptanalyzer.py AnalyzerInvocationTests
+
+      - name: Save verified analyzer archive
+        if: steps.restore-analyzer.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.analyzer-cache.outputs.archive }}
+          key: ${{ steps.analyzer-cache.outputs.key }}
+
       - name: Analyze PowerShell safety and correctness
         shell: pwsh
+        env:
+          ANALYZER_MANIFEST: ${{ steps.analyzer.outputs.manifest }}
+          ANALYZER_VERSION: ${{ steps.analyzer.outputs.version }}
         run: |
-          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 `
-            -Repository PSGallery -Scope CurrentUser -Force
-          $findings = @(Invoke-ScriptAnalyzer -Path tools -Recurse `
-            -Settings .github/PSScriptAnalyzerSettings.psd1)
-          $findings | Format-Table -AutoSize
-          if ($findings.Count -ne 0) { exit 1 }
+          & ./.github/scripts/Invoke-RepositoryScriptAnalysis.ps1 `
+            -Manifest $env:ANALYZER_MANIFEST -ExpectedVersion $env:ANALYZER_VERSION
+          exit $LASTEXITCODE
 
       - name: Reject conflict markers and oversized Dart sources
         shell: bash
