@@ -32,31 +32,30 @@ namespace TopiaForge.RobotKit
 
         public bool CanInteract(Transform hand)
         {
-            if (!isActiveAndEnabled || agent == null || interaction == null || hand == null)
+            var native = agent;
+            var custom = interaction;
+            if (!isActiveAndEnabled || native == null || custom == null || hand == null)
             {
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(interaction.Prompt))
+            if (string.IsNullOrWhiteSpace(custom.Prompt))
             {
                 return false;
             }
 
             var distance = Vector3.Distance(hand.position, transform.position);
-            var maxDistance = interaction.Distance > 0f ? interaction.Distance : 3f;
+            var maxDistance = custom.Distance > 0f ? custom.Distance : 3f;
             if (distance > maxDistance)
             {
                 return false;
             }
 
-            if (interaction.CanInteract == null)
-            {
-                return true;
-            }
-
             try
             {
-                return interaction.CanInteract(BuildContext(hand, distance));
+                var owner = CallbackAgent(native, custom);
+                var gate = custom.CanInteract;
+                return owner != null && (gate == null || gate(BuildContext(owner, native, hand, distance)));
             }
             catch (Exception ex)
             {
@@ -67,14 +66,18 @@ namespace TopiaForge.RobotKit
 
         public UniTask OnInteractAttempt(Transform hand, CancellationToken ct)
         {
-            if (agent == null || interaction == null || hand == null || ct.IsCancellationRequested)
+            var native = agent;
+            var custom = interaction;
+            if (native == null || custom == null || custom.Interact is not { } callback || hand == null || ct.IsCancellationRequested)
             {
                 return UniTask.CompletedTask;
             }
 
             try
             {
-                interaction.Interact?.Invoke(BuildContext(hand, Vector3.Distance(hand.position, transform.position)));
+                var owner = CallbackAgent(native, custom);
+                if (owner != null)
+                    callback(BuildContext(owner, native, hand, Vector3.Distance(hand.position, transform.position)));
             }
             catch (Exception ex)
             {
@@ -99,12 +102,21 @@ namespace TopiaForge.RobotKit
             UIState.InteractAction.Set(interaction.Prompt ?? string.Empty);
         }
 
-        private RobotInteractionContext BuildContext(Transform hand, float distance)
+        private static IRobotAgent? CallbackAgent(IRobotAgent native, RobotCustomInteraction custom)
+        {
+            var resolve = custom.ResolveOwner;
+            if (resolve == null) return native;
+            // Bound callbacks receive the routed owner handle only while its scope and world remain current.
+            var owner = resolve();
+            return owner?.IsAlive == true ? owner : null;
+        }
+
+        private static RobotInteractionContext BuildContext(IRobotAgent owner, IRobotAgent native, Transform hand, float distance)
         {
             var handPosition = hand.position;
             return new RobotInteractionContext(
-                agent!,
-                agent!.Position,
+                owner,
+                native.Position,
                 new Vec3(handPosition.x, handPosition.y, handPosition.z),
                 distance);
         }
