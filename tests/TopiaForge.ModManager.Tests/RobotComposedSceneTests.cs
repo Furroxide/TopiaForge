@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
         {
             WorldObservation();
             RobotComposedDiscoveryTests.Run();
+            RobotComposedCleanupTests.Run();
             DiscoveryDiagnostics();
             // Synthetic structure only: no native character data or asset identifiers are reproduced.
             const string json = "{\"id\":\"test\",\"entities\":{\"actor\":{\"components\":{\"transform\":{},\"agent\":{},\"humanoid-body-parts\":{\"Head\":\"test-part\"}}}}}";
