@@ -16,16 +16,24 @@ internal static class WorldViewLifetimeRefreshTests
     {
         UnityMainThreadGuard.CaptureCurrentThread();
         RunCache();
-        Reconnect(false);
-        Reconnect(true);
+        Reconnect(ReconnectCase.Normal);
+        Reconnect(ReconnectCase.PartialBaseline);
+        Reconnect(ReconnectCase.ReplacementAvatar);
+        Reconnect(ReconnectCase.MixedRoster);
         Console.WriteLine("Engine lifetime world-view refresh and cached references passed.");
     }
 
-    internal static void RunCache() { UnityMainThreadGuard.CaptureCurrentThread(); Reconnect(false, true); }
+    internal static void RunCache() { UnityMainThreadGuard.CaptureCurrentThread(); Reconnect(ReconnectCase.Cache); }
 
-    private static void Reconnect(bool partialBaseline, bool cacheOnly = false)
+    private enum ReconnectCase { Normal, PartialBaseline, Cache, ReplacementAvatar, MixedRoster }
+
+    private static void Reconnect(ReconnectCase scenario)
     {
-        using var engine = new EngineHarness(MultiplayerProcessKind.Interactive);
+        var mixedRoster = scenario == ReconnectCase.MixedRoster;
+        using var engine = new EngineHarness(MultiplayerProcessKind.Interactive, options =>
+        {
+            if (mixedRoster) options.ParticipantGraceMicros = 500_000;
+        });
         var guest = engine.AddClient("subject");
         var watcher = engine.AddClient("watcher");
         engine.Flush();
@@ -71,24 +79,67 @@ internal static class WorldViewLifetimeRefreshTests
         Check(!seam.PlayerWorldView(host.Renderer, observer.Id.Value).Hide(foreign).Succeeded,
             "same-ID foreign entity cannot borrow a player's canonical reference");
 
-        if (cacheOnly)
+        if (scenario == ReconnectCase.ReplacementAvatar)
+        {
+            host.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, original)).Destroyed = true;
+            observer.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, watched)).Destroyed = true;
+            Frames(4);
+            var replacement = Avatar(host, subject.Id);
+            var watchedReplacement = Avatar(observer, subject.Id);
+            Check(!ReferenceEquals(original, replacement) && !ReferenceEquals(watched, watchedReplacement)
+                && Row(engine.Host, subject.Id).LifetimeId == originalLifetime
+                && host.Players.TryResolveReference(oldReference, out var currentRoot) && ReferenceEquals(currentRoot, replacement)
+                && observer.Players.TryResolveReference(oldReference, out var currentWatched) && ReferenceEquals(currentWatched, watchedReplacement),
+                "destroyed roots are replaced in the same admission and resolve through the original canonical name");
+            Check(!host.Renderer.Hidden.Contains(original) && host.Renderer.Hidden.Contains(replacement)
+                && !observer.Renderer.Hidden.Contains(watched) && observer.Renderer.Hidden.Contains(watchedReplacement),
+                "the existing host and observer hides have already followed the replacement roots");
+            original = replacement;
+            watched = watchedReplacement;
+        }
+
+        if (scenario == ReconnectCase.Cache)
         {
             Idle(host, observer, oldReference);
+            IdleAcrossRosterPublications(host);
+        }
+        if (scenario == ReconnectCase.Cache || mixedRoster)
+        {
+            if (mixedRoster)
+            {
+                engine.Network.Sever(watcher.Link);
+                Frames(3);
+                Check(!Row(engine.Host, observer.Id).IsConnected && privateView.IsActive,
+                    "the other viewer's scoped lease survives while that viewer is in grace");
+                engine.Advance(35);
+                Check(!engine.Host.Snapshot.TryGetParticipant(observer.Id, out _), "the other viewer expires before the next runtime roster read");
+            }
             // Actual replacement can be published before the consumer samples the intermediate lost-link roster.
             engine.Network.Sever(guest.Link); engine.Advance(3);
             engine.Join(subject.Engine, "subject"); engine.Flush();
             foreach (var node in nodes) node.Runtime.BeforeModsUpdate(1f / 60);
             Check(Row(engine.Host, subject.Id).LifetimeId != originalLifetime && !host.Players.TryResolveReference(oldReference, out _),
                 "coalesced engine reconnect retires cached reference without an intermediate disconnect sample");
-            CheckSuppressed("on the coalesced reconnect receive frame");
+            if (mixedRoster)
+                Check(!PresenceVisible(host, original) && !HasNametag(host, displayName), "host presence is suppressed on the mixed roster receive frame");
+            else CheckSuppressed("on the coalesced reconnect receive frame");
             var calls = host.Renderer.HideCalls;
-            host.Services.Views.Run(.25f);
-            Check(host.Renderer.Hidden.Contains(original) && host.Renderer.HideCalls == calls,
+            var releases = host.Renderer.ReleaseCalls;
+            host.Services.Views.Run(mixedRoster ? 0 : .25f);
+            Check(host.Renderer.Hidden.Contains(original) && host.Renderer.HideCalls == calls && host.Renderer.ReleaseCalls == releases,
                 "name refresh occurs before local reconciliation can release an admitted retained-root hold");
+            if (mixedRoster)
+            {
+                Check(local.IsActive && !privateView.IsActive, "the same publication removes only the expired viewer's lease");
+                host.Services.Views.Run(.25f);
+                Check(host.Renderer.HideCalls == calls && host.Renderer.ReleaseCalls == releases,
+                    "the later retry has no dropped host hold to reacquire");
+            }
             return;
         }
 
         var extras = new List<IViewLease>();
+        var partialBaseline = scenario == ReconnectCase.PartialBaseline;
         if (partialBaseline)
         {
             for (var index = 0; index < 40; index++)
@@ -193,6 +244,29 @@ internal static class WorldViewLifetimeRefreshTests
                 + allocated + " bytes).");
     }
 
+    private static void IdleAcrossRosterPublications(Node host)
+    {
+        var snapshot = host.Engine.Snapshot;
+        // Allocate the equivalent snapshots before the probe. The runtime sees a new object on every publication.
+        var first = Equivalent(snapshot);
+        var second = Equivalent(snapshot);
+        void Publish(int index)
+        {
+            host.Control.SnapshotOverride = (index & 1) == 0 ? first : second;
+            host.Services.Views.Run(.25f);
+        }
+        try
+        {
+            for (var index = 0; index < 200; index++) Publish(index);
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < 10_000; index++) Publish(index);
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            if (allocated != 0)
+                throw new InvalidOperationException("Lifetime view: distinct stable-admission roster publications allocate " + allocated + " bytes.");
+        }
+        finally { host.Control.SnapshotOverride = null; }
+    }
+
     private static MultiplayerSessionSnapshot Equivalent(MultiplayerSessionSnapshot source) => new(source.Id, source.State,
         source.ProcessKind, source.ExecutionSides, source.LocalParticipantId, source.Participants, source.Tick, source.Seed,
         source.HostParticipantId, source.EndReason);
@@ -262,6 +336,7 @@ internal static class WorldViewLifetimeRefreshTests
     {
         internal readonly HashSet<IEntity> Hidden = new();
         internal int HideCalls;
+        internal int ReleaseCalls;
         public bool IsAlive { get; private set; } = true;
         public bool FogAvailable => true;
         public bool EnvironmentAvailable => true;
@@ -278,7 +353,16 @@ internal static class WorldViewLifetimeRefreshTests
         }
         public void Dispose() { if (!IsAlive) return; IsAlive = false; Stopped(); Hidden.Clear(); }
         private sealed class Hold(Renderer renderer, IEntity entity) : IDisposable
-        { private bool active = true; public void Dispose() { if (!active) return; active = false; renderer.Hidden.Remove(entity); } }
+        {
+            private bool active = true;
+            public void Dispose()
+            {
+                if (!active) return;
+                active = false;
+                renderer.ReleaseCalls++;
+                renderer.Hidden.Remove(entity);
+            }
+        }
     }
     private sealed class QuietLog : IMultiplayerLog
     {
