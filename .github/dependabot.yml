@@ -21,8 +21,16 @@ updates:
     commit-message:
       prefix: deps
     groups:
+      roslyn:
+        patterns: ["Microsoft.CodeAnalysis.*"]
       dotnet:
         patterns: ["*"]
+        exclude-patterns: ["Microsoft.CodeAnalysis.*"]
+    ignore:
+      # Keep analyzers and generators compatible with the compiler in the pinned SDK.
+      # Workspaces must share the hold because it can pull in a newer CSharp package.
+      - dependency-name: "Microsoft.CodeAnalysis.*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /tools/ugc-automerge-sidecar
@@ -35,8 +43,6 @@ updates:
       sidecar:
         patterns: ["*"]
 
-  # The website is pending on the bootstrap branch. This entry becomes active
-  # when its package.json and package-lock.json are promoted to the default branch.
   - package-ecosystem: npm
     directory: /website
     schedule:
@@ -46,6 +52,23 @@ updates:
       prefix: deps
     groups:
       website:
+        patterns: ["*"]
+    ignore:
+      # The current website toolchain does not accept the next TypeScript major.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /services/control-plane
+    schedule:
+      interval: weekly
+    target-branch: dev
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: deps
+    groups:
+      control-plane:
         patterns: ["*"]
 
   - package-ecosystem: pub
