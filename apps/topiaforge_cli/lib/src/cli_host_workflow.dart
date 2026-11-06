@@ -170,6 +170,14 @@ Future<int> runCliHost({
     final voice = defaults.voice && settings.voiceActive;
     write(voice ? CliMultiplayerText.voiceOn : CliMultiplayerText.voiceOff);
     write('Host visibility: ${visibility.wireName}.');
+    if (visibility == ServerVisibility.public) {
+      write(
+        'Public Internet sessions contribute to activity bands on the status page. '
+        'Bands cover 5 sessions and 10 players, appear only when those minimums are met, '
+        'and are delayed at least 15 minutes. Invite-only and LAN sessions are '
+        'excluded. Published bands are kept for 90 days.',
+      );
+    }
     if (!await consent('Start hosting [y/N]')) {
       return refuse('Hosting cancelled. Run host again when ready.', 130);
     }

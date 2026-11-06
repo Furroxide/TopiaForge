@@ -20,6 +20,8 @@ export async function activity(context: RequestContext): Promise<Response> {
   const snapshot = await context.env.ACTIVITY_SNAPSHOTS.get(
     context.env.ACTIVITY_SNAPSHOTS.idFromName("snapshots"),
   ).released();
-  if (snapshot === null) throw new ApiError("service-unavailable");
+  // A rolling upgrade may still reach a legacy snapshot instance.
+  if (snapshot === null || snapshot.schema !== "topiaforge.activity/2" || snapshot.scope !== "public")
+    throw new ApiError("service-unavailable");
   return jsonResponse(200, { ...snapshot });
 }
