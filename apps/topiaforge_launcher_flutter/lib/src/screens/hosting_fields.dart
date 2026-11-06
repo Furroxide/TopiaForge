@@ -83,6 +83,16 @@ class _HostingFieldsState extends State<_HostingFields> {
           onChanged: (value) => setState(() => _visibility = value!),
         ),
         const SizedBox(height: 12),
+        if (_visibility == ServerVisibility.public) ...[
+          const Text(
+            'Public Internet sessions contribute to activity bands on the status page. '
+            'Bands cover 5 sessions and 10 players, appear only when those minimums are met, '
+            'and are delayed at least 15 minutes. Invite-only and LAN sessions are '
+            'excluded. Published bands are kept for 90 days.',
+            key: Key('hosting-activity-disclosure'),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextFormField(
           key: const Key('hosting-port'),
           controller: _port,

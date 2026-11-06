@@ -11,6 +11,13 @@ void main() {
   late HostFixture rig;
   setUp(() => rig = HostFixture());
   tearDown(() => rig.dispose());
+  test('public activity disclosure is printed before launch', () async {
+    rig.onLaunch = () {
+      expect(rig.messages.any((line) => line.startsWith('Public Internet sessions contribute')), isTrue);
+      rig.controller.add(rig.success());
+    };
+    expect(await rig.run(['--yes', '--visibility', 'public']), 0);
+  });
   test('no terminal needs yes before preferences or launch', () async {
     expect(await rig.run([]), 2);
     expect(rig.syncs, 0);
