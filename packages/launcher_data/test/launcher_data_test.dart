@@ -28,6 +28,7 @@ part 'runtime_loader_payload_test_part.dart';
 part 'restart_requirement_test_part.dart';
 part 'world_catalog_test_part.dart';
 part 'launch_v5_integration_test_part.dart';
+part 'dev_peer_launch_integration_test_part.dart';
 part 'registry_history_test_part.dart';
 part 'owned_game_quit_test_part.dart';
 
@@ -155,6 +156,12 @@ void main() {
     gameRoot: () => gameRoot,
   );
   _registerLaunchV5IntegrationTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerDevPeerLaunchIntegrationTests(
     root: () => root,
     dataRoot: () => dataRoot,
     repositoryRoot: () => repoRoot,

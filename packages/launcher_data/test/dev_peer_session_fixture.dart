@@ -126,6 +126,9 @@ Future<void> main(List<String> args) async {
         workingDirectory: gameRoot,
         environment: {
           ...profile.launchSettings.environment,
+          // This lifetime fixture bypasses launchSession. The real repository
+          // supplies this reserved value from its own data root.
+          'TOPIAFORGE_DATA_ROOT': overlay.launcherRoot,
           'TF_FIXTURE_READY_PORT': '${server.port}',
           // Expose the old path-visible/writer-open sequence deterministically.
           if (onReportPublished != null) 'TF_FIXTURE_HOLD_PUBLICATION': '1',
