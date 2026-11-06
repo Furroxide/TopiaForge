@@ -147,7 +147,8 @@ namespace TopiaForge.ModManager
         internal bool TryGetTransform(IEntity entity, IModLifetime? caller, out TransformState transform)
         {
             transform = TransformState.Identity;
-            if (!UnityMainThreadGuard.IsCurrent || disposed) return false;
+            if (disposed) return false;
+            UnityMainThreadGuard.AssertCurrent();
             try
             {
                 GameObject gameObject;
