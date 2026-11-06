@@ -19,6 +19,7 @@ namespace TopiaForge.ModManager.Tests
             HighContrastParityWithHudColor();
             HighContrastTransformsScheme();
             PaperTextReadsOnEveryPaperSurface();
+            UiKitOnColorTests.Run();
             AccessibilityProfilesComposeAndClamp();
             EasingEndpointsAndShape();
             RoundedRectCoverage();
