@@ -132,8 +132,8 @@ origin for offline scopes. It continues during pause and slow motion. A countdow
 at zero, and ends with its composition or surface. No author frame callback is needed. Progress
 and countdown nodes use the surface's semantic tones, UI scale and high-contrast theme.
 
-Progress and countdown widgets also work in targeted player UI and shared HUDs. The original deadline travels
-unchanged, including in late-join baselines. A countdown created during `OnLoad` keeps its deadline when the initial
+Progress and countdown widgets also work in targeted player UI and shared HUDs. In the same epoch the original
+deadline travels unchanged, including in late-join baselines. A countdown created during `OnLoad` keeps its deadline when the initial
 solo multiplayer provider attaches, and opening that same world to peers retains its timeline. Opening a later UI scope never restarts the clock. Offline scopes
 share one origin; joined players estimate the host timeline from authenticated network samples, with a half-RTT
 latency correction. Estimates may differ temporarily because of latency, asymmetric links, frame scheduling or
@@ -142,10 +142,10 @@ player has reached a deadline. Keep authoritative round decisions on the host.
 
 This corrects the pre-release per-scope clock semantics. The clock is neither Unix time nor local wall time,
 and gameplay pause/slow motion does not pause it. To pause a round timer, display the held remaining value
-and create a fresh deadline when resuming. A new session invalidates previously bound countdown nodes. Recreate
-deadlines from the new `ClockTime` rather than reusing an old numeric `EndsAt`. Internally replicated deadlines
-carry the session epoch, so a replacement cannot
-accept a previous session's timer.
+and create a fresh deadline when resuming. A new solo world or replacement session expires previously bound
+countdowns. When the surface's scope and recipient remain active, a shared HUD or targeted surface keeps its
+other content and shows the expired timer at zero. Use `SetContent` with a new countdown built from the current
+`ClockTime` to start another timer. A new composition cannot reuse a countdown node bound to an ended epoch.
 
 Remote compositions are validated in full before any surface is created. Unsupported nodes, unknown widget
 versions and invalid shapes are refused; authored shape failures return `InvalidArgument` with the cause.

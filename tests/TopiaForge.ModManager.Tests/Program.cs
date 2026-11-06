@@ -17,6 +17,13 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && args[0] == "--menu-presentation")
             { MenuLoadPresentationTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--countdown-wire") { UiCountdownWireTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-epoch-lifetimes")
+            {
+                PlayersRemoteContractTests.CountdownWidgets();
+                PlayersRemoteContractTests.CountdownSurvivesReplacement();
+                PresentationRuntimeTests.CountdownWidgets();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--robot-world-lifetime")
             { RobotBodyTests.RunWorldRecovery(); RobotComposedCurrentnessTests.Run(); RobotComposedSceneTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-body-views")
