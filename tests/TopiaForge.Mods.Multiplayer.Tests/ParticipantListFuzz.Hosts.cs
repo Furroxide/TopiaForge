@@ -100,15 +100,15 @@ internal sealed partial class ParticipantListFuzz
         var version = ++lists;
         string Name(string id) => current.Label + "v" + version + "-" + id;
         var entries = new List<ParticipantEntry>();
-        if (!current.Host.Headless) entries.Add(new ParticipantEntry("local", Name("local"), true, true, MultiplayerConnectionQuality.Unknown, null, null));
+        if (!current.Host.Headless) entries.Add(new ParticipantEntry("local", Name("local"), true, true, MultiplayerConnectionQuality.Unknown, null, null, Guid.NewGuid()));
         var others = Ids.Where(id => id != current.ClientId && random.Next(2) == 0).ToList();
         var at = random.Next(others.Count + 1);
         for (var index = 0; index <= others.Count; index++)
         {
-            if (index == at) entries.Add(new ParticipantEntry(current.ClientId, Name(current.ClientId), true, false, MultiplayerConnectionQuality.Unknown, null, null));
+            if (index == at) entries.Add(new ParticipantEntry(current.ClientId, Name(current.ClientId), true, false, MultiplayerConnectionQuality.Unknown, null, null, Guid.NewGuid()));
             if (index < others.Count)
             {
-                entries.Add(new ParticipantEntry(others[index], Name(others[index]), random.Next(4) != 0, false, MultiplayerConnectionQuality.Unknown, null, null));
+                entries.Add(new ParticipantEntry(others[index], Name(others[index]), random.Next(4) != 0, false, MultiplayerConnectionQuality.Unknown, null, null, Guid.NewGuid()));
             }
         }
 

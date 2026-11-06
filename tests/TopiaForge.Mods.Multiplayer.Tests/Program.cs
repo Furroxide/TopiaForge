@@ -23,6 +23,8 @@ internal static class Program
             if (args.Length == 1 && args[0] == "--voice-flood") { VoiceRelayPolicyTests.FloodsJustPastTwiceALimitAreRateLimitedWithoutStrikesEnoughToMute(); Console.WriteLine("Voice flood regression passed."); return 0; }
             if (args.Length == 1 && args[0] == "--voice-retirement-service") { VoiceRetirementTests.Service(); return 0; }
             if (args.Length == 1 && args[0] == "--voice-retirement-engine") { VoiceRetirementTests.Engine(); return 0; }
+            if (args.Length == 1 && args[0] == "--world-view-lifetimes") { WorldViewLifetimeRefreshTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--player-reference-cache") { WorldViewLifetimeRefreshTests.RunCache(); return 0; }
             if (args.Length == 1 && args[0] == "--participant-lifetimes") { ParticipantLifetimeTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--per-player") { PerPlayerStateTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--communication-routing")
@@ -777,6 +779,7 @@ internal static class Program
             ParticipantListProviderTests.AJoinWhoseWholeAnswerArrivesAtOnceEndsThePreviousHostsStreams();
             VoiceSessionChangeTests.AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams();
             ParticipantLifetimeTests.Run();
+            WorldViewLifetimeRefreshTests.Run();
             ParticipantListTests.TheListGenerationMovesOnlyWhenTheListIsLetGo();
             EnginePlayersTests.CancelBeforeJoinFlush();
             ParticipantListFuzzTests.EverySnapshotShowsTheListOfTheHostThatSentIt();

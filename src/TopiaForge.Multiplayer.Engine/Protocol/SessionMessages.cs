@@ -13,8 +13,9 @@ namespace TopiaForge.Multiplayer.Engine
             bool isHost,
             MultiplayerConnectionQuality quality,
             int? pingMilliseconds,
-            string? playerKey, Guid? lifetimeId = null)
+            string? playerKey, Guid lifetimeId)
         {
+            if (lifetimeId == Guid.Empty) throw new ArgumentException("A participant lifetime is required.", nameof(lifetimeId));
             Id = id;
             DisplayName = displayName;
             IsConnected = isConnected;
@@ -22,7 +23,7 @@ namespace TopiaForge.Multiplayer.Engine
             Quality = quality;
             PingMilliseconds = pingMilliseconds;
             PlayerKey = playerKey;
-            LifetimeId = lifetimeId ?? Guid.NewGuid();
+            LifetimeId = lifetimeId;
         }
 
         internal string Id { get; }
