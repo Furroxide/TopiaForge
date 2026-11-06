@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace TopiaForge.Mods.UnityUi
@@ -14,6 +15,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly Color successText;
         private readonly Color warningText;
         private readonly Color dangerText;
+        private readonly (Color Fill, Color FlatFill, Color Ring, Color Label)[] chips;
 
         /// <summary>Gets scheme.</summary>
         public TopiaForgeScheme Scheme { get; }
@@ -118,6 +120,36 @@ namespace TopiaForge.Mods.UnityUi
             successText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Success, HighContrast)) : Success;
             warningText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Warning, HighContrast)) : Warning;
             dangerText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Danger, HighContrast)) : Danger;
+
+            // A chip's label is drawn on the chip, so it is resolved against the chip's own fill.
+            var tones = (TopiaForgeTone[])Enum.GetValues(typeof(TopiaForgeTone));
+            chips = new (Color Fill, Color FlatFill, Color Ring, Color Label)[tones.Length];
+            foreach (var tone in tones)
+            {
+                var chip = tone == TopiaForgeTone.Neutral
+                    ? TopiaForgeSchemes.NeutralChip(scheme, colors, HighContrast)
+                    : TopiaForgeSchemes.Chip(scheme, colors, ToRgba(ToneColor(tone)), HighContrast);
+                chips[(int)tone] = (
+                    ToColor(chip.Fill),
+                    ToColor(chip.Flattened(colors.SurfaceSunken).Fill),
+                    ToColor(chip.Ring),
+                    ToColor(chip.Label));
+            }
+        }
+
+        /// <summary>
+        /// Gets a status chip's colors in a tone, its label reading on the chip at WCAG AA, or AAA in high contrast. On
+        /// Paper the chip is a wash of its tone with a ring in it; on the HUD it is solid, so the world behind it cannot
+        /// change it. Over a picture, as on a card's preview, a Paper chip's wash is flattened onto sunken paper instead,
+        /// so the picture cannot show through.
+        /// </summary>
+        internal void ChipColors(TopiaForgeTone tone, bool overPicture, out Color fill, out Color ring, out Color label)
+        {
+            var index = (int)tone;
+            var chip = chips[index >= 0 && index < chips.Length ? index : (int)TopiaForgeTone.Neutral];
+            fill = overPicture ? chip.FlatFill : chip.Fill;
+            ring = chip.Ring;
+            label = chip.Label;
         }
 
         /// <summary>
@@ -169,6 +201,11 @@ namespace TopiaForge.Mods.UnityUi
         private static Color ToColor(TopiaForgeRgba value)
         {
             return new Color(value.R, value.G, value.B, value.A);
+        }
+
+        private static TopiaForgeRgba ToRgba(Color value)
+        {
+            return new TopiaForgeRgba(value.r, value.g, value.b, value.a);
         }
     }
 

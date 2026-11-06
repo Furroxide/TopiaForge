@@ -300,12 +300,11 @@ namespace TopiaForge.Mods.UnityUi
 
             previewFrame.color = theme.SurfaceSunken;
 
-            var accent = theme.ToneColor(badgeTone);
-            var background = accent;
-            background.a = Scheme == TopiaForgeScheme.Paper ? 0.14f : 0.22f;
-            badgeFill.color = background;
-            badgeRing.color = accent;
-            badgeLabel.color = badgeTone == TopiaForgeTone.Neutral ? theme.TextMuted : accent;
+            // The corner badge sits on the preview, so a picture may be under it.
+            theme.ChipColors(badgeTone, overPicture: true, out var badgeBackground, out var badgeOutline, out var badgeText);
+            badgeFill.color = badgeBackground;
+            badgeRing.color = badgeOutline;
+            badgeLabel.color = badgeText;
         }
 
         private static UImage CreateStretched(Transform parent, string name, Sprite sprite, bool sliced)

@@ -64,12 +64,40 @@ namespace TopiaForge.Mods.UnityUi
             return current;
         }
 
+        /// <summary>
+        /// Gets a color drawn at an opacity over an opaque one, as an opaque color. Unity blends the stored sRGB values in
+        /// a gamma project and linear light in a linear one, so the caller says which.
+        /// </summary>
+        internal static TopiaForgeRgba Over(TopiaForgeRgba top, float opacity, TopiaForgeRgba bottom, bool linear)
+        {
+            return new TopiaForgeRgba(
+                Blend(top.R, bottom.R, opacity, linear),
+                Blend(top.G, bottom.G, opacity, linear),
+                Blend(top.B, bottom.B, opacity, linear),
+                1f);
+        }
+
+        private static float Blend(float top, float bottom, float opacity, bool linear)
+        {
+            return linear
+                ? Delinearize(Lerp(Linearize(bottom), Linearize(top), opacity))
+                : Lerp(bottom, top, opacity);
+        }
+
         private static float Linearize(float channel)
         {
             channel = channel < 0f ? 0f : channel > 1f ? 1f : channel;
             return channel <= 0.03928f
                 ? channel / 12.92f
                 : (float)Math.Pow((channel + 0.055) / 1.055, 2.4);
+        }
+
+        private static float Delinearize(float channel)
+        {
+            channel = channel < 0f ? 0f : channel > 1f ? 1f : channel;
+            return channel <= 0.0031308f
+                ? channel * 12.92f
+                : (float)((1.055 * Math.Pow(channel, 1.0 / 2.4)) - 0.055);
         }
 
         private static float Lerp(float from, float to, float t)

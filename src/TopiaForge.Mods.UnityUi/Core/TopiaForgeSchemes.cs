@@ -38,6 +38,68 @@ namespace TopiaForge.Mods.UnityUi
                 highContrast ? PaperHighContrastTextRatio : PaperTextRatio);
         }
 
+        /// <summary>The opacity of a Paper chip's fill: a wash of its tone over the surface behind it.</summary>
+        internal const float PaperChipTint = 0.14f;
+
+        /// <summary>The label a HUD chip takes on a fill too light for the HUD's own text.</summary>
+        internal static readonly TopiaForgeRgba HudChipDarkText = TopiaForgePalette.HudBackdrop;
+
+        /// <summary>The contrast a chip's label keeps on the chip in either scheme, as Paper text does: WCAG AA, or AAA in high contrast.</summary>
+        internal static float ChipTextRatio(bool highContrast) => highContrast ? PaperHighContrastTextRatio : PaperTextRatio;
+
+        /// <summary>
+        /// Gets the colors of a chip in a status, brand or text tone. On Paper the chip is a wash of the tone with a ring in
+        /// it, and its label is the tone, darkened until it reads on the wash over the darkest surface text sits on. On the
+        /// HUD the chip is solid in the tone, so that the world behind it cannot change it, and its label is the HUD's text
+        /// or a dark one, whichever reads.
+        /// </summary>
+        internal static TopiaForgeChipColors Chip(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, TopiaForgeRgba tone, bool highContrast)
+        {
+            return scheme == TopiaForgeScheme.Paper
+                ? PaperChip(tone, tone, highContrast)
+                : HudChip(tone, colors.Text, highContrast);
+        }
+
+        /// <summary>
+        /// Gets a neutral chip's colors: on Paper a wash of the text color with a muted label, darkened if it must be, and on
+        /// the HUD the slate tint with a label in the HUD's text.
+        /// </summary>
+        internal static TopiaForgeChipColors NeutralChip(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
+        {
+            return scheme == TopiaForgeScheme.Paper
+                ? PaperChip(colors.Text, colors.TextMuted, highContrast)
+                : HudChip(colors.Tint, colors.Text, highContrast);
+        }
+
+        private static TopiaForgeChipColors PaperChip(TopiaForgeRgba tone, TopiaForgeRgba label, bool highContrast)
+        {
+            // The wash comes out darkest over the darkest surface text sits on. Unity blends it on the stored values in a
+            // gamma project and in linear light in a linear one, so the label is held to whichever comes out darker.
+            var wash = Darker(
+                TopiaForgeContrast.Over(tone, PaperChipTint, DarkestTextSurface, linear: false),
+                TopiaForgeContrast.Over(tone, PaperChipTint, DarkestTextSurface, linear: true));
+            return new TopiaForgeChipColors(
+                tone.WithAlpha(PaperChipTint),
+                tone,
+                TopiaForgeContrast.DarkenForPaper(label, wash, ChipTextRatio(highContrast)));
+        }
+
+        private static TopiaForgeChipColors HudChip(TopiaForgeRgba tone, TopiaForgeRgba lightText, bool highContrast)
+        {
+            var fill = tone.WithAlpha(1f);
+            var dark = TopiaForgeContrast.Ratio(HudChipDarkText, fill) >= TopiaForgeContrast.Ratio(lightText, fill);
+            var label = dark ? HudChipDarkText : lightText;
+
+            // A fill that neither label reads on, such as a mid-grey accent a mod picks, moves away from its label until
+            // the label reads.
+            for (var step = 0; step < 48 && TopiaForgeContrast.Ratio(label, fill) < ChipTextRatio(highContrast); step++)
+            {
+                fill = dark ? TopiaForgeRgba.Lerp(fill, TopiaForgePalette.White, 0.08f) : fill.Scale(0.92f);
+            }
+
+            return new TopiaForgeChipColors(fill, fill, label);
+        }
+
         private static TopiaForgeRgba Darker(TopiaForgeRgba first, TopiaForgeRgba second) =>
             TopiaForgeContrast.Luminance(first) <= TopiaForgeContrast.Luminance(second) ? first : second;
 

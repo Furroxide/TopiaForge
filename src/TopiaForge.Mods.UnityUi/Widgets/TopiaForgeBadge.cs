@@ -5,8 +5,9 @@ using UImage = UnityEngine.UI.Image;
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
-    /// Status chip (ENABLED / RESTART / LOADED...). Chip-radius fill tinted by tone
-    /// with a matching ring; Set() dirty-checks both text and tone.
+    /// Status chip (ENABLED / RESTART / LOADED...). On Paper a chip-radius wash of its tone with
+    /// a matching ring, on the HUD solid in its tone, with a label that reads on it in every tone;
+    /// Set() dirty-checks both text and tone.
     /// </summary>
     public sealed class TopiaForgeBadge : TopiaForgeWidget, ITopiaForgeThemeAware
     {
@@ -98,12 +99,10 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
-            var accent = theme.ToneColor(tone);
-            var background = accent;
-            background.a = Scheme == TopiaForgeScheme.Paper ? 0.14f : 0.22f;
+            theme.ChipColors(tone, overPicture: false, out var background, out var outline, out var text);
             fill.color = background;
-            ring.color = accent;
-            label.color = tone == TopiaForgeTone.Neutral ? theme.TextMuted : accent;
+            ring.color = outline;
+            label.color = text;
         }
 
         private void FitWidth()
