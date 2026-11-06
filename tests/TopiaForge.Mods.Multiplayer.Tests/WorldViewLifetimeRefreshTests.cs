@@ -48,6 +48,16 @@ internal static class WorldViewLifetimeRefreshTests
         var original = Avatar(host, subject.Id);
         var watched = Avatar(observer, subject.Id);
         var originalLifetime = Row(engine.Host, subject.Id).LifetimeId;
+        var displayName = Row(engine.Host, subject.Id).DisplayName;
+        Check(AvatarShown(host, original) && AvatarShown(observer, watched)
+            && HasNametag(host, displayName) && HasNametag(observer, displayName),
+            "host and observer both present the subject before link loss");
+        void CheckSuppressed(string stage)
+        {
+            Check(!PresenceVisible(host, original) && !PresenceVisible(observer, watched)
+                && !HasNametag(host, displayName) && !HasNametag(observer, displayName),
+                "host and observer suppress avatar and nametag " + stage);
+        }
         var made = host.Players.TryCreateReference(original, out var oldReference);
         Check(made && observer.Players.TryResolveReference(oldReference, out var remote) && ReferenceEquals(remote, watched),
             "canonical engine reference resolves the observer's exact current root");
@@ -70,6 +80,7 @@ internal static class WorldViewLifetimeRefreshTests
             foreach (var node in nodes) node.Runtime.BeforeModsUpdate(1f / 60);
             Check(Row(engine.Host, subject.Id).LifetimeId != originalLifetime && !host.Players.TryResolveReference(oldReference, out _),
                 "coalesced engine reconnect retires cached reference without an intermediate disconnect sample");
+            CheckSuppressed("on the coalesced reconnect receive frame");
             var calls = host.Renderer.HideCalls;
             host.Services.Views.Run(.25f);
             Check(host.Renderer.Hidden.Contains(original) && host.Renderer.HideCalls == calls,
@@ -110,7 +121,14 @@ internal static class WorldViewLifetimeRefreshTests
         engine.Network.Sever(guest.Link); Frames(3);
         Check(!Row(engine.Host, subject.Id).IsConnected && !host.Players.TryResolveReference(oldReference, out _)
             && !host.Services.Views.IsCurrentAvatar(original, host.Renderer), "disconnected canonical reference and native admission refuse retained root");
-        Check(!host.Renderer.Hidden.Contains(original), "disconnect suspends the host's native hold");
+        Check(!observer.Players.TryResolveReference(oldReference, out _)
+            && !observer.Services.Views.IsCurrentAvatar(watched, observer.Renderer),
+            "disconnected canonical reference and native admission also refuse the observer's retained root");
+        CheckSuppressed("during disconnect");
+        Frames(10);
+        CheckSuppressed("through reconnect grace");
+        Check(!host.Renderer.Hidden.Contains(original) && !observer.Renderer.Hidden.Contains(watched),
+            "presence suppression covers released native holds on host and observer during grace");
         engine.Join(subject.Engine, "subject"); engine.Flush();
         foreach (var node in nodes) node.Runtime.BeforeModsUpdate(1f / 60);
         // Observe the replacement at the real receive boundary before host send may assign a fresh index.
@@ -118,11 +136,14 @@ internal static class WorldViewLifetimeRefreshTests
             Check(!node.Presence.TryGetPose(subject.Id, out _) && node.Presence.TryGetPeer(subject.Id, out var replaced)
                 && replaced!.Index == 0 && (replaced.Flags & (PresenceFlags.Talking | PresenceFlags.Typing)) == 0,
                 "replacement admission resumes views without fabricating gameplay pose or index");
+        CheckSuppressed("on the rejoin receive frame");
         Frames(3);
+        CheckSuppressed("after rejoin without a fresh pose");
         var current = Row(engine.Host, subject.Id);
         Check(current.IsConnected && current.LifetimeId != originalLifetime, "production engine rejoin issues a genuinely fresh lifetime");
         Check(ReferenceEquals(Avatar(host, subject.Id), original), "grace rejoin retains the exact validated avatar root");
-        Check(!host.Players.TryResolveReference(oldReference, out _), "retired opaque reference remains refused after rejoin");
+        Check(!host.Players.TryResolveReference(oldReference, out _) && !observer.Players.TryResolveReference(oldReference, out _),
+            "retired opaque reference remains refused on both processes after rejoin");
         made = host.Players.TryCreateReference(original, out var freshReference);
         Check(made && !freshReference.Equals(oldReference) && host.Players.TryResolveReference(freshReference, out var refreshed)
             && ReferenceEquals(refreshed, original), "canonical cache refreshes by actual engine-issued lifetime");
@@ -132,12 +153,24 @@ internal static class WorldViewLifetimeRefreshTests
         Check(observer.Renderer.Hidden.Contains(Avatar(observer, subject.Id)),
             partialBaseline ? "fresh lifetime view restarts partial baseline without stale wire fragments" : "fresh lifetime reference reaches observer without outer lease reacquisition");
         Check(local.IsActive && privateView.IsActive, "actual lifetime recovery preserves original outer leases");
+        CheckSuppressed("after view delivery without a fresh pose");
         var savedWorld = host.World; host.World = "another-world";
         Check(!host.Services.Views.IsCurrentAvatar(original, host.Renderer), "world mismatch cannot admit retained root"); host.World = savedWorld;
         host.SceneVersion++;
         Check(!host.Services.Views.IsCurrentAvatar(original, host.Renderer), "scene mismatch cannot admit retained root"); host.SceneVersion--;
 
         Idle(host, observer, freshReference);
+        subject.SendEnabled = true;
+        for (var frame = 0; frame < 60 && !(host.Presence.TryGetPose(subject.Id, out _)
+            && observer.Presence.TryGetPose(subject.Id, out _)); frame++) Frames(1);
+        Check(host.Presence.TryGetPose(subject.Id, out _) && observer.Presence.TryGetPose(subject.Id, out _)
+            && PresenceVisible(host, original) && PresenceVisible(observer, watched)
+            && !AvatarShown(host, original) && !AvatarShown(observer, watched),
+            "fresh poses restore presence while the existing renderer holds keep both avatars hidden");
+        local.Dispose(); privateView.Dispose(); Frames(6);
+        Check(AvatarShown(host, original) && AvatarShown(observer, watched)
+            && HasNametag(host, displayName) && HasNametag(observer, displayName),
+            "releasing the recovered outer leases shows both avatars and nametags");
         foreach (var extra in extras) extra.Dispose();
     }
 
@@ -167,6 +200,19 @@ internal static class WorldViewLifetimeRefreshTests
     private static MultiplayerParticipant Row(SessionEngine engine, ParticipantId id) => engine.Snapshot.Participants.Single(player => player.Id.Equals(id));
     private static IEntity Avatar(Node node, ParticipantId id) => node.Presence.TryGetAvatar(id, out var value) && value != null
         ? value : throw new InvalidOperationException("Expected validated engine avatar.");
+    private static bool AvatarShown(Node node, IEntity entity) =>
+        PresenceVisible(node, entity) && !node.Renderer.Hidden.Contains(entity);
+
+    private static bool PresenceVisible(Node node, IEntity entity) =>
+        node.Backend.Avatars.Any(avatar => avatar.IsAlive && ReferenceEquals(avatar.Entity, entity) && avatar.IsVisible);
+
+    private static bool HasNametag(Node node, string displayName)
+    {
+        for (var slot = 0; slot < node.Presence.NametagCount; slot++)
+            if (node.Presence.TryGetNametag(slot, out var tag) && tag.DisplayName == displayName) return true;
+        return false;
+    }
+
     private static IViewLease Lease(OperationResult<IViewLease> result) => result.TryGetValue(out var lease) ? lease
         : throw new InvalidOperationException("Expected view lease: " + result.ErrorCode);
     private static void Check(bool value, string message) { if (!value) throw new InvalidOperationException("Lifetime view: " + message); }
@@ -179,6 +225,7 @@ internal static class WorldViewLifetimeRefreshTests
         internal readonly MultiplayerRuntime Runtime;
         internal readonly MultiplayerReplication Services;
         internal readonly MultiplayerPresence Presence;
+        internal readonly FakePresenceBackend Backend = new() { RecordTrails = false };
         internal readonly MultiplayerPlayers Players;
         internal readonly Renderer Renderer;
         internal readonly Binding Binding;
@@ -191,7 +238,7 @@ internal static class WorldViewLifetimeRefreshTests
             var log = new QuietLog(); Runtime = new MultiplayerRuntime(() => Control, new MultiplayerRuntimeHost("2545", "0.2.0", log), log);
             Runtime.SessionPhaseSource = () => SessionPhase.Running;
             Services = new MultiplayerReplication(Runtime);
-            Presence = MultiplayerPresence.Install(Runtime, Services, new FakePresenceBackend { RecordTrails = false }, () => harness.NowMicros);
+            Presence = MultiplayerPresence.Install(Runtime, Services, Backend, () => harness.NowMicros);
             Presence.RunningWorld = () => World; Presence.RunningSpawn = () => TransformState.Identity; Presence.SceneVersion = () => SceneVersion;
             Players = MultiplayerPlayers.Install(Runtime, Presence); Services.Players = Players;
             Check(Runtime.Attach(Control), "real engine control attaches"); Runtime.BeforeModsUpdate(0);
