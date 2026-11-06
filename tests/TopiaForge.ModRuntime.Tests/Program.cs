@@ -15,7 +15,9 @@ namespace TopiaForge.ModRuntime.Tests
     {
         private const string FixtureAssembly = "TopiaForge.ValidTestMod.dll";
 
-        private static int Main(string[] args)
+        private static int Main(string[] args) => TopiaForge.TestSupport.IsolatedTestProcess.Run(args, RunTests);
+
+        private static int RunTests(string[] args)
         {
             if (args.Length == 1 && args[0] == "--ui-clock-attachment") return RunUiClockCases();
             if (args.Length == 1 && args[0] == "--world-view") { SessionWorldViewTests.Run(); return 0; }
