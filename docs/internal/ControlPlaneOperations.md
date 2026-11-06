@@ -126,6 +126,33 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 
 ## 3. First deploy
 
+### Production bootstrap and release order
+
+Release compilation must work before the first production deployment. The release recipes use
+`tools/multiplayer-build.py --environment production --build-only` to embed the production origin without
+contacting the service. The build log explicitly says readiness was not checked. This option accepts only
+production Flutter builds and Dart executable compilation; staging builds, `flutter run` and `--check-only`
+retain their readiness checks. A successful package build is not evidence that Internet play is ready.
+
+After staging and release validation pass, use this order for the first production release:
+
+1. Build and validate the release packages with the production origin while production is absent. Keep
+   package publication, signing authorization and deployment approval as their existing separate gates.
+2. Review and merge the release into `main`, making the service and deployment workflow available there.
+3. Dispatch **Control plane** from that exact main revision to **control-plane-production**, review the
+   deployment, and provision its Worker secrets as described below. Do not use the staging credential.
+4. Check production readiness with
+   `python tools/multiplayer-build.py --environment production --check-only`, then complete the production
+   admin/spend checks and real relay live check from steps 4 and 5 below, using the production environment.
+5. Publish only after those checks and the release's remaining approvals pass. If readiness fails, keep
+   the packages unpublished and repair or roll back production; recompilation does not establish readiness.
+
+This order needs no production deployment before the release merge and no relaxation of main's required
+package checks. Later production outages or feature flags likewise do not prevent compilation, while the
+explicit readiness check remains a required operational step before publication.
+
+### Environment provisioning
+
 1. Merge the service to `dev`. `RELAY_ADDRESS_RANGES` was checked on 2026-10-16 (section 4.1); check it again if the
    quarter has turned or Cloudflare has announced an address change.
 2. In Actions, run **Control plane** with `control-plane-staging` on `dev`. Approve the deployment when GitHub asks.
@@ -160,8 +187,9 @@ they are set by hand and never sit in the repository; they are not sensitive in 
    caller's own address. Then play an Internet session through staging: invite join, relay join with "hide my IP",
    and a hole-punched join.
 6. Register both GitHub environments in governance (section 2.2).
-7. For production, repeat steps 2 to 4 with `control-plane-production` on `main` after the release merge, and give
-   the release builds the production origin (`--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=…`). The launcher reads
+7. For production, follow [Production bootstrap and release order](#production-bootstrap-and-release-order)
+   above, including its readiness and real relay checks before publication. Release recipes supply the
+   production origin through the build helper. The launcher reads
    the define by the launch request's rule (`MultiplayerLaunchContract.md`, section 2): `https://`, a DNS name and an
    optional port, in any letter case, with or without a trailing `/` or an explicit `:443`, which it drops. An address
    in any spelling, an IP literal or a name whose last label is a number such as `0x7f000001` or `example.123`, and
@@ -387,8 +415,12 @@ without Internet services; `--environment production` selects production.
 
 The reusable launcher workflow selects staging on development branches and
 production on main/release branches. Release packaging always selects production
-for both clients. An unavailable or disabled service stops these builds. The
-check verifies service feature flags, not an end-to-end game or TURN session.
+for both clients and passes `--build-only`, as do production reusable launcher builds.
+These recipes embed the origin without checking live readiness. Default local builds,
+staging workflow builds and explicit `--check-only` calls still refuse an unavailable
+or disabled service. That check verifies feature flags, not an end-to-end game or TURN
+session. Follow the [production release order](#production-bootstrap-and-release-order)
+for readiness and real relay verification before publication.
 Rebuild the launcher and launch the game through it to project the address into
 the game's preferences. An already running game must restart to read it.
 

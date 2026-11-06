@@ -442,7 +442,7 @@ Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
 Invoke-Checked -FilePath "python" -WorkingDirectory $launcherProject `
     -Arguments @(
         (Join-Path $repository "tools/multiplayer-build.py"),
-        "--environment", "production", "--executable", $flutter, "--",
+        "--environment", "production", "--build-only", "--executable", $flutter, "--",
         "build", "windows", "--release",
         "--dart-define=TOPIAFORGE_PRODUCT_VERSION=$Version"
     )
@@ -491,7 +491,7 @@ Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments @("pub", "get", "--enforce-lockfile")
 Invoke-Checked -FilePath "python" -WorkingDirectory $cliProject `
     -Arguments @((Join-Path $repository "tools/multiplayer-build.py"),
-        "--environment", "production", "--kind", "dart", "--executable", $dart, "--",
+        "--environment", "production", "--build-only", "--kind", "dart", "--executable", $dart, "--",
         "compile", "exe", "bin/topiaforge.dart", "-o", $compiledCli)
 $buildPackageArguments = @(
     "run", "bin/topiaforge.dart", "release", "build-package",

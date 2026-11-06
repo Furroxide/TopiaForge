@@ -343,7 +343,7 @@ if [[ "$platform" == macos ]]; then
   export FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO
   export FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO
 fi
-python3 "$repo/tools/multiplayer-build.py" --environment production --executable "$flutter_command" -- build "$platform" --release \
+python3 "$repo/tools/multiplayer-build.py" --environment production --build-only --executable "$flutter_command" -- build "$platform" --release \
   --dart-define="TOPIAFORGE_PRODUCT_VERSION=$version"
 popd >/dev/null
 
@@ -352,7 +352,7 @@ pushd "$cli_project" >/dev/null
 if [[ "$platform" == linux ]]; then
   cp -R "$repo/apps/topiaforge_launcher_flutter/build/linux/x64/release/bundle/." \
     "$work/launcher/"
-  python3 "$repo/tools/multiplayer-build.py" --environment production --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart -o "$work/cli/topiaforge"
+  python3 "$repo/tools/multiplayer-build.py" --environment production --build-only --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart -o "$work/cli/topiaforge"
   package_args=(
     release build-package --platform linux --output "$output"
     --configuration Release --prebuilt-launcher "$work/launcher"
@@ -367,7 +367,7 @@ if [[ "$platform" == linux ]]; then
 else
   cp -R "$repo/apps/topiaforge_launcher_flutter/build/macos/Build/Products/Release/TopiaForge.app" \
     "$work/launcher/"
-  python3 "$repo/tools/multiplayer-build.py" --environment production --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart \
+  python3 "$repo/tools/multiplayer-build.py" --environment production --build-only --kind dart --executable "$dart_command" -- compile exe bin/topiaforge.dart \
     -o "$work/cli/topiaforge-arm64"
   arch -x86_64 "$TOPIAFORGE_DART_X64" pub get --enforce-lockfile
   arch -x86_64 "$TOPIAFORGE_DART_X64" compile exe \
