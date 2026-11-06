@@ -53,6 +53,7 @@ namespace TopiaForge.ModManager
         internal void ClearPose()
         {
             HasPose = false;
+            Avatar?.Hide();
             SetActivityFlags(Flags & ~(PresenceFlags.Talking | PresenceFlags.Typing));
             ActivityRelayMicros = long.MinValue;
             HasFed = false;

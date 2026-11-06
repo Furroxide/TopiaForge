@@ -40,7 +40,7 @@ namespace TopiaForge.ModManager
             if (slot < 0 || slot >= shown.Count) return false;
             var peer = shown[slot];
             var avatar = peer.Avatar;
-            if (avatar == null || !avatar.IsAlive || peer.Presentation?.Visible == false) return false;
+            if (avatar == null || !avatar.IsAlive || !avatar.IsVisible || peer.Presentation?.Visible == false) return false;
             nametag = new PresenceNametag(peer.Presentation?.Name ?? peer.DisplayName, avatar.HeadPosition);
             return true;
         }
@@ -79,7 +79,7 @@ namespace TopiaForge.ModManager
                 }
 
                 // Host poses can arrive while this peer still loads and settles its native player.
-                if (!canPresent || !peer.HasPose || buffer == null) continue;
+                if (!canPresent || !peer.IsConnected || !peer.HasPose || buffer == null) continue;
                 if (avatar == null)
                 {
                     if (nowMicros < peer.NextAvatarMicros) continue;

@@ -161,6 +161,10 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public bool IsWearingBody => Body != null;
 
+        internal bool IsVisible { get; private set; } = true;
+
+        public void SetVisible(bool visible) => IsVisible = visible;
+
         public NetVector3 HeadPosition => new NetVector3(Feet.X, Feet.Y + 2.25f, Feet.Z);
 
         public void Place(NetVector3 feet, float yawDegrees)
