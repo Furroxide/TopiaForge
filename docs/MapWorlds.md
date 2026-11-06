@@ -29,7 +29,15 @@ when `content.scene` is omitted; the CLI pins the scene it inspected.
 Published maps are downloaded when playing. The launcher discloses this on the selected
 target before launch. Each play revalidates the cached copy; a network failure uses a
 hash-verified saved copy with an offline notice. A removed map (404 or 410) is refused
-and its saved copy is discarded. Redirects and untrusted origins are refused.
+and its saved copy is discarded. Redirects and untrusted origins are refused. Revalidation headers
+wait at most 5 seconds when a verified copy exists (30 seconds on first play). A changed
+200 response with a cached predecessor gets a separate 30-second body deadline under the unchanged
+8 MiB limit. First play retains its original 30-second total deadline, including headers and body.
+Transport failures, deadline expiry, 408, 429 and 5xx responses may replay a verified saved copy;
+401, 403 and other non-transient refusals do not bypass access decisions through the cache.
+A validated download can play from memory when saving fails; a sanitized warning explains
+how to restore offline availability. Offline notices show the selected world's bounded name
+as plain text and distinguish a slow service from an unreachable or temporarily busy one.
 
 The map cache holds at most 256 MiB. Downloads are bounded to 8 MiB, expanded JSON to
 32 MiB and projects to 50,000 entities. Duplicate keys, invalid identities, parent

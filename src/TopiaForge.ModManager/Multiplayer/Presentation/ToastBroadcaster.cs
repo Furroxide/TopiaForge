@@ -15,7 +15,8 @@ namespace TopiaForge.ModManager
         private readonly Dictionary<ulong, RemoteAudio> remoteAudio = new Dictionary<ulong, RemoteAudio>();
         private ulong effectSequence, lastEffect;
 
-        internal OperationResult<bool> Toast(RuntimeReplication context, IUiService local, string message, UiTone tone)
+        internal OperationResult<bool> Toast(RuntimeReplication context, IUiService local, string message, UiTone tone,
+            Func<string, UiTone, OperationResult<bool>>? showPlain = null)
         {
             UnityMainThreadGuard.AssertCurrent();
             if (context.Lifetime.IsStopping) return Stopped<bool>();
@@ -24,7 +25,7 @@ namespace TopiaForge.ModManager
             var decision = effects.Offer(PresentationKind.Toast, Hash(message, (ulong)tone), Now);
             if (decision == BroadcastDecision.Duplicate) return OperationResult<bool>.Success(false);
             if (decision == BroadcastDecision.RateLimited) return Limit<bool>();
-            var result = local.ShowToast(message, tone);
+            var result = showPlain == null ? local.ShowToast(message, tone) : showPlain(message, tone);
             if (result.Succeeded && Hosting && !context.Lifetime.IsStopping)
             {
                 writer.Begin(31); writer.WriteString(""); writer.WriteVarUInt(++effectSequence);
