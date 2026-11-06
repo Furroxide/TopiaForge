@@ -51,17 +51,26 @@ def main():
     parser.add_argument("--kind", choices=("flutter", "dart"), default="flutter")
     parser.add_argument("--executable")
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--build-only", action="store_true",
+                        help="Compile a production client without checking live service readiness.")
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     origin = ORIGINS[args.environment]
     try:
-        check_service(origin)
-        print("Multiplayer service: " + args.environment, flush=True)
-        if args.check_only:
-            return 0
         arguments = args.arguments
         if arguments[:1] == ["--"]:
             arguments = arguments[1:]
+        if args.build_only and (args.check_only or args.environment != "production"
+                                or (args.kind == "flutter" and arguments[:1] != ["build"])
+                                or (args.kind == "dart" and arguments[:2] != ["compile", "exe"])):
+            raise ValueError("--build-only requires a production build, not a run or readiness check.")
+        if args.build_only:
+            print("Multiplayer service: production; compile only, readiness not checked.", flush=True)
+        else:
+            check_service(origin)
+            print("Multiplayer service: " + args.environment, flush=True)
+        if args.check_only:
+            return 0
         executable = args.executable or shutil.which(args.kind)
         if not executable:
             raise FileNotFoundError("The selected build tool is not on PATH.")

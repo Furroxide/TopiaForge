@@ -81,7 +81,11 @@ jobs:
           product_version=$(jq -er \
             '.versioning.productVersion' \
             ../../release/release-policy.json)
-          python ../../tools/multiplayer-build.py --environment "$MULTIPLAYER_ENVIRONMENT" -- build "$LAUNCHER_PLATFORM" --release \
+          service_options=()
+          if [[ "$MULTIPLAYER_ENVIRONMENT" == production ]]; then
+            service_options+=(--build-only)
+          fi
+          python ../../tools/multiplayer-build.py --environment "$MULTIPLAYER_ENVIRONMENT" "${service_options[@]}" -- build "$LAUNCHER_PLATFORM" --release \
             --dart-define="TOPIAFORGE_PRODUCT_VERSION=$product_version"
 
       - name: Verify unsigned macOS launcher policy

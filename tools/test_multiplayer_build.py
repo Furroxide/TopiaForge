@@ -14,6 +14,51 @@ spec.loader.exec_module(build)
 
 
 class MultiplayerBuildTests(unittest.TestCase):
+    def test_production_build_only_compiles_without_contacting_service(self):
+        for kind, arguments in (('flutter', ['build', 'windows', '--release']),
+                                ('dart', ['compile', 'exe', 'bin/topiaforge.dart'])):
+            with self.subTest(kind=kind), \
+                 patch.object(sys, 'argv', ['multiplayer-build.py', '--environment', 'production',
+                                           '--build-only', '--kind', kind, '--executable', kind,
+                                           '--', *arguments]), \
+                 patch.object(build.urllib.request, 'build_opener', side_effect=OSError('unavailable')) as opener, \
+                 patch.object(build.subprocess, 'call', return_value=7) as call, \
+                 patch('sys.stdout', new_callable=io.StringIO) as output:
+                self.assertEqual(build.main(), 7)
+                opener.assert_not_called()
+                define = ('--dart-define=' if kind == 'flutter' else '-D') + \
+                    'TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev'
+                self.assertIn(define, call.call_args.args[0])
+                self.assertIn('readiness not checked', output.getvalue())
+
+    def test_default_and_production_readiness_still_refuse_unavailable_service(self):
+        cases = [[], ['--environment', 'production'],
+                 ['--environment', 'production', '--check-only']]
+        for options in cases:
+            with self.subTest(options=options), \
+                 patch.object(sys, 'argv', ['multiplayer-build.py', *options,
+                                           '--executable', 'flutter', '--', 'build', 'windows']), \
+                 patch.object(build.urllib.request, 'build_opener', side_effect=OSError('unavailable')), \
+                 patch.object(build.subprocess, 'call') as call:
+                self.assertEqual(build.main(), 1)
+                call.assert_not_called()
+
+    def test_build_only_cannot_skip_staging_run_or_check_only(self):
+        cases = [([], ['build', 'windows']),
+                 (['--environment', 'offline'], ['build', 'windows']),
+                 (['--environment', 'production'], ['run']),
+                 (['--environment', 'production', '--check-only'], ['build', 'windows']),
+                 (['--environment', 'production', '--kind', 'dart'], ['run', 'bin/topiaforge.dart'])]
+        for options, arguments in cases:
+            with self.subTest(options=options, arguments=arguments), \
+                 patch.object(sys, 'argv', ['multiplayer-build.py', *options, '--build-only',
+                                           '--executable', 'unused', '--', *arguments]), \
+                 patch.object(build.urllib.request, 'build_opener') as opener, \
+                 patch.object(build.subprocess, 'call') as call:
+                self.assertEqual(build.main(), 1)
+                opener.assert_not_called()
+                call.assert_not_called()
+
     def test_default_executable_uses_path_and_platform_extensions(self):
         suffixes = ('.exe', '.bat') if os.name == 'nt' else ('',)
         for kind, arguments in (('dart', ['compile', 'exe', 'bin/topiaforge.dart']),
