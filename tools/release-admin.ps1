@@ -2332,6 +2332,17 @@ function Build-Handoff {
 }
 
 function Invoke-Build {
+    $state = Read-State
+    if ($null -eq $state -or $state.phase -notin @(
+            "preflight", "platforms-built", "built", "accepted", "staged",
+            "dispatch-requested", "published"
+        )) {
+        throw "Run release-admin.ps1 preflight before build."
+    }
+    Use-StateConfiguration $state
+    if ($state.phase -in @("accepted", "staged", "dispatch-requested", "published")) {
+        throw "An accepted candidate cannot be rebuilt or repacked; resume its qualified bytes."
+    }
     if ($Version.Contains('-')) {
         if ($ProductionMultiplayerReady) {
             throw "Prerelease builds must use staging multiplayer."
@@ -2354,17 +2365,6 @@ function Invoke-Build {
         Invoke-Checked python @(
             "tools/multiplayer-build.py", "--environment", "production", "--check-only"
         ) -WorkingDirectory $repositoryRoot
-    }
-    $state = Read-State
-    if ($null -eq $state -or $state.phase -notin @(
-            "preflight", "platforms-built", "built", "accepted", "staged",
-            "dispatch-requested", "published"
-        )) {
-        throw "Run release-admin.ps1 preflight before build."
-    }
-    Use-StateConfiguration $state
-    if ($state.phase -in @("accepted", "staged", "dispatch-requested", "published")) {
-        throw "An accepted candidate cannot be rebuilt or repacked; resume its qualified bytes."
     }
     if ($targetsLinux) { throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked." }
     $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord

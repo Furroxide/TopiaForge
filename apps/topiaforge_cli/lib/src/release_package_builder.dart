@@ -56,7 +56,9 @@ class ReleasePackageBuilder {
         TopiaForgeReleasePolicy.load(repositoryRoot).productVersion,
       );
       if (version == null || version.isPrerelease) {
-        throw StateError('Production multiplayer requires a stable release policy.');
+        throw StateError(
+          'Production multiplayer requires a stable release policy.',
+        );
       }
     }
     final windowsPolicy = _admitWindowsPolicy();
