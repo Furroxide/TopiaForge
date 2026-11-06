@@ -180,22 +180,7 @@ namespace TopiaForge.RobotKit
                 {
                     if (options == null) throw new ArgumentNullException(nameof(options));
                     var custom = options.CustomInteraction;
-                    if (custom == null) return options;
-
-                    RobotInteractionContext Rebind(IRobotAgent owner, RobotInteractionContext context) =>
-                        new RobotInteractionContext(owner, context.AgentPosition, context.HandPosition, context.Distance);
-
-                    // The bridge's native context never escapes to author callbacks. The retained owner handle
-                    // continues to use its routed agent, so guest origin is checked when a later call is made.
-                    return RobotInteractionOptions.Custom(new RobotCustomInteraction(custom.Prompt, context =>
-                    {
-                        var owner = resolve();
-                        if (owner?.IsAlive == true) custom.Interact?.Invoke(Rebind(owner, context));
-                    }, custom.Distance, custom.ScreenRectExpansion, context =>
-                    {
-                        var owner = resolve();
-                        return owner?.IsAlive == true && (custom.CanInteract?.Invoke(Rebind(owner, context)) ?? true);
-                    }));
+                    return custom == null ? options : RobotInteractionOptions.Custom(custom.BindOwner(resolve));
                 }
 
                 public bool Wraps(IEntity entity) => ReferenceEquals(agent, entity);

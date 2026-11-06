@@ -14,6 +14,7 @@ internal sealed class InteractionProbe
     private readonly RobotAgentService service = new();
     private readonly List<IRobotAgent> gates = new(), callbacks = new();
     private RobotInteractionContext? lastContext;
+    private bool allowGate = true;
     public InteractionProbe() { }
     public IRobotAgent Decorate(IRobotAgent inner, RobotAgentSpawnRequest request)
     {
@@ -21,17 +22,17 @@ internal sealed class InteractionProbe
         service.Last = native;
         return native;
     }
-    private RobotInteractionOptions Custom(string prompt = "Repair") =>
+    private RobotInteractionOptions Custom(string prompt = "Repair", bool gated = true) =>
         RobotInteractionOptions.Custom(new RobotCustomInteraction(prompt, context =>
         {
             callbacks.Add(context.Agent);
             lastContext = context;
-        }, 4f, 0.25f, context =>
+        }, 4f, 0.25f, gated ? context =>
         {
             gates.Add(context.Agent);
             lastContext = context;
-            return true;
-        }));
+            return allowGate;
+        } : null));
     public void Run(string scenario, IModLifetime lifetime, IRuntimeReplication replication,
         Func<IRuntimeReplication, RobotAgentSpawnRequest, OperationResult<IRobotAgent>> spawn,
         Func<IDisposable> forwarded, Action stopOwner)
@@ -41,6 +42,7 @@ internal sealed class InteractionProbe
         var owner = service.ForOwner(context);
         if (scenario == "policies") { Policies(owner, forwarded); return; }
 
+        var reused = scenario == "poll-allocation" ? Custom(gated: false) : null;
         OperationResult<IRobotAgent> result;
         if (scenario == "guest-custom")
         {
@@ -50,7 +52,7 @@ internal sealed class InteractionProbe
         else
         {
             result = owner.Spawn(new RobotAgentSpawnRequest(Vec3.Zero,
-                interaction: scenario == "replacement" ? RobotInteractionOptions.DisableNativeTalk() : Custom()));
+                interaction: scenario == "replacement" ? RobotInteractionOptions.DisableNativeTalk() : reused ?? Custom()));
         }
         Require(result.Succeeded, "owner spawn succeeds");
         var robot = result.Value!;
@@ -69,6 +71,13 @@ internal sealed class InteractionProbe
         Require(custom != null && custom.Distance == 4f && custom.ScreenRectExpansion == 0.25f,
             "custom interaction metadata survives native construction");
         var bridge = native.Bridge;
+        if (reused != null)
+        {
+            var repeated = owner.Spawn(new RobotAgentSpawnRequest(Vec3.Zero, interaction: reused));
+            Require(repeated.Succeeded, "reusing the author's interaction spawns a second owner handle");
+            PollWithoutGate(robot, native, repeated.Value!, service.Last!, reused, stopOwner);
+            return;
+        }
         Require(bridge.CanInteract(native.Hand), "production bridge selects the custom interaction");
         bridge.OnInteractAttempt(native.Hand, CancellationToken.None);
         Require(gates.Count == 1 && callbacks.Count == 1, "both production bridge callbacks run after construction");
@@ -99,6 +108,14 @@ internal sealed class InteractionProbe
             return;
         }
 
+        if (scenario == "retained")
+        {
+            allowGate = false;
+            Require(!bridge.CanInteract(native.Hand) && gates.Count == 2 && ReferenceEquals(gates[1], robot),
+                "an author gate can refuse the prompt after receiving its exact owner context");
+            allowGate = true;
+        }
+
         var before = native.Calls;
         using (forwarded())
         {
@@ -118,6 +135,42 @@ internal sealed class InteractionProbe
         Require(callbacks[0].SetBrainMode(RobotBrainMode.Autonomous).Succeeded &&
             gates[0].SetInteraction(RobotInteractionOptions.NativeTalk()).Succeeded && native.Calls == before + 2,
             "trusted host controls recover after forwarded context ends");
+    }
+
+    private void PollWithoutGate(IRobotAgent robot, NativeRobot native, IRobotAgent second, NativeRobot secondNative,
+        RobotInteractionOptions reused, Action stopOwner)
+    {
+        var bridge = native.Bridge;
+        var hand = native.Hand;
+        for (var poll = 0; poll < 200; poll++) Require(bridge.CanInteract(hand), "live gate-free prompt is selectable");
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var selectable = true;
+        for (var poll = 0; poll < 10_000; poll++) selectable &= bridge.CanInteract(hand);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Require(selectable && allocated == 0, "10,000 live gate-free polls allocate zero bytes, measured " + allocated);
+        bridge.OnInteractAttempt(hand, CancellationToken.None);
+        Require(!secondNative.EarlySelectable && secondNative.Bridge.CanInteract(secondNative.Hand),
+            "the second binding stays inert until its own owner settles");
+        secondNative.Bridge.OnInteractAttempt(secondNative.Hand, CancellationToken.None);
+        Require(gates.Count == 0 && callbacks.Count == 2 && ReferenceEquals(callbacks[0], robot) && ReferenceEquals(callbacks[1], second),
+            "reusing one author's options routes each callback to its exact owner handle");
+        var authored = reused.CustomInteraction!;
+        var firstBound = native.Interaction.CustomInteraction!;
+        var secondBound = secondNative.Interaction.CustomInteraction!;
+        Require(authored.ResolveOwner == null && authored.CanInteract == null && !ReferenceEquals(firstBound, authored)
+            && !ReferenceEquals(secondBound, authored) && !ReferenceEquals(firstBound, secondBound)
+            && ReferenceEquals(firstBound.Interact, authored.Interact) && ReferenceEquals(secondBound.Interact, authored.Interact),
+            "owner binding leaves the reusable author options and callbacks untouched");
+
+        stopOwner();
+        Require(native.IsAlive && secondNative.IsAlive && !bridge.CanInteract(hand) && !secondNative.Bridge.CanInteract(secondNative.Hand),
+            "both gate-free prompts refuse the stopping scope while their native bodies are still alive");
+        bridge.OnInteractAttempt(hand, CancellationToken.None);
+        secondNative.Bridge.OnInteractAttempt(secondNative.Hand, CancellationToken.None);
+        robot.Dispose();
+        second.Dispose();
+        Require(!bridge.CanInteract(hand) && !secondNative.Bridge.CanInteract(secondNative.Hand) && callbacks.Count == 2,
+            "disposed owner polls and stopping owner callbacks stay suppressed");
     }
 
     private void Policies(IRobotAgentService owner, Func<IDisposable> forwarded)
