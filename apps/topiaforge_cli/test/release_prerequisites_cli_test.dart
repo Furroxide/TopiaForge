@@ -92,8 +92,10 @@ class _Fixture {
       }
       source = source.parent;
     }
-    final root = Directory.systemTemp.createTempSync(
-      'topiaforge-prerequisites-',
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-prerequisites-')
+          .resolveSymbolicLinksSync(),
     );
     try {
       final readiness =

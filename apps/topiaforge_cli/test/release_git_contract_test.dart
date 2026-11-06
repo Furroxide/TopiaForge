@@ -63,8 +63,10 @@ final class _ReplacementFixture {
       }
       source = source.parent;
     }
-    final directory = Directory.systemTemp.createTempSync(
-      'release-replace-test-',
+    final directory = Directory(
+      Directory.systemTemp
+          .createTempSync('release-replace-test-')
+          .resolveSymbolicLinksSync(),
     );
     try {
       for (final path in candidateContractPaths) {

@@ -18,7 +18,11 @@ void main() {
   late Directory root;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('topiaforge-bump-');
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-bump-')
+          .resolveSymbolicLinksSync(),
+    );
     _write(
       root,
       '.github/robotopia-game-build.json',

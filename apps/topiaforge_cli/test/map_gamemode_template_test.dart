@@ -10,7 +10,11 @@ void main() {
   test(
     'map variant enables real template and fake test with one surveyed id',
     () async {
-      final root = Directory.systemTemp.createTempSync('map-template-');
+      final root = Directory(
+        Directory.systemTemp
+            .createTempSync('map-template-')
+            .resolveSymbolicLinksSync(),
+      );
       try {
         final repository = LocalDeveloperRepository(
           repositoryRoot: p.absolute('../..'),

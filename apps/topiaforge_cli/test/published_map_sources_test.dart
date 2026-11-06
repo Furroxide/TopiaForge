@@ -5,7 +5,13 @@ import 'package:test/test.dart';
 
 void main() {
   late Directory root;
-  setUp(() => root = Directory.systemTemp.createTempSync('source-cli-'));
+  setUp(
+    () => root = Directory(
+      Directory.systemTemp
+          .createTempSync('source-cli-')
+          .resolveSymbolicLinksSync(),
+    ),
+  );
   tearDown(() => root.deleteSync(recursive: true));
   Future<ProcessResult> cli(List<String> args) => Process.run(
     Platform.resolvedExecutable,

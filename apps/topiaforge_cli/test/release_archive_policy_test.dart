@@ -11,7 +11,11 @@ void main() {
   late Directory temp;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('release-archive-policy-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('release-archive-policy-')
+          .resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

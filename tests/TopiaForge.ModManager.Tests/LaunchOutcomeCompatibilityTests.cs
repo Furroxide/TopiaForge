@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
         {
             using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot,
                 "tests", "fixtures", "multiplayer", "progress-v2", "forward-compat.json")));
-            var root = Directory.CreateTempSubdirectory("topiaforge-outcome-compat-");
+            var root = TestPaths.CreateTempDirectory("topiaforge-outcome-compat-");
             var paths = new ManagerPaths(Path.Combine(root.FullName, "BepInEx"));
             var store = new LaunchStagingStore(paths);
             var count = 0;

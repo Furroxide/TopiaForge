@@ -31,7 +31,11 @@ final class CandidateFixture {
     while (!File(p.join(repository.path, 'TopiaForge.slnx')).existsSync()) {
       repository = repository.parent;
     }
-    final root = Directory.systemTemp.createTempSync('candidate-fixture-');
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('candidate-fixture-')
+          .resolveSymbolicLinksSync(),
+    );
     try {
       for (final name in candidateContractPaths) {
         final file = File(p.join(root.path, name));

@@ -34,7 +34,7 @@ namespace TopiaForge.ModManager.Tests
             var trees = files.Concat(inputFiles.Select(file => kit + file))
                 .Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file))))
                 .Concat(new[] { contracts, Contracts, methods, Probe, InputProbe }.Select(source => CSharpSyntaxTree.ParseText(source)));
-            var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
+            var trusted = TrustedReferences.Paths();
             var compilation = CSharpCompilation.Create("ChatViewProbe" + Guid.NewGuid().ToString("N"), trees,
                 trusted.Select(path => MetadataReference.CreateFromFile(path)),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, nullableContextOptions: NullableContextOptions.Enable));

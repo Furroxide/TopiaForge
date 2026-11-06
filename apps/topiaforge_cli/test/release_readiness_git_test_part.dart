@@ -8,8 +8,10 @@ void _exactTargetCommitTests() {
   test(
     'loads readiness and schema only from the exact target commit',
     () async {
-      final temp = Directory.systemTemp.createTempSync(
-        'topiaforge-readiness-git-',
+      final temp = Directory(
+        Directory.systemTemp
+            .createTempSync('topiaforge-readiness-git-')
+            .resolveSymbolicLinksSync(),
       );
       try {
         final readinessFile = File(p.join(temp.path, releaseReadinessPath))

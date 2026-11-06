@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Tests
             })
             {
                 runs++;
-                var owned = Directory.CreateTempSubdirectory("TopiaForgeLauncherQuit-");
+                var owned = TestPaths.CreateTempDirectory("TopiaForgeLauncherQuit-");
                 try
                 {
                     var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);

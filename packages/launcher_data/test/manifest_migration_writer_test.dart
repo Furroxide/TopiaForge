@@ -9,7 +9,14 @@ void main() {
   late Directory root;
   late File manifest;
   setUp(() {
-    root = Directory.systemTemp.createTempSync('migration-writer-');
+    // The production writer refuses a linked path component, and macOS puts
+    // the system temp directory under /var -> private/var, so canonicalise the
+    // root the way the rest of these suites do.
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('migration-writer-')
+          .resolveSymbolicLinksSync(),
+    );
     manifest = File(p.join(root.path, 'topiaforge.mod.json'))
       ..writeAsStringSync(
         jsonEncode({

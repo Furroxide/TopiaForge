@@ -210,6 +210,14 @@ Future<List<String>> _discoverDotnetCandidates() async {
   }
 
   if (Platform.isMacOS) {
+    // Microsoft's own dotnet-install script installs here by default, so a
+    // pinned SDK often lives outside the package-manager roots below. The
+    // Linux branch already checks it; macOS has to as well, or a side-by-side
+    // SDK the repository pins stays invisible.
+    final home = Platform.environment['HOME'];
+    if (home != null && home.trim().isNotEmpty) {
+      add(p.join(home.trim(), '.dotnet', 'dotnet'));
+    }
     candidates.addAll(const [
       '/opt/homebrew/bin/dotnet',
       '/usr/local/bin/dotnet',

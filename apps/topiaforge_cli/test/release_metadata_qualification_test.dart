@@ -100,8 +100,10 @@ void main() {
     'a ready tracked decision cannot bypass detached qualification',
     () async {
       final root = Directory.current.parent.parent.path;
-      final temp = Directory.systemTemp.createTempSync(
-        'metadata-qualification-',
+      final temp = Directory(
+        Directory.systemTemp
+            .createTempSync('metadata-qualification-')
+            .resolveSymbolicLinksSync(),
       );
       addTearDown(() => temp.deleteSync(recursive: true));
       final readiness =

@@ -67,7 +67,7 @@ namespace TopiaForge.ModManager.Tests
             { WorldViewTests.Run(); PresenceViewRootReconnectTests.Run(); TopiaForge.ModRuntime.Tests.SessionWorldViewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--managed-assembly-validation")
             {
-                var validationRoot = Directory.CreateTempSubdirectory("TopiaForgeAssemblyValidation-").FullName;
+                var validationRoot = TestPaths.CreateTempDirectory("TopiaForgeAssemblyValidation-").FullName;
                 try { ManagedModAssemblyValidatorTests.Run(validationRoot); return 0; }
                 finally { TryDelete(validationRoot); }
             }
@@ -145,13 +145,13 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && args[0] == "--robo-api-client")
             {
-                var owned = Directory.CreateTempSubdirectory("TopiaForgeRoboApi-");
+                var owned = TestPaths.CreateTempDirectory("TopiaForgeRoboApi-");
                 try { RoboApiClientTests.Run(owned.FullName); return 0; }
                 finally { owned.Delete(true); }
             }
             if (args.Length == 1 && args[0] == "--world-marker-hierarchy") { WorldMarkerHierarchyTests.Run(FindRepoRoot()); return 0; }
             if (args.Length == 1 && args[0] == "--acceptance-isolation") { AcceptanceIsolationTests.Run(); AcceptanceIsolationStagingTests.Run(); AcceptancePluginLifecycleTests.Run(); return 0; }
-            if (args.Length == 1 && args[0] == "--runtime-launch-command") { var owned = Directory.CreateTempSubdirectory("TopiaForgeLaunchCommand-"); try { RuntimeLaunchCommandTests.Run(owned.FullName); RuntimeLaunchPublicationTests.Run(Path.Combine(owned.FullName, "publication")); return 0; } finally { owned.Delete(true); } }
+            if (args.Length == 1 && args[0] == "--runtime-launch-command") { var owned = TestPaths.CreateTempDirectory("TopiaForgeLaunchCommand-"); try { RuntimeLaunchCommandTests.Run(owned.FullName); RuntimeLaunchPublicationTests.Run(Path.Combine(owned.FullName, "publication")); return 0; } finally { owned.Delete(true); } }
             if (args.Length == 1 && args[0] == "--profile-v4-policy") { ProfileLaunchV4PolicyTests.Run(); RuntimeStartupSelectionTests.Run(); ManagerLaunchSelectionTests.Run(); LegacyManagerSelectionTests.Run(); WorldLaunchArmingTests.Run(); LaunchTargetPreviewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--launch-staging") { LaunchStorageKeyTests.Run(FindRepoRoot()); LaunchStagingTests.Run(); return 0; }
             if (args.Length >= 1 && args.Length <= 2 &&
@@ -185,7 +185,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 2 && string.Equals(args[0], "--content-admission-case", StringComparison.Ordinal))
             {
-                var contentRoot = Directory.CreateTempSubdirectory("TopiaForgeContentTests-").FullName;
+                var contentRoot = TestPaths.CreateTempDirectory("TopiaForgeContentTests-").FullName;
                 try { ContentAdmissionTests.Run(contentRoot, args[1]); return 0; }
                 finally { TryDelete(contentRoot); }
             }
@@ -201,7 +201,7 @@ namespace TopiaForge.ModManager.Tests
             { DuplicateSelectionTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--settled-world-spawn")
             {
-                var spawnRoot = Directory.CreateTempSubdirectory("TopiaForgeSettledSpawn-").FullName;
+                var spawnRoot = TestPaths.CreateTempDirectory("TopiaForgeSettledSpawn-").FullName;
                 try
                 {
                     WorldReadinessContractTests.Run(spawnRoot);
@@ -221,7 +221,7 @@ namespace TopiaForge.ModManager.Tests
             { SpawnReadbackPrecisionTests.Run(); return 0; }
             if (args.Length == 1 && string.Equals(args[0], "--world-readiness-contract", StringComparison.Ordinal))
             {
-                var readinessRoot = Directory.CreateTempSubdirectory("TopiaForgeReadinessTests-").FullName;
+                var readinessRoot = TestPaths.CreateTempDirectory("TopiaForgeReadinessTests-").FullName;
                 try { WorldReadinessContractTests.Run(readinessRoot); return 0; }
                 finally { TryDelete(readinessRoot); }
             }
@@ -231,7 +231,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--session-follow", StringComparison.Ordinal))
             {
-                var followRoot = Directory.CreateTempSubdirectory("TopiaForgeFollowTests-").FullName;
+                var followRoot = TestPaths.CreateTempDirectory("TopiaForgeFollowTests-").FullName;
                 try
                 {
                     SessionFollowTests.Run(followRoot);
@@ -245,7 +245,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--session-lifecycle", StringComparison.Ordinal))
             {
-                var sessionRoot = Directory.CreateTempSubdirectory("TopiaForgeSessionTests-").FullName;
+                var sessionRoot = TestPaths.CreateTempDirectory("TopiaForgeSessionTests-").FullName;
                 try
                 {
                     HostDispatcherTests.Run();
@@ -452,14 +452,14 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--multiplayer-runtime", StringComparison.Ordinal))
             {
-                var multiplayerRoot = Directory.CreateTempSubdirectory("TopiaForgeMultiplayerRuntime-");
+                var multiplayerRoot = TestPaths.CreateTempDirectory("TopiaForgeMultiplayerRuntime-");
                 try { MultiplayerRuntimeHostTests.Run(multiplayerRoot.FullName); MultiplayerSeamTests.Run(multiplayerRoot.FullName); NetworkWorldTests.Run(); RunMultiplayerSessions(multiplayerRoot.FullName); return 0; }
                 finally { multiplayerRoot.Delete(true); }
             }
 
             if (args.Length == 1 && string.Equals(args[0], "--multiplayer-voice", StringComparison.Ordinal))
             {
-                var voiceRoot = Directory.CreateTempSubdirectory("TopiaForgeVoiceChat-");
+                var voiceRoot = TestPaths.CreateTempDirectory("TopiaForgeVoiceChat-");
                 try { VoiceChatTests.Run(voiceRoot.FullName); return 0; }
                 finally { voiceRoot.Delete(true); }
             }
@@ -509,7 +509,7 @@ namespace TopiaForge.ModManager.Tests
                 }
             }
 
-            var root = Directory.CreateTempSubdirectory("TopiaForgeModManagerTests-").FullName;
+            var root = TestPaths.CreateTempRoot("TopiaForgeModManagerTests-");
 
             try
             {

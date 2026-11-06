@@ -87,7 +87,7 @@ namespace TopiaForge.ModManager.Tests
                 Array.Empty<string>(), new Dictionary<string, string>()));
             private static DirectoryInfo CreateRoot()
             {
-                var owned = Directory.CreateTempSubdirectory("TopiaForgeIsolation-");
+                var owned = TestPaths.CreateTempDirectory("TopiaForgeIsolation-");
                 if (!OperatingSystem.IsWindows()) return owned;
                 try
                 {

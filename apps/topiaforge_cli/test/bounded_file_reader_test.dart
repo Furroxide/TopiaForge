@@ -8,7 +8,13 @@ import 'package:test/test.dart';
 void main() {
   late Directory temp;
 
-  setUp(() => temp = Directory.systemTemp.createTempSync('bounded-file-test-'));
+  setUp(
+    () => temp = Directory(
+      Directory.systemTemp
+          .createTempSync('bounded-file-test-')
+          .resolveSymbolicLinksSync(),
+    ),
+  );
   tearDown(() => temp.deleteSync(recursive: true));
 
   test('reads a bounded strict-UTF8 JSON object', () {

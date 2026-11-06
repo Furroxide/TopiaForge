@@ -27,7 +27,11 @@ void main() {
 
   setUp(() {
     root = _repositoryRoot();
-    temp = Directory.systemTemp.createTempSync('topiaforge-unsigned-handoff-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-unsigned-handoff-')
+          .resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

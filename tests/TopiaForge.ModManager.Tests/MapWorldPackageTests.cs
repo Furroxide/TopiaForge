@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
-            var owned = Directory.CreateTempSubdirectory("map-package-");
+            var owned = TestPaths.CreateTempDirectory("map-package-");
             var root = owned.FullName;
             try
             {

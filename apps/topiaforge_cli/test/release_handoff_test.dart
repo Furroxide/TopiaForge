@@ -18,7 +18,11 @@ void main() {
   late String root;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('topiaforge-handoff-test-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-handoff-test-')
+          .resolveSymbolicLinksSync(),
+    );
     root = writeSignedReleaseHandoffRoot(temp, version: version);
     _writeArchives(temp);
     writeReleaseQaFixtures(

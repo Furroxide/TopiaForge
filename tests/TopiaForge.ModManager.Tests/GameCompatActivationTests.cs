@@ -151,7 +151,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ManagerLinkedAudit()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeManagerAudit-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeManagerAudit-");
             var root = owned.FullName;
             var manager = Path.Combine(root, "src", "TopiaForge.ModManager");
             var shared = Path.Combine(root, "mods", "Shared");
@@ -184,7 +184,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void AssertDirectoryLinkRejected(string location)
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeAuditBoundary-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeAuditBoundary-");
             FileSystemInfo? link = null;
             try
             {

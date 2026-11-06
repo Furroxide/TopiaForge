@@ -63,7 +63,7 @@ namespace TopiaForge.ModManager.Tests
             catch (OperationCanceledException) { }
             queue.Drain();
             Assert(lateCalls == 0 && waitingSource.Requests.Count == 1, "cancelled queued callback never parses or contacts project");
-            var root = Directory.CreateTempSubdirectory("manifest-cache-");
+            var root = TestPaths.CreateTempDirectory("manifest-cache-");
             try
             {
                 var cache = new MapCache(root.FullName); cache.Put("example", new MapDocument(Project()), null, null);

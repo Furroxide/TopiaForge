@@ -24,7 +24,7 @@ namespace TopiaForge.ModManager.Tests
             var source = Contracts + "\nclass PhysicalAvatar { " + PhysicalFields + constants
                 + Method(unity, "Animate") + Method(unity, "Present") + Method(unity, "Shape")
                 + " }\nclass RemoteAvatar { " + RemoteFields + Method(remote, "Draw") + " }\n" + CollisionProbe;
-            var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
+            var trusted = TrustedReferences.Paths();
             var compilation = CSharpCompilation.Create("AppearanceCollisionProbe", new[] { CSharpSyntaxTree.ParseText(source) },
                 trusted.Select(path => MetadataReference.CreateFromFile(path)),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));

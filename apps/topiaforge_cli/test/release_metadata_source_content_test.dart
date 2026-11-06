@@ -100,7 +100,11 @@ final class _Fixture {
   );
 
   static _Fixture create(String attrs, String name, List<int> bytes) {
-    final root = Directory.systemTemp.createTempSync('metadata-content-');
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('metadata-content-')
+          .resolveSymbolicLinksSync(),
+    );
     File(p.join(root.path, '.gitattributes')).writeAsStringSync('$attrs\n');
     File(p.join(root.path, name)).writeAsBytesSync(bytes);
     String git(List<String> args) {
