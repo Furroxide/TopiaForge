@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Testing;
+using TopiaForge.Worlds.Maps;
 using static TopiaForge.ModManager.Tests.PlayersApiTests;
 
 namespace TopiaForge.ModManager.Tests
@@ -16,13 +18,14 @@ namespace TopiaForge.ModManager.Tests
             CoalescesAndRestores();
             LocalFailureDoesNotPublish();
             EffectsAreBounded();
+            RunMapNotices();
             ForgedAndInteractiveFramesAreRefused();
             SlowPeerDoesNotStopTheOthers();
             RestingPresentationAllocatesNothing();
             BoundsAndLifetime();
             ExactContextScopes();
             ReviewRegressions();
-            Console.WriteLine("PresentationRuntimeTests: 20 groups passed.");
+            Console.WriteLine("PresentationRuntimeTests: 22 groups passed.");
         }
 
         private static void RoutesAndPromotes()
@@ -104,6 +107,114 @@ namespace TopiaForge.ModManager.Tests
             rig.Frames(10); Assert(rig.Guest.ReceivedAudio.ActivePlaybacks.Count == 2, "loop baseline starts playback");
             loop.Stop(); rig.Frames(10); Assert(rig.Guest.ReceivedAudio.ActivePlaybacks.Count == 1, "stop retires remote loop");
             rig.Guest.Node.Runtime.Disconnect(); Assert(rig.Guest.ReceivedAudio.ActivePlaybacks.Count == 0, "disconnect stops all received audio");
+        }
+
+        internal static void RunMapNotices()
+        {
+            SharedMapNoticesStayPlain();
+            SharedMapNoticesUseSafeFallback();
+            Console.WriteLine("Shared map notice tests passed.");
+        }
+
+        private static void SharedMapNoticesStayPlain()
+        {
+            using var rig = new Rig();
+            var guest = ObserveGuestToasts(rig);
+            rig.Start();
+            Assert(rig.Host.Node.Runtime.Realm == NetRealm.ListenHost && rig.Guest.Node.Runtime.Realm == NetRealm.Client,
+                "the map notice crosses a listen-host gamemode broadcast");
+            var host = new MapNoticeToastProbe();
+            var ui = new NetUiService(host, rig.Host.Ui.Replication);
+            const string name = "<size=300>Declared world</size>";
+            const string notice = "Playing the copy of " + name + " saved on an earlier play; the public map service was too slow.";
+            MapNotices.Offline(ui, name, "an earlier play", MapOfflineReason.Slow);
+            Assert(host.Map.Count == 1 && host.Map[0] == (notice, UiTone.Warning) && host.Remote.Count == 0 && host.Rich.Count == 0,
+                "the shared offline notice preserves literal world markup at the host's plain map sink");
+            Assert(ui.ShowMapNotice(notice, UiTone.Warning).TryGetValue(out var repeated) && !repeated,
+                "a repeated map notice is deduplicated before delivery");
+            Assert(ui.ShowMapNotice(" ", UiTone.Warning).ErrorCode == ModErrorCode.InvalidArgument &&
+                ui.ShowMapNotice(new string('x', 513), UiTone.Warning).ErrorCode == ModErrorCode.InvalidArgument &&
+                ui.ShowMapNotice("invalid tone", (UiTone)255).ErrorCode == ModErrorCode.InvalidArgument,
+                "shared map notices enforce text and tone limits");
+
+            var remoteOnly = new RemoteToastProbe();
+            var remoteUi = new NetUiService(remoteOnly, ui.Replication);
+            Assert(remoteUi.ShowMapNotice(name, UiTone.Warning).Succeeded && remoteOnly.Remote.Count == 1 &&
+                remoteOnly.Remote[0] == (name, UiTone.Warning) && remoteOnly.Rich.Count == 0,
+                "a local remote-UI receiver also renders the detailed map notice as plain text");
+            var maximum = new string('x', 512);
+            Assert(ui.ShowMapNotice(maximum, UiTone.Warning).Succeeded && host.Map.Count == 2 && host.Map[1] == (maximum, UiTone.Warning),
+                "a map notice at the shared length limit reaches the plain sink");
+            const string trusted = "<b>Ready</b>";
+            Assert(ui.ShowToast(trusted, UiTone.Success).Succeeded && host.Rich.Count == 1 && host.Rich[0] == (trusted, UiTone.Success),
+                "ordinary authored toasts retain their trusted local renderer");
+            Assert(ui.ShowMapNotice("over the shared burst", UiTone.Warning).ErrorCode == ModErrorCode.RateLimited && host.Map.Count == 2,
+                "map notices and ordinary toasts share the same rate limit");
+
+            rig.Frames(4);
+            Assert(guest.Rich.Count == 0 && guest.Remote.Count == 4 && guest.Remote[0] == (notice, UiTone.Warning) &&
+                guest.Remote[1] == (name, UiTone.Warning) && guest.Remote[2] == (maximum, UiTone.Warning) && guest.Remote[3] == (trusted, UiTone.Success),
+                "the guest's existing plain toast receiver gets exactly the admitted messages in order");
+        }
+
+        private static void SharedMapNoticesUseSafeFallback()
+        {
+            using var rig = new Rig();
+            var guest = ObserveGuestToasts(rig);
+            rig.Start();
+            const string name = "<size=300>Declared world</size>";
+            const string notice = "Playing the copy of " + name + " saved on an earlier play; the public map service was too slow.";
+            MapNotices.Offline(rig.Host.Ui, name, "an earlier play", MapOfflineReason.Slow);
+            Assert(rig.Host.LocalUi.Toasts.Count == 1 && rig.Host.LocalUi.Toasts[0].Message == notice &&
+                rig.Host.LocalUi.Toasts[0].Tone == UiTone.Warning,
+                "a plain map sink without the remote receiver capability keeps the detailed notice");
+
+            var host = new RichToastProbe();
+            var ui = new NetUiService(host, rig.Host.Ui.Replication);
+            MapNotices.Offline(ui, name, "an earlier play", MapOfflineReason.Slow);
+            MapNotices.Offline(ui, "<b>Another world</b>", "an earlier play", MapOfflineReason.Unreachable);
+            rig.Frames(4);
+            const string fallback = "Playing a saved map copy because the public map service is temporarily unavailable.";
+            Assert(host.Rich.Count == 1 && host.Rich[0] == (fallback, UiTone.Warning),
+                "a host without a plain sink renders only the deduplicated fixed fallback");
+            Assert(guest.Rich.Count == 0 && guest.Remote.Count == 2 && guest.Remote[0] == (notice, UiTone.Warning) &&
+                guest.Remote[1] == (fallback, UiTone.Warning),
+                "the guest gets the detailed plain notice and the fixed fallback once each");
+        }
+
+        private static RemoteToastProbe ObserveGuestToasts(Rig rig)
+        {
+            var guest = new RemoteToastProbe();
+            rig.Guest.Players.Presentation = new MultiplayerPresentation(rig.Guest.Players,
+                () => new PresentationSink(guest, rig.Guest.ReceivedAudio));
+            return guest;
+        }
+
+        private class RichToastProbe : IUiService
+        {
+            internal readonly List<(string Text, UiTone Tone)> Rich = new List<(string, UiTone)>();
+            public OperationResult<bool> ShowToast(string text, UiTone tone = UiTone.Neutral)
+            { Rich.Add((text, tone)); return OperationResult<bool>.Success(true); }
+            public UiAccessibilityPreferences Accessibility => throw new NotSupportedException();
+            public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences value) => throw new NotSupportedException();
+            public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => throw new NotSupportedException();
+            public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => throw new NotSupportedException();
+        }
+
+        private class RemoteToastProbe : RichToastProbe, IRemoteUiReceiver
+        {
+            internal readonly List<(string Text, UiTone Tone)> Remote = new List<(string, UiTone)>();
+            public OperationResult<bool> RemoteToast(string text, UiTone tone)
+            { Remote.Add((text, tone)); return OperationResult<bool>.Success(true); }
+            public OperationResult<IUiSurface> RemoteSurface(UiSurfaceRequest request) => throw new NotSupportedException();
+            public OperationResult<IUiModal> RemoteModal(UiModalRequest request, Action<bool> completed) => throw new NotSupportedException();
+        }
+
+        private sealed class MapNoticeToastProbe : RemoteToastProbe, IInternalMapNoticeUi
+        {
+            internal readonly List<(string Text, UiTone Tone)> Map = new List<(string, UiTone)>();
+            public OperationResult<bool> ShowMapNotice(string text, UiTone tone)
+            { Map.Add((text, tone)); return OperationResult<bool>.Success(true); }
         }
 
         private static UiSurfaceRequest Hud(string id, string body, UiNode? content = null) =>

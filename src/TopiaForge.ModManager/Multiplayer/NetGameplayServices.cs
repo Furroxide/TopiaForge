@@ -150,14 +150,18 @@ namespace TopiaForge.ModManager
         public OperationResult<bool> ShowMapNotice(string message, UiTone tone)
         {
             UnityMainThreadGuard.AssertCurrent();
+            Func<string, UiTone, OperationResult<bool>>? showPlain = inner switch
+            {
+                IInternalMapNoticeUi plain => plain.ShowMapNotice,
+                IRemoteUiReceiver remote => remote.RemoteToast,
+                _ => null
+            };
+            if (showPlain == null) message = "Playing a saved map copy because the public map service is temporarily unavailable.";
             var presentation = Replication.Services.Players?.Presentation;
-            // Existing broadcast delivery is already plain at local and remote receivers; preserve its owner/routing rules.
             if (presentation != null && Core.Multiplayer.PresentationRoutingPolicy.Route(Replication.Services.Runtime.Realm,
                 Replication.Profile, Core.Multiplayer.PresentationKind.Toast) == Core.Multiplayer.PresentationRoute.BroadcastToEveryone)
-                return presentation.Toast(Replication, inner, inner is IRemoteUiReceiver ? message
-                    : "Playing a saved map copy because the public map service is temporarily unavailable.", tone);
-            return inner is IInternalMapNoticeUi plain ? plain.ShowMapNotice(message, tone)
-                : inner.ShowToast("Playing a saved map copy because the public map service is temporarily unavailable.", tone);
+                return presentation.Toast(Replication, inner, message, tone, showPlain);
+            return showPlain == null ? inner.ShowToast(message, tone) : showPlain(message, tone);
         }
 
         public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral)
