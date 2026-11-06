@@ -9,6 +9,8 @@ namespace TopiaForge.ModManager
 {
     internal sealed class WorldPreparation : IInternalWorldPreparation
     {
+        private static readonly TimeSpan ReadinessLimit = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan SpawnOverallLimit = TimeSpan.FromSeconds(120);
         private readonly IWorldNativeLoad native;
         private readonly IWorldRuntimeClock clock;
         private readonly IHostDispatcher dispatcher;
@@ -114,7 +116,7 @@ namespace TopiaForge.ModManager
                 else if (providerSpawn.HasValue || NativeDefaultSpawn.HasValue) selected = providerSpawn ?? NativeDefaultSpawn!.Value;
                 else return Failure<WorldReadiness>(ModErrorCode.Unavailable, "The world has no resolved default spawn.");
                 if (!Valid(selected)) return Failure<WorldReadiness>(ModErrorCode.InvalidArgument, "The resolved spawn is not a valid transform.");
-                var applied = await WaitAsync(() => native.ApplySpawn(selected), linked.Token);
+                var applied = await WaitAsync(() => native.ApplySpawn(selected), linked.Token, settleSpawn: true);
                 if (!applied.TryGetValue(out var actual)) return Failure<WorldReadiness>(applied.ErrorCode, applied.ErrorMessage);
                 if (!Valid(actual)) return Failure<WorldReadiness>(ModErrorCode.InvalidState, "The applied spawn is not a valid transform.");
                 linked.Token.ThrowIfCancellationRequested();
@@ -126,20 +128,50 @@ namespace TopiaForge.ModManager
             finally { ReleaseAdmission(); }
         });
 
-        private async Task<OperationResult<TransformState>> WaitAsync(Func<OperationResult<TransformState>?> probe, CancellationToken token)
+        private async Task<OperationResult<TransformState>> WaitAsync(Func<OperationResult<TransformState>?> probe, CancellationToken token,
+            bool settleSpawn = false)
         {
-            var deadline = clock.UtcNow + TimeSpan.FromSeconds(30);
+            var started = clock.Elapsed;
+            var previous = started;
+            var unpaused = TimeSpan.Zero;
+            var paused = settleSpawn && clock.IsPhysicsPaused;
             while (true)
             {
                 token.ThrowIfCancellationRequested();
                 var valid = native.ValidateScene();
                 if (!valid.Succeeded) return Failure<TransformState>(valid.ErrorCode, valid.ErrorMessage);
+                if (settleSpawn)
+                {
+                    var timeout = CheckSpawnBudget();
+                    if (timeout != null) return timeout;
+                    paused = clock.IsPhysicsPaused;
+                }
                 var result = probe();
                 token.ThrowIfCancellationRequested();
+                if (settleSpawn)
+                {
+                    var timeout = CheckSpawnBudget();
+                    if (timeout != null) return timeout;
+                }
                 if (result != null) return result;
-                if (clock.UtcNow >= deadline) return Failure<TransformState>(ModErrorCode.TimedOut, "World scene/player/spawn readiness did not complete within 30 seconds.");
+                if (!settleSpawn && clock.Elapsed - started >= ReadinessLimit)
+                    return Failure<TransformState>(ModErrorCode.TimedOut, "World scene/player/spawn readiness did not complete within 30 seconds.");
+                // The observed pause mode governs the interval until the next frame callback.
+                paused = settleSpawn && clock.IsPhysicsPaused;
                 var frame = await clock.NextFrameAsync(token);
                 if (!frame.Succeeded) return Failure<TransformState>(frame.ErrorCode, frame.ErrorMessage);
+            }
+
+            OperationResult<TransformState>? CheckSpawnBudget()
+            {
+                var now = clock.Elapsed;
+                if (!paused) unpaused += now - previous;
+                previous = now;
+                if (now - started >= SpawnOverallLimit)
+                    return Failure<TransformState>(ModErrorCode.TimedOut, "World spawn readiness did not complete within 120 seconds overall.");
+                if (unpaused >= ReadinessLimit)
+                    return Failure<TransformState>(ModErrorCode.TimedOut, "World spawn readiness did not complete within 30 unpaused seconds.");
+                return null;
             }
         }
         private static bool Valid(TransformState value) => value.Position.IsFinite && value.Rotation.IsFinite
