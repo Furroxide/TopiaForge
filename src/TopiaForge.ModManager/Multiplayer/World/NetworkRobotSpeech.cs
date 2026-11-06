@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager
     // Ephemeral private events, deliberately absent from spawn descriptors and late-join baselines.
     internal sealed partial class NetworkRobotSpeech : IWorldMessageHandler, IMultiplayerFrameStage
     {
+        private const long DeadlineMicros = 15_000_000;
         private readonly NetworkWorld world;
         private readonly MultiplayerReplication services;
         private readonly Func<long> clock;
@@ -24,7 +25,7 @@ namespace TopiaForge.ModManager
         private readonly TokenBucket outgoing, incoming;
         private ulong nonce, seenNonce, generation, instance;
         private string challenge = "";
-        private bool readySent, resetting;
+        private bool readySent, resetting, ticking;
         private long nextReady;
         private NetRealm realm;
         private string? runningWorld;
@@ -61,11 +62,9 @@ namespace TopiaForge.ModManager
             if (active.Count >= 32 || !outgoing.TryTake(clock())) return Result(ModErrorCode.RateLimited, "Robot speech is busy; retry a fresh line shortly.");
             foreach (var previous in active)
                 if (ReferenceEquals(previous.Entity, entity))
-                {
-                    previous.Cancel();
-                }
+                    previous.RequestCancellation();
             bool Current() => owns() && services.TryGetReplicaFactory(kind, out var registered) && ReferenceEquals(registered, provider);
-            var operation = new Playback(entity, provider, ++nonce, clock(), CancellationTokenSource.CreateLinkedTokenSource(token, context.Lifetime.StoppingToken), Current) { WireId = id };
+            var operation = new Playback(entity, provider, ++nonce, clock(), Current, token, context.Lifetime.StoppingToken) { WireId = id };
             active.Add(operation);
             speechPaces[entity] = new SpeechPace(clock(), Current);
             var presence = services.Players?.Presence;
@@ -83,11 +82,7 @@ namespace TopiaForge.ModManager
                     operation.Recipients.Add(new Recipient(peer.Id, gate, id));
                 }
             }
-            if (LocalEligible(entity))
-            {
-                operation.LocalCancellation = CancellationTokenSource.CreateLinkedTokenSource(operation.Cancellation.Token);
-                operation.Task = SafePlay(provider, entity, voice, text, operation.LocalCancellation.Token);
-            }
+            if (!operation.CancellationRequested && LocalEligible(entity)) operation.StartLocal(voice, text);
             return operation.Completion.Task;
         }
 
@@ -162,20 +157,48 @@ namespace TopiaForge.ModManager
             internal readonly IInternalSpeechProvider Provider;
             internal readonly ulong Nonce;
             internal readonly long Started;
-            internal readonly CancellationTokenSource Cancellation;
             internal readonly Func<bool> Current;
+            private readonly CancellationToken caller, ownerStopping;
+            private bool requested;
             internal readonly List<Recipient> Recipients = new List<Recipient>();
             internal readonly TaskCompletionSource<OperationResult<bool>> Completion = new TaskCompletionSource<OperationResult<bool>>();
             internal Task<OperationResult<bool>>? Task;
             internal OperationResult<bool>? Failure;
-            internal CancellationTokenSource? LocalCancellation;
+            private CancellationTokenSource? localCancellation;
+            private bool cancellingLocal;
             internal uint WireId;
-            internal Playback(IEntity entity, IInternalSpeechProvider provider, ulong nonce, long started, CancellationTokenSource cancellation, Func<bool> current)
+            internal Playback(IEntity entity, IInternalSpeechProvider provider, ulong nonce, long started, Func<bool> current,
+                CancellationToken caller = default, CancellationToken ownerStopping = default)
             {
-                Entity = entity; Provider = provider; Nonce = nonce; Started = started; Cancellation = cancellation; Current = current;
-                cancellation.CancelAfter(TimeSpan.FromSeconds(15));
+                Entity = entity; Provider = provider; Nonce = nonce; Started = started; Current = current;
+                this.caller = caller; this.ownerStopping = ownerStopping;
             }
-            internal void Cancel() { try { Cancellation.Cancel(); } catch (Exception) { } }
+            internal bool CancellationRequested => requested || caller.IsCancellationRequested || ownerStopping.IsCancellationRequested;
+            internal void RequestCancellation() => requested = true;
+            internal void StartLocal(string voice, string text)
+            {
+                localCancellation = new CancellationTokenSource();
+                Task = SafePlay(Provider, Entity, voice, text, localCancellation.Token);
+            }
+            internal void CancelLocal()
+            {
+                var source = localCancellation;
+                if (source == null || source.IsCancellationRequested) return;
+                cancellingLocal = true;
+                try { source.Cancel(); }
+                catch (AggregateException) { }
+                finally
+                {
+                    cancellingLocal = false;
+                    if (localCancellation == null) source.Dispose();
+                }
+            }
+            internal void DisposeLocal()
+            {
+                var source = localCancellation;
+                localCancellation = null;
+                if (!cancellingLocal) source?.Dispose();
+            }
         }
     }
 }

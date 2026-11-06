@@ -98,8 +98,9 @@ namespace TopiaForge.RobotKit
                     return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The robot's speech association has ended.");
                 var asset = NativeRobotVoice.Resolve(voice);
                 if (asset == null) return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The requested native voice binding is unavailable; retry after recovery.");
+                // The linked token is only for the serial wait and result. Native playback owns its cancellation.
                 using (speechHead.OverrideSpeech(speechHead.CurrentSpeakerName, asset))
-                    await playback.PlayAsync(text, linked.Token);
+                    await playback.PlayAsync(text, token);
                 linked.Token.ThrowIfCancellationRequested();
                 return OperationResult<bool>.Success(true);
             }

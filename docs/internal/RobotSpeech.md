@@ -102,7 +102,9 @@ per-operation recipient metadata; acknowledgements do not add a queue or late-jo
 Listener failure, loss of eligibility or disconnection records failure while other admitted listeners
 finish. Local earshot loss cancels only local playback. Caller cancellation, replacement or source
 ownership/provider/world loss cancels the whole operation. A missing report or stalled native task
-expires at the existing 15-second deadline; timeouts never count as success. Settlement and all world,
+expires at the existing 15-second deadline; timeouts never count as success. Frame maintenance observes
+caller and owner cancellation and the host or receiver deadline. Native playback receives its own token,
+which the runtime cancels on the frame thread during maintenance or explicit teardown. Settlement and all world,
 Unity and transport access occur on the frame thread. Reset settles pending callers and rejects
 reentrant speech admission until teardown completes. A full acknowledgement window is not retried;
 the host times out. Successful operations retire before releasing a sequential caller.

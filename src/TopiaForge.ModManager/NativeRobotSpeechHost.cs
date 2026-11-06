@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,6 +22,14 @@ namespace TopiaForge.ModManager
         internal static IInternalNativeSpeechHost? ForProvider(string ownerModId, IModLifetime lifetime) =>
             string.Equals(ownerModId, ProviderId, StringComparison.OrdinalIgnoreCase)
                 ? new NativeRobotSpeechHost(lifetime) : null;
+
+        internal static void Tick()
+        {
+            var installation = active;
+            if (installation == null) return;
+            UnityMainThreadGuard.AssertCurrent();
+            installation.Tick();
+        }
 
         public IInternalNativeSpeechLease Install(IInternalNativeSpeechRouter router)
         {
@@ -107,8 +116,8 @@ namespace TopiaForge.ModManager
         private sealed class Installation : IInternalNativeSpeechLease
         {
             private readonly OwnerHarmonyLease patches;
-            private readonly CancellationTokenSource stopping = new CancellationTokenSource();
             private readonly CancellationToken ownerStopping;
+            private readonly List<NativeLine> lines = new List<NativeLine>();
             private bool ready, closed;
             internal IInternalNativeSpeechRouter? Router { get; private set; }
             internal NativeRobotSpeechBindings? Bindings { get; set; }
@@ -137,32 +146,122 @@ namespace TopiaForge.ModManager
             {
                 UnityMainThreadGuard.AssertCurrent();
                 if (!Owns(registration)) throw new InvalidOperationException("The native speech association has ended.");
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, stopping.Token, ownerStopping,
-                    registration.Stopping, registration.AssociationStopping);
-                linked.Token.ThrowIfCancellationRequested();
-                var head = registration.Head;
-                UniTask task;
-                var previous = entering;
-                entering = new Playback(head, text, linked.Token);
+                token.ThrowIfCancellationRequested();
+                var line = new NativeLine(registration, token);
+                lines.Add(line);
+                bool retired;
                 try
                 {
-                    task = (UniTask)(Bindings ?? throw new InvalidOperationException("Native robot speech bindings are unavailable."))
-                        .InvokeNamed(head, head.CurrentSpeakerName, text, new TaskGraph("Robot speech"), linked.Token);
+                    var head = registration.Head;
+                    UniTask task;
+                    var previous = entering;
+                    entering = new Playback(head, text, line.Token);
+                    try
+                    {
+                        task = (UniTask)(Bindings ?? throw new InvalidOperationException("Native robot speech bindings are unavailable."))
+                            .InvokeNamed(head, head.CurrentSpeakerName, text, new TaskGraph("Robot speech"), line.Token);
+                    }
+                    finally { entering = previous; }
+                    await task;
+                    line.Token.ThrowIfCancellationRequested();
+                    token.ThrowIfCancellationRequested();
+                    ownerStopping.ThrowIfCancellationRequested();
+                    registration.AssociationStopping.ThrowIfCancellationRequested();
                 }
-                finally { entering = previous; }
-                await task;
-                linked.Token.ThrowIfCancellationRequested();
+                finally { retired = line.Complete(); }
+                if (retired) throw new OperationCanceledException("Native robot speech was cancelled.");
+            }
+
+            internal void Tick()
+            {
+                try { RetireLines(null, false); }
+                catch (AggregateException) { } // A failing native cancellation callback must not stop the frame.
+            }
+
+            private bool ShouldCancel(NativeLine line)
+            {
+                if (line.Caller.IsCancellationRequested) return true;
+                try { return !Owns(line.Registration); }
+                catch (Exception) { return true; }
+            }
+
+            private void RetireLines(Registration? registration, bool all)
+            {
+                List<NativeLine>? retiring = null;
+                for (var i = lines.Count - 1; i >= 0; i--)
+                {
+                    var line = lines[i];
+                    if (line.IsComplete) { lines.RemoveAt(i); continue; }
+                    if (!all && (registration == null ? !ShouldCancel(line) : !ReferenceEquals(line.Registration, registration))) continue;
+                    lines.RemoveAt(i);
+                    if (line.MarkRetired()) (retiring ??= new List<NativeLine>()).Add(line);
+                }
+                if (retiring == null) return;
+                // Mark the whole batch before callbacks can complete a sibling, dispose a registration, or start another line.
+                List<Exception>? failures = null;
+                foreach (var line in retiring)
+                    try { line.Cancel(); }
+                    catch (Exception error) { (failures ??= new List<Exception>()).Add(error); }
+                if (failures != null) throw new AggregateException(failures);
+            }
+
+            private sealed class NativeLine
+            {
+                private readonly object gate = new object();
+                private readonly CancellationTokenSource source = new CancellationTokenSource();
+                private bool complete, cancelling, retired;
+                internal readonly Registration Registration;
+                internal readonly CancellationToken Caller, Token;
+                internal bool IsComplete => Volatile.Read(ref complete);
+                internal NativeLine(Registration registration, CancellationToken caller)
+                { Registration = registration; Caller = caller; Token = source.Token; }
+
+                internal bool MarkRetired()
+                {
+                    lock (gate)
+                    {
+                        if (complete) return false;
+                        retired = true;
+                        return true;
+                    }
+                }
+
+                internal void Cancel()
+                {
+                    lock (gate)
+                    {
+                        if (complete) return;
+                        cancelling = true;
+                    }
+                    try { source.Cancel(); }
+                    finally
+                    {
+                        lock (gate)
+                        {
+                            cancelling = false;
+                            if (complete) source.Dispose();
+                        }
+                    }
+                }
+
+                internal bool Complete()
+                {
+                    lock (gate)
+                    {
+                        Volatile.Write(ref complete, true);
+                        if (!cancelling) source.Dispose();
+                        return retired;
+                    }
+                }
             }
 
             private sealed class Registration : IInternalNativeSpeechPlayback
             {
                 private readonly Installation owner;
-                private readonly CancellationTokenSource stopping = new CancellationTokenSource();
                 internal AgentHead Head { get; }
                 internal object Association { get; }
                 internal CancellationToken AssociationStopping { get; }
                 internal bool Retired { get; private set; }
-                internal CancellationToken Stopping => stopping.Token;
                 internal Registration(Installation owner, AgentHead head, object association, CancellationToken associationStopping)
                 { this.owner = owner; Head = head; Association = association; AssociationStopping = associationStopping; }
                 public bool IsAvailable => owner.Owns(this);
@@ -172,8 +271,7 @@ namespace TopiaForge.ModManager
                     UnityMainThreadGuard.AssertCurrent();
                     if (Retired) return;
                     Retired = true;
-                    try { stopping.Cancel(); }
-                    finally { stopping.Dispose(); }
+                    owner.RetireLines(this, false);
                 }
             }
             public void Dispose()
@@ -184,8 +282,7 @@ namespace TopiaForge.ModManager
                     if (!closed)
                     {
                         closed = true;
-                        try { stopping.Cancel(); }
-                        finally { stopping.Dispose(); }
+                        RetireLines(null, true);
                     }
                 }
                 finally
