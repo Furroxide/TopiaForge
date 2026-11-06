@@ -189,6 +189,11 @@ namespace TopiaForge.RobotKit {
    Reset();Hosts=Array.Empty<Component>();Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.HostCount,"host refusal classified");
    host=Reset();host.RuntimeAssetConfig.PrefabSceneMap.Entries=new UgcPrefabSceneMap.Entry[257];Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.EntryBudget,"entry budget classified");
    host=Reset();host.RuntimeAssetConfig.PrefabSceneMap.Entries[0].sceneJson="{}";Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.SceneShape,"identified malformed scene classified");
+   host=Reset();host.RuntimeAssetConfig.PrefabSceneMap.Entries=Array.Empty<UgcPrefabSceneMap.Entry>();
+   Check(RobotComposedScene.Discover(()=>State,out var absent)==null && absent,"only a completed no-entry scan admits absence backoff");
+   Reset();Hosts=Array.Empty<Component>();
+   Check(RobotComposedScene.Discover(()=>State,out absent)==null && !absent,"transient host refusal never admits absence backoff");
+   Reset();Check(RobotComposedScene.Discover(()=>State,out absent)!=null && !absent,"successful discovery is not negative cached");
   }
  }
 }

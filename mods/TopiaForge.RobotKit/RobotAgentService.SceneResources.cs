@@ -8,7 +8,15 @@ namespace TopiaForge.RobotKit
     {
         // StartingMode is committed before the gamemode factory runs. A catalog observed during world load
         // must retry composition on that notification, without waiting for the ordinary two-second throttle.
-        internal void InvalidateComposedDiscovery() => nextPrefabScan = 0f;
+        private float nextComposedScan;
+        private float composedRetryDelay = 2f;
+
+        internal void InvalidateComposedDiscovery()
+        {
+            nextPrefabScan = 0f;
+            nextComposedScan = 0f;
+            composedRetryDelay = 2f;
+        }
 
         private void ClearAgents()
         {
@@ -61,52 +69,62 @@ namespace TopiaForge.RobotKit
 
         private IReadOnlyList<RobotPrefabCandidate>? ResolveCachedCatalog()
         {
+            // OnSceneChanged also resets nextPrefabScan. A real publication or scene boundary
+            // must not retain a negative discovery delay from the previous world.
+            if (nextPrefabScan == 0f)
+            {
+                nextComposedScan = 0f;
+                composedRetryDelay = 2f;
+            }
+            RobotPrefabCandidate? composition = null;
+            var hasPrefab = false;
             if (cachedCatalog != null)
             {
                 var staleComposition = false;
                 foreach (var candidate in cachedCatalog)
                 {
-                    if (candidate.Prefab != null) continue;
-                    if (candidate.IsCurrent) return cachedCatalog;
-                    staleComposition = true;
+                    if (candidate.Prefab != null) hasPrefab = true;
+                    else if (candidate.IsCurrent) composition = candidate;
+                    else staleComposition = true;
                 }
                 if (staleComposition)
                 {
                     var retained = new List<RobotPrefabCandidate>();
-                    foreach (var candidate in cachedCatalog) if (candidate.Prefab != null) retained.Add(candidate);
+                    foreach (var candidate in cachedCatalog)
+                        if (candidate.Prefab != null || ReferenceEquals(candidate, composition)) retained.Add(candidate);
                     cachedCatalog = retained;
                     cachedTypes = null;
-                    nextPrefabScan = 0f;
+                    InvalidateComposedDiscovery();
                 }
+                // A current composed actor cannot make an empty prefab scan permanent.
+                if (composition != null && hasPrefab) return cachedCatalog;
             }
-            // ResolveAll does full Resources scans, which are expensive; throttle re-scans while nothing is
-            // found (e.g. before a gameplay level has loaded any robots). Reset on scene change.
-            if (Time.unscaledTime < nextPrefabScan)
-            {
-                return cachedCatalog;
-            }
+            var now = Time.unscaledTime;
+            if (now < nextPrefabScan) return cachedCatalog;
 
-            // A map can finish loading after ordinary prefab discovery has already succeeded. Retry composed
-            // discovery too, without changing the existing default-prefab order or rescanning every frame.
             var catalog = new List<RobotPrefabCandidate>();
             if (cachedCatalog != null)
                 foreach (var candidate in cachedCatalog) if (candidate.Prefab != null) catalog.Add(candidate);
             if (catalog.Count == 0) catalog.AddRange(prefabResolver.ResolveAll());
-            var composed = RobotComposedScene.Discover(world);
-            if (composed != null && !catalog.Exists(candidate => string.Equals(candidate.Id, composed.Id, StringComparison.OrdinalIgnoreCase)))
-                catalog.Add(composed);
-            var changed = cachedCatalog == null || catalog.Count != cachedCatalog.Count;
+            if (composition != null)
+            {
+                if (!catalog.Exists(candidate => string.Equals(candidate.Id, composition.Id, StringComparison.OrdinalIgnoreCase)))
+                    catalog.Add(composition);
+            }
+            else if (now >= nextComposedScan)
+            {
+                var composed = RobotComposedScene.Discover(world, out var notPresent);
+                if (composed != null && !catalog.Exists(candidate => string.Equals(candidate.Id, composed.Id, StringComparison.OrdinalIgnoreCase)))
+                    catalog.Add(composed);
+                nextComposedScan = now + (notPresent ? composedRetryDelay : 2f);
+                composedRetryDelay = notPresent ? Math.Min(composedRetryDelay * 2f, 30f) : 2f;
+            }
+            var changed = cachedCatalog == null || catalog.Count != cachedCatalog.Count
+                || (composition != null && !catalog.Contains(composition));
             if (changed) cachedCatalog = catalog;
-            nextPrefabScan = Time.unscaledTime + 2f;
-            if (cachedCatalog == null || cachedCatalog.Count == 0)
-            {
-                cachedCatalog = null;
-                nextPrefabScan = Time.unscaledTime + 2f;
-            }
-            else if (changed)
-            {
-                cachedTypes = null;
-            }
+            nextPrefabScan = now + 2f;
+            if (cachedCatalog == null || cachedCatalog.Count == 0) cachedCatalog = null;
+            else if (changed) cachedTypes = null;
 
             return cachedCatalog;
         }
