@@ -190,6 +190,12 @@ void main() {
       await tester.pumpWidget(page(const HostingDialog()));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('hosting-name')), findsOneWidget);
+      final visibility = find.byType(DropdownButtonFormField<ServerVisibility>);
+      await tester.tap(visibility);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Public').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('hosting-activity-disclosure')), findsOneWidget);
       expect(find.byType(TextField), findsNWidgets(2)); // no password field
       expect(tester.takeException(), isNull);
       await tester.runAsync(() async {

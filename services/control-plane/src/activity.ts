@@ -1,4 +1,4 @@
-/** Aggregate Internet activity only. No descriptors, addresses, candidates or player identities leave a host. */
+/** Public Internet activity only. No descriptors, addresses, candidates or player identities leave a host. */
 import type { Env } from "./env";
 import type { SessionRow } from "./objects/host-store";
 import { clock, nowSeconds } from "./shared/runtime";
@@ -6,6 +6,7 @@ import { clock, nowSeconds } from "./shared/runtime";
 export const ACTIVITY_SHARDS = 16;
 export const ACTIVITY_CRON = "*/5 * * * *";
 export interface ActivityLease {
+  readonly scope: "public-v2";
   readonly serverId: string;
   readonly version: number;
   readonly expiresAt: number;
@@ -40,8 +41,9 @@ export class ActivityReporter {
     private readonly env: Env,
   ) {}
   private ensure(): void {
+    this.ctx.storage.sql.exec("DROP TABLE IF EXISTS activity_outbox");
     this.ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS activity_outbox (id INTEGER PRIMARY KEY, server_id TEXT, version INTEGER, expires_at INTEGER, players INTEGER, attempts INTEGER, retry_at INTEGER, keep_until INTEGER)",
+      "CREATE TABLE IF NOT EXISTS public_activity_outbox_v2 (id INTEGER PRIMARY KEY, server_id TEXT, version INTEGER, expires_at INTEGER, players INTEGER, attempts INTEGER, retry_at INTEGER, keep_until INTEGER)",
     );
   }
   record(session: SessionRow, ended = false): void {
@@ -49,19 +51,25 @@ export class ActivityReporter {
     try {
       this.ensure();
       const previous = this.ctx.storage.sql
-        .exec<Pending>("SELECT * FROM activity_outbox WHERE id = 1")
+        .exec<Pending>("SELECT * FROM public_activity_outbox_v2 WHERE id = 1")
         .toArray()[0];
+      // Invite-only hosts never create an activity lease. A former public host
+      // may send a zero-count tombstone to withdraw its earlier public lease.
+      // A withdrawal is sent once. Later invite heartbeats must not renew its
+      // retention or reveal private timing; existing bounded retries still run.
+      if (session.visibility !== "public" && (!previous || previous.expires_at === 0))
+        return;
       const version = Math.max(clock.now(), (previous?.version ?? 0) + 1);
       const expires =
-        ended || monitorIds(this.env).includes(session.serverId)
+        ended || session.visibility !== "public" || monitorIds(this.env).includes(session.serverId)
           ? 0
           : session.expiresAt;
       this.ctx.storage.sql.exec(
-        "INSERT OR REPLACE INTO activity_outbox VALUES (1,?,?,?,?,0,?,?)",
+        "INSERT OR REPLACE INTO public_activity_outbox_v2 VALUES (1,?,?,?,?,0,?,?)",
         session.serverId,
         version,
         expires,
-        session.players,
+        expires === 0 ? 0 : session.players,
         nowSeconds(),
         nowSeconds() + 90,
       );
@@ -83,7 +91,7 @@ export class ActivityReporter {
     if (!activityEnabled(this.env)) return;
     this.ensure();
     const row = this.ctx.storage.sql
-      .exec<Pending>("SELECT * FROM activity_outbox WHERE id = 1")
+      .exec<Pending>("SELECT * FROM public_activity_outbox_v2 WHERE id = 1")
       .toArray()[0];
     if (
       !row ||
@@ -94,7 +102,7 @@ export class ActivityReporter {
       return;
     // Reserve the attempt before yielding. A replacement lease supersedes this attempt atomically.
     this.ctx.storage.sql.exec(
-      "UPDATE activity_outbox SET attempts = attempts + 1, retry_at = ? WHERE version = ?",
+      "UPDATE public_activity_outbox_v2 SET attempts = attempts + 1, retry_at = ? WHERE version = ?",
       nowSeconds() + [5, 15, 30][row.attempts]!,
       row.version,
     );
@@ -107,6 +115,7 @@ export class ActivityReporter {
       );
       await Promise.race([
         shard.apply({
+          scope: "public-v2",
           serverId: row.server_id,
           version: row.version,
           expiresAt: row.expires_at,
@@ -120,7 +129,7 @@ export class ActivityReporter {
         }),
       ]);
       this.ctx.storage.sql.exec(
-        "UPDATE activity_outbox SET attempts = 3 WHERE version = ?",
+        "UPDATE public_activity_outbox_v2 SET attempts = 3 WHERE version = ?",
         row.version,
       );
     } finally {
@@ -138,11 +147,11 @@ export class ActivityReporter {
     try {
       this.ensure();
       this.ctx.storage.sql.exec(
-        "DELETE FROM activity_outbox WHERE keep_until <= ?",
+        "DELETE FROM public_activity_outbox_v2 WHERE keep_until <= ?",
         nowSeconds(),
       );
       const row = this.ctx.storage.sql
-        .exec<Pending>("SELECT * FROM activity_outbox WHERE id = 1")
+        .exec<Pending>("SELECT * FROM public_activity_outbox_v2 WHERE id = 1")
         .toArray()[0];
       return row
         ? row.attempts >= 3

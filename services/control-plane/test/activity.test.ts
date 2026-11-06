@@ -48,7 +48,7 @@ describe("activity leases and publication", () => {
               async totals() {
                 arrived();
                 await gate;
-                return { sessions: 1, players: 2 };
+                return { scope: "public-v2", sessions: 1, players: 2 };
               },
             };
           },
@@ -86,39 +86,39 @@ describe("activity leases and publication", () => {
     const s = shard(),
       serverId = "0".repeat(64),
       version = scenario.clock.now();
-    await s.apply({
+    await s.apply({ scope: "public-v2",
       serverId,
       version,
       expiresAt: nowSeconds() + 90,
       players: 3,
     });
-    await s.apply({
+    await s.apply({ scope: "public-v2",
       serverId,
       version,
       expiresAt: nowSeconds() + 90,
       players: 3,
     });
-    expect(await s.totals(nowSeconds())).toEqual({ sessions: 1, players: 3 });
-    await s.apply({ serverId, version: version + 1, expiresAt: 0, players: 0 });
-    await s.apply({
+    expect(await s.totals(nowSeconds())).toEqual({ scope: "public-v2", sessions: 1, players: 3 });
+    await s.apply({ scope: "public-v2", serverId, version: version + 1, expiresAt: 0, players: 0 });
+    await s.apply({ scope: "public-v2",
       serverId,
       version,
       expiresAt: nowSeconds() + 90,
       players: 3,
     });
-    expect(await s.totals(nowSeconds())).toEqual({ sessions: 0, players: 0 });
+    expect(await s.totals(nowSeconds())).toEqual({ scope: "public-v2", sessions: 0, players: 0 });
     scenario.clock.advance(1);
-    await s.apply({
+    await s.apply({ scope: "public-v2",
       serverId,
       version: scenario.clock.now(),
       expiresAt: nowSeconds() + 90,
       players: 4,
     });
-    expect(await s.totals(nowSeconds())).toEqual({ sessions: 1, players: 4 });
+    expect(await s.totals(nowSeconds())).toEqual({ scope: "public-v2", sessions: 1, players: 4 });
     scenario.clock.advance(90);
-    expect(await s.totals(nowSeconds())).toEqual({ sessions: 0, players: 0 });
+    expect(await s.totals(nowSeconds())).toEqual({ scope: "public-v2", sessions: 0, players: 0 });
   });
-  it("includes public and invite-only sessions across builds, and updates player counts from heartbeat", async () => {
+  it("excludes invite-only sessions across builds, and updates player counts from heartbeat", async () => {
     const a = await identity(`activity-public-${scenario.day}`),
       b = await identity(`activity-private-${scenario.day}`);
     const ra = await register(a, scenario.ip),
@@ -158,8 +158,8 @@ describe("activity leases and publication", () => {
     const totals = await Promise.all(
       Array.from({ length: 16 }, (_, i) => shard(i).totals(nowSeconds())),
     );
-    expect(totals.reduce((n, r) => n + r.sessions, 0)).toBe(2);
-    expect(totals.reduce((n, r) => n + r.players, 0)).toBe(7);
+    expect(totals.reduce((n, r) => n + r.sessions, 0)).toBe(1);
+    expect(totals.reduce((n, r) => n + r.players, 0)).toBe(3);
     await call("DELETE", `/v1/hosts/${b.serverId}`, {
       token: rb.token,
       ip: scenario.ip,
@@ -178,7 +178,7 @@ describe("activity leases and publication", () => {
     const snapshot = snapshots();
     await snapshot.collect();
     scenario.clock.advance(300);
-    await shard().apply({
+    await shard().apply({ scope: "public-v2",
       serverId: "0".repeat(64),
       version: scenario.clock.now(),
       expiresAt: nowSeconds() + 90,
@@ -189,12 +189,12 @@ describe("activity leases and publication", () => {
     scenario.clock.advance(900);
     expect(await snapshot.released()).toMatchObject({
       state: "suppressed",
-      sessions: null,
-      players: null,
+      sessionsBand: null,
+      playersBand: null,
     });
     const stored = await runInDurableObject(snapshot, (_instance, state) =>
       state.storage.sql
-        .exec("SELECT sessions,players FROM snapshot WHERE state='suppressed'")
+        .exec("SELECT sessions,players FROM public_snapshot_v2 WHERE state='suppressed'")
         .toArray(),
     );
     expect(
@@ -206,7 +206,7 @@ describe("activity leases and publication", () => {
     await snapshot.collect();
     scenario.clock.advance(300);
     for (let i = 0; i < 5; i++)
-      await shard(i).apply({
+      await shard(i).apply({ scope: "public-v2",
         serverId: i.toString(16).repeat(64),
         version: scenario.clock.now(),
         expiresAt: nowSeconds() + 90,
@@ -221,14 +221,17 @@ describe("activity leases and publication", () => {
     expect(response.status).toBe(200);
     expect(response.json).toMatchObject({
       state: "available",
-      sessions: 5,
-      players: 10,
+      schema: "topiaforge.activity/2",
+      scope: "public",
+      sessionsBand: { min: 5, max: 9 },
+      playersBand: { min: 10, max: 19 },
     });
     expect(Object.keys(response.json).sort()).toEqual([
-      "players",
+      "playersBand",
       "sampledAt",
       "schema",
-      "sessions",
+      "scope",
+      "sessionsBand",
       "state",
     ]);
   });
@@ -252,23 +255,14 @@ describe("activity leases and publication", () => {
     const snapshot = snapshots();
     await snapshot.collect();
     scenario.clock.advance(300);
-    await runInDurableObject(shard(), (instance) => {
-      instance.totals = () => {
-        throw new Error("test-only aggregate failure");
-      };
+    await collectWithShardTotals(() => {
+      throw new Error("test-only aggregate failure");
     });
-    try {
-      await snapshot.collect();
-    } finally {
-      await runInDurableObject(shard(), (instance) => {
-        Reflect.deleteProperty(instance, "totals");
-      });
-    }
     scenario.clock.advance(900);
     expect(await snapshot.released()).toMatchObject({
       state: "unavailable",
-      sessions: null,
-      players: null,
+      sessionsBand: null,
+      playersBand: null,
     });
   });
   it("bounds a failing outbox to three attempts and never throws from a recording operation", async () => {
@@ -291,6 +285,7 @@ describe("activity leases and publication", () => {
       const reporter = new ActivityReporter(state, failing);
       expect(() =>
         reporter.record({
+          visibility: "public",
           serverId: host.serverId,
           expiresAt: nowSeconds() + 90,
           players: 3,
@@ -303,7 +298,7 @@ describe("activity leases and publication", () => {
       }
       expect(
         state.storage.sql
-          .exec<{ attempts: number }>("SELECT attempts FROM activity_outbox")
+          .exec<{ attempts: number }>("SELECT attempts FROM public_activity_outbox_v2")
           .one().attempts,
       ).toBe(3);
     });
@@ -322,6 +317,7 @@ describe("activity leases and publication", () => {
           MONITOR_SERVER_IDS: host.serverId,
         });
         reporter.record({
+          visibility: "public",
           serverId: host.serverId,
           expiresAt: row.expires_at,
           players: 16,
@@ -346,6 +342,100 @@ describe("activity leases and publication", () => {
         ).activity.settled();
       },
     );
+  });
+  it("never promotes old combined rows or unqualified writes to public activity", async () => {
+    const s = shard();
+    // Assert the real method's refusal inside the object: the test RPC wrapper
+    // reports deliberate remote rejections as additional unhandled errors.
+    await runInDurableObject(s, async (instance) => {
+      await expect(instance.apply({ serverId: "0".repeat(64), version: scenario.clock.now(),
+        expiresAt: nowSeconds() + 90, players: 4 } as never)).rejects.toThrow("invalid public activity lease");
+      expect(instance.totals(nowSeconds()).sessions).toBe(0);
+    });
+    const snapshot = snapshots();
+    await runInDurableObject(snapshot, (_instance, state) => {
+      state.storage.sql.exec("CREATE TABLE snapshot (sampled_at INTEGER, collected_at INTEGER, state TEXT, sessions INTEGER, players INTEGER)");
+      state.storage.sql.exec("INSERT INTO snapshot VALUES (?,?, 'available',7,19)", nowSeconds()-1200, nowSeconds()-1200);
+    });
+    expect(await snapshot.released()).toBeNull();
+  });
+  it("stores only coarse public bands and rejects legacy shard totals during rollout", async () => {
+    const snapshot = snapshots();
+    await snapshot.collect();
+    scenario.clock.advance(300);
+    for (let i = 0; i < 7; i++) await shard(i).apply({ scope: "public-v2",
+      serverId: i.toString(16).repeat(64), version: scenario.clock.now(),
+      expiresAt: nowSeconds() + 90, players: i === 0 ? 7 : 2 });
+    await snapshot.collect();
+    const stored = await runInDurableObject(snapshot, (_instance, state) =>
+      state.storage.sql.exec("SELECT sessions,players FROM public_snapshot_v2 WHERE state='available'").one());
+    expect(stored).toMatchObject({ sessions: 5, players: 10 });
+    scenario.clock.advance(900);
+    expect(await snapshot.released()).toMatchObject({ scope: "public",
+      sessionsBand: { min: 5, max: 9 }, playersBand: { min: 10, max: 19 } });
+    await collectWithShardTotals(() => ({ sessions: 7, players: 19 }));
+    scenario.clock.advance(900);
+    expect(await snapshot.released()).toMatchObject({ state: "unavailable", sessionsBand: null, playersBand: null });
+  });
+  it("withdraws a public lease without reporting invite-only players", async () => {
+    const host = await identity(`visibility-activity-${scenario.day}`);
+    await runInDurableObject(env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(host.serverId)), async (_instance, state) => {
+      const reporter = new ActivityReporter(state, env);
+      const session = { serverId: host.serverId, visibility: "public", expiresAt: nowSeconds()+90, players: 3 };
+      reporter.record(session as never);
+      await reporter.settled();
+      expect((await shard(parseInt(host.serverId[0]!,16)).totals(nowSeconds())).players).toBe(3);
+      reporter.record({ ...session, visibility: "invite", players: 4 } as never);
+      await reporter.settled();
+      expect((await shard(parseInt(host.serverId[0]!,16)).totals(nowSeconds())).players).toBe(0);
+      expect(state.storage.sql.exec("SELECT players FROM public_activity_outbox_v2").one()["players"]).toBe(0);
+      const withdrawal = state.storage.sql.exec("SELECT * FROM public_activity_outbox_v2").one();
+      scenario.clock.advance(10);
+      reporter.record({ ...session, visibility: "invite", players: 6 } as never);
+      await reporter.settled();
+      expect(state.storage.sql.exec("SELECT * FROM public_activity_outbox_v2").one()).toEqual(withdrawal);
+      expect((await shard(parseInt(host.serverId[0]!,16)).totals(nowSeconds())).players).toBe(0);
+    });
+  });
+  it("keeps the earliest shard cleanup deadline across staggered writes", async () => {
+    const s = env.ACTIVITY_SHARDS.get(env.ACTIVITY_SHARDS.idFromName(`staggered-${scenario.day}`));
+    const firstAt = nowSeconds();
+    await s.apply({ scope: "public-v2", serverId: "0".repeat(64), version: scenario.clock.now(), expiresAt: 0, players: 0 });
+    expect(await runInDurableObject(s, (_instance, state) => state.storage.getAlarm())).toBe((firstAt + 180) * 1000);
+    scenario.clock.advance(179);
+    await s.apply({ scope: "public-v2", serverId: "1".repeat(64), version: scenario.clock.now(), expiresAt: nowSeconds()+90, players: 3 });
+    expect(await runInDurableObject(s, (_instance, state) => state.storage.getAlarm())).toBe((firstAt + 180) * 1000);
+    scenario.clock.advance(1);
+    await runInDurableObject(s, async (instance, state) => {
+      await instance.alarm();
+      const rows = state.storage.sql.exec("SELECT server_id FROM public_lease_v2").toArray();
+      expect(rows).toEqual([{ server_id: "1".repeat(64) }]);
+      expect(await state.storage.getAlarm()).toBe((firstAt + 359) * 1000);
+    });
+  });
+  it("refuses legacy or non-public snapshot replies at the monitor endpoint", async () => {
+    for (const reply of [
+      { schema: "topiaforge.activity/1", sampledAt: nowSeconds()-900, state: "available", sessions: 7, players: 19 },
+      { schema: "topiaforge.activity/2", scope: "combined", sampledAt: nowSeconds()-900, state: "available", sessionsBand: { min: 5, max: 9 }, playersBand: { min: 10, max: 19 } },
+      { schema: "topiaforge.activity/2", sampledAt: nowSeconds()-900, state: "suppressed", sessionsBand: null, playersBand: null },
+    ]) {
+      // Inject the old response at the namespace boundary; own-instance method
+      // overrides are intentionally inaccessible through Durable Object RPC.
+      const mixed = {
+        ...env,
+        ACTIVITY_SNAPSHOTS: {
+          idFromName() { return "test-only-snapshot"; },
+          get() { return { released: async () => reply }; },
+        },
+      } as unknown as typeof env;
+      const response = await worker.fetch(new Request("https://control-plane.example.invalid/v1/monitor/activity", {
+        headers: { authorization: `Bearer ${monitorToken}`, "cf-connecting-ip": scenario.ip },
+      }), mixed);
+      expect(response.status).toBe(503);
+      const body = await response.json();
+      expect(body).not.toHaveProperty("sessions");
+      expect(body).not.toHaveProperty("sessionsBand");
+    }
   });
   it("keeps activity collection separate from the hourly spend measurement", async () => {
     const ctx = createExecutionContext();
@@ -372,4 +462,23 @@ function assertNoPrematureSnapshot(
   expect(snapshot === null || snapshot.sampledAt < latestPrematureSlot).toBe(
     true,
   );
+}
+
+async function collectWithShardTotals(totals: () => unknown): Promise<void> {
+  await runInDurableObject(snapshots(), async (instance) => {
+    const holder = instance as unknown as { env: typeof env };
+    const original = holder.env;
+    holder.env = {
+      ...original,
+      ACTIVITY_SHARDS: {
+        idFromName() { return "test-only-shard"; },
+        get() { return { totals }; },
+      },
+    } as unknown as typeof env;
+    try {
+      await instance.collect();
+    } finally {
+      holder.env = original;
+    }
+  });
 }
