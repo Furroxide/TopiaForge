@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Guests now report a reason-free refusal before robot speech playback, so hidden, missing or out-of-earshot replicas and full receive budgets do not hold other listeners until the deadline. Speech schema 3 requires matching peers; all-declined lines return `Success(false)` after the existing pace.
+
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 
 - Robot dialogue capture now holds the runtime microphone lease, yields to native recording, and returns Conflict when preempted without ending the native recording.

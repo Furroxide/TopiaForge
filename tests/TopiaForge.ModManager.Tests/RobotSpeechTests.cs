@@ -181,8 +181,8 @@ namespace TopiaForge.ModManager.Tests
             missing.WriteUInt64(stamp); missing.WriteString(mod); missing.WriteString(kind); missing.WriteString(voice); missing.WriteString(text);
             rig.Guests[0].Body.Voice = voice;
             reader.Reset(missing.Segment.ToArray()); reader.TryReadHeader(out type);
-            Check(!rig.Guests[0].Peer.World.Speech.Handle(type, rig.World.Host.Control.Id, reader)
-                && rig.Guests[0].Body.SpeechPlays == 1, "missing canonical descriptor drops a fresh valid line without native work");
+            Check(rig.Guests[0].Peer.World.Speech.Handle(type, rig.World.Host.Control.Id, reader)
+                && rig.Guests[0].Body.SpeechPlays == 1, "missing canonical descriptor declines a fresh valid line without native work");
         }
         private static void Quotas()
         {
