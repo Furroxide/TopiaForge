@@ -78,7 +78,7 @@ namespace TopiaForge.RobotKit
                     // synchronous factory owns no asset catalogue and must not acquire one through defaults.
                     if (!(GameReflection.GetFieldValue(project, "assets") is IDictionary assets) || assets.Count != 0
                         || !(GameReflection.GetFieldValue(project, "localAssets") is IDictionary localAssets) || localAssets.Count != 0)
-                        return Refuse(state, RobotComposedRefusal.AssetReferences);
+                        return Refuse(state, RobotComposedRefusal.ProjectCatalogShape);
                     var nativeScenes = GameReflection.GetFieldValue(project, "scenes") as IDictionary;
                     var nativeScene = nativeScenes?[sceneId!];
                     if (nativeScene == null || nativeScene.GetType() != Type.GetType("UgcExportScene, GameCode", true)!)
@@ -88,7 +88,7 @@ namespace TopiaForge.RobotKit
                     var entity = entities.Values.Cast<object>().Single();
                     if (entity == null || entity.GetType() != Type.GetType("UgcExportEntity, GameCode", true)!)
                         return Refuse(state, RobotComposedRefusal.EntityShape);
-                    if (!ReferencesResolve(config, map, project, entity)) return Refuse(state, RobotComposedRefusal.AssetReferences);
+                    if (!ReferencesResolve(config, map, project, entity, out var referenceRefusal)) return Refuse(state, referenceRefusal);
                     // Ambiguous catalog identities are unavailable rather than chosen by ordering.
                     if (selected != null) return Refuse(state, RobotComposedRefusal.AmbiguousIdentity);
                     selected = new RobotComposedScene(world, state, host, config, sceneRoot, mapRoot, project, entity);
@@ -142,12 +142,16 @@ namespace TopiaForge.RobotKit
 
         private static bool CanSpawn(WorldSessionPhase phase) => phase == WorldSessionPhase.StartingMode || phase == WorldSessionPhase.Running;
 
-        private static bool ReferencesResolve(object config, object sceneMap, object project, object entity)
+        private static bool ReferencesResolve(object config, object sceneMap, object project, object entity,
+            out RobotComposedRefusal refusal)
         {
+            refusal = RobotComposedRefusal.EntityReferencesShape;
             var components = GameReflection.GetFieldValue(entity, "components");
             if (components == null || components.GetType() != Type.GetType("UgcExportEntityComponents, GameCode", true)!
                 || !(GameReflection.GetFieldValue(components, "humanoidBodyParts") is IDictionary parts)) return false;
-            var allowedAssets = new HashSet<string>(StringComparer.Ordinal);
+            // This synchronous factory has not prepared catalog lore for its empty project.
+            // A part or voice resolver cannot attest personality/about data, even for equal strings.
+            var preparedCatalogAssets = new HashSet<string>(StringComparer.Ordinal);
             var builder = Type.GetType("UgcSceneBuilder, GameCode", true)!;
             string Literal(string name)
             {
@@ -159,6 +163,7 @@ namespace TopiaForge.RobotKit
             var partMap = Property(config, "RobotPartMap", Type.GetType("UgcRobotPartMap, GameCode", true)!);
             var partType = Type.GetType("ComposerPartType, GameCode", true)!;
             var resolve = RequireMethod(partMap.GetType(), "TryResolve", false, typeof(bool), typeof(string), partType.MakeByRefType(), typeof(GameObject).MakeByRefType());
+            refusal = RobotComposedRefusal.BodyPartUnavailable;
             foreach (DictionaryEntry part in parts)
             {
                 if (!(part.Key is string slot) || !(part.Value is string uri)) return false;
@@ -170,24 +175,24 @@ namespace TopiaForge.RobotKit
                 var args = new object?[] { uri, null, null };
                 if (!(resolve.Invoke(partMap, args) is true) || !Equals(args[1], Enum.Parse(partType, names[0]))
                     || !(args[2] is GameObject prefab) || prefab == null || prefab.scene.IsValid()) return false;
-                allowedAssets.Add(uri);
             }
+            refusal = RobotComposedRefusal.EntityReferencesShape;
             var agent = GameReflection.GetFieldValue(components, "agent");
             if (agent == null || agent.GetType() != Type.GetType("UgcAgentComponent, GameCode", true)!) return false;
             var voice = GameReflection.GetFieldValue(agent, "voiceset") as string;
             if (!string.IsNullOrEmpty(voice))
             {
+                refusal = RobotComposedRefusal.VoiceUnavailable;
                 var voiceMap = Property(config, "VoiceMap", Type.GetType("UgcVoiceMap, GameCode", true)!);
                 var args = new object?[] { voice, null };
                 var method = RequireMethod(voiceMap.GetType(), "TryResolve", false, typeof(bool), typeof(string), Type.GetType("OvertoneVoiceAsset, GameCode", true)!.MakeByRefType());
                 if (!(method.Invoke(voiceMap, args) is true) || !(args[1] is UnityEngine.Object asset) || asset == null) return false;
-                allowedAssets.Add(voice!);
             }
             var collector = Type.GetType("UgcCatalogLoreLoader, GameCode", true)!.GetMethod("CollectReferencedAssetUris",
                 BindingFlags.NonPublic | BindingFlags.Static, null, new[] { project.GetType(), sceneMap.GetType() }, null);
             Require(collector != null && collector.ReturnType == typeof(IReadOnlyList<string>));
             var assets = collector!.Invoke(null, new[] { project, sceneMap }) as IReadOnlyList<string>;
-            return RobotComposedReferences.AllAssetsResolved(assets, allowedAssets);
+            return RobotComposedReferences.AllAssetsResolved(assets, preparedCatalogAssets, out refusal);
         }
 
         private static object DeserializeProject(string json)
