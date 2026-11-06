@@ -130,7 +130,7 @@ jobs:
           jq -e \
             --arg name "$TARGET" \
             '.name == $name and
-             .can_admins_bypass == false and
+             (.can_admins_bypass == ($name == "control-plane-production")) and
              .deployment_branch_policy.custom_branch_policies == true and
              ([.protection_rules[] | select(.type == "required_reviewers") |
                ((.prevent_self_review == ($name == "control-plane-production")) and (.reviewers | length) > 0)] | any)' \

@@ -146,8 +146,11 @@ has been granted.
 ## Trusted release and deployment environments
 
 Environments must exist before any workflow references them, or a workflow must verify that the protected
-environment already exists before naming it. Administrator bypass is disabled on every privileged environment.
-The control-plane environments require a separate dispatcher and prevent self-review.
+environment already exists before naming it. Administrator bypass is disabled on privileged environments except
+`control-plane-production`. That environment prevents self-review but allows the maintainer to force a pending
+deployment after an independent agent reviews the exact revision and deployment plan. The bypass is a recorded
+exception to GitHub reviewer approval for that run. GitHub cannot enforce the agent-review prerequisite; the
+maintainer records the reviewed SHA and review result before using bypass.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
