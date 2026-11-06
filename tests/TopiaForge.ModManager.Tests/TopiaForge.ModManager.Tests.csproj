@@ -380,6 +380,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.Speech.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotReplication*.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotBodyService.cs" />
+    <Compile Include="../../mods/TopiaForge.RobotKit/RobotBodyCompositionDiagnostics.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotBodyWire.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RoutedRobotAgent.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/OwnerRobotBrainQueries.cs" />

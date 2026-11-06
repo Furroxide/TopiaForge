@@ -10,13 +10,13 @@ namespace TopiaForge.RobotKit
     {
         internal const int MaximumPerScope = 64;
         internal const int MaximumBodies = 256;
-        private readonly Func<RobotBodyRequest, OperationResult<IRobotBody>> create;
+        private readonly Func<RobotBodyRequest, bool, OperationResult<IRobotBody>> create;
         private readonly IInternalNativeEntityReadContext? replicaReadContext;
         private readonly HashSet<Body> bodies = new HashSet<Body>();
         private bool disposed;
         private int generation;
 
-        internal RobotBodyService(Func<RobotBodyRequest, OperationResult<IRobotBody>> create,
+        internal RobotBodyService(Func<RobotBodyRequest, bool, OperationResult<IRobotBody>> create,
             IInternalNativeEntityReadContext? replicaReadContext = null)
         { this.create = create; this.replicaReadContext = replicaReadContext; }
 
@@ -41,7 +41,8 @@ namespace TopiaForge.RobotKit
             IRobotBody? native = null;
             try
             {
-                var result = create(request);
+                // Only the authority-checked facade supplies an owner. Replica composition never diagnoses locally.
+                var result = create(request, owner != null);
                 if (!result.TryGetValue(out native)) return Fail(result.ErrorCode, "RobotKit could not compose the requested body. Check the loaded robot and accessory catalog.");
                 if (disposed || generation != epoch)
                 { native.Dispose(); return Fail(ModErrorCode.Unavailable, "The body provider or world changed during composition."); }

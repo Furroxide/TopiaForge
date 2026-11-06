@@ -22,7 +22,7 @@ internal static class BodyPoseScenarios {
   var owner=new ModContext();var registry=new UnityEntityRegistry();
   var root=new GameObject();
   var request=new RobotBodyRequest(new AvatarAppearance(new RgbaColor(1,0,0),new RgbaColor(0,1,0)),new Vec3(99,99,99));
-  using var provider=new RobotBodyService(r=>OperationResult<IRobotBody>.Success(new NativeBody(root,r)),owner);
+  using var provider=new RobotBodyService((r,_)=>OperationResult<IRobotBody>.Success(new NativeBody(root,r)),owner);
   var service=provider.Bind(owner.Lifetime,seam(owner.Lifetime),owner);
   var made=service.Spawn(request);Check(made.Succeeded,"actual scoped service returns a lease");var body=made.Value!;
   IEntityService read=new OwnerEntityService(owner.Lifetime,registry);
@@ -44,7 +44,7 @@ internal static class BodyPoseScenarios {
   Check(read.TryGetTransform(second,out _),"new lease recovers read access");
   provider.EndWorld();Refuses(read,second,"provider world retirement refuses old lease");
   var world=new ModContext();
-  using var replacement=new RobotBodyService(r=>OperationResult<IRobotBody>.Success(new NativeBody(new GameObject(),r)),world);
+  using var replacement=new RobotBodyService((r,_)=>OperationResult<IRobotBody>.Success(new NativeBody(new GameObject(),r)),world);
   var next=replacement.Bind(world.Lifetime,seam(world.Lifetime),world).Spawn(request).Value!;
   IEntityService nextRead=new OwnerEntityService(world.Lifetime,registry);
   Check(nextRead.TryGetTransform(next,out _),"replacement provider has fresh authority");
@@ -56,7 +56,7 @@ internal static class BodyPoseScenarios {
   ((FakeModLifetime)world.WorldLifetime).Dispose();Refuses(nextRead,next,"world lifetime retirement refuses surviving native root");
   Refuses(nextRead,recovered,"world retirement invalidates recovered replica too");
   var race=new ModContext();
-  using var racing=new RobotBodyService(r=> { race.World=new WorldReadiness(race.World!.Scene,TransformState.Identity);return OperationResult<IRobotBody>.Success(new NativeBody(new GameObject(),r)); });
+  using var racing=new RobotBodyService((r,_)=> { race.World=new WorldReadiness(race.World!.Scene,TransformState.Identity);return OperationResult<IRobotBody>.Success(new NativeBody(new GameObject(),r)); });
   var raced=racing.Bind(race.Lifetime,seam(race.Lifetime),race).Spawn(request).Value!;
   Refuses(new OwnerEntityService(race.Lifetime,registry),raced,"read scope was captured before construction changed the world");
   Console.WriteLine("Persistent body native pose assertions: "+assertions);
