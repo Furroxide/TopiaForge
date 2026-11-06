@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'cli_join_consent.dart';
 import 'cli_join_options.dart';
@@ -12,7 +13,7 @@ import 'cli_multiplayer_text.dart';
 /// and one admission re-plan. A spawned game is never killed by stopping the CLI.
 Future<int> runCliJoin({
   required LauncherRepository launcher,
-  required MultiplayerJoinGateway multiplayer,
+  required MultiplayerRepository multiplayer,
   required GameInstall install,
   required Set<String> profileIds,
   required bool developerMode,
@@ -119,20 +120,10 @@ Future<int> runCliJoin({
         );
       }
     }
-    if (options.allowDirect) {
-      write('Allow a direct connection?');
-      write(CliMultiplayerText.direct);
-      if (!await consent('Allow for this session [y/N]') || stopped) {
-        return await cancel();
-      }
-    }
     final consentSettings = jsonEncode(preferences.settings.toJson());
-    join = JoinSession.start(
-      options.target,
-      privacy: preferences.settings.privacyForSession(
-        allowDirect: options.allowDirect,
-      ),
-    );
+    var offeredDirect = false;
+    String? directServerId;
+    join = JoinSession.start(options.target, privacy: SessionPrivacy.relayOnly);
     subscription = launcher.launchActivities.listen(
       (activity) => receipt?.accept(activity),
       onError: (Object _) {
@@ -146,6 +137,41 @@ Future<int> runCliJoin({
         if (failure != null) stage = cliJoinStage(failure.stage);
         if (failure?.code == JoinFailureCode.cancelled || stopped) {
           return await cancel();
+        }
+        if (failure?.code == JoinFailureCode.directNotAllowed) {
+          if (started != null || receipt != null) {
+            return refuse(
+              'A direct connection is required after the game has started. Robotopia was left running. Stop this join in the game before retrying with a direct connection.',
+              3,
+            );
+          }
+          if (options.allowDirect &&
+              !offeredDirect &&
+              state.privacy == MultiplayerAddressPrivacy.relayOnly) {
+            offeredDirect = true;
+            write('Allow a direct connection?');
+            write(CliMultiplayerText.direct);
+            if (!await consent('Allow for this session [y/N]') || stopped) {
+              return await cancel();
+            }
+            final current = await multiplayer.loadPreferences();
+            if (stopped) return await cancel();
+            if (!current.readable ||
+                jsonEncode(current.settings.toJson()) != consentSettings) {
+              return refuse(
+                'Multiplayer settings changed while direct consent was open. Run join again to review the current choices.',
+              );
+            }
+            directServerId = state.serverId;
+            join = JoinSession.start(
+              options.target,
+              privacy: current.settings.privacyForSession(allowDirect: true),
+              trustedServerId: options.target is JoinAddressTarget
+                  ? directServerId
+                  : null,
+            );
+            continue;
+          }
         }
         return refuse(
           failure == null
@@ -170,6 +196,42 @@ Future<int> runCliJoin({
       }
       if (stopped && !JoinSession.deferredCancelStages.contains(state.stage)) {
         return await cancel();
+      }
+      if (directServerId != null &&
+          state.serverId != null &&
+          state.serverId != directServerId) {
+        return refuse(
+          'The server identity changed while direct consent was open. Ask the host for a fresh invite and try again.',
+        );
+      }
+      if (state.stage == JoinStage.fetchingDescriptor &&
+          state.target.resolvesThroughService &&
+          state.privacy == MultiplayerAddressPrivacy.relayOnly) {
+        final service = await multiplayer.readServiceStatus(
+          cancellation: token,
+        );
+        if (stopped) return await cancel();
+        final features = service.features;
+        if (features == null || !features.signaling) {
+          take(
+            JoinFailed(
+              JoinFailureCode.serviceUnavailable,
+              detail:
+                  'Internet joining is unavailable right now. Retry later or join a local session.',
+            ),
+          );
+          continue;
+        }
+        if (!features.relayAvailable) {
+          take(
+            JoinFailed(
+              JoinFailureCode.directNotAllowed,
+              detail:
+                  'The relay is unavailable. This Internet join requires a direct connection.',
+            ),
+          );
+          continue;
+        }
       }
       if (state.stage == JoinStage.awaitingConsent) {
         final nowRunning = await multiplayer.joinGameRunning(install);

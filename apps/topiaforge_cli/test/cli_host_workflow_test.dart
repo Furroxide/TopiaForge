@@ -39,8 +39,21 @@ void main() {
     'explicit direct is scoped to one request and still asks with yes',
     () async {
       rig.terminal = true;
+      rig.features = const MultiplayerServiceFeatures(
+        hosting: true,
+        invites: true,
+        signaling: true,
+        relay: false,
+        killSwitch: true,
+        heartbeat: Duration(seconds: 10),
+        listingTtl: Duration(seconds: 30),
+        relayCredentialTtl: Duration(minutes: 5),
+      );
       rig.onLaunch = () => rig.controller.add(rig.success());
-      expect(await rig.run(['--yes', '--allow-direct']), 0);
+      expect(
+        await rig.run(['--yes', '--allow-direct', '--visibility', 'invite']),
+        0,
+      );
       expect(rig.prompts, contains('Allow for this session [y/N]'));
       expect(rig.messages, contains(CliMultiplayerText.direct));
       expect(rig.request!.transport.directConsent!.intentId, 'intent-one');
