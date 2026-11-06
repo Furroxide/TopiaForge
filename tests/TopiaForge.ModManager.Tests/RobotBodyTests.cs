@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
             ViewTargets();
             TestingKit();
             NativeConstructionContract();
+            VisualSnapshotMeshHandling();
             Console.WriteLine("Persistent body tests passed (" + assertions + " assertions).");
         }
 

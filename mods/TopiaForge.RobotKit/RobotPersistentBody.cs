@@ -127,7 +127,8 @@ namespace TopiaForge.RobotKit
                 {
                     stage = RobotBodyCompositionStage.Mesh;
                     var sharedMesh = skin.sharedMesh;
-                    if (sharedMesh == null) throw new InvalidOperationException("A body skin has no mesh.");
+                    // A renderer without a mesh contributes no geometry to the snapshot.
+                    if (sharedMesh == null) continue;
                     var count = sharedMesh.vertexCount;
                     stage = RobotBodyCompositionStage.VertexBudget;
                     vertices = checked(vertices + count);
@@ -141,7 +142,7 @@ namespace TopiaForge.RobotKit
                 {
                     stage = RobotBodyCompositionStage.Mesh;
                     mesh = source.GetComponent<MeshFilter>()?.sharedMesh;
-                    if (mesh == null) throw new InvalidOperationException("A body renderer has no mesh.");
+                    if (mesh == null) continue;
                     var count = mesh.vertexCount;
                     stage = RobotBodyCompositionStage.VertexBudget;
                     vertices = checked(vertices + count);
