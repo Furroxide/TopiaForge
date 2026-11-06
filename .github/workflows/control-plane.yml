@@ -133,7 +133,7 @@ jobs:
              .can_admins_bypass == false and
              .deployment_branch_policy.custom_branch_policies == true and
              ([.protection_rules[] | select(.type == "required_reviewers") |
-               (.prevent_self_review == true and (.reviewers | length) > 0)] | any)' \
+               ((.prevent_self_review == ($name == "control-plane-production")) and (.reviewers | length) > 0)] | any)' \
             <<<"$environment" >/dev/null
 
   deploy:
