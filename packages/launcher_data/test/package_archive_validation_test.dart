@@ -152,7 +152,8 @@ void main() {
         predicate(
           (error) =>
               error.toString().contains('expanded limit') ||
-              error.toString().contains('declared'),
+              error.toString().contains('declared') ||
+              error.toString().contains('decoded data is larger than'),
         ),
       ),
     );

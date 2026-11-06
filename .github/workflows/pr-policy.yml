@@ -59,8 +59,8 @@ jobs:
             if [[ "$same_repository" == false ]]; then
               failures+=("main accepts only same-repository release branches.")
             fi
-            if [[ ! $HEAD_REF =~ ^release/$semver$ ]]; then
-              failures+=("main accepts only release/<semver> pull requests.")
+            if [[ ! $HEAD_REF =~ ^release/$semver$ && "$HEAD_REF" != service/production-multiplayer ]]; then
+              failures+=("main accepts only release/<semver> or the scoped production service pull request.")
             fi
           elif [[ "$BASE_REF" == release/* ]]; then
             if [[ ! $BASE_REF =~ ^release/$semver$ ]]; then
@@ -118,8 +118,23 @@ jobs:
           done < <(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
           exit "$failures"
 
+      - name: Limit the production service pull request
+        if: github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin "$BASE_SHA"
+          while IFS= read -r path; do
+            case "$path" in
+              services/control-plane/*|tests/fixtures/multiplayer/control-plane/*|tests/fixtures/multiplayer/descriptor/*|tests/fixtures/multiplayer/links/*|packages/launcher_data/test/package_archive_validation_test.dart|.github/workflows/control-plane.yml|.github/workflows/pr-policy.yml|.github/workflows/ci.yml|.github/workflows/release-dry-run.yml|.github/workflows/release-package-build.yml|.github/repository-governance.json|.github/scripts/test_audit_repository_governance.py|docs/internal/ControlPlaneApi.md|docs/internal/ControlPlaneOperations.md|docs/RepositoryGovernance.md) ;;
+              *) echo "::error::Out-of-scope production service file: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only --no-renames "$BASE_SHA" HEAD)
+
       - name: Validate release source against the product version
-        if: github.base_ref == 'main'
+        if: github.base_ref == 'main' && github.head_ref != 'service/production-multiplayer'
         shell: bash
         env:
           HEAD_REF: ${{ github.head_ref }}

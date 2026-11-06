@@ -1,0 +1,168 @@
+# TopiaForge multiplayer control plane: the Internet server browser, invites, signaling and relay credentials.
+#
+# docs/internal/ControlPlaneOperations.md lists every resource, secret and figure the maintainer sets before the
+# first deploy. Nothing account-specific lives in this file: Wrangler reads CLOUDFLARE_ACCOUNT_ID and
+# CLOUDFLARE_API_TOKEN from the protected deploy environment, and the Worker's secrets are set out of band with
+# `wrangler secret put`. Durable Object bindings and vars do not inherit into environments, so each environment
+# repeats them; keep the three copies identical apart from ENVIRONMENT.
+#
+# Staging is served only from https://mp-staging.topiaforge.dev and production only from https://mp.topiaforge.dev.
+# workers.dev and preview URLs stay off, so the account's workers.dev subdomain never appears in a URL, a response
+# or a deploy log.
+
+name = "topiaforge-control-plane"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+workers_dev = false
+preview_urls = false
+
+# Invocation logs would record request metadata the service promises never to keep. Leave them off.
+[observability]
+enabled = false
+
+# Five-minute relay-spend measurement and activity collection. TURN analytics trail traffic by about 30 seconds.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[durable_objects.bindings]]
+name = "ACTIVITY_SHARDS"
+class_name = "ActivityShard"
+
+[[durable_objects.bindings]]
+name = "ACTIVITY_SNAPSHOTS"
+class_name = "ActivitySnapshot"
+
+[[durable_objects.bindings]]
+name = "HOST_SESSIONS"
+class_name = "HostSession"
+
+[[durable_objects.bindings]]
+name = "DIRECTORY_SHARDS"
+class_name = "DirectoryShard"
+
+[[durable_objects.bindings]]
+name = "INVITE_SHARDS"
+class_name = "InviteShard"
+
+[[durable_objects.bindings]]
+name = "SPEND_GUARD"
+class_name = "SpendGuard"
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HostSession", "DirectoryShard", "InviteShard", "SpendGuard", "RateLimiter"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["ActivityShard", "ActivitySnapshot"]
+
+# RELAY_ADDRESS_RANGES must cover the ranges Realtime TURN allocates relay addresses from, and as little else as it can:
+# a relay-only side's candidates must lie inside it. It is Cloudflare's published lists (cloudflare.com/ips-v4, then
+# ips-v6) with 104.16.0.0/13 and 104.24.0.0/14 widened to Cloudflare's registered 104.16.0.0/12: on 2026-10-16 staging
+# relay allocations came from 104.30.0.0, outside the published list. Realtime TURN publishes no relay range and issues
+# IPv4 relay addresses only; ControlPlaneOperations.md, section 4.1, says how to check it again.
+[vars]
+ENVIRONMENT = "development"
+RELAY_ADDRESS_RANGES = "173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32"
+TURN_CREDENTIAL_TTL_SECONDS = "600"
+TURN_IP_MINTS_PER_HOUR = "20"
+TURN_IP_MINTS_PER_MINUTE = "5"
+TURN_TICKET_MAX_MINTS = "36"
+TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+FLAG_CACHE_SECONDS = "5"
+
+[env.staging]
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "mp-staging.topiaforge.dev", custom_domain = true }]
+
+[env.staging.observability]
+enabled = false
+
+[[env.staging.durable_objects.bindings]]
+name = "ACTIVITY_SHARDS"
+class_name = "ActivityShard"
+
+[[env.staging.durable_objects.bindings]]
+name = "ACTIVITY_SNAPSHOTS"
+class_name = "ActivitySnapshot"
+
+[[env.staging.durable_objects.bindings]]
+name = "HOST_SESSIONS"
+class_name = "HostSession"
+
+[[env.staging.durable_objects.bindings]]
+name = "DIRECTORY_SHARDS"
+class_name = "DirectoryShard"
+
+[[env.staging.durable_objects.bindings]]
+name = "INVITE_SHARDS"
+class_name = "InviteShard"
+
+[[env.staging.durable_objects.bindings]]
+name = "SPEND_GUARD"
+class_name = "SpendGuard"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+RELAY_ADDRESS_RANGES = "173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32"
+TURN_CREDENTIAL_TTL_SECONDS = "600"
+TURN_IP_MINTS_PER_HOUR = "20"
+TURN_IP_MINTS_PER_MINUTE = "5"
+TURN_TICKET_MAX_MINTS = "36"
+TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+FLAG_CACHE_SECONDS = "5"
+
+[env.production]
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "mp.topiaforge.dev", custom_domain = true }]
+
+[env.production.observability]
+enabled = false
+
+[[env.production.durable_objects.bindings]]
+name = "ACTIVITY_SHARDS"
+class_name = "ActivityShard"
+
+[[env.production.durable_objects.bindings]]
+name = "ACTIVITY_SNAPSHOTS"
+class_name = "ActivitySnapshot"
+
+[[env.production.durable_objects.bindings]]
+name = "HOST_SESSIONS"
+class_name = "HostSession"
+
+[[env.production.durable_objects.bindings]]
+name = "DIRECTORY_SHARDS"
+class_name = "DirectoryShard"
+
+[[env.production.durable_objects.bindings]]
+name = "INVITE_SHARDS"
+class_name = "InviteShard"
+
+[[env.production.durable_objects.bindings]]
+name = "SPEND_GUARD"
+class_name = "SpendGuard"
+
+[[env.production.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+RELAY_ADDRESS_RANGES = "173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32"
+TURN_CREDENTIAL_TTL_SECONDS = "600"
+TURN_IP_MINTS_PER_HOUR = "20"
+TURN_IP_MINTS_PER_MINUTE = "5"
+TURN_TICKET_MAX_MINTS = "36"
+TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+FLAG_CACHE_SECONDS = "5"
