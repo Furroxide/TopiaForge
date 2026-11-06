@@ -9,6 +9,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeResolvedTheme
     {
+        private readonly (Color Fill, Color Content)[] fills;
         private readonly Color primaryText;
         private readonly Color accentText;
         private readonly Color successText;
@@ -69,6 +70,12 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets the focus ring color.</summary>
         public Color FocusRing { get; }
 
+        /// <summary>
+        /// Gets a slider handle's color: on Paper the accent, opaque and darkened if it must be, so the handle shows on its
+        /// light track and surface; on the HUD white, which shows on the HUD's dark ones.
+        /// </summary>
+        internal Color SliderHandle { get; }
+
         /// <summary>Creates a resolved theme.</summary>
         public TopiaForgeResolvedTheme(TopiaForgeScheme scheme, TopiaForgeRgba? accentOverride)
             : this(scheme, accentOverride, TopiaForgeTheme.HighContrast, TopiaForgeTheme.Version)
@@ -109,6 +116,16 @@ namespace TopiaForge.Mods.UnityUi
             Shadow = ToColor(colors.Shadow);
             ShadowStrong = ToColor(colors.ShadowStrong);
             FocusRing = ToColor(colors.FocusRing);
+
+            // What the kit draws on a fill is resolved against that fill, so it reads in every state the fill is drawn in.
+            var resolvedFills = TopiaForgeOnColors.ResolveAll(colors, HighContrast);
+            fills = new (Color Fill, Color Content)[resolvedFills.Length];
+            for (var index = 0; index < resolvedFills.Length; index++)
+            {
+                fills[index] = (ToColor(resolvedFills[index].Fill), ToColor(resolvedFills[index].Content));
+            }
+
+            SliderHandle = ToColor(TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast));
 
             // Status and brand colors are made for fills and rings. On Paper their text is darkened until it reads on every
             // surface; the HUD's are bright on dark already.
@@ -152,6 +169,18 @@ namespace TopiaForge.Mods.UnityUi
                 TopiaForgeTone.Danger => Danger,
                 _ => Text,
             };
+        }
+
+        /// <summary>
+        /// Gets a fill and the color of the label, icon, thumb or check the kit draws on it. The content reads on the fill
+        /// hovered and pressed too: a label at WCAG AA and a mark at 3:1, or 7:1 and 4.5:1 in high contrast. The fill is the
+        /// brand's own unless nothing reads on it.
+        /// </summary>
+        internal void FillColors(TopiaForgeFillRole role, out Color fill, out Color content)
+        {
+            var colors = fills[(int)role];
+            fill = colors.Fill;
+            content = colors.Content;
         }
 
         /// <summary>High-contrast emphasis for consumer-supplied custom colors.</summary>
