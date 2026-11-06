@@ -52,6 +52,10 @@ matrix jobs are never configured directly as required checks.
 | `release/*` | The same five common checks. Each release-head update also produces `Required / Release packages` for later promotion. |
 | `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. The scoped production service branch also runs this check on its own exact head. |
 
+For the one-time service branch, CI and the required package build verify the historical stable `main` game build
+against its pinned public archive. The upstream game has advanced since that release, so the latest-build check would
+reject this unchanged client baseline. Release branches retain the latest-build requirement.
+
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
 development, or unknown scope. License and notice validation is
