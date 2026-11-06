@@ -9,34 +9,59 @@ namespace TopiaForge.RobotKit
     internal sealed partial class RobotAgentService
     {
         private readonly string bodyPrefix = "robotkit:body-" + Guid.NewGuid().ToString("N") + "-";
+        private readonly RobotBodyCompositionDiagnostics bodyDiagnostics = new RobotBodyCompositionDiagnostics();
         private long bodySerial;
         private int bodyVertices;
 
-        internal OperationResult<IRobotBody> CreatePersistentBody(RobotBodyRequest request)
+        internal OperationResult<IRobotBody> CreatePersistentBody(RobotBodyRequest request, bool authoritative)
         {
             if (disposed) return OperationResult<IRobotBody>.Failure(ModErrorCode.Unavailable, "RobotKit has stopped.");
-            var prefab = ResolveCachedPrefab();
-            if (prefab == null) return OperationResult<IRobotBody>.Failure(ModErrorCode.Unavailable, "No robot is loaded to compose a body.");
-            EnsureRoots();
+            var hostLogger = authoritative ? logger : null;
+            var stage = RobotBodyCompositionStage.PrefabLookup;
+            GameObject? prefab;
+            try
+            {
+                prefab = ResolveCachedPrefab();
+                if (prefab == null)
+                {
+                    bodyDiagnostics.Report(hostLogger, RobotBodyCompositionStage.MissingPrefab);
+                    return OperationResult<IRobotBody>.Failure(ModErrorCode.Unavailable, "No robot is loaded to compose a body.");
+                }
+                stage = RobotBodyCompositionStage.Roots;
+                EnsureRoots();
+            }
+            catch (Exception)
+            {
+                bodyDiagnostics.Report(hostLogger, stage);
+                throw;
+            }
             GameObject? clone = null;
             GameObject? anchor = null;
             var meshes = new List<Mesh>();
+            var failed = false;
             try
             {
+                stage = RobotBodyCompositionStage.Hierarchy;
                 RobotBodyVisual.CheckHierarchy(prefab.transform);
                 // The incubator is inactive. Native scripts never receive Awake/OnEnable on this clone.
+                stage = RobotBodyCompositionStage.InactiveClone;
                 clone = UnityEngine.Object.Instantiate(prefab, incubator!.transform, false);
                 clone.SetActive(false);
+                stage = RobotBodyCompositionStage.DormantBrain;
                 GameReflection.ConfigureBrain(clone, RobotBrainMode.Dormant, logger);
+                stage = RobotBodyCompositionStage.Quieten;
                 Quieten(clone);
+                stage = RobotBodyCompositionStage.Appearance;
                 RobotAvatarAppearance.Apply(clone, request.Appearance);
+                stage = RobotBodyCompositionStage.AnchorSetup;
                 anchor = new GameObject("Powered-down robot");
                 anchor.SetActive(false);
                 anchor.transform.SetParent(root!.transform, false);
                 var p = request.Position; var q = request.Rotation;
                 anchor.transform.position = new Vector3(p.X, p.Y, p.Z);
                 anchor.transform.rotation = new Quaternion(q.X, q.Y, q.Z, q.W);
-                var vertices = RobotBodyVisual.Copy(clone, anchor, meshes, Math.Min(250000, 4000000 - bodyVertices));
+                var vertices = RobotBodyVisual.Copy(clone, anchor, meshes, Math.Min(250000, 4000000 - bodyVertices), ref stage);
+                stage = RobotBodyCompositionStage.AnchorActivation;
                 var id = bodyPrefix + (++bodySerial).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 anchor.AddComponent<RobotAgentEntityIdentityAnchor>().Initialize(id);
                 // Only the visual snapshot is activated: no native scripts, animator, audio, rigidbody or collider.
@@ -48,11 +73,16 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception)
             {
+                failed = true;
                 if (anchor != null) { anchor.SetActive(false); UnityEngine.Object.Destroy(anchor); }
                 foreach (var mesh in meshes) if (mesh != null) UnityEngine.Object.Destroy(mesh);
                 return OperationResult<IRobotBody>.Failure(ModErrorCode.Unavailable, "The loaded robot cannot provide the requested cosmetic body.");
             }
-            finally { if (clone != null) UnityEngine.Object.Destroy(clone); }
+            finally
+            {
+                try { if (clone != null) UnityEngine.Object.Destroy(clone); }
+                finally { if (failed) bodyDiagnostics.Report(hostLogger, stage); }
+            }
         }
     }
 
@@ -72,11 +102,15 @@ namespace TopiaForge.RobotKit
             for (var i = 0; i < node.childCount; i++) Check(node.GetChild(i), depth + 1, ref count);
         }
 
-        internal static int Copy(GameObject clone, GameObject anchor, List<Mesh> meshes, int vertexBudget)
+        internal static int Copy(GameObject clone, GameObject anchor, List<Mesh> meshes, int vertexBudget,
+            ref RobotBodyCompositionStage stage)
         {
+            stage = RobotBodyCompositionStage.Hierarchy;
             CheckHierarchy(clone.transform);
+            stage = RobotBodyCompositionStage.Renderers;
             var renderers = clone.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0 || renderers.Length > 256) throw new InvalidOperationException("Invalid body renderer count.");
+            stage = RobotBodyCompositionStage.Hierarchy;
             var transforms = new Dictionary<Transform, Transform>();
             var visual = CopyTransforms(clone.transform, anchor.transform, transforms);
             visual.localPosition = new Vector3(0, 0.35f, 0);
@@ -86,34 +120,48 @@ namespace TopiaForge.RobotKit
             var visible = 0;
             foreach (var source in renderers)
             {
+                stage = RobotBodyCompositionStage.Renderers;
                 if (!source.enabled || !VisibleBelow(source.transform, clone.transform)) continue;
                 Mesh? mesh;
                 if (source is SkinnedMeshRenderer skin)
                 {
-                    if (skin.sharedMesh == null) throw new InvalidOperationException("A body skin has no mesh.");
-                    vertices = checked(vertices + skin.sharedMesh.vertexCount);
+                    stage = RobotBodyCompositionStage.Mesh;
+                    var sharedMesh = skin.sharedMesh;
+                    if (sharedMesh == null) throw new InvalidOperationException("A body skin has no mesh.");
+                    var count = sharedMesh.vertexCount;
+                    stage = RobotBodyCompositionStage.VertexBudget;
+                    vertices = checked(vertices + count);
                     if (vertices > vertexBudget) throw new InvalidOperationException("The body mesh budget was exceeded.");
+                    stage = RobotBodyCompositionStage.Bake;
                     mesh = new Mesh(); meshes.Add(mesh);
                     skin.BakeMesh(mesh);
                     if (mesh.vertexCount == 0) throw new InvalidOperationException("The body skin could not be baked.");
                 }
                 else if (source is MeshRenderer)
                 {
+                    stage = RobotBodyCompositionStage.Mesh;
                     mesh = source.GetComponent<MeshFilter>()?.sharedMesh;
                     if (mesh == null) throw new InvalidOperationException("A body renderer has no mesh.");
-                    vertices = checked(vertices + mesh.vertexCount);
+                    var count = mesh.vertexCount;
+                    stage = RobotBodyCompositionStage.VertexBudget;
+                    vertices = checked(vertices + count);
                     if (vertices > vertexBudget) throw new InvalidOperationException("The body mesh budget was exceeded.");
                 }
                 else throw new InvalidOperationException("Unsupported body renderer.");
+                stage = RobotBodyCompositionStage.Materials;
                 var materials = source.sharedMaterials;
                 if (materials.Length == 0 || materials.Length > 32) throw new InvalidOperationException("Invalid body materials.");
                 foreach (var material in materials) if (material == null) throw new InvalidOperationException("A body material is unavailable.");
+                stage = RobotBodyCompositionStage.Renderers;
                 var target = transforms[source.transform].gameObject;
                 target.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var renderer = target.AddComponent<MeshRenderer>();
+                stage = RobotBodyCompositionStage.Materials;
                 renderer.sharedMaterials = materials;
+                stage = RobotBodyCompositionStage.Renderers;
                 renderer.shadowCastingMode = source.shadowCastingMode;
                 renderer.receiveShadows = source.receiveShadows;
+                stage = RobotBodyCompositionStage.Materials;
                 source.GetPropertyBlock(block); renderer.SetPropertyBlock(block);
                 for (var slot = 0; slot < materials.Length; slot++)
                 {
@@ -121,7 +169,11 @@ namespace TopiaForge.RobotKit
                 }
                 visible++;
             }
-            if (visible == 0 || vertices == 0) throw new InvalidOperationException("The body has no visible meshes.");
+            if (visible == 0 || vertices == 0)
+            {
+                stage = RobotBodyCompositionStage.NoVisibleMeshes;
+                throw new InvalidOperationException("The body has no visible meshes.");
+            }
             return vertices;
         }
 

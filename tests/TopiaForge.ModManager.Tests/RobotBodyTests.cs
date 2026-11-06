@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager.Tests
         {
             WireAndContract();
             AuthorityAndLimits();
+            CompositionDiagnostics();
             ConstructionRollbackAndProviderLimit();
             LifetimeAndCatchup();
             ProviderRecovery();
@@ -48,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
                 for (var length = 0; length < descriptor.Payload.Length; length++)
                 {
                     var malformed = new InternalSpawnDescriptor(RobotBodyWire.Kind, descriptor.Transform, descriptor.Payload.Slice(0, length).ToArray());
-                    using var provider = new RobotBodyService(_ => throw new Exception("must not construct"));
+                    using var provider = new RobotBodyService((_, _) => throw new Exception("must not construct"));
                     Check(provider.CreateReplica(malformed).ErrorCode == ModErrorCode.InvalidArgument, "truncated data refused before construction");
                 }
             }
@@ -60,7 +61,7 @@ namespace TopiaForge.ModManager.Tests
             bytes = good.Payload.ToArray().Concat(new byte[] { 0 }).ToArray(); mutations.Add(bytes);
             bytes = good.Payload.ToArray(); Array.Copy(BitConverter.GetBytes(float.NaN), 0, bytes, 2, 4); mutations.Add(bytes);
             mutations.Add(new byte[129]);
-            using var refused = new RobotBodyService(_ => throw new Exception("must not construct"));
+            using var refused = new RobotBodyService((_, _) => throw new Exception("must not construct"));
             foreach (var payload in mutations) Check(refused.CreateReplica(new InternalSpawnDescriptor(RobotBodyWire.Kind, good.Transform, payload)).ErrorCode == ModErrorCode.InvalidArgument, "invalid payload rejected");
             foreach (var bad in new[] { float.NaN, float.PositiveInfinity, 100001f })
             {
@@ -153,15 +154,17 @@ namespace TopiaForge.ModManager.Tests
             internal bool Refuse;
             internal bool Throw;
             internal int Attempts;
+            internal readonly List<bool> AuthoritativeAttempts = new List<bool>();
             internal Action? Created;
             private readonly IDisposable factory;
             private readonly IDisposable handler;
             internal Bodies(WorldPeer peer, IInternalNativeEntityReadContext? readContext = null)
             {
                 peer.Scene.ProviderObject = entity => Native.FirstOrDefault(body => body.Id == entity.Id)?.Object;
-                Provider = new RobotBodyService(request =>
+                Provider = new RobotBodyService((request, authoritative) =>
                 {
                     Attempts++;
+                    AuthoritativeAttempts.Add(authoritative);
                     if (Throw) throw new InvalidOperationException("private diagnostic must not escape");
                     if (Refuse) return OperationResult<IRobotBody>.Failure(ModErrorCode.Unavailable, "private provider failure");
                     var p = request.Position;
