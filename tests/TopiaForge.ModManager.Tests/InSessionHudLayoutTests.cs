@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
             var sources = new[] { File.ReadAllText(file),
                 File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager/UiHudAnchors.cs")),
                 File.ReadAllText(Path.Combine(root, "src/TopiaForge.Mods.UnityUi/Layout/TopiaForgeAnchors.cs")), Contracts, Probe };
-            var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
+            var trusted = TrustedReferences.Paths();
             var references = trusted.Concat(new[] { typeof(TopiaForgeHudDock).Assembly.Location,
                 typeof(InputActionDefinition).Assembly.Location }).Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(path => MetadataReference.CreateFromFile(path));

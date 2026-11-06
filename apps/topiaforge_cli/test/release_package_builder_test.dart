@@ -28,7 +28,11 @@ late Directory temp;
 
 void main() {
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('release-package-test-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('release-package-test-')
+          .resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

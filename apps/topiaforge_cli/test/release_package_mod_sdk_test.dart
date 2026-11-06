@@ -76,7 +76,11 @@ void main() {
   });
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('topiaforge-relocatable-sdk-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-relocatable-sdk-')
+          .resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

@@ -19,7 +19,11 @@ void main() {
   late String root;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('topiaforge-game-identity-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-game-identity-')
+          .resolveSymbolicLinksSync(),
+    );
     root = writeSignedReleaseHandoffRoot(temp, version: version);
     for (final platform in const ['windows-x64']) {
       File(

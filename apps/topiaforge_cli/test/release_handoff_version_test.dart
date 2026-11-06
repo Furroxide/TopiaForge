@@ -18,7 +18,11 @@ void main() {
   late String root;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('topiaforge-handoff-version-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-handoff-version-')
+          .resolveSymbolicLinksSync(),
+    );
     root = writeSignedReleaseHandoffRoot(temp, version: version);
     File(
       p.join(temp.path, 'TopiaForge-windows-x64.zip'),

@@ -17,7 +17,13 @@ void main() {
   test(
     'explicit main menu overrides remembered launch and leaves Worlds config alone',
     () async {
-      final root = Directory.systemTemp.createTempSync('world-config-merge-');
+      // The saved-map store refuses a linked path component, and the macOS system
+      // temp directory is reached through one, so canonicalise the root.
+      final root = Directory(
+        Directory.systemTemp
+            .createTempSync('world-config-merge-')
+            .resolveSymbolicLinksSync(),
+      );
       addTearDown(() => root.deleteSync(recursive: true));
       final gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
       final repositoryRoot = Directory(p.join(root.path, 'repo'))..createSync();
@@ -101,7 +107,13 @@ void main() {
   );
 
   test('a profile that only remembers a world still boots normally', () async {
-    final root = Directory.systemTemp.createTempSync('world-config-normal-');
+    // The saved-map store refuses a linked path component, and the macOS system
+    // temp directory is reached through one, so canonicalise the root.
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('world-config-normal-')
+          .resolveSymbolicLinksSync(),
+    );
     addTearDown(() => root.deleteSync(recursive: true));
     final gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     final repositoryRoot = Directory(p.join(root.path, 'repo'))..createSync();

@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
         {
             // Created atomically under an unpredictable name; a GetTempPath-derived root is untrusted input to
             // CodeQL, and these fixtures pass it on to the production launcher-state reader.
-            var root = Directory.CreateTempSubdirectory("TopiaForgeGameVersionTests-").FullName;
+            var root = TestPaths.CreateTempDirectory("TopiaForgeGameVersionTests-").FullName;
 
             try
             {

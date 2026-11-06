@@ -14,7 +14,11 @@ void main() {
   late Map<String, dynamic> manifest;
   late String worldId;
   setUp(() {
-    root = Directory.systemTemp.createTempSync('map-survey-');
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('map-survey-')
+          .resolveSymbolicLinksSync(),
+    );
     final fixture =
         jsonDecode(
               File(

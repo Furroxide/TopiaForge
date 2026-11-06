@@ -21,7 +21,7 @@ namespace TopiaForge.ModManager.Tests
                 EventSystemUnityContract,
                 EventSystemAdapterScenarios,
             };
-            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            var references = TrustedReferences.Paths()
                 .Select(path => MetadataReference.CreateFromFile(path));
             var compilation = CSharpCompilation.Create("EventSystemAdapterProbe",
                 sources.Select(source => CSharpSyntaxTree.ParseText(source)), references,

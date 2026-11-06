@@ -19,8 +19,10 @@ void main() {
   late String root;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync(
-      'topiaforge-handoff-embedded-test-',
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-handoff-embedded-test-')
+          .resolveSymbolicLinksSync(),
     );
     root = writeSignedReleaseHandoffRoot(temp, version: version);
   });

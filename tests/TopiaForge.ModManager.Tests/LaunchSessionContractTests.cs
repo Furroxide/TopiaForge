@@ -142,7 +142,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void Consume()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeSessionConsume-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeSessionConsume-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);
@@ -167,7 +167,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void Correlation()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeSessionCorrelation-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeSessionCorrelation-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);
@@ -211,7 +211,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void Channels()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeSessionChannels-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeSessionChannels-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);
@@ -248,7 +248,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void JournalAppend()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeSessionJournal-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeSessionJournal-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);

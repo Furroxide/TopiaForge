@@ -7,7 +7,11 @@ void main() {
   late Directory root;
   late File log;
   setUp(() {
-    root = Directory.systemTemp.createTempSync('acceptance-log-');
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('acceptance-log-')
+          .resolveSymbolicLinksSync(),
+    );
     log = File('${root.path}/manager.log');
   });
   tearDown(() => root.deleteSync(recursive: true));

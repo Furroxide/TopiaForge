@@ -147,7 +147,11 @@ void main() {
     test(
       'publication rejects ${staged ? 'staged' : 'unstaged'} source drift before output',
       () async {
-        final root = Directory.systemTemp.createTempSync('metadata-source-');
+        final root = Directory(
+          Directory.systemTemp
+              .createTempSync('metadata-source-')
+              .resolveSymbolicLinksSync(),
+        );
         addTearDown(() => root.deleteSync(recursive: true));
         final file = File(p.join(root.path, 'source.txt'))
           ..writeAsStringSync('frozen');
@@ -222,7 +226,11 @@ final class _SourceFixture {
 
   static _SourceFixture create() {
     final repository = Directory.current.parent.parent.path;
-    final root = Directory.systemTemp.createTempSync('metadata-inputs-');
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('metadata-inputs-')
+          .resolveSymbolicLinksSync(),
+    );
     void write(String name, String content) => File(p.join(root.path, name))
       ..createSync(recursive: true)
       ..writeAsStringSync(content);

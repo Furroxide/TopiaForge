@@ -9,7 +9,11 @@ void main() {
 
   setUpAll(() async {
     if (Platform.isWindows) return;
-    cliTemp = Directory.systemTemp.createTempSync('unity-probe-cli-');
+    cliTemp = Directory(
+      Directory.systemTemp
+          .createTempSync('unity-probe-cli-')
+          .resolveSymbolicLinksSync(),
+    );
     addTearDown(() {
       if (cliTemp.existsSync()) cliTemp.deleteSync(recursive: true);
     });
@@ -33,7 +37,11 @@ void main() {
   test(
     'UI bundle Unity probe times out and terminates a hung executable',
     () async {
-      final temp = Directory.systemTemp.createTempSync('unity-probe-timeout-');
+      final temp = Directory(
+        Directory.systemTemp
+            .createTempSync('unity-probe-timeout-')
+            .resolveSymbolicLinksSync(),
+      );
       final editor = File(p.join(temp.path, 'Unity'));
       final pidFile = File('${editor.path}.pid');
       int? childPid;
@@ -79,7 +87,11 @@ exec /bin/sleep 300
   test(
     'UI bundle Unity probe bounds output and surfaces overflow',
     () async {
-      final temp = Directory.systemTemp.createTempSync('unity-probe-output-');
+      final temp = Directory(
+        Directory.systemTemp
+            .createTempSync('unity-probe-output-')
+            .resolveSymbolicLinksSync(),
+      );
       addTearDown(() {
         if (temp.existsSync()) temp.deleteSync(recursive: true);
       });

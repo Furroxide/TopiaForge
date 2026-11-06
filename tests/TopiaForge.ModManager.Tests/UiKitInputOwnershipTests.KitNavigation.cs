@@ -29,7 +29,7 @@ namespace TopiaForge.ModManager.Tests
                 NavigationUnityContract,
                 NavigationScenarios,
             };
-            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            var references = TrustedReferences.Paths()
                 .Select(path => MetadataReference.CreateFromFile(path));
             var compilation = CSharpCompilation.Create("KitNavigationProbe",
                 sources.Select(source => CSharpSyntaxTree.ParseText(source)), references,

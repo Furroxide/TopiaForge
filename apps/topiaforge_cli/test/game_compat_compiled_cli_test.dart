@@ -10,8 +10,10 @@ void main() {
     'compiled CLI selects and bounds its packaged sibling extractor',
     () async {
       final packageRoot = Directory.current.absolute.path;
-      final temp = Directory.systemTemp.createTempSync(
-        'topiaforge-compiled-game-compat-',
+      final temp = Directory(
+        Directory.systemTemp
+            .createTempSync('topiaforge-compiled-game-compat-')
+            .resolveSymbolicLinksSync(),
       );
       try {
         final cliName = Platform.isWindows

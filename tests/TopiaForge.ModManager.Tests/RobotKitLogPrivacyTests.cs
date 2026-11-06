@@ -37,7 +37,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void DamagedTokenFile()
         {
-            var directory = Directory.CreateTempSubdirectory("TopiaForgeTokenPrivacy-");
+            var directory = TestPaths.CreateTempDirectory("TopiaForgeTokenPrivacy-");
             var previous = Environment.GetEnvironmentVariable("ROBOAPI_BACKEND_ROOT");
             try
             {
@@ -99,7 +99,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TokenReadFailure()
         {
-            var directory = Directory.CreateTempSubdirectory("TopiaForgeTokenPrivacy-");
+            var directory = TestPaths.CreateTempDirectory("TopiaForgeTokenPrivacy-");
             var previous = Environment.GetEnvironmentVariable("ROBOAPI_BACKEND_ROOT");
             try
             {

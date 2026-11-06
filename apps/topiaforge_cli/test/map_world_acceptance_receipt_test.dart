@@ -9,7 +9,11 @@ import 'package:topiaforge/src/live_acceptance_trust.dart';
 
 void main() {
   test('acceptance retains a portable map path longer than 512 characters', () {
-    final root = Directory.systemTemp.createTempSync('map-long-path-');
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('map-long-path-')
+          .resolveSymbolicLinksSync(),
+    );
     try {
       final path = '${List.filled(6, 'a' * 100).join('/')}/world.json';
       final archive = Archive()
@@ -44,7 +48,11 @@ void main() {
   });
 
   test('acceptance refuses duplicate map source fields before decoding', () {
-    final root = Directory.systemTemp.createTempSync('map-duplicate-');
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('map-duplicate-')
+          .resolveSymbolicLinksSync(),
+    );
     try {
       final archive = Archive()
         ..addFile(
@@ -76,7 +84,11 @@ void main() {
   });
 
   test('acceptance binds map payload bytes as critical receipt content', () {
-    final root = Directory.systemTemp.createTempSync('map-evidence-');
+    final root = Directory(
+      Directory.systemTemp
+          .createTempSync('map-evidence-')
+          .resolveSymbolicLinksSync(),
+    );
     try {
       final raw = {
         'name': 'example.map',

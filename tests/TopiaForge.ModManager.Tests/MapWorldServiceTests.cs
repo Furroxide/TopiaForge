@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task AuthoredReadinessAsync()
         {
-            var owned = Directory.CreateTempSubdirectory("map-service-");
+            var owned = TestPaths.CreateTempDirectory("map-service-");
             try { await AuthoredReadinessAsync(owned.FullName); }
             finally { owned.Delete(true); }
         }
@@ -47,7 +47,7 @@ namespace TopiaForge.ModManager.Tests
         internal static async Task RunAsync()
         {
             MapLoadProgressTests.Run();
-            var owned = Directory.CreateTempSubdirectory("map-service-");
+            var owned = TestPaths.CreateTempDirectory("map-service-");
             try
             {
                 var root = owned.FullName;
@@ -146,7 +146,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static async Task CacheFailureRecovery()
         {
-            var directory = Directory.CreateTempSubdirectory("map-recovery-");
+            var directory = TestPaths.CreateTempDirectory("map-recovery-");
             try
             {
                 var cachePath = Path.Combine(directory.FullName, "cache");

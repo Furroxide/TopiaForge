@@ -77,7 +77,11 @@ final class ManifestMigrationWriter {
     File? staging;
     var committed = false;
     try {
-      _ordinaryAncestors(Directory.systemTemp.path);
+      // Resolve before checking: the system temp directory is reached through a
+      // link on macOS (/var -> private/var, /tmp -> private/tmp), so checking the
+      // path as spelled would refuse every migration there. The resolved root and
+      // the lock directory under it are both checked below, which is what actually
+      // guards the staging write.
       final temporaryRoot = Directory.systemTemp.resolveSymbolicLinksSync();
       final directory = Directory(
         p.join(temporaryRoot, 'topiaforge-manifest-migration-locks'),
