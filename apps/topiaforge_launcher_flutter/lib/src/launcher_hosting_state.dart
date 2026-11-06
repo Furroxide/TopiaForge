@@ -21,6 +21,7 @@ final class HostingView {
     this.plan,
     this.message = '',
     this.canAllowDirect = false,
+    this.disclosureAcknowledged = false,
     this.inviteCode,
   });
   final int generation;
@@ -30,6 +31,7 @@ final class HostingView {
   final HostingPlan? plan;
   final String message;
   final bool canAllowDirect;
+  final bool disclosureAcknowledged;
   final String? inviteCode;
   bool get busy => const {
     HostingPhase.loading,
