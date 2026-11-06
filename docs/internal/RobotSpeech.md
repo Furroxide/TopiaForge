@@ -40,10 +40,12 @@ retrying a fresh line. Missing receiver assets never cause historical speech to 
 
 ## Private wire and compatibility
 
-The existing world channel's version 1 permits additive message types. Private speech schema 2 uses
-72 (readiness), 73 (line), 74 (cancel), 75 (withdrawal) and 76 (finished). Speech schema 1 peers cannot
-exchange readiness with schema 2 peers, so mixed versions receive no speech rather than claiming
-unacknowledged completion. Existing spawn/command payloads and public interfaces keep their signatures. The new extension
+The existing world channel's version 1 permits additive message types. Private speech schema 3 uses
+72 (readiness), 73 (line), 74 (cancel), 75 (withdrawal) and 76 (finished). Schema 3 adds a terminal decline
+status that older hosts cannot interpret. All five message types require an exact schema match, including
+readiness: schema 1 or 2 peers cannot exchange readiness with schema 3 peers. Mixed versions can still
+join the session, but exchange no robot speech; they are never admitted to each other's speech operations.
+Existing spawn/command payloads and public interfaces keep their signatures. The extension
 API is marked `RequiresTopiaForge("0.2.0")`; the RobotKit assembly identity remains `0.1.0.0`.
 
 Every frame starts with the world-channel version/type and speech schema, nonzero world instance,
@@ -51,14 +53,21 @@ Every frame starts with the world-channel version/type and speech schema, nonzer
 field for the recipient's monotonic timestamp, has entity id zero, and appends its current world key.
 Lines append that timestamp, consuming mod, provider kind, 64-character lowercase voice digest and text.
 Cancellation identifies the same entity/line without text; withdrawal has zero nonce/entity fields.
-Finished identifies the same entity/line and appends exactly one byte: 1 for native task completion,
-0 for failure. A receiver emits it on the frame thread only after completion or cancellation.
+Finished identifies the same entity/line and appends exactly one status byte: 0 for playback failure,
+1 for native task completion, or 2 for decline before playback. No other values or trailing fields are
+accepted. A decline carries no reason, text or visibility flag. A receiver emits a finished report on
+the frame thread after playback completion/cancellation, or immediately when it declines a valid line.
 Decoding requires minimal integers, strict UTF-8, bounded fields and complete payload consumption before effects.
 
 The authenticated transport supplies the sender. Only the host can send lines/cancellation. The receiver
-requires its own fresh challenge, current world instance and a live host-owned entity of the named consumer
-and provider. A monotonic high-water nonce rejects duplicates and older lines. Challenges are replaced on
-stream, world or scene changes; readiness withdrawal removes the previous host gate. Readiness heartbeats
+requires its own fresh challenge and current world instance before considering a line. Playback also
+requires a live host-owned entity of the named consumer and provider. A monotonic high-water nonce rejects
+duplicates and older lines without a reply. Malformed frames, future echoed timestamps, wrong schemas and
+unauthenticated senders also receive no reply. A well-formed current-host line with a fresh nonce may be
+declined for an expired timestamp, receiver budget/cap, missing replica, local earshot or visibility refusal.
+The nonce is consumed even when the line is declined; retrying it cannot solicit another response.
+Challenges are replaced on stream, world or scene changes; readiness withdrawal removes the previous host
+gate. Readiness heartbeats
 run at most once a second. Readiness and withdrawal share a per-peer burst-four, sustained-two-per-second
 budget that withdrawal cannot reset; accepted readiness updates are at least 200 milliseconds apart. The echoed
 recipient timestamp expires after two seconds, bounding transport backlog age without synchronized clocks.
@@ -69,27 +78,32 @@ recipient timestamp expires after two seconds, bounding transport backlog age wi
 - Frames: at most 2,560 bytes; mod/provider/world keys at most 128 bytes each.
 - Host admission: burst four, sustained two lines per second; one new line per robot per second.
 - Receiver admission: burst eight, sustained four per second; at most 32 active operations per process.
+- Decline replies: a separate burst-eight, sustained-four-per-second budget, not reset by world/stream changes.
+  A full admission budget can therefore close a line; fresh-nonce floods still cannot create unbounded replies.
 - Playback: at most 15 seconds, linked to caller and context cancellation; one current line per entity.
 - Readiness: at most 256 peers; departed/restarted streams lose their entries.
 
 There is no outbound speech retry queue or late-join replay. A full window drops that recipient's event.
-Immediate spawn-and-speak announces the descriptor first. A receiver without that descriptor drops the
-line rather than retaining secret text for later. Replacement, despawn, context/provider disposal,
+Immediate spawn-and-speak announces the descriptor first. A receiver without that descriptor declines the
+line without retaining secret text for later. Replacement, despawn, context/provider disposal,
 world/scene changes and stream loss cancel outstanding work. Cancellation is best effort over the wire; the receiver also enforces its own deadline.
 The native serializer allows only the newest uncancelled line to wait for the prior native call to unwind.
 
 ## Completion contract
 
-`Success(true)` means every admitted listener's native playback task completed successfully. The host
-waits for its local task (if in earshot) and a finished report from each remote recipient to which the
-line was sent. The same rule applies regardless of the host's position. Native task completion is not
+`Success(true)` means at least one listener completed native playback and every listener still accepting
+the line completed successfully. The host waits for its local task (if in earshot) and a finished report
+from each remote recipient to which the line was sent. A recipient that declines before playback is
+removed immediately, without failing the call or counting as successful playback. Its later departure
+cannot change that operation's result; other listeners must still finish. The same rule applies regardless
+of the host's position. Native task completion is not
 proof of physical audible output; a remote report is a statement by that authenticated participant,
 not acoustic attestation. No estimated speech duration is used to claim playback completion.
 
-Successful calls also wait until the existing one-second per-robot pace expires. When no listener is
-admitted (including no one in earshot, incompatible peers, or no successful sends), `Success(false)`
-waits that same second without synthesis. There is no fictitious playback or retained line for a later
-listener. Thus an ordinary sequential `await SayAsync(...)` can start the next line without cutting off
+Successful calls also wait until the existing one-second per-robot pace expires. When no listener accepts
+(including no one in earshot, incompatible peers, no successful sends, or every recipient declining),
+`Success(false)` waits that same second without synthesis. There is no fictitious playback or retained line
+for a later listener. Thus an ordinary sequential `await SayAsync(...)` can start the next line without cutting off
 the first or hitting its pace, even for an empty audience. Concurrent traffic still shares the unchanged
 global budget and active cap; callers must handle admission failures.
 
@@ -105,7 +119,8 @@ ownership/provider/world loss cancels the whole operation. A missing report or s
 expires at the existing 15-second deadline; timeouts never count as success. Settlement and all world,
 Unity and transport access occur on the frame thread. Reset settles pending callers and rejects
 reentrant speech admission until teardown completes. A full acknowledgement window is not retried;
-the host times out. Successful operations retire before releasing a sequential caller.
+the host times out. Exhausting the separate decline reply budget likewise sends no queued reply and leaves
+the host's existing deadline in force. Successful operations retire before releasing a sequential caller.
 
 ## Verification and remaining native checks
 
