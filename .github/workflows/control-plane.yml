@@ -185,9 +185,18 @@ jobs:
       - name: Smoke-test the deployed status endpoint
         env:
           CONTROL_PLANE_ORIGIN: ${{ vars.CONTROL_PLANE_ORIGIN }}
+          WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
         run: |
           set -euo pipefail
-          [[ "$CONTROL_PLANE_ORIGIN" =~ ^https://[a-z0-9.-]+$ ]]
+          case "$WRANGLER_ENVIRONMENT" in
+            staging) expected_origin=https://mp-staging.topiaforge.dev ;;
+            production) expected_origin=https://mp.topiaforge.dev ;;
+            *) echo '::error::Unexpected deployment environment.'; exit 1 ;;
+          esac
+          if [[ "$CONTROL_PLANE_ORIGIN" != "$expected_origin" ]]; then
+            echo '::error::Deployment origin does not match the selected environment.'
+            exit 1
+          fi
           status=$(curl --fail --silent --show-error \
             --retry 6 --retry-all-errors --retry-delay 5 \
             --connect-timeout 10 --max-time 20 \
