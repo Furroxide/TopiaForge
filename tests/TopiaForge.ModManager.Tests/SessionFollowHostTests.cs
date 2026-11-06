@@ -123,7 +123,7 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             var world = rig.Received(guest).Last();
             That(world.Kind == HostWorldKind.World && world.Transition == ModTransitions.AdditiveArena && world.Scene == "Downtown" && Equals(world.Spawn, spawn),
-                "an additive arena names the level it is built over and where the host's player stood as it was built");
+                "an additive arena places the follower at accepted actual placement, not the pre-settle request");
         }
 
         private static void AFullWindowIsCaughtUp(string root)
@@ -148,7 +148,8 @@ namespace TopiaForge.ModManager.Tests
         {
             internal ArenaWorld(TransformState spawn)
             {
-                Readiness = new WorldReadiness(new WorldSceneIdentity(-31, "Downtown"), spawn);
+                Readiness = new WorldReadiness(new WorldSceneIdentity(-31, "Downtown"), spawn,
+                    new TransformState(new Vec3(spawn.Position.X, spawn.Position.Y - 0.13f, spawn.Position.Z), spawn.Rotation, spawn.Scale));
             }
 
             public WorldReadiness Readiness { get; }

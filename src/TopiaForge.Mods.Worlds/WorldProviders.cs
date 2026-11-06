@@ -60,26 +60,47 @@ namespace TopiaForge.Mods
     /// <summary>Immutable evidence that scene, content, player and spawn readiness have completed.</summary>
     public sealed class WorldReadiness
     {
-        /// <summary>Captures the actual scene and applied spawn after provider readiness.</summary>
-        public WorldReadiness(WorldSceneIdentity scene, TransformState spawn)
+        /// <summary>Captures the actual scene and accepted settled player pose; the requested spawn is unknown.</summary>
+        public WorldReadiness(WorldSceneIdentity scene, TransformState spawn) : this(scene, spawn, (TransformState?)null) { }
+
+        /// <summary>Captures completed readiness with the accepted settled player pose and the provider's resolved request, if known.</summary>
+        /// <param name="scene">The actual scene containing the ready world.</param>
+        /// <param name="spawn">The actual player pose accepted after placement and settling.</param>
+        /// <param name="requestedSpawn">The resolved world-space transform requested before settling, or null when unknown.</param>
+        [RequiresTopiaForge("0.2.0")]
+        public WorldReadiness(WorldSceneIdentity scene, TransformState spawn, TransformState? requestedSpawn)
         {
             Scene = scene ?? throw new ArgumentNullException(nameof(scene));
+            ValidateSpawn(spawn, nameof(spawn));
+            if (requestedSpawn.HasValue) ValidateSpawn(requestedSpawn.Value, nameof(requestedSpawn));
+            Spawn = spawn;
+            RequestedSpawn = requestedSpawn;
+        }
+        internal WorldReadiness(WorldSceneIdentity scene, TransformState spawn, IAuthoredMap map) : this(scene, spawn, null, map) { }
+        internal WorldReadiness(WorldSceneIdentity scene, TransformState spawn, TransformState? requestedSpawn, IAuthoredMap map)
+            : this(scene, spawn, requestedSpawn)
+        { Map = map ?? throw new ArgumentNullException(nameof(map)); }
+
+        private static void ValidateSpawn(TransformState spawn, string parameter)
+        {
             if (!spawn.Position.IsFinite || !spawn.Rotation.IsFinite || spawn.Rotation.LengthSquared <= 0.000001f
                 || !spawn.Scale.IsFinite || spawn.Scale.X == 0f || spawn.Scale.Y == 0f || spawn.Scale.Z == 0f)
-                throw new ArgumentException("World readiness requires a finite spawn with a valid rotation and non-zero scale.", nameof(spawn));
-            Spawn = spawn;
+                throw new ArgumentException("World readiness requires a finite spawn with a valid rotation and non-zero scale.", parameter);
         }
-        internal WorldReadiness(WorldSceneIdentity scene, TransformState spawn, IAuthoredMap map) : this(scene, spawn)
-        { Map = map ?? throw new ArgumentNullException(nameof(map)); }
         /// <summary>Gets the imported map, or null for another kind of world.</summary>
         [RequiresTopiaForge("0.2.0")]
         public IAuthoredMap? Map { get; }
         internal WorldReadiness ForContext(IModContext context) => Map is Internal.AuthoredMapIndex index && context is Internal.IInternalAuthoredMapContext package
-            ? new WorldReadiness(Scene, Spawn, index.ForPackage(package.ReadAnchorFile)) : this;
+            ? new WorldReadiness(Scene, Spawn, RequestedSpawn, index.ForPackage(package.ReadAnchorFile)) : this;
         /// <summary>Gets the actual scene identity.</summary>
         public WorldSceneIdentity Scene { get; }
-        /// <summary>Gets the resolved spawn transform applied to the player.</summary>
+        /// <summary>Gets the accepted settled actual player pose, which may differ from the requested spawn.</summary>
+        /// <remarks>This is placement evidence, not an authored marker or a guarantee that the player remains motionless.</remarks>
         public TransformState Spawn { get; }
+        /// <summary>Gets the resolved world-space spawn requested by the provider before settling, or null when unknown.</summary>
+        /// <remarks>The request may come from an authored marker or a provider default. Never infer it from the settled pose.</remarks>
+        [RequiresTopiaForge("0.2.0")]
+        public TransformState? RequestedSpawn { get; }
     }
 
     /// <summary>Owns loaded world content and cleanup; gameplay receives only its readiness view.</summary>

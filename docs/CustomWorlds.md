@@ -277,7 +277,18 @@ Task<OperationResult<IWorldInstance>> LoadAsync(
 ```
 
 The returned `IWorldInstance` owns cleanup. Its `WorldReadiness` records the actual scene
-instance and the resolved spawn transform applied to the player. The gamemode receives that
+instance and `Spawn`, the accepted settled actual player pose. `RequestedSpawn` is the resolved
+world-space transform the provider requested before settling, or `null` when unknown. For example,
+a request at Y = 1 can settle at Y = 1.13: `RequestedSpawn` retains Y = 1 and `Spawn` records Y = 1.13.
+The two-argument constructor knows only the settled pose and leaves the request unknown. Providers
+that know both pass `new WorldReadiness(scene, settledSpawn, requestedSpawn)` after readiness completes.
+Map and package-scoped readiness views preserve both values.
+
+Use the accepted pose for player placement evidence, presence, and recovery to the accepted spawn.
+Open Sandbox recovery and additive-arena follower placement retain that behavior. Use authored map
+transforms for geometry; a known `RequestedSpawn` identifies the resolved marker or provider default,
+but an unknown request must not be reconstructed from another player's settling offset. Neither pose
+asserts that the player remains motionless after readiness. The gamemode receives the
 readiness view without world disposal authority. `provider-default` requires a validated actual
 provider spawn. Honor `context.Transition` and `context.SpawnPolicy`; fail unsupported requests.
 

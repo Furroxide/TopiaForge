@@ -119,7 +119,7 @@ namespace TopiaForge.ModManager
                 if (!Valid(actual)) return Failure<WorldReadiness>(ModErrorCode.InvalidState, "The applied spawn is not a valid transform.");
                 linked.Token.ThrowIfCancellationRequested();
                 var validScene = native.ValidateContent(contentRoot);
-                return validScene.Succeeded ? OperationResult<WorldReadiness>.Success(new WorldReadiness(Scene, actual))
+                return validScene.Succeeded ? OperationResult<WorldReadiness>.Success(new WorldReadiness(Scene, actual, selected))
                     : Failure<WorldReadiness>(validScene.ErrorCode, validScene.ErrorMessage);
             }
             catch (Exception error) { return Failure<WorldReadiness>(error is OperationCanceledException ? ModErrorCode.Cancelled : ModErrorCode.External, error.Message); }

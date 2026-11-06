@@ -247,6 +247,8 @@ type public enum TopiaForge.Mods.WorldPauseExitDecision : System.Int32
 
 type public sealed class TopiaForge.Mods.WorldReadiness : System.Object
   constructor .ctor(TopiaForge.Mods.WorldSceneIdentity scene, TopiaForge.Mods.TransformState spawn)
+  constructor .ctor(TopiaForge.Mods.WorldSceneIdentity scene, TopiaForge.Mods.TransformState spawn, System.Nullable<TopiaForge.Mods.TransformState> requestedSpawn) [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.TransformState> RequestedSpawn { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IAuthoredMap? Map { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.TransformState Spawn { get; }
   property TopiaForge.Mods.WorldSceneIdentity Scene { get; }

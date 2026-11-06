@@ -19,6 +19,7 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>Gets where the running world session put its player as it became ready, which the spawn ring is around.</summary>
+        // Presence starts at accepted actual placement, never at an authored request before settling.
         internal TransformState? RunningSpawn => lifecycle.Current.Phase == SessionPhase.Running && current?.PresenceInvalidated == false
             ? current.Readiness?.Spawn : null;
 

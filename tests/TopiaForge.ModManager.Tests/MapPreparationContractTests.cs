@@ -246,14 +246,18 @@ namespace TopiaForge.ModManager.Tests
                 + (loading.IsCompleted ? "; result=" + loading.Result.ErrorCode : string.Empty));
             test.AssertExclusive();
             test.Load.PlayerReady = true; test.Clock.Advance(); test.Wait(loading);
-            Assert(loading.Result.Succeeded && loading.Result.Value!.Readiness.Spawn == MapWorldServiceTests.Backend.Spawn,
-                "the actual readiness service applies the map spawn");
+            Assert(loading.Result.Succeeded && loading.Result.Value!.Readiness.Spawn == Settled(MapWorldServiceTests.Backend.Spawn)
+                && loading.Result.Value.Readiness.RequestedSpawn == MapWorldServiceTests.Backend.Spawn,
+                "map readiness preserves the requested marker separately from the accepted +0.13 m player pose");
             Assert(backend.SceneArgument == (published ? "scene" : null) && backend.Label == (published ? "map:example" : "map:package"),
                 "source identity and requested scene survive the full composition");
             test.AssertReleased();
             loading.Result.Value!.Dispose(); test.Dispatcher.Drain();
             Assert(backend.ContentDisposals == 1 && test.Load.Disposals == 1, "world disposal releases imported content and preparation once");
         }
+
+        private static TransformState Settled(TransformState spawn) => new TransformState(
+            new Vec3(spawn.Position.X, spawn.Position.Y + 0.13f, spawn.Position.Z), spawn.Rotation, spawn.Scale);
 
         private static InternalMapWorldRequest Request(bool published) => published
             ? new InternalMapWorldRequest("example", "scene", null)
@@ -358,7 +362,7 @@ namespace TopiaForge.ModManager.Tests
             public OperationResult<TransformState>? ApplySpawn(TransformState spawn)
             {
                 SpawnApplications++;
-                return PlayerReady ? OperationResult<TransformState>.Success(spawn) : null;
+                return PlayerReady ? OperationResult<TransformState>.Success(Settled(spawn)) : null;
             }
             public void Dispose() { Disposals++; }
         }

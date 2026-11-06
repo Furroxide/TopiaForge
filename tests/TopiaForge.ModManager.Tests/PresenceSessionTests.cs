@@ -49,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
             var running = SessionFixture.ModeSession!.SessionId;
             That(test.Hosted.RunningWorldId == running, "a running world session is named by its id");
             var placed = test.Hosted.RunningSpawn;
-            That(placed.HasValue && placed.Value.Position.X == 4f && placed.Value.Position.Z == -2f && placed.Value.Rotation.Y > 0.7f,
+            That(placed == spawn && placed.HasValue && placed.Value.Position.X == 4f && placed.Value.Position.Z == -2f && placed.Value.Rotation.Y > 0.7f,
                 "and the spawn is where the world put its player as it became ready");
 
             var restarted = SessionFixture.ModeSession!.RestartAsync();
@@ -87,6 +87,7 @@ namespace TopiaForge.ModManager.Tests
             if (change != SceneLifecyclePhase.Unloaded) scene.Activated("World", -13);
             test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(change == SceneLifecyclePhase.Unloaded ? -12 : -13, "World", change,
                 SceneLoadMode.Single, isActive: change != SceneLifecyclePhase.Unloaded));
+            That(test.Hosted.RunningSpawn == null, "scene replacement invalidates settled readiness even when its requested spawn is known");
             That(rig.Host.Presence.ValidatedPosition(raw.Id) == null, "scene evidence invalidates range before queued policy handling");
             test.Host.Drain();
             That(test.Hosted.Current.Phase == Core.SessionPhase.Running, "keep-controller policy retains the session across native replacement");
@@ -110,7 +111,8 @@ namespace TopiaForge.ModManager.Tests
         {
             internal SpawnWorld(TransformState spawn)
             {
-                Readiness = new WorldReadiness(new WorldSceneIdentity(-12, "World"), spawn);
+                Readiness = new WorldReadiness(new WorldSceneIdentity(-12, "World"), spawn,
+                    new TransformState(new Vec3(spawn.Position.X, spawn.Position.Y - 0.13f, spawn.Position.Z), spawn.Rotation, spawn.Scale));
             }
 
             public WorldReadiness Readiness { get; }
