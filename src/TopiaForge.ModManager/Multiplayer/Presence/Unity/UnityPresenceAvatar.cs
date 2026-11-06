@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager
         private readonly GameObject root;
         private readonly Transform rootTransform;
         private readonly CapsuleCollider collider;
+        private readonly GameObject visuals;
         private readonly GameObject capsule;
         private readonly Transform capsuleTransform;
         private Material? capsuleMaterial;
@@ -54,12 +55,15 @@ namespace TopiaForge.ModManager
             collider.radius = Radius;
             collider.direction = 1;
             root.AddComponent<PresenceAvatarIdentity>().Initialize("avatar-" + index);
+            // Presence owns this parent's activity. World view leases independently own Renderer.enabled.
+            visuals = new GameObject("Visuals");
+            visuals.transform.SetParent(rootTransform, false);
             capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             capsule.name = "Capsule";
             var primitiveCollider = capsule.GetComponent<Collider>();
             if (primitiveCollider != null) UnityEngine.Object.DestroyImmediate(primitiveCollider);
             capsuleTransform = capsule.transform;
-            capsuleTransform.SetParent(rootTransform, false);
+            capsuleTransform.SetParent(visuals.transform, false);
             Shape(Height);
             Tint(capsule, tint);
         }
@@ -87,6 +91,11 @@ namespace TopiaForge.ModManager
             }
         }
 
+        public void SetVisible(bool visible)
+        {
+            if (!disposed && visuals != null) visuals.SetActive(visible);
+        }
+
         public void Place(NetVector3 feet, float yawDegrees)
         {
             if (disposed || root == null) return;
@@ -100,7 +109,7 @@ namespace TopiaForge.ModManager
             var made = (worn.Root as IInternalNativeObjectEntity)?.NativeObject as GameObject;
             if (made == null) return false;
             var part = made.transform;
-            part.SetParent(rootTransform, false);
+            part.SetParent(visuals.transform, false);
             part.localPosition = Vector3.zero;
             part.localRotation = Quaternion.identity;
             capsule.SetActive(false);

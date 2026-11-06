@@ -92,6 +92,9 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the point above its head where a nametag goes.</summary>
         NetVector3 HeadPosition { get; }
 
+        /// <summary>Shows or suppresses the avatar visuals without changing its entity or view holds.</summary>
+        void SetVisible(bool visible);
+
         /// <summary>Moves the avatar: its feet, and which way its body faces.</summary>
         void Place(NetVector3 feet, float yawDegrees);
 

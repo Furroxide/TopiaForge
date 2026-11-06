@@ -22,7 +22,6 @@ namespace TopiaForge.ModManager
 
         private readonly IPresenceAvatarObject avatar;
         private IInternalAvatarBody? body;
-        private bool hasDrawn;
         private NetVector3 drawn;
         private long nextBodyMicros;
         private bool disposed;
@@ -33,6 +32,7 @@ namespace TopiaForge.ModManager
             this.avatar = avatar ?? throw new ArgumentNullException(nameof(avatar));
             Tint = tint;
             presentation = tint.ToBodyRequest();
+            avatar.SetVisible(false);
         }
 
         internal void Present(AvatarAppearance appearance, bool poweredDown)
@@ -48,6 +48,16 @@ namespace TopiaForge.ModManager
         internal IEntity Entity => avatar.Entity;
 
         internal bool IsAlive => !disposed && avatar.IsAlive;
+
+        internal bool IsVisible { get; private set; }
+
+        internal void Hide()
+        {
+            if (!IsVisible) return;
+            IsVisible = false;
+            Speed = 0f;
+            avatar.SetVisible(false);
+        }
 
         /// <summary>Gets whether the avatar wears a provider's body rather than its capsule.</summary>
         internal bool IsWearingBody => body != null && avatar.IsWearingBody;
@@ -140,7 +150,7 @@ namespace TopiaForge.ModManager
         internal void Draw(NetVector3 feet, float yawDegrees, bool crouching, float deltaSeconds)
         {
             if (disposed) return;
-            if (hasDrawn && deltaSeconds > 0f)
+            if (IsVisible && deltaSeconds > 0f)
             {
                 var dx = (double)feet.X - drawn.X;
                 var dz = (double)feet.Z - drawn.Z;
@@ -148,10 +158,14 @@ namespace TopiaForge.ModManager
                 Speed += (Math.Min(measured, 64f) - Speed) * SpeedSmoothing;
             }
 
-            hasDrawn = true;
             drawn = feet;
             avatar.Place(feet, yawDegrees);
             avatar.Animate(presentation.PoweredDown ? 0f : Speed, crouching);
+            if (!IsVisible)
+            {
+                avatar.SetVisible(true);
+                IsVisible = true;
+            }
             body?.Animate(presentation.PoweredDown ? 0f : Speed, !presentation.PoweredDown && crouching);
         }
 

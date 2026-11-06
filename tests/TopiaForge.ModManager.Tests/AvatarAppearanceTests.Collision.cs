@@ -44,13 +44,15 @@ namespace TopiaForge.ModManager.Tests
             private bool disposed, crouching, poweredDown;
             private const int BaseColor = 1, Color = 2;
             public void Place(NetVector3 feet, float yaw) { }
+            public void SetVisible(bool visible) { }
             """;
 
         private const string RemoteFields = """
             public readonly PhysicalAvatar avatar = new();
             public Body body;
             public readonly Presentation presentation = new();
-            private bool disposed, hasDrawn;
+            private bool disposed;
+            private bool IsVisible { get; set; }
             private NetVector3 drawn;
             private const float SpeedSmoothing = 0.3f;
             public float Speed { get; private set; }
