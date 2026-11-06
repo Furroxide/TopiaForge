@@ -23,15 +23,15 @@ namespace TopiaForge.Mods.UnityUi
         internal TopiaForgeRgba Label { get; }
 
         /// <summary>
-        /// Gets the chip with a translucent fill flattened onto the color it sits on, so that it looks the same there and
-        /// a picture under it, such as a card's preview, cannot show through. The label reads on the flattened fill on any
-        /// Paper surface, the darkest included.
+        /// Gets the chip with a translucent fill flattened onto the color it sits on, as drawn, so that it looks the same
+        /// there and a picture under it, such as a card's preview, cannot show through. The label reads on the flattened
+        /// fill on any Paper surface, the darkest included.
         /// </summary>
         internal TopiaForgeChipColors Flattened(TopiaForgeRgba behind)
         {
             return Fill.A >= 1f
                 ? this
-                : new TopiaForgeChipColors(TopiaForgeContrast.Over(Fill, Fill.A, behind, linear: false), Ring, Label);
+                : new TopiaForgeChipColors(TopiaForgeContrast.Quantize(TopiaForgeContrast.Over(Fill, Fill.A, behind, linear: false)), Ring, Label);
         }
     }
 }

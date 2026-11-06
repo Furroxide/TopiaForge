@@ -74,27 +74,36 @@ namespace TopiaForge.Mods.UnityUi
         private static TopiaForgeChipColors PaperChip(TopiaForgeRgba tone, TopiaForgeRgba label, bool highContrast)
         {
             // The wash comes out darkest over the darkest surface text sits on. Unity blends it on the stored values in a
-            // gamma project and in linear light in a linear one, so the label is held to whichever comes out darker.
+            // gamma project and in linear light in a linear one, so the label is held to whichever comes out darker, as
+            // drawn: the wash, its opacity, the surface and the stored blend each in 256 steps a channel.
+            var fill = TopiaForgeContrast.Quantize(tone.WithAlpha(PaperChipTint));
+            var surface = TopiaForgeContrast.Quantize(DarkestTextSurface);
             var wash = Darker(
-                TopiaForgeContrast.Over(tone, PaperChipTint, DarkestTextSurface, linear: false),
-                TopiaForgeContrast.Over(tone, PaperChipTint, DarkestTextSurface, linear: true));
-            return new TopiaForgeChipColors(
-                tone.WithAlpha(PaperChipTint),
-                tone,
-                TopiaForgeContrast.DarkenForPaper(label, wash, ChipTextRatio(highContrast)));
+                TopiaForgeContrast.Quantize(TopiaForgeContrast.Over(fill, fill.A, surface, linear: false)),
+                TopiaForgeContrast.Quantize(TopiaForgeContrast.Over(fill, fill.A, surface, linear: true)));
+
+            // The label is opaque, whatever opacity a mod's accent carries, and is darkened in drawn steps until it reads.
+            var text = TopiaForgeContrast.Quantize(label.WithAlpha(1f));
+            for (var step = 0; step < 48 && TopiaForgeContrast.Ratio(text, wash) < ChipTextRatio(highContrast); step++)
+            {
+                text = TopiaForgeContrast.Quantize(text.Scale(0.92f));
+            }
+
+            return new TopiaForgeChipColors(fill, tone, text);
         }
 
         private static TopiaForgeChipColors HudChip(TopiaForgeRgba tone, TopiaForgeRgba lightText, bool highContrast)
         {
-            var fill = tone.WithAlpha(1f);
+            // The chip and its label are opaque and drawn in 256 steps a channel, so they are checked as drawn.
+            var fill = TopiaForgeContrast.Quantize(tone.WithAlpha(1f));
             var dark = TopiaForgeContrast.Ratio(HudChipDarkText, fill) >= TopiaForgeContrast.Ratio(lightText, fill);
-            var label = dark ? HudChipDarkText : lightText;
+            var label = TopiaForgeContrast.Quantize((dark ? HudChipDarkText : lightText).WithAlpha(1f));
 
             // A fill that neither label reads on, such as a mid-grey accent a mod picks, moves away from its label until
             // the label reads.
             for (var step = 0; step < 48 && TopiaForgeContrast.Ratio(label, fill) < ChipTextRatio(highContrast); step++)
             {
-                fill = dark ? TopiaForgeRgba.Lerp(fill, TopiaForgePalette.White, 0.08f) : fill.Scale(0.92f);
+                fill = TopiaForgeContrast.Quantize(dark ? TopiaForgeRgba.Lerp(fill, TopiaForgePalette.White, 0.08f) : fill.Scale(0.92f));
             }
 
             return new TopiaForgeChipColors(fill, fill, label);

@@ -77,6 +77,22 @@ namespace TopiaForge.Mods.UnityUi
                 1f);
         }
 
+        /// <summary>
+        /// Gets a color as uGUI draws it: every channel, opacity included, rounded to one of 256 steps, as a Color32 vertex
+        /// color and an 8-bit target hold it. A contrast that must hold on screen is checked on these values.
+        /// </summary>
+        internal static TopiaForgeRgba Quantize(TopiaForgeRgba color)
+        {
+            return new TopiaForgeRgba(QuantizeChannel(color.R), QuantizeChannel(color.G), QuantizeChannel(color.B), QuantizeChannel(color.A));
+        }
+
+        private static float QuantizeChannel(float channel)
+        {
+            // Rounds half to even, as Unity's Color to Color32 conversion does.
+            channel = channel < 0f ? 0f : channel > 1f ? 1f : channel;
+            return (float)Math.Round(channel * 255f) / 255f;
+        }
+
         private static float Blend(float top, float bottom, float opacity, bool linear)
         {
             return linear

@@ -303,7 +303,8 @@ until it reads on that wash over the darkest surface. On the HUD a badge is soli
 the world behind it cannot change it, and its label is the HUD's text or a dark one, whichever
 reads; an accent neither reads on is lightened or darkened until one does. A card's corner badge
 sits on its preview, so on Paper its wash is flattened onto sunken paper and a picture cannot show
-through.
+through. A badge's label is always opaque, whatever opacity a mod's accent carries, and its contrast
+is checked on the colors as uGUI draws them, in 256 steps a channel.
 
 Toasts reuse a few pooled views. Each toast is placed and brought in afresh, whatever its view
 showed before and under reduced motion too, and shows above every window and dialog, stacked up from
