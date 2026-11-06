@@ -15,7 +15,8 @@ param(
     [string]$AcceptanceIsolationRecord,
     [string]$PythonPath = $env:TOPIAFORGE_PYTHON,
     [string]$StateRoot,
-    [switch]$Rehearsal
+    [switch]$Rehearsal,
+    [switch]$ProductionMultiplayerReady
 )
 
 . (Join-Path $PSScriptRoot "release/acceptance-isolation.ps1")
@@ -1583,6 +1584,8 @@ if grep -Ev '^[0-9a-f]{64} \* .+$' <<<"$lfs_inventory" | grep -q .; then
   printf 'The WSL clone contains unmaterialized Git LFS pointers.\n' >&2
   exit 1
 fi
+production_options=()
+if [[ "$version" != *-* ]]; then production_options+=(--production-stable); fi
 /bin/bash "$checkout/tools/release/build-platform.sh" \
   --platform linux \
   --repo "$checkout" \
@@ -1591,7 +1594,7 @@ fi
   --canonical-archive "$canonical_archive" \
   --canonical-ecosystem-sha256 "$canonical_ecosystem_sha" \
   --canonical-archive-sha256 "$canonical_archive_sha" \
-  --output "$output"
+  --output "$output" "${production_options[@]}"
 '@
     Invoke-WslScript -Script $linuxScript -Arguments @(
         $repoWsl,
@@ -2329,6 +2332,29 @@ function Build-Handoff {
 }
 
 function Invoke-Build {
+    if ($Version.Contains('-')) {
+        if ($ProductionMultiplayerReady) {
+            throw "Prerelease builds must use staging multiplayer."
+        }
+    }
+    else {
+        if (-not $ProductionMultiplayerReady) {
+            throw "A stable release requires -ProductionMultiplayerReady after the privacy, native disclosure and live service checks."
+        }
+        $readiness = Get-Content -LiteralPath (
+            Join-Path $repositoryRoot "release/release-readiness.json"
+        ) -Raw | ConvertFrom-Json
+        foreach ($gateId in @("P0-PRIV-01", "P0-CRED-01")) {
+            $gate = @($readiness.gates | Where-Object { $_.id -ceq $gateId })
+            if ($gate.Count -ne 1 -or $gate[0].status -cne "approved" -or
+                @($gate[0].evidenceIds).Count -eq 0) {
+                throw "Stable production multiplayer requires approved $gateId evidence."
+            }
+        }
+        Invoke-Checked python @(
+            "tools/multiplayer-build.py", "--environment", "production", "--check-only"
+        ) -WorkingDirectory $repositoryRoot
+    }
     $state = Read-State
     if ($null -eq $state -or $state.phase -notin @(
             "preflight", "platforms-built", "built", "accepted", "staged",
@@ -2405,9 +2431,7 @@ function Invoke-Build {
             $windowsWorktree = New-ReleaseWorktree `
                 -Name "windows" -SourceSha $sourceSha
             $releaseWorktrees.Add($windowsWorktree)
-            Invoke-Checked (
-                Join-Path $windowsWorktree "tools/release/build-windows.ps1"
-            ) @(
+            $windowsBuildArguments = @(
                 "-RepositoryRoot", $windowsWorktree,
                 "-SourceSha", $sourceSha,
                 "-Version", $Version,
@@ -2422,6 +2446,12 @@ function Invoke-Build {
                 "-DartPath", $sdk.Dart,
                 "-FlutterPath", $sdk.Flutter
             )
+            if (-not $Version.Contains('-')) {
+                $windowsBuildArguments += "-ProductionStable"
+            }
+            Invoke-Checked (
+                Join-Path $windowsWorktree "tools/release/build-windows.ps1"
+            ) $windowsBuildArguments
 
             if ($targetsLinux) {
                 Invoke-WslBuild -SourceSha $sourceSha `

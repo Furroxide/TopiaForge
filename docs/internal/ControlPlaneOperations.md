@@ -33,8 +33,10 @@ Do the steps in order: the deploy workflow refuses to run until the GitHub envir
 1. **Plan.** Use the Workers Paid plan for production. The service also deploys on the free plan, but its request
    and Durable Object allowances are too small for a public browser. Check Cloudflare's current pricing page; at the
    volumes this service expects, usage stays inside the paid plan's included allowances.
-2. **Deploy token.** Create an API token from the "Edit Cloudflare Workers" template, limited to this one account
-   (and to the zone, if you route the Worker through a custom domain). It is used only by the deploy workflow.
+2. **Deploy tokens.** Use separate staging and production tokens. Creating the production Worker needs a temporary
+   Workers product Admin credential and Workers Routes Write for its custom domain. After first creation, replace
+   it with Workers Editor scoped only to `topiaforge-control-plane-production`; scope the staging token only to
+   `topiaforge-control-plane-staging`. Verify neither token can edit the other Worker, then revoke the broad token.
 3. **TURN keys.** In the dashboard, open Realtime, then TURN, and create one key for staging and one for production.
    Each gives a key id and an API token; keep them for section 2.3.
 4. **Analytics token.** Create an API token with Account Analytics read only. The hourly measurement uses it to read
@@ -54,14 +56,14 @@ Create two environments under repository Settings, Environments, before any depl
 | Setting | `control-plane-staging` | `control-plane-production` |
 | --- | --- | --- |
 | Required reviewers | The maintainer | The maintainer |
-| Prevent self-review | Off, while there is one maintainer | Off, while there is one maintainer |
+| Prevent self-review | On, with a separate dispatcher | On, with a separate dispatcher |
 | Allow administrators to bypass | Off | Off |
 | Deployment branches | Selected: `dev` and `main` | Selected: `main` |
-| Secret `CLOUDFLARE_API_TOKEN` | The deploy token | The deploy token |
+| Secret `CLOUDFLARE_API_TOKEN` | Staging-only deploy token | Production-only deploy token |
 | Secret `CLOUDFLARE_ACCOUNT_ID` | The account id | The account id |
 | Variable `CONTROL_PLANE_ORIGIN` | The staging origin, `https://…` | The production origin, `https://…` |
 
-The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
+The dispatcher must not hold the human review credential. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
 required reviewer, no administrator bypass and custom branch rules. That replaces the governance rule that an
 environment must exist before a workflow references it: a dispatch can never create an unprotected environment.
 
@@ -76,7 +78,7 @@ Once both environments exist, register them in the governance desired state, so 
     "protected_branches": false,
     "custom_branch_policies": true,
     "reviewer_ids": [221987073],
-    "prevent_self_review": false,
+    "prevent_self_review": true,
     "branch_policies": [
       {"name": "dev", "type": "branch"},
       {"name": "main", "type": "branch"}
@@ -88,7 +90,7 @@ Once both environments exist, register them in the governance desired state, so 
     "protected_branches": false,
     "custom_branch_policies": true,
     "reviewer_ids": [221987073],
-    "prevent_self_review": false,
+    "prevent_self_review": true,
     "branch_policies": [
       {"name": "main", "type": "branch"}
     ]
@@ -128,28 +130,27 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 
 ### Production bootstrap and release order
 
-Release compilation must work before the first production deployment. The release recipes use
-`tools/multiplayer-build.py --environment production --build-only` to embed the production origin without
-contacting the service. The build log explicitly says readiness was not checked. This option accepts only
-production Flutter builds and Dart executable compilation; staging builds, `flutter run` and `--check-only`
-retain their readiness checks. A successful package build is not evidence that Internet play is ready.
+Production services can launch independently of client publication. Internal testing, previews and CI builds,
+including builds from `main` and `release/*`, use staging. Only the final approved stable-release packaging path
+embeds the production origin. A compiled client is not evidence that Internet play is ready.
 
-After staging and release validation pass, use this order for the first production release:
+Use this order for the first production service launch:
 
-1. Build and validate the release packages with the production origin while production is absent. Keep
-   package publication, signing authorization and deployment approval as their existing separate gates.
-2. Review and merge the release into `main`, making the service and deployment workflow available there.
-3. Dispatch **Control plane** from that exact main revision to **control-plane-production**, review the
+1. Review and merge the narrowly scoped `service/production-multiplayer` pull request to `main`; its PR policy
+   permits only the service, its fixtures, deployment workflow, governance and operations documentation.
+2. Dispatch **Control plane** from that exact main revision to **control-plane-production**, review the
    deployment, and provision its Worker secrets as described below. Do not use the staging credential.
-4. Check production readiness with
+3. Check production readiness with
    `python tools/multiplayer-build.py --environment production --check-only`, then complete the production
    admin/spend checks and real relay live check from steps 4 and 5 below, using the production environment.
-5. Publish only after those checks and the release's remaining approvals pass. If readiness fails, keep
-   the packages unpublished and repair or roll back production; recompilation does not establish readiness.
+4. Start independent production availability monitoring and show the service as live only after real observations
+   pass. Keep production activity publication disabled until the public-only activity upgrade and native disclosure
+   have been verified. No preview or internal client is switched to production.
+5. Later, build and publish a stable client with the production origin only after the privacy and release gates pass.
+   If readiness fails, keep stable packages unpublished and repair or roll back production.
 
-This order needs no production deployment before the release merge and no relaxation of main's required
-package checks. Later production outages or feature flags likewise do not prevent compilation, while the
-explicit readiness check remains a required operational step before publication.
+The service-only merge does not publish a client or relax the stable-release gate. The explicit readiness and
+privacy checks remain required before a stable client connects to production.
 
 ### Environment provisioning
 
@@ -188,8 +189,8 @@ explicit readiness check remains a required operational step before publication.
    and a hole-punched join.
 6. Register both GitHub environments in governance (section 2.2).
 7. For production, follow [Production bootstrap and release order](#production-bootstrap-and-release-order)
-   above, including its readiness and real relay checks before publication. Release recipes supply the
-   production origin through the build helper. The launcher reads
+   above, including its readiness and real relay checks before publication. Only the final approved stable-release
+   recipe supplies the production origin through the build helper. The launcher reads
    the define by the launch request's rule (`MultiplayerLaunchContract.md`, section 2): `https://`, a DNS name and an
    optional port, in any letter case, with or without a trailing `/` or an explicit `:443`, which it drops. An address
    in any spelling, an IP literal or a name whose last label is a number such as `0x7f000001` or `example.123`, and
@@ -197,7 +198,8 @@ explicit readiness check remains a required operational step before publication.
 
 ## 4. Updates
 
-- **Code.** Merge to `dev` and dispatch staging; after a release reaches `main`, dispatch production. A deploy is
+- **Code.** Merge to `dev` and dispatch staging; port the reviewed service changes to `main` through the scoped
+  service pull request or a later stable release, then dispatch production. A deploy is
   atomic, and Durable Objects pick up new code as they restart.
 - **Rollback.** `npx wrangler rollback --env <environment>` restores the previous code version. It does not undo
   storage, so storage changes must stay readable by the previous version.
@@ -266,7 +268,7 @@ few seconds without a deploy.
 | `ADMIN_TOKEN` | The old token stops at once. |
 | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | Create a new TURN key, set both secrets, then delete the old key in the dashboard; credentials minted under it stop working. |
 | `ANALYTICS_API_TOKEN` | Set the new token, run `POST /v1/admin/spend/measure` to confirm, then revoke the old one. |
-| `CLOUDFLARE_API_TOKEN` (GitHub) | Create a new deploy token, update both environments' secrets, then revoke the old token. |
+| `CLOUDFLARE_API_TOKEN` (GitHub) | Rotate staging and production tokens independently in their own environments; never share one token across both Workers. |
 
 ### 5.1 The kill switch
 
@@ -395,7 +397,7 @@ must say so before Internet play is enabled.
 
 | Symptom | Check |
 | --- | --- |
-| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, refuse administrator bypass and use custom branch rules. The expression holds for the `release` environment as configured today. |
+| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, prevent self-review, refuse administrator bypass and use custom branch rules. |
 | The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
 | `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |
@@ -413,10 +415,12 @@ The helper runs from either directory, checks service readiness, and supplies
 without this define remains offline. `--environment offline` explicitly builds
 without Internet services; `--environment production` selects production.
 
-The reusable launcher workflow selects staging on development branches and
-production on main/release branches. Release packaging always selects production
-for both clients and passes `--build-only`, as do production reusable launcher builds.
-These recipes embed the origin without checking live readiness. Default local builds,
+The reusable launcher workflow selects staging on every branch. Preview release packaging also selects staging.
+Only approved final stable-release packaging selects production for both clients. It requires
+`release-admin.ps1 -ProductionMultiplayerReady`, approved privacy and credential evidence,
+and a live service readiness check; the switch attests that the native on-screen disclosure
+has been inspected. Production builds cannot skip the readiness check with `--build-only`.
+Staging CI builds may compile without waiting for service availability. Default local builds,
 staging workflow builds and explicit `--check-only` calls still refuse an unavailable
 or disabled service. That check verifies feature flags, not an end-to-end game or TURN
 session. Follow the [production release order](#production-bootstrap-and-release-order)

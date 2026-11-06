@@ -147,7 +147,7 @@ void main() {
       'build',
       'windows',
       '--release',
-      '--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev',
+      '--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp-staging.topiaforge.dev',
     ]);
   });
 

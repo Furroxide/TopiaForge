@@ -244,7 +244,7 @@ void _registerReleaseProcessAndIoTests() {
     expect(dartCalls.last.arguments, containsAllInOrder(['compile', 'exe']));
     expect(
       dartCalls.last.arguments,
-      contains('-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp.topiaforge.dev'),
+      contains('-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp-staging.topiaforge.dev'),
     );
   });
 }
