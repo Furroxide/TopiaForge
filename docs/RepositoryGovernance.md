@@ -50,7 +50,7 @@ matrix jobs are never configured directly as required checks.
 | --- | --- |
 | `dev` | `Required / PR policy`, `Required / CI validation`, `Required / Unity source validation`, `Required / Registry validation`, `Required / Dependency review` |
 | `release/*` | The same five common checks. Each release-head update also produces `Required / Release packages` for later promotion. |
-| `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. |
+| `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. The scoped production service branch also runs this check on its own exact head. |
 
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
@@ -126,8 +126,9 @@ The stable PR-policy check enforces these routing rules:
 - Fork/community PRs may target only `dev`.
 - Dependabot PRs may target only `dev`.
 - `release/*` accepts same-repository stabilization branches only.
-- `main` accepts only the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
-  from that head's `release/release-policy.json`.
+- `main` accepts the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
+  from that head's `release/release-policy.json`. The exact `service/production-multiplayer` branch is a one-time,
+  file-allowlisted exception for the production multiplayer service launch.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
 - Once `v1.0.0-rc.1` exists, every introduced commit must contain a valid
@@ -140,14 +141,16 @@ has been granted.
 
 ## Trusted release and deployment environments
 
-Environments must exist before any workflow references them. Otherwise GitHub can auto-create an unprotected
-environment. Administrator bypass is disabled on every privileged environment. Self-review is temporarily allowed
-because there is one maintainer.
+Environments must exist before any workflow references them, or a workflow must verify that the protected
+environment already exists before naming it. Administrator bypass is disabled on every privileged environment.
+The control-plane environments require a separate dispatcher and prevent self-review.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
 | `release` | `v*` tags | Update-metadata signing, verification attestation, and automatic release publication |
 | `github-pages` | published `v*` tags | Deployment of release-derived Pages content |
+| `control-plane-staging` | `dev`, `main` | Staging multiplayer Worker deployment |
+| `control-plane-production` | `main` | Production multiplayer Worker deployment |
 
 Every GitHub job that can read the update-signing key, read the protected
 governance-audit token, or mutate a release declares the protected `release`
