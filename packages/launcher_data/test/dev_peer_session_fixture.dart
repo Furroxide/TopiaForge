@@ -6,17 +6,25 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
-/// Only installation is simulated. Sessions read real staging files and own
+/// By default, only installation is simulated. Sessions read staging files and own
 /// real inert VM processes through the production Windows creation/stop APIs.
 final class PeerSessionFixture extends LocalLauncherRepository {
-  PeerSessionFixture(this.root, this.index)
-    : super(
-        dataRoot: p.join(root.path, 'launcher-$index'),
-        repositoryRoot: root.path,
-      );
+  PeerSessionFixture(
+    this.root,
+    this.index, {
+    this.checkAlive = isLaunchProcessAlive,
+    this.stopOwnedProcess = stopLaunchProcess,
+    this.disposeRepository,
+  }) : super(
+         dataRoot: p.join(root.path, 'launcher-$index'),
+         repositoryRoot: root.path,
+       );
 
   final Directory root;
   final int index;
+  final GameProcessLiveness checkAlive;
+  final GameProcessStopper stopOwnedProcess;
+  final Future<void> Function()? disposeRepository;
   bool omitIdentity = false;
   void Function()? onReportPublished;
   Socket? _publicationSocket;
@@ -205,13 +213,18 @@ Future<void> main(List<String> args) async {
   );
 
   Future<void> retire() async {
-    final identity = receipt?.identity;
-    if (identity != null && await isLaunchProcessAlive(identity) != false) {
-      await stopLaunchProcess(identity);
+    final owned = receipt;
+    if (owned != null) {
+      final identity = owned.identity;
+      if (identity == null) {
+        throw StateError('Retain fixture until its process identity is known.');
+      }
+      // False proves this generation gone. A normal Windows stop return also
+      // proves exit, whether it stopped the held process or found it absent.
+      if (await checkAlive(identity) != false) {
+        await stopOwnedProcess(identity);
+      }
     }
-    if (identity != null && await isLaunchProcessAlive(identity) != false) {
-      throw StateError('Retain fixture until its owned process exits.');
-    }
-    await dispose();
+    await (disposeRepository ?? dispose)();
   }
 }
