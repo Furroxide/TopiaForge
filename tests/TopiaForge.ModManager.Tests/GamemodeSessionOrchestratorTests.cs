@@ -17,8 +17,8 @@ namespace TopiaForge.ModManager.Tests
         {
             GamemodeSessionResultTests.Run(root + "-results");
             TestMenuCancellationFailure(root + "-menu-cancel-failure");
-            TestDelayedSceneOwnership(root + "-delayed-scene");
-            TestCapturedReadiness(root + "-captured-readiness");
+            foreach (var ends in new[] { false, true }) TestDelayedSceneOwnership(root + "-delayed-scene-" + ends, ends);
+            foreach (var ends in new[] { false, true }) TestCapturedReadiness(root + "-captured-readiness-" + ends, ends);
             TestShutdownCancelsMainMenu(root + "-shutdown-menu");
             TestShutdownAdmission(root + "-shutdown-admission");
             TestRunningAndStaleHandles(root + "-running");
@@ -27,6 +27,8 @@ namespace TopiaForge.ModManager.Tests
             TestFailures(root + "-failures");
             TestSelfStop(root + "-self-stop");
             TestScenePolicy(root + "-scene-policy");
+            TestDeferredSceneFailure(root + "-deferred-scene-failure");
+            TestExplicitRestartBeforeSceneFailure(root + "-explicit-scene-restart");
             TestNativeDrain(root + "-native");
             TestNotificationStop(root + "-notification");
             TestReentrantAdmission(root + "-reentrant");
@@ -163,13 +165,47 @@ namespace TopiaForge.ModManager.Tests
                 var session = SessionFixture.ModeSession!;
                 test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-12, "World", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
                 test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(100, "Background", SceneLifecyclePhase.Loaded, SceneLoadMode.Additive, false));
+                test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(100, "Background", SceneLifecyclePhase.Unloaded, SceneLoadMode.Additive, false));
                 test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(101, "Snapshot", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true, true));
                 test.Host.Drain();
                 Assert(test.Hosted.Current.Phase == SessionPhase.Running, "duplicate, additive background and initial events do not end gameplay");
                 test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-20, "Replacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
-                if (ends) test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
-                else { test.Host.Drain(); Assert(ReferenceEquals(session, SessionFixture.ModeSession), "keep-controller never reconstructs a controller"); }
+                test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+                var terminal = test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == session.SessionId);
+                Assert(ReferenceEquals(session, SessionFixture.ModeSession), "scene notifications never reconstruct a controller");
+                Assert(ends ? terminal.Status == "succeeded" && terminal.Error == null
+                    : terminal.Status == "failed" && terminal.Error?.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage,
+                    "owned-scene loss stops end-session normally and explicitly fails keep-controller without fresh readiness");
             }
+        }
+
+        private static void TestDeferredSceneFailure(string root)
+        {
+            using var test = new SessionFixture(root);
+            var failures = 0;
+            var deferred = false;
+            test.Hosted.DiagnosticFailure += error =>
+            {
+                if (error.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage) failures++;
+            };
+            test.Hosted.StateChanged += state =>
+            {
+                if (state.Phase != SessionPhase.Running) return;
+                var scene = new SceneLifecycleEvent(-20, "Replacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true);
+                var posted = test.Dispatch.PostedCount;
+                test.Hosted.OnSceneLifecycle(scene);
+                test.Hosted.OnSceneLifecycle(scene);
+                // Stop admission defers while the Running notification is being published and its launch holds the lease.
+                for (var step = 0; step < 32 && test.Dispatch.PostedCount < posted + 4; step++) test.Host.Drain(1);
+                deferred = test.Dispatch.PostedCount == posted + 4 && test.Hosted.Current.Phase == SessionPhase.Running
+                    && test.Hosted.RunningWorldId == null;
+            };
+            test.Launch();
+            test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+            var terminal = test.Outcomes.Single(item => item.Kind == "session");
+            Assert(deferred && failures == 1 && terminal.Status == "failed"
+                && terminal.Error?.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage,
+                "duplicate scene notifications record one failure even when stop admission is deferred");
         }
 
         private static void TestNativeDrain(string root)
@@ -214,25 +250,78 @@ namespace TopiaForge.ModManager.Tests
             Assert(!test.Native.IsSceneBusy, "cancellation callback failure cannot abandon native admission");
         }
 
-        private static void TestDelayedSceneOwnership(string root)
+        private static void TestDelayedSceneOwnership(string root, bool endOnScene)
         {
-            using var test = new SessionFixture(root, endOnScene: true);
+            using var test = new SessionFixture(root, endOnScene: endOnScene);
             test.Launch();
+            var previous = SessionFixture.ModeSession!;
             test.Dispatch.HoldNextPost = true;
             test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-20, "OldReplacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
-            var stopped = SessionFixture.ModeSession!.StopAsync(); test.Wait(stopped);
+            var stopped = previous.StopAsync(); test.Wait(stopped);
             test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+            var retired = test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == previous.SessionId);
+            Assert(stopped.Result.Succeeded && retired.Status == "succeeded" && retired.Error == null,
+                "an explicit stop before the scene callback retains its own successful result and terminal outcome");
             test.Launch("new-scene-session");
             var newer = SessionFixture.ModeSession!.SessionId;
             test.Dispatch.Release();
             test.Until(() => !test.Host.HasPendingWork);
-            Assert(test.Hosted.Current.Identity?.SessionId == newer && test.Hosted.Current.Phase == SessionPhase.Running,
-                "a delayed scene event from a prior session cannot stop its successor");
+            Assert(test.Hosted.Current.Identity?.SessionId == newer && test.Hosted.Current.Phase == SessionPhase.Running
+                && test.Hosted.RunningWorldId == newer && test.Hosted.RunningSpawn.HasValue,
+                "a delayed scene event from a prior session cannot stop or invalidate its successor");
+            var stopNew = SessionFixture.ModeSession!.StopAsync(); test.Wait(stopNew);
+            test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+            Assert(test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == newer).Status == "succeeded",
+                "the stale event cannot attach a readiness failure to the newer session");
         }
 
-        private static void TestCapturedReadiness(string root)
+        private static void TestExplicitRestartBeforeSceneFailure(string root)
         {
-            using var test = new SessionFixture(root, endOnScene: true);
+            using var test = new SessionFixture(root);
+            test.Launch();
+            var previous = SessionFixture.ModeSession!;
+            var readiness = new WorldReadiness(new WorldSceneIdentity(-30, "Replacement"),
+                new TransformState(new Vec3(100, 0, 0), Quat.Identity, new Vec3(1, 1, 1)));
+            SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new ReplacementReadinessWorld(readiness)));
+            var readinessFailures = 0;
+            test.Hosted.DiagnosticFailure += error =>
+            {
+                if (error.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage) readinessFailures++;
+            };
+            test.Dispatch.HoldNextPost = true;
+            test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-20, "OldReplacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
+            Assert(test.Hosted.RunningWorldId == null && test.Hosted.RunningSpawn == null,
+                "scene invalidation still closes presence immediately before an explicit restart");
+            var restarted = previous.RestartAsync(); test.Wait(restarted);
+            var successor = SessionFixture.ModeSession!;
+            Assert(restarted.Result.Succeeded && successor.SessionId != previous.SessionId
+                && ReferenceEquals(successor.World, readiness) && test.Hosted.RunningSpawn == readiness.Spawn,
+                "an explicit restart can retire the invalidated session and commit fresh provider readiness");
+            var retired = test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == previous.SessionId);
+            Assert(retired.Status == "succeeded" && retired.Error == null,
+                "the old session keeps the explicit restart's normal retirement outcome");
+            test.Dispatch.Release();
+            test.Until(() => !test.Host.HasPendingWork);
+            Assert(test.Hosted.Current.Phase == SessionPhase.Running && test.Hosted.RunningWorldId == successor.SessionId
+                && test.Hosted.RunningSpawn == readiness.Spawn && readinessFailures == 0,
+                "the delayed old-scene callback cannot fail the restart or invalidate its successor");
+            var stopped = successor.StopAsync(); test.Wait(stopped);
+            test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+            var terminal = test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == successor.SessionId);
+            Assert(stopped.Result.Succeeded && terminal.Status == "succeeded" && terminal.Error == null && readinessFailures == 0,
+                "neither retirement inherits an error from the losing scene callback");
+        }
+
+        private sealed class ReplacementReadinessWorld : IWorldInstance
+        {
+            internal ReplacementReadinessWorld(WorldReadiness readiness) { Readiness = readiness; }
+            public WorldReadiness Readiness { get; }
+            public void Dispose() { }
+        }
+
+        private static void TestCapturedReadiness(string root, bool endOnScene)
+        {
+            using var test = new SessionFixture(root, endOnScene: endOnScene);
             var world = new ChangingReadinessWorld();
             SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(world));
             test.Launch();

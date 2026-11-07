@@ -270,6 +270,7 @@ namespace TopiaForge.ModManager
             internal IWorldInstance? Instance;
             internal WorldReadiness? Readiness;
             internal bool PresenceInvalidated;
+            internal bool PresenceFailureReported;
             internal IGamemodeFactory? Factory;
             internal IGamemodeController? Controller;
             internal IGamemodeParticipantController? ParticipantController;

@@ -2631,9 +2631,15 @@ The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in
   repeating it does not replenish allowances. Running credit, teleport credit and strikes survive world restarts.
   A link or stream return retains the last accepted anchor and those allowances, so ordinary movement during a short
   interruption stands while a new arbitrary position does not. Disconnected and stale positions still fail motion.
-  A keep-controller session retains its controller after native replacement, but its old readiness no longer supplies
-  a trusted world or spawn. Fresh world readiness or a host placement is required. Host Players placements synchronize
-  scene invalidation before recording their landing, including actions issued before the next presence receive stage.
+  Losing the owned scene or activating a replacement immediately withholds the running world and spawn. A local
+  keep-controller session still Running when its queued scene handler executes ends with a failed session outcome:
+  the provider's immutable readiness cannot validate replacement content and spawn. The host must start the world again;
+  a Players placement cannot recover that session. An explicit stop, restart, new launch or menu return that starts
+  retirement first keeps its own result. The delayed scene handler cannot fail that retirement or affect a successor.
+  End-session worlds and followers retain their normal stop path, and followers re-follow the host. Initial snapshots,
+  current-instance activation and unrelated background additive notifications keep the controller running.
+  Host Players placements still synchronize scene invalidation before recording their landing, including actions issued
+  before the next presence receive stage. They do not substitute for world readiness while a session starts or stops.
 - **Corrections.** A pose that breaks a rule is dropped, and the player is sent back to its last accepted position under
   a new correction number (`Correct`), keeping the credit it had: a correction never refills the bank, so a cheat is
   struck again as soon as it runs past the limit. Poses still carrying the old number are ignored for a second, as they
