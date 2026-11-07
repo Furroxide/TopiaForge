@@ -23,6 +23,9 @@ namespace TopiaForge.ModManager
         internal TransformState? RunningSpawn => lifecycle.Current.Phase == SessionPhase.Running && current?.PresenceInvalidated == false
             ? current.Readiness?.Spawn : null;
 
+        // A provider's captured readiness cannot establish content or spawn readiness in another scene.
+        internal const string LostWorldReadinessMessage = "The session ended because its world scene changed and fresh world readiness cannot be established. Start the world again to continue.";
+
         // Keeping a controller alive does not make its old scene's readiness valid in a replacement scene.
         private static bool InvalidatesPresenceReadiness(SessionRecord record, SceneLifecycleEvent scene)
         {

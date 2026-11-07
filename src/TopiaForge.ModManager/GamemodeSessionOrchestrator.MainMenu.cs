@@ -147,9 +147,16 @@ namespace TopiaForge.ModManager
             {
                 var record = current;
                 if (record == null || !ReferenceEquals(record.Identity, owner) || lifecycle.Current.Phase != SessionPhase.Running
-                    || (record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy)) return;
-                if (InvalidatesPresenceReadiness(record, scene))
-                    RequestBoundStop(record.Identity.SessionId);
+                    || !InvalidatesPresenceReadiness(record, scene)) return;
+                // The provider owns immutable readiness for the lost scene. Retaining the controller here would
+                // leave Running with presence permanently closed; no existing contract can revalidate its world.
+                if (record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy
+                    && !record.PresenceFailureReported)
+                {
+                    record.PresenceFailureReported = true; // Stop admission may defer; duplicate events report once.
+                    record.Errors.Add(new InvalidOperationException(LostWorldReadinessMessage));
+                }
+                RequestBoundStop(record.Identity.SessionId);
             });
         }
     }
