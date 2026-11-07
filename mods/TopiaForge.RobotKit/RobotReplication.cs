@@ -31,6 +31,11 @@ namespace TopiaForge.RobotKit
                 RobotReplicationWire.Spawn(payload);
                 if (IsGuestOrigin(replication))
                 {
+                    // A host callback acting for a guest must report that it cannot honor autonomy.
+                    // Client prediction and untrusted wire input retain defensive canonicalization.
+                    if (replication.Realm != InternalNetRealm.Client && request.BrainMode == RobotBrainMode.Autonomous)
+                        return OperationResult<IRobotAgent>.Failure(ModErrorCode.NotAuthoritative,
+                            "A guest-origin callback cannot spawn an Autonomous robot, even when it runs on the host. Request Dormant instead.");
                     request = WithoutNativeBrain(request);
                     payload = RobotReplicationWire.Spawn(request);
                 }

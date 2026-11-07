@@ -79,6 +79,11 @@ namespace TopiaForge.ModManager.Tests
                     "original invalid brain/talk input must not be erased by guest normalization");
                 Check(guest.Agents.Count == 0 && host.Agents.Count == 0, "invalid input invokes no prediction/native construction");
             }
+            var server = new AuthorityMod(rig.Host, ModExecutionContext.GamemodeServer);
+            using (rig.Host.Runtime.Intents.EnterForwarded(WorldPeer.ModId, IntentSource.UiCallback, owner.Peer.Control.Id.Value))
+                foreach (var request in invalid)
+                    Check(host.Provider.Spawn(server.Seam, request).ErrorCode == ModErrorCode.InvalidArgument,
+                        "forwarded host validates original inputs before deciding authority");
             rig.Frames(4);
             Check(guest.Agents.Count == 0 && host.Agents.Count == 0 && owner.Peer.Client.OwnedObjects == 0 &&
                 rig.Host.Runtime.Spawns.Live().Count == hostRecords && owner.Peer.Runtime.Spawns.Live().Count == guestRecords,
@@ -146,8 +151,18 @@ namespace TopiaForge.ModManager.Tests
                 Check(server.Seam.SubmitEntityCommand(body, RobotReplicationWire.Kind, Brain()).ErrorCode == ModErrorCode.NotAuthoritative &&
                     server.Seam.SubmitEntityCommand(body, RobotReplicationWire.Kind, Talk()).ErrorCode == ModErrorCode.NotAuthoritative,
                     "raw host submission retains forwarded origin");
-                var forwarded = host.Provider.Spawn(server.Seam, Autonomous()).Value!;
-                Safe(host.Agents[forwarded.Id].Request, "forwarded host spawn");
+                var count = host.Agents.Count;
+                var records = rig.Host.Runtime.Spawns.Live().Count;
+                var refused = host.Provider.Spawn(server.Seam, Autonomous());
+                Check(refused.ErrorCode == ModErrorCode.NotAuthoritative && refused.Value == null,
+                    "forwarded host Autonomous spawn reports refusal, not a silently changed robot");
+                Check(host.Agents.Count == count && rig.Host.Runtime.Spawns.Live().Count == records,
+                    "refused forwarded spawn creates no native body or ledger entry");
+                Check(host.Provider.Spawn(server.Seam, new RobotAgentSpawnRequest(Vec3.Zero,
+                    brainMode: RobotBrainMode.Autonomous, interaction: RobotInteractionOptions.DisableNativeTalk()))
+                    .ErrorCode == ModErrorCode.NotAuthoritative, "Autonomous refusal does not depend on native talk");
+                var forwarded = host.Provider.Spawn(server.Seam, new RobotAgentSpawnRequest(Vec3.Zero)).Value!;
+                Safe(host.Agents[forwarded.Id].Request, "forwarded host Dormant/default spawn");
                 var record = rig.Host.Runtime.Spawns.Find(host.Agents[forwarded.Id])!;
                 Safe(RobotReplicationWire.Spawn(((InternalSpawnDescriptor)record.Description.Descriptor!).Payload).Request, "forwarded host ledger");
                 var malformed = Brain().Concat(new byte[] { 99 }).ToArray();

@@ -64,12 +64,12 @@ namespace TopiaForge.Mods.Testing
             return false;
         }
 
-        private OperationResult<bool> Invoke(Action callback, string description)
+        private OperationResult<bool> Invoke(Action callback, string description, bool playerAction = true)
         {
             var failures = 0;
             foreach (var subscriber in callback.GetInvocationList())
             {
-                try { ((Action)subscriber)(); }
+                try { FakeGuestOrigin.Run(WireBounded && playerAction, () => ((Action)subscriber)()); }
                 catch (Exception exception)
                 {
                     failures++;
@@ -85,7 +85,7 @@ namespace TopiaForge.Mods.Testing
             var failures = 0;
             foreach (var subscriber in callback.GetInvocationList())
             {
-                try { ((Action<T>)subscriber)(value); }
+                try { FakeGuestOrigin.Run(WireBounded, () => ((Action<T>)subscriber)(value)); }
                 catch (Exception exception)
                 {
                     failures++;
@@ -130,7 +130,7 @@ namespace TopiaForge.Mods.Testing
         {
             var handlers = Dismissed;
             if (handlers == null) return;
-            Invoke(handlers, "surface '" + Id + "' dismissal");
+            Invoke(handlers, "surface '" + Id + "' dismissal", playerAction: false);
         }
 
         private void EnsureActive()

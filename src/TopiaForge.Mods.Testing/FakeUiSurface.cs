@@ -89,6 +89,13 @@ namespace TopiaForge.Mods.Testing
             if (wasVisible) InvokeDismissed();
         }
 
+        /// <summary>
+        /// Simulates the player closing this surface. A remote player's dismissal carries guest origin;
+        /// <see cref="Hide"/> remains a server-initiated operation.
+        /// </summary>
+        [RequiresTopiaForge("0.2.0")]
+        public void DismissFromPlayer() => FakeGuestOrigin.Run(WireBounded, Hide);
+
         /// <inheritdoc/>
         public void SetBody(string body)
         {
