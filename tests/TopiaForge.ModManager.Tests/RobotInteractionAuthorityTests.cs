@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -6,6 +7,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TopiaForge.ModManager.Core.Multiplayer;
+using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -13,6 +15,11 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class RobotInteractionAuthorityTests
     {
+        private delegate void RunProbe(string scenario, IModLifetime lifetime, IRuntimeReplication replication,
+            Func<IRuntimeReplication, RobotAgentSpawnRequest, Func<bool>, OperationResult<IRobotAgent>> spawn,
+            Func<IDisposable> forwarded, Action stopOwner, Action<string> forgetId,
+            Action<int> awaitAdoption, Func<long> sentRequests, Action<string, string?> settleClientCleanup);
+
         internal static void Run()
         {
             var root = Program.FindRepoRoot();
@@ -45,27 +52,61 @@ namespace TopiaForge.ModManager.Tests
                     emitted.Diagnostics.Where(diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
             Console.WriteLine("Robot interaction authority: production callback sources compiled.");
             var probeType = Assembly.Load(bytes.ToArray()).GetType("InteractionProbe", true)!;
-            foreach (var scenario in new[] { "retained", "guest-custom", "replacement", "owner-stop", "world-retired", "policies" })
+            foreach (var scenario in new[]
+            {
+                "retained", "guest-custom", "replacement", "owner-stop", "world-retired", "policies", "worker",
+                "client-live", "client-owner-stop", "client-retired-despawn", "client-retired-dispose"
+            })
             {
                 var rig = AuthorityRig.Create(players: 1);
                 rig.Host.World.Proxies.IsSharedMod = mod => mod == WorldPeer.ModId || mod == "io.example.robot-provider";
                 var probe = Activator.CreateInstance(probeType)!;
                 var decorate = (Func<IRobotAgent, RobotAgentSpawnRequest, IRobotAgent>)probeType.GetMethod("Decorate")!
                     .CreateDelegate(typeof(Func<IRobotAgent, RobotAgentSpawnRequest, IRobotAgent>), probe);
-                var robots = new FirstPartyRobots(rig.Host, decorate);
-                _ = new FirstPartyRobots(rig.Players[0]);
-                var owner = new AuthorityMod(rig.Host, ModExecutionContext.GamemodeServer);
+                var player = rig.Players[0];
+                var clientScenario = scenario.StartsWith("client-", StringComparison.Ordinal);
+                var hostRobots = new FirstPartyRobots(rig.Host, clientScenario ? null : decorate);
+                var localBodies = new Dictionary<IEntity, FakeWorldObject>();
+                var clientRobots = new FirstPartyRobots(player, clientScenario ? (inner, request) =>
+                {
+                    var body = decorate(inner, request);
+                    localBodies.Add(body, ((FirstPartyRobot)inner).Body);
+                    return body;
+                } : null);
+                // The same-ID scenario needs the fake engine to keep each body distinct while the
+                // production command table continues to resolve both handles by their shared ID.
+                if (clientScenario)
+                    player.Scene.ProviderObject = entity => localBodies.TryGetValue(entity, out var body) ? body : null;
+
+                var owner = clientScenario
+                    ? new AuthorityMod(player, ModExecutionContext.Participant)
+                    : new AuthorityMod(rig.Host, ModExecutionContext.GamemodeServer);
                 using var lifetime = owner.Lifetime;
-                var run = (Action<string, IModLifetime, IRuntimeReplication,
-                    Func<IRuntimeReplication, RobotAgentSpawnRequest, OperationResult<IRobotAgent>>,
-                    Func<IDisposable>, Action>)probeType.GetMethod("Run")!.CreateDelegate(typeof(Action<string,
-                        IModLifetime, IRuntimeReplication,
-                        Func<IRuntimeReplication, RobotAgentSpawnRequest, OperationResult<IRobotAgent>>,
-                        Func<IDisposable>, Action>), probe);
-                run(scenario, lifetime, owner.Seam, robots.Provider.Spawn,
-                    () => rig.Host.Runtime.Intents.EnterForwarded(WorldPeer.ModId,
-                        IntentSource.UiCallback, rig.Players[0].Control.Id.Value),
-                    () => owner.Lifetime.BeginStop());
+                var run = (RunProbe)probeType.GetMethod("Run")!.CreateDelegate(typeof(RunProbe), probe);
+                run(scenario, lifetime, owner.Seam, (clientScenario ? clientRobots : hostRobots).Provider.Spawn,
+                    () => rig.Host.Runtime.Intents.EnterForwarded(WorldPeer.ModId, IntentSource.UiCallback, player.Control.Id.Value),
+                    () => lifetime.BeginStop(), ForgetId, AwaitAdoption, () => player.Counters().AuthorityRequestsSent, SettleClientCleanup);
+
+                void ForgetId(string id)
+                {
+                    if (clientScenario) clientRobots.Provider.Forget(id);
+                    else rig.Host.Runtime.Spawns.Remove(rig.Host.Runtime.Spawns.Live().Single(record => record.EntityKey == id));
+                }
+
+                void AwaitAdoption(int count)
+                {
+                    if (!rig.Run(() => player.Client.OwnedObjects == count))
+                        throw new InvalidOperationException("Robot cleanup test could not adopt " + count + " client robots.");
+                }
+
+                void SettleClientCleanup(string original, string? successor)
+                {
+                    if (!rig.Run(() => hostRobots.Agents.Values.Any(robot => robot.Name == original && !robot.IsAlive)))
+                        throw new InvalidOperationException("The original prediction did not retire on the host.");
+                    rig.Frames(4);
+                    if (successor != null && !hostRobots.Agents.Values.Any(robot => robot.Name == successor && robot.IsAlive))
+                        throw new InvalidOperationException("Retired cleanup reached the same-ID replacement on the host.");
+                }
                 Console.WriteLine("Robot interaction authority: " + scenario + " passed.");
             }
         }
