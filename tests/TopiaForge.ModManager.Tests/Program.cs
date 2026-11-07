@@ -294,7 +294,7 @@ namespace TopiaForge.ModManager.Tests
                 }
                 finally
                 {
-                    lifecycleDirectory.Delete(recursive: true);
+                    TryDelete(lifecycleDirectory);
                 }
             }
 
@@ -402,7 +402,7 @@ namespace TopiaForge.ModManager.Tests
                 }
                 finally
                 {
-                    manifestDirectory.Delete(recursive: true);
+                    TryDelete(manifestDirectory);
                 }
             }
 
