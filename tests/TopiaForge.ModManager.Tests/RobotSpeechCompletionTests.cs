@@ -11,8 +11,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
-            FarHostSequential(); NoRecipients(); AllListeners(); Failures(); AcknowledgementValidation(); ResetContinuation();
-            Console.WriteLine("Robot speech completion: 6 focused groups passed.");
+            FarHostSequential(); SequentialAtPaceBoundary(); NoRecipients(); AllListeners(); Failures(); AcknowledgementValidation(); ResetContinuation();
+            Console.WriteLine("Robot speech completion: 7 focused groups passed.");
         }
         private static void Check(bool value, string reason)
         { if (!value) throw new InvalidOperationException("Robot speech completion: " + reason); }
@@ -45,6 +45,46 @@ namespace TopiaForge.ModManager.Tests
             dialogue.GetAwaiter().GetResult();
             Check(completed == 2 && rig.World.Host.World.Speech.ActiveCount == 0, "two sequential awaited lines retire without pending work");
             Console.WriteLine("FarHostSequential: passed two controlled native completions, no truncation or refusal.");
+        }
+
+        private static void SequentialAtPaceBoundary()
+        {
+            using var rig = new RobotSpeechRig(0);
+            var clock = rig.World.Clock;
+            var speech = rig.World.Host.World.Speech;
+            var body = rig.Canonical;
+            async Task Dialogue()
+            {
+                var first = await rig.Robot.SayAsync("First line.");
+                Check(first.Succeeded && first.Value, "first local playback completes successfully");
+                var second = await rig.Robot.SayAsync("Second line.");
+                Check(second.Succeeded && second.Value, "the next awaited line completes successfully");
+            }
+
+            // The first read checks the outgoing budget; the next records the playback start.
+            // Another read for the pace would move its deadline one microsecond later.
+            clock.ReadIncrement = 1;
+            var started = clock.Now + 1;
+            var dialogue = Dialogue();
+            clock.ReadIncrement = 0;
+            Check(!dialogue.IsCompleted && body.SpeechPlays == 1, "the first line begins local playback");
+            body.SpeechCompletions[0].SetResult(OperationResult<bool>.Success(true));
+
+            clock.Now = started + 999_999;
+            var early = rig.Robot.SayAsync("Too soon.");
+            Check(early.IsCompleted && early.Result.ErrorCode == ModErrorCode.RateLimited && !dialogue.IsCompleted,
+                "one microsecond before the boundary, the first line waits and an early call is rate limited");
+
+            clock.Advance(1);
+            speech.Tick();
+            Check(!dialogue.IsCompleted && body.SpeechPlays == 2 && !body.SpeechTokens[0].IsCancellationRequested,
+                "at the one-second boundary, the first line retires and its continuation starts the next line");
+
+            body.SpeechCompletions[1].SetResult(OperationResult<bool>.Success(true));
+            clock.Advance(1_000_000);
+            speech.Tick();
+            Check(dialogue.IsCompleted && speech.ActiveCount == 0, "both sequential lines retire");
+            dialogue.GetAwaiter().GetResult();
         }
 
         private static void NoRecipients()
