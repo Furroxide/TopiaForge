@@ -139,7 +139,7 @@ cut off their predecessor, including when the host is far away. Missing reports 
 within the 15-second lifetime; task completion is not proof of audible sound. Native subtitle-only or
 pre-recorded-clip overrides are outside this replicated speech contract.
 
-See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/c43ed92e963b0f662996eb6649f412e1d9176485/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
+See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/d87c0cbdb7500c03c419b5fbdc4b78cda3e33e57/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
 
 ## Deterministic Robotopia gameplay first
 
