@@ -59,7 +59,9 @@ namespace TopiaForge.ModRuntime.Tests
                 var item = generated.RootElement[0];
                 var project = item.GetProperty("project").GetString()!;
                 var assembly = item.GetProperty("assembly").GetString()!;
-                RunGeneratedTool(GeneratedTool.Dotnet, repository, "build", Path.Combine(project, Path.ChangeExtension(assembly, ".csproj")), "-c", "Release", "--nologo");
+                RunGeneratedTool(GeneratedTool.Dotnet, repository, "build",
+                    Path.Combine(project, Path.ChangeExtension(assembly, ".csproj")), "-c", "Release", "--nologo",
+                    "--disable-build-servers", "-nr:false", "-p:UseSharedCompilation=false");
                 foreach (var source in item.GetProperty("sources").EnumerateObject())
                     Assert(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(project, source.Name)))) == source.Value.GetString(),
                         "building must not rewrite generated source or manifest: " + source.Name);

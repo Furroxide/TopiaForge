@@ -50,12 +50,21 @@ namespace TopiaForge.TestSupport
                 Console.CancelKeyPress += cancel;
                 try
                 {
-                    var stdout = child.StandardOutput.BaseStream.CopyToAsync(Console.OpenStandardOutput());
-                    var stderr = child.StandardError.BaseStream.CopyToAsync(Console.OpenStandardError());
+                    using var drain = new CancellationTokenSource();
+                    var stdout = child.StandardOutput.BaseStream.CopyToAsync(Console.OpenStandardOutput(), drain.Token);
+                    var stderr = child.StandardError.BaseStream.CopyToAsync(Console.OpenStandardError(), drain.Token);
                     child.WaitForExit();
                     safeToClean = true;
                     code = child.ExitCode;
-                    Task.WhenAll(stdout, stderr).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+                    try
+                    {
+                        Task.WhenAll(stdout, stderr).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+                    }
+                    catch (TimeoutException)
+                    {
+                        drain.Cancel();
+                        Console.Error.WriteLine("Timed out draining test process output after exit.");
+                    }
                 }
                 finally
                 {
@@ -99,7 +108,10 @@ namespace TopiaForge.TestSupport
                 new DirectoryInfo(directory).Delete();
                 return;
             }
-            foreach (var entry in new DirectoryInfo(directory).EnumerateFileSystemInfos())
+            var root = new DirectoryInfo(directory);
+            if ((attributes & FileAttributes.ReadOnly) != 0)
+                root.Attributes = attributes & ~FileAttributes.ReadOnly;
+            foreach (var entry in root.EnumerateFileSystemInfos())
             {
                 if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
                 {
@@ -113,8 +125,6 @@ namespace TopiaForge.TestSupport
                     entry.Delete();
                 }
             }
-            var root = new DirectoryInfo(directory);
-            root.Attributes &= ~FileAttributes.ReadOnly;
             root.Delete();
         }
     }
