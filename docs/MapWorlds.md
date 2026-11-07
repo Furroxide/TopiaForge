@@ -73,10 +73,19 @@ pose, including the complete parent chain and import root, even without a live
 marker. The native adapter converts each local transform with the game's helpers.
 Position preserves the full affine chain, including rotated, nonuniform and
 reflected scales. Rotation is the normalized product of converted quaternions;
-lossy scale is the length of each world basis axis, assigning an odd reflection to
-X. A position/rotation/scale value cannot encode shear; do not reconstruct parent
-matrices from it to place descendants. Native lossy-scale and prefab-expansion
-parity still require in-game qualification.
+each scale magnitude is the length of its world basis column. Its sign is negative
+only when the dot product of that column with the corresponding composed-rotation
+axis is negative; a zero dot product chooses positive. This preserves reflections
+on their respective axes when the columns align with those rotation axes, such as
+scales `(2, -3, 4)` and `(-1, -1, 1)` with identity rotations.
+
+The returned position/rotation/scale reconstructs the basis only when each column
+aligns with its corresponding composed-rotation axis. Shear remains approximate,
+and a reflected parent followed by a rotated child can also be approximate even
+without shear, because the composed rotation is preserved. Do not reconstruct
+parent matrices from this pose to place descendants. This scale convention does
+not promise equivalence to Unity's `lossyScale`. Native coordinate-helper and
+prefab-expansion parity still require in-game qualification.
 
 `WorldTransform` is captured when the index is built. It does not follow later
 physics or import-root movement: use `context.Entities.TryGetTransform` with the

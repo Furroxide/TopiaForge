@@ -42,6 +42,8 @@ namespace TopiaForge.ModManager.Tests
             Expect<InvalidOperationException>(() => _ = child.WorldTransform, contains: "ended");
             Expect<InvalidOperationException>(() => _ = vent.WorldTransform, contains: "ended");
             ReflectionAndQuaternion();
+            SignedScalesAndRotatedParents();
+            NonAlignedReflectionAndZeroProjection();
             ImportRootAndLifetime();
             UnrepresentablePoseKeepsMap();
             LargeFiniteQuaternion();
@@ -100,9 +102,57 @@ namespace TopiaForge.ModManager.Tests
                 .AddEntity("e-child", "Euler child", editorTransform: new MapTransform(new Vec3(1, 2, 3), Vec3.Zero, new Vec3(1, 1, 1)), parentId: "euler")
                 .AddEntity("q-child", "Quaternion child", editorTransform: new MapTransform(new Vec3(1, 2, 3), Vec3.Zero, new Vec3(1, 1, 1)), parentId: "quaternion");
             Near(map.Entity("child").WorldTransform.Position, new Vec3(-12, -6, 12), "reflected parent position");
-            Near(map.Entity("child").WorldTransform.Scale, new Vec3(-2, 3, 4), "odd reflection sign assigned to X");
+            Near(map.Entity("child").WorldTransform.Scale, new Vec3(2, -3, 4), "reflection retains its Y axis");
             Near(map.Entity("e-child").WorldTransform.Position, new Vec3(-3, 2, -1), "Euler converted before hierarchy composition");
             Near(map.Entity("e-child").WorldTransform.Position, map.Entity("q-child").WorldTransform.Position, "normalized quaternion/Euler parity");
+        }
+        private static void SignedScalesAndRotatedParents()
+        {
+            for (var mask = 0; mask < 8; mask++)
+            {
+                var sx = (mask & 1) == 0 ? 1 : -1;
+                var sy = (mask & 2) == 0 ? 1 : -1;
+                var sz = (mask & 4) == 0 ? 1 : -1;
+                using var map = new FakeAuthoredMap()
+                    .AddEntity("plain", "Plain", editorTransform: new MapTransform(Vec3.Zero, Vec3.Zero, new Vec3(2 * sx, 3 * sy, 4 * sz)))
+                    .AddEntity("rotated", "Rotated", editorTransform: new MapTransform(Vec3.Zero, new Vec3(0, 0, 90), new Vec3(2 * sx, 3 * sy, 4 * sz)))
+                    .AddEntity("child", "Child", editorTransform: new MapTransform(Vec3.Zero, new Vec3(0, 0, 90), new Vec3(5, 6, 7)), parentId: "rotated")
+                    .AddEntity("grandchild", "Grandchild", editorTransform: new MapTransform(Vec3.Zero, Vec3.Zero, new Vec3(-1, -1, 1)), parentId: "child");
+                var plain = map.Entity("plain").WorldTransform;
+                Near(plain.Scale, new Vec3(2 * sx, 3 * sy, 4 * sz), "all axis signs survive identity rotation");
+                Basis(plain, new Vec3(2 * sx, 0, 0), new Vec3(0, 3 * sy, 0), new Vec3(0, 0, 4 * sz), "plain reconstruction");
+                var rotated = map.Entity("rotated").WorldTransform;
+                Near(rotated.Scale, plain.Scale, "rotated mirrored record retains axis signs");
+                Basis(rotated, new Vec3(0, -2 * sx, 0), new Vec3(3 * sy, 0, 0), new Vec3(0, 0, 4 * sz), "rotated reconstruction");
+                var grandchild = map.Entity("grandchild").WorldTransform;
+                Near(grandchild.Scale, new Vec3(-15 * sy, -12 * sx, 28 * sz), "multiple parents permute and cancel reflections");
+                Basis(grandchild, new Vec3(15 * sy, 0, 0), new Vec3(0, 12 * sx, 0), new Vec3(0, 0, 28 * sz), "nested reconstruction");
+            }
+        }
+        private static void NonAlignedReflectionAndZeroProjection()
+        {
+            // Sx * Rz(30) has orthogonal columns but cannot be reconstructed with the
+            // preserved Rz(30) and diagonal scale. The complete basis still places children.
+            var radians = Math.PI / 12;
+            var rotation = new Quat(0, 0, (float)Math.Sin(radians), (float)Math.Cos(radians));
+            var reflected = AuthoredAffine.From(Vec3.Zero, Quat.Identity, new Vec3(-2, 2, 2))
+                .Append(AuthoredAffine.From(Vec3.Zero, rotation, new Vec3(1, 1, 1)));
+            var sqrt3 = (float)Math.Sqrt(3);
+            Near(reflected.X, new Vec3(-sqrt3, 1, 0), "noncommuting reflection X column");
+            Near(reflected.Y, new Vec3(1, sqrt3, 0), "noncommuting reflection Y column");
+            Near(reflected.Pose.Scale, new Vec3(-2, 2, 2), "nonaligned projection signs");
+            Near(reflected.Pose.Rotation * new Vec3(1, 0, 0), new Vec3(sqrt3 / 2, 0.5f, 0), "composed rotation remains unchanged");
+            Near(reflected.Pose.Rotation * new Vec3(reflected.Pose.Scale.X, 0, 0), new Vec3(-sqrt3, -1, 0), "nonaligned TRS remains approximate");
+            Near(reflected.Append(AuthoredAffine.From(new Vec3(1, 1, 0), Quat.Identity, new Vec3(1, 1, 1))).Position,
+                new Vec3(1 - sqrt3, 1 + sqrt3, 0), "nonaligned reflection retains full affine child position");
+            var perpendicular = new AuthoredAffine(Vec3.Zero, new Vec3(0, 2, 0), new Vec3(0, 0, 3), new Vec3(4, 0, 0), Quat.Identity);
+            Near(perpendicular.Pose.Scale, new Vec3(2, 3, 4), "zero projections choose positive nonzero magnitudes on every axis");
+        }
+        internal static void Basis(TransformState pose, Vec3 x, Vec3 y, Vec3 z, string reason)
+        {
+            Near(pose.Rotation * new Vec3(pose.Scale.X, 0, 0), x, reason + " X");
+            Near(pose.Rotation * new Vec3(0, pose.Scale.Y, 0), y, reason + " Y");
+            Near(pose.Rotation * new Vec3(0, 0, pose.Scale.Z), z, reason + " Z");
         }
         private static void ImportRootAndLifetime()
         {
@@ -117,7 +167,7 @@ namespace TopiaForge.ModManager.Tests
                 value => value, value => TransformState.Identity, () => alive);
             var retained = map.Entity("root");
             Near(retained.WorldTransform.Position, new Vec3(26, 30, 52), "full import-root basis");
-            Near(retained.WorldTransform.Scale, new Vec3(-2, (float)Math.Sqrt(10), 4), "root lossy scale");
+            Near(retained.WorldTransform.Scale, new Vec3(2, (float)Math.Sqrt(10), 4), "root lossy scale with positive zero-projection sign");
             var bound = map.ForPackage(_ => OperationResult<byte[]>.Success(Array.Empty<byte>()));
             Assert(ReferenceEquals(retained, bound.Entity("root")), "package facade shares imported pose");
             alive = false;
