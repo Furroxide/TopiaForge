@@ -6,7 +6,12 @@ namespace TopiaForge.RobotKit
     internal enum RobotComposedRefusal
     {
         SceneUnavailable, HostCount, MapRoot, EntryBudget, SceneShape, SceneIdentity,
-        EntityShape, AssetReferences, AmbiguousIdentity, NotPresent, NativeBinding
+        EntityShape, AssetReferences, AmbiguousIdentity, NotPresent, NativeBinding, ContextUnverified
+    }
+
+    internal enum RobotComposedRetirement
+    {
+        WorldChanged, NativeLifetimeEnded, NativeIdentityChanged, NativeIdentityReadFailed, VerificationTimedOut
     }
 
     // 2597's all-asset collector is deliberately not treated as a lore-only collector.
