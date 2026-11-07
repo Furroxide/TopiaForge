@@ -64,6 +64,25 @@ namespace TopiaForge.ModManager.Tests
                 var replacement = new WorldSessionSnapshot(WorldSessionPhase.Running, new Session("private-replacement"), next.World, 4);
                 RobotKitDiagnostics.ReportComposedDiscovery(replacement, RobotComposedRefusal.HostCount);
                 Check(logger.Messages.Count == count + 2, "actual session replacement reports again with the same world identity");
+
+                const string timedOut = "RobotKit composed context retired: VerificationTimedOut.";
+                const string readFailed = "RobotKit composed context retired: NativeIdentityReadFailed.";
+                RobotKitDiagnostics.ReportComposedRetirement(state, RobotComposedRetirement.VerificationTimedOut);
+                RobotKitDiagnostics.ReportComposedRetirement(next, RobotComposedRetirement.VerificationTimedOut);
+                RobotKitDiagnostics.ReportComposedRetirement(replacement, RobotComposedRetirement.VerificationTimedOut);
+                RobotKitDiagnostics.ReportComposedRetirement(state, RobotComposedRetirement.NativeIdentityReadFailed);
+                for (var i = 0; i < 1000; i++)
+                {
+                    RobotKitDiagnostics.ReportComposedRetirement(rebound, RobotComposedRetirement.VerificationTimedOut);
+                    RobotKitDiagnostics.ReportComposedRetirement(next, RobotComposedRetirement.VerificationTimedOut);
+                    RobotKitDiagnostics.ReportComposedRetirement(replacement, RobotComposedRetirement.VerificationTimedOut);
+                    RobotKitDiagnostics.ReportComposedRetirement(state, RobotComposedRetirement.NativeIdentityReadFailed);
+                    RobotKitDiagnostics.ReportComposedDiscovery(state, RobotComposedRefusal.HostCount);
+                    RobotKitDiagnostics.ReportComposedDiscovery(next, RobotComposedRefusal.HostCount);
+                    RobotKitDiagnostics.ReportComposedDiscovery(replacement, RobotComposedRefusal.HostCount);
+                }
+                Check(logger.Messages.Skip(count + 2).SequenceEqual(new[] { timedOut, timedOut, timedOut, readFailed }),
+                    "interleaved retirement and discovery retain each world's reason budget across publications and sessions");
             }
             finally { RobotKitDiagnostics.Clear(logger); }
         }

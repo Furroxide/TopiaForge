@@ -105,6 +105,13 @@ missing scene identity, entity shape, asset references, ambiguous identity, abse
 failure. They contain no asset identifiers, native payloads, paths or session values. Check game compatibility
 for `NativeBinding`; for structural/reference codes check the imported world's supported composition data.
 
+`ContextUnverified` means a composed robot's native context could not be verified. An incomplete identity
+sample leaves existing composed actors in place for up to two seconds of unscaled time. During that grace
+period, composed spawns return `Unavailable`. If the context is still unverified at the deadline, the
+candidate retires and the next catalog lookup retries discovery. A definite replacement, ended lifetime
+or throwing identity getter retires the candidate immediately. Retirement reasons appear at Info as
+`RobotKit composed context retired: <code>.`, at most once per reason for each world and session.
+
 `FindReachableSpawnAsync` automatically links cancellation to the consuming lifetime; an optional
 caller token can end the search sooner. Check its result, then spawn on collision-clear ground at
 the returned position. Check `Spawn` before issuing `MoveTo`.

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using TopiaForge.Mods;
 
 namespace TopiaForge.RobotKit
@@ -14,9 +15,8 @@ namespace TopiaForge.RobotKit
         private static readonly object Gate = new object();
         private static readonly HashSet<string> Reported = new HashSet<string>(StringComparer.Ordinal);
         private static IModLogger? logger;
-        private static object? discoveryWorld;
-        private static string? discoverySession;
-        private static readonly HashSet<RobotComposedRefusal> discoveryReasons = new HashSet<RobotComposedRefusal>();
+        private static readonly ConditionalWeakTable<WorldSceneIdentity, HashSet<(string SessionId, int Reason, bool Retirement)>>
+            ComposedReports = new ConditionalWeakTable<WorldSceneIdentity, HashSet<(string, int, bool)>>();
 
         public static void Configure(IModLogger value)
         {
@@ -29,7 +29,7 @@ namespace TopiaForge.RobotKit
             {
                 logger = value;
                 Reported.Clear();
-                discoveryWorld = null; discoverySession = null; discoveryReasons.Clear();
+                ComposedReports.Clear();
             }
         }
 
@@ -41,29 +41,38 @@ namespace TopiaForge.RobotKit
                 {
                     logger = null;
                     Reported.Clear();
-                    discoveryWorld = null; discoverySession = null; discoveryReasons.Clear();
+                    ComposedReports.Clear();
                 }
             }
         }
 
         public static void ReportComposedDiscovery(WorldSessionSnapshot? state, RobotComposedRefusal reason)
         {
-            // Session/world identities are compared only in memory; diagnostics contain static codes only.
-            if (state?.Session == null || state.World == null) return;
-            IModLogger? sink;
+            var sink = TakeComposedReport(state, (int)reason, retirement: false);
+            if (sink != null) ReportComposed(sink, "RobotKit composed discovery refused: " + reason + ".");
+        }
+
+        public static void ReportComposedRetirement(WorldSessionSnapshot state, RobotComposedRetirement reason)
+        {
+            var sink = TakeComposedReport(state, (int)reason, retirement: true);
+            if (sink != null) ReportComposed(sink, "RobotKit composed context retired: " + reason + ".");
+        }
+
+        private static IModLogger? TakeComposedReport(WorldSessionSnapshot? state, int reason, bool retirement)
+        {
+            // An old actor can retire after discovery in a newer world. Keep separate budgets without rooting scenes.
+            if (state?.Session == null || state.World == null) return null;
             lock (Gate)
             {
-                if (!ReferenceEquals(discoveryWorld, state.World.Scene) || discoverySession != state.Session.SessionId)
-                {
-                    discoveryWorld = state.World.Scene;
-                    discoverySession = state.Session.SessionId;
-                    discoveryReasons.Clear();
-                }
-                sink = logger;
-                if (sink == null || !discoveryReasons.Add(reason)) return;
+                return logger != null && ComposedReports.GetOrCreateValue(state.World.Scene).Add((state.Session.SessionId, reason, retirement))
+                    ? logger : null;
             }
-            try { sink.Info("RobotKit composed discovery refused: " + reason + "."); }
-            catch { /* A diagnostic cannot break discovery. */ }
+        }
+
+        private static void ReportComposed(IModLogger sink, string message)
+        {
+            try { sink.Info(message); }
+            catch { /* A diagnostic cannot break discovery or retirement. */ }
         }
 
         public static void ReportOnce(string operation, Exception exception)
