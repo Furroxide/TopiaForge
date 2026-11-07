@@ -17,24 +17,30 @@ namespace TopiaForge.RobotKit
     // It only bridges the separately compiled engine boundary; it makes no authority or normalization decisions.
     internal sealed class RobotReplication
     {
-        internal Func<IRuntimeReplication, RobotAgentSpawnRequest, OperationResult<IRobotAgent>> SpawnCore = null!;
-        internal OperationResult<IRobotAgent> Spawn(IRuntimeReplication replication, RobotAgentSpawnRequest request) =>
-            SpawnCore(replication, request);
+        internal Func<IRuntimeReplication, RobotAgentSpawnRequest, Func<bool>, OperationResult<IRobotAgent>> SpawnCore = null!;
+        internal OperationResult<IRobotAgent> Spawn(IRuntimeReplication replication, RobotAgentSpawnRequest request,
+            Func<bool> canRouteDisposal) => SpawnCore(replication, request, canRouteDisposal);
     }
     internal sealed partial class RobotAgentService
     {
         internal RobotReplication? Replication;
         internal NativeRobot? Last;
         internal IRobotAgentService ForOwner(IModContext context) => new OwnerFacade(this, context);
-        public bool IsAvailable => true;
-        public bool IsNavigationAvailable => true;
-        public IReadOnlyList<RobotTypeDescriptor> RobotTypes => Array.Empty<RobotTypeDescriptor>();
-        internal IRobotAgent? FindAgentByEntity(IEntity entity) => Last?.Id == entity.Id ? Last : null;
-        public bool TryGetPlayerEntity(out IEntity? entity) { entity = null; return false; }
+        internal int NativeReads;
+        public bool IsAvailable { get { NativeReads++; return true; } }
+        public bool IsNavigationAvailable { get { NativeReads++; return true; } }
+        public IReadOnlyList<RobotTypeDescriptor> RobotTypes
+        { get { NativeReads++; return Array.Empty<RobotTypeDescriptor>(); } }
+        internal IRobotAgent? FindAgentByEntity(IEntity entity)
+        { NativeReads++; return entity.IsAlive && Last?.Id == entity.Id ? Last : null; }
+        public bool TryGetPlayerEntity(out IEntity? entity) { NativeReads++; entity = null; return false; }
         public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request) =>
             throw new InvalidOperationException("This fixture must exercise production replication.");
-        public Task<OperationResult<ReachableSpawnResult>> FindReachableSpawnAsync(ReachableSpawnRequest request, CancellationToken token) =>
-            Task.FromResult(OperationResult<ReachableSpawnResult>.Failure(ModErrorCode.Unavailable, "No navigation boundary."));
+        public Task<OperationResult<ReachableSpawnResult>> FindReachableSpawnAsync(ReachableSpawnRequest request, CancellationToken token)
+        {
+            NativeReads++;
+            return Task.FromResult(OperationResult<ReachableSpawnResult>.Failure(ModErrorCode.Unavailable, "No navigation boundary."));
+        }
     }
     internal sealed class NativeRobot : IRobotAgent, IInternalSpeechAgent
     {
@@ -44,13 +50,13 @@ namespace TopiaForge.RobotKit
         private RobotInteractionBridge? interactionBridge;
         internal readonly RobotAgentSpawnRequest Request;
         internal RobotInteractionOptions Interaction;
-        internal int Calls, Disposals;
+        internal int Calls, Disposals, AliveReads;
         internal bool EarlySelectable;
         internal RobotInteractionBridge Bridge => interactionBridge ?? throw new InvalidOperationException("Custom interaction bridge missing.");
         internal readonly Transform Hand = new() { position = new Vector3(1, 0, 0) };
-        internal NativeRobot(IRobotAgent inner, RobotAgentSpawnRequest request)
+        internal NativeRobot(IRobotAgent inner, RobotAgentSpawnRequest request, string? id)
         {
-            this.inner = inner; Request = request; Interaction = request.Interaction;
+            this.inner = inner; Id = id ?? inner.Id; Request = request; Interaction = request.Interaction;
             if (request.Interaction.CustomInteraction is { } custom)
             {
                 InstallCustomInteractionBridge(custom);
@@ -59,9 +65,9 @@ namespace TopiaForge.RobotKit
             }
         }
         /* production installation */
-        public string Id => inner.Id;
+        public string Id { get; }
         public string Name => inner.Name;
-        public bool IsAlive => inner.IsAlive;
+        public bool IsAlive { get { AliveReads++; return inner.IsAlive; } }
         public Vec3 Position => inner.Position;
         public Vec3 HeadPosition => inner.HeadPosition;
         public RobotBrainMode BrainMode => inner.BrainMode;
@@ -101,23 +107,36 @@ namespace TopiaForge.RobotKit
 }
 internal sealed class ProbeReadScope : IInternalNativeEntityReadScope
 {
+    private readonly int mainThreadId = Thread.CurrentThread.ManagedThreadId;
     internal readonly IModLifetime Lifetime;
     internal bool Current = true;
+    internal int Checks;
     internal ProbeReadScope(IModLifetime lifetime) { Lifetime = lifetime; }
     public int SceneInstanceId => 1;
     public string SceneName => "Yard";
-    public bool IsCurrent(IModLifetime caller) => Current && ReferenceEquals(caller, Lifetime) && !caller.IsStopping;
+    public bool IsCurrent(IModLifetime caller)
+    {
+        Checks++;
+        return Thread.CurrentThread.ManagedThreadId == mainThreadId && Current &&
+            ReferenceEquals(caller, Lifetime) && !caller.IsStopping;
+    }
     public bool IsCurrentWorld(IInternalNativeEntityReadContext caller) => Current;
 }
 internal sealed class ProbeContext : IModContext, IInternalReplicationContext, IInternalNativeEntityReadContext, IDisposable
 {
     private readonly FakeModContext backing = new();
-    internal readonly ProbeReadScope Scope;
+    internal ProbeReadScope Scope { get; private set; }
+    internal int Captures;
     public IRuntimeReplication Replication { get; }
     public IModLifetime Lifetime { get; }
     internal ProbeContext(IModLifetime lifetime, IRuntimeReplication replication)
     { Lifetime = lifetime; Replication = replication; Scope = new ProbeReadScope(lifetime); }
-    public IInternalNativeEntityReadScope? CaptureNativeEntityReadScope() => Scope;
+    internal void ReplaceWorld()
+    {
+        Scope.Current = false;
+        Scope = new ProbeReadScope(Lifetime);
+    }
+    public IInternalNativeEntityReadScope? CaptureNativeEntityReadScope() { Captures++; return Scope; }
     public ModIdentity Identity => backing.Identity;
     public IRuntimeInfo Runtime => backing.Runtime;
     public IModLogger Logger => backing.Logger;

@@ -9,8 +9,13 @@ namespace TopiaForge.RobotKit
     {
         private readonly IRobotAgent agent;
         private readonly IRuntimeReplication replication;
-        internal RoutedRobotAgent(IRobotAgent agent, IRuntimeReplication replication)
-        { this.agent = agent; this.replication = replication; }
+        private readonly Func<bool>? canRouteDisposal;
+        internal RoutedRobotAgent(IRobotAgent agent, IRuntimeReplication replication, Func<bool>? canRouteDisposal = null)
+        {
+            this.agent = agent;
+            this.replication = replication;
+            this.canRouteDisposal = canRouteDisposal;
+        }
         public System.Threading.Tasks.Task<OperationResult<bool>> SayAsync(string text, System.Threading.CancellationToken token) =>
             replication is IInternalEntitySpeech speech ? speech.SayAsync(agent, RobotReplicationWire.Kind, text, token)
             : System.Threading.Tasks.Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Robot speech routing is unavailable."));
@@ -83,8 +88,8 @@ namespace TopiaForge.RobotKit
         public OperationResult<bool> Despawn() => Send(RobotCommand.Despawn);
         public void Dispose()
         {
-            // The scope also retires its prediction through the runtime, even when it is already stopping.
-            if (replication.Realm == InternalNetRealm.Client) Despawn();
+            // A retired scope releases its own body without routing a command by its old entity ID.
+            if (replication.Realm == InternalNetRealm.Client && (canRouteDisposal?.Invoke() ?? true)) Despawn();
             agent.Dispose();
         }
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -9,6 +10,19 @@ namespace TopiaForge.RobotKit
 {
     internal sealed partial class RobotAgentService
     {
+        // RobotKit constructs the service on the game thread. Resolving a facade does not establish thread ownership.
+        private readonly int mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
+        private void AssertMainThread([CallerMemberName] string operation = "RobotKit operation")
+        {
+            if (Thread.CurrentThread.ManagedThreadId != mainThreadId)
+            {
+                throw new InvalidOperationException(
+                    "TFSDK100: " + operation + " must be called on the Robotopia game thread. " +
+                    "Use Context.Scheduler.NextFrame when continuing work from a background task.");
+            }
+        }
+
         private sealed class OwnerFacade : IRobotAgentService, IRobotPlayerEntitySource
         {
             private readonly RobotAgentService service;
@@ -25,14 +39,38 @@ namespace TopiaForge.RobotKit
                 nativeReadContext = context as IInternalNativeEntityReadContext;
             }
 
-            public bool IsAvailable => !lifetime.IsStopping && service.IsAvailable;
-            public bool IsNavigationAvailable => !lifetime.IsStopping && service.IsNavigationAvailable;
-            public IReadOnlyList<RobotTypeDescriptor> RobotTypes => service.RobotTypes;
+            public bool IsAvailable
+            {
+                get
+                {
+                    service.AssertMainThread();
+                    return !lifetime.IsStopping && service.IsAvailable;
+                }
+            }
+
+            public bool IsNavigationAvailable
+            {
+                get
+                {
+                    service.AssertMainThread();
+                    return !lifetime.IsStopping && service.IsNavigationAvailable;
+                }
+            }
+
+            public IReadOnlyList<RobotTypeDescriptor> RobotTypes
+            {
+                get
+                {
+                    service.AssertMainThread();
+                    return service.RobotTypes;
+                }
+            }
 
             public IReadOnlyList<IRobotAgent> ActiveAgents
             {
                 get
                 {
+                    service.AssertMainThread();
                     ownedAgents.RemoveAll(agent => !agent.IsAlive);
                     return ownedAgents.ToArray();
                 }
@@ -40,6 +78,7 @@ namespace TopiaForge.RobotKit
 
             public bool TryGetRobot(IEntity entity, out IRobotAgent? agent)
             {
+                service.AssertMainThread();
                 if (lifetime.IsStopping)
                 {
                     agent = null;
@@ -69,6 +108,7 @@ namespace TopiaForge.RobotKit
 
             public bool TryGetPlayerEntity(out IEntity? entity)
             {
+                service.AssertMainThread();
                 if (lifetime.IsStopping)
                 {
                     entity = null;
@@ -80,6 +120,7 @@ namespace TopiaForge.RobotKit
 
             public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request)
             {
+                service.AssertMainThread();
                 if (lifetime.IsStopping)
                 {
                     return OperationResult<IRobotAgent>.Failure(
@@ -97,8 +138,11 @@ namespace TopiaForge.RobotKit
                 var boundRequest = new RobotAgentSpawnRequest(request.Position, request.Facing, request.BrainMode,
                     request.Gait, request.MoveSpeed, request.TurnSpeed, request.StopDistance, request.Tint,
                     request.Name, request.Scale, interaction, request.RobotTypeId);
+                var ownerLifetime = lifetime;
                 var result = replication != null && service.Replication != null
-                    ? service.Replication.Spawn(replication, boundRequest) : service.Spawn(boundRequest);
+                    ? service.Replication.Spawn(replication, boundRequest,
+                        () => IsScopeCurrent(ownerLifetime, readScope))
+                    : service.Spawn(boundRequest);
                 if (!result.TryGetValue(out var agent))
                 {
                     return result;
@@ -106,7 +150,7 @@ namespace TopiaForge.RobotKit
 
                 try
                 {
-                    wrapper = new OwnerRobotAgent(agent, lifetime.Track(agent), lifetime, readScope);
+                    wrapper = new OwnerRobotAgent(service, agent, lifetime.Track(agent), lifetime, readScope, replication);
                     ownedAgents.Add(wrapper);
                     return OperationResult<IRobotAgent>.Success(wrapper);
                 }
@@ -122,6 +166,7 @@ namespace TopiaForge.RobotKit
                 ReachableSpawnRequest request,
                 CancellationToken cancellationToken = default)
             {
+                service.AssertMainThread();
                 using (var linked = CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken,
                     lifetime.StoppingToken))
@@ -130,18 +175,25 @@ namespace TopiaForge.RobotKit
                 }
             }
 
+            private static bool IsScopeCurrent(IModLifetime lifetime, IInternalNativeEntityReadScope? readScope) =>
+                !lifetime.IsStopping && (readScope == null || readScope.IsCurrent(lifetime));
+
             private sealed class OwnerRobotAgent : IRobotAgent, IInternalOwnedNativeEntity, IInternalSpeechAgent
             {
+                private readonly RobotAgentService service;
                 private readonly IRobotAgent agent;
                 private IDisposable? lifetimeLease;
                 private readonly IModLifetime lifetime;
+                private readonly IRuntimeReplication? replication;
 
-                public OwnerRobotAgent(IRobotAgent agent, IDisposable lifetimeLease, IModLifetime lifetime,
-                    IInternalNativeEntityReadScope? readScope)
+                public OwnerRobotAgent(RobotAgentService service, IRobotAgent agent, IDisposable lifetimeLease,
+                    IModLifetime lifetime, IInternalNativeEntityReadScope? readScope, IRuntimeReplication? replication)
                 {
+                    this.service = service;
                     this.agent = agent;
                     this.lifetimeLease = lifetimeLease;
                     this.lifetime = lifetime;
+                    this.replication = replication;
                     NativeReadScope = readScope;
                 }
 
@@ -154,8 +206,7 @@ namespace TopiaForge.RobotKit
                 public IInternalNativeEntityReadScope? NativeReadScope { get; }
                 public object? NativeObject => IsAlive ? (agent as IInternalNativeObjectEntity)?.NativeObject : null;
                 public string Name => agent.Name;
-                public bool IsAlive => lifetimeLease != null && !lifetime.IsStopping &&
-                    (NativeReadScope == null || NativeReadScope.IsCurrent(lifetime)) && agent.IsAlive;
+                public bool IsAlive => lifetimeLease != null && IsScopeCurrent(lifetime, NativeReadScope) && agent.IsAlive;
                 public Vec3 Position => agent.Position;
                 public Vec3 HeadPosition => agent.HeadPosition;
                 public RobotBrainMode BrainMode => agent.BrainMode;
@@ -220,10 +271,25 @@ namespace TopiaForge.RobotKit
 
                 public OperationResult<bool> Despawn()
                 {
+                    service.AssertMainThread();
+                    if (lifetimeLease == null) return OperationResult<bool>.Success(false);
+
                     var refusal = ScopeRefusal();
-                    if (refusal != null) return refusal;
+                    if (refusal != null)
+                    {
+                        // A forwarded guest call on the host cannot turn a scope refusal into native cleanup.
+                        if (replication?.Realm != InternalNetRealm.Client &&
+                            replication is IInternalEntityCommands commands && commands.IsGuestOrigin)
+                            return refusal;
+
+                        // Release the tracked instance. The routed disposer skips commands after scope retirement.
+                        var wasAlive = agent.IsAlive;
+                        Dispose();
+                        return OperationResult<bool>.Success(wasAlive);
+                    }
+
                     var result = agent.Despawn();
-                    if (result.Succeeded) Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                    if (result.Succeeded) Dispose();
                     return result;
                 }
 
