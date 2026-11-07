@@ -20,6 +20,6 @@ namespace TopiaForge.RobotKit
             interaction.NativeTalkMode == RobotNativeTalkMode.Enabled && (replica || IsGuestOrigin(replication)) ? NativeBrainRefusal() : null;
 
         private static OperationResult<bool> NativeBrainRefusal() => OperationResult<bool>.Failure(
-            ModErrorCode.NotAuthoritative, "Autonomous robots and native conversation must be started by the host.");
+            ModErrorCode.NotAuthoritative, "Autonomous robots and native conversation require a host call outside a guest-origin callback.");
     }
 }

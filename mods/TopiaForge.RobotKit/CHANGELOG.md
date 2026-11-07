@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Host callbacks acting for a guest now receive `NotAuthoritative` when requesting an Autonomous spawn, before any robot is created. Dormant requests keep their existing native-talk normalization; client requests and replicas remain Dormant. The testing kit models these callback restrictions and distinguishes player dismissals from host hides.
+
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 
 - Robot dialogue capture now holds the runtime microphone lease, yields to native recording, and returns Conflict when preempted without ending the native recording.

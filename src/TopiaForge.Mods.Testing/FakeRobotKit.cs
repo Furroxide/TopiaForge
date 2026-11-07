@@ -47,7 +47,7 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Deterministic robot agent service that creates inspectable SDK-native agents.</summary>
-    public sealed class FakeRobotAgentService : IRobotAgentService, IRobotPlayerEntitySource
+    public sealed partial class FakeRobotAgentService : IRobotAgentService, IRobotPlayerEntitySource
     {
         private readonly FakeModLifetime lifetime;
         private readonly List<FakeRobotAgent> agents = new List<FakeRobotAgent>();
@@ -106,6 +106,12 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentNullException(nameof(request));
             }
 
+            if (lifetime.IsStopping)
+                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Cancelled, "The fake mod is stopping and cannot spawn robots.");
+
+            var refusal = PrepareSpawn(ref request);
+            if (refusal != null) return refusal;
+
             if (!IsAvailable)
             {
                 return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, "Fake RobotKit is unavailable.");
@@ -130,7 +136,9 @@ namespace TopiaForge.Mods.Testing
             var agent = new FakeRobotAgent(
                 "fake-robot-" + (++serial).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 request,
-                value => agents.Remove(value))
+                value => agents.Remove(value),
+                () => IsClient || IsGuestOrigin,
+                () => IsClient)
             {
                 AutoCompleteMovement = AutoCompleteAgentMovement
             };
