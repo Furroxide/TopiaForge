@@ -70,8 +70,10 @@ namespace TopiaForge.Mods
         public MapTransform EditorTransform { get; }
         /// <summary>Gets the imported authored world pose, including all authored parents and the import root, even without a live marker.</summary>
         /// <remarks>Captured at indexing; does not track later physics or root movement. Position uses the full affine chain.
-        /// Rotation is the normalized product of converted quaternions. Scale is lossy basis length, with an odd reflection
-        /// assigned to X; this TRS cannot represent shear. Use IEntityService.TryGetTransform for current live movement.</remarks>
+        /// Rotation is the normalized product of converted quaternions. Each scale magnitude is its world basis-column length;
+        /// its sign is negative only when that column's dot product with the corresponding rotation axis is negative (zero chooses positive).
+        /// This TRS reconstructs the basis only when each column aligns with its corresponding rotation axis; shear and rotated
+        /// reflected hierarchies can remain approximate. Use IEntityService.TryGetTransform for current live movement.</remarks>
         /// <exception cref="InvalidOperationException">The map's world session has ended, or the composed pose has a zero scale axis or non-finite values
         /// that TransformState cannot represent. Such authored records remain indexed; inspect EditorTransform and the parent chain.</exception>
         public TransformState WorldTransform => alive() ? worldTransform.Pose : throw new InvalidOperationException("This map's world session has ended.");
