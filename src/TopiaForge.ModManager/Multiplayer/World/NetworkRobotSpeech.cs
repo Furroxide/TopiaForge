@@ -65,9 +65,10 @@ namespace TopiaForge.ModManager
                     previous.Cancel();
                 }
             bool Current() => owns() && services.TryGetReplicaFactory(kind, out var registered) && ReferenceEquals(registered, provider);
-            var operation = new Playback(entity, provider, ++nonce, clock(), CancellationTokenSource.CreateLinkedTokenSource(token, context.Lifetime.StoppingToken), Current) { WireId = id };
+            var started = clock();
+            var operation = new Playback(entity, provider, ++nonce, started, CancellationTokenSource.CreateLinkedTokenSource(token, context.Lifetime.StoppingToken), Current) { WireId = id };
             active.Add(operation);
-            speechPaces[entity] = new SpeechPace(clock(), Current);
+            speechPaces[entity] = new SpeechPace(started, Current);
             var presence = services.Players?.Presence;
             if (shared && presence != null)
             {
