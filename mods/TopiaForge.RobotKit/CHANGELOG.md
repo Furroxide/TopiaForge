@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restricted temporary scene editing to eligible native scene robots. The editor excludes RobotKit-managed robots,
+  including guest replicas, and skips previews and snapshot restoration if a target comes under RobotKit management.
+
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 
 - Robot dialogue capture now holds the runtime microphone lease, yields to native recording, and returns Conflict when preempted without ending the native recording.
