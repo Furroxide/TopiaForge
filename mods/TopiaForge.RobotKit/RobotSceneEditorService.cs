@@ -88,14 +88,19 @@ namespace TopiaForge.RobotKit
                 return OperationResult<IRobotEditLease>.Failure(ModErrorCode.NotFound, "Robot edit target is no longer available.");
             }
 
-            var instanceId = nativeTarget.InstanceId;
-            if (leases.TryGetValue(instanceId, out var existing) && existing.IsActive)
-            {
-                return OperationResult<IRobotEditLease>.Failure(ModErrorCode.Conflict, "Another creator session is editing this robot.");
-            }
-
             try
             {
+                if (nativeTarget.IsManaged)
+                {
+                    return OperationResult<IRobotEditLease>.Failure(ModErrorCode.Conflict, RobotEditTarget.ManagedRobotMessage);
+                }
+
+                var instanceId = nativeTarget.InstanceId;
+                if (leases.TryGetValue(instanceId, out var existing) && existing.IsActive)
+                {
+                    return OperationResult<IRobotEditLease>.Failure(ModErrorCode.Conflict, "Another creator session is editing this robot.");
+                }
+
                 var lease = new RobotEditLease(nativeTarget, logger, () => leases.Remove(instanceId));
                 leases[instanceId] = lease;
                 return OperationResult<IRobotEditLease>.Success(lease);
@@ -144,13 +149,12 @@ namespace TopiaForge.RobotKit
 
             var body = agent.GetComponentInParent(RobotPersonalityBridge.RobotBodyType ?? agent.GetType());
             var root = body == null ? agent.gameObject : body.gameObject;
-            var isManaged = root.GetComponent<RobotAgentEntityIdentityAnchor>() != null;
-            if (!isManaged && HasProgressionComponent(root))
+            if (RobotEditTarget.HasManagedRobot(root, agent) || HasProgressionComponent(root))
             {
                 return null;
             }
 
-            return new RobotEditTarget(root, agent, !isManaged);
+            return new RobotEditTarget(root, agent);
         }
 
         private static bool HasProgressionComponent(GameObject root)
