@@ -93,7 +93,21 @@ root collapses an axis, or the composed world values overflow, `WorldTransform`
 throws an actionable `InvalidOperationException`: the existing `TransformState`
 contract cannot represent that pose. Import and metadata access still succeed;
 inspect `EditorTransform` and the parent chain, and choose a non-collapsed marker
-for placement. No identity pose or unit scale is substituted.
+for placement. The property never substitutes an identity pose or unit scale.
+
+For iteration, use `entity.TryGetWorldTransform(out var pose)`. It returns the same
+captured pose as the property on success, including records without a live marker.
+It returns false for an unrepresentable pose or an ended map session. On false,
+the out value is `TransformState.Identity`; ignore it rather than placing an object
+there. Unexpected lifetime callback failures still propagate.
+
+```csharp
+foreach (var seat in map.FindByModel("kit/seat"))
+{
+    if (!seat.TryGetWorldTransform(out var pose)) continue;
+    // Use pose for placement; the authored record has a representable world pose.
+}
+```
 
 Survey a declared world and track selected objects in a copied anchors file:
 

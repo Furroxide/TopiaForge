@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
             // Compile the production root/chain boundary, substituting only engine values and
             // the game's local coordinate helper. Native helper semantics remain a game-run gate.
             var source = File.ReadAllText(Path.Combine(repo, "mods", "TopiaForge.Worlds", "Maps", "MapNativeCoordinates.cs"));
+            AuthoredNativeBindingTests.Run(source);
             var tree = CSharpSyntaxTree.ParseText(source).GetRoot();
             var method = tree.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.Text == "AuthoredTransforms");
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)

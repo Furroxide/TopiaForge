@@ -13,6 +13,8 @@ namespace TopiaForge.Worlds.Maps
         private readonly Transform root;
         private readonly Type vectorType;
         private readonly Type rotationType;
+        private readonly FieldInfo vectorX, vectorY, vectorZ;
+        private readonly FieldInfo rotationX, rotationY, rotationZ, rotationW;
         private readonly MethodInfo convertPosition;
         private readonly MethodInfo convertRotation;
         internal MapNativeCoordinates(Transform root)
@@ -20,6 +22,13 @@ namespace TopiaForge.Worlds.Maps
             this.root = root;
             vectorType = Type.GetType("UgcVector3Value, GameCode", false) ?? throw Unavailable();
             rotationType = Type.GetType("UgcRotationValue, GameCode", false) ?? throw Unavailable();
+            vectorX = Field(vectorType, "x", typeof(float));
+            vectorY = Field(vectorType, "y", typeof(float));
+            vectorZ = Field(vectorType, "z", typeof(float));
+            rotationX = Field(rotationType, "x", typeof(float));
+            rotationY = Field(rotationType, "y", typeof(float));
+            rotationZ = Field(rotationType, "z", typeof(float));
+            rotationW = Field(rotationType, "w", typeof(float?));
             var helper = Type.GetType("UgcRotationHelper, GameCode", false) ?? throw Unavailable();
             convertPosition = vectorType.GetMethod("ToUnityPosition", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null) ?? throw Unavailable();
             convertRotation = helper.GetMethod("ToUnityQuaternion", BindingFlags.Public | BindingFlags.Static, null, new[] { rotationType }, null) ?? throw Unavailable();
@@ -28,7 +37,7 @@ namespace TopiaForge.Worlds.Maps
         internal Vec3 Position(Vec3 editor)
         {
             if (root == null) throw Unavailable();
-            var value = VectorValue(vectorType, editor);
+            var value = VectorValue(vectorType, vectorX, vectorY, vectorZ, editor);
             var converted = root.TransformPoint((Vector3)convertPosition.Invoke(value, null)!);
             return new Vec3(converted.x, converted.y, converted.z);
         }
@@ -54,27 +63,25 @@ namespace TopiaForge.Worlds.Maps
         {
             var quaternion = editor.QuaternionRotation;
             if (quaternion.HasValue) quaternion = AuthoredAffine.NormalizeRotation(quaternion.Value);
-            var value = VectorValue(rotationType, quaternion.HasValue
+            var value = VectorValue(rotationType, rotationX, rotationY, rotationZ, quaternion.HasValue
                 ? new Vec3(quaternion.Value.X, quaternion.Value.Y, quaternion.Value.Z) : editor.EulerDegrees!.Value);
-            var w = rotationType.GetField("w", BindingFlags.Public | BindingFlags.Instance);
-            if (w?.FieldType != typeof(float?)) throw Unavailable();
-            w.SetValue(value, quaternion.HasValue ? (object)quaternion.Value.W : null);
+            rotationW.SetValue(value, quaternion.HasValue ? (object)quaternion.Value.W : null);
             var rotation = (Quaternion)convertRotation.Invoke(null, new[] { value })!;
-            var position = (Vector3)convertPosition.Invoke(VectorValue(vectorType, editor.Position), null)!;
+            var position = (Vector3)convertPosition.Invoke(VectorValue(vectorType, vectorX, vectorY, vectorZ, editor.Position), null)!;
             return AuthoredAffine.From(Value(position), new Quat(rotation.x, rotation.y, rotation.z, rotation.w), editor.Scale);
         }
         private static Vec3 Value(Vector3 value) => new Vec3(value.x, value.y, value.z);
-        private static object VectorValue(Type type, Vec3 vector)
+        private static object VectorValue(Type type, FieldInfo x, FieldInfo y, FieldInfo z, Vec3 vector)
         {
             var value = Activator.CreateInstance(type) ?? throw Unavailable();
-            Set(type, value, "x", vector.X); Set(type, value, "y", vector.Y); Set(type, value, "z", vector.Z);
+            x.SetValue(value, vector.X); y.SetValue(value, vector.Y); z.SetValue(value, vector.Z);
             return value;
         }
-        private static void Set(Type type, object instance, string name, float value)
+        private static FieldInfo Field(Type type, string name, Type fieldType)
         {
             var field = type.GetField(name, BindingFlags.Public | BindingFlags.Instance);
-            if (field?.FieldType != typeof(float)) throw Unavailable();
-            field.SetValue(instance, value);
+            if (field?.FieldType != fieldType) throw Unavailable();
+            return field;
         }
         private static MapProblem Unavailable() => new MapProblem(ModErrorCode.Unavailable,
             "This game build cannot convert authored map coordinates yet. Update TopiaForge.");
