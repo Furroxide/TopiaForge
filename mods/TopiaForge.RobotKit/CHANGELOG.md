@@ -12,6 +12,10 @@
 - Host callbacks acting for a guest now receive `NotAuthoritative` when requesting an Autonomous spawn, before any robot is created. Dormant requests keep their existing native-talk normalization; client requests and replicas remain Dormant. The testing kit models these callback restrictions and distinguishes player dismissals from host hides.
 - `SayAsync` now succeeds when at least one listener played the line to the end; a listener lost during playback, or one that has not reported by the 15-second deadline, no longer fails a line that others heard, and `Unavailable` means nobody did.
 - Guests now report a reason-free refusal before robot speech playback, so hidden, missing or out-of-earshot replicas and full receive budgets do not hold other listeners until the deadline. Speech schema 3 requires matching peers; all-declined lines return `Success(false)` after the existing pace.
+- Retained persistent-body service facades can spawn in a ready replacement world while their scope and provider remain active. New bodies capture fresh world read authority; old bodies stay retired.
+- Composed robot actors survive unchanged world publications and retire when their native context is replaced.
+- Guest-origin robot spawns are normalized to dormant brains with native conversation disabled, including host callbacks acting for guests. Robot commands refuse guest-origin requests to enable autonomous brains or native conversation; custom interaction callbacks retain the consuming owner handle.
+- Added guarded native composition for MuniciPal candidates, with world-owned asset cleanup.
 
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 
