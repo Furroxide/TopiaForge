@@ -173,12 +173,16 @@ viewer's playback while other eligible listeners continue. Missing bindings retu
 Retry a fresh line after recovery. Delivery is best effort: full windows, expired lines and late joins
 do not replay speech. A successful await waits for every accepting listener's native playback completion
 (remote listeners report theirs) and the one-second speech pace. A guest that declines before playback
-reports that promptly, without a reason; it does not delay or fail the remaining listeners. `true` means
-at least one listener completed playback and all accepting listeners finished; `false` means none accepted
-and the pace elapsed without synthesis. Sequential awaited lines do not
-cut off their predecessor, including when the host is far away. Missing reports or listener loss fail
-within the 15-second lifetime; task completion is not proof of audible sound. Native subtitle-only or
-pre-recorded-clip overrides are outside this replicated speech contract.
+reports that promptly without a reason. A decline the host accepts removes only that listener without
+failing the call. `true` means at least one listener completed playback and all accepting listeners
+finished. `false` means none accepted
+and the pace elapsed without synthesis. Sequential awaited lines do not cut off their predecessor,
+including when the host is far away. When an admitted listener loses eligibility, such as by leaving
+earshot or having the robot hidden during playback, the other listeners can finish and the await
+returns `Unavailable`. A line still pending at the host's 15-second deadline returns `TimedOut`.
+Caller cancellation, replacement and
+retirement of the owning scope, provider or world return `Cancelled`. Native task completion does not
+verify audible sound. Native subtitle-only and pre-recorded-clip overrides are outside this contract.
 
 Speech requires matching speech schemas on both peers; older builds can join but exchange no robot speech.
 See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/dev/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
