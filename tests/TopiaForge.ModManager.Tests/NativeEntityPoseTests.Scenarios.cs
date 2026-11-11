@@ -18,9 +18,26 @@ public static class PoseScenarios {
  private static void Refuses(LifetimeReader reader,IEntity entity,string why) {
   Check(!reader.TryGetTransform(entity,out var pose) && pose==TransformState.Identity,why);
  }
+ private static void WorkerAsserts(Action read,string why) {
+  var nativeBefore=NativeAccess.Count;
+  var rejected=Task.Run(()=> {
+   try { read();return false; }
+   catch(InvalidOperationException error) { return error.Message.StartsWith("TFSDK100:",StringComparison.Ordinal); }
+  }).GetAwaiter().GetResult();
+  Check(rejected,why);
+  Check(NativeAccess.Count==nativeBefore,"off-thread diagnostic occurs before every Unity boundary");
+ }
  public static void Run(Func<IRobotAgent,bool,IRobotAgent> routed) {
   UnityMainThreadGuard.CaptureCurrentThread();
   var registry=new UnityEntityRegistry();
+  var directEntity=new UnityEntityRegistry.UnityEntity{Owner=registry};
+  var directPose=default(TransformState);
+  WorkerAsserts(()=>registry.TryGetTransform(directEntity,out directPose),"active direct registry read reports TFSDK100 off-thread");
+  Check(directPose==TransformState.Identity,"direct registry diagnostic retains default Identity output");
+  registry.disposed=true;var disposedNative=NativeAccess.Count;
+  Check(Task.Run(()=>!registry.TryGetTransform(directEntity,out var disposedPose) && disposedPose==TransformState.Identity).GetAwaiter().GetResult(),
+   "disposed registry retains false plus Identity off-thread");
+  Check(NativeAccess.Count==disposedNative,"disposed registry never touches Unity");registry.disposed=false;
   var parent=new ModContext();
   var child=new ModContext {World=parent.World,WorldLifetime=parent.WorldLifetime};
   foreach(var context in new[]{parent,child}) foreach(var route in new[]{0,1,2}) {
@@ -34,6 +51,15 @@ public static class PoseScenarios {
    Check(pose.Position==new Vec3(2,3,4) && pose.Rotation==new Quat(0,0.6f,0,0.8f)
     && pose.Scale==new Vec3(2,3,4),"position, rotation and local scale come from the actual root transform");
    Check(robot.Id==raw.Id && ReferenceEquals(((IInternalNativeObjectEntity)robot).NativeObject,root),"canonical native identity is preserved through owner/routed wrappers");
+   var netReader=new NetReader(service);
+   Check(netReader.TryGetTransform(robot,out var netPose) && netPose==pose,"network read forwarding retains the actual current-thread pose");
+   var nativeReads=raw.Reads;
+   var workerPose=default(TransformState);
+   WorkerAsserts(()=>service.TryGetTransform(robot,out workerPose),"active owner read reports TFSDK100 off-thread");
+   Check(workerPose==TransformState.Identity,"owner diagnostic retains default Identity output");
+   WorkerAsserts(()=>reader.TryGetTransform(robot,out workerPose),"active lifetime owner/routed read reports TFSDK100 off-thread");
+   WorkerAsserts(()=>netReader.TryGetTransform(robot,out workerPose),"active network forwarding reports TFSDK100 off-thread");
+   Check(raw.Reads==nativeReads,"owner/routed/network diagnostics precede native adapter access");
    root.transform.position=new Vector3(5,6,7); root.transform.rotation=new Quaternion(0.6f,0,0,0.8f);
    Check(reader.TryGetTransform(robot,out pose) && pose.Position==new Vec3(5,6,7) && pose.Rotation.X==0.6f,
     "reads sample the current native pose, not the public Position or a movement target");
@@ -77,7 +103,7 @@ public static class PoseScenarios {
   }
   go.transform.rotation=new Quaternion(0,0,0,1);go.transform.localScale=new Vector3(0,1,1);
   Refuses(read,wrapper,"zero scale cannot construct a transform");go.transform.localScale=new Vector3(1,1,1);
-  Check(Task.Run(()=>!read.TryGetTransform(wrapper,out var p) && p==TransformState.Identity).GetAwaiter().GetResult(),"off-thread read refuses without touching Unity");
+  WorkerAsserts(()=>read.TryGetTransform(wrapper,out _),"live scoped read reports TFSDK100 rather than a missing pose");
   registry.disposed=true;Refuses(read,wrapper,"disposed registry refuses");registry.disposed=false;
   var missing=new ModContext {World=null};
   Refuses(new LifetimeReader(new OwnerEntityService(missing.Lifetime,registry),missing.Lifetime),
@@ -89,6 +115,11 @@ public static class PoseScenarios {
   var stopping=new ModContext();var stoppedRobot=WrapperFactory.Wrap(new NativeRobot(),stopping.Lifetime,stopping.CaptureNativeEntityReadScope());
   var stoppedReader=new LifetimeReader(new OwnerEntityService(stopping.Lifetime,registry),stopping.Lifetime);
   ((FakeModLifetime)stopping.Lifetime).Dispose();Refuses(stoppedReader,stoppedRobot,"owner stop invalidates its reads");
+  var stoppedService=new OwnerEntityService(stopping.Lifetime,registry);var stoppedNative=NativeAccess.Count;
+  Check(Task.Run(()=>!stoppedService.TryGetTransform(stoppedRobot,out var directStopped) && directStopped==TransformState.Identity
+   && !stoppedReader.TryGetTransform(stoppedRobot,out var scopedStopped) && scopedStopped==TransformState.Identity).GetAwaiter().GetResult(),
+   "stopped owner and lifetime reads keep false plus Identity off-thread");
+  Check(NativeAccess.Count==stoppedNative,"stopped reads never touch Unity");
   var normal=new UnityEntityRegistry.UnityEntity{Owner=registry};
   Check(registry.TryGetTransform(normal,out _),"existing registry-owned reads remain supported");
   Check(registry.SetTransform(normal,TransformState.Identity).Succeeded,"existing mutation resolution remains supported");

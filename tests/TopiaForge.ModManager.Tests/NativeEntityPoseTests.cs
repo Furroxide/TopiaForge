@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             var world = Read("src/TopiaForge.ModManager/ModContext.WorldView.cs");
             var owner = Read("mods/TopiaForge.RobotKit/RobotAgentService.OwnerFacade.cs");
             var scoped = Read("src/TopiaForge.ModManager/ModContext.ScopedGameplay.cs");
+            var net = Read("src/TopiaForge.ModManager/Multiplayer/NetGameplayServices.cs");
             var spawn = Method(owner, "Spawn");
             var capture = spawn.IndexOf("CaptureNativeEntityReadScope", StringComparison.Ordinal);
             if (capture < 0 || capture > spawn.IndexOf("service.Spawn", StringComparison.Ordinal))
@@ -36,6 +37,7 @@ namespace TopiaForge.ModManager.Tests
                 Engine.Replace("/* registry */", Methods(registry, "TryGetTransform", "IsNativeReadSceneLoaded",
                     "TryResolve", "FromUnity", "ToUnity", "SetTransform", "AcquireMotion"))
                     .Replace("/* owner service */", Class(ownerService, "OwnerEntityService"))
+                    .Replace("/* net read */", Method(Class(net, "NetEntityService"), "TryGetTransform"))
                     .Replace("/* context scope */", Method(world, "CaptureNativeEntityReadScope") + Class(world, "NativeEntityReadScope"))
                     .Replace("/* lifetime read */", Method(Class(scoped, "LifetimeEntityService"), "TryGetTransform"))
                     .Replace("/* robot wrapper */", Class(owner, "OwnerRobotAgent") + Method(owner, "IsScopeCurrent")),
