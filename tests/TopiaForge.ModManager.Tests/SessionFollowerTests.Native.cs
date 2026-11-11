@@ -82,6 +82,11 @@ namespace TopiaForge.ModManager.Tests
             using var rig = new FollowRig(root);
             rig.Join();
             var host = SessionFollowTests.NewSessionId();
+            var readinessFailures = 0;
+            rig.Test.Hosted.DiagnosticFailure += error =>
+            {
+                if (error.Message.Contains(GamemodeSessionOrchestrator.LostWorldReadinessMessage)) readinessFailures++;
+            };
             rig.Announce(rig.World(host));
             rig.Until(() => rig.Status.Stage == FollowStage.Running, "the keep-controller world runs");
             var loads = 0;
@@ -109,6 +114,7 @@ namespace TopiaForge.ModManager.Tests
                 That(rig.Follower.Refollows == 1 && rig.Runtime.Realm == NetRealm.Client,
                     "same-level restarts preserve the previous different-level count and stay joined");
             }
+            That(readinessFailures == 0, "followers use normal stop and re-follow without a local readiness failure");
         }
     }
 }
