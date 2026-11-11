@@ -22,7 +22,7 @@ namespace TopiaForge.ModManager
         private readonly List<IEntity> expiredPaces = new List<IEntity>();
         private readonly List<Playback> active = new List<Playback>();
         private readonly List<ParticipantId> removed = new List<ParticipantId>();
-        private readonly TokenBucket outgoing, incoming;
+        private readonly TokenBucket outgoing, incoming, declines;
         private ulong nonce, seenNonce, generation, instance;
         private string challenge = "";
         private bool readySent, resetting, ticking;
@@ -36,6 +36,7 @@ namespace TopiaForge.ModManager
         {
             this.world = world; this.services = services; this.clock = clock;
             outgoing = new TokenBucket(4, 2, clock()); incoming = new TokenBucket(8, 4, clock());
+            declines = new TokenBucket(8, 4, clock());
             world.Channel.Register(RobotSpeechWire.Ready, this);
             world.Channel.Register(RobotSpeechWire.Line, this);
             world.Channel.Register(RobotSpeechWire.Cancel, this);

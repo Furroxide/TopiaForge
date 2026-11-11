@@ -14,9 +14,10 @@ namespace TopiaForge.Mods
         /// may speak. Listeners within 20 metres in the current world receive the line; late joiners do not.
         /// A new line replaces this robot's previous line. Cancellation, disposal and world changes stop playback.
         /// Unavailable native voice bindings return Unavailable; callers may retry a fresh line after recovery.
-        /// Success(true) waits for every admitted listener's native playback completion, including remote reports,
-        /// and at least the one-second speech pace. With no admitted listeners, Success(false) waits that same pace
-        /// without synthesis or replay. Sequential awaits therefore do not replace or rate-limit their predecessor.
+        /// Success(true) waits for every accepting listener's native playback completion, including remote reports,
+        /// and at least the one-second speech pace. A remote refusal before playback excludes only that listener,
+        /// without failing the call. With no accepting listeners, Success(false) waits the same pace without synthesis
+        /// or replay. Sequential awaits therefore do not replace or rate-limit their predecessor.
         /// Listener failure/loss or a missing completion report fails the call within the 15-second lifetime.
         /// Completion reports native task completion, not proof of audible sound. Concurrent calls still share budgets.
         /// </summary>
