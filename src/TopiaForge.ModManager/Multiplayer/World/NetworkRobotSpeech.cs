@@ -65,9 +65,10 @@ namespace TopiaForge.ModManager
                 if (ReferenceEquals(previous.Entity, entity))
                     previous.RequestCancellation();
             bool Current() => owns() && services.TryGetReplicaFactory(kind, out var registered) && ReferenceEquals(registered, provider);
-            var operation = new Playback(entity, provider, ++nonce, clock(), Current, token, context.Lifetime.StoppingToken) { WireId = id };
+            var started = clock();
+            var operation = new Playback(entity, provider, ++nonce, started, Current, token, context.Lifetime.StoppingToken) { WireId = id };
             active.Add(operation);
-            speechPaces[entity] = new SpeechPace(clock(), Current);
+            speechPaces[entity] = new SpeechPace(started, Current);
             var presence = services.Players?.Presence;
             if (shared && presence != null)
             {
