@@ -75,7 +75,7 @@ namespace TopiaForge.ModManager.Tests
                     var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("nametag overlay dispatch", overlay.Tick, 10000, 200);
                     Check(allocated == 0, "production overlay dispatch allocates exactly zero");
                     Console.WriteLine("PresenceNametag overlay dispatch: " + allocated + " bytes; 200 warmups; 10,000 frames; 8 players.");
-                    var renderAllocated = TopiaForge.TestSupport.AllocationProbe.Measure("nametag live anchors", layer.Tags.Tick, 10000, 200);
+                    var renderAllocated = TopiaForge.TestSupport.AllocationProbe.Measure("nametag live anchors", () => layer.Tags.Tick(), 10000, 200);
                     Check(renderAllocated == 0, "live render-time anchor reads allocate exactly zero");
                     Console.WriteLine("PresenceNametag live anchors: " + renderAllocated + " bytes; 200 warmups; 10,000 frames; 8 players.");
                     first.Lose(); Check(first.Disposals == 1, "layer loss disposes the old host once");

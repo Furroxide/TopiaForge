@@ -300,6 +300,7 @@
     <EmbeddedResource Remove="@(EmbeddedResource)" />
     <Compile Include="TestingKitTests*.cs" />
     <Compile Include="TestingKitFocusedProgram.cs" />
+    <Compile Include="../Shared/AllocationProbe.cs" Link="TestSupport/AllocationProbe.cs" />
   </ItemGroup>
   <!-- Production binding and world-provider adapters exercised by the full offline harness. -->
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
