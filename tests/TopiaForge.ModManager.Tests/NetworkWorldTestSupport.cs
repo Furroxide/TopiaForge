@@ -34,7 +34,14 @@ namespace TopiaForge.ModManager.Tests
     {
         internal long Now { get; set; } = 1_000_000;
 
-        internal long Read() => Now;
+        internal long ReadIncrement { get; set; }
+
+        internal long Read()
+        {
+            var now = Now;
+            Now += ReadIncrement;
+            return now;
+        }
 
         internal void Advance(long micros) => Now += micros;
     }
