@@ -225,6 +225,22 @@ namespace TopiaForge.ModManager
             return changed;
         }
 
+        internal bool IsHiddenForSpeech(string worldId, ParticipantId viewer, IEntity entity, uint entityId)
+        {
+            var snapshot = services.Runtime.Control?.SessionSnapshot;
+            if (binding == null || binding.WorldId != worldId || !binding.Renderer.IsAlive
+                || !worlds.TryGetValue(binding.Renderer, out var leases) || snapshot == null
+                || (session.IsValid && !session.Equals(snapshot.Id))) return false;
+
+            string? player = viewer.Value;
+            if (admitted.TryGetValue(viewer, out var previous) && snapshot.TryGetParticipant(viewer, out var current)
+                && current != null && !current.PlayerKey.Equals(previous)) player = null;
+            // The lease can name a wrapper and may have been acquired offline, before its network ID
+            // existed. Resolve it the same way as view projection.
+            return leases.IsHiddenFor(player, (Views: this, Entity: entity, Id: entityId), static (target, speech) =>
+                ReferenceEquals(target, speech.Entity) || (speech.Id != 0 && speech.Views.TryName(target, out var name)
+                    && name.Kind == 2 && NetworkWorldIds.TryParse(name.Id, out var named) && named.Value == speech.Id));
+        }
         private ViewSnapshot Derive(string player)
         {
             if (binding == null || !binding.Renderer.IsAlive) return ViewSnapshot.Empty;

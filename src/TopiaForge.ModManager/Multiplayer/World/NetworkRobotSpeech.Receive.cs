@@ -71,9 +71,12 @@ namespace TopiaForge.ModManager
             for (var i = active.Count - 1; i >= 0; i--)
             {
                 var operation = active[i];
-                var valid = operation.Current() && operation.Entity.IsAlive && operation.Provider.IsSpeechVisible(operation.Entity);
+                var valid = operation.Current() && operation.Entity.IsAlive
+                    && operation.Provider.IsSpeechVisible(operation.Entity, canonical: realm != NetRealm.Client);
                 if (!valid || clock() - operation.Started >= DeadlineMicros) operation.RequestCancellation();
-                if (!operation.CancellationRequested && operation.Task != null && !operation.Task.IsCompleted && !LocalEligible(operation.Entity))
+                if (!operation.CancellationRequested && operation.Task != null && !operation.Task.IsCompleted
+                    && (!LocalEligible(operation.Entity, operation.WireId)
+                        || !operation.Provider.IsSpeechVisible(operation.Entity, canonical: false)))
                 {
                     if (realm == NetRealm.Client) operation.RequestCancellation();
                     else operation.CancelLocal();
@@ -88,7 +91,7 @@ namespace TopiaForge.ModManager
                 for (var p = operation.Recipients.Count - 1; p >= 0; p--)
                 {
                     var recipient = operation.Recipients[p];
-                    if (!cancelled && Eligible(recipient.Id, operation.Entity)
+                    if (!cancelled && Eligible(recipient.Id, operation.Entity, operation.WireId, checkView: !recipient.Completed)
                         && recipient.Gate.Generation == world.Channel.GetGeneration(recipient.Id)
                         && ready.TryGetValue(recipient.Id, out var currentGate) && currentGate.Challenge == recipient.Gate.Challenge) continue;
                     // An admitted listener that departs cannot certify completion. Stop its copy, but let
@@ -196,9 +199,9 @@ namespace TopiaForge.ModManager
             // The receiver's own monotonic clock was echoed, so no clock synchronization is needed.
             if (clock() - (long)stamp > 2_000_000) return Decline(lineNonce, (uint)entityId);
             if (!incoming.TryTake(clock()) || active.Count >= 32) return Decline(lineNonce, (uint)entityId);
-            if (!world.Client.SpeechTarget((uint)entityId, mod, kind, out var entity) || entity == null || !LocalEligible(entity)
+            if (!world.Client.SpeechTarget((uint)entityId, mod, kind, out var entity) || entity == null || !LocalEligible(entity, (uint)entityId)
                 || !services.TryGetReplicaFactory(kind, out var factory) || factory is not IInternalSpeechProvider provider
-                || !provider.IsSpeechVisible(entity)) return Decline(lineNonce, (uint)entityId);
+                || !provider.IsSpeechVisible(entity, canonical: false)) return Decline(lineNonce, (uint)entityId);
             foreach (var previous in active) if (ReferenceEquals(previous.Entity, entity)) previous.RequestCancellation();
             bool Current() => world.Client.SpeechTarget((uint)entityId, mod, kind, out var current) && ReferenceEquals(current, entity)
                 && services.TryGetReplicaFactory(kind, out var registered) && ReferenceEquals(registered, provider);

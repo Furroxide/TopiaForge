@@ -161,14 +161,16 @@ This spawn path does not import an entity overlay.
 ## Robot speech
 
 Call `await agent.SayAsync(reply, cancellationToken)` on an agent from the owning host context.
-RobotKit selects listeners within 20 metres using current-world validated presence, privately delivers
-only the bounded line and its native voice fingerprint, and synthesizes locally on each eligible peer.
+RobotKit selects listeners within 20 metres using current-world validated presence and the host's
+world-view leases. It privately delivers only the bounded line and its native voice fingerprint to
+eligible guests, then synthesizes locally for each eligible listener.
 Native `AgentHead.Say` calls on these owned robots use the same route automatically. Guests cannot
 originate NPC speech and their replicas remain dormant. Authors write no packet, recipient list or token plumbing.
 
 Lines allow up to 512 plain-text characters. A new line replaces the previous one; cancellation,
-despawn, scope disposal, hiding and world changes stop playback. Missing bindings return `Unavailable`;
-retry a fresh line after recovery. Delivery is best effort: full windows, expired lines and late joins
+despawn, scope disposal and world changes stop playback. Hiding a robot from a viewer stops that
+viewer's playback while other eligible listeners continue. Missing bindings return `Unavailable`.
+Retry a fresh line after recovery. Delivery is best effort: full windows, expired lines and late joins
 do not replay speech. A successful await waits for every accepting listener's native playback completion
 (remote listeners report theirs) and the one-second speech pace. A guest that declines before playback
 reports that promptly, without a reason; it does not delay or fail the remaining listeners. `true` means

@@ -54,7 +54,7 @@ namespace TopiaForge.ModManager
             if (!RobotSpeechWire.Text(text)) return Result(ModErrorCode.InvalidArgument, "Robot speech needs 1 to 512 plain-text characters.");
             if (speechPaces.ContainsKey(entity)) return Result(ModErrorCode.RateLimited, "This robot spoke too recently.");
             if (!services.TryGetReplicaFactory(kind, out var factory) || factory is not IInternalSpeechProvider provider
-                || !provider.IsSpeechVisible(entity)) return Unavailable();
+                || !provider.IsSpeechVisible(entity, canonical: true)) return Unavailable();
             var identity = provider.VoiceIdentity(entity);
             if (!identity.TryGetValue(out var voice) || !RobotSpeechWire.Hex(voice, 64)) return Unavailable();
             uint id = 0;
@@ -73,7 +73,7 @@ namespace TopiaForge.ModManager
             {
                 foreach (var peer in presence.Peers)
                 {
-                    if (peer.IsLocal || !Eligible(peer.Id, entity) || !ready.TryGetValue(peer.Id, out var gate)
+                    if (peer.IsLocal || !Eligible(peer.Id, entity, id) || !ready.TryGetValue(peer.Id, out var gate)
                         || gate.World != instance || gate.Generation != world.Channel.GetGeneration(peer.Id)
                         || clock() - gate.ReceivedAt > 2_000_000) continue;
                     RobotSpeechWire.Header(writer, RobotSpeechWire.Line, instance, gate.Challenge, operation.Nonce, id);
@@ -83,26 +83,28 @@ namespace TopiaForge.ModManager
                     operation.Recipients.Add(new Recipient(peer.Id, gate, id));
                 }
             }
-            if (!operation.CancellationRequested && LocalEligible(entity)) operation.StartLocal(voice, text);
+            if (!operation.CancellationRequested && LocalEligible(entity, id) && provider.IsSpeechVisible(entity, canonical: false))
+                operation.StartLocal(voice, text);
             return operation.Completion.Task;
         }
 
-        private bool Eligible(ParticipantId participant, IEntity entity)
+        private bool Eligible(ParticipantId participant, IEntity entity, uint entityId, bool checkView = true)
         {
             var presence = services.Players?.Presence;
             if (presence == null || runningWorld == null || !presence.Host.IsCurrentWorld
                 || !presence.TryGetPeer(participant, out var peer) || peer == null || !peer.IsConnected || peer.Removed
-                || (!peer.IsLocal && peer.PlacedWorld != runningWorld)) return false;
+                || (!peer.IsLocal && peer.PlacedWorld != runningWorld)
+                || (checkView && services.Views.IsHiddenForSpeech(runningWorld, participant, entity, entityId))) return false;
             var position = presence.ValidatedPosition(participant);
             return position.HasValue && Near(entity.Position, new Vec3(position.Value.X, position.Value.Y, position.Value.Z));
         }
 
-        private bool LocalEligible(IEntity entity)
+        private bool LocalEligible(IEntity entity, uint entityId)
         {
             var presence = services.Players?.Presence;
             if (presence == null) return false;
             if (realm == NetRealm.ListenHost)
-                return presence.LocalParticipant is ParticipantId local && Eligible(local, entity);
+                return presence.LocalParticipant is ParticipantId local && Eligible(local, entity, entityId);
             return (realm == NetRealm.Offline || runningWorld != null) && presence.Backend.TryReadLocalPlayer(out var sample)
                 && Near(entity.Position, new Vec3(sample.Feet.X, sample.Feet.Y, sample.Feet.Z));
         }
