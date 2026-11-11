@@ -26,6 +26,13 @@ namespace TopiaForge.ModManager.Core
         internal int Count => entries.Count;
         internal int HiddenCount => hidden.Count;
         internal bool IsHidden(T target) => hidden.ContainsKey(target);
+        internal bool IsHiddenFor<TState>(string? player, TState state, Func<T, TState, bool> matches)
+        {
+            foreach (var entry in entries.Values)
+                if (entry.Hidden != null && (entry.Player == null || entry.Player == player)
+                    && matches(entry.Hidden, state)) return true;
+            return false;
+        }
         internal long Add(Entry entry)
         {
             if (Count >= MaximumLeases || next == long.MaxValue) return 0;

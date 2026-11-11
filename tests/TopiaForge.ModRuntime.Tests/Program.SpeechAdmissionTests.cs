@@ -60,7 +60,7 @@ namespace TopiaForge.ModRuntime.Tests
 
         private sealed class AdmissionSpeechFactory : AdmissionReplicaFactory, IInternalSpeechProvider
         {
-            public bool IsSpeechVisible(IEntity entity) => false;
+            public bool IsSpeechVisible(IEntity entity, bool canonical) => false;
             public OperationResult<string> VoiceIdentity(IEntity entity) =>
                 OperationResult<string>.Failure(ModErrorCode.Unavailable, "This admission fixture synthesizes no speech.");
             public Task<OperationResult<bool>> PlaySpeechAsync(IEntity entity, string voice, string text, CancellationToken cancellationToken) =>

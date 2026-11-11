@@ -45,7 +45,7 @@ namespace TopiaForge.ModManager
                         || recipient.Gate.Challenge != messageChallenge
                         || recipient.Gate.Generation != world.Channel.GetGeneration(sender)
                         || !ready.TryGetValue(sender, out var gate) || gate.Challenge != messageChallenge
-                        || gate.Generation != recipient.Gate.Generation || !Eligible(sender, operation.Entity)) continue;
+                        || gate.Generation != recipient.Gate.Generation || !Eligible(sender, operation.Entity, entityId)) continue;
                     if (status == RobotSpeechWire.Declined)
                     {
                         // A refusal before playback is terminal for this recipient only. Removing it also

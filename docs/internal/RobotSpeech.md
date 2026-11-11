@@ -10,12 +10,14 @@ delivery, synthesis and cancellation. No author networking, serialization or tok
 ## Audience and disclosure
 
 Only currently synchronized listeners in the same running world, with fresh host-validated positions
-within a spherical 20-metre radius, receive text. The source must be a live, visible body with a current owning speech association.
-RobotKit's persistent parent belongs to Unity's DontDestroyOnLoad scene; that scene is not the owning
-world. Association lifetime, active hierarchy and enabled renderers determine speech visibility.
-The host uses the same earshot rule for its own synthesis. Receivers recheck their local position,
-world, replica lifetime and native visibility before synthesis and while playback remains active.
-Moving the host out of earshot stops only its local playback; other eligible listeners continue.
+within a spherical 20-metre radius, receive text. The host checks each listener's world-view leases
+before sending the line. The source must have a current owning speech association, an active hierarchy
+and an enabled renderer. For a renderer under a view hide, the source check uses its value before the
+hide. The owning association also covers bodies under Unity's persistent DontDestroyOnLoad root.
+The host applies the same earshot and view rules for its own synthesis. Receivers recheck their local
+position, world, replica lifetime and native visibility before synthesis and while playback is active.
+A listener who moves out of earshot or has the robot hidden from their view loses their own playback.
+Other eligible listeners continue. Restoring a view permits fresh lines.
 
 Packets contain one effective line and voice fingerprint, plus bounded routing/authentication metadata.
 There are no audience lists, conversation histories, transcripts, callbacks, credentials, addresses or audio
