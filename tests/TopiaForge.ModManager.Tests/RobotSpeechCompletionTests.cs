@@ -14,7 +14,8 @@ namespace TopiaForge.ModManager.Tests
             FarHostSequential(); SequentialAtPaceBoundary(); NoRecipients(); AllListeners(); Failures(); AcknowledgementValidation(); ResetContinuation();
             WorkerCancellation(); FrameDeadlines();
             DeclinedAdmissions(); DeclineValidation(); SchemaCompatibility(); ActiveCapDecline();
-            Console.WriteLine("Robot speech completion: 13 focused groups passed.");
+            ListenerLoss(); CompletedListenerDeparture(); LocalProviderCancellation();
+            Console.WriteLine("Robot speech completion: 16 focused groups passed.");
         }
         private static void Check(bool value, string reason)
         { if (!value) throw new InvalidOperationException("Robot speech completion: " + reason); }
@@ -132,7 +133,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void Failures()
         {
-            foreach (var loss in new[] { "caller", "world", "provider", "owner", "ownership", "disconnect", "hidden", "failure", "timeout" })
+            foreach (var loss in new[] { "caller", "cancelled-at-deadline", "world", "provider", "owner", "ownership", "disconnect", "hidden", "failure", "timeout" })
             {
                 using var rig = new RobotSpeechRig(); rig.Move(rig.Host, 60);
                 using var cancellation = new CancellationTokenSource();
@@ -142,6 +143,7 @@ namespace TopiaForge.ModManager.Tests
                 switch (loss)
                 {
                     case "caller": cancellation.Cancel(); break;
+                    case "cancelled-at-deadline": cancellation.Cancel(); rig.World.Clock.Advance(16_000_000); break;
                     case "world": rig.Host.Scene++; break;
                     case "provider": rig.World.Host.Lifetime.Dispose(); break;
                     case "owner": rig.Owner.Lifetime.BeginStop(); break;
@@ -152,7 +154,13 @@ namespace TopiaForge.ModManager.Tests
                     case "timeout": rig.World.Clock.Advance(16_000_000); break;
                 }
                 rig.Later();
-                Check(call.IsCompleted && !call.Result.Succeeded, loss + " settles boundedly without claiming playback success");
+                var expected = loss switch
+                {
+                    "disconnect" or "hidden" or "failure" => ModErrorCode.Unavailable,
+                    "timeout" => ModErrorCode.TimedOut,
+                    _ => ModErrorCode.Cancelled,
+                };
+                Check(call.IsCompleted && call.Result.ErrorCode == expected, loss + " settles with its own failure code");
                 Check(rig.World.Host.World.Speech.ActiveCount == 0, loss + " releases retained operation");
             }
             // Silence from a still-connected peer is not an acknowledgement, including a full return window.
@@ -161,7 +169,73 @@ namespace TopiaForge.ModManager.Tests
             stalled.Guests[0].Peer.Paused = true; stalled.Later();
             Check(!pending.IsCompleted, "a silent connected listener cannot complete a line");
             stalled.World.Clock.Advance(16_000_000); stalled.World.Frames(3);
-            Check(pending.IsCompleted && !pending.Result.Succeeded, "missing completion report expires at the existing deadline");
+            Check(pending.IsCompleted && pending.Result.ErrorCode == ModErrorCode.TimedOut,
+                "missing completion report expires at the existing deadline");
+        }
+
+        private static void ListenerLoss()
+        {
+            foreach (var local in new[] { true, false })
+            {
+                using var rig = new RobotSpeechRig(2);
+                var call = rig.Robot.SayAsync("One listener leaves earshot.");
+                rig.World.Frames(5);
+                var departing = local ? rig.Canonical : rig.Guests[0].Body;
+                var remaining = local ? rig.Guests[0].Body : rig.Canonical;
+                var otherGuest = rig.Guests[1].Body;
+
+                rig.Move(local ? rig.Host : rig.Guests[0], 60);
+                rig.Later();
+                Check(departing.SpeechTokens.Single().IsCancellationRequested && !call.IsCompleted,
+                    "leaving earshot stops the lost copy and the host waits for the other listeners");
+                Check(!remaining.SpeechTokens.Single().IsCancellationRequested && !otherGuest.SpeechTokens.Single().IsCancellationRequested,
+                    "listener loss leaves the other admitted copies running");
+                remaining.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
+                otherGuest.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
+                rig.World.Frames(5);
+                Check(call.IsCompleted && call.Result.ErrorCode == ModErrorCode.Unavailable && rig.World.Host.World.Speech.ActiveCount == 0,
+                    "listener loss is Unavailable even when the stopped native task reports Cancelled and other copies finish");
+            }
+        }
+
+        private static void CompletedListenerDeparture()
+        {
+            foreach (var disconnect in new[] { false, true })
+            {
+                using var rig = new RobotSpeechRig(2);
+                rig.Move(rig.Host, 60);
+                var departed = rig.Guests[0];
+                var remaining = rig.Guests[1].Body;
+                var call = rig.Robot.SayAsync("A listener leaves after completing playback.");
+                rig.World.Frames(5);
+                var sender = departed.Peer.Control.Id;
+                var line = rig.Log.Last(packet => packet.Payload[1] == RobotSpeechWire.Line && packet.To.Equals(sender)).Payload;
+                departed.Body.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
+                Check(Deliver(rig, Finished(line, RobotSpeechWire.Completed), sender) && !call.IsCompleted,
+                    "the host accepts completion from the eligible guest while the other guest is pending");
+
+                if (disconnect) rig.World.Network.LoseLink(departed.Peer.Control);
+                else rig.Move(departed, 60);
+                rig.Later();
+                Check(!call.IsCompleted && !remaining.SpeechTokens.Single().IsCancellationRequested,
+                    "the completed guest's departure leaves the remaining copy pending");
+
+                remaining.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
+                rig.World.Frames(5);
+                Check(call.IsCompleted && call.Result.Succeeded && call.Result.Value,
+                    "a guest leaving after an accepted completion does not undo overall success");
+            }
+        }
+
+        private static void LocalProviderCancellation()
+        {
+            using var rig = new RobotSpeechRig(0);
+            var call = rig.Robot.SayAsync("The native provider stops on its own.");
+            var local = rig.Canonical;
+            local.SpeechCompletions.Single().SetResult(OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Provider stopped."));
+            rig.Later();
+            Check(call.IsCompleted && call.Result.ErrorCode == ModErrorCode.Unavailable && !local.SpeechTokens.Single().IsCancellationRequested,
+                "provider cancellation alone is a playback failure and does not report caller cancellation");
         }
 
         private static void ResetContinuation()
@@ -170,7 +244,7 @@ namespace TopiaForge.ModManager.Tests
             async Task Dialogue()
             {
                 var result = await rig.Robot.SayAsync("World is ending.");
-                Check(!result.Succeeded, "world reset fails the old call");
+                Check(result.ErrorCode == ModErrorCode.Cancelled, "world reset cancels the old call");
                 var retry = await rig.Robot.SayAsync("Reentrant call during reset.");
                 Check(retry.ErrorCode == ModErrorCode.Unavailable, "reset continuation cannot readmit old-world work");
             }
@@ -215,7 +289,8 @@ namespace TopiaForge.ModManager.Tests
             var guest = rig.Guests[0];
             var clock = rig.World.Clock;
             var hostStarted = clock.Now;
-            var call = rig.Robot.SayAsync("Neither copy can hang forever.");
+            using var caller = new CancellationTokenSource();
+            var call = rig.Robot.SayAsync("Neither copy can hang forever.", caller.Token);
             long receivedAt = 0;
             for (var frame = 0; frame < 10 && guest.Body.SpeechPlays == 0; frame++)
             {
@@ -226,7 +301,11 @@ namespace TopiaForge.ModManager.Tests
             var frameThread = Environment.CurrentManagedThreadId;
             var localThread = 0;
             var remoteThread = 0;
-            using var hostProbe = rig.Canonical.SpeechTokens.Single().Register(() => localThread = Environment.CurrentManagedThreadId);
+            using var hostProbe = rig.Canonical.SpeechTokens.Single().Register(() =>
+            {
+                localThread = Environment.CurrentManagedThreadId;
+                caller.Cancel();
+            });
             using var guestProbe = guest.Body.SpeechTokens.Single().Register(() => remoteThread = Environment.CurrentManagedThreadId);
             var host = rig.World.Host.World.Speech;
             var receiver = guest.Peer.World.Speech;
@@ -235,8 +314,8 @@ namespace TopiaForge.ModManager.Tests
             Check(localThread == 0 && remoteThread == 0 && !call.IsCompleted, "neither copy expires before its deadline");
             clock.Advance(1);
             host.Tick();
-            Check(localThread == frameThread && remoteThread == 0 && call.IsCompleted && call.Result.ErrorCode == ModErrorCode.Cancelled,
-                "host expires exactly on its frame deadline without an acknowledgement");
+            Check(localThread == frameThread && remoteThread == 0 && call.IsCompleted && call.Result.ErrorCode == ModErrorCode.TimedOut,
+                "host expires exactly on its frame deadline even if native cancellation also requests caller cancellation");
             // No transport pump or flush here: the receiver must enforce its own deadline without a host cancel packet.
             if (receivedAt > hostStarted)
             {

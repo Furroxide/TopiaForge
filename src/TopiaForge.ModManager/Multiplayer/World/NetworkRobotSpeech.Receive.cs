@@ -73,32 +73,50 @@ namespace TopiaForge.ModManager
                 var operation = active[i];
                 var valid = operation.Current() && operation.Entity.IsAlive
                     && operation.Provider.IsSpeechVisible(operation.Entity, canonical: realm != NetRealm.Client);
-                if (!valid || clock() - operation.Started >= DeadlineMicros) operation.RequestCancellation();
-                if (!operation.CancellationRequested && operation.Task != null && !operation.Task.IsCompleted
+                if (!valid) operation.RequestCancellation();
+                var deadlineReached = clock() - operation.Started >= DeadlineMicros;
+                if (!operation.CancellationRequested && !deadlineReached && operation.Task != null && !operation.Task.IsCompleted
                     && (!LocalEligible(operation.Entity, operation.WireId)
                         || !operation.Provider.IsSpeechVisible(operation.Entity, canonical: false)))
                 {
                     if (realm == NetRealm.Client) operation.RequestCancellation();
-                    else operation.CancelLocal();
+                    else
+                    {
+                        // Native cancellation can complete the task inline with Cancelled.
+                        operation.ListenerLost = true;
+                        operation.CancelLocal();
+                    }
                 }
                 if (i >= active.Count || !ReferenceEquals(active[i], operation)) { i = active.Count; continue; }
                 var cancelled = operation.CancellationRequested;
-                if (cancelled)
+                if (cancelled || deadlineReached)
                 {
+                    var failure = cancelled || realm == NetRealm.Client
+                        ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Robot speech was cancelled.")
+                        : OperationResult<bool>.Failure(ModErrorCode.TimedOut, "Robot speech did not finish within 15 seconds.");
+                    // Retire with the selected result before native cancellation can run callbacks.
                     active.RemoveAt(i);
                     operation.CancelLocal();
+                    foreach (var recipient in operation.Recipients) SendCancel(operation, recipient);
+                    if (realm == NetRealm.Client) SendFinished(operation, completed: false);
+                    operation.DisposeLocal();
+                    operation.Completion.TrySetResult(failure);
+                    i = active.Count;
+                    continue;
                 }
                 for (var p = operation.Recipients.Count - 1; p >= 0; p--)
                 {
                     var recipient = operation.Recipients[p];
-                    if (!cancelled && Eligible(recipient.Id, operation.Entity, operation.WireId, checkView: !recipient.Completed)
+                    // Eligibility was checked when the terminal report was accepted.
+                    if (recipient.Completed) continue;
+                    if (Eligible(recipient.Id, operation.Entity, operation.WireId)
                         && recipient.Gate.Generation == world.Channel.GetGeneration(recipient.Id)
                         && ready.TryGetValue(recipient.Id, out var currentGate) && currentGate.Challenge == recipient.Gate.Challenge) continue;
                     // An admitted listener that departs cannot certify completion. Stop its copy, but let
                     // the remaining listeners finish. The caller receives failure, never partial success.
-                    SendCancel(operation, recipient);
-                    operation.Failure = OperationResult<bool>.Failure(ModErrorCode.Cancelled, "A robot speech listener became unavailable.");
+                    operation.ListenerLost = true;
                     operation.Recipients.RemoveAt(p);
+                    SendCancel(operation, recipient);
                 }
                 var localDone = operation.Task == null || operation.Task.IsCompleted;
                 if (operation.Task?.IsCompleted == true)
@@ -111,20 +129,23 @@ namespace TopiaForge.ModManager
                 var remoteDone = true;
                 foreach (var recipient in operation.Recipients) if (!recipient.Completed) remoteDone = false;
                 // A request racing this frame's poll stays pending for the next frame to cancel every copy.
-                if (!cancelled && operation.CancellationRequested) continue;
+                if (operation.CancellationRequested) continue;
                 if (realm == NetRealm.Client)
                 {
-                    if (!cancelled && !localDone) continue;
-                    // Only settled native playback can report success. Cancellation reports failure on this frame.
-                    SendFinished(operation, !cancelled && operation.Task?.Result.Succeeded == true && operation.Task.Result.Value);
+                    if (!localDone) continue;
+                    // Only settled native playback can report success.
+                    SendFinished(operation, operation.Task?.Result.Succeeded == true && operation.Task.Result.Value);
                 }
-                else if (!cancelled && (!localDone || !remoteDone || clock() - operation.Started < 1_000_000)) continue;
-                if (!cancelled) active.RemoveAt(i);
+                else if (!localDone || !remoteDone || clock() - operation.Started < 1_000_000) continue;
+                active.RemoveAt(i);
                 operation.DisposeLocal();
-                var result = cancelled ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Robot speech was cancelled.")
-                    : operation.Failure ?? OperationResult<bool>.Success(operation.Task != null || operation.Recipients.Count != 0);
+                var result = operation.Failure;
+                if (operation.ListenerLost)
+                    result = OperationResult<bool>.Failure(ModErrorCode.Unavailable, "A robot speech listener became unavailable.");
+                else if (result?.ErrorCode == ModErrorCode.Cancelled)
+                    result = OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Native robot speech did not complete playback.");
                 // Retire before waking a sequential caller, which may start another line synchronously.
-                operation.Completion.TrySetResult(result);
+                operation.Completion.TrySetResult(result ?? OperationResult<bool>.Success(operation.Task != null || operation.Recipients.Count != 0));
                 i = active.Count;
             }
             if (handshakePaces.Count != 0)
