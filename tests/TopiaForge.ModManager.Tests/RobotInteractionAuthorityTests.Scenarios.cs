@@ -15,10 +15,12 @@ internal sealed class InteractionProbe
     private readonly List<IRobotAgent> gates = new(), callbacks = new();
     private RobotInteractionContext? lastContext;
     private bool allowGate = true;
+    private string? nextEntityId;
     public InteractionProbe() { }
     public IRobotAgent Decorate(IRobotAgent inner, RobotAgentSpawnRequest request)
     {
-        var native = new NativeRobot(inner, request);
+        var native = new NativeRobot(inner, request, nextEntityId);
+        nextEntityId = null;
         service.Last = native;
         return native;
     }
@@ -34,13 +36,20 @@ internal sealed class InteractionProbe
             return allowGate;
         } : null));
     public void Run(string scenario, IModLifetime lifetime, IRuntimeReplication replication,
-        Func<IRuntimeReplication, RobotAgentSpawnRequest, OperationResult<IRobotAgent>> spawn,
-        Func<IDisposable> forwarded, Action stopOwner)
+        Func<IRuntimeReplication, RobotAgentSpawnRequest, Func<bool>, OperationResult<IRobotAgent>> spawn,
+        Func<IDisposable> forwarded, Action stopOwner, Action<string> forgetId,
+        Action<int> awaitAdoption, Func<long> sentRequests, Action<string, string?> settleClientCleanup)
     {
         service.Replication = new RobotReplication { SpawnCore = spawn };
         using var context = new ProbeContext(lifetime, replication);
+        if (scenario == "worker") { WorkerCalls(context); return; }
         var owner = service.ForOwner(context);
         if (scenario == "policies") { Policies(owner, forwarded); return; }
+        if (scenario.StartsWith("client-", StringComparison.Ordinal))
+        {
+            ClientCleanup(scenario, context, owner, stopOwner, forgetId, awaitAdoption, sentRequests, settleClientCleanup);
+            return;
+        }
 
         var reused = scenario == "poll-allocation" ? Custom(gated: false) : null;
         OperationResult<IRobotAgent> result;
@@ -91,7 +100,13 @@ internal sealed class InteractionProbe
         if (scenario == "owner-stop" || scenario == "world-retired")
         {
             if (scenario == "owner-stop") stopOwner();
-            else context.Scope.Current = false;
+            else
+            {
+                forgetId(robot.Id);
+                Require(robot.Despawn().ErrorCode == ModErrorCode.NotAuthoritative &&
+                    native.IsAlive && native.Disposals == 0, "a live authority refusal retains the cleanup lease");
+                context.Scope.Current = false;
+            }
             Require(native.IsAlive, "native body still exists before scoped rejection");
             var expected = scenario == "owner-stop" ? ModErrorCode.Cancelled : ModErrorCode.InvalidState;
             var calls = native.Calls;
@@ -103,8 +118,14 @@ internal sealed class InteractionProbe
             Require(!bridge.CanInteract(native.Hand), "retired owner/world bridge cannot select a prompt");
             bridge.OnInteractAttempt(native.Hand, CancellationToken.None);
             Require(gates.Count + callbacks.Count == count, "retired owner/world callbacks stay suppressed");
+            using (forwarded())
+                Require(robot.Despawn().ErrorCode == expected && native.IsAlive && native.Disposals == 0,
+                    "a forwarded guest cannot release the retired host body");
+            Require(robot.Despawn().TryGetValue(out var released) && released && !native.IsAlive,
+                "trusted cleanup releases the tracked body after scope retirement or stop");
+            Require(robot.Despawn().TryGetValue(out released) && !released, "repeated Despawn is a successful no-op");
             robot.Dispose();
-            Require(native.Disposals > 0 && !native.IsAlive, "Dispose still releases native resources after scope retirement");
+            Require(native.Calls == calls && native.Disposals == 1, "cleanup releases the lease once without a routed mutation");
             return;
         }
 
@@ -173,6 +194,112 @@ internal sealed class InteractionProbe
             "disposed owner polls and stopping owner callbacks stay suppressed");
     }
 
+    private void WorkerCalls(ProbeContext context)
+    {
+        IRobotAgentService owner = null!;
+        OnWorker(() => owner = service.ForOwner(context));
+        var request = new RobotAgentSpawnRequest(Vec3.Zero);
+        var robot = owner.Spawn(request).Value!;
+        var native = service.Last!;
+        Require(ReferenceEquals(owner.ActiveAgents[0], robot) && owner.TryGetRobot(native, out var found) &&
+            ReferenceEquals(found, robot), "facade first resolved on a worker still belongs to the game thread");
+
+        var scopeChecks = context.Scope.Checks;
+        var captures = context.Captures;
+        var aliveReads = native.AliveReads;
+        var nativeReads = service.NativeReads;
+        OnWorker(() =>
+        {
+            RequireThreadRefusal(() => _ = owner.ActiveAgents, "ActiveAgents");
+            RequireThreadRefusal(() => owner.TryGetRobot(native, out _), "TryGetRobot");
+            RequireThreadRefusal(() => _ = owner.IsAvailable, "IsAvailable");
+            RequireThreadRefusal(() => _ = owner.IsNavigationAvailable, "IsNavigationAvailable");
+            RequireThreadRefusal(() => _ = owner.RobotTypes, "RobotTypes");
+            RequireThreadRefusal(() => owner.TryGetPlayerEntity(out _), "TryGetPlayerEntity");
+            RequireThreadRefusal(() => owner.Spawn(request), "Spawn");
+            RequireThreadRefusal(() => owner.FindReachableSpawnAsync(null!).GetAwaiter().GetResult(), "FindReachableSpawnAsync");
+            RequireThreadRefusal(() => robot.Despawn(), "Despawn");
+        });
+        Require(context.Scope.Checks == scopeChecks && context.Captures == captures &&
+            native.AliveReads == aliveReads && service.NativeReads == nativeReads &&
+            native.Calls == 0 && native.Disposals == 0 && ReferenceEquals(native, service.Last),
+            "worker rejections precede scope, native and cleanup access");
+        Require(owner.TryGetRobot(native, out found) && ReferenceEquals(found, robot) &&
+            ReferenceEquals(owner.ActiveAgents[0], robot), "worker access does not prune the live owner wrapper");
+    }
+
+    private static void OnWorker(Action action)
+    {
+        Exception? failure = null;
+        var worker = new Thread(() =>
+        {
+            try { action(); }
+            catch (Exception error) { failure = error; }
+        });
+        worker.Start();
+        worker.Join();
+        if (failure != null) throw new InvalidOperationException("Robot interaction worker failed.", failure);
+    }
+
+    private static void RequireThreadRefusal(Action action, string operation)
+    {
+        try { action(); }
+        catch (InvalidOperationException error) when (error.Message.StartsWith("TFSDK100: " + operation + " ", StringComparison.Ordinal)
+            && error.Message.Contains("Context.Scheduler.NextFrame", StringComparison.Ordinal))
+        {
+            return;
+        }
+        throw new InvalidOperationException(operation + " did not report the game-thread requirement.");
+    }
+
+    private void ClientCleanup(string scenario, ProbeContext context, IRobotAgentService owner, Action stopOwner,
+        Action<string> forgetId, Action<int> awaitAdoption, Func<long> sentRequests, Action<string, string?> settleCleanup)
+    {
+        const string originalName = "Original";
+        const string successorName = "Successor";
+        var original = owner.Spawn(new RobotAgentSpawnRequest(Vec3.Zero, name: originalName)).Value!;
+        var native = service.Last!;
+        awaitAdoption(1);
+        if (scenario == "client-live")
+        {
+            var before = sentRequests();
+            original.Dispose();
+            Require(sentRequests() > before, "disposing a current client robot still routes its command");
+            settleCleanup(originalName, null);
+            return;
+        }
+
+        if (scenario == "client-owner-stop")
+        {
+            stopOwner();
+            context.Lifetime.Dispose();
+            Require(!native.IsAlive && native.Disposals == 1 && original.Despawn().TryGetValue(out var afterStop) && !afterStop,
+                "lifetime teardown releases the client body once and later cleanup is a no-op");
+            settleCleanup(originalName, null);
+            return;
+        }
+
+        context.ReplaceWorld();
+        forgetId(original.Id);
+        nextEntityId = original.Id;
+        var successor = owner.Spawn(new RobotAgentSpawnRequest(Vec3.Zero, name: successorName)).Value!;
+        var successorNative = service.Last!;
+        Require(successor.Id == original.Id && !ReferenceEquals(successorNative, native), "successor reuses only the ID");
+        awaitAdoption(2);
+        var sent = sentRequests();
+        if (scenario == "client-retired-dispose")
+            original.Dispose();
+        else
+            Require(original.Despawn().TryGetValue(out var released) && released, "retired client Despawn releases its original body");
+
+        Require(original.Despawn().TryGetValue(out var again) && !again && native.Disposals == 1 &&
+            !native.IsAlive && successor.IsAlive && sentRequests() == sent,
+            "retired cleanup releases the original once without submitting a command for the replacement");
+        settleCleanup(originalName, successorName);
+        Require(successor.IsAlive && successorNative.Disposals == 0 && native.Disposals == 1,
+            "ending the original prediction leaves the same-ID replacement untouched");
+    }
+
     private void Policies(IRobotAgentService owner, Func<IDisposable> forwarded)
     {
         Require(owner.Spawn(new RobotAgentSpawnRequest(Vec3.Zero)).Succeeded &&
@@ -213,7 +340,6 @@ internal sealed class InteractionProbe
         yield return () => robot.Kill(default, "test");
         yield return () => robot.Ragdoll();
         yield return () => robot.Knockback(Vec3.Zero);
-        yield return () => robot.Despawn();
         yield return () => robot.SayAsync("Hello", CancellationToken.None).GetAwaiter().GetResult();
     }
     private static void Require(bool condition, string message)
