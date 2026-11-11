@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Successful speech calls wait for every admitted listener's native playback task and the one-second pace. `Success(false)` means no listener was admitted; no synthesis occurs. Remote completion reports require speech schema 2 on both peers.
+- Retained persistent-body service facades can spawn in a ready replacement world while their scope and provider remain active. New bodies capture fresh world read authority; old bodies stay retired.
+- Composed robot actors survive unchanged world publications and retire when their native context is replaced.
+- Guest-origin robot spawns are normalized to dormant brains with native conversation disabled, including host callbacks acting for guests. Robot commands refuse guest-origin requests to enable autonomous brains or native conversation; custom interaction callbacks retain the consuming owner handle.
+- Added guarded native composition for MuniciPal candidates, with world-owned asset cleanup.
+
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 
 - Robot dialogue capture now holds the runtime microphone lease, yields to native recording, and returns Conflict when preempted without ending the native recording.
