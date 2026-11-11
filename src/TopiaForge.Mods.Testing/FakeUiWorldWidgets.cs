@@ -28,6 +28,7 @@ namespace TopiaForge.Mods.Testing
         {
             get
             {
+                gameThread.AssertCurrent();
                 if (labels != null) return labels;
                 labels = new FakeUiWorldLabels(lifetime, () => scenes?.IsGameplay ?? true, () => scenes?.ActiveInstanceId ?? 0);
                 if (!lifetime.IsStopping)
@@ -46,7 +47,14 @@ namespace TopiaForge.Mods.Testing
         IUiWorldLabels IUiService.Labels => Labels;
         /// <inheritdoc/>
         [RequiresTopiaForge("0.2.0")]
-        public double ClockTime => widgetClock();
+        public double ClockTime
+        {
+            get
+            {
+                gameThread.AssertCurrent();
+                return widgetClock();
+            }
+        }
         internal void FollowWidgets(IGameTime time, FakeModEvents events)
         {
             FollowTime(time);

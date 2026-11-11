@@ -12,6 +12,8 @@ namespace TopiaForge.ModManager.Tests
         {
             TestInMemoryAuthoringServices();
             TestDeterministicGameplayServices();
+            TestEngineFacingThreadAffinity();
+            TestPermissiveFakeThreadAccess();
             TestImmediateLifetimeReleaseForZombieResources();
             TestSchedulerAndControlledCompletion();
             TestExpectedCancellationResults();
@@ -33,6 +35,7 @@ namespace TopiaForge.ModManager.Tests
             TestEveryOwnedResourceAfterPartialLoadFailure();
             TestParticipantSessionFake();
             TestGamemodeSessionRunnerRoles();
+            TestGamemodeSessionRunnerAsyncServer();
             TestGamemodeSessionRunnerFailures();
             Console.WriteLine("TestingKitTests passed.");
         }
