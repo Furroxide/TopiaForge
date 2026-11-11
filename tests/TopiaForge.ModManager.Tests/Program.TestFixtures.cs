@@ -154,6 +154,18 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        private static void TryDelete(DirectoryInfo directory)
+        {
+            try
+            {
+                directory.Delete(recursive: true);
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Could not remove test workspace {directory.Name} ({error.GetType().Name}).");
+            }
+        }
+
         private static void TryDelete(string path)
         {
             try
