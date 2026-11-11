@@ -56,6 +56,10 @@ no peer address or new author networking code is needed. Import, spawn, cancella
 and cleanup use the shared world transition owner. Native catalog lore and respawn
 integration still require verification against the installed game.
 
+Spawn readiness waits for a physics step after placing the player and records the
+settled pose. The spawn wait allows 30 seconds while physics is unpaused and has a
+120-second overall limit. Resume a paused load to let the spawn finish settling.
+
 ## Authored entities and anchors
 
 In a gamemode, `session.World.RequireMap()` returns the imported map's index.

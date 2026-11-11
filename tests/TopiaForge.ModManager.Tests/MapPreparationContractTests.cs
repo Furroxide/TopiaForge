@@ -369,7 +369,9 @@ namespace TopiaForge.ModManager.Tests
         private sealed class Clock : IWorldRuntimeClock
         {
             private TaskCompletionSource<OperationResult<bool>> frame = new TaskCompletionSource<OperationResult<bool>>();
-            public DateTime UtcNow => DateTime.UtcNow;
+            private readonly System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+            public TimeSpan Elapsed => elapsed.Elapsed;
+            public bool IsPhysicsPaused => false;
             public Task<OperationResult<bool>> NextFrameAsync(CancellationToken token) => frame.Task;
             internal void Advance()
             {

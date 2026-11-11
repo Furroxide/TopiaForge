@@ -91,7 +91,7 @@ namespace TopiaForge.ModManager
                             WarnSpawnOffset(actual, spawn, "refused");
                             return Failure<TransformState>(ModErrorCode.Unavailable, "The native player collision shape is unavailable during spawn settling.");
                         }
-                        var result = settlement.Probe(actual, Time.fixedTime);
+                        var result = settlement.Probe(actual, Time.fixedTime, Time.frameCount, Time.timeScale == 0f);
                         if (result != null) WarnSpawnOffset(actual, spawn, result.Succeeded ? "accepted" : "refused");
                         return result;
                     }
@@ -107,11 +107,11 @@ namespace TopiaForge.ModManager
                         new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z),
                         new Quaternion(spawn.Rotation.X, spawn.Rotation.Y, spawn.Rotation.Z, spawn.Rotation.W));
                     spawnController = controller;
-                    settlement = new NativeSpawnSettlement(spawn, controller.height * scale.y, Time.fixedTime);
+                    settlement = new NativeSpawnSettlement(spawn, controller.height * scale.y, Time.fixedTime, Time.frameCount);
                     try { WarnSpawnOffset(ReadTransform(player), spawn, "applied"); }
                     catch (Exception) { }
                     placedPlayer = player; requestedSpawn = spawn;
-                    return null; // Observe settling on subsequent fixed-time epochs within the existing readiness deadline.
+                    return null; // Require a later fixed epoch before paused render frames can confirm stability.
                 }
                 catch (Exception error) { return Failure<TransformState>(ModErrorCode.External, Unwrap(error).Message); }
             }
