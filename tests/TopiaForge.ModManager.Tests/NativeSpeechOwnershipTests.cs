@@ -117,7 +117,12 @@ public static class OwnershipProbe {
   var stoppedHead=new AgentHead();var stoppedAgent=Agent(stoppedHead);using var consumingOwner=new CancellationTokenSource();
   stoppedAgent.BindSpeechPlayback(new object(),()=>true,consumingOwner.Token);var retained=stoppedAgent.speechPlayback!;
   stoppedHead.Pending=new();var speaking=retained.PlayAsync("owner-active",CancellationToken.None);
-  consumingOwner.Cancel();
+  UnityMainThreadGuard.OnWorker(consumingOwner.Cancel);
+  if(speaking.IsCompleted || stoppedHead.LastToken.IsCancellationRequested || stoppedHead.CancellationThread!=0)
+   throw new Exception("worker consuming owner stop reached native playback before the frame");
+  NativeRobotSpeechHost.Tick();
+  if(stoppedHead.CancellationThread!=Environment.CurrentManagedThreadId)
+   throw new Exception("consuming owner stop did not cancel on the frame");
   try{speaking.GetAwaiter().GetResult();throw new Exception("consumer stopping did not cancel native playback");}catch(OperationCanceledException){}
   stoppedHead.Pending=null;
   Refuse("stopped consuming owner with no caller token",stoppedHead,()=>retained.PlayAsync("owner-stopped",CancellationToken.None).GetAwaiter().GetResult());

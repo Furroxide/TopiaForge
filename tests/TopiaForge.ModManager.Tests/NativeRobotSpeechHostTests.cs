@@ -47,7 +47,7 @@ namespace TopiaForge.ModManager.Tests
             if (!emitted.Success) throw new InvalidOperationException(string.Join("\n", emitted.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
             var probe = Assembly.Load(bytes.ToArray()).GetType("Probe", true)!;
             ((Action)probe.GetMethod("Run")!.CreateDelegate(typeof(Action)))();
-            Console.WriteLine("Native speech hosting: 12 production-source boundary groups passed (native execution unproved).");
+            Console.WriteLine("Native speech hosting: 13 production-source boundary groups passed (native execution unproved).");
         }
 
         private const string Boundary = """
@@ -69,7 +69,7 @@ public sealed class AgentHead {
  public int NativeCalls,Overrides; public bool Throw;
  public IDisposable OverrideSpeech(string speaker,object asset){Overrides++;return new Override();}
  private sealed class Override:IDisposable {public void Dispose(){}} public Action<CancellationToken>? Reenter;
- public TaskCompletionSource<bool>? Pending; public CancellationToken LastToken;
+ public TaskCompletionSource<bool>? Pending; public CancellationToken LastToken; public int CancellationThread;
  public Task<SayResult> Say(string text, HintGroup hints, TaskGraph graph, CancellationToken ct, FMODAudioClipAsset? synth, bool subtitles) {
   var args=new object?[]{this,text,ct,synth,subtitles,null};
   if(!OwnerHarmonyLease.Invoke(false,args)) return (Task<SayResult>)args[5]!;
@@ -81,8 +81,9 @@ public sealed class AgentHead {
   NativeCalls++; LastToken=ct;
   if(Throw) throw new InvalidOperationException("native failure");
   Reenter?.Invoke(ct);
-  if(Pending==null) return Task.CompletedTask;
-  ct.Register(()=>Pending.TrySetCanceled(ct)); return Pending.Task;
+  var pending=Pending;
+  if(pending==null) return Task.CompletedTask;
+  ct.Register(()=>{CancellationThread=Environment.CurrentManagedThreadId; pending.TrySetCanceled(ct);}); return pending.Task;
  }
 }
 namespace TopiaForge.Mods {
@@ -116,7 +117,17 @@ namespace TopiaForge.Mods {
  }
 }
 namespace TopiaForge.ModManager {
- internal static class UnityMainThreadGuard { internal static void AssertCurrent() { } }
+ internal static class UnityMainThreadGuard {
+  private static readonly int frameThread=Environment.CurrentManagedThreadId;
+  internal static void AssertCurrent() {
+   if(Environment.CurrentManagedThreadId!=frameThread)throw new InvalidOperationException("off-frame native speech");
+  }
+  internal static void OnWorker(Action action) =>
+   Task.Factory.StartNew(()=>{
+    if(Environment.CurrentManagedThreadId==frameThread)throw new InvalidOperationException("expected a worker thread");
+    action();
+   },CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default).GetAwaiter().GetResult();
+ }
  internal sealed class OwnerHarmonyLease : IDisposable {
   private static readonly Dictionary<bool,(OwnerHarmonyLease Owner,MethodInfo Prefix)> hooks=new();
   public static int FailPatch,PatchCalls,Unpatches; public static bool FailUnpatch; private bool disposed;
@@ -225,9 +236,14 @@ public static class Probe {
   head.Throw=true;
   try {Play(head,"throws",default).GetAwaiter().GetResult(); throw new Exception("native failure swallowed");}catch(InvalidOperationException){}
   head.Throw=false; Named(head,"throws").GetAwaiter().GetResult(); Check(agent.Routes==routed+2,"exception leaked bypass");
-  // 6: caller cancellation and lifetime teardown reach pending native work without fabricated success.
+  // 6: a worker caller cannot cancel native work before a frame; frame teardown still stops pending work.
   head.Pending=new(); using(var cancel=new CancellationTokenSource()) {
-   var pending=Play(head,"cancel",cancel.Token); cancel.Cancel(); Cancelled(pending); Check(head.LastToken.IsCancellationRequested,"caller token lost");
+   var pending=Play(head,"cancel",cancel.Token); var frame=Environment.CurrentManagedThreadId;
+   UnityMainThreadGuard.OnWorker(cancel.Cancel);
+   Check(!pending.IsCompleted&&!head.LastToken.IsCancellationRequested&&head.CancellationThread==0,"worker caller reached the native token");
+   NativeRobotSpeechHost.Tick();
+   Check(head.LastToken.IsCancellationRequested&&head.CancellationThread==frame,"frame did not cancel the native caller copy");
+   Cancelled(pending);
   }
   head.Pending=new(); var ending=Play(head,"ending",default); first.Life.Dispose(); Cancelled(ending);
   Check(!NativeRobotSpeech.IsInstalled&&OwnerHarmonyLease.Count==0&&NativeRobotVoice.Clears==1,"provider teardown leaked bindings");
@@ -245,7 +261,11 @@ public static class Probe {
   Check(b.IsAvailable&&OwnerHarmonyLease.Count==2,"old lease removed replacement"); b.Dispose();
   // 9: BeginStop cancels active playback and rejects new playback before resource disposal.
   var stopContext=New(); NativeRobotSpeech.Install(stopContext); var stopHead=new AgentHead(){Pending=new()}; var stopAgent=Add(stopHead);
-  var stopPlay=Play(stopHead,"stop",default); stopContext.Life.BeginStop(); Cancelled(stopPlay);
+  var stopPlay=Play(stopHead,"stop",default); UnityMainThreadGuard.OnWorker(stopContext.Life.BeginStop);
+  Check(!stopPlay.IsCompleted&&!stopHead.LastToken.IsCancellationRequested&&stopHead.CancellationThread==0,"worker provider stop reached the native token");
+  NativeRobotSpeechHost.Tick();
+  Check(stopHead.CancellationThread==Environment.CurrentManagedThreadId,"provider stop did not cancel on the frame");
+  Cancelled(stopPlay);
   Check(!NativeRobotSpeech.IsInstalled && Simple(stopHead).Result==AgentHead.SayResult.InvalidTarget && stopAgent.Routes==0,"BeginStop admitted routed speech");
   try { Play(stopHead,"late",default).GetAwaiter().GetResult(); throw new Exception("late playback accepted"); }catch(InvalidOperationException){}
   stopContext.Life.Dispose();
@@ -261,10 +281,19 @@ public static class Probe {
   Check(OwnerHarmonyLease.Count==1,"partial install failure fixture did not retain patch");
   try {NativeRobotSpeechHost.ForProvider(Id,new Lifetime())!.Install(new Router());throw new Exception("replacement accepted during rollback");}catch(InvalidOperationException){}
   OwnerHarmonyLease.FailPatch=0; OwnerHarmonyLease.FailUnpatch=false; rollbackLife.Dispose(); Check(OwnerHarmonyLease.Count==0,"rollback retry failed");
-  // 11: cancellation callback failures still unpatch and release provider associations; owner disposal is idempotent.
+  // 11: a throwing cancellation callback cannot stop frame retirement or prevent teardown from releasing patches.
   var throwing=New(); NativeRobotSpeech.Install(throwing); var throwHead=new AgentHead(); Add(throwHead);
   Play(throwHead,"callback",default).GetAwaiter().GetResult();
-  // Hold a native operation open so its linked token still observes teardown.
+  using(var caller=new CancellationTokenSource()) {
+   var sibling=new AgentHead(){Pending=new()}; Add(sibling); var good=Play(sibling,"other frame callback",caller.Token);
+   throwHead.Pending=new(); throwHead.Reenter=ct=>ct.Register(()=>throw new InvalidOperationException("cancel callback"));
+   var bad=Play(throwHead,"frame callback",caller.Token); throwHead.Reenter=null;
+   UnityMainThreadGuard.OnWorker(caller.Cancel);
+   Check(!bad.IsCompleted&&!good.IsCompleted,"worker cancellation invoked a native callback");
+   NativeRobotSpeechHost.Tick();
+   Check(throwHead.LastToken.IsCancellationRequested&&sibling.LastToken.IsCancellationRequested,"throwing callback skipped a pending native line");
+   Cancelled(bad); Cancelled(good);
+  }
   throwHead.Pending=new(); throwHead.Reenter=ct=>ct.Register(()=>throw new InvalidOperationException("cancel callback"));
   var throwPlay=Play(throwHead,"callback",default); throwHead.Reenter=null;
   try {throwing.Life.Dispose();throw new Exception("callback failure swallowed");}catch(AggregateException){}
@@ -274,6 +303,29 @@ public static class Probe {
   var final=New(); NativeRobotSpeech.Install(final); var x=new AgentHead(); var y=new AgentHead(); var ax=Add(x); var ay=Add(y);
   NativeRobotSpeech.Release(x,ax); Simple(x).GetAwaiter().GetResult(); Simple(y).GetAwaiter().GetResult();
   Check(x.NativeCalls==1&&ax.Routes==0&&ay.Routes==1&&y.NativeCalls==0,"head release escaped its association"); final.Life.Dispose();
+  // 13: synchronous cancellation can complete a sibling before that sibling's token is cancelled.
+  RetiredSiblingCannotSucceed(true); RetiredSiblingCannotSucceed(false);
+ }
+ static void RetiredSiblingCannotSucceed(bool registrationOnly) {
+  var context=New(); NativeRobotSpeech.Install(context);
+  var head=new AgentHead(); var agent=Add(head); var registration=agent.speechPlayback!;
+  var siblingNative=new TaskCompletionSource<bool>(); head.Pending=siblingNative;
+  var sibling=registration.PlayAsync("sibling",default); var siblingToken=head.LastToken;
+  var siblingFinishedDuringCallback=false; var siblingCancelledDuringCallback=false;
+  head.Pending=new(); head.Reenter=ct=>ct.Register(()=>{
+   Check(!siblingToken.IsCancellationRequested,"fixture must complete the sibling before its token is cancelled");
+   siblingFinishedDuringCallback=siblingNative.TrySetResult(true);
+   try { sibling.GetAwaiter().GetResult(); }
+   catch(OperationCanceledException) { siblingCancelledDuringCallback=true; }
+  });
+  var trigger=registration.PlayAsync("trigger",default); head.Reenter=null;
+  Check(!trigger.IsCompleted&&!sibling.IsCompleted,"both native lines must be pending before teardown");
+  if(registrationOnly) registration.Dispose(); else context.Life.Last.Dispose();
+  Cancelled(trigger);
+  Check(siblingFinishedDuringCallback&&siblingCancelledDuringCallback&&sibling.IsCanceled,
+   registrationOnly?"registration disposal certified a retired sibling":"installation disposal certified a retired sibling");
+  Check(NativeRobotSpeech.IsInstalled==registrationOnly,"retirement did not preserve exact installation ownership");
+  context.Life.Dispose();
  }
  sealed class Router:IInternalNativeSpeechRouter {
   public bool TryRoute(object h,string t,CancellationToken ct,bool supported,out Task<OperationResult<bool>>? result){result=null;return false;}

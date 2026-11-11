@@ -216,7 +216,7 @@ namespace TopiaForge.ModManager
             // that boundary, a callback for a reused handle is a real later load and must not be suppressed.
             replayedInitialScenesAwaitingNativeCallback.Clear();
             coreGameplayServices.BeginFrame(deltaTime);
-            if (shutdownCompletion != null) return;
+            if (shutdownCompletion != null) { NativeRobotSpeechHost.Tick(); return; }
             capabilityRefreshRemaining -= Math.Max(0f, deltaTime);
             if (capabilityRefreshRemaining <= 0f)
             {
@@ -227,6 +227,7 @@ namespace TopiaForge.ModManager
             // Frame order: 1. the multiplayer provider's pump (main-thread receive) and 2. world events and the follower,
             // then 3. the mods' Update, then 4. pose, voice and host snapshots, and the provider's flush.
             multiplayer.BeforeModsUpdate(deltaTime);
+            NativeRobotSpeechHost.Tick();
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {

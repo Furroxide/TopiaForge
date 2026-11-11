@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -23,9 +22,10 @@ namespace TopiaForge.ModManager
                 active.Clear();
                 foreach (var operation in retired)
                 {
-                    operation.Cancel();
+                    operation.RequestCancellation();
+                    operation.CancelLocal();
                     foreach (var recipient in operation.Recipients) SendCancel(operation, recipient);
-                    operation.LocalCancellation?.Dispose(); operation.Cancellation.Dispose();
+                    operation.DisposeLocal();
                 }
                 ready.Clear(); handshakePaces.Clear(); speechPaces.Clear(); expiredPaces.Clear(); removed.Clear();
                 challenge = ""; readySent = false; seenNonce = 0; nextReady = 0;
@@ -36,6 +36,14 @@ namespace TopiaForge.ModManager
         }
 
         internal void Tick()
+        {
+            if (ticking || resetting) return;
+            ticking = true;
+            try { TickCore(); }
+            finally { ticking = false; }
+        }
+
+        private void TickCore()
         {
             var nextRealm = services.Runtime.Realm;
             var presence = services.Players?.Presence;
@@ -64,16 +72,23 @@ namespace TopiaForge.ModManager
             {
                 var operation = active[i];
                 var valid = operation.Current() && operation.Entity.IsAlive && operation.Provider.IsSpeechVisible(operation.Entity);
-                if (!valid || clock() - operation.Started >= 15_000_000) operation.Cancel();
-                if (operation.Task != null && !operation.Task.IsCompleted && !LocalEligible(operation.Entity))
+                if (!valid || clock() - operation.Started >= DeadlineMicros) operation.RequestCancellation();
+                if (!operation.CancellationRequested && operation.Task != null && !operation.Task.IsCompleted && !LocalEligible(operation.Entity))
                 {
-                    try { operation.LocalCancellation?.Cancel(); } catch (Exception) { }
-                    if (realm == NetRealm.Client) operation.Cancel();
+                    if (realm == NetRealm.Client) operation.RequestCancellation();
+                    else operation.CancelLocal();
+                }
+                if (i >= active.Count || !ReferenceEquals(active[i], operation)) { i = active.Count; continue; }
+                var cancelled = operation.CancellationRequested;
+                if (cancelled)
+                {
+                    active.RemoveAt(i);
+                    operation.CancelLocal();
                 }
                 for (var p = operation.Recipients.Count - 1; p >= 0; p--)
                 {
                     var recipient = operation.Recipients[p];
-                    if (!operation.Cancellation.IsCancellationRequested && Eligible(recipient.Id, operation.Entity)
+                    if (!cancelled && Eligible(recipient.Id, operation.Entity)
                         && recipient.Gate.Generation == world.Channel.GetGeneration(recipient.Id)
                         && ready.TryGetValue(recipient.Id, out var currentGate) && currentGate.Challenge == recipient.Gate.Challenge) continue;
                     // An admitted listener that departs cannot certify completion. Stop its copy, but let
@@ -92,17 +107,17 @@ namespace TopiaForge.ModManager
                 }
                 var remoteDone = true;
                 foreach (var recipient in operation.Recipients) if (!recipient.Completed) remoteDone = false;
-                var cancelled = operation.Cancellation.IsCancellationRequested;
+                // A request racing this frame's poll stays pending for the next frame to cancel every copy.
+                if (!cancelled && operation.CancellationRequested) continue;
                 if (realm == NetRealm.Client)
                 {
                     if (!cancelled && !localDone) continue;
-                    // Send on the frame thread only, after the native task settles. No Unity or channel
-                    // access occurs on a cancellation callback or worker continuation.
+                    // Only settled native playback can report success. Cancellation reports failure on this frame.
                     SendFinished(operation, !cancelled && operation.Task?.Result.Succeeded == true && operation.Task.Result.Value);
                 }
                 else if (!cancelled && (!localDone || !remoteDone || clock() - operation.Started < 1_000_000)) continue;
-                active.RemoveAt(i);
-                operation.LocalCancellation?.Dispose(); operation.Cancellation.Dispose();
+                if (!cancelled) active.RemoveAt(i);
+                operation.DisposeLocal();
                 var result = cancelled ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Robot speech was cancelled.")
                     : operation.Failure ?? OperationResult<bool>.Success(operation.Task != null || operation.Recipients.Count != 0);
                 // Retire before waking a sequential caller, which may start another line synchronously.
@@ -172,7 +187,7 @@ namespace TopiaForge.ModManager
                 || !(services.Runtime.Control?.SessionSnapshot.HostParticipantId ?? InternalSystemMessage.HeadlessHostSender).Equals(sender)) return false;
             if (type == RobotSpeechWire.Cancel)
             {
-                foreach (var operation in active) if (operation.Nonce == lineNonce && operation.WireId == entityId) operation.Cancel();
+                foreach (var operation in active) if (operation.Nonce == lineNonce && operation.WireId == entityId) operation.RequestCancellation();
                 return true;
             }
             if (type != RobotSpeechWire.Line || lineNonce <= seenNonce) return false;
@@ -183,12 +198,12 @@ namespace TopiaForge.ModManager
             if (!world.Client.SpeechTarget((uint)entityId, mod, kind, out var entity) || entity == null || !LocalEligible(entity)
                 || !services.TryGetReplicaFactory(kind, out var factory) || factory is not IInternalSpeechProvider provider
                 || !provider.IsSpeechVisible(entity)) return false;
-            foreach (var previous in active) if (ReferenceEquals(previous.Entity, entity)) previous.Cancel();
+            foreach (var previous in active) if (ReferenceEquals(previous.Entity, entity)) previous.RequestCancellation();
             bool Current() => world.Client.SpeechTarget((uint)entityId, mod, kind, out var current) && ReferenceEquals(current, entity)
                 && services.TryGetReplicaFactory(kind, out var registered) && ReferenceEquals(registered, provider);
-            var playback = new Playback(entity, provider, lineNonce, clock(), new CancellationTokenSource(), Current) { WireId = (uint)entityId };
+            var playback = new Playback(entity, provider, lineNonce, clock(), Current) { WireId = (uint)entityId };
             active.Add(playback);
-            playback.Task = SafePlay(provider, entity, voice, text, playback.Cancellation.Token);
+            playback.StartLocal(voice, text);
             return true;
         }
     }

@@ -12,7 +12,8 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             FarHostSequential(); NoRecipients(); AllListeners(); Failures(); AcknowledgementValidation(); ResetContinuation();
-            Console.WriteLine("Robot speech completion: 6 focused groups passed.");
+            WorkerCancellation(); FrameDeadlines();
+            Console.WriteLine("Robot speech completion: 8 focused groups passed.");
         }
         private static void Check(bool value, string reason)
         { if (!value) throw new InvalidOperationException("Robot speech completion: " + reason); }
@@ -135,6 +136,78 @@ namespace TopiaForge.ModManager.Tests
             var dialogue = Dialogue(); rig.World.Frames(4); rig.Host.Scene++; rig.World.Frames(3);
             Check(dialogue.IsCompleted, "reset continuation settles without mutating the retiring list");
             dialogue.GetAwaiter().GetResult();
+        }
+
+        private static void WorkerCancellation()
+        {
+            var frameThread = Environment.CurrentManagedThreadId;
+            foreach (var ownerStops in new[] { false, true })
+            {
+                using var rig = new RobotSpeechRig();
+                using var caller = new CancellationTokenSource();
+                var call = rig.Robot.SayAsync("Cancellation waits for the frame.", caller.Token);
+                rig.World.Frames(5);
+                var local = rig.Canonical.SpeechTokens.Single();
+                var remote = rig.Guests[0].Body.SpeechTokens.Single();
+                var localThread = 0;
+                var remoteThread = 0;
+                using var hostProbe = local.Register(() => localThread = Environment.CurrentManagedThreadId);
+                using var guestProbe = remote.Register(() => remoteThread = Environment.CurrentManagedThreadId);
+                var sent = rig.Log.Count;
+                Task.Factory.StartNew(() =>
+                {
+                    Check(Environment.CurrentManagedThreadId != frameThread, "cancellation starts on a worker");
+                    if (ownerStops) rig.Owner.Lifetime.BeginStop();
+                    else caller.Cancel();
+                }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).GetAwaiter().GetResult();
+                Check(!local.IsCancellationRequested && !remote.IsCancellationRequested && localThread == 0 && remoteThread == 0
+                    && !call.IsCompleted && rig.Log.Count == sent, "worker cancellation touches neither playback nor transport before a frame");
+                rig.World.Frames(6);
+                Check(localThread == frameThread && remoteThread == frameThread && call.IsCompleted && call.Result.ErrorCode == ModErrorCode.Cancelled,
+                    "frame maintenance cancels both copies and preserves the caller's cancellation result");
+            }
+        }
+
+        private static void FrameDeadlines()
+        {
+            using var rig = new RobotSpeechRig();
+            var guest = rig.Guests[0];
+            var clock = rig.World.Clock;
+            var hostStarted = clock.Now;
+            var call = rig.Robot.SayAsync("Neither copy can hang forever.");
+            long receivedAt = 0;
+            for (var frame = 0; frame < 10 && guest.Body.SpeechPlays == 0; frame++)
+            {
+                receivedAt = clock.Now;
+                rig.World.Frame();
+            }
+            Check(guest.Body.SpeechPlays == 1, "the receiver began real managed playback");
+            var frameThread = Environment.CurrentManagedThreadId;
+            var localThread = 0;
+            var remoteThread = 0;
+            using var hostProbe = rig.Canonical.SpeechTokens.Single().Register(() => localThread = Environment.CurrentManagedThreadId);
+            using var guestProbe = guest.Body.SpeechTokens.Single().Register(() => remoteThread = Environment.CurrentManagedThreadId);
+            var host = rig.World.Host.World.Speech;
+            var receiver = guest.Peer.World.Speech;
+            clock.Now = hostStarted + 14_999_999;
+            host.Tick(); receiver.Tick();
+            Check(localThread == 0 && remoteThread == 0 && !call.IsCompleted, "neither copy expires before its deadline");
+            clock.Advance(1);
+            host.Tick();
+            Check(localThread == frameThread && remoteThread == 0 && call.IsCompleted && call.Result.ErrorCode == ModErrorCode.Cancelled,
+                "host expires exactly on its frame deadline without an acknowledgement");
+            // No transport pump or flush here: the receiver must enforce its own deadline without a host cancel packet.
+            if (receivedAt > hostStarted)
+            {
+                clock.Now = receivedAt + 14_999_999;
+                receiver.Tick();
+                Check(remoteThread == 0, "the later receiver remains pending one microsecond before its own deadline");
+            }
+            clock.Now = receivedAt + 15_000_000;
+            receiver.Tick();
+            Check(remoteThread == frameThread && receiver.ActiveCount == 0
+                && guest.Channel.Log!.Any(item => item.Payload[1] == RobotSpeechWire.Finished && item.Payload.Last() == 0),
+                "receiver expires and reports failure on its own frame deadline");
         }
 
         private static byte[] Finished(byte[] line, byte status = 1, int changed = 0)
