@@ -11,7 +11,11 @@ void main() {
   late Directory current;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('registry-history-test-');
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('registry-history-test-')
+          .resolveSymbolicLinksSync(),
+    );
     previous = Directory(p.join(root.path, 'previous'))..createSync();
     current = Directory(p.join(root.path, 'current'))..createSync();
     _write(previous, [_version('1.0.0', 'a')]);

@@ -30,7 +30,7 @@ namespace TopiaForge.ModManager.Tests
         public static JsonElement Snapshot(JsonElement body, string path)
         {
             var scenario = new Scenario(body.GetProperty("scenario"), path);
-            var root = Directory.CreateTempSubdirectory("TopiaForgeLifecycleFixture-");
+            var root = TestPaths.CreateTempDirectory("TopiaForgeLifecycleFixture-");
             try
             {
                 var runtime = OnRuntime(scenario, root.FullName);

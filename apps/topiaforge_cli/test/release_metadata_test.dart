@@ -22,7 +22,11 @@ void main() {
   const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('topiaforge-metadata-test-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-metadata-test-')
+          .resolveSymbolicLinksSync(),
+    );
     sourceFixture = writeMetadataPrereleaseFixture(_repositoryRoot());
     root = sourceFixture.path;
     release = TopiaForgeReleaseCatalog.load(root).release('0.2.0-rc.1');

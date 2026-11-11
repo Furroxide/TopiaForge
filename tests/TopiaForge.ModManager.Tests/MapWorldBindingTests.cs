@@ -14,7 +14,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task RunAsync()
         {
-            var owned = Directory.CreateTempSubdirectory("map-binding-");
+            var owned = TestPaths.CreateTempDirectory("map-binding-");
             var root = owned.FullName;
             try
             {

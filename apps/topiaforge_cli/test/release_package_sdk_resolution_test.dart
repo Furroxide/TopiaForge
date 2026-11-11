@@ -13,7 +13,11 @@ void main() {
   late Directory temp;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('release-sdk-test-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('release-sdk-test-')
+          .resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

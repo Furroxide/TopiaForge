@@ -276,7 +276,7 @@ namespace TopiaForge.ModManager.Tests
             internal readonly INativeTransitionReservation Reservation;
             internal readonly IInternalSceneTransitionService Parent;
             private readonly IInternalSceneTransitionService sibling;
-            private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("map-contract-");
+            private readonly DirectoryInfo directory = TestPaths.CreateTempDirectory("map-contract-");
             internal Fixture()
             {
                 Coordinator = new SceneCoordinator(dispatcher: Dispatcher);

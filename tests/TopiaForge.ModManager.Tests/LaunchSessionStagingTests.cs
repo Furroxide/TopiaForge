@@ -29,7 +29,7 @@ namespace TopiaForge.ModManager.Tests
                 ("session-withdrawn", _ => SessionWithdrawn()), ("v4-fixtures", paths => V4Fixtures(repositoryRoot, paths))
             })
             {
-                var owned = Directory.CreateTempSubdirectory("TopiaForgeSessionStaging-");
+                var owned = TestPaths.CreateTempDirectory("TopiaForgeSessionStaging-");
                 try
                 {
                     var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);

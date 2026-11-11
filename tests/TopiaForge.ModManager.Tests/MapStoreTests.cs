@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
         private static readonly Uri Project = new Uri(Origin, "map/example/project.roboworld");
         internal static async Task RunAsync()
         {
-            var owned = Directory.CreateTempSubdirectory("map-store-");
+            var owned = TestPaths.CreateTempDirectory("map-store-");
             var root = owned.FullName;
             try
             {

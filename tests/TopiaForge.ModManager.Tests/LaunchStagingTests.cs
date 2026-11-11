@@ -33,7 +33,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void FilenameCorrelation()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeStagingCorrelation-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeStagingCorrelation-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);
@@ -48,7 +48,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void LeafLink()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeStagingLeaf-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeStagingLeaf-");
             FileSystemInfo? link = null;
             try
             {
@@ -65,7 +65,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void AncestorLink(string segment)
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeStagingAncestor-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeStagingAncestor-");
             FileSystemInfo? link = null;
             try
             {
@@ -87,7 +87,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void RejectionCorrelation()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeStagingReject-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeStagingReject-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName); paths.EnsureCreated();
@@ -108,7 +108,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void AtomicInterruption()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeStagingAtomic-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeStagingAtomic-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName); paths.EnsureCreated();
@@ -126,7 +126,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void PublicationLink()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeStagingWriteLink-"); FileSystemInfo? link = null;
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeStagingWriteLink-"); FileSystemInfo? link = null;
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName); paths.EnsureCreated();
@@ -139,7 +139,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void OwnedConsumption()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeStagingOwned-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeStagingOwned-");
             try
             {
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);

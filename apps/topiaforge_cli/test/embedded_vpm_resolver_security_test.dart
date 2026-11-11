@@ -14,8 +14,10 @@ void main() {
   });
 
   setUp(() {
-    scratch = Directory.systemTemp.createTempSync(
-      'topiaforge-vpm-bridge-test-',
+    scratch = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-vpm-bridge-test-')
+          .resolveSymbolicLinksSync(),
     );
   });
 

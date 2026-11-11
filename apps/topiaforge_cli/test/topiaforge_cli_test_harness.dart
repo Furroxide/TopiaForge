@@ -28,7 +28,11 @@ File _writeTestPackage(
 
 class _CliTestHarness {
   _CliTestHarness()
-    : temp = Directory.systemTemp.createTempSync('topiaforge-cli-test-');
+    : temp = Directory(
+        Directory.systemTemp
+            .createTempSync('topiaforge-cli-test-')
+            .resolveSymbolicLinksSync(),
+      );
 
   final Directory temp;
 

@@ -24,7 +24,7 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.Mods.UnityUi/Core/TopiaForgeNavigationBindings.cs",
                 "src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeInputOwnership.Gamepad.cs",
             }.Select(path => File.ReadAllText(Path.Combine(root, path))).Concat(new[] { Contract, Scenarios });
-            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            var references = TrustedReferences.Paths()
                 .Append(typeof(InputBinding).Assembly.Location).Distinct().Select(path => MetadataReference.CreateFromFile(path));
             var compilation = CSharpCompilation.Create("GamepadBindingProbe", sources.Select(source => CSharpSyntaxTree.ParseText(source)),
                 references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));

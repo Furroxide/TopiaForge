@@ -26,7 +26,11 @@ void main() {
   late Directory temp;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('build-host-paths-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('build-host-paths-')
+          .resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

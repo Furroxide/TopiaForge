@@ -49,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void RejectMalformedPrimaryAndEnvelope()
         {
-            var owned = Directory.CreateTempSubdirectory("topiaforge-manager-state-");
+            var owned = TestPaths.CreateTempDirectory("topiaforge-manager-state-");
             var directory = owned.FullName;
             try
             {

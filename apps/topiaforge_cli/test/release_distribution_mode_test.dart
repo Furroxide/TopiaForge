@@ -16,7 +16,11 @@ void main() {
   late TopiaForgeReleaseCatalogEntry release;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('topiaforge-distribution-test-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-distribution-test-')
+          .resolveSymbolicLinksSync(),
+    );
     root = _repositoryRoot();
     release = TopiaForgeReleaseCatalog.load(root).release('0.2.0');
   });

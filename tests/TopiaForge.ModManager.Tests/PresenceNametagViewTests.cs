@@ -25,7 +25,7 @@ namespace TopiaForge.ModManager.Tests
                     "src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeNametagLayer.cs", "TopiaForgeNametagDriver") + " }",
                 Probe,
             };
-            var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
+            var trusted = TrustedReferences.Paths();
             var compilation = CSharpCompilation.Create("PresenceNametagProbe" + Guid.NewGuid().ToString("N"),
                 sources.Select(source => CSharpSyntaxTree.ParseText(source)), trusted.Select(path => MetadataReference.CreateFromFile(path)),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));

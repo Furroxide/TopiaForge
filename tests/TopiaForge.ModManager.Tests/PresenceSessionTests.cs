@@ -16,7 +16,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
-            var root = Directory.CreateTempSubdirectory("TopiaForgePresenceSession-");
+            var root = TestPaths.CreateTempDirectory("TopiaForgePresenceSession-");
             try
             {
                 TheRunningWorldNamesItsSessionAndSpawn(root.FullName);

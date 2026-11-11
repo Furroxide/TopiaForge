@@ -15,7 +15,14 @@ void main() {
     name: 'Courtyard',
   );
   setUp(() {
-    root = Directory.systemTemp.createTempSync('saved-maps-');
+    // The production writer refuses a linked path component, and macOS puts
+    // the system temp directory under /var -> private/var, so canonicalise the
+    // root the way the rest of these suites do.
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('saved-maps-')
+          .resolveSymbolicLinksSync(),
+    );
     store = PublishedMapSourceStore(root.path);
   });
   tearDown(() => root.deleteSync(recursive: true));

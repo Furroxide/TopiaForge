@@ -317,7 +317,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void AssertLinkedCompileSourcesAreAudited()
         {
-            var owned = Directory.CreateTempSubdirectory("TopiaForgeGameCompatLinked-");
+            var owned = TestPaths.CreateTempDirectory("TopiaForgeGameCompatLinked-");
             var root = owned.FullName;
             var bindings = Path.Combine(root, "bindings");
             const string modId = "io.github.furroxide.topiaforge.linked";

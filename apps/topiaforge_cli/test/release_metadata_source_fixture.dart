@@ -7,8 +7,10 @@ import 'package:path/path.dart' as p;
 /// synthetic prerelease from current components without editing real policy or
 /// treating the blocked stable target as permission to publish unsigned bytes.
 Directory writeMetadataPrereleaseFixture(String source) {
-  final output = Directory.systemTemp.createTempSync(
-    'topiaforge-policy-fixture-',
+  final output = Directory(
+    Directory.systemTemp
+        .createTempSync('topiaforge-policy-fixture-')
+        .resolveSymbolicLinksSync(),
   );
   final listing = Process.runSync('git', [
     'ls-files',

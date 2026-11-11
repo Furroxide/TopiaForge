@@ -21,7 +21,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void SnapshotPackageOwnership()
         {
-            var folder = Directory.CreateTempSubdirectory("map-package-ownership-");
+            var folder = TestPaths.CreateTempDirectory("map-package-ownership-");
             try
             {
                 using var fixture = new SessionFixture(folder.FullName);

@@ -9,7 +9,11 @@ void main() {
   late Directory root;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('topiaforge-game-compat-');
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-game-compat-')
+          .resolveSymbolicLinksSync(),
+    );
   });
 
   tearDown(() {

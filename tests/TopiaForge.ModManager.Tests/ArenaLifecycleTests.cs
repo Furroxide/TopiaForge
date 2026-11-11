@@ -28,7 +28,7 @@ namespace TopiaForge.ModManager.Tests
                 Read("mods/Shared/NativePlayerTeleport.cs"),
                 Probe
             };
-            var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
+            var trusted = TrustedReferences.Paths();
             var references = trusted.Select(path => MetadataReference.CreateFromFile(path));
             var compilation = CSharpCompilation.Create("ArenaProbe", sources.Select(source => CSharpSyntaxTree.ParseText(source)), references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));

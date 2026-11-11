@@ -16,7 +16,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task RunAsync()
         {
-            var folder = Directory.CreateTempSubdirectory("authored-import-");
+            var folder = TestPaths.CreateTempDirectory("authored-import-");
             try
             {
                 File.WriteAllBytes(Path.Combine(folder.FullName, "map.json"), Project());

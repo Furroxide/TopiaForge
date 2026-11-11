@@ -144,7 +144,11 @@ void main() {
   test(
     'manifest replacement detects a concurrent edit and cleans its staging file',
     () async {
-      final temp = Directory.systemTemp.createTempSync('map-author-');
+      final temp = Directory(
+        Directory.systemTemp
+            .createTempSync('map-author-')
+            .resolveSymbolicLinksSync(),
+      );
       try {
         final file = File(p.join(temp.path, 'topiaforge.mod.json'))
           ..writeAsStringSync('changed');
@@ -164,7 +168,11 @@ void main() {
   test(
     'offline CLI requires scene and name then writes a fixed target without survey bytes',
     () async {
-      final temp = Directory.systemTemp.createTempSync('map-cli-');
+      final temp = Directory(
+        Directory.systemTemp
+            .createTempSync('map-cli-')
+            .resolveSymbolicLinksSync(),
+      );
       try {
         final file = File(p.join(temp.path, 'topiaforge.mod.json'))
           ..writeAsStringSync(jsonEncode(source()));

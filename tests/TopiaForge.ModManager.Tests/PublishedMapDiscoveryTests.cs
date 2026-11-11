@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task RunAsync(string repo)
         {
-            var root = Directory.CreateTempSubdirectory("published-maps-");
+            var root = TestPaths.CreateTempDirectory("published-maps-");
             try
             {
                 Corpus(repo);

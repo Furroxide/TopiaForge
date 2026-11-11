@@ -8,7 +8,11 @@ void main() {
   final cli = p.join(Directory.current.path, 'bin', 'topiaforge.dart');
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('topiaforge-mod-usage-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-mod-usage-')
+          .resolveSymbolicLinksSync(),
+    );
   });
   tearDown(() {
     temp.deleteSync(recursive: true);

@@ -46,7 +46,11 @@ void main() {
   }
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('tf-features-');
+    temp = Directory(
+      Directory.systemTemp
+          .createTempSync('tf-features-')
+          .resolveSymbolicLinksSync(),
+    );
     project = Directory(p.join(temp.path, 'mod'))..createSync();
     repository = _Repository(temp.path);
     manifest = {

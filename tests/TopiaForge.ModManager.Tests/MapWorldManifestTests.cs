@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager.Tests
             var world = manifest.Contributions!.Worlds.Single();
             Check(world.Transitions.SequenceEqual(new[] { ModTransitions.SceneReplacement }) && world.Spawn!.Kind == ModSpawnPolicy.ProviderDefaultKind,
                 "Omitted map defaults must be effective in the typed model.");
-            var owned = Directory.CreateTempSubdirectory("MapWorldManifestTests-");
+            var owned = TestPaths.CreateTempDirectory("MapWorldManifestTests-");
             var root = owned.FullName;
             try
             {

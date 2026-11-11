@@ -268,7 +268,11 @@ void _addDartNotices(Archive archive, {String prefix = ''}) {
 void _addSdkPayload(Archive archive, {String prefix = ''}) {
   const version = '1.0.0';
   final base = prefix.isEmpty ? '' : '$prefix/';
-  final temp = Directory.systemTemp.createTempSync('topiaforge-sdk-fixture-');
+  final temp = Directory(
+    Directory.systemTemp
+        .createTempSync('topiaforge-sdk-fixture-')
+        .resolveSymbolicLinksSync(),
+  );
   try {
     final references = <String, File>{};
     final documentation = <String, File>{};

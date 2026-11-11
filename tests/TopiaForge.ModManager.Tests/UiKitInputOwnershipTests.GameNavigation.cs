@@ -193,7 +193,7 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>Compiles <paramref name="sources"/> and runs each named scenario of <paramref name="type"/>; every failure is reported.</summary>
         private static void RunProbe(string assembly, string type, string[] sources, params string[] scenarios)
         {
-            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            var references = TrustedReferences.Paths()
                 .Select(path => MetadataReference.CreateFromFile(path));
             var compilation = CSharpCompilation.Create(assembly,
                 sources.Select(source => CSharpSyntaxTree.ParseText(source)), references,
