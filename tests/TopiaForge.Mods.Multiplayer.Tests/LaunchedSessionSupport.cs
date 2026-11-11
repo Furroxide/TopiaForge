@@ -22,7 +22,7 @@ internal sealed class PeerScreens : IMultiplayerSessionEnvironment, IDisposable
     private Action<bool, string>? menu;
 
     private PeerScreens(IInternalMultiplayerControl control, MultiplayerRuntime composition, MultiplayerRuntimeHost runtime, IMultiplayerSession session,
-        string? requestId, string? packageSetDigest, string? serviceOrigin)
+        string? requestId, string? packageSetDigest, string? serviceOrigin, IMultiplayerWorkScheduler? scheduler = null, Action? beforeCommit = null)
     {
         this.control = control;
         this.composition = composition;
@@ -32,9 +32,9 @@ internal sealed class PeerScreens : IMultiplayerSessionEnvironment, IDisposable
         Root = Directory.CreateTempSubdirectory("TopiaForgeLaunchedSession-").FullName;
         var paths = new ManagerPaths(Root);
         paths.EnsureCreated();
-        Store = new LaunchStagingStore(paths);
+        Store = new LaunchStagingStore(paths, beforeCommit);
         Channels = new NotingChannels(new StagingLauncherChannels(Store, requestId, packageSetDigest, serviceOrigin));
-        Presenter = new MultiplayerSessionsPresenter(this, Settings, MultiplayerWorkSchedulers.Background);
+        Presenter = new MultiplayerSessionsPresenter(this, Settings, scheduler ?? MultiplayerWorkSchedulers.Background);
         Presenter.Start();
         Presenter.Intake?.Dispose();
     }
@@ -94,8 +94,9 @@ internal sealed class PeerScreens : IMultiplayerSessionEnvironment, IDisposable
 
     public SessionFollowStatus Follow => SessionFollowStatus.None;
 
-    internal static PeerScreens Of(ControlPeer peer, string? requestId = null, string? packageSetDigest = null, string? serviceOrigin = null) =>
-        new(peer.Control, peer.Composition, peer.Runtime, peer.Session, requestId, packageSetDigest, serviceOrigin);
+    internal static PeerScreens Of(ControlPeer peer, string? requestId = null, string? packageSetDigest = null, string? serviceOrigin = null,
+        IMultiplayerWorkScheduler? scheduler = null, Action? beforeCommit = null) =>
+        new(peer.Control, peer.Composition, peer.Runtime, peer.Session, requestId, packageSetDigest, serviceOrigin, scheduler, beforeCommit);
 
     internal static PeerScreens Of(InternetPeer peer, string? requestId = null, string? packageSetDigest = null, string? serviceOrigin = null) =>
         new(peer.Control, peer.Composition, peer.Runtime, peer.Provider, requestId, packageSetDigest, serviceOrigin);

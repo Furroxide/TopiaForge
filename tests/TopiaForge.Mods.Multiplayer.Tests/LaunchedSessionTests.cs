@@ -18,7 +18,7 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// in-game preference change reaches the launcher's journal. No channel is touched on the frame's thread, and no record,
 /// handoff, toast or log names an address.
 /// </summary>
-internal static class LaunchedSessionTests
+internal static partial class LaunchedSessionTests
 {
     private const string RequestId = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
     private const string Digest = "aa1fa8782182a9af";
@@ -145,17 +145,22 @@ internal static class LaunchedSessionTests
 
     internal static void AnInGamePreferenceChangeReachesTheJournal()
     {
+        JournalWorkAdmissionRegressions();
         using var rig = new ControlRig(7_805, Sandbox);
-        using var screens = PeerScreens.Of(rig.Host, RequestId, Digest);
-        That(rig.Run(() => Frame(screens, () => screens.Presenter.Preferences.IsLoaded)), "the launcher's preferences load off the frame");
-        screens.Presenter.SetDisplayName("Sammy");
-        That(rig.Run(() => Frame(screens, () => !screens.Presenter.Preferences.IsSaving && screens.Store.ReadPreferencesJournal() != null)),
-            "the change is recorded for the launcher");
-        var change = screens.Store.ReadPreferencesJournal()!.Changes.Single();
-        That(change.Kind == "displayName" && change.NewDisplayName == "Sammy" && rig.Host.Runtime.PreferredDisplayName == "Sammy",
-            "in the launcher's journal, and in effect at once");
-        That(screens.Channels.Calls.Any(call => call.Call == nameof(ILauncherChannels.RecordPreferenceChange)), "through the channel");
-        Clean(screens, rig.Host.Log.Lines);
+        var work = new ScreensBackgroundWork();
+        using var screens = PeerScreens.Of(rig.Host, RequestId, Digest, scheduler: work);
+        try
+        {
+            That(work.Run(rig, screens, () => screens.Presenter.Preferences.IsLoaded), "the launcher's preferences load off the frame");
+            screens.Presenter.SetDisplayName("Sammy");
+            var journal = RequireJournalChange(rig, screens, work);
+            var change = journal.Changes.Single();
+            That(change.Kind == "displayName" && change.NewDisplayName == "Sammy" && rig.Host.Runtime.PreferredDisplayName == "Sammy",
+                "in the launcher's journal, and in effect at once");
+            That(screens.Channels.Calls.Any(call => call.Call == nameof(ILauncherChannels.RecordPreferenceChange)), "through the channel");
+            Clean(screens, rig.Host.Log.Lines);
+        }
+        finally { work.Join(rig.BackgroundWorkBound); }
     }
 
     /// <summary>
