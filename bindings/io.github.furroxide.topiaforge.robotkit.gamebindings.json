@@ -1241,7 +1241,7 @@
       "assembly": "GameCode",
       "declaringType": "ActionSuccess",
       "member": "ShouldIgnore",
-      "matchMode": "DynamicInstance",
+      "matchMode": "StaticFullName",
       "criticality": "Critical",
       "feature": "Native walk arrival result",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeWalkCompletion.cs",

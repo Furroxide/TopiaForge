@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             WorldObservation();
+            RobotCatalogDiscoveryTests.Run();
             RobotComposedDiscoveryTests.Run();
             RobotComposedCleanupTests.Run();
             DiscoveryDiagnostics();

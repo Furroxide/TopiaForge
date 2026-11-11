@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added guarded map-world MuniciPal composition and bounded discovery refusal diagnostics. Native character qualification remains pending.
+- Empty native-prefab discovery keeps retrying beside a current composition; definite absent-character discovery backs off without surviving world or scene changes.
+- Missing native walk `ShouldIgnore` metadata now fails the Critical compatibility gate.
+
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 
 - Robot dialogue capture now holds the runtime microphone lease, yields to native recording, and returns Conflict when preempted without ending the native recording.
