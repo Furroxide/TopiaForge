@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager.Tests
         {
             RunCore();
             PlayersRemoteContractTests.CountdownWidgets();
+            PlayersRemoteContractTests.CountdownSurvivesReplacement();
             PresentationRuntimeTests.CountdownWidgets();
             Console.WriteLine("Countdown wire: shared codec, malformed/epoch refusal, delayed/paused scopes, targeted UI, shared HUD and late join passed.");
         }
@@ -38,6 +39,10 @@ namespace TopiaForge.ModManager.Tests
             UiClockBinding.AdoptInitialEpoch(initial, provider);
             That(UiClockBinding.IsCurrent(currentTimer, provider) && currentTimer.EndsAt == 30,
                 "initial adoption preserves the exact already-bound deadline");
+            var adopted = new WorldWireWriter();
+            That(UiNodeWireCodec.WriteRetained(adopted, currentTimer, provider)
+                && UiNodeWireCodec.Read(Reader(Copy(adopted)), (_, _) => { }, provider) is UiCountdown { EndsAt: 30d },
+                "refreshing the retained payload after initial adoption keeps a live countdown");
             That(!UiClockBinding.IsCurrent(retiredTimer, provider), "initial adoption does not revive a previous world");
             Refused(() => UiClockBinding.Bind(retiredTimer, provider), "retired epoch cannot be adopted");
             Refused(() => UiClockBinding.Bind(currentTimer, "replacement"), "adopted countdown still expires on replacement");
@@ -72,7 +77,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void RoundTripAndEpoch()
         {
-            var timer = new UiCountdown(1234.567890123, "Remaining", UiTone.Warning, "timer");
+            var timer = new UiCountdown(1234.567890123, "<b>Remaining</b>", UiTone.Warning, "timer");
             var source = new UiColumn(new UiProgress(0.375f, "Tasks", UiTone.Success, "progress"), timer);
             var writer = new WorldWireWriter(32768);
             UiNodeWireCodec.Write(writer, source, "session:7");
@@ -89,6 +94,15 @@ namespace TopiaForge.ModManager.Tests
             Refused(() => UiNodeWireCodec.Read(Reader(bytes), (_, _) => { }, "session:8"), "stale wire epoch");
             writer.Reset(); Refused(() => UiNodeWireCodec.Write(writer, source, "session:8"), "reusing an authored node after replacement");
             That(writer.Length == 0, "epoch refusal precedes any encoded composition");
+            var identity = timer.ClockIdentity;
+            That(!UiNodeWireCodec.WriteRetained(writer, source, "replacement:with:a:longer:epoch") && writer.Length < bytes.Length,
+                "retained expiry does not grow the encoded composition or require another clock refresh");
+            var retained = (UiColumn)UiNodeWireCodec.Read(Reader(Copy(writer)), (_, _) => { }, "replacement:with:a:longer:epoch")!;
+            That(retained.Children[0] is UiProgress { Fraction: 0.375f, Id: "progress" }
+                && retained.Children[1] is UiText { Text: "<b>Remaining</b> 0", Tone: UiTone.Warning },
+                "retained expiry preserves unrelated widgets and the original countdown's zero display");
+            That(ReferenceEquals(timer.ClockIdentity, identity) && timer.ClockEpoch == "session:7" && timer.EndsAt == countdown.EndsAt,
+                "retained serialization leaves the author's timer bound to its original epoch");
         }
 
         private static void MalformedAndWholeComposition()

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using static TopiaForge.ModManager.Tests.PlayersApiTests;
 using TopiaForge.Mods;
 
@@ -15,19 +16,46 @@ namespace TopiaForge.ModManager.Tests
             rig.Host.Node.Runtime.FollowUiWorldSessions(session.Hosted);
             session.Launch();
             var oldEpoch = rig.Host.Node.Runtime.UiClockEpoch;
-            var timer = new UiCountdown(rig.Host.Ui.ClockTime + 30, id: "old");
-            Assert(rig.Host.Ui.CreateSurface(Hud("before", "", timer)).Succeeded, "first solo world binds its timer");
+            var deadline = rig.Host.Ui.ClockTime + 30;
+            var timer = new UiCountdown(deadline, "Old", UiTone.Warning, "old");
+            var retained = rig.Host.Ui.CreateSurface(Hud("before", "Retained score", new UiColumn(new UiText("Score"), timer))).Value!;
+            var originalIdentity = timer.ClockIdentity;
+            retained.Hide();
             var restarted = SessionFixture.ModeSession!.RestartAsync(); session.Wait(restarted);
             Assert(restarted.Result.Succeeded && rig.Host.Node.Runtime.UiClockEpoch != oldEpoch, "same-runtime solo world restart retires the clock epoch");
             var stale = rig.Host.Ui.CreateSurface(Hud("after", "", timer));
             Assert(stale.ErrorCode == ModErrorCode.InvalidArgument && stale.ErrorMessage.Contains("epoch"), "the new solo world refuses a previously bound timer");
             Assert(rig.Host.Ui.CreateSurface(Hud("fresh", "", new UiCountdown(rig.Host.Ui.ClockTime + 5, id: "fresh"))).Succeeded, "the new solo world accepts a fresh deadline");
+            Assert(!retained.IsVisible && rig.Host.LocalUi.Surfaces[0].TryGetCountdownSeconds("old", out var remaining) && remaining == 0,
+                "the host retains its hidden surface and expires only its old timer");
             if (!withoutProvider)
             {
                 rig.Start(); rig.Frames(15);
-                Assert(rig.Guest.ReceivedUi.Surfaces.Count == 1 && rig.Guest.ReceivedUi.Surfaces[0].TryFindNode("fresh", out _),
-                    "retired process-scope timers cannot poison a fresh world's promoted baseline");
+                Assert(rig.Guest.ReceivedUi.Surfaces.Count == 2 && rig.Guest.ReceivedUi.Surfaces.Any(surface => surface.TryFindNode("fresh", out _)),
+                    "a promoted baseline retains the expired HUD alongside the fresh HUD");
+                var guest = rig.Guest.ReceivedUi.Surfaces.Single(surface => surface.Body == "Retained score");
+                Assert(!retained.IsVisible && !guest.IsVisible && guest.Content is UiColumn content
+                    && content.Children[0] is UiText { Text: "Score" }
+                    && content.Children[1] is UiText { Text: "Old 0", Tone: UiTone.Warning },
+                    "promotion preserves the hidden HUD and renders only its stale timer as zero");
+                retained.Show(); retained.SetBody("Visible score"); rig.Frames(15);
+                Assert(retained.IsVisible && guest.IsVisible && guest.Body == "Visible score", "the original host handle still updates both copies");
+                Assert(retained.SetContent(new UiColumn(timer)).ErrorCode == ModErrorCode.InvalidArgument,
+                    "a new composition containing the retired node is still refused after promotion");
+                var replacement = new UiCountdown(rig.Host.Ui.ClockTime + 45, id: "new");
+                Assert(retained.SetContent(new UiColumn(new UiText("New score"), replacement)).Succeeded,
+                    "the retained HUD accepts new content through its original handle");
+                rig.Frames(15);
+                Assert(guest.TryFindNode("new", out var node) && ((UiCountdown)node!).EndsAt == replacement.EndsAt,
+                    "the fresh deadline reaches the same guest HUD without rebasing");
             }
+            else
+            {
+                retained.Show(); retained.SetBody("Local score");
+                Assert(retained.IsVisible && rig.Host.LocalUi.Surfaces[0].Body == "Local score", "the same local handle remains usable without a provider");
+            }
+            Assert(timer.EndsAt == deadline && timer.ClockEpoch == oldEpoch && ReferenceEquals(timer.ClockIdentity, originalIdentity),
+                "retirement never rewrites the original authored deadline or clock identity");
         }
 
         internal static void CountdownWidgets()
