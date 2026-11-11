@@ -299,7 +299,8 @@ jobs:
 
   flutter-tests:
     name: Analyze and test Flutter packages
-    runs-on: ubuntu-latest
+    # Keep the native GLib fixture's Linux baseline stable during the ubuntu-latest rollout.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
