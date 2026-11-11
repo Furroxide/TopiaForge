@@ -60,10 +60,11 @@ namespace TopiaForge.Mods.Internal
         {
             get
             {
-                // Unity-style lossy scale: basis lengths, with odd reflection assigned to X.
-                // The quaternion remains the product of local quaternions, independent of scale.
-                var sign = Determinant(X, Y, Z) < 0 ? -1 : 1;
-                return new Vec3(sign * Length(X), Length(Y), Length(Z));
+                // Keep basis magnitudes and choose each sign relative to the composed rotation.
+                // This reconstructs aligned columns; shear and rotated reflections can remain lossy.
+                return new Vec3(SignedLength(X, Rotate(Rotation, new Vec3(1, 0, 0))),
+                    SignedLength(Y, Rotate(Rotation, new Vec3(0, 1, 0))),
+                    SignedLength(Z, Rotate(Rotation, new Vec3(0, 0, 1))));
             }
         }
         internal TransformState Pose
@@ -80,6 +81,12 @@ namespace TopiaForge.Mods.Internal
             (double)x.X * ((double)y.Y * z.Z - (double)y.Z * z.Y)
             - (double)x.Y * ((double)y.X * z.Z - (double)y.Z * z.X)
             + (double)x.Z * ((double)y.X * z.Y - (double)y.Y * z.X);
+        private static float SignedLength(Vec3 basis, Vec3 axis)
+        {
+            var projection = (double)basis.X * axis.X + (double)basis.Y * axis.Y + (double)basis.Z * axis.Z;
+            // A perpendicular column is not a collapsed axis. Zero projection chooses positive.
+            return projection < 0 ? -Length(basis) : Length(basis);
+        }
         private static float Length(Vec3 value) => (float)Math.Sqrt((double)value.X * value.X + (double)value.Y * value.Y + (double)value.Z * value.Z);
         internal static IReadOnlyDictionary<string, AuthoredAffine> Compose(IReadOnlyList<AuthoredRecord> records,
             Func<MapTransform, AuthoredAffine> local, AuthoredAffine root)

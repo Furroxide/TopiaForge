@@ -49,7 +49,36 @@ namespace TopiaForge.ModManager.Tests
             poses = read(scene, local, root);
             Near(poses["child"].Position, new Vec3(29, 10, 15), "production rotated/scaled import root");
             Near(poses["child"].Rotation * new Vec3(0, 0, 1), new Vec3(1, 0, 0), "production import-root quaternion");
+            SignedImportRoots(read);
             Console.WriteLine("Authored native coordinate boundary passed (compiled production method, fake parity and affine import root).");
+        }
+        private static void SignedImportRoots(Func<AuthoredScene, Func<MapTransform, AuthoredAffine>, AuthoredAffine, IReadOnlyDictionary<string, AuthoredAffine>> read)
+        {
+            for (var mask = 0; mask < 8; mask++)
+            {
+                var sx = (mask & 1) == 0 ? 1 : -1;
+                var sy = (mask & 2) == 0 ? 1 : -1;
+                var sz = (mask & 4) == 0 ? 1 : -1;
+                var rootTransform = new MapTransform(Vec3.Zero, new Vec3(0, 0, 90), new Vec3(2 * sx, 3 * sy, 4 * sz));
+                var childTransform = new MapTransform(Vec3.Zero, new Vec3(0, 0, 90), new Vec3(5, 6, 7));
+                var grandchildTransform = new MapTransform(new Vec3(1, 2, 3), Vec3.Zero, new Vec3(-1, -1, 1));
+                using var fake = new FakeAuthoredMap()
+                    .AddEntity("root", "Root", editorTransform: rootTransform)
+                    .AddEntity("child", "Child", editorTransform: childTransform, parentId: "root")
+                    .AddEntity("grandchild", "Grandchild", editorTransform: grandchildTransform, parentId: "child", hasMarker: false);
+                // Put the first transform in the native import root instead of an authored
+                // record. Expected columns are analytic; fake parity is an additional check.
+                var scene = new AuthoredScene("scene", "Scene", "", new[] {
+                    new AuthoredRecord("child", "scene", "Child", null, null, null, childTransform, AuthoredComponents.None),
+                    new AuthoredRecord("grandchild", "scene", "Grandchild", "child", null, null, grandchildTransform, AuthoredComponents.None) });
+                var poses = read(scene, value => AuthoredAffine.From(fake.ToWorld(value)), AuthoredAffine.From(fake.ToWorld(rootTransform)));
+                var pose = poses["grandchild"].Pose;
+                Near(pose.Scale, new Vec3(-15 * sy, -12 * sx, 28 * sz), "production import-root signs and reflection cancellation");
+                Near(pose.Position, new Vec3(15 * sy, -24 * sx, 84 * sz), "production reflected import-root child position");
+                AuthoredWorldTransformTests.Basis(pose, new Vec3(15 * sy, 0, 0), new Vec3(0, 12 * sx, 0), new Vec3(0, 0, 28 * sz), "production reflected basis reconstruction");
+                Near(pose.Scale, fake.Entity("grandchild").WorldTransform.Scale, "production/fake signed scale parity");
+                Near(pose.Position, fake.Entity("grandchild").WorldTransform.Position, "production/fake reflected position parity");
+            }
         }
         private static void Near(Vec3 actual, Vec3 expected, string reason) => Assert((actual - expected).Length < 0.0001f, reason);
         private const string Engine = """
