@@ -42,7 +42,7 @@ namespace TopiaForge.ModManager.Tests
             AppDomain.CurrentDomain.AssemblyResolve += resolve;
             try { ((Action)probe.GetMethod("Run")!.CreateDelegate(typeof(Action)))(); }
             finally { AppDomain.CurrentDomain.AssemblyResolve -= resolve; }
-            Console.WriteLine("Composed discovery production path: 2597 all-asset classification and refusals passed.");
+            Console.WriteLine("Composed discovery production path: distinct catalog dependencies and fixed refusals passed.");
         }
 
         private const string Contract = """
@@ -101,14 +101,16 @@ public class UgcExportProject {public IDictionary scenes=new Hashtable();public 
 public class UgcExportScene {public IDictionary entities=new Hashtable();}
 public class UgcExportEntity {public UgcExportEntityComponents components=new();}
 public class UgcExportEntityComponents {public IDictionary humanoidBodyParts=new Hashtable();public UgcAgentComponent agent=new();}
-public class UgcAgentComponent {public string voiceset="voice"; public string personality="ordinary prompt text";public string[] about=Array.Empty<string>();}
+public class UgcAgentComponent {public string voiceset="voice"; public string personality="";public string[] about=Array.Empty<string>();}
 public class WrongScene : UgcExportScene { }
 public class WrongEntity : UgcExportEntity { }
 public class WrongComponents : UgcExportEntityComponents { }
 public class WrongAgent : UgcAgentComponent { }
 public static class UgcCatalogLoreLoader {
- // Signature-only 2597 boundary: deliberately no CollectReferencedLoreUris member.
- private static IReadOnlyList<string> CollectReferencedAssetUris(UgcExportProject project,UgcPrefabSceneMap map)=>TopiaForge.RobotKit.Probe.Assets;
+ // Clean-room boundary for the only three-component shape production admits. It has no
+ // poi/aoi/prefab-instance components, so only agent catalog dependencies can be returned.
+ // Deliberately no removed CollectReferencedLoreUris member.
+ private static IReadOnlyList<string> CollectReferencedAssetUris(UgcExportProject project,UgcPrefabSceneMap map)=>TopiaForge.RobotKit.Probe.Collect(project);
 }
 namespace TopiaForge.RobotKit {
  internal static class GameReflection {
@@ -125,9 +127,23 @@ namespace TopiaForge.RobotKit {
  public static class Probe {
   public static GameObject Root=new(); public static Component[] Hosts=Array.Empty<Component>();
   public static IReadOnlyList<string> Assets=new[]{"part","voice"};
+  private static bool OverrideAssets;
+  private static string? LastPersonality;
+  private static string[] LastCollected=Array.Empty<string>();
   private static readonly WorldSessionSnapshot State=new();
   private static int WrongType, InjectCatalog;
-  private const string Json="{\"id\":\"test\",\"entities\":{\"actor\":{\"components\":{\"transform\":{},\"agent\":{\"personality\":\"ordinary prompt text\",\"voiceset\":\"voice\"},\"humanoid-body-parts\":{\"Head\":\"part\",\"PlasticMaterial\":\"symbolic\"}}}}}";
+  private const string Json="{\"id\":\"test\",\"entities\":{\"actor\":{\"components\":{\"transform\":{},\"agent\":{\"personality\":\"\",\"voiceset\":\"voice\"},\"humanoid-body-parts\":{\"Head\":\"part\",\"PlasticMaterial\":\"symbolic\"}}}}}";
+  public static IReadOnlyList<string> Collect(UgcExportProject project) {
+   if(OverrideAssets)return Assets;
+   var references=new List<string>();
+   foreach(UgcExportScene scene in project.scenes.Values)
+    foreach(UgcExportEntity entity in scene.entities.Values) {
+     var agent=entity.components.agent;
+     references.AddRange(agent.about.Where(value=>!string.IsNullOrWhiteSpace(value)));
+     if(!string.IsNullOrWhiteSpace(agent.personality))references.Add(agent.personality);
+    }
+   LastCollected=references.ToArray();return LastCollected;
+  }
   public static object Project(string json) {
    // Deserialize real production envelope data into signature stand-ins without invoking GameCode.
    var data=(Dictionary<string,object?>)MiniJson.Deserialize(json)!;
@@ -151,7 +167,9 @@ namespace TopiaForge.RobotKit {
    foreach(var part in parts)entity.components.humanoidBodyParts.Add(part.Key,part.Value);
    entity.components.agent.personality=(string)agent["personality"]!;
    entity.components.agent.voiceset=(string)agent["voiceset"]!;
-   Check(entity.components.agent.personality=="ordinary prompt text","plain prompt survives the complete envelope unchanged");
+   entity.components.agent.about=agent.TryGetValue("about",out var about)
+    ? ((List<object?>)about!).Cast<string>().ToArray() : Array.Empty<string>();
+   LastPersonality=entity.components.agent.personality;
    scene.entities.Add("actor",entity);p.scenes.Add("test",scene);return p;
   }
   private static void Check(bool ok,string message){if(!ok)throw new InvalidOperationException(message);}
@@ -159,31 +177,46 @@ namespace TopiaForge.RobotKit {
    Root=new GameObject {scene=new Scene {handle=7}};
    var host=new UgcImportHostSceneController {gameObject=Root};host.SceneRoot.ActiveImportRoot=Root.transform;
    host.RuntimeAssetConfig.PrefabSceneMap.Entries=new[]{new UgcPrefabSceneMap.Entry {sceneJson=Json}};
-   Hosts=new Component[]{host};Assets=new[]{"part","voice"};WrongType=InjectCatalog=0;RobotKitDiagnostics.Last=null;return host;
+   Hosts=new Component[]{host};Assets=new[]{"part","voice"};OverrideAssets=false;
+   LastCollected=Array.Empty<string>();LastPersonality=null;WrongType=InjectCatalog=0;RobotKitDiagnostics.Last=null;return host;
   }
   public static void Run() {
-   Reset();Check(RobotComposedScene.Discover(()=>State)!=null,"2597 all-asset result with resolved parts/voice and unmodified prompt must discover");
+   Reset();Check(RobotComposedScene.Discover(()=>State)!=null && LastCollected.Length==0,
+    "resolved body/voice with no catalog dependencies discovers without pretending those maps contain lore");
+   foreach(var reference in new[]{"personality-reference","part","voice"}) {
+    var personalityHost=Reset();
+    personalityHost.RuntimeAssetConfig.PrefabSceneMap.Entries[0].sceneJson=Json.Replace("\"personality\":\"\"","\"personality\":\""+reference+"\"");
+    Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.CatalogAssetsUnavailable
+     && LastPersonality==reference && LastCollected.SequenceEqual(new[]{reference}),
+     "nonblank personality remains an unprepared catalog dependency even when its string equals a resolved part or voice");
+   }
+   var aboutHost=Reset();
+   aboutHost.RuntimeAssetConfig.PrefabSceneMap.Entries[0].sceneJson=Json.Replace("\"personality\":\"\"","\"personality\":\"\",\"about\":[\"part\",\"about-reference\"]");
+   Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.CatalogAssetsUnavailable
+    && LastCollected.SequenceEqual(new[]{"part","about-reference"}),"about dependencies are not attested by body-part resolution");
    foreach(var type in new[]{1,2,3,4}) {
     Reset();WrongType=type;
     Check(RobotComposedScene.Discover(()=>State)==null
-     && RobotKitDiagnostics.Last==(type<=2 ? RobotComposedRefusal.EntityShape : RobotComposedRefusal.AssetReferences),
+     && RobotKitDiagnostics.Last==(type<=2 ? RobotComposedRefusal.EntityShape : RobotComposedRefusal.EntityReferencesShape),
      "lookalike native DTO types refuse before use");
    }
    foreach(var catalog in new[]{1,2}) {
     Reset();InjectCatalog=catalog;
-    Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AssetReferences,
+    Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.ProjectCatalogShape,
      "unexpected deserialized native asset catalogue refuses");
    }
    Reset();
-   Assets=new[]{"part","voice","unresolved-lore"};Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AssetReferences,"unknown fetch-dependent reference refuses");
+   OverrideAssets=true;
+   Assets=new[]{"part","voice","unresolved-lore"};Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.CatalogAssetsUnavailable,"unknown fetch-dependent reference refuses with a fixed catalog reason");
    Assets=new[]{"part","voice","symbolic"};Check(RobotComposedScene.Discover(()=>State)==null,"material symbol is not automatically a resolved asset URI");
-   Assets=Array.Empty<string>();Check(RobotComposedScene.Discover(()=>State)!=null,"empty all-asset result remains eligible");
-   Assets=null!;Check(RobotComposedScene.Discover(()=>State)==null,"null collection refuses");
-   Assets=Enumerable.Repeat("part",257).ToArray();Check(RobotComposedScene.Discover(()=>State)==null,"asset budget refuses");
+   Assets=Array.Empty<string>();Check(RobotComposedScene.Discover(()=>State)!=null,"empty catalog result remains eligible");
+   Assets=null!;Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AssetReferenceSetInvalid,"null collection refuses");
+   Assets=new[]{""};Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AssetReferenceSetInvalid,"empty reference refuses");
+   Assets=Enumerable.Repeat("part",257).ToArray();Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AssetReferenceSetInvalid,"asset budget refuses");
    var badPart=Reset();badPart.RuntimeAssetConfig.PrefabSceneMap.Entries[0].sceneJson=Json.Replace("\"Head\":\"part\"","\"Head\":\"missing\"");
-   Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AssetReferences,"unresolved body part refuses");
+   Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.BodyPartUnavailable,"unresolved body part refuses");
    var badVoice=Reset();badVoice.RuntimeAssetConfig.PrefabSceneMap.Entries[0].sceneJson=Json.Replace("\"voiceset\":\"voice\"","\"voiceset\":\"missing\"");
-   Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AssetReferences,"unresolved voice refuses");
+   Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.VoiceUnavailable,"unresolved voice refuses");
    var host=Reset();host.RuntimeAssetConfig.PrefabSceneMap.Entries=Enumerable.Repeat(host.RuntimeAssetConfig.PrefabSceneMap.Entries[0],2).ToArray();
    Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.AmbiguousIdentity,"duplicate identity refuses");
    Reset();Hosts=Array.Empty<Component>();Check(RobotComposedScene.Discover(()=>State)==null && RobotKitDiagnostics.Last==RobotComposedRefusal.HostCount,"host refusal classified");
