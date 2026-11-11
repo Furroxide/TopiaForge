@@ -9,7 +9,7 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class TestingKitTests
     {
-        internal static void RunRobotAuthority()
+        internal static void RunRobotCallOriginTests()
         {
             TestRobotAuthorityScopes();
             TestRobotAuthorityClient();
