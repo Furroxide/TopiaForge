@@ -52,7 +52,7 @@ namespace TopiaForge.RobotKit
                 stage = RobotBodyCompositionStage.Quieten;
                 Quieten(clone);
                 stage = RobotBodyCompositionStage.Appearance;
-                RobotAvatarAppearance.Apply(clone, request.Appearance);
+                RobotAvatarAppearance.ApplyPersistentBody(clone, request.Appearance);
                 stage = RobotBodyCompositionStage.AnchorSetup;
                 anchor = new GameObject("Powered-down robot");
                 anchor.SetActive(false);
