@@ -11,10 +11,15 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class Program
     {
-        private static int Main(string[] args)
+        private static int Main(string[] args) => TopiaForge.TestSupport.IsolatedTestProcess.Run(args, RunTests);
+
+        private static int RunTests(string[] args)
         {
             if (args.Length == 1 && args[0] == "--temporary-test-directories")
             { FocusedHarnessDirectoryTests.Run(); return 0; }
+            if (args.Length > 0 && args[0] == "--temporary-workspace-probe")
+                return args.Length == 2 ? TemporaryWorkspaceTests.Probe(args) : 64;
+            if (args.Length == 1 && args[0] == "--temporary-workspaces") { TemporaryWorkspaceTests.Run(); return 0; }
             UnityMainThreadGuard.CaptureCurrentThread();
             if (args.Length == 1 && args[0] == "--menu-presentation")
             { MenuLoadPresentationTests.Run(); return 0; }
@@ -507,6 +512,7 @@ namespace TopiaForge.ModManager.Tests
                 }
             }
 
+            TemporaryWorkspaceTests.Run();
             var root = Directory.CreateTempSubdirectory("TopiaForgeModManagerTests-").FullName;
 
             try
