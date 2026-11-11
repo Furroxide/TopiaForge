@@ -73,6 +73,8 @@ namespace TopiaForge.ModManager.Tests
             { NativeEntityPoseTests.Run(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "--robot-interaction-authority")
             { RobotInteractionAuthorityTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--robot-editor-authority")
+            { RobotEditorAuthorityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--guest-brain-authority")
             { FirstPartyGuestBrainTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--first-party-local-robots")
@@ -630,6 +632,7 @@ namespace TopiaForge.ModManager.Tests
                 NetworkWorldTests.Run();
                 FirstPartyReplicationTests.Run();
                 PresenceSuite.Run();
+                RobotEditorAuthorityTests.Run();
                 RobotBodyTests.Run();
                 AvatarAppearanceTests.Run();
                 PlayersApiTests.Run();

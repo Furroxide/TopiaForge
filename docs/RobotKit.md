@@ -34,14 +34,20 @@ integration.
 | `IRobotConversationService` | Run bounded multi-turn dialogue with closed-set decisions. |
 | `IPlayerDialogueInputService` | Typed text helpers and optional push-to-talk capture/transcription. |
 | `IRobotBrainQueryService` | Asynchronous structured queries with typed output fields and stable failures. |
-| `IRobotSceneEditorService` | Optional discovery and exclusive temporary edit leases for approved native and RobotKit-managed robots. |
+| `IRobotSceneEditorService` | Optional discovery and exclusive temporary edit leases for eligible native scene robots. |
 | `IRobotEditTarget` / `IRobotEditLease` | Opaque scene target plus snapshot-backed transform, brain-mode, and autonomous-personality previews with conflict-safe restoration. |
 
-The scene editor is additive: existing `IRobotAgent` and `IRobotAgentService` implementations do not gain new members.
-Every native edit is temporary and exclusive. A lease snapshots each reversible property once, restores changes in
-reverse order, and leaves a property untouched if another system changed it after the preview. `RobotPersonalityDraft`
-uses the verified `PersonalityAsset`/`LLMAgent` surface for autonomous behavior; Creator conversations apply the same
-persona to their explicit `RobotConversationRequest`.
+Use the scene editor for eligible native scene robots. RobotKit-managed robots, including guest replicas, are excluded
+from discovery, resolution, and edit leases. Use the routed `IRobotAgent` controls for managed robots. Temporary native
+personality previews apply only to eligible scene robots.
+
+Every scene edit is temporary and exclusive. A lease snapshots each reversible property once, restores changes in
+reverse order, and leaves a property untouched if another system changed it after the preview. If the target comes under
+RobotKit management, further previews fail. Restoring or disposing the lease then releases its resources without
+applying the captured state.
+
+`RobotPersonalityDraft` uses the verified `PersonalityAsset`/`LLMAgent` surface for autonomous behavior. Creator
+conversations apply the same persona to their explicit `RobotConversationRequest`.
 
 Every operation either uses a cheap `Try...` query, returns `OperationResult<T>`, or returns
 `Task<OperationResult<T>>` with lifetime cancellation. Check provider availability and

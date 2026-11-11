@@ -296,7 +296,10 @@ namespace TopiaForge.RobotKit
                         break;
                     }
 
-                    if (tree != null && foundExpected && tree.enabled == expectedEnabled)
+                    // The snapshot retains references even when a tree is moved to another robot.
+                    if (tree != null && foundExpected
+                        && (tree.gameObject == root || tree.transform.IsChildOf(root.transform))
+                        && tree.enabled == expectedEnabled)
                     {
                         tree.enabled = wasEnabled;
                     }
