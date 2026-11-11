@@ -501,6 +501,17 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--presence-relay", StringComparison.Ordinal))
+            {
+                PresenceFirstPoseTests.Run();
+                PresenceFirstPoseHostTests.Run();
+                PresenceWireTests.Run();
+                PresenceHostileTests.Run();
+                PresenceBudgetTests.Run();
+                PresenceSessionTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--authority-routing", StringComparison.Ordinal))
             {
                 AuthorityTests.Run();

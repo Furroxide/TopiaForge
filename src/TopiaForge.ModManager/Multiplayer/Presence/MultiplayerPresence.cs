@@ -216,7 +216,8 @@ namespace TopiaForge.ModManager
             var flags = Realm == NetRealm.ListenHost
                 ? LocalParticipant.HasValue ? ActivityFlagsFor(peer, LocalParticipant.Value) : peer.Flags & ~(PresenceFlags.Talking | PresenceFlags.Typing)
                 : peer.Flags;
-            pose = PoseOf(peer, flags);
+            var sampledMicros = Realm == NetRealm.ListenHost && !peer.IsLocal ? peer.RelayPoseMicros : peer.PoseMicros;
+            pose = PoseOf(peer, flags, sampledMicros);
             return true;
         }
 
@@ -239,7 +240,7 @@ namespace TopiaForge.ModManager
         internal bool TryGetPeer(ParticipantId participant, out PresencePeer? peer) => peersById.TryGetValue(participant, out peer);
 
         /// <summary>The public pose a peer's held pose and state stand for.</summary>
-        internal static MultiplayerPose PoseOf(PresencePeer peer, PresenceFlags flags)
+        private static MultiplayerPose PoseOf(PresencePeer peer, PresenceFlags flags, long sampledMicros)
         {
             var feet = NetQuantization.DequantizePosition(peer.Position);
             var view = NetQuantization.DequantizeRotation(peer.Rotation);
@@ -249,7 +250,7 @@ namespace TopiaForge.ModManager
             var maximum = peer.HasState ? Math.Max(0f, peer.MaximumHealth) : 0f;
             var health = peer.HasState ? Math.Max(0f, Math.Min(peer.Health, maximum)) : 0f;
             return new MultiplayerPose(
-                new NetworkTick((ulong)Math.Max(0, peer.PoseMicros) / (ulong)PresenceLocalPlayer.SendIntervalMicros),
+                new NetworkTick((ulong)Math.Max(0, sampledMicros) / (ulong)PresenceLocalPlayer.SendIntervalMicros),
                 new Vec3(feet.X, feet.Y, feet.Z),
                 aim,
                 new Vec3(velocity.X, velocity.Y, velocity.Z),

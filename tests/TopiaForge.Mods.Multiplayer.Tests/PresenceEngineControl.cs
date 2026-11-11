@@ -97,6 +97,8 @@ internal sealed class PresenceInbox(IInternalSystemChannel inner) : IInternalSys
     internal byte[] LastDatagramTo(ParticipantId listener) => datagrams[listener];
     private readonly Dictionary<(ParticipantId Listener, byte Index), PresenceFlags> sentFlags = new();
     internal PresenceFlags? LastWireFlags(ParticipantId listener, byte index) => sentFlags.TryGetValue((listener, index), out var flags) ? flags : null;
+    private readonly Dictionary<(ParticipantId Listener, byte Index), int> sentPoseCounts = new();
+    internal int SentPoseCount(ParticipantId listener, byte index) => sentPoseCounts.GetValueOrDefault((listener, index));
     public OperationResult<int> SendDatagram(ArraySegment<byte> payload, InternalSystemTarget target)
     {
         if (DropDatagramsTo.HasValue && target.Participant.Equals(DropDatagramsTo.Value))
@@ -110,7 +112,11 @@ internal sealed class PresenceInbox(IInternalSystemChannel inner) : IInternalSys
                 && TopiaForge.ModManager.PresenceWire.TryReadPosesHeader(reader, out _, out var count))
                 for (var i = 0; i < count; i++)
                     if (TopiaForge.ModManager.PresenceWire.TryReadRelay(reader, out var pose))
-                        sentFlags[(target.Participant, pose.Index)] = pose.Flags & (PresenceFlags.Talking | PresenceFlags.Typing);
+                    {
+                        var key = (target.Participant, pose.Index);
+                        sentFlags[key] = pose.Flags & (PresenceFlags.Talking | PresenceFlags.Typing);
+                        sentPoseCounts[key] = sentPoseCounts.GetValueOrDefault(key) + 1;
+                    }
         }
         return inner.SendDatagram(payload, target);
     }
