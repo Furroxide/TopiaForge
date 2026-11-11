@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -13,20 +14,30 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             var root = Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.RobotKit");
-            var syntax = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, "RobotComposedScene.cs")));
+            SyntaxTree Read(string file) => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file), Encoding.UTF8));
+            MethodDeclarationSyntax Method(SyntaxNode root, string name) => root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.Text == name);
+
+            var syntax = Read("RobotComposedScene.cs").GetRoot();
             // Native deserialization is a boundary fake; discovery and ReferencesResolve are complete production code.
-            var method = syntax.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
-                .Single(m => m.Identifier.Text == "DeserializeProject");
-            var tree = syntax.GetRoot().ReplaceNode(method, method.WithBody(SyntaxFactory.ParseStatement(
+            var method = Method(syntax, "DeserializeProject");
+            var tree = syntax.ReplaceNode(method, method.WithBody(SyntaxFactory.ParseStatement(
                 "{ return Probe.Project(json); }") as BlockSyntax));
+
+            var candidate = Read("RobotPrefabResolver.cs").GetRoot().DescendantNodes()
+                .OfType<ClassDeclarationSyntax>().Single(type => type.Identifier.Text == "RobotPrefabCandidate");
+            var sceneResources = Read("RobotAgentService.SceneResources.cs").GetRoot();
+            var cache = Method(sceneResources, "ResolveCachedCatalog").ToFullString()
+                + Method(sceneResources, "InvalidateComposedDiscovery").ToFullString();
+            var probeSource = Contract.Replace("/* candidate */", candidate.ToFullString())
+                .Replace("/* cache */", cache);
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(p => !Path.GetFileName(p).StartsWith("UnityEngine", StringComparison.Ordinal)
                     && !Path.GetFileName(p).StartsWith("TopiaForge", StringComparison.Ordinal)
                     && !string.Equals(Path.GetFileName(p), "GameCode.dll", StringComparison.OrdinalIgnoreCase))
                 .Select(p => MetadataReference.CreateFromFile(p));
-            var sources = new[] { "MiniJson.cs", "RobotComposedSceneShape.cs", "RobotComposedReferences.cs" }
-                .Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file))))
-                .Append(CSharpSyntaxTree.Create((CSharpSyntaxNode)tree)).Append(CSharpSyntaxTree.ParseText(Contract));
+            var sources = new[] { "MiniJson.cs", "RobotComposedSceneShape.cs", "RobotComposedReferences.cs", "RobotComposedCurrentness.cs" }
+                .Select(Read).Append(CSharpSyntaxTree.Create((CSharpSyntaxNode)tree)).Append(CSharpSyntaxTree.ParseText(probeSource));
             var compilation = CSharpCompilation.Create("GameCode", sources, references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
             using var bytes = new MemoryStream();
@@ -42,7 +53,7 @@ namespace TopiaForge.ModManager.Tests
             AppDomain.CurrentDomain.AssemblyResolve += resolve;
             try { ((Action)probe.GetMethod("Run")!.CreateDelegate(typeof(Action)))(); }
             finally { AppDomain.CurrentDomain.AssemblyResolve -= resolve; }
-            Console.WriteLine("Composed discovery production path: distinct catalog dependencies and fixed refusals passed.");
+            Console.WriteLine("Composed discovery production path: distinct catalog dependencies, fixed refusals and catalog recovery passed.");
         }
 
         private const string Contract = """
@@ -57,12 +68,21 @@ using TopiaForge.Mods;
 namespace UnityEngine.SceneManagement {
  public struct Scene {
   public int handle; public bool isLoaded => true; public bool IsValid()=>handle!=0;
-  public GameObject[] GetRootGameObjects()=>new[]{ TopiaForge.RobotKit.Probe.Root };
+  public GameObject[] GetRootGameObjects() {
+   TopiaForge.RobotKit.Probe.SceneScans++;
+   return new[]{ TopiaForge.RobotKit.Probe.Root };
+  }
  }
  public static class SceneManager { public static int sceneCount=>1; public static Scene GetSceneAt(int i)=>new Scene {handle=7}; }
 }
 namespace UnityEngine {
- public class Object { }
+ public class Object {
+  public static T Instantiate<T>(T original,Transform parent,bool worldPositionStays) where T:Object => original;
+ }
+ public static class Time {
+  public static double unscaledTimeAsDouble;
+  public static float unscaledTime => (float)unscaledTimeAsDouble;
+ }
  public class Component : Object { public GameObject gameObject=null!; public Transform transform=>gameObject.transform; }
  public class Transform : Component { public void SetParent(Transform t,bool b){} public bool IsChildOf(Transform t)=>true; }
  public class GameObject : Object {
@@ -117,15 +137,30 @@ namespace TopiaForge.RobotKit {
   internal static object? GetFieldValue(object o,string n)=>o.GetType().GetField(n)?.GetValue(o);
   internal static bool HasComponent(GameObject o,string n)=>true;
  }
- internal sealed class RobotComposedCurrentness {
-  internal RobotComposedCurrentness(Func<WorldSessionSnapshot?> w,WorldSessionSnapshot s,Component h,object c,object r,Transform m){}
-  internal bool IsCurrent()=>true;internal bool IsVerified=>true;
- }
  internal sealed class RobotComposedLifetime {internal Func<bool>? Current;internal GameObject? Actor; internal void Initialize(Type t,MethodInfo m){}internal void Dispose(){}}
- internal sealed class RobotPrefabCandidate {internal RobotPrefabCandidate(string id,string name,Func<Transform,GameObject> c,Func<bool> current){}}
- internal static class RobotKitDiagnostics {internal static RobotComposedRefusal? Last;internal static void ReportComposedDiscovery(WorldSessionSnapshot? s,RobotComposedRefusal r){Last=r;}}
+ /* candidate */
+ internal sealed class RobotPrefabResolver {
+  internal IReadOnlyList<RobotPrefabCandidate> ResolveAll()=>new[]{new RobotPrefabCandidate("native","Native",new GameObject(),1)};
+ }
+ internal sealed class RobotAgentService {
+  private readonly Func<WorldSessionSnapshot?> world;
+  private readonly RobotPrefabResolver prefabResolver=new();
+  private IReadOnlyList<RobotPrefabCandidate>? cachedCatalog;
+  private object? cachedTypes;
+  private float nextPrefabScan, nextComposedScan, composedRetryDelay=2f;
+  internal RobotAgentService(Func<WorldSessionSnapshot?> world) { this.world=world; }
+  internal IReadOnlyList<RobotPrefabCandidate>? Catalog()=>ResolveCachedCatalog();
+  /* cache */
+ }
+ internal static class RobotKitDiagnostics {
+  internal static RobotComposedRefusal? Last;
+  internal static RobotComposedRetirement? Retirement;
+  internal static void ReportComposedDiscovery(WorldSessionSnapshot? s,RobotComposedRefusal r) { Last=r; }
+  internal static void ReportComposedRetirement(WorldSessionSnapshot s,RobotComposedRetirement r) { Retirement=r; }
+ }
  public static class Probe {
   public static GameObject Root=new(); public static Component[] Hosts=Array.Empty<Component>();
+  public static int SceneScans;
   public static IReadOnlyList<string> Assets=new[]{"part","voice"};
   private static bool OverrideAssets;
   private static string? LastPersonality;
@@ -178,7 +213,8 @@ namespace TopiaForge.RobotKit {
    var host=new UgcImportHostSceneController {gameObject=Root};host.SceneRoot.ActiveImportRoot=Root.transform;
    host.RuntimeAssetConfig.PrefabSceneMap.Entries=new[]{new UgcPrefabSceneMap.Entry {sceneJson=Json}};
    Hosts=new Component[]{host};Assets=new[]{"part","voice"};OverrideAssets=false;
-   LastCollected=Array.Empty<string>();LastPersonality=null;WrongType=InjectCatalog=0;RobotKitDiagnostics.Last=null;return host;
+   LastCollected=Array.Empty<string>();LastPersonality=null;WrongType=InjectCatalog=SceneScans=0;
+   RobotKitDiagnostics.Last=null;RobotKitDiagnostics.Retirement=null;return host;
   }
   public static void Run() {
    Reset();Check(RobotComposedScene.Discover(()=>State)!=null && LastCollected.Length==0,
@@ -227,6 +263,46 @@ namespace TopiaForge.RobotKit {
    Reset();Hosts=Array.Empty<Component>();
    Check(RobotComposedScene.Discover(()=>State,out absent)==null && !absent,"transient host refusal never admits absence backoff");
    Reset();Check(RobotComposedScene.Discover(()=>State,out absent)!=null && !absent,"successful discovery is not negative cached");
+   CatalogRecovery();
+  }
+
+  private static void CatalogRecovery() {
+   var host=Reset();
+   var state=new WorldSessionSnapshot { Phase=WorldSessionPhase.StartingMode };
+   var service=new RobotAgentService(()=>state);
+   Time.unscaledTimeAsDouble=100;
+   var catalog=service.Catalog()!;
+   Check(catalog.Count==2 && catalog[0].Id=="native" && catalog[1].Id=="municipal" && SceneScans==1,
+    "initial catalog keeps the native default ahead of the composed candidate");
+   var original=catalog[1];
+   state=new WorldSessionSnapshot { World=state.World,Session=state.Session };
+   host.SceneRoot.ActiveImportRoot=null!;
+   Check(ReferenceEquals(service.Catalog(),catalog),"incomplete identity preserves the candidate during grace");
+   bool refused=false;
+   try { _=original.Create(Root.transform); }
+   catch(RobotComposedContextUnverifiedException) { refused=true; }
+   Check(refused && RobotKitDiagnostics.Last==RobotComposedRefusal.ContextUnverified,
+    "construction during grace reports the stable composed context refusal");
+
+   Time.unscaledTimeAsDouble=101.999;
+   Check(ReferenceEquals(service.Catalog(),catalog) && SceneScans==1,"grace uses the cached candidate without rediscovery");
+   Time.unscaledTimeAsDouble=102;
+   RobotKitDiagnostics.Last=null;
+   var retired=service.Catalog()!;
+   Check(retired.Count==1 && ReferenceEquals(retired[0],catalog[0]) && SceneScans==2,
+    "deadline evicts the composed candidate and immediately retries discovery while retaining the native default");
+   Check(RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut
+    && RobotKitDiagnostics.Last==RobotComposedRefusal.ContextUnverified,
+    "retirement and persistent null rediscovery each report their reason");
+
+   host.SceneRoot.ActiveImportRoot=Root.transform;
+   Time.unscaledTimeAsDouble=103.999;
+   Check(ReferenceEquals(service.Catalog(),retired) && SceneScans==2,"failed rediscovery honors the existing retry throttle");
+   Time.unscaledTimeAsDouble=104;
+   var recovered=service.Catalog()!;
+   Check(recovered.Count==2 && ReferenceEquals(recovered[0],catalog[0]) && recovered[1].Id=="municipal"
+    && !ReferenceEquals(recovered[1],original) && recovered[1].IsCurrent && !original.IsCurrent && SceneScans==3,
+    "a later scan rediscovers a fresh verified candidate and cannot revive the retired one");
   }
  }
 }
