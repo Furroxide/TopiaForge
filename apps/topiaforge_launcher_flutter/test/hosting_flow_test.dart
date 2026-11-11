@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:launcher_domain/launcher_domain.dart';
+import 'package:launcher_ui/launcher_ui.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_bloc.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_event.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_multiplayer_state.dart';
@@ -192,6 +193,15 @@ void main() {
       expect(find.byType(TextField), findsNWidgets(2)); // no password field
       expect(tester.takeException(), isNull);
       await tester.runAsync(() async {
+        await _review(bloc, rig);
+      });
+      await tester.pumpAndSettle();
+      expect(
+        find.text(MultiplayerPrivacyText.disclosureHidden),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.runAsync(() async {
         bloc.add(const ServerCleanupRequested());
         await _until(bloc, (s) => s.multiplayer.cleanup.catalog != null);
       });
@@ -202,4 +212,65 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  testWidgets('first direct host reads disclosure once before direct consent', (
+    tester,
+  ) async {
+    late _Rig rig;
+    late LauncherBloc bloc;
+    await tester.runAsync(() async {
+      rig = _Rig()..prepareGate = Completer<HostingPreparation>();
+      bloc = await _open(rig);
+      bloc.add(HostingReviewRequested(rig.choices));
+      await _until(
+        bloc,
+        (s) => s.multiplayer.hosting.phase == HostingPhase.preparing,
+      );
+      rig.prepareGate!.complete(
+        const HostingRefused('Relay unavailable.', canAllowDirect: true),
+      );
+      await _until(
+        bloc,
+        (s) => s.multiplayer.hosting.phase == HostingPhase.failed,
+      );
+    });
+    await tester.pumpWidget(
+      BlocProvider.value(
+        value: bloc,
+        child: const MaterialApp(home: Scaffold(body: HostingDialog())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Allow a direct connection…'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('privacy-disclosure-dialog')), findsOneWidget);
+    expect(find.text(MultiplayerPrivacyText.directTitle), findsNothing);
+    expect(rig.launches, 0);
+    await tester.tap(find.text(MultiplayerPrivacyText.disclosureButton));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('privacy-disclosure-dialog')), findsNothing);
+    expect(find.text(MultiplayerPrivacyText.directTitle), findsOneWidget);
+    rig.prepareGate = null;
+    await tester.tap(find.text(MultiplayerPrivacyText.directAllowButton));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await _until(
+        bloc,
+        (s) => s.multiplayer.hosting.phase == HostingPhase.review,
+      );
+    });
+    await tester.pumpAndSettle();
+    expect(find.text(MultiplayerPrivacyText.directBody), findsOneWidget);
+    await tester.tap(find.text('Start hosting'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('privacy-disclosure-dialog')), findsNothing);
+    await tester.runAsync(() async {
+      await _until(
+        bloc,
+        (s) => s.multiplayer.hosting.phase == HostingPhase.failed,
+      );
+    });
+    expect(rig.launches, 1);
+    expect(rig.disclosureSaved, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 }

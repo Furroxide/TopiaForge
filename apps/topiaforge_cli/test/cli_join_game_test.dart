@@ -54,7 +54,17 @@ void main() {
     }
     test('TFJOIN180 ${code.name} has safe next steps', () async {
       rig.activityOnLaunch = () => failed(code);
-      expect(await rig.run(), 1);
+      final result = await rig.run();
+      if (code == LaunchMultiplayerFailure.directNotAllowed) {
+        expect(result, 3);
+        expect(rig.messages.last, contains('Robotopia was left running.'));
+        expect(rig.messages.last, contains('Stop this join in the game'));
+        expect(rig.launches, 1);
+        expect(rig.histories, 0);
+        expect(rig.withdrawals, 0);
+      } else {
+        expect(result, 1);
+      }
       expect(rig.messages.last, startsWith('TFJOIN180:'));
       expect(rig.messages.last, isNot(contains('203.0.113.99')));
     });

@@ -84,6 +84,7 @@ Future<int> runCliHost({
         visibility == ServerVisibility.public ||
         visibility == ServerVisibility.invite;
     stage = 'TFHOST120';
+    var needsDirect = false;
     if (needsService) {
       if (serviceOrigin == null) {
         return refuse(
@@ -101,7 +102,8 @@ Future<int> runCliHost({
           'Internet hosting or invites are unavailable. Retry later or use --visibility lan.',
         );
       }
-      if (!features.relayAvailable && !options.allowDirect) {
+      needsDirect = !features.relayAvailable;
+      if (needsDirect && !options.allowDirect) {
         return refuse(
           'The relay is unavailable. Keep Hide my IP on with --visibility lan, or explicitly choose --allow-direct for this session.',
         );
@@ -157,7 +159,7 @@ Future<int> runCliHost({
       );
       settings = saved.settings;
     }
-    if (options.allowDirect) {
+    if (needsDirect) {
       write('Allow a direct connection?');
       write(CliMultiplayerText.direct);
       if (!await consent('Allow for this session [y/N]')) {
@@ -200,7 +202,7 @@ Future<int> runCliHost({
     final request = LaunchSessionRequest.host(
       intentId: intent,
       settings: settings,
-      privacy: settings.privacyForSession(allowDirect: options.allowDirect),
+      privacy: settings.privacyForSession(allowDirect: needsDirect),
       host: LaunchHostOptions(
         name: options.name ?? defaults.name,
         maxPlayers: options.maxPlayers ?? defaults.maxPlayers,

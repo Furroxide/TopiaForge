@@ -126,7 +126,8 @@ For live multiplayer builds, `topiaforge join <code|link|host:port>` reviews the
 add `--json` for the versioned machine-readable snapshot. `topiaforge host` uses
 the launcher's profile and multiplayer preferences, waits for the game to confirm
 hosting, and prints an Internet invite when the game issues one. Hide my IP stays
-on unless `--allow-direct` is explicitly chosen for this session. Non-interactive
+on when a relay or local route is available. `--allow-direct` permits a one-session
+exception only when that route cannot reach the session, after the direct prompt. Non-interactive
 hosting requires `--yes`; an interactive terminal still asks for consent.
 
 `topiaforge acceptance run --suite multiplayer --dry-run` prints the separate

@@ -145,6 +145,7 @@ class HostingDialog extends StatelessWidget {
     final plan = view.plan!;
     final acknowledged =
         !plan.preferences.settings.needsPrivacyDisclosure ||
+        view.disclosureAcknowledged ||
         await showPrivacyDisclosure(context);
     if (!context.mounted ||
         !acknowledged ||
@@ -158,6 +159,18 @@ class HostingDialog extends StatelessWidget {
   }
 
   Future<void> _allowDirect(BuildContext context, HostingView view) async {
+    final acknowledged =
+        !view.preferences!.settings.needsPrivacyDisclosure ||
+        view.disclosureAcknowledged ||
+        await showPrivacyDisclosure(context);
+    if (!context.mounted ||
+        !acknowledged ||
+        !identical(
+          context.read<LauncherBloc>().state.multiplayer.hosting,
+          view,
+        )) {
+      return;
+    }
     final allowed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -180,8 +193,10 @@ class HostingDialog extends StatelessWidget {
     );
     if (!context.mounted ||
         allowed != true ||
-        context.read<LauncherBloc>().state.multiplayer.hosting.generation !=
-            view.generation) {
+        !identical(
+          context.read<LauncherBloc>().state.multiplayer.hosting,
+          view,
+        )) {
       return;
     }
     final choices = view.choices!;
@@ -194,6 +209,7 @@ class HostingDialog extends StatelessWidget {
           servePackages: choices.servePackages,
           allowDirect: true,
         ),
+        acknowledgeDisclosure: true,
       ),
     );
   }
@@ -218,8 +234,8 @@ class _HostingReview extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           choices.allowDirect
-              ? 'Direct connection allowed for this session only. Other players can see your IP address.'
-              : 'Hide my IP: on. This session uses a relay or stays on your local network.',
+              ? MultiplayerPrivacyText.directBody
+              : MultiplayerPrivacyText.disclosureHidden,
         ),
         Text(
           defaults.voice
