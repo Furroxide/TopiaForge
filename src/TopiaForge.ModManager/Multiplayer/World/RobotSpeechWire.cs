@@ -7,7 +7,8 @@ namespace TopiaForge.ModManager
     internal static class RobotSpeechWire
     {
         internal const byte Ready = 72, Line = 73, Cancel = 74, Withdraw = 75, Finished = 76;
-        internal const byte Version = 2;
+        internal const byte Version = 3;
+        internal const byte Failed = 0, Completed = 1, Declined = 2;
         internal const int MaximumBytes = 2560, MaximumText = 512;
         internal const float Earshot = 20;
         internal static bool Text(string text)
