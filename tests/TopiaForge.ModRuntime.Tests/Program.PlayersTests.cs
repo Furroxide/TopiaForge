@@ -72,9 +72,7 @@ namespace TopiaForge.ModRuntime.Tests
                         player.TryGetSnapshot(out _); player.TryGetHealth(out _); _ = player.Input.IsHeld("fire");
                     }
                 }
-                for (var i = 0; i < 1000; i++) Read();
-                var before = GC.GetAllocatedBytesForCurrentThread(); for (var i = 0; i < 10000; i++) Read();
-                var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+                var bytes = TopiaForge.TestSupport.AllocationProbe.Measure("three-player runtime reads", Read, 10000, 1000);
                 Assert(bytes == 0, "three-player runtime steady reads allocate zero, got " + bytes);
                 var frameBytes = MeasurePresenceFrames(all, clock, 10000);
                 Assert(frameBytes == 0, "players runtime at rest allocates zero, got " + frameBytes);

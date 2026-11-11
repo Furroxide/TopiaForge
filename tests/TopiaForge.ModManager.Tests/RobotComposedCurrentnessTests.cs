@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager.Tests
                 .Select(p => MetadataReference.CreateFromFile(p));
             var compilation = CSharpCompilation.Create("ComposedCurrentnessProbe", new[] {
                 CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, "RobotComposedCurrentness.cs"))),
+                CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(Program.FindRepoRoot(), "tests", "Shared", "AllocationProbe.cs"))),
                 CSharpSyntaxTree.ParseText(source) }, references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
             using var bytes = new MemoryStream();
@@ -118,10 +119,7 @@ namespace TopiaForge.RobotKit {
    ended.Actor.Frame(); Check(ended.Actor.Disposed,"new live map cannot adopt actor after original map lifetime ends");
    var stable=new Rig(); stable.Publish(); stable.Actor.Frame();
    Check(!stable.Actor.Disposed && stable.Host.ConfigReads==1 && stable.Host.RootReads==1 && stable.Root.Reads==1,"new snapshot checks identities once");
-   for(int i=0;i<200;i++) stable.Actor.Frame();
-   long before=GC.GetAllocatedBytesForCurrentThread();
-   for(int i=0;i<10000;i++) stable.Actor.Frame();
-   long allocated=GC.GetAllocatedBytesForCurrentThread()-before;
+   long allocated=TopiaForge.TestSupport.AllocationProbe.Measure("stable composed frames",()=>stable.Actor.Frame(),10000,200);
    Check(allocated==0,"stable production frame allocation must be zero");
    Check(stable.Host.ConfigReads==1 && stable.Host.RootReads==1 && stable.Root.Reads==1,"stable frames must not repeat native getters/reflection");
    foreach(int missing in new[]{0,1,2}) {

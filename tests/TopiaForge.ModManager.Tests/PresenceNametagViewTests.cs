@@ -19,6 +19,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager/Overlay/NametagOverlay.cs")),
                 File.ReadAllText(Path.Combine(root, "src/TopiaForge.ModManager/Multiplayer/Sessions/ScoreboardNametagFeed.cs")),
+                File.ReadAllText(Path.Combine(root, "tests/Shared/AllocationProbe.cs")),
                 Contracts.Replace("CORE_GAMEPLAY_LOOP", ReadClass(root,
                     "src/TopiaForge.ModManager/CoreGameplayServices.cs", "CoreGameplayLoop")),
                 "using UnityEngine; namespace TopiaForge.Mods.UnityUi { " + ReadClass(root,
@@ -71,16 +72,10 @@ namespace TopiaForge.ModManager.Tests
                     current = source; overlay.Tick(); Check(UiHost.Created == 1 && layer.Shown, "return reuses pool");
                     source.Count = 50; overlay.Tick(); Check(tags.Count(tag => tag.Anchor.TryGetPosition(out _)) == 32, "large roster stays bounded");
                     source.Count = 8; overlay.Tick(); Check(tags.Count(tag => tag.Anchor.TryGetPosition(out _)) == 8, "departures deactivate spare slots");
-                    for (var i = 0; i < 200; i++) overlay.Tick();
-                    var before = GC.GetAllocatedBytesForCurrentThread();
-                    for (var i = 0; i < 10000; i++) overlay.Tick();
-                    var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                    var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("nametag overlay dispatch", overlay.Tick, 10000, 200);
                     Check(allocated == 0, "production overlay dispatch allocates exactly zero");
                     Console.WriteLine("PresenceNametag overlay dispatch: " + allocated + " bytes; 200 warmups; 10,000 frames; 8 players.");
-                    for (var i = 0; i < 200; i++) layer.Tags.Tick();
-                    var renderBefore = GC.GetAllocatedBytesForCurrentThread();
-                    for (var i = 0; i < 10000; i++) layer.Tags.Tick();
-                    var renderAllocated = GC.GetAllocatedBytesForCurrentThread() - renderBefore;
+                    var renderAllocated = TopiaForge.TestSupport.AllocationProbe.Measure("nametag live anchors", layer.Tags.Tick, 10000, 200);
                     Check(renderAllocated == 0, "live render-time anchor reads allocate exactly zero");
                     Console.WriteLine("PresenceNametag live anchors: " + renderAllocated + " bytes; 200 warmups; 10,000 frames; 8 players.");
                     first.Lose(); Check(first.Disposals == 1, "layer loss disposes the old host once");

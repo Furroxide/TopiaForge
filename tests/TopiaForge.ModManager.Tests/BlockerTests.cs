@@ -182,9 +182,7 @@ namespace TopiaForge.ModManager.Tests
                 == ModErrorCode.NotAuthoritative, "host participant is refused too");
             Check(player.Runtime.Spawns.Live().Count == 0 && player.World.Counters.AuthorityRequestsSent == 0, "no client canonical record or prediction request");
             rig.Frames(300);
-            var allocated = GC.GetAllocatedBytesForCurrentThread();
-            rig.Frames(500);
-            allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("settled blocker frames", () => rig.Frames(1), 500);
             Check(allocated == 0, "steady state allocates zero bytes: " + allocated);
             hostScope.Dispose();
             Check(rig.Run(() => !shadow.IsAlive, 120) && !made.IsAlive, "scope end despawns bound shadow");

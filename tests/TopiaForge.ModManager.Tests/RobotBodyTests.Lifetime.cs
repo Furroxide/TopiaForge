@@ -42,22 +42,7 @@ namespace TopiaForge.ModManager.Tests
             Check(body.IsAlive && guest.Native[3].Object.Mark == networkId, "remote scene does not retire host lease or canonical identity");
             var pump = typeof(NetworkWorldClient).GetMethod("PumpProviders", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
                 .CreateDelegate<Action<long>>(player.Client);
-            for (var i = 0; i < 200; i++) pump(rig.Clock.Now);
-            var firstAllocation = -1;
-            long firstBytes = 0;
-            var elapsedStart = System.Diagnostics.Stopwatch.GetTimestamp();
-            long firstElapsed = 0;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 10000; i++)
-            {
-                pump(rig.Clock.Now);
-                var current = GC.GetAllocatedBytesForCurrentThread() - before;
-                if (current != 0 && firstAllocation < 0)
-                { firstAllocation = i; firstBytes = current; firstElapsed = System.Diagnostics.Stopwatch.GetTimestamp() - elapsedStart; }
-            }
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            if (allocated != 0) Console.WriteLine("First recovery allocation: frame " + firstAllocation + ", bytes " + firstBytes
-                + ", elapsed ticks " + firstElapsed + ", frequency " + System.Diagnostics.Stopwatch.Frequency);
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("idle provider recovery", () => pump(rig.Clock.Now), 10000, 200);
             Check(allocated == 0, "idle provider recovery allocates exactly zero bytes: " + allocated);
             Console.WriteLine("Idle provider recovery: " + allocated + " bytes (200 warmups, 10000 frames).");
             body.Dispose(); body.Dispose();

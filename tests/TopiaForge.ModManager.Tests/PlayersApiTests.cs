@@ -153,10 +153,7 @@ namespace TopiaForge.ModManager.Tests
                     fake.TryGet(player.Id, out _); player.TryGetSnapshot(out _); player.TryGetHealth(out _);
                 }
             }
-            for (var i = 0; i < 1000; i++) Read();
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 10000; i++) Read();
-            var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            var bytes = TopiaForge.TestSupport.AllocationProbe.Measure("players directory reads", Read, 10000, 1000);
             Assert(bytes == 0, "steady directory reads allocate zero, got " + bytes);
             Console.WriteLine("Players directory: 0 B over 10,000 reads of two players.");
         }

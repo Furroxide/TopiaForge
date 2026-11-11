@@ -60,9 +60,7 @@ namespace TopiaForge.ModRuntime.Tests
                 Assert(WorldRunUntil(games, clock, () => games.All(game => Near(game.Game.Scene.Blockers[0].Object.Position, new NetVector3(10, 1, 0))), 150),
                     "both players follow the moved blocker");
                 BlockerFrames(games, clock, 300);
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                BlockerFrames(games, clock, 500);
-                var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("three settled blocker runtimes", () => BlockerFrames(games, clock, 1), 500);
                 Assert(allocated == 0, "three settled runtimes allocate zero bytes over 500 frames (" + allocated + ")");
                 PumpBinding(host.Runtime.NativeDispatcher, scope.CloseAsync());
                 Assert(WorldRunUntil(games, clock, () => games.All(game => game.Game.Scene.Blockers.All(box => !box.IsAlive)), 120),

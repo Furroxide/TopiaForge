@@ -165,17 +165,14 @@ namespace TopiaForge.ModManager.Tests
                     var service = Start(out _); var label = Add(service); var tag = LastTag(service);
                     var labels = (UnityWorldLabels)service.Labels;
                     var policy = (ITopiaForgeNametagPresentation)tag.Anchor;
-                    for (var i = 0; i < 512; i++) { labels.Tick(); tag.Anchor.TryGetPosition(out var point); policy.CanShow(Vec3.Zero, point); label.SetText("Marker"); }
-                    var before = GC.GetAllocatedBytesForCurrentThread();
-                    for (var i = 0; i < 10000; i++) { labels.Tick(); tag.Anchor.TryGetPosition(out var point); policy.CanShow(Vec3.Zero, point); label.SetText("Marker"); }
-                    Check(GC.GetAllocatedBytesForCurrentThread() == before, "Settled adapter label ticks allocate zero bytes.");
+                    var ticks = TopiaForge.TestSupport.AllocationProbe.Measure("adapter label ticks",
+                        () => { labels.Tick(); tag.Anchor.TryGetPosition(out var point); policy.CanShow(Vec3.Zero, point); label.SetText("Marker"); }, 10000, 512);
+                    Check(ticks == 0, "Settled adapter label ticks allocate zero bytes.");
                     var view = service.Render(new UiCountdown(service.ClockTime + 10));
                     var update = (Action)view.Go.Components[0].GetType().GetMethod("Update", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
                         .CreateDelegate(typeof(Action), view.Go.Components[0]);
-                    for (var i = 0; i < 512; i++) update();
-                    before = GC.GetAllocatedBytesForCurrentThread();
-                    for (var i = 0; i < 10000; i++) update();
-                    Check(GC.GetAllocatedBytesForCurrentThread() == before && view.Text!.Writes == 1, "Settled production driver allocates zero bytes and writes once.");
+                    var updates = TopiaForge.TestSupport.AllocationProbe.Measure("countdown driver updates", update, 10000, 512);
+                    Check(updates == 0 && view.Text!.Writes == 1, "Settled production driver allocates zero bytes and writes once.");
                 }
                 public static void ThreadOwnership()
                 {

@@ -42,6 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../Shared/AllocationProbe.cs" Link="TestSupport/AllocationProbe.cs" />
     <Compile Include="../Shared/IsolatedTestProcess.cs" Link="TestSupport/IsolatedTestProcess.cs" />
     <AssemblyMetadata Include="TopiaForge.RobotopiaManagedDir" Value="$(RobotopiaManagedDir)" />
   </ItemGroup>

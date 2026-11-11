@@ -20,7 +20,8 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/Overlay/Multiplayer/ChatOverlay.cs",
                 "src/TopiaForge.ModManager/Overlay/Multiplayer/ConnectionIndicator.cs",
                 "src/TopiaForge.ModManager/Multiplayer/Screens/IInSessionScreen.cs",
-                "src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeFocus.cs"
+                "src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeFocus.cs",
+                "tests/Shared/AllocationProbe.cs"
             };
             var kit = "src/TopiaForge.Mods.UnityUi/";
             var inputFiles = new[] { "Core/TopiaForgeInputClaim.cs", "Core/TopiaForgeInputGate.cs", "Core/TopiaForgeDismissOrder.cs",
@@ -89,10 +90,8 @@ namespace TopiaForge.ModManager.Tests
                     screen.Open(); view.Tick(true);
                     TopiaForgeInputField.Last!.Advance(); view.Tick(true);
                     Check(screen.IsTyping, "the idle probe keeps the composer focused");
-                    for (var index = 0; index < 200; index++) { view.Tick(true); indicator.Tick(true); }
-                    var before = GC.GetAllocatedBytesForCurrentThread();
-                    for (var index = 0; index < 10000; index++) { view.Tick(true); indicator.Tick(true); }
-                    Check(GC.GetAllocatedBytesForCurrentThread() == before, "idle production views allocate zero bytes");
+                    var idle = TopiaForge.TestSupport.AllocationProbe.Measure("idle chat views", () => { view.Tick(true); indicator.Tick(true); }, 10000, 200);
+                    Check(idle == 0, "idle production views allocate zero bytes");
                     view.Dispose();
                     Check(!screen.IsTyping && !TopiaForgeCursorLease.Active, "disposal ends typing");
                 }

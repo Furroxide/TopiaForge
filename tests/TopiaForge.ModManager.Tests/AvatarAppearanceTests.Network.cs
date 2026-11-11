@@ -67,10 +67,10 @@ namespace TopiaForge.ModManager.Tests
 
             // Isolate the new idle send/draw work. Other network stages already have their own exact-zero tests.
             rig.Host.Backend.RecordTrails = false;
-            for (var i = 0; i < 200; i++) { rig.Host.Presence.DriveAvatars(rig.Clock.Read(), .016f); rig.Host.Presence.SendPresentations(rig.Host.Channel); rig.Clock.Advance(100_000); }
-            var start = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 10000; i++) { rig.Host.Presence.DriveAvatars(rig.Clock.Read(), .016f); rig.Host.Presence.SendPresentations(rig.Host.Channel); rig.Clock.Advance(100_000); }
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - start;
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("avatar idle presentation", () =>
+            {
+                rig.Host.Presence.DriveAvatars(rig.Clock.Read(), .016f); rig.Host.Presence.SendPresentations(rig.Host.Channel); rig.Clock.Advance(100_000);
+            }, 10000, 200);
             Check(allocated == 0, "idle presentation allocates exactly zero bytes; actual=" + allocated);
             Console.WriteLine("Avatar presentation idle: " + allocated + " bytes; 200 warmups; 10,000 frames.");
         }

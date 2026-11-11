@@ -27,10 +27,9 @@ namespace TopiaForge.ModManager.Tests
                 && !MenuNoticeBinding.CanFinish(build, build, new object(), owner, null, null, null),
                 "current-build refusal without a notice remains visible while disposed or replaced owners are ignored");
             for (var index = 0; index < 200; index++) binding.TryRead(test.Sessions.MenuPresentation, out _, out _);
-            var before = GC.GetAllocatedBytesForCurrentThread();
             var changes = 0;
-            for (var index = 0; index < 10_000; index++) if (binding.TryRead(test.Sessions.MenuPresentation, out _, out _)) changes++;
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("unchanged menu binding",
+                () => { if (binding.TryRead(test.Sessions.MenuPresentation, out _, out _)) changes++; }, 10_000);
             Check(changes == 0 && allocated == 0, "unchanged menu binding is dirty-checked with exact-zero idle allocation");
 
             ForwardingIsTransparent(test, source, first!);

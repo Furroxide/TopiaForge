@@ -111,10 +111,9 @@ namespace TopiaForge.ModManager.Tests
             using var context = new FakeModContext(); context.Scenes.Load("Courtyard");
             var label = (FakeUiWorldLabel)context.Ui.Labels.Add(UiWorldLabelRequest.At(new Vec3(0, 0, 10), "Marker")).Value!;
             var timer = new UiCountdown(30);
-            for (var index = 0; index < 512; index++) { _ = label.OpacityFrom(Vec3.Zero); _ = timer.RemainingSeconds(2); label.SetText("Marker"); }
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var index = 0; index < 10000; index++) { _ = label.OpacityFrom(Vec3.Zero); _ = timer.RemainingSeconds(2); label.SetText("Marker"); }
-            Assert(GC.GetAllocatedBytesForCurrentThread() == before, "settled label and countdown model reads allocate zero bytes");
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("testing kit world widgets",
+                () => { _ = label.OpacityFrom(Vec3.Zero); _ = timer.RemainingSeconds(2); label.SetText("Marker"); }, 10000, 512);
+            Assert(allocated == 0, "settled label and countdown model reads allocate zero bytes");
         }
         private static void WorldWidgetCompatibility()
         {

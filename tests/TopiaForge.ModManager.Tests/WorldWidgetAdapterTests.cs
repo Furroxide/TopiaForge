@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/UnityMainThreadGuard.cs",
                 "src/TopiaForge.Mods.Abstractions/Internal/UiLabelState.cs",
                 "src/TopiaForge.Mods.Abstractions/UiWorldWidgets.cs",
+                "tests/Shared/AllocationProbe.cs",
             };
             var sources = files.Select(path => File.ReadAllText(Path.Combine(Program.FindRepoRoot(), path)))
                 .Concat(new[] { EngineContract, KitContract, Scenarios });

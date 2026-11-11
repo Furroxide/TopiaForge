@@ -154,13 +154,11 @@ namespace TopiaForge.ModManager.Tests
                     var pad = Reset(); Take(pad, 3, .6f, .7f); pad.rightTrigger.Value = .5f;
                     float total = 0;
                     for (int i = 0; i < 1000; i++) total += UnityGamepadAxes.Read(InputGamepadAxis.LeftX);
-                    var before = GC.GetAllocatedBytesForCurrentThread();
-                    for (int i = 0; i < 10000; i++)
+                    var bytes = TopiaForge.TestSupport.AllocationProbe.Measure("gamepad reads", () =>
                     {
                         total += UnityGamepadAxes.Read(InputGamepadAxis.LeftX) + UnityGamepadAxes.Read(InputGamepadAxis.RightTrigger);
                         Check(TopiaForgeInputOwnership.StickTaken(false), "still taken");
-                    }
-                    var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+                    }, 10000);
                     Check(bytes == 0 && total > 0, "gamepad reads allocate " + bytes + " bytes");
                 }
             }
