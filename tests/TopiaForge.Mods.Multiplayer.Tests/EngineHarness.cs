@@ -193,7 +193,7 @@ internal sealed class RawHostClient
             SessionMessages.WriteEmpty(frame, body, MessageType.SnapshotEnd);
             SessionMessages.WriteParticipants(frame, body, new[]
             {
-                new ParticipantEntry("client", "Client", true, false, MultiplayerConnectionQuality.Unknown, null, null)
+                new ParticipantEntry("client", "Client", true, false, MultiplayerConnectionQuality.Unknown, null, null, Guid.NewGuid())
             });
             SessionMessages.WriteCommit(frame, body, 0, 0);
         });

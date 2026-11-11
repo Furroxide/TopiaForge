@@ -8,6 +8,7 @@ internal static class ParticipantLifetimeTests
 {
     internal static void Run()
     {
+        RequiredEntryLifetime();
         SharedLifetimes();
         WireBounds();
         OldProtocolIsRefused();
@@ -52,9 +53,10 @@ internal static class ParticipantLifetimeTests
         SessionMessages.WriteParticipants(frame, body, entries);
         var decoded = SessionMessages.ReadParticipants(new ProtocolReader(body.Buffer, 0, body.Length));
         That(decoded[0].LifetimeId == token, "wire round trip preserves the opaque lifetime");
-        foreach (var malformed in new[] { new[] { Entry("host", Guid.Empty) }, new[] { Entry("host", token), Entry("guest", token) } })
+        foreach (var malformed in new[] { new[] { Entry("host", token) }, new[] { Entry("host", token), Entry("guest", token) } })
         {
             SessionMessages.WriteParticipants(frame, body, malformed);
+            if (malformed.Length == 1) RewriteAsEmptyLifetime(body, token);
             var rejected = false;
             try { SessionMessages.ReadParticipants(new ProtocolReader(body.Buffer, 0, body.Length)); }
             catch (ProtocolException) { rejected = true; }
@@ -65,6 +67,30 @@ internal static class ParticipantLifetimeTests
         try { SessionMessages.ReadParticipants(new ProtocolReader(body.Buffer, 0, body.Length - 1)); }
         catch (ProtocolException) { truncated = true; }
         That(truncated, "truncated lifetime is rejected");
+    }
+
+    private static void RequiredEntryLifetime()
+    {
+        var rejected = false;
+        try { _ = Entry("host", Guid.Empty); }
+        catch (ArgumentException error) when (error.ParamName == "lifetimeId") { rejected = true; }
+        That(rejected, "participant entries require an explicit nonempty lifetime");
+    }
+
+    private static void RewriteAsEmptyLifetime(ProtocolWriter body, Guid token)
+    {
+        // Malformed wire fixtures bypass the now-validated value constructor, not the protocol parser.
+        var encoded = System.Text.Encoding.ASCII.GetBytes(token.ToString("N"));
+        var replacements = 0;
+        for (var offset = 0; offset <= body.Length - encoded.Length; offset++)
+        {
+            var matches = true;
+            for (var index = 0; index < encoded.Length; index++) matches &= body.Buffer[offset + index] == encoded[index];
+            if (!matches) continue;
+            for (var index = 0; index < encoded.Length; index++) body.Buffer[offset + index] = (byte)'0';
+            replacements++;
+        }
+        That(replacements == 1, "the empty lifetime fixture corrupts exactly its serialized lifetime");
     }
 
     private static ParticipantEntry Entry(string id, Guid lifetime) =>
