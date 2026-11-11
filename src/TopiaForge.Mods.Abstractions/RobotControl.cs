@@ -48,9 +48,12 @@ namespace TopiaForge.Mods
         /// <summary>
         /// Spawns a standard-agent robot at <see cref="RobotAgentSpawnRequest.Position"/>. The robot comes up
         /// native (body, animation, locomotion); its brain is dormant by default
-        /// (<see cref="RobotBrainMode.Dormant"/>) so the mod owns its decisions, or fully autonomous if
-        /// requested. Returns a successful opaque agent handle, or a stable failure result when the service is
-        /// unavailable or no prefab could be resolved.
+        /// (<see cref="RobotBrainMode.Dormant"/>) so the mod owns its decisions, or autonomous when permitted.
+        /// A host callback acting for a guest returns <see cref="ModErrorCode.NotAuthoritative"/> for an
+        /// Autonomous request, without creating a robot. Its Dormant requests still succeed with native talk
+        /// disabled. Direct client spawns normalize Autonomous to Dormant and disable native talk; every replica
+        /// is Dormant. Host calls outside guest-origin callbacks retain the requested brain and talk policy.
+        /// Returns a stable failure when the service is unavailable or no prefab could be resolved.
         /// </summary>
         OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request);
 

@@ -545,12 +545,14 @@ type public sealed class TopiaForge.Mods.Testing.FakeRobotAgent : System.Object,
 
 type public sealed class TopiaForge.Mods.Testing.FakeRobotAgentService : System.Object, TopiaForge.Mods.IRobotAgentService, TopiaForge.Mods.IRobotPlayerEntitySource
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
+  method System.Void RunAsGuest(System.Action callback) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Boolean TryGetPlayerEntity(out TopiaForge.Mods.IEntity? entity)
   method [virtual,final,newslot] System.Boolean TryGetRobot(TopiaForge.Mods.IEntity entity, out TopiaForge.Mods.IRobotAgent? agent)
   method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.ReachableSpawnResult>> FindReachableSpawnAsync(TopiaForge.Mods.ReachableSpawnRequest request, System.Threading.CancellationToken cancellationToken = null)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotAgent> Spawn(TopiaForge.Mods.RobotAgentSpawnRequest request)
   property System.Boolean AutoCompleteAgentMovement { get; set; }
   property System.Boolean IsAvailable { get [virtual,final,newslot]; set; }
+  property System.Boolean IsClient { get; set; } [requires-topiaforge="0.2.0"]
   property System.Boolean IsNavigationAvailable { get [virtual,final,newslot]; set; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotAgent> ActiveAgents { get [virtual,final,newslot]; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTypeDescriptor> RobotTypes { get [virtual,final,newslot]; set; }
@@ -723,6 +725,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, 
   method System.Boolean TryGetSliderValue(System.String id, out System.Single value)
   method System.Boolean TryGetTextValue(System.String id, out System.String? value)
   method System.Boolean TryGetToggleValue(System.String id, out System.Boolean value)
+  method System.Void DismissFromPlayer() [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> ActivateButton(System.String id)
   method TopiaForge.Mods.OperationResult<System.Boolean> ChangeDropdown(System.String id, System.String value)
   method TopiaForge.Mods.OperationResult<System.Boolean> ChangeGraphViewport(System.String id, TopiaForge.Mods.UiGraphViewport viewport)

@@ -9,6 +9,7 @@
   `TryResolve` turns one into a target that allows only a personality preview. A personality preview or waking a
   native brain is refused on a guest's PC and in host code running on a guest's input. Previews and snapshot
   restoration stop if a scene target comes under RobotKit management.
+- Host callbacks acting for a guest now receive `NotAuthoritative` when requesting an Autonomous spawn, before any robot is created. Dormant requests keep their existing native-talk normalization; client requests and replicas remain Dormant. The testing kit models these callback restrictions and distinguishes player dismissals from host hides.
 
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 

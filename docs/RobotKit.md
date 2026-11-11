@@ -192,7 +192,32 @@ and the generated C# API reference.
 
 ### Native brains in multiplayer
 
-Guest-origin robot spawns use `RobotBrainMode.Dormant` with native talk disabled on the host and every replica.
-A guest's `SetBrainMode(Autonomous)` or native-talk-enabling `SetInteraction` returns `NotAuthoritative`.
-Movement, appearance and other non-AI controls remain available within the usual ownership and lifetime rules.
-Host-owned, offline and trusted server operations retain Autonomous brains and native conversation support.
+RobotKit checks the origin of each spawn and routed control call, including calls made through a retained
+host-owned handle. Guest origin includes a client process and host callbacks dispatched for a remote player,
+such as remote UI controls, window dismissals and forwarded entity commands. Running inside a gamemode's
+server controller does not remove that restriction. Nested synchronous callbacks retain it; a captured
+continuation retains the forwarded origin when it returns to the owning thread.
+
+- A host callback acting for a guest cannot spawn `RobotBrainMode.Autonomous`: `Spawn` returns
+  `NotAuthoritative` without creating a robot or a replication record.
+- A `Dormant` request in that callback still succeeds. Native talk is disabled, including the constructor's
+  default native-talk policy; custom interactions are preserved. This normalization is unchanged.
+- Direct client spawns retain defensive normalization to Dormant with native talk disabled. The canonical
+  host body created from a guest's wire request uses the same safe settings, and every replica is Dormant.
+- `SetBrainMode(Autonomous)` and native-talk-enabling `SetInteraction` return `NotAuthoritative` for clients
+  and guest-origin host callbacks. Movement, appearance and other non-AI controls retain their normal
+  ownership and lifetime rules.
+
+Host local-player actions and host or solo calls outside guest-origin callbacks retain Autonomous brains
+and native conversation support. There is no guest-autonomy opt-in. For a guest-triggered feature, request
+Dormant explicitly and check the spawn result before using the handle. These rules cover RobotKit spawning
+and routed agent controls.
+
+The testing kit follows these rules for `FakeRobotAgentService` and its agents. Set `IsClient = true` to
+model a guest process. Remote `FakePlayerDirectory` surface actions establish guest origin automatically;
+`FakeUiSurface.DismissFromPlayer()` simulates a player closing the window, while `Hide()` models a host call.
+Use `agents.RunAsGuest(() => ...)` for other forwarded host callbacks. Nested local surface actions cannot
+remove the outer guest origin. Captured execution contexts retain it on the originating thread, workers do
+not observe it, and return or exception cleanup restores the caller's scope. Construct the fake agent service
+and invoke simulated callbacks on the same thread, including in async test runners. Fake modal completions
+need an explicit `RunAsGuest` scope.
