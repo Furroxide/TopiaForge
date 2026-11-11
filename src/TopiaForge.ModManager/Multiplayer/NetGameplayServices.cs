@@ -107,7 +107,7 @@ namespace TopiaForge.ModManager
     /// <summary>
     /// Routes an exact consuming context's presentation. Targeted player UI uses its separate authenticated path.
     /// </summary>
-    internal sealed class NetUiService : IUiService
+    internal sealed class NetUiService : IUiService, IInternalMapNoticeUi
     {
         private readonly IUiService inner;
 
@@ -146,6 +146,23 @@ namespace TopiaForge.ModManager
         }
 
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => inner.ShowModal(request, completed);
+
+        public OperationResult<bool> ShowMapNotice(string message, UiTone tone)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            Func<string, UiTone, OperationResult<bool>>? showPlain = inner switch
+            {
+                IInternalMapNoticeUi plain => plain.ShowMapNotice,
+                IRemoteUiReceiver remote => remote.RemoteToast,
+                _ => null
+            };
+            if (showPlain == null) message = "Playing a saved map copy because the public map service is temporarily unavailable.";
+            var presentation = Replication.Services.Players?.Presentation;
+            if (presentation != null && Core.Multiplayer.PresentationRoutingPolicy.Route(Replication.Services.Runtime.Realm,
+                Replication.Profile, Core.Multiplayer.PresentationKind.Toast) == Core.Multiplayer.PresentationRoute.BroadcastToEveryone)
+                return presentation.Toast(Replication, inner, message, tone, showPlain);
+            return showPlain == null ? inner.ShowToast(message, tone) : showPlain(message, tone);
+        }
 
         public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral)
         {

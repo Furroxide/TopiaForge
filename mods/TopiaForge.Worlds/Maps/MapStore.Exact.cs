@@ -25,7 +25,7 @@ namespace TopiaForge.Worlds.Maps
                 var live = await GetAsync(expected.MapId, uri, token, progress, requestTransport).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
                 if (live.TryGetValue(out var current) && expected.Matches(current.Document.Packed))
-                    return Success(ValidateExact(expected, current.Document.Packed), false, string.Empty);
+                    return Success(ValidateExact(expected, current.Document.Packed), false, string.Empty, current.CacheWriteFailed);
                 if (expected.Size > InternalMapIdentity.MaximumTransferBytes || hostCopy == null)
                     return Failure(ModErrorCode.Unavailable, "The host's map revision is unavailable or too large to send. Ask the host to restart the round.");
                 var transferred = await hostCopy(token, progress).ConfigureAwait(false);
@@ -34,8 +34,9 @@ namespace TopiaForge.Worlds.Maps
                 // Hash and full document validation precede cache publication and all native parsing.
                 var exact = ValidateExact(expected, bytes);
                 token.ThrowIfCancellationRequested();
-                cache.PutHash(exact);
-                return Success(exact, false, string.Empty);
+                var saved = TrySave(() => cache.PutHash(exact));
+                token.ThrowIfCancellationRequested();
+                return Success(exact, false, string.Empty, cacheWriteFailed: !saved);
             }
             catch (OperationCanceledException) { return Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }
             catch (MapProblem error) { return Failure(error.Code, error.Message); }

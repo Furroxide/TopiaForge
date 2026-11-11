@@ -43,7 +43,7 @@ namespace TopiaForge.Worlds
                 if (!context.Context.Extensions.TryGet<IInternalMapWorldService>(out var maps))
                     return Failure(ModErrorCode.Unavailable, "Saved maps need TopiaForge Worlds. Enable it and restart the game.");
                 stopping.Token.ThrowIfCancellationRequested();
-                return await maps.LoadAsync(context, new InternalMapWorldRequest(selected.Map, selected.Scene, null), stopping.Token);
+                return await maps.LoadAsync(context, new InternalMapWorldRequest(selected.Map, selected.Scene, null, displayName: selected.Name), stopping.Token);
             }
             catch (OperationCanceledException) { return Failure(ModErrorCode.Cancelled, "Saved map loading was cancelled."); }
             catch (Exception) { return Failure(ModErrorCode.External, "The saved map could not be loaded. Repair its source in launcher Setup and try again."); }

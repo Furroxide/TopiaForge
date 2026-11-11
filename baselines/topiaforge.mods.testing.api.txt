@@ -697,7 +697,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiModal : System.Object, Sy
   property System.Collections.Generic.IReadOnlyList<System.String> CallbackErrors { get; }
   property TopiaForge.Mods.UiModalRequest Request { get; }
 
-type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, TopiaForge.Mods.IUiClockReceiver, TopiaForge.Mods.IUiService
+type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, TopiaForge.Mods.IUiClockReceiver, TopiaForge.Mods.IUiService, TopiaForge.Mods.Internal.IInternalMapNoticeUi
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime, TopiaForge.Mods.IGameTime clock) [requires-topiaforge="0.2.0"]
   method System.Void FailNextContentUpdate(System.String surfaceId, TopiaForge.Mods.ModErrorCode errorCode = 9 (External), System.String message = "The fake UI content update was rejected.")
