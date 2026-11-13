@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 import 'package:launcher_data/src/launch_process_control.dart';
 import 'package:launcher_domain/launcher_domain.dart';
@@ -121,6 +122,68 @@ void main() {
       await expectLater(stopLaunchProcess(unverified), throwsStateError);
     },
   );
+  test('an unverified open names the Windows error value', () async {
+    final identity = LaunchProcessIdentity(
+      pid: 2147483000,
+      startTimeUtc: DateTime.utc(2026, 11, 1),
+      executablePath: Platform.resolvedExecutable,
+      nativeStartToken: 'windows:1',
+    );
+    final original = windowsProcessApi;
+    try {
+      windowsProcessApi = () => _RefusingOpen(5);
+      Object? reason;
+      expect(
+        await isLaunchProcessAlive(
+          identity,
+          unverified: (error) => reason = error,
+        ),
+        isNull,
+      );
+      expect(
+        reason,
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'The process handle could not be verified (Windows error 5).',
+        ),
+      );
+      await expectLater(
+        stopLaunchProcess(identity),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('(Windows error 5)'),
+          ),
+        ),
+      );
+      windowsProcessApi = () => _RefusingOpen(87);
+      reason = null;
+      expect(
+        await isLaunchProcessAlive(
+          identity,
+          unverified: (error) => reason = error,
+        ),
+        isFalse,
+      );
+      expect(reason, isNull);
+    } finally {
+      windowsProcessApi = original;
+    }
+  }, skip: !Platform.isWindows);
+}
+
+/// Refuses every open with one fixed system error value.
+final class _RefusingOpen extends WindowsProcessApi {
+  _RefusingOpen(this.error);
+  final int error;
+  @override
+  Pointer<Void> Function(int, int, int) get openProcess =>
+      (access, inherit, processId) => nullptr;
+  @override
+  int Function() get lastError =>
+      () => error;
 }
 
 Future<_Child> _child() async {

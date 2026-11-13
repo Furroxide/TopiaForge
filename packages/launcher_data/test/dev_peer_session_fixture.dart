@@ -224,7 +224,23 @@ Future<void> main(List<String> args) async {
       }
       // False proves this generation gone. A normal Windows stop return also
       // proves exit, whether it stopped the held process or found it absent.
-      if (await checkAlive(identity) != false) {
+      Object? reason;
+      final alive = identical(checkAlive, isLaunchProcessAlive)
+          ? await isLaunchProcessAlive(
+              identity,
+              unverified: (error) => reason = error,
+            )
+          : await checkAlive(identity);
+      // Name the probe's answer, so a failed cleanup shows which one it was.
+      stdout.writeln(
+        'Fixture peer $index cleanup probe: '
+        '${alive == null
+            ? 'unverified${reason == null ? '' : ' ($reason)'}'
+            : alive
+            ? 'running'
+            : 'gone'}.',
+      );
+      if (alive != false) {
         await stopOwnedProcess(identity);
       }
     }

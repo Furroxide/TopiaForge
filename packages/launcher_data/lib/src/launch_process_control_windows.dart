@@ -5,15 +5,20 @@ part of 'launch_process_control.dart';
 // Query and termination use the same held handle, not a second PID lookup.
 final class _WindowsOwnedProcess implements _OwnedProcess {
   _WindowsOwnedProcess(this.processId, bool terminate)
-    : api = WindowsProcessApi() {
+    : api = windowsProcessApi() {
     handle = api.openProcess(
       0x100000 | 0x1000 | (terminate ? 1 : 0),
       0,
       processId,
     );
     if (handle == nullptr) {
-      if (api.lastError() == 87) throw _ProcessAbsent();
-      throw StateError('The process handle could not be verified.');
+      final error = api.lastError();
+      if (error == 87) throw _ProcessAbsent();
+      // Keep the system error value: it tells a denied open (5) from a status
+      // that another call on this thread replaced before it was read.
+      throw StateError(
+        'The process handle could not be verified (Windows error $error).',
+      );
     }
   }
   // Ownership comes directly from PROCESS_INFORMATION; this path never opens a PID.
@@ -94,6 +99,10 @@ final class _WindowsOwnedProcess implements _OwnedProcess {
     api.closeHandle(handle);
   }
 }
+
+/// Source-internal: makes the native adapter for each opened process. Tests
+/// replace it to reach refusals the operating system rarely gives.
+WindowsProcessApi Function() windowsProcessApi = WindowsProcessApi.new;
 
 /// Source-internal native call adapter; each creator owns its instance.
 class WindowsProcessApi {

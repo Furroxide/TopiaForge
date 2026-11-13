@@ -109,15 +109,23 @@ Future<LaunchProcessIdentity?> readLaunchProcessIdentity(
 }
 
 /// False means the recorded generation is gone; null means it could not be proved.
-Future<bool?> isLaunchProcessAlive(LaunchProcessIdentity identity) async {
-  if (!_validIdentity(identity)) return null;
+/// [unverified] receives the reason when the answer is null.
+Future<bool?> isLaunchProcessAlive(
+  LaunchProcessIdentity identity, {
+  void Function(Object reason)? unverified,
+}) async {
+  if (!_validIdentity(identity)) {
+    unverified?.call(StateError('The process identity is incomplete.'));
+    return null;
+  }
   _OwnedProcess? process;
   try {
     process = _openProcess(identity.pid);
     return _sameIdentity(await process.identity(), identity);
   } on _ProcessAbsent {
     return false;
-  } on Object {
+  } on Object catch (error) {
+    unverified?.call(error);
     return null;
   } finally {
     process?.close();
