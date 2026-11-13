@@ -24,6 +24,7 @@ type public flags enum TopiaForge.Mods.AuthoredComponents : System.Int32 [requir
   field const TopiaForge.Mods.AuthoredComponents SpawnLocation = 4 (SpawnLocation) [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.AuthoredEntity : System.Object [requires-topiaforge="0.2.0"]
+  method System.Boolean TryGetWorldTransform(out TopiaForge.Mods.TransformState transform) [requires-topiaforge="0.2.0"]
   property System.Boolean AssetResolved { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String Id { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String Name { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]

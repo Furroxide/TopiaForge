@@ -71,11 +71,19 @@ namespace TopiaForge.Mods.Internal
         {
             get
             {
-                var scale = LossyScale;
-                if (collapsed || !Position.IsFinite || !Rotation.IsFinite || !scale.IsFinite || scale.X == 0 || scale.Y == 0 || scale.Z == 0)
+                if (!TryGetPose(out var pose))
                     throw new InvalidOperationException("This authored world pose cannot be represented as TransformState: an authored ancestor or import root has a collapsed scale or the composed values overflow. Inspect EditorTransform and the parent chain; use a non-collapsed authored marker for placement.");
-                return new TransformState(Position, Rotation, scale);
+                return pose;
             }
+        }
+        internal bool TryGetPose(out TransformState pose)
+        {
+            pose = TransformState.Identity;
+            var scale = LossyScale;
+            if (collapsed || !Position.IsFinite || !Rotation.IsFinite || !scale.IsFinite || scale.X == 0 || scale.Y == 0 || scale.Z == 0)
+                return false;
+            pose = new TransformState(Position, Rotation, scale);
+            return true;
         }
         private static double Determinant(Vec3 x, Vec3 y, Vec3 z) =>
             (double)x.X * ((double)y.Y * z.Z - (double)y.Z * z.Y)

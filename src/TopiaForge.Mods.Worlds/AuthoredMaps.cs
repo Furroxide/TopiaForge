@@ -77,6 +77,15 @@ namespace TopiaForge.Mods
         /// <exception cref="InvalidOperationException">The map's world session has ended, or the composed pose has a zero scale axis or non-finite values
         /// that TransformState cannot represent. Such authored records remain indexed; inspect EditorTransform and the parent chain.</exception>
         public TransformState WorldTransform => alive() ? worldTransform.Pose : throw new InvalidOperationException("This map's world session has ended.");
+        /// <summary>Tries to get the same captured authored world pose as WorldTransform, even without a live marker.</summary>
+        /// <param name="transform">The captured pose on success; Identity on failure, which must not be used for placement.</param>
+        /// <returns>False after the map session ends or when collapsed scale or non-finite composed values prevent representation.</returns>
+        /// <remarks>Does not track later physics or root movement. Unexpected lifetime callback failures propagate.</remarks>
+        public bool TryGetWorldTransform(out TransformState transform)
+        {
+            transform = TransformState.Identity;
+            return alive() && worldTransform.TryGetPose(out transform);
+        }
         /// <summary>Gets the authored component flags.</summary>
         public AuthoredComponents Components { get; }
         /// <summary>Gets the live handle, or a dead handle for a missing marker or ended session.</summary>

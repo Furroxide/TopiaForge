@@ -32,6 +32,8 @@ namespace TopiaForge.ModManager.Tests
             Near(livePose.Rotation * new Vec3(1, 0, 0), child.WorldTransform.Rotation * new Vec3(1, 0, 0), "live read retains composed world rotation");
             Assert(!livePose.Scale.Equals(child.WorldTransform.Scale), "live local scale and authored lossy world scale stay distinct");
             Assert(!vent.Entity.IsAlive, "no synthetic live handle for absent marker");
+            Assert(vent.TryGetWorldTransform(out var missingMarkerPose) && missingMarkerPose == vent.WorldTransform,
+                "Try returns the exact property pose without a live marker");
             Near(child.EditorTransform.Position, new Vec3(1, 2, 3), "editor remains parent-local");
             Near(map.ToWorld(child.EditorTransform).Position, new Vec3(-1, 2, 3), "legacy conversion remains root-level");
             var anchor = new MapAnchor("machine", "old-id", "Generator", "kit/machine", new Vec3(1, 2, 3), positionTolerance: 0);
@@ -41,12 +43,15 @@ namespace TopiaForge.ModManager.Tests
             map.Dispose();
             Expect<InvalidOperationException>(() => _ = child.WorldTransform, contains: "ended");
             Expect<InvalidOperationException>(() => _ = vent.WorldTransform, contains: "ended");
+            Refuses(child, "This map's world session has ended.");
+            Refuses(vent, "This map's world session has ended.");
             ReflectionAndQuaternion();
             SignedScalesAndRotatedParents();
             NonAlignedReflectionAndZeroProjection();
             ImportRootAndLifetime();
             UnrepresentablePoseKeepsMap();
             LargeFiniteQuaternion();
+            UnexpectedLifetimeFailure();
             Console.WriteLine("Authored world transforms passed (affine parents, shear, reflection, quaternion, missing marker, root and teardown).");
         }
         private static void LargeFiniteQuaternion()
@@ -90,6 +95,22 @@ namespace TopiaForge.ModManager.Tests
             using var parsed = FakeAuthoredMap.FromProject("{\"scenes\":{\"scene\":{\"entities\":{\"flat\":{\"components\":{\"transform\":{\"scale\":[0,1,1]}}}}}}}");
             Assert(parsed.Entities.Count == 1, "runtime reader accepts collapsed authored records");
             Expect<InvalidOperationException>(() => _ = parsed.Entity("flat").WorldTransform, contains: "collapsed");
+            const string unrepresentable = "This authored world pose cannot be represented as TransformState: an authored ancestor or import root has a collapsed scale or the composed values overflow. Inspect EditorTransform and the parent chain; use a non-collapsed authored marker for placement.";
+            Refuses(map.Entity("collapsed"), unrepresentable);
+            Refuses(map.Entity("child"), unrepresentable);
+            Refuses(map.Entity("overflow"), unrepresentable);
+            Refuses(parsed.Entity("flat"), unrepresentable);
+            var accepted = new List<string>();
+            foreach (var record in map.Entities)
+            {
+                if (!record.TryGetWorldTransform(out var pose)) continue;
+                Assert(pose == record.WorldTransform, "mixed-record success matches the property exactly");
+                accepted.Add(record.Id);
+            }
+            Assert(accepted.Count == 1 && accepted[0] == "large", "mixed iteration skips collapsed ancestry and overflow without stopping");
+            var retained = map.Entities;
+            map.Dispose();
+            foreach (var record in retained) Refuses(record, "This map's world session has ended.");
         }
         private static void ReflectionAndQuaternion()
         {
@@ -172,6 +193,32 @@ namespace TopiaForge.ModManager.Tests
             Assert(ReferenceEquals(retained, bound.Entity("root")), "package facade shares imported pose");
             alive = false;
             Expect<InvalidOperationException>(() => _ = retained.WorldTransform, contains: "ended");
+            Refuses(retained, "This map's world session has ended.");
+        }
+        private static void Refuses(AuthoredEntity entity, string propertyMessage)
+        {
+            var pose = new TransformState(new Vec3(1, 2, 3), Quat.Identity, new Vec3(2, 3, 4));
+            Assert(!entity.TryGetWorldTransform(out pose) && pose == TransformState.Identity, "Try refusal clears the out value to Identity");
+            try { _ = entity.WorldTransform; }
+            catch (InvalidOperationException failure)
+            {
+                Assert(failure.Message == propertyMessage, "property retains the exact failure message");
+                return;
+            }
+            throw new InvalidOperationException("The property must continue to reject an unavailable pose.");
+        }
+        private static void UnexpectedLifetimeFailure()
+        {
+            var failure = new InvalidOperationException("Unexpected lifetime failure");
+            var record = new AuthoredRecord("root", "scene", "Root", null, null, null, MapTransform.Identity, AuthoredComponents.None);
+            var entity = new AuthoredEntity(record, DeadAuthoredEntity.Instance, false, () => throw failure, AuthoredAffine.Identity);
+            try { entity.TryGetWorldTransform(out _); }
+            catch (InvalidOperationException actual)
+            {
+                Assert(ReferenceEquals(actual, failure), "Try propagates unexpected lifetime faults without replacing them");
+                return;
+            }
+            throw new InvalidOperationException("Try must not hide an unexpected lifetime failure.");
         }
         private static void Near(Vec3 actual, Vec3 expected, string reason) =>
             Assert((actual - expected).Length < 0.0001f, reason + ": expected " + expected + ", got " + actual);
