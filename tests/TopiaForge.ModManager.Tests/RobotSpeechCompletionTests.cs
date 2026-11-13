@@ -193,8 +193,8 @@ namespace TopiaForge.ModManager.Tests
                 remaining.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
                 otherGuest.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
                 rig.World.Frames(5);
-                Check(call.IsCompleted && call.Result.ErrorCode == ModErrorCode.Unavailable && rig.World.Host.World.Speech.ActiveCount == 0,
-                    "listener loss is Unavailable even when the stopped native task reports Cancelled and other copies finish");
+                Check(call.IsCompleted && call.Result.Succeeded && call.Result.Value && rig.World.Host.World.Speech.ActiveCount == 0,
+                    "a line the remaining listeners heard succeeds although one listener left");
             }
         }
 

@@ -154,6 +154,8 @@ namespace TopiaForge.ModManager
             internal readonly ReadyPeer Gate;
             internal readonly uint Entity;
             internal bool Completed;
+            // Reported that it played the line to the end, not only that it stopped.
+            internal bool Heard;
             internal Recipient(ParticipantId id, ReadyPeer gate, uint entity) { Id = id; Gate = gate; Entity = entity; }
         }
         private sealed class Playback
