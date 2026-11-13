@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -52,13 +53,15 @@ namespace TopiaForge.ModManager
         private sealed class FrameClock : IWorldRuntimeClock
         {
             private readonly UnityScheduler scheduler;
+            private readonly Stopwatch elapsed = Stopwatch.StartNew();
 
             internal FrameClock(UnityScheduler scheduler)
             {
                 this.scheduler = scheduler;
             }
 
-            public DateTime UtcNow => DateTime.UtcNow;
+            public TimeSpan Elapsed => elapsed.Elapsed;
+            public bool IsPhysicsPaused => UnityEngine.Time.timeScale == 0f;
 
             public Task<OperationResult<bool>> NextFrameAsync(CancellationToken token)
             {

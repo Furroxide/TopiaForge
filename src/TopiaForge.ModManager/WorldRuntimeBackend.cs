@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -28,15 +29,18 @@ namespace TopiaForge.ModManager
 
     internal interface IWorldRuntimeClock
     {
-        DateTime UtcNow { get; }
+        TimeSpan Elapsed { get; }
+        bool IsPhysicsPaused { get; }
         Task<OperationResult<bool>> NextFrameAsync(CancellationToken token);
     }
 
     internal sealed class WorldRuntimeClock : IWorldRuntimeClock
     {
         private readonly IModScheduler scheduler;
+        private readonly Stopwatch elapsed = Stopwatch.StartNew();
         internal WorldRuntimeClock(IModScheduler scheduler) { this.scheduler = scheduler; }
-        public DateTime UtcNow => DateTime.UtcNow;
+        public TimeSpan Elapsed => elapsed.Elapsed;
+        public bool IsPhysicsPaused => UnityEngine.Time.timeScale == 0f;
         public Task<OperationResult<bool>> NextFrameAsync(CancellationToken token) => scheduler.DelayAsync(TimeSpan.Zero, token);
     }
 }

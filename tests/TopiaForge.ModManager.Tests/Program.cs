@@ -21,6 +21,8 @@ namespace TopiaForge.ModManager.Tests
                 return args.Length == 2 ? TemporaryWorkspaceTests.Probe(args) : 64;
             if (args.Length == 1 && args[0] == "--temporary-workspaces") { TemporaryWorkspaceTests.Run(); return 0; }
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--spawn-settlement")
+            { PausedSpawnSettlementTests.Run(); NativeSpawnWiringTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--menu-presentation")
             { MenuLoadPresentationTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--countdown-wire") { UiCountdownWireTests.Run(); return 0; }
@@ -642,6 +644,8 @@ namespace TopiaForge.ModManager.Tests
                 ContentAdmissionTests.Run(root + "-content-admission");
                 RuntimeSessionSelectionTests.Run();
                 BuiltinWorldProviderTests.Run();
+                PausedSpawnSettlementTests.Run();
+                NativeSpawnWiringTests.Run();
                 WorldRuntimeReadinessTests.Run();
                 SpawnReadbackPrecisionTests.Run();
                 WorldReadinessContractTests.Run(root + "-readiness-contract");
