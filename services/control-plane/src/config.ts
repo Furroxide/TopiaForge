@@ -13,7 +13,7 @@ export interface RelayLimits {
   readonly ticketMaxMints: number;
   /** Bytes a credential may plan to relay per peer per second: the 256 kbit/s per-connection budget. */
   readonly reserveBytesPerPeerSecond: number;
-  /** Consecutive failed hourly measurements that trip the kill switch; 0 never trips on failure. */
+  /** Consecutive failed five-minute measurements that trip the kill switch; 0 never trips on failure. */
   readonly measurementFailureLimit: number;
   /** How far past its reservation a credential's measured egress may go before it is revoked. */
   readonly overuseFactor: number;

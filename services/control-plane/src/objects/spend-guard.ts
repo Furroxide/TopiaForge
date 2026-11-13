@@ -7,7 +7,7 @@
  * - the ticket: at most TURN_TICKET_MAX_MINTS credentials and TURN_TICKET_CAP_GB reserved;
  * - the caller's address prefix: TURN_IP_MINTS_PER_MINUTE and TURN_IP_MINTS_PER_HOUR (sliding windows);
  * - the day: today's measured egress plus every reservation not yet measured stays under TURN_DAILY_CAP_GB.
- * A failed mint refunds all of it. The hourly measurement reads real egress: at the daily cap it trips the kill switch,
+ * A failed mint refunds all of it. Five-minute measurement reads real egress: at the daily cap it trips the kill switch,
  * after repeated failures to measure it trips it too, and a credential that relays well past its reservation is
  * revoked and its ticket blocked.
  *
@@ -188,7 +188,7 @@ export class SpendGuard extends DurableObject<Env> {
     return { ok: true, iceServers: minted.iceServers, expiresAt };
   }
 
-  /** The hourly measurement, also run on demand by an admin. */
+  /** The five-minute measurement, also run on demand by an admin. */
   async measure(): Promise<SpendReport> {
     const config = readConfig(this.env);
     const now = nowSeconds();

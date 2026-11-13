@@ -20,9 +20,9 @@ preview_urls = false
 [observability]
 enabled = false
 
-# Hourly relay-spend measurement. Minute 7 gives the usage analytics time to settle.
+# Five-minute relay-spend measurement and activity collection. TURN analytics trail traffic by about 30 seconds.
 [triggers]
-crons = ["7 * * * *", "*/5 * * * *"]
+crons = ["*/5 * * * *"]
 
 [[durable_objects.bindings]]
 name = "ACTIVITY_SHARDS"

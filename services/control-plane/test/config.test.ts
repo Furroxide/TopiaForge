@@ -106,6 +106,6 @@ describe("wrangler.toml", () => {
     for (const secret of ["SERVICE_KEY", "ADMIN_TOKEN", "TURN_KEY_ID", "TURN_KEY_API_TOKEN", "ANALYTICS_API_TOKEN", "ANALYTICS_ACCOUNT_ID", "TURN_DAILY_CAP_GB", "TURN_TICKET_CAP_GB"]) {
       expect(wranglerToml).not.toMatch(new RegExp(`^${secret}\\s*=`, "m"));
     }
-    expect(wranglerToml).toContain('crons = ["7 * * * *", "*/5 * * * *"]');
+    expect(wranglerToml).toContain('crons = ["*/5 * * * *"]');
   });
 });

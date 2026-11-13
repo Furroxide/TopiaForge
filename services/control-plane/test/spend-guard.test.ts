@@ -55,7 +55,7 @@ async function keepAlive(sessions: readonly { readonly serverId: string; readonl
 
 async function runCron(): Promise<void> {
   const context = createExecutionContext();
-  await worker.scheduled(createScheduledController({ scheduledTime: scenario.clock.now(), cron: "7 * * * *" }), env, context);
+  await worker.scheduled(createScheduledController({ scheduledTime: scenario.clock.now(), cron: "*/5 * * * *" }), env, context);
   await waitOnExecutionContext(context);
 }
 
@@ -282,7 +282,7 @@ describe("the kill switch", () => {
     expect((await mint(session.serverId, await ticket(session.serverId), "10.5.9.2")).status).toBe(201);
   });
 
-  it("trips on the hourly measurement once the day's real egress reaches the cap", async () => {
+  it("trips on measurement once the day's real egress reaches the cap", async () => {
     const session = await host("cron-trip", 2);
     await mint(session.serverId, await ticket(session.serverId), "10.6.0.1");
     scenario.relay.egressBytes = 2_000_000_000;
@@ -294,7 +294,7 @@ describe("the kill switch", () => {
     expect((await mint(session.serverId, await ticket(session.serverId), "10.6.0.2")).status).toBe(503);
   });
 
-  it("trips after three hourly measurements in a row fail, and a success clears the count", async () => {
+  it("trips after three measurements in a row fail, and a success clears the count", async () => {
     scenario.relay.failUsage = true;
     await runCron();
     await runCron();
@@ -315,7 +315,7 @@ describe("the kill switch", () => {
     await expectWithdrawn(held.response);
   });
 
-  it("revokes such a credential when the hourly measurement trips it, too", async () => {
+  it("revokes such a credential when measurement trips it, too", async () => {
     const session = await host("in-flight-cron", 2);
     const held = await heldMint(session.serverId, "10.8.1.1");
     scenario.relay.egressBytes = 2_000_000_000;

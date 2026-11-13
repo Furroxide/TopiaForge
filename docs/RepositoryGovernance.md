@@ -50,7 +50,11 @@ matrix jobs are never configured directly as required checks.
 | --- | --- |
 | `dev` | `Required / PR policy`, `Required / CI validation`, `Required / Unity source validation`, `Required / Registry validation`, `Required / Dependency review` |
 | `release/*` | The same five common checks. Each release-head update also produces `Required / Release packages` for later promotion. |
-| `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. |
+| `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. The scoped production service branch also runs this check on its own exact head. |
+
+For the one-time service branch, CI and the required package build verify the historical stable `main` game build
+against its pinned public archive. The upstream game has advanced since that release, so the latest-build check would
+reject this unchanged client baseline. Release branches retain the latest-build requirement.
 
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
@@ -127,8 +131,9 @@ The stable PR-policy check enforces these routing rules:
 - Fork/community PRs may target only `dev`.
 - Dependabot PRs may target only `dev`.
 - `release/*` accepts same-repository stabilization branches only.
-- `main` accepts only the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
-  from that head's `release/release-policy.json`.
+- `main` accepts the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
+  from that head's `release/release-policy.json`. The exact `service/production-multiplayer` branch is a one-time,
+  file-allowlisted exception for the production multiplayer service launch.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
 - Once `v0.1.0-rc.1` exists, every introduced commit must contain a valid
@@ -141,14 +146,19 @@ has been granted.
 
 ## Trusted release and deployment environments
 
-Environments must exist before any workflow references them. Otherwise GitHub can auto-create an unprotected
-environment. Administrator bypass is disabled on every privileged environment. Self-review is temporarily allowed
-because there is one maintainer.
+Environments must exist before any workflow references them, or a workflow must verify that the protected
+environment already exists before naming it. Administrator bypass is disabled on privileged environments except
+`control-plane-production`. That environment prevents self-review but allows the maintainer to force a pending
+deployment after an independent agent reviews the exact revision and deployment plan. The bypass is a recorded
+exception to GitHub reviewer approval for that run. GitHub cannot enforce the agent-review prerequisite; the
+maintainer records the reviewed SHA and review result before using bypass.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
 | `release` | `v*` tags | Update-metadata signing, verification attestation, and automatic release publication |
 | `github-pages` | published `v*` tags | Deployment of release-derived Pages content |
+| `control-plane-staging` | `dev`, `main` | Staging multiplayer Worker deployment |
+| `control-plane-production` | `main` | Production multiplayer Worker deployment |
 
 Every GitHub job that can read the update-signing key, read the protected
 governance-audit token, or mutate a release declares the protected `release`

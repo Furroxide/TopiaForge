@@ -78,8 +78,9 @@ jobs:
           WRANGLER_SEND_METRICS: "false"
         run: |
           set -euo pipefail
-          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-staging" --env staging
-          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-production" --env production
+          node scripts/deployment-config.mjs
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/control-plane-staging" --env staging
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/control-plane-production" --env production
 
   # Runs before any job names an environment, so a dispatch can never create an unprotected one.
   preflight:
@@ -130,9 +131,10 @@ jobs:
           jq -e \
             --arg name "$TARGET" \
             '.name == $name and
-             .can_admins_bypass == false and
+             (.can_admins_bypass == ($name == "control-plane-production")) and
              .deployment_branch_policy.custom_branch_policies == true and
-             ([.protection_rules[] | select(.type == "required_reviewers") | (.reviewers | length)] | any(. > 0))' \
+             ([.protection_rules[] | select(.type == "required_reviewers") |
+               ((.prevent_self_review == ($name == "control-plane-production")) and (.reviewers | length) > 0)] | any)' \
             <<<"$environment" >/dev/null
 
   deploy:
@@ -179,14 +181,24 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           [[ "$WRANGLER_ENVIRONMENT" == staging || "$WRANGLER_ENVIRONMENT" == production ]]
-          npx wrangler deploy --env "$WRANGLER_ENVIRONMENT"
+          node scripts/deployment-config.mjs
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT"
 
       - name: Smoke-test the deployed status endpoint
         env:
           CONTROL_PLANE_ORIGIN: ${{ vars.CONTROL_PLANE_ORIGIN }}
+          WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
         run: |
           set -euo pipefail
-          [[ "$CONTROL_PLANE_ORIGIN" =~ ^https://[a-z0-9.-]+$ ]]
+          case "$WRANGLER_ENVIRONMENT" in
+            staging) expected_origin=https://mp-staging.topiaforge.dev ;;
+            production) expected_origin=https://mp.topiaforge.dev ;;
+            *) echo '::error::Unexpected deployment environment.'; exit 1 ;;
+          esac
+          if [[ "$CONTROL_PLANE_ORIGIN" != "$expected_origin" ]]; then
+            echo '::error::Deployment origin does not match the selected environment.'
+            exit 1
+          fi
           status=$(curl --fail --silent --show-error \
             --retry 6 --retry-all-errors --retry-delay 5 \
             --connect-timeout 10 --max-time 20 \

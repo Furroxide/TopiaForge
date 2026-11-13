@@ -47,7 +47,7 @@ export interface DayTotals {
 export const DEFAULT_FEATURES: Features = { hosting: true, invites: true, signaling: true, relay: true };
 const RELEASED: KillSwitch = { engaged: false, reason: null, since: null, note: null };
 const NEVER_MEASURED: Measurement = { day: null, egressBytes: 0, measuredAt: null, failures: 0, lastFailureAt: null };
-/** Credentials are remembered this long past expiry, so the hourly measurement can still attribute their usage. */
+/** Credentials are remembered this long past expiry, so measurement can still attribute their usage. */
 export const CREDENTIAL_MEMORY_SECONDS = 2 * 60 * 60;
 const DAY_MEMORY_SECONDS = 35 * 24 * 60 * 60;
 
