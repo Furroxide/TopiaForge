@@ -5,6 +5,8 @@ import { clock, nowSeconds } from "./shared/runtime";
 
 export const ACTIVITY_SHARDS = 16;
 export const ACTIVITY_CRON = "*/5 * * * *";
+/** The one activity format this service publishes: delayed public-only bands. */
+export const ACTIVITY_SCHEMA = "topiaforge.activity/2";
 export interface ActivityLease {
   readonly scope: "public-v2";
   readonly serverId: string;
@@ -17,8 +19,13 @@ export function monitorIds(env: Env): readonly string[] {
     .split(/\s+/)
     .filter((value) => /^[0-9a-f]{64}$/.test(value));
 }
-export function activityEnabled(env: Env): boolean {
+/**
+ * Whether activity is collected and published. Configured monitor secrets turn it on only for the public-only band
+ * format (`schema`, the format this code publishes): exact or combined totals are never published, whatever is set.
+ */
+export function activityEnabled(env: Env, schema: string = ACTIVITY_SCHEMA): boolean {
   return (
+    schema === "topiaforge.activity/2" &&
     typeof env.MONITOR_ACTIVITY_TOKEN === "string" &&
     env.MONITOR_ACTIVITY_TOKEN.length >= 32 &&
     monitorIds(env).length > 0
@@ -36,15 +43,23 @@ interface Pending extends Record<string, SqlStorageValue> {
 /** One coalescing durable outbox per host. Analytics never joins the host's success/failure path. */
 export class ActivityReporter {
   private pending: Promise<void> = Promise.resolve();
+  private ready = false;
   constructor(
     private readonly ctx: DurableObjectState,
     private readonly env: Env,
   ) {}
+  /** Creates the outbox once per object, and again after the host wipes its storage (see `wiped`). */
   private ensure(): void {
+    if (this.ready) return;
     this.ctx.storage.sql.exec("DROP TABLE IF EXISTS activity_outbox");
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS public_activity_outbox_v2 (id INTEGER PRIMARY KEY, server_id TEXT, version INTEGER, expires_at INTEGER, players INTEGER, attempts INTEGER, retry_at INTEGER, keep_until INTEGER)",
     );
+    this.ready = true;
+  }
+  /** Forgets that the outbox exists, after the host's storage was wiped. */
+  wiped(): void {
+    this.ready = false;
   }
   record(session: SessionRow, ended = false): void {
     if (!activityEnabled(this.env)) return;

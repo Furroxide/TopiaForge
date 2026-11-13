@@ -1,6 +1,7 @@
 import {
   env,
   runInDurableObject,
+  runDurableObjectAlarm,
   createExecutionContext,
   waitOnExecutionContext,
 } from "cloudflare:test";
@@ -8,7 +9,8 @@ import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { startScenario, endScenario, type Scenario } from "./support/scenario";
 import { call, identity, register } from "./support/api";
 import { nowSeconds } from "../src/shared/runtime";
-import { ActivityReporter } from "../src/activity";
+import { ACTIVITY_SCHEMA, ActivityReporter, activityEnabled } from "../src/activity";
+import { HostStore } from "../src/objects/host-store";
 import worker from "../src/index";
 
 let scenario: Scenario;
@@ -452,7 +454,97 @@ describe("activity leases and publication", () => {
     expect(scenario.relay.authorizations).toHaveLength(0);
     expect(await snapshots().released()).toBeNull();
   });
+  it("enables activity only for the public-only band format", () => {
+    expect(ACTIVITY_SCHEMA).toBe("topiaforge.activity/2");
+    expect(activityEnabled(env)).toBe(true);
+    expect(activityEnabled(env, "topiaforge.activity/1")).toBe(false);
+    expect(activityEnabled(env, "topiaforge.activity/3")).toBe(false);
+  });
+  it("reads any stored visibility other than public as invite-only and withdraws its lease", async () => {
+    const host = await identity(`activity-stored-visibility-${scenario.day}`);
+    const { token } = await register(host, scenario.ip);
+    const stub = env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(host.serverId));
+    const index = parseInt(host.serverId[0]!, 16);
+    await settle(stub);
+    expect((await shard(index).totals(nowSeconds())).sessions).toBe(1);
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec("UPDATE session SET visibility = 'unlisted'");
+      expect(new HostStore(state.storage.sql).session()?.visibility).toBe("invite");
+    });
+    scenario.clock.advance(6);
+    const heartbeat = await call("POST", `/v1/hosts/${host.serverId}/heartbeat`, {
+      token,
+      ip: scenario.ip,
+      body: { players: 3 },
+    });
+    expect(heartbeat.status).toBe(200);
+    await settle(stub);
+    expect(await shard(index).totals(nowSeconds())).toEqual({ scope: "public-v2", sessions: 0, players: 0 });
+  });
+  it("prepares the outbox once per object, and again after its storage is wiped", async () => {
+    const host = await identity(`activity-outbox-once-${scenario.day}`);
+    const stub = env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(host.serverId));
+    await runInDurableObject(stub, async (_instance, state) => {
+      const statements: string[] = [];
+      const sql = state.storage.sql;
+      const counting = {
+        storage: {
+          sql: {
+            exec: (query: string, ...bindings: SqlStorageValue[]) => {
+              statements.push(query);
+              return sql.exec(query, ...bindings);
+            },
+          },
+          getAlarm: () => state.storage.getAlarm(),
+          setAlarm: (time: number) => state.storage.setAlarm(time),
+        },
+        waitUntil: (promise: Promise<unknown>) => state.waitUntil(promise),
+      } as unknown as DurableObjectState;
+      const schemaStatements = () => statements.filter((query) => /^(DROP|CREATE) TABLE/.test(query)).length;
+      const reporter = new ActivityReporter(counting, env);
+      const session = { serverId: host.serverId, visibility: "public", expiresAt: nowSeconds() + 90, players: 3 };
+      for (const visibility of ["public", "public", "invite", "invite"]) {
+        reporter.record({ ...session, visibility } as never);
+        await reporter.settled();
+        scenario.clock.advance(1);
+      }
+      expect(schemaStatements()).toBe(2);
+      await state.storage.deleteAll();
+      reporter.wiped();
+      reporter.record({ ...session, expiresAt: nowSeconds() + 90 } as never);
+      await reporter.settled();
+      expect(schemaStatements()).toBe(4);
+      expect(sql.exec("SELECT players FROM public_activity_outbox_v2").one()["players"]).toBe(3);
+    });
+  });
+  it("records a host that registers again after its object wiped its storage", async () => {
+    const host = await identity(`activity-after-wipe-${scenario.day}`);
+    const stub = env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(host.serverId));
+    const index = parseInt(host.serverId[0]!, 16);
+    await register(host, scenario.ip);
+    await settle(stub);
+    // The first alarm ends the expired session and queues its withdrawal; the next one, once that is done, wipes.
+    scenario.clock.advance(121);
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    scenario.clock.advance(91);
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    const tables = await runInDurableObject(stub, (_instance, state) =>
+      state.storage.sql
+        .exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'public_activity_outbox_v2'")
+        .toArray(),
+    );
+    expect(tables).toEqual([]);
+    expect((await shard(index).totals(nowSeconds())).sessions).toBe(0);
+    await register(host, scenario.ip);
+    await settle(stub);
+    expect(await shard(index).totals(nowSeconds())).toMatchObject({ sessions: 1 });
+  });
 });
+async function settle(stub: DurableObjectStub): Promise<void> {
+  await runInDurableObject(stub, async (instance) => {
+    await (instance as unknown as { activity: ActivityReporter }).activity.settled();
+  });
+}
 function assertNoPrematureSnapshot(
   snapshot: { sampledAt: number } | null,
   latestPrematureSlot: number,

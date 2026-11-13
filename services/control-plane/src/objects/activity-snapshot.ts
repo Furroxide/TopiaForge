@@ -1,10 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../env";
-import { ACTIVITY_SHARDS, activityEnabled } from "../activity";
+import { ACTIVITY_SCHEMA, ACTIVITY_SHARDS, activityEnabled } from "../activity";
 import { nowSeconds } from "../shared/runtime";
 
 export interface ActivitySnapshotValue {
-  readonly schema: "topiaforge.activity/2";
+  readonly schema: typeof ACTIVITY_SCHEMA;
   readonly sampledAt: number;
   readonly state: "available" | "suppressed" | "unavailable";
   readonly scope: "public";
@@ -99,7 +99,7 @@ export class ActivitySnapshot extends DurableObject<Env> {
       .toArray()[0];
     return row
       ? {
-          schema: "topiaforge.activity/2",
+          schema: ACTIVITY_SCHEMA,
           sampledAt: row.sampled_at,
           state: row.state,
           scope: "public",
