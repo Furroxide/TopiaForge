@@ -17,8 +17,9 @@ internal static partial class PresenceActivityTests
     {
         UnityMainThreadGuard.CaptureCurrentThread();
         PrivateAudiences(); FarHost(); ExpiryMutesAndRest(); SchedulerSkip(); Backpressure(); HostileAndLifetimes();
+        ActivityDoesNotWakeBarredRecipients();
         ReviewRegressions();
-        Console.WriteLine("Presence activity: 6 groups passed (private audiences/host projection, far host, expiry/mutes/rest, scheduler skip/backpressure, forged voice/lifetimes).");
+        Console.WriteLine("Presence activity: 7 groups passed (audiences, timing privacy, expiry, scheduler pressure, and lifetimes).");
     }
     private static void PrivateAudiences()
     {
@@ -46,6 +47,117 @@ internal static partial class PresenceActivityTests
         Flags(r.Host, ghost, 0, "host remains denied through public projection");
         Check(r.Host.Control.Inbox!.LastWireFlags(living.Id, Peer(r.Host, ghost).Index) == 0, "outgoing wire strips both private flags");
     }
+
+    private static void ActivityDoesNotWakeBarredRecipients()
+    {
+        using var r = new Rig();
+        var source = r.Add("source"); var barred = r.Add("barred"); var allowed = r.Add("allowed");
+        r.Frames(40);
+        using var life = new FakeModLifetime();
+        using var route = r.Engine.Host.RouteCommunications(life, Policy(allowBarred: false)).Value!;
+        var wire = r.Host.Control.Inbox!;
+        var sourceIndex = Peer(r.Host, source).Index;
+        var scheduler = Peer(r.Host, barred).Scheduler!;
+        var entity = new NetworkEntityId(sourceIndex);
+        var barredBefore = SampledAt(barred);
+        var allowedBefore = SampledAt(allowed);
+        var hostBefore = SampledAt(r.Host);
+        var count = wire.SentPoseCount(barred.Id, sourceIndex);
+        r.Frames(8);
+        Check(scheduler.IsSuppressed(entity) && wire.SentPoseCount(barred.Id, sourceIndex) == count,
+            "fixture has a stationary source with its rest confirmations settled");
+
+        source.Presence.LocalTyping = true;
+        r.Frames(8);
+        Flags(allowed, source, MultiplayerPoseFlags.Typing, "allowed recipient gets a stationary typing start");
+        BarredStaysResting("typing start");
+        r.Speak(source);
+        r.Frames(6);
+        Flags(allowed, source, Activity, "allowed recipient gets a stationary voice start");
+        BarredStaysResting("voice start");
+        r.Frames(24);
+        Flags(allowed, source, MultiplayerPoseFlags.Typing, "allowed recipient gets stationary voice expiry");
+        BarredStaysResting("voice expiry");
+        source.Presence.LocalTyping = false;
+        r.Frames(8);
+        Flags(allowed, source, 0, "allowed recipient gets a stationary typing stop");
+        BarredStaysResting("typing stop");
+
+        Check(scheduler.Refresh(entity), "an independent resync re-arms barred rest confirmations");
+        source.Presence.LocalTyping = true;
+        r.Frames(12);
+        Check(wire.SentPoseCount(barred.Id, sourceIndex) == count + ReplicationScheduler.RestConfirmationSends,
+            "private typing adds no records to an independent confirmation burst");
+        Check(SampledAt(barred) == barredBefore, "pending confirmations retain the public transform timestamp");
+        Flags(barred, source, 0, "pending confirmations still project private flags");
+        Check(route.SetPolicy(Policy(allowBarred: true)).Succeeded, "fixture grants a stationary source's typing audience");
+        r.Frames(8);
+        Flags(barred, source, MultiplayerPoseFlags.Typing, "grant wakes stationary authorized typing");
+        Check(SampledAt(barred) == barredBefore, "grant delivers activity with the held transform timestamp");
+        Check(route.SetPolicy(Policy(allowBarred: false)).Succeeded, "fixture revokes a stationary source's typing audience");
+        r.Frames(8);
+        Flags(barred, source, 0, "revoke wakes the stationary activity clear");
+        Check(SampledAt(barred) == barredBefore, "revoke leaves the held transform timestamp unchanged");
+
+        source.Backend.Feet = new NetVector3(source.Backend.Feet.X + 0.1f, source.Backend.Feet.Y, source.Backend.Feet.Z);
+        r.Frames(12);
+        Check(SampledAt(barred) > barredBefore && SampledAt(allowed) > allowedBefore, "movement advances both recipients' samples");
+        Check(Peer(barred, source).Position.Equals(Peer(r.Host, source).Position) &&
+              Peer(allowed, source).Position.Equals(Peer(r.Host, source).Position), "both recipients receive the accepted movement");
+        Flags(barred, source, 0, "movement carries the barred activity projection");
+        var movingSample = SampledAt(barred);
+        source.Backend.Crouching = true;
+        r.Frames(12);
+        Check(SampledAt(barred) > movingSample &&
+            (ReadPose(barred).Flags & MultiplayerPoseFlags.Crouching) != 0 &&
+            (ReadPose(allowed).Flags & MultiplayerPoseFlags.Crouching) != 0,
+            "a public flag change wakes both recipients while standing still");
+
+        // Keep the real heartbeat running past the wire age limit, then send a fresh activity clear.
+        var oldAllowedSample = SampledAt(allowed);
+        var oldBarredSample = SampledAt(barred);
+        r.Frames(4_020);
+        count = wire.SentPoseCount(barred.Id, sourceIndex);
+        source.Presence.LocalTyping = false;
+        r.Frames(8);
+        Flags(allowed, source, 0, "activity still clears after the held transform's wire age saturates");
+        Check(wire.SentPoseCount(barred.Id, sourceIndex) == count && SampledAt(barred) == oldBarredSample &&
+              SampledAt(allowed) == oldAllowedSample, "wire age saturation neither wakes a barred peer nor refreshes an unchanged pose");
+
+        var epoch = new MultiplayerSessionId("presence-timing-next");
+        r.Engine.Host.ReplaceSession(epoch, new SessionSeed(8));
+        using var next = r.Engine.Host.RouteCommunications(life, Policy(allowBarred: false)).Value!;
+        r.Frames(40);
+        Check(barred.Engine.Snapshot.Id.Equals(epoch) && SampledAt(barred) > oldBarredSample,
+            "a fresh session publishes a new sample for the same stationary player");
+        Flags(allowed, source, 0, "fresh session starts without held activity");
+        sourceIndex = Peer(r.Host, source).Index;
+        count = wire.SentPoseCount(barred.Id, sourceIndex);
+        barredBefore = SampledAt(barred);
+        allowedBefore = SampledAt(allowed);
+        hostBefore = SampledAt(r.Host);
+        source.Presence.LocalTyping = true;
+        r.Speak(source);
+        r.Frames(8);
+        Flags(allowed, source, Activity, "fresh session delivers newly authorized activity");
+        BarredStaysResting("fresh session activity");
+
+        CommunicationPolicy Policy(bool allowBarred) => new(
+            new[] { Member("host", 1), Member("source", 2), Member("barred", allowBarred ? (byte)2 : (byte)1), Member("allowed", 2) },
+            new[] { new CommunicationRoute(2, 2) });
+        MultiplayerPose ReadPose(Node viewer) => viewer.Presence.TryGetPose(source.Id, out var pose)
+            ? pose : throw new InvalidOperationException("Presence activity: stationary fixture pose is missing.");
+        ulong SampledAt(Node viewer) => ReadPose(viewer).SampledAt.Value;
+        void BarredStaysResting(string transition)
+        {
+            Flags(barred, source, 0, transition + " keeps activity private");
+            Check(wire.SentPoseCount(barred.Id, sourceIndex) == count && SampledAt(barred) == barredBefore,
+                transition + " leaves the barred recipient's relay count and sample unchanged");
+            Check(SampledAt(allowed) == allowedBefore && SampledAt(r.Host) == hostBefore,
+                transition + " leaves the allowed and listen-host transform timestamps unchanged");
+        }
+    }
+
     private static void FarHost()
     {
         using var r = new Rig(); var speaker = r.Add("speaker"); var listener = r.Add("listener"); r.Frames(40);
