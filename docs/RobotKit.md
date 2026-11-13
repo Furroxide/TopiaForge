@@ -179,7 +179,7 @@ and the pace elapsed without synthesis. Sequential awaited lines do not cut off 
 including when the host is far away. When an admitted listener loses eligibility, such as by leaving
 earshot or having the robot hidden during playback, the other listeners finish and the line still
 succeeds if any of them heard it to the end; it returns `Unavailable` only when nobody did, so do not
-repeat a line on `Unavailable` without checking who could have heard it. A line still pending at the host's 15-second deadline returns `TimedOut`.
+repeat a line on `Unavailable` without checking who could have heard it. At the host's 15-second deadline the remaining copies stop; the line returns `TimedOut` unless a listener had already heard it to the end, in which case it succeeds.
 Caller cancellation, replacement and
 retirement of the owning scope, provider or world return `Cancelled`. Native task completion does not
 verify audible sound. Native subtitle-only and pre-recorded-clip overrides are outside this contract.

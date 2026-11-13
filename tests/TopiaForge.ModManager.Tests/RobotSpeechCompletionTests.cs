@@ -12,11 +12,48 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             FarHostSequential(); SequentialAtPaceBoundary(); NoRecipients(); AllListeners(); Failures(); AcknowledgementValidation(); ResetContinuation();
-            WorkerCancellation(); FrameDeadlines();
+            WorkerCancellation(); FrameDeadlines(); HeardBeforeDeadline();
             DeclinedAdmissions(); DeclineValidation(); SchemaCompatibility(); ActiveCapDecline();
             ListenerLoss(); CompletedListenerDeparture(); LocalProviderCancellation();
-            Console.WriteLine("Robot speech completion: 16 focused groups passed.");
+            Console.WriteLine("Robot speech completion: 17 focused groups passed.");
         }
+
+        private static void HeardBeforeDeadline()
+        {
+            using var rig = new RobotSpeechRig(2);
+            rig.Move(rig.Host, 60);
+            var finished = rig.Guests[0];
+            var silent = rig.Guests[1];
+            var speech = rig.World.Host.World.Speech;
+            var call = rig.Robot.SayAsync("One listener hears it all; the other never reports.");
+            rig.World.Frames(5);
+            Check(speech.ActiveCount == 1 && finished.Body.SpeechPlays == 1 && silent.Body.SpeechPlays == 1 && rig.Canonical.SpeechPlays == 0,
+                "both guests play the line while the host is out of earshot");
+            var started = speech.StartedAt(0);
+            finished.Body.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
+            rig.World.Frames(5);
+            Check(!call.IsCompleted, "the host still waits for the other listener's report");
+            // Keep presence current while the silent guest neither finishes nor reaches its own deadline.
+            for (var now = started + 250_000; now <= started + 14_750_000; now += 250_000)
+            {
+                rig.World.Clock.Now = now;
+                rig.World.Frame();
+            }
+            Check(!call.IsCompleted && speech.ActiveCount == 1 && !silent.Body.SpeechTokens.Single().IsCancellationRequested,
+                "the silent listener stays admitted and its copy keeps playing");
+
+            rig.Log.Clear();
+            rig.World.Clock.Now = started + 14_999_999;
+            speech.Tick();
+            Check(!call.IsCompleted, "the line stays pending until the deadline");
+            rig.World.Clock.Advance(1);
+            speech.Tick();
+            Check(call.IsCompletedSuccessfully && call.Result.Succeeded && call.Result.Value && speech.ActiveCount == 0,
+                "a line one listener heard to the end succeeds at the deadline instead of timing out");
+            Check(rig.Log.Any(packet => packet.Payload[1] == RobotSpeechWire.Cancel && packet.To.Equals(silent.Peer.Control.Id)),
+                "the deadline still stops the copy that never reported");
+        }
+
         private static void Check(bool value, string reason)
         { if (!value) throw new InvalidOperationException("Robot speech completion: " + reason); }
 

@@ -93,8 +93,8 @@ The native serializer allows only the newest uncancelled line to wait for the pr
 
 ## Completion contract
 
-`Success(true)` means at least one listener completed native playback and every listener still accepting
-the line completed successfully. The host waits for its local task (if in earshot) and a finished report
+`Success(true)` means at least one listener played the line to the end; the loss or failure of other
+listeners does not change that. The host waits for its local task (if in earshot) and a finished report
 from each remote recipient to which the line was sent. When the host accepts a decline before playback,
 it removes that recipient immediately without failing the call or counting it as successful playback.
 A later departure leaves that decline or an accepted completion intact. Other listeners must still
@@ -116,11 +116,12 @@ statuses, including decline. Wrong senders, stale streams/worlds, duplicates, ma
 statuses and surplus bytes are rejected. Reports contain no text. The host retains only bounded
 per-operation recipient metadata; acknowledgements do not add a queue or late-join history.
 
-Loss of a local or remote listener whose playback is pending records `Unavailable` while the other
+Loss of a local or remote listener whose playback is pending stops that listener's copy while the other
 admitted listeners finish. For example, leaving earshot or losing a view during playback stops that
-listener's copy. A failed remote playback report or a local provider cancellation outside whole-line
-cancellation also records `Unavailable`. If the host still awaits a native task or a report at
-the 15-second deadline, it stops the remaining copies and returns `TimedOut`. Caller cancellation,
+listener's copy. Loss, a failed remote playback report or a local provider cancellation outside whole-line
+cancellation returns `Unavailable` only when no listener heard the line to the end. If the host still
+awaits a native task or a report at the 15-second deadline, it stops the remaining copies; it returns
+`Success(true)` if a listener had already heard the line to the end and `TimedOut` otherwise. Caller cancellation,
 replacement, or invalidation of the source, owner, provider or world returns `Cancelled`. Cancellation
 already observed when the host checks the deadline takes precedence. A receiver enforces its own
 15-second deadline and reports failure through the existing finished status.
