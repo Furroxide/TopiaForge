@@ -2636,7 +2636,9 @@ The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in
   the game is online at that moment; the handler reads the realm then, not the realm recorded at launch, so a world
   started alone and opened to players later counts as online. Offline, the session keeps running with its world and
   spawn still withheld. When that kept session's game becomes a listen host, session follow's realm change ends it
-  with the same failure, reported once, before the host announces its world. Online, the provider's immutable
+  with the same failure, reported once. The stop is queued, so the host's announcement on that frame and while the
+  session stops names the menu: a session that lost its readiness before its first announcement is never announced.
+  Online, the provider's immutable
   readiness cannot validate replacement content and spawn. The host must start the world again;
   a Players placement cannot recover that session. An explicit stop, restart, new launch or menu return that starts
   retirement first keeps its own result. The delayed scene handler cannot fail that retirement or affect a successor.
