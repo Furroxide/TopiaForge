@@ -151,8 +151,7 @@ namespace TopiaForge.ModManager
         public bool TryGetTransform(IEntity entity, out TransformState transform)
         {
             transform = TransformState.Identity;
-            return UnityMainThreadGuard.IsCurrent && !lifetime.IsStopping
-                && registry.TryGetTransform(entity, lifetime, out transform);
+            return !lifetime.IsStopping && registry.TryGetTransform(entity, lifetime, out transform);
         }
 
         public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform)
