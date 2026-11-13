@@ -48,8 +48,11 @@ Only a shared gamemode server scope may spawn, including offline. Clients, parti
 listen host's), process contexts and non-shared consumers receive `NotAuthoritative`. An ended scope receives
 `Cancelled`; a missing seam, provider or world receives `Unavailable`. A native composition failure is a real
 failure, with no capsule or invisible-success placeholder. `Conflict` means 64 live bodies in the consuming scope
-or 256 in the provider. Explicit disposal returns capacity. A retained facade cannot enter a replacement world.
-Provider removal and world replacement end every body it owns, including canonical records and remote replicas.
+or 256 in the provider. Explicit disposal returns capacity. A retained service facade can spawn new bodies once
+the replacement world is ready, provided its consuming scope and provider are still active. Each spawn captures
+fresh world read authority; old body handles remain retired. World replacement ends bodies from the previous
+world. Removing the provider ends the bodies it owns. On the host, this also retires their canonical records
+and remote replicas.
 
 Replication uses the existing reliable world ledger and provider kind `robotkit.body`. Its immutable payload
 contains only the version, powered-down pose and appearance (at most 128 bytes); the descriptor contains the
