@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
         private const string DisclosureSection = "First time a player hosts or joins";
         private const string DirectSection = "When a session needs a direct connection";
         private const string VoiceSection = "First time a player turns on voice chat";
+        private const string ActivitySection = "When a player hosts a public Internet session";
 
         internal static void Run()
         {
@@ -55,6 +56,10 @@ namespace TopiaForge.ModManager.Tests
             Same(voice.Buttons[0], MultiplayerPrivacyText.VoiceAcceptButton, "the voice consent's accept button");
             Same(voice.Buttons[1], MultiplayerPrivacyText.VoiceDeclineButton, "the voice consent's decline button");
 
+            var activity = Section(document, ActivitySection, isPrompt: false);
+            That(activity.Paragraphs.Count == 1, "the public activity notice has one approved paragraph (" + activity.Paragraphs.Count + ")");
+            Same(activity.Paragraphs[0], MultiplayerPrivacyText.PublicActivity, "the public activity notice");
+
             // The setting is named as the approved text names it.
             That(MultiplayerPrivacyText.DisclosureHidden.StartsWith(MultiplayerPrivacyText.HideMyIp + " is on", StringComparison.Ordinal),
                 "the setting's name is the one the approved disclosure uses");
@@ -67,6 +72,9 @@ namespace TopiaForge.ModManager.Tests
         {
             var changed = document.Replace("TopiaForge never turns it on for you.", "TopiaForge never turns it on.");
             That(Section(changed, DisclosureSection).Paragraphs[2] != MultiplayerPrivacyText.DisclosureChoice, "a changed sentence in the document is caught");
+            var later = document.Replace("shown at least 15 minutes late.", "shown at least 5 minutes late.");
+            That(!ReferenceEquals(later, document) && Section(later, ActivitySection, isPrompt: false).Paragraphs[0] != MultiplayerPrivacyText.PublicActivity,
+                "a changed number in the public activity notice is caught");
             var rewrapped = document.Replace("they can see your IP address and you can see theirs. An IP address shows\n> roughly",
                 "they can see your IP address and you can see theirs.\n> An IP address shows roughly");
             if (!ReferenceEquals(rewrapped, document))
@@ -93,7 +101,7 @@ namespace TopiaForge.ModManager.Tests
         private static void NoOtherSourceSpellsTheWording()
         {
             var root = Program.FindRepoRoot();
-            var fragments = new[] { "IP address", "Hide my IP", "direct connection", "Allow for this session", "I understand", "Your address and" };
+            var fragments = new[] { "IP address", "Hide my IP", "direct connection", "Allow for this session", "I understand", "Your address and", "activity numbers", "status page" };
             var literal = new Regex("\"(?:[^\"\\\\]|\\\\.)*\"", RegexOptions.CultureInvariant);
             foreach (var folder in MultiplayerUiArchitectureTests.SourceFolders(root))
             {
@@ -123,9 +131,10 @@ namespace TopiaForge.ModManager.Tests
 
         /// <summary>
         /// Reads one prompt from the document: the <c>**Title:**</c> line, the blockquote's paragraphs with their wrapped lines
-        /// joined by single spaces, and the <c>**Button:**</c> or <c>**Buttons:**</c> line split at its middle dots.
+        /// joined by single spaces, and the <c>**Button:**</c> or <c>**Buttons:**</c> line split at its middle dots. A section
+        /// that is a notice rather than a prompt (<paramref name="isPrompt"/> false) has text only.
         /// </summary>
-        private static Prompt Section(string document, string heading)
+        private static Prompt Section(string document, string heading, bool isPrompt = true)
         {
             var lines = document.Replace("\r\n", "\n").Split('\n');
             var start = Array.IndexOf(lines, "## " + heading);
@@ -164,7 +173,8 @@ namespace TopiaForge.ModManager.Tests
             }
 
             Flush(prompt, paragraph);
-            That(prompt.Title.Length > 0 && prompt.Paragraphs.Count > 0 && prompt.Buttons.Count > 0, "the section \"" + heading + "\" has a title, text and buttons");
+            That(prompt.Paragraphs.Count > 0 && (!isPrompt || (prompt.Title.Length > 0 && prompt.Buttons.Count > 0)),
+                "the section \"" + heading + "\" has " + (isPrompt ? "a title, text and buttons" : "text"));
             return prompt;
         }
 

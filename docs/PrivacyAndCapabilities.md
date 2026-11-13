@@ -157,6 +157,10 @@ the initial release recommendation remains **NO-SHIP**.
 
 ## Public multiplayer activity
 
-Public Internet sessions contribute to activity bands on the status page. Bands cover 5 sessions and 10 players, appear only when those minimums are met, and are delayed at least 15 minutes. Invite-only and LAN sessions are excluded. Published bands are kept for 90 days.
+The launcher, the CLI and the game tell a host this before a public Internet session starts:
+
+> Public sessions count toward rough activity numbers on the TopiaForge status page. The numbers move in steps of
+> 5 sessions and 10 players, appear only once those minimums are reached, and are shown at least 15 minutes late.
+> Invite-only and local network sessions are never counted. The numbers are kept for 90 days.
 
 Choosing invite-only excludes a session from these public statistics. This choice does not alter Hide my IP or the separately approved address and voice notices. Activity leases use the public host's stable server ID internally for deduplication; expired leases and tombstones are scheduled for cleanup 180 seconds after their last update. Alarm execution may occur later; expired leases are excluded from totals regardless of cleanup timing. No addresses, invites, descriptors or player identities enter the activity pipeline.

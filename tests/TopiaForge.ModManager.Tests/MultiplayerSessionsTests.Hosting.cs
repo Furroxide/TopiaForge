@@ -192,8 +192,10 @@ namespace TopiaForge.ModManager.Tests
             That(relayedHost.VisibilityNote == "Players on your local network can find this session and join it.",
                 "with the service configured, LAN still has only its local-network note");
             relayedHost.SetVisibility(0);
+            // The listing sentence, then the approved activity notice word for word (MultiplayerPrivacyTextTests pins that
+            // constant to the approved document).
             const string publicNote = "Players find this session in the TopiaForge server list and join it through the service. " +
-                "Public sessions contribute to delayed activity ranges on the status page. Invite-only sessions are excluded.";
+                MultiplayerPrivacyText.PublicActivity;
             That(relayedHost.ChoosesTarget && relayedHost.CanHost && relayedHost.VisibilityNote == publicNote,
                 "START AND HOST shows the activity notice before starting a Public game");
             relayed.Environment.Phase = SessionPhase.Running;

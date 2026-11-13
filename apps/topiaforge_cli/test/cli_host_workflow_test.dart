@@ -13,11 +13,36 @@ void main() {
   tearDown(() => rig.dispose());
   test('public activity disclosure is printed before launch', () async {
     rig.onLaunch = () {
-      expect(rig.messages.any((line) => line.startsWith('Public Internet sessions contribute')), isTrue);
+      expect(
+        rig.messages.where((line) => line == HostActivityText.publicSessions),
+        hasLength(1),
+      );
       rig.controller.add(rig.success());
     };
     expect(await rig.run(['--yes', '--visibility', 'public']), 0);
   });
+  test('public activity disclosure is shown before consent to host', () async {
+    rig.terminal = true;
+    var shownBeforeStart = false;
+    rig.onConsent = () {
+      if (rig.prompts.last != 'Start hosting [y/N]') return;
+      shownBeforeStart = rig.messages.contains(HostActivityText.publicSessions);
+      rig.consent = false;
+    };
+    expect(await rig.run(['--visibility', 'public']), 130);
+    expect(shownBeforeStart, isTrue);
+    expect(rig.launches, 0);
+  });
+  for (final visibility in ['invite', 'lan']) {
+    test('$visibility hosting prints no activity disclosure', () async {
+      rig.onLaunch = () => rig.controller.add(rig.success());
+      expect(await rig.run(['--yes', '--visibility', visibility]), 0);
+      expect(
+        rig.messages.where((line) => line.contains('activity numbers')),
+        isEmpty,
+      );
+    });
+  }
   test('no terminal needs yes before preferences or launch', () async {
     expect(await rig.run([]), 2);
     expect(rig.syncs, 0);
@@ -308,8 +333,38 @@ void main() {
       CliMultiplayerText.direct,
       CliMultiplayerText.voiceOff,
       CliMultiplayerText.voiceOn,
+      HostActivityText.publicSessions,
     ]) {
       expect(text, contains(line));
     }
   });
+  test('the public activity notice is its approved section word for word', () {
+    expect(_approvedQuotes('When a player hosts a public Internet session'), [
+      HostActivityText.publicSessions,
+    ]);
+  });
+}
+
+/// The block-quoted paragraphs of one section of the approved privacy text,
+/// with each paragraph's wrapped lines joined by single spaces.
+List<String> _approvedQuotes(String heading) {
+  final lines = File(
+    '../../docs/internal/MultiplayerPrivacyText.md',
+  ).readAsLinesSync();
+  final start = lines.indexOf('## $heading');
+  expect(start, isNot(-1), reason: 'the approved text has "$heading"');
+  final quotes = <String>[];
+  var current = <String>[];
+  for (final line in lines.skip(start + 1)) {
+    if (line.startsWith('## ')) break;
+    final quoted = line.startsWith('>') ? line.substring(1).trim() : null;
+    if (quoted != null && quoted.isNotEmpty) {
+      current.add(quoted);
+    } else if (current.isNotEmpty) {
+      quotes.add(current.join(' '));
+      current = [];
+    }
+  }
+  if (current.isNotEmpty) quotes.add(current.join(' '));
+  return quotes;
 }
