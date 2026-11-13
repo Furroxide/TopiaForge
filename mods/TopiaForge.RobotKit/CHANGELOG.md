@@ -11,6 +11,7 @@
   restoration stop if a scene target comes under RobotKit management.
 - Host callbacks acting for a guest now receive `NotAuthoritative` when requesting an Autonomous spawn, before any robot is created. Dormant requests keep their existing native-talk normalization; client requests and replicas remain Dormant. The testing kit models these callback restrictions and distinguishes player dismissals from host hides.
 - `SayAsync` now succeeds when at least one listener played the line to the end; a listener lost during playback, or one that has not reported by the 15-second deadline, no longer fails a line that others heard, and `Unavailable` means nobody did.
+- Hiding a robot from a player's world view now also keeps that player from hearing it speak. A hide in the host's own view stops only the host's playback; other listeners still hear the line.
 - Guests now report a reason-free refusal before robot speech playback, so hidden, missing or out-of-earshot replicas and full receive budgets do not hold other listeners until the deadline. Speech schema 3 requires matching peers; all-declined lines return `Success(false)` after the existing pace.
 - Retained persistent-body service facades can spawn in a ready replacement world while their scope and provider remain active. New bodies capture fresh world read authority; old bodies stay retired.
 - Composed robot actors survive unchanged world publications and retire when their native context is replaced.
