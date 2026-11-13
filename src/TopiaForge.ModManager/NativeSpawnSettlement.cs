@@ -7,27 +7,32 @@ namespace TopiaForge.ModManager
     // One teleport, then bounded observation only. The world readiness clock still owns the overall deadline.
     internal sealed class NativeSpawnSettlement
     {
+        // A body falling from rest drops about 5 cm in 0.1 s of fixed time, well past the 1 cm guards,
+        // so a steady run this long cannot hide a fall between two close samples.
+        internal const float SteadySeconds = 0.1f;
+        // Bounds an unsteady player: refuse after 8 fixed samples once 0.5 s of fixed time has passed.
+        internal const float SettleSeconds = 0.5f;
+        private const float ClockTolerance = 0.0005f;
         private readonly TransformState requested;
         private readonly float height;
+        private readonly float placedAt;
         private float fixedTime;
-        private int renderedFrame;
-        private bool hasFixedSample;
-        private Vec3 previous;
+        private Vec3 anchor;
+        private float steadySince;
         private int stable;
         private int samples;
         internal NativeSpawnSettlement(TransformState requested, float height, float fixedTime)
-            : this(requested, height, fixedTime, 0) { }
-        internal NativeSpawnSettlement(TransformState requested, float height, float fixedTime, int renderedFrame)
         {
-            this.renderedFrame = renderedFrame;
             this.requested = requested;
             this.height = height;
             this.fixedTime = fixedTime;
-            previous = requested.Position;
+            placedAt = fixedTime;
+            steadySince = fixedTime;
+            anchor = requested.Position;
         }
-        internal OperationResult<TransformState>? Probe(TransformState actual, float currentFixedTime) =>
-            Probe(actual, currentFixedTime, renderedFrame, false);
-        internal OperationResult<TransformState>? Probe(TransformState actual, float currentFixedTime, int currentRenderedFrame, bool paused)
+        // Only fixed steps count. Paused or extra rendered frames observe the same physics state,
+        // so they validate the pose but cannot add a sample.
+        internal OperationResult<TransformState>? Probe(TransformState actual, float currentFixedTime)
         {
             if (!Finite(height) || height <= 0f || !Finite(fixedTime) || !Finite(currentFixedTime))
                 return OperationResult<TransformState>.Failure(ModErrorCode.Unavailable, "The native player collision height or fixed clock is unavailable for spawn settling.");
@@ -40,22 +45,18 @@ namespace TopiaForge.ModManager
             if (!delta.IsFinite || delta.X * delta.X + delta.Z * delta.Z > 0.0001f || dot < 0.9999f
                 || (delta.Y < 0f && delta.Y * delta.Y > 0.0001f) || delta.Y > height || currentFixedTime < fixedTime)
                 return Refused();
-            var advanced = currentFixedTime != fixedTime;
-            // Paused render frames may confirm stability only after physics has observed this placement.
-            // Record frames for both modes so switching to paused cannot count the same observation twice.
-            if (!advanced && (!paused || !hasFixedSample)) return null;
-            if (paused && currentRenderedFrame == renderedFrame) return null;
-            hasFixedSample |= advanced;
+            if (currentFixedTime == fixedTime) return null;
             fixedTime = currentFixedTime;
-            renderedFrame = currentRenderedFrame;
             samples++;
-            stable = (actual.Position - previous).LengthSquared <= 0.0001f ? stable + 1 : 0;
-            previous = actual.Position;
-            if (stable >= 2) return OperationResult<TransformState>.Success(actual);
-            return samples >= 8 ? Refused() : null;
+            // Every sample of a steady run stays within 1 cm of the run's first position.
+            if ((actual.Position - anchor).LengthSquared <= 0.0001f) stable++;
+            else { stable = 0; anchor = actual.Position; steadySince = currentFixedTime; }
+            if (stable >= 2 && currentFixedTime - steadySince + ClockTolerance >= SteadySeconds)
+                return OperationResult<TransformState>.Success(actual);
+            return samples >= 8 && currentFixedTime - placedAt >= SettleSeconds ? Refused() : null;
         }
         private static OperationResult<TransformState> Refused() => OperationResult<TransformState>.Failure(
-            ModErrorCode.External, "The native player did not retain the applied spawn position and rotation.");
+            ModErrorCode.External, TopiaForge.Mods.Internal.WorldSpawnReadinessText.SettleRefused);
         internal static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         internal static string DescribeOffset(TransformState actual, TransformState requested, string stage)
         {

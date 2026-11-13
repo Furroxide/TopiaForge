@@ -11,7 +11,12 @@ namespace TopiaForge.ModManager
     {
         private static readonly TimeSpan ReadinessLimit = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan SpawnOverallLimit = TimeSpan.FromSeconds(120);
+        // A load that waits on a paused game tells the player once, after this long, instead of failing silently later.
+        internal static readonly TimeSpan PausedNoticeDelay = TimeSpan.FromSeconds(3);
+        internal const string PausedNotice = "Resume the game to finish loading the world.";
         private readonly IWorldNativeLoad native;
+        private readonly Action<string>? notice;
+        private bool pausedNoticeShown;
         private readonly IWorldRuntimeClock clock;
         private readonly IHostDispatcher dispatcher;
         private readonly CancellationTokenSource stopping;
@@ -25,9 +30,9 @@ namespace TopiaForge.ModManager
         private Task? cleanup;
         private bool finishing;
         internal WorldPreparation(IWorldNativeLoad native, CancellationToken ownerToken, CancellationToken callerToken,
-            IWorldRuntimeClock clock, IHostDispatcher dispatcher)
+            IWorldRuntimeClock clock, IHostDispatcher dispatcher, Action<string>? notice = null)
         {
-            this.native = native; this.clock = clock; this.dispatcher = dispatcher;
+            this.native = native; this.clock = clock; this.dispatcher = dispatcher; this.notice = notice;
             stopping = CancellationTokenSource.CreateLinkedTokenSource(ownerToken, callerToken);
             token = stopping.Token;
         }
@@ -135,6 +140,7 @@ namespace TopiaForge.ModManager
             var previous = started;
             var unpaused = TimeSpan.Zero;
             var paused = settleSpawn && clock.IsPhysicsPaused;
+            TimeSpan? pausedSince = null;
             while (true)
             {
                 token.ThrowIfCancellationRequested();
@@ -158,6 +164,14 @@ namespace TopiaForge.ModManager
                     return Failure<TransformState>(ModErrorCode.TimedOut, "World scene/player/spawn readiness did not complete within 30 seconds.");
                 // The observed pause mode governs the interval until the next frame callback.
                 paused = settleSpawn && clock.IsPhysicsPaused;
+                if (!paused) pausedSince = null;
+                else if (!pausedSince.HasValue) pausedSince = clock.Elapsed;
+                else if (!pausedNoticeShown && clock.Elapsed - pausedSince.Value >= PausedNoticeDelay)
+                {
+                    pausedNoticeShown = true;
+                    try { notice?.Invoke(PausedNotice); }
+                    catch (Exception) { } // A notice is advice; it never changes the load's outcome.
+                }
                 var frame = await clock.NextFrameAsync(token);
                 if (!frame.Succeeded) return Failure<TransformState>(frame.ErrorCode, frame.ErrorMessage);
             }

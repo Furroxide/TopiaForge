@@ -65,9 +65,13 @@ no peer address or new author networking code is needed. Import, spawn, cancella
 and cleanup use the shared world transition owner. Native catalog lore and respawn
 integration still require verification against the installed game.
 
-Spawn readiness waits for a physics step after placing the player and records the
-settled pose. The spawn wait allows 30 seconds while physics is unpaused and has a
-120-second overall limit. Resume a paused load to let the spawn finish settling.
+Spawn readiness places the player once, then accepts the pose only after it has held
+within 1 cm for 0.1 second of physics time, so a spawn over a gap is refused rather
+than falling after the map loads. The spawn wait allows 30 seconds while physics is
+unpaused and has a 120-second overall limit. A paused game tells the player after a
+few seconds to resume it to finish loading. When the spawn wait runs out, the player
+reads that the spawn did not finish settling in time; when the marker does not hold
+the player, the author reads that the spawn point should move onto solid ground.
 
 ## Authored entities and anchors
 

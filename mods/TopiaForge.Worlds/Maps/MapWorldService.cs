@@ -22,6 +22,8 @@ namespace TopiaForge.Worlds.Maps
 
     internal sealed class MapWorldService : IInternalMapWorldService, IDisposable
     {
+        internal const string SpawnTimedOut = "The spawn did not finish settling in time. If the game was paused, resume it and load the map again.";
+        internal const string SpawnRefused = "The map's spawn point did not hold the player. Move the spawn marker onto solid ground.";
         private readonly MapCache cache;
         private readonly IMapTransport transport;
         private readonly Func<IMapNativeBackend> createBackend;
@@ -49,6 +51,12 @@ namespace TopiaForge.Worlds.Maps
             string? safeFailure = null;
             OperationResult<WorldReadiness> Failure(ModErrorCode code, string? message)
             { safeFailure = message ?? "The map could not be loaded."; return OperationResult<WorldReadiness>.Failure(code, safeFailure); }
+            // Spawn readiness names its causes with fixed text. Other External text can carry a native
+            // exception message, so it keeps the generic replacement below.
+            OperationResult<WorldReadiness> SpawnFailure(OperationResult<WorldReadiness> ready) =>
+                ready.ErrorCode == ModErrorCode.TimedOut ? Failure(ready.ErrorCode, SpawnTimedOut)
+                : ready.ErrorCode == ModErrorCode.External && ready.ErrorMessage == WorldSpawnReadinessText.SettleRefused
+                    ? Failure(ready.ErrorCode, SpawnRefused) : ready;
             // Never allow a native exception's URL, file path or backend reply to escape the map boundary.
             var result = await WorldProviderLoader.LoadAsync(context, NativeWorldLoadRequest.OpenSandbox(context.Transition), token,
                 async (preparation, resources) =>
@@ -129,7 +137,8 @@ namespace TopiaForge.Worlds.Maps
                                     "; sha256=" + document.Sha256 + "; bytes=" + document.Packed.Length + "; modified=" + modified);
                             }
                             return ready.TryGetValue(out var readiness)
-                                ? OperationResult<WorldReadiness>.Success(new WorldReadiness(readiness.Scene, readiness.Spawn, readiness.RequestedSpawn, map)) : ready;
+                                ? OperationResult<WorldReadiness>.Success(new WorldReadiness(readiness.Scene, readiness.Spawn, readiness.RequestedSpawn, map))
+                                : SpawnFailure(ready);
                         }
                     }
                     catch (OperationCanceledException) { return Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }

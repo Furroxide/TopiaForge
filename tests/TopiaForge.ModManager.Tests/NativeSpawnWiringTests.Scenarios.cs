@@ -21,6 +21,8 @@ namespace SettlementProbe
             Accepted(true);
             Accepted(false);
             PausedFallIsRefused();
+            GradualFallIsRefused(false);
+            GradualFallIsRefused(true);
             LongPauseAndOverallCap();
             PausePreservesUnpausedBudget();
             LateUnpausedSettlementIsRefused();
@@ -41,10 +43,11 @@ namespace SettlementProbe
             Check(MovementController.Teleports == 1, "placement teleports exactly once while observing settlement");
             Check(result.Succeeded, "actual WorldPreparation accepts settled upward readback " + (paused ? "after resuming" : "while running"));
             Check(result.Value.Spawn == Pose(0.13f), "readiness records the actual applied readback rather than the request");
-            Check(Time.frameCount == (paused ? 6 : 3), "upward placement needs its first fixed observation and two steady observations");
+            Check(Time.frameCount == (paused ? 9 : 6), "upward placement needs its first fixed observation and 0.1 s of steady fixed time");
             Check(Time.fixedTime > 0f, "accepted readiness observes a real fixed epoch at the Unity time boundary");
             Check(!test.Player.FPSController.enabled, "placement does not enable caller-disabled movement controls");
             Check(test.Admission.Releases == 1, "completed readiness releases its existing admission once");
+            Check(test.Notices.Count == 0, "a running or briefly paused load shows no pause notice");
             test.Close();
             Check(test.Native.IsDisposed && test.Admission.Releases == 1 && !test.Player.FPSController.enabled,
                 "close disposes native observation without stealing control state or repeating release");
@@ -61,6 +64,17 @@ namespace SettlementProbe
             Check(test.Admission.Releases == 1, "a refused post-pause placement releases its admission");
         }
 
+        private static void GradualFallIsRefused(bool paused)
+        {
+            using var test = new Fixture(paused);
+            MovementController.Gravity = 9.81f;
+            if (paused) test.ResumeAt(3);
+            Check(test.Finish().ErrorCode == ModErrorCode.External && Time.frameCount == (paused ? 6 : 3)
+                && MovementController.Teleports == 1,
+                "a fall from rest, under a centimetre in each early step, is refused before readiness");
+            Check(test.Admission.Releases == 1, "a refused falling placement releases its admission");
+        }
+
         private static void LongPauseAndOverallCap()
         {
             using (var test = new Fixture(true))
@@ -68,8 +82,10 @@ namespace SettlementProbe
                 MovementController.Lift = 0.13f;
                 test.ResumeAt(35);
                 var result = test.Finish();
-                Check(result.Succeeded && result.Value.Spawn == Pose(0.13f) && Time.frameCount == 38,
+                Check(result.Succeeded && result.Value.Spawn == Pose(0.13f) && Time.frameCount == 41,
                     "more than thirty paused seconds still allow actual fixed-step settlement after resuming");
+                Check(test.Notices.Count == 1 && test.Notices[0] == WorldPreparation.PausedNotice,
+                    "a load waiting on a paused game tells the player once to resume");
             }
             using (var test = new Fixture(true))
             {
@@ -106,7 +122,7 @@ namespace SettlementProbe
                 var lateProbe = false;
                 test.Clock.OnFrame = frame =>
                 {
-                    if (frame == 28) test.Clock.AdvanceFixed = true;
+                    if (frame == 25) test.Clock.AdvanceFixed = true;
                     if (frame == 30) Time.ReadingFixedTime = () => lateProbe = true;
                 };
                 Check(test.Finish().ErrorCode == ModErrorCode.TimedOut && Time.frameCount == 30 && !lateProbe,
@@ -118,14 +134,14 @@ namespace SettlementProbe
                 var enteredProbe = false;
                 test.Clock.OnFrame = frame =>
                 {
-                    if (frame != 3) return;
+                    if (frame != 6) return;
                     Time.ReadingFixedTime = () =>
                     {
                         enteredProbe = true;
-                        test.Clock.AdvanceElapsed(TimeSpan.FromSeconds(27));
+                        test.Clock.AdvanceElapsed(TimeSpan.FromSeconds(24));
                     };
                 };
-                Check(test.Finish().ErrorCode == ModErrorCode.TimedOut && Time.frameCount == 3 && enteredProbe
+                Check(test.Finish().ErrorCode == ModErrorCode.TimedOut && Time.frameCount == 6 && enteredProbe
                     && test.Clock.Elapsed == TimeSpan.FromSeconds(30) && test.Admission.Releases == 1,
                     "a probe entered within the active budget cannot publish a valid pose at its deadline");
             }
@@ -257,6 +273,7 @@ namespace SettlementProbe
             internal readonly CancellationTokenSource Caller = new CancellationTokenSource();
             internal readonly FrameClock Clock = new FrameClock();
             internal readonly Admission Admission = new Admission();
+            internal readonly List<string> Notices = new List<string>();
             private readonly List<Exception> reported = new List<Exception>();
             internal readonly HostDispatcher Dispatcher;
             internal readonly PlayerController Player;
@@ -269,9 +286,9 @@ namespace SettlementProbe
                 Time.fixedTime = 0; Time.frameCount = 0; Time.timeScale = paused ? 0 : 1;
                 SceneManager.World = new Scene { handle = 7, name = "World", path = "World.unity", isLoaded = true };
                 Player = PlayerController.Create(); PlayerController.Current = Player;
-                MovementController.Teleports = 0; MovementController.Lift = 0; MovementController.AfterTeleport = null;
+                MovementController.Teleports = 0; MovementController.Lift = 0; MovementController.Gravity = 0; MovementController.AfterTeleport = null;
                 Native = new ProbeNativeLoad();
-                preparation = new WorldPreparation(Native, Owner.Token, Caller.Token, Clock, Dispatcher);
+                preparation = new WorldPreparation(Native, Owner.Token, Caller.Token, Clock, Dispatcher, Notices.Add);
                 preparation.Attach(Admission);
                 try
                 {

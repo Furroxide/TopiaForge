@@ -15,9 +15,10 @@ namespace TopiaForge.ModManager
         private readonly IWorldRuntimeBackend backend;
         private readonly IWorldRuntimeClock clock;
         private readonly IHostDispatcher dispatcher;
+        private readonly Action<string>? notice;
         internal OwnerWorldRuntimeService(IModLifetime lifetime, IInternalSceneTransitionService transitions,
-            IWorldRuntimeBackend backend, IWorldRuntimeClock clock, IHostDispatcher dispatcher)
-        { this.lifetime = lifetime; this.transitions = transitions; this.backend = backend; this.clock = clock; this.dispatcher = dispatcher; }
+            IWorldRuntimeBackend backend, IWorldRuntimeClock clock, IHostDispatcher dispatcher, Action<string>? notice = null)
+        { this.lifetime = lifetime; this.transitions = transitions; this.backend = backend; this.clock = clock; this.dispatcher = dispatcher; this.notice = notice; }
 
         public Task<OperationResult<IReadOnlyList<NativeWorldEntry>>> DiscoverAsync(NativeWorldSource source,
             int maximumResults, CancellationToken token) => dispatcher.InvokeAsync(() =>
@@ -51,7 +52,7 @@ namespace TopiaForge.ModManager
             {
                 var created = backend.CreateLoad(request);
                 if (!created.TryGetValue(out var load)) return Failure<IInternalWorldPreparation>(created.ErrorCode, created.ErrorMessage);
-                preparation = new WorldPreparation(load, lifetime.StoppingToken, token, clock, dispatcher);
+                preparation = new WorldPreparation(load, lifetime.StoppingToken, token, clock, dispatcher, notice);
                 lifetime.Track(preparation);
                 if (preparation.Token.IsCancellationRequested) throw new OperationCanceledException();
                 var admission = transitions.Acquire(load.ExpectedSceneName, false, "world preparation");

@@ -122,18 +122,29 @@ namespace SettlementProbe
     {
         public static int Teleports;
         public static float Lift;
+        public static float Gravity;
         public static Action? AfterTeleport;
         private bool pendingLift;
+        private int fallingSteps;
+        private float placedY;
         public void TeleportTo(UnityEngine.Vector3 position, UnityEngine.Quaternion? rotation)
         {
             Teleports++;
             transform.position = position;
             transform.rotation = rotation ?? transform.rotation;
             pendingLift = true;
+            fallingSteps = 0; placedY = position.y;
             AfterTeleport?.Invoke();
         }
         internal void FixedStep()
         {
+            // A gradual fall from rest: about 2 mm in the first 20 ms step, 8 mm after two.
+            if (Gravity != 0f)
+            {
+                var time = ++fallingSteps * 0.02f;
+                transform.position.y = placedY - 0.5f * Gravity * time * time;
+                return;
+            }
             if (!pendingLift) return;
             pendingLift = false;
             transform.position.y += Lift;
