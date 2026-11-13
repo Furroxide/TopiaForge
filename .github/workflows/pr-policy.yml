@@ -97,7 +97,9 @@ jobs:
       - name: Enforce DCO for incoming commits
         shell: bash
         env:
+          BASE_REF: ${{ github.base_ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.head_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
@@ -106,7 +108,15 @@ jobs:
           # integrated base history is excluded, independent of release tags.
           git rev-parse --verify "$BASE_SHA^{commit}" >/dev/null
           git rev-parse --verify "$HEAD_SHA^{commit}" >/dev/null
-          commits=$(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
+          range=("$BASE_SHA..$HEAD_SHA")
+          # A sync pull request brings main's history into dev. Those commits are already
+          # on the protected main, so only the sync branch's own commits are checked.
+          if [[ "$BASE_REF" == dev && "$HEAD_REF" == sync/main-v* ]]; then
+            git fetch --force --no-tags origin main:refs/remotes/origin/main
+            git rev-parse --verify "refs/remotes/origin/main^{commit}" >/dev/null
+            range+=(--not refs/remotes/origin/main)
+          fi
+          commits=$(git rev-list --reverse "${range[@]}")
           failures=0
           while IFS= read -r commit; do
             [[ -n "$commit" ]] || continue

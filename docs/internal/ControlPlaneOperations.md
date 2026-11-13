@@ -16,8 +16,8 @@ the API document, the code and every player-facing page. The relay pricing facts
 | --- | --- |
 | Worker `topiaforge-control-plane-staging` | Cloudflare, deployed from `dev` or `main`, served at `https://mp-staging.topiaforge.dev` |
 | Worker `topiaforge-control-plane-production` | Cloudflare, deployed from `main` only, served at `https://mp.topiaforge.dev` |
-| Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter` | Inside each Worker, SQLite-backed, created by migration `v1` on the first deploy |
-| Hourly cron (minute 7) | Each Worker; measures relay usage and can trip the kill switch |
+| Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter`, `ActivityShard`, `ActivitySnapshot` | Inside each Worker, SQLite-backed, created by migrations on the first deploy |
+| Five-minute cron | Each Worker; measures relay usage and can trip the kill switch |
 | Relay | Cloudflare Realtime TURN, one key per environment |
 | Deploy | `.github/workflows/control-plane.yml`, manual dispatch through a protected GitHub environment; staging may also be deployed from a maintainer's machine (section 3) |
 
@@ -56,16 +56,22 @@ Create two environments under repository Settings, Environments, before any depl
 | Setting | `control-plane-staging` | `control-plane-production` |
 | --- | --- | --- |
 | Required reviewers | The maintainer | The maintainer |
-| Prevent self-review | On, with a separate dispatcher | On, with a separate dispatcher |
-| Allow administrators to bypass | Off | Off |
+| Prevent self-review | Off (on also deploys) | On |
+| Allow administrators to bypass | Off | On, used only after a second review of the exact revision; off also deploys |
 | Deployment branches | Selected: `dev` and `main` | Selected: `main` |
 | Secret `CLOUDFLARE_API_TOKEN` | Staging-only deploy token | Production-only deploy token |
 | Secret `CLOUDFLARE_ACCOUNT_ID` | The account id | The account id |
 | Variable `CONTROL_PLANE_ORIGIN` | The staging origin, `https://…` | The production origin, `https://…` |
 
-The dispatcher must not hold the human review credential. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
-required reviewer, no administrator bypass and custom branch rules. That replaces the governance rule that an
-environment must exist before a workflow references it: a dispatch can never create an unprotected environment.
+A protected production run is dispatched only after a second review of the exact source revision and deployment
+plan. GitHub's admin bypass then starts the pending deployment, skipping reviewer approval for that run while
+self-review prevention stays on. The workflow's preflight job reads the environment before any job names it, and stops
+unless it exists with a required reviewer and custom branch rules. Production must also prevent self-review, and
+staging must refuse administrator bypass. Production deploys with bypass on or off, and staging with self-review
+prevention on or off, so tightening either needs no workflow change. The live governance audit compares the exact
+values, so after changing either setting, also set `can_admins_bypass` or `prevent_self_review` for that environment
+in `.github/repository-governance.json`. That replaces the governance rule that an environment must exist before a
+workflow references it: a dispatch can never create an unprotected environment.
 
 Once both environments exist, register them in the governance desired state, so the live audit watches them:
 
@@ -78,7 +84,7 @@ Once both environments exist, register them in the governance desired state, so 
     "protected_branches": false,
     "custom_branch_policies": true,
     "reviewer_ids": [221987073],
-    "prevent_self_review": true,
+    "prevent_self_review": false,
     "branch_policies": [
       {"name": "dev", "type": "branch"},
       {"name": "main", "type": "branch"}
@@ -86,7 +92,7 @@ Once both environments exist, register them in the governance desired state, so 
   },
   {
     "name": "control-plane-production",
-    "can_admins_bypass": false,
+    "can_admins_bypass": true,
     "protected_branches": false,
     "custom_branch_policies": true,
     "reviewer_ids": [221987073],
@@ -136,10 +142,12 @@ embeds the production origin. A compiled client is not evidence that Internet pl
 
 Use this order for the first production service launch:
 
-1. Review and merge the narrowly scoped `service/production-multiplayer` pull request to `main`; its PR policy
-   permits only the service, its fixtures, deployment workflow, governance and operations documentation.
-2. Dispatch **Control plane** from that exact main revision to **control-plane-production**, review the
-   deployment, and provision its Worker secrets as described below. Do not use the staging credential.
+1. Bring the service to `main`. The first launch on 2026-11-06 used a one-time service pull request; that route is
+   closed, and service changes now reach `main` only through `release/<version>`.
+2. Review that exact `main` revision and deployment plan a second time and record the reviewed SHA and the result,
+   then dispatch **Control plane** from it to **control-plane-production**. GitHub cannot enforce that review. If
+   admin bypass starts the pending run, use it only for that run and name the reviewed SHA in the bypass comment.
+   Then provision the Worker secrets as described below. Do not use the staging credential.
 3. Check production readiness with
    `python tools/multiplayer-build.py --environment production --check-only`, then complete the production
    admin/spend checks and real relay live check from steps 4 and 5 below, using the production environment.
@@ -281,7 +289,7 @@ Revocation reaches every credential promptly, but not in one step:
 
 - It runs in passes of at most 40 calls to the provider, six at a time. A pass therefore stays inside the smallest
   number of subrequests Workers allow one invocation, 50.
-- The request that engages the switch, or the hourly run that trips it, runs the first pass itself. Each further pass
+- The request that engages the switch, or the five-minute run that trips it, runs the first pass itself. Each further pass
   starts as soon as the one before it ends.
 - A pass in which the provider confirms nothing is tried again a minute later.
 - A credential not yet revoked keeps working until it is, or until it expires: at most `TURN_CREDENTIAL_TTL_SECONDS`,
@@ -303,16 +311,22 @@ new ones.
 
 ### 5.2 Automatic trips
 
-The hourly cron trips the kill switch itself, with a reason in admin state:
+The five-minute cron trips the kill switch itself, with a reason in admin state:
 
 | Reason | Cause |
 | --- | --- |
 | `spend-cap` | Today's measured relay egress reached `TURN_DAILY_CAP_GB` |
-| `measurement-failed` | `TURN_MEASUREMENT_FAILURE_LIMIT` (3) five-minute measurements in a row failed |
+| `measurement-failed` | Every measurement failed for `TURN_MEASUREMENT_FAILURE_MINUTES` (180) after the last good one: 36 in a row at the five-minute interval |
 
-An automatic trip stays engaged until you release it: nothing re-enables relay on its own. Failing closed on a failed
-measurement is deliberate, because the relay has no spend cap of its own. Setting `TURN_MEASUREMENT_FAILURE_LIMIT` to
-`0` disables that trip; do so only briefly, while fixing the analytics token.
+The limit is a duration, and the service turns it into a count at the measurement interval. The switch trips only
+when both hold: at least that many measurements have failed in a row, and the time since the last good measurement
+(counted from no earlier than one interval before the first failure) has reached the duration. Extra measurements
+you run with `POST /v1/admin/spend/measure` therefore add to the count but cannot trip the switch sooner. Values from
+1 to 179 fall back to 180; only `0` turns the trip off. Admin state reports `measurementFailureMinutes`,
+`measurementFailureLimit` and, while measurements fail, `measurementFailingSince`. An automatic trip stays engaged
+until you release it: nothing re-enables relay on its own.
+Failing closed on a failed measurement is deliberate, because the relay has no spend cap of its own. Setting
+`TURN_MEASUREMENT_FAILURE_MINUTES` to `0` disables that trip; do so only briefly, while fixing the analytics token.
 
 ## 6. Spend
 
@@ -400,8 +414,8 @@ must say so before Internet play is enabled.
 
 | Symptom | Check |
 | --- | --- |
-| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, prevent self-review, refuse administrator bypass and use custom branch rules. |
-| The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
+| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer and custom branch rules; production must prevent self-review, and staging must refuse administrator bypass. |
+| The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be the environment's own origin exactly: `https://mp-staging.topiaforge.dev` for staging and `https://mp.topiaforge.dev` for production, with no path or trailing slash. The smoke test refuses any other value before it calls the service. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
 | `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |
 | Relay-only joins fail while other relay joins work | The joiner receives a `candidates-withheld` notice for its relay candidates, so the relay addresses it was given lie outside `RELAY_ADDRESS_RANGES`. Compare the list with Cloudflare's (section 4.1). |

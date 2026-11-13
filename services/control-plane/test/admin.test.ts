@@ -47,7 +47,7 @@ describe("admin controls", () => {
       features: { hosting: true, invites: true, signaling: true, relay: true },
       killSwitch: { engaged: false, reason: null, since: null, note: null },
       spend: { mints: 0, reservedBytes: 0, dailyCapBytes: 2_000_000_000, ticketCapBytes: 1_000_000_000, providerConfigured: true, analyticsConfigured: true },
-      limits: { credentialTtlSeconds: 600, ipMintsPerMinute: 5, ipMintsPerHour: 20, ticketMaxMints: 36, measurementFailureLimit: 3 },
+      limits: { credentialTtlSeconds: 600, ipMintsPerMinute: 5, ipMintsPerHour: 20, ticketMaxMints: 36, measurementFailureMinutes: 180, measurementFailureLimit: 36 },
     });
   });
 

@@ -20,9 +20,9 @@ preview_urls = false
 [observability]
 enabled = false
 
-# Hourly relay-spend measurement. Minute 7 gives the usage analytics time to settle.
+# Five-minute relay-spend measurement and activity collection. TURN analytics trail traffic by about 30 seconds.
 [triggers]
-crons = ["7 * * * *", "*/5 * * * *"]
+crons = ["*/5 * * * *"]
 
 [[durable_objects.bindings]]
 name = "ACTIVITY_SHARDS"
@@ -72,7 +72,7 @@ TURN_CREDENTIAL_TTL_SECONDS = "600"
 TURN_IP_MINTS_PER_HOUR = "20"
 TURN_IP_MINTS_PER_MINUTE = "5"
 TURN_TICKET_MAX_MINTS = "36"
-TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+TURN_MEASUREMENT_FAILURE_MINUTES = "180"
 FLAG_CACHE_SECONDS = "5"
 
 [env.staging]
@@ -118,7 +118,7 @@ TURN_CREDENTIAL_TTL_SECONDS = "600"
 TURN_IP_MINTS_PER_HOUR = "20"
 TURN_IP_MINTS_PER_MINUTE = "5"
 TURN_TICKET_MAX_MINTS = "36"
-TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+TURN_MEASUREMENT_FAILURE_MINUTES = "180"
 FLAG_CACHE_SECONDS = "5"
 
 [env.production]
@@ -164,5 +164,5 @@ TURN_CREDENTIAL_TTL_SECONDS = "600"
 TURN_IP_MINTS_PER_HOUR = "20"
 TURN_IP_MINTS_PER_MINUTE = "5"
 TURN_TICKET_MAX_MINTS = "36"
-TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+TURN_MEASUREMENT_FAILURE_MINUTES = "180"
 FLAG_CACHE_SECONDS = "5"

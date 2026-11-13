@@ -87,6 +87,7 @@ function stateJson(context: RequestContext, flags: Flags, spend: SpendReport): J
       measuredAt: spend.measurement.measuredAt,
       measurementFailures: spend.measurement.failures,
       lastMeasurementFailureAt: spend.measurement.lastFailureAt,
+      measurementFailingSince: spend.measurement.failingSince ?? null,
       activeCredentials: spend.activeCredentials,
       pendingRevocations: spend.pendingRevocations,
       dailyCapBytes: spend.dailyCapBytes,
@@ -99,6 +100,7 @@ function stateJson(context: RequestContext, flags: Flags, spend: SpendReport): J
       ipMintsPerMinute: context.config.limits.ipMintsPerMinute,
       ipMintsPerHour: context.config.limits.ipMintsPerHour,
       ticketMaxMints: context.config.limits.ticketMaxMints,
+      measurementFailureMinutes: context.config.limits.measurementFailureMinutes,
       measurementFailureLimit: context.config.limits.measurementFailureLimit,
     },
   };
