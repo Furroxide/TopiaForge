@@ -23,6 +23,8 @@ namespace TopiaForge.ModManager
         private ViewSnapshot received = ViewSnapshot.Empty;
         private bool invalidStream;
         private bool viewApplied;
+        // A complete view was read on this attachment, whatever world was bound when it arrived.
+        private bool viewReceived;
         private MultiplayerSessionId appliedSession;
         private bool avatarFailureLogged;
         private bool unreadableLogged;
@@ -121,8 +123,9 @@ namespace TopiaForge.ModManager
             ClearProjection();
             foreach (var world in worlds.Values.ToArray()) world.Dispose();
             worlds.Clear(); names.Clear(); binding = value;
-            // A new world waits for its own first complete view; one that already arrived for it still counts.
-            viewApplied = viewApplied && ViewsWorld(received, value.WorldId);
+            // A new world waits for its own first complete view; one that already arrived for it still counts, even
+            // if it arrived while the old world was still bound.
+            viewApplied = viewReceived && ViewsWorld(received, value.WorldId);
             For(value.Renderer);
             if (Client) ApplyReceived();
             deliveries.Clear();
@@ -142,7 +145,7 @@ namespace TopiaForge.ModManager
         }
         private void Reset(bool endLeases)
         {
-            ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false; viewApplied = false;
+            ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false; viewApplied = false; viewReceived = false;
             deliveries.Clear(); admitted.Clear(); names.Clear(); seenRoster = null; generation = 0; session = default;
             resetting = true;
             try { if (endLeases) foreach (var world in worlds.Values.ToArray()) world.Dispose(); }
@@ -178,7 +181,8 @@ namespace TopiaForge.ModManager
                     }
                     if (next != null)
                     {
-                        received = next; viewApplied = binding == null || ViewsWorld(next, binding.WorldId); unreadableLogged = false;
+                        received = next; viewReceived = true; unreadableLogged = false;
+                        viewApplied = binding == null || ViewsWorld(next, binding.WorldId);
                         appliedSession = services.Runtime.Control?.SessionSnapshot.Id ?? default;
                         ApplyReceived();
                     }
@@ -191,7 +195,7 @@ namespace TopiaForge.ModManager
             if (snapshot != null) RefreshRoster(snapshot);
             retry += deltaTime;
             if (retry >= .25f && names.Count != 0)
-            { retry = 0; foreach (var world in worlds.Values) world.RefreshLocal(); }
+            { retry = 0; foreach (var world in worlds.Values) world.RefreshLocal(retryRefused: true); }
             SendViews();
         }
         private void SendViews()
@@ -199,6 +203,8 @@ namespace TopiaForge.ModManager
             var snapshot = services.Runtime.Control?.SessionSnapshot;
             if (snapshot == null || channel == null) return;
             RefreshRoster(snapshot);
+            // A bound world whose renderer is ending sends nothing until it is replaced or unbound.
+            if (binding != null && !binding.Renderer.IsAlive) return;
             for (var index = 0; index < snapshot.Participants.Count; index++)
             {
                 var player = snapshot.Participants[index];
@@ -309,7 +315,8 @@ namespace TopiaForge.ModManager
 
         private ViewSnapshot Derive(string player)
         {
-            if (binding == null || !binding.Renderer.IsAlive) return ViewSnapshot.Empty;
+            // Only a host with no world view sends the empty view: clients take it as "nothing to hold".
+            if (binding == null) return ViewSnapshot.Empty;
             var leases = For(binding.Renderer);
             var targets = new List<ViewTarget>();
             foreach (var entity in leases.HiddenFor(player)) if (TryName(entity, out var target)) targets.Add(target);

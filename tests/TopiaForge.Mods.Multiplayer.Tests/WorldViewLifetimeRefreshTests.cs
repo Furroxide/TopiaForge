@@ -30,6 +30,9 @@ internal static class WorldViewLifetimeRefreshTests
         Reconnect(ReconnectCase.UnreadableFirstView);
         Reconnect(ReconnectCase.WorldChange);
         Reconnect(ReconnectCase.SessionReplaced);
+        Reconnect(ReconnectCase.WorldChangeHostFirst);
+        Reconnect(ReconnectCase.RefusedTarget);
+        Reconnect(ReconnectCase.RendererEnding);
         Console.WriteLine("Engine lifetime world-view refresh and cached references passed.");
     }
 
@@ -40,11 +43,14 @@ internal static class WorldViewLifetimeRefreshTests
     // ViewerLinkLoss cuts and restores the observer's own link, RootLostInGrace destroys the subject's roots while
     // they are away, GraceExpiry lets them leave and join again, and LateJoiner adds a viewer after the hide. The
     // HeldBack variants hold the host's views back, so the subject's poses arrive first. UnreadableFirstView spoils a
-    // late joiner's first view; WorldChange and SessionReplaced move the observer to a world or session with no view.
+    // late joiner's first view; WorldChange and SessionReplaced move the observer to a world or session with no view,
+    // and WorldChangeHostFirst moves the host first. RefusedTarget has the host's renderer refuse one hidden object for
+    // good, and RendererEnding lets the host's renderer stop being alive before its world is unbound.
     private enum ReconnectCase
     {
         Normal, Quiet, PartialBaseline, Cache, ReplacementAvatar, MixedRoster, ViewerLinkLoss, RootLostInGrace, RootLostHeldBack,
-        GraceExpiry, LateJoiner, LateJoinerHeldBack, UnreadableFirstView, WorldChange, SessionReplaced
+        GraceExpiry, LateJoiner, LateJoinerHeldBack, UnreadableFirstView, WorldChange, SessionReplaced, WorldChangeHostFirst,
+        RefusedTarget, RendererEnding
     }
 
     private static void Reconnect(ReconnectCase scenario)
@@ -107,6 +113,14 @@ internal static class WorldViewLifetimeRefreshTests
             "canonical engine reference resolves the observer's exact current root");
         using var scope = new FakeModLifetime();
         var seam = host.Services.Bind("example.mode", new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer), scope);
+        // A target hidden before the subject comes first in the host's apply order.
+        var refusedProp = new FakeEntity("refused-prop", "Authored", Vec3.Zero);
+        IViewLease? refusedLease = null;
+        if (scenario == ReconnectCase.RefusedTarget)
+        {
+            host.Binding.Add(refusedProp);
+            refusedLease = Lease(seam.PlayerWorldView(host.Renderer, host.Id.Value).Hide(refusedProp));
+        }
         using var local = Lease(seam.PlayerWorldView(host.Renderer, host.Id.Value).Hide(original));
         using var privateView = Lease(seam.PlayerWorldView(host.Renderer, observer.Id.Value).Hide(original));
         Frames(4);
@@ -230,6 +244,72 @@ internal static class WorldViewLifetimeRefreshTests
             Check(local.IsActive && privateView.IsActive && AvatarShown(host, Avatar(host, subject.Id))
                 && AvatarShown(observer, Avatar(observer, subject.Id)),
                 "a player who left and joined again is not hidden by the leases taken for their earlier admission");
+            return;
+        }
+        if (scenario == ReconnectCase.WorldChangeHostFirst)
+        {
+            // The host's view of the new world arrives while the observer is still bound to the old one. It counts
+            // once the observer binds the new world, even if the host never sends again.
+            watching = false;
+            host.World = "world-two";
+            using var hostTwo = new Renderer(host);
+            host.Services.Views.Activate(new Binding(hostTwo, "world-two"));
+            Frames(30);
+            observer.World = "world-two";
+            using var observerTwo = new Renderer(observer);
+            observer.Services.Views.Activate(new Binding(observerTwo, "world-two"));
+            Frames(60);
+            Check(AvatarShown(observer, Avatar(observer, subject.Id)), "a view that arrived before the observer bound its world still counts for it");
+            return;
+        }
+        if (scenario == ReconnectCase.RefusedTarget)
+        {
+            // The renderer refuses the prop's replacement for good. The subject's target comes after it: their new
+            // root is still held before it is drawn, and the refusal is asked again only on the 0.25 s retry.
+            host.Renderer.RefusedIds.Add(refusedProp.Id);
+            var refusedReplacement = new FakeEntity(refusedProp.Id, "Authored", Vec3.Zero);
+            host.Binding.Replace(refusedReplacement);
+            host.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, original)).Destroyed = true;
+            var refusals = host.Renderer.Refusals;
+            Frames(60);
+            var replacement = Avatar(host, subject.Id);
+            Check(host.Renderer.Hidden.Contains(replacement) && PresenceVisible(host, replacement) && host.Renderer.Refusals - refusals <= 6,
+                "a hidden avatar after a refused target is held, and the refusal costs only its retries ("
+                + (host.Renderer.Refusals - refusals) + " refusals in 60 frames)");
+            // While a new root itself is refused it stays undrawn, and nothing is asked every frame.
+            tolerateUndrawn = true;
+            host.Renderer.RefuseAll = true;
+            host.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, replacement)).Destroyed = true;
+            refusals = host.Renderer.Refusals;
+            Frames(60);
+            Check(!PresenceVisible(host, Avatar(host, subject.Id)) && host.Renderer.Refusals - refusals <= 16,
+                "a refused new root waits undrawn without per-frame work (" + (host.Renderer.Refusals - refusals) + " refusals in 60 frames)");
+            host.Renderer.RefuseAll = false;
+            Frames(20);
+            tolerateUndrawn = false;
+            // Only a refusal of a lease's own target fails that lease.
+            var otherProp = new FakeEntity("other-prop", "Authored", Vec3.Zero);
+            host.Binding.Add(otherProp);
+            using var otherHide = Lease(seam.PlayerWorldView(host.Renderer, host.Id.Value).Hide(otherProp));
+            Check(host.Renderer.Hidden.Contains(otherProp), "a new lease is held while another target stays refused");
+            Check(!seam.PlayerWorldView(host.Renderer, host.Id.Value).Hide(refusedReplacement).Succeeded,
+                "a lease whose own target is refused fails");
+            Check(host.Renderer.Hidden.Contains(Avatar(host, subject.Id)) && PresenceVisible(host, Avatar(host, subject.Id)),
+                "the refused root is held and drawn once the renderer accepts it");
+            refusedLease!.Dispose();
+            return;
+        }
+        if (scenario == ReconnectCase.RendererEnding)
+        {
+            // The host's renderer stops being alive before its world is unbound. The host sends no view meanwhile, so
+            // the observer keeps holding what the host still leases.
+            viewers.Remove(host);
+            host.Renderer.Ending = true;
+            local.Dispose();
+            Frames(20);
+            host.Renderer.Ending = false;
+            Frames(20);
+            Check(observer.Renderer.Hidden.Contains(watched) && privateView.IsActive, "the observer keeps the hold the host still leases");
             return;
         }
         if (scenario == ReconnectCase.WorldChange)
@@ -540,6 +620,7 @@ internal static class WorldViewLifetimeRefreshTests
     {
         private readonly Dictionary<string, IEntity> authored = new(StringComparer.Ordinal);
         internal void Add(IEntity entity) => authored.Add(entity.Id, entity);
+        internal void Replace(IEntity entity) => authored[entity.Id] = entity;
         public string WorldId => world;
         public IInternalWorldViewRenderer Renderer => renderer;
         public bool TryNameAuthored(IEntity entity, out string scene, out string id)
@@ -554,7 +635,12 @@ internal static class WorldViewLifetimeRefreshTests
         internal int ReleaseCalls;
         internal bool FailNextHide;
         internal bool RefuseNextHide;
-        public bool IsAlive { get; private set; } = true;
+        private bool alive = true;
+        internal bool Ending;
+        internal bool RefuseAll;
+        internal readonly HashSet<string> RefusedIds = new();
+        internal int Refusals;
+        public bool IsAlive => alive && !Ending;
         public bool FogAvailable => true;
         public bool EnvironmentAvailable => true;
         public IReadOnlyList<string> Presets => Array.Empty<string>();
@@ -566,11 +652,13 @@ internal static class WorldViewLifetimeRefreshTests
         {
             if (FailNextHide) { FailNextHide = false; throw new InvalidOperationException("Simulated native hide failure."); }
             if (RefuseNextHide) { RefuseNextHide = false; return OperationResult<IDisposable>.Failure(ModErrorCode.Unavailable, "Simulated refusal."); }
+            if (RefuseAll || RefusedIds.Contains(entity.Id))
+            { Refusals++; return OperationResult<IDisposable>.Failure(ModErrorCode.Unavailable, "Simulated steady refusal."); }
             if (!entity.IsAlive || !(owner.Binding.Owns(entity) || owner.Services.Views.IsCurrentAvatar(entity, this)))
                 return OperationResult<IDisposable>.Failure(ModErrorCode.Unavailable, "Target is not current.");
             HideCalls++; Hidden.Add(entity); return OperationResult<IDisposable>.Success(new Hold(this, entity));
         }
-        public void Dispose() { if (!IsAlive) return; IsAlive = false; Stopped(); Hidden.Clear(); }
+        public void Dispose() { if (!alive) return; alive = false; Stopped(); Hidden.Clear(); }
         private sealed class Hold(Renderer renderer, IEntity entity) : IDisposable
         {
             private bool active = true;

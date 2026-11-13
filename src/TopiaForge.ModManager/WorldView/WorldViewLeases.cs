@@ -17,7 +17,9 @@ namespace TopiaForge.ModManager
         private readonly Dictionary<long, Lease> leases = new Dictionary<long, Lease>();
         private string? environment;
         private string? appliedPlayer;
-        private readonly HashSet<IEntity> waiting = new HashSet<IEntity>(EntityIdentity.Instance);
+        // Desired targets without a hold: unresolved (no entity) or refused by the renderer (the entity it refused).
+        private readonly Dictionary<IEntity, Refusal> waiting = new Dictionary<IEntity, Refusal>(EntityIdentity.Instance);
+        private readonly List<IEntity> retried = new List<IEntity>();
         private VisionFog? fog;
         private bool disposed;
         private readonly Func<string?> localPlayer;
@@ -49,10 +51,12 @@ namespace TopiaForge.ModManager
         { var value = ledger.FogFor(player); return value.Distance == 0 ? (VisionFog?)null : VisionFog.Radius(value.Distance, (FogTint)value.Tint); }
         internal IEntity[] HiddenFor(string? player) => ledger.HiddenFor(player).ToArray();
         // Whether a lease for the local viewer names a target that resolves to the object now.
+        // Reads the targets the last Apply held or left waiting, so it allocates nothing.
         internal bool Wants(IEntity entity)
         {
             if (disposed || !renderer.IsAlive) return false;
-            foreach (var target in ledger.HiddenFor(localPlayer())) if (ReferenceEquals(resolve(target), entity)) return true;
+            foreach (var hold in hidden.Values) if (ReferenceEquals(hold.Entity, entity)) return true;
+            foreach (var target in waiting.Keys) if (ReferenceEquals(resolve(target), entity)) return true;
             return false;
         }
         // Whether one of this view's native holds is on the object right now.
@@ -64,13 +68,39 @@ namespace TopiaForge.ModManager
         }
         internal void RemovePlayer(string player)
         { foreach (var id in ledger.ForPlayer(player).ToArray()) if (leases.TryGetValue(id, out var lease)) lease.Dispose(); }
-        internal void RefreshLocal()
+        // A waiting target counts as changed only when it resolves to an object the renderer has not refused, so a
+        // steady refusal never re-runs Apply. The views' 0.25 s retry asks again for refused objects alone.
+        internal void RefreshLocal(bool retryRefused = false)
         {
             if (disposed || !renderer.IsAlive) return;
             var changed = appliedPlayer != localPlayer();
             foreach (var item in hidden) if (!Holds(item.Key, item.Value)) { changed = true; break; }
-            if (!changed) foreach (var target in waiting) if (resolve(target) != null) { changed = true; break; }
-            if (changed) Apply();
+            if (!changed)
+                foreach (var item in waiting)
+                {
+                    var current = resolve(item.Key);
+                    if (current != null && !ReferenceEquals(current, item.Value.Entity)) { changed = true; break; }
+                }
+            if (changed) { Apply(); return; }
+            if (retryRefused) RetryRefused();
+        }
+        private void RetryRefused()
+        {
+            foreach (var item in waiting) if (item.Value.Entity != null) retried.Add(item.Key);
+            try
+            {
+                for (var index = 0; index < retried.Count; index++)
+                {
+                    var target = retried[index];
+                    var entity = waiting[target].Entity!;
+                    if (!ReferenceEquals(resolve(target), entity)) continue;
+                    var result = renderer.Hide(entity);
+                    if (!result.TryGetValue(out var hold)) continue;
+                    waiting.Remove(target);
+                    hidden.Add(target, new Hidden(entity, hold));
+                }
+            }
+            finally { retried.Clear(); }
         }
         internal IViewControls Bind(IModLifetime lifetime, Func<ModErrorCode> authority, Action assertThread, string? player = null) =>
             new Controls(this, lifetime, authority, assertThread, player);
@@ -85,6 +115,9 @@ namespace TopiaForge.ModManager
                 var applied = Apply();
                 if (!applied.Succeeded)
                 { Remove(id, entry.Hidden); return Failure(applied.ErrorCode, applied.ErrorMessage); }
+                // Only a refusal of this lease's own target fails it; another target's refusal waits for its retry.
+                if (entry.Hidden != null && waiting.TryGetValue(entry.Hidden, out var refused) && refused.Entity != null)
+                { Remove(id, entry.Hidden); return Failure(refused.Code, refused.Message); }
                 var lease = new Lease(this, id, entry.Hidden, caller.AssertThread);
                 leases.Add(id, lease);
                 lease.Tracking = caller.Lifetime.Track(lease);
@@ -113,10 +146,10 @@ namespace TopiaForge.ModManager
                 if (!hidden.ContainsKey(target))
                 {
                     var entity = resolve(target);
-                    if (entity == null) { waiting.Add(target); continue; }
+                    if (entity == null) { waiting[target] = default; continue; }
                     var result = renderer.Hide(entity);
-                    // A refused hold waits like an unresolved target, so the next refresh asks the renderer again.
-                    if (!result.TryGetValue(out var hold)) { waiting.Add(target); return OperationResult<bool>.Failure(result.ErrorCode, result.ErrorMessage); }
+                    // A refusal waits with the object refused and does not stop the targets after it.
+                    if (!result.TryGetValue(out var hold)) { waiting[target] = new Refusal(entity, result.ErrorCode, result.ErrorMessage); continue; }
                     hidden.Add(target, new Hidden(entity, hold));
                 }
             var nextEnvironment = ledger.EnvironmentFor(player);
@@ -239,6 +272,14 @@ namespace TopiaForge.ModManager
             public bool IsActive => !owner.disposed && owner.renderer.IsAlive && owner.ledger.Contains(id);
             public void Dispose() { assertThread(); owner.Remove(id, target); }
             internal void Detach() { var value = Tracking; Tracking = null; value?.Dispose(); }
+        }
+        private readonly struct Refusal
+        {
+            internal readonly IEntity? Entity;
+            internal readonly ModErrorCode Code;
+            internal readonly string Message;
+            internal Refusal(IEntity entity, ModErrorCode code, string? message)
+            { Entity = entity; Code = code; Message = message ?? "The renderer could not hide this object."; }
         }
         private sealed class Hidden
         {
