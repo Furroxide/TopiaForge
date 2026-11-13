@@ -45,7 +45,7 @@ namespace TopiaForge.ModManager.Tests
                     emitted.Diagnostics.Where(diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
             Console.WriteLine("Robot interaction authority: production callback sources compiled.");
             var probeType = Assembly.Load(bytes.ToArray()).GetType("InteractionProbe", true)!;
-            foreach (var scenario in new[] { "retained", "guest-custom", "replacement", "owner-stop", "world-retired", "policies" })
+            foreach (var scenario in new[] { "retained", "guest-custom", "replacement", "owner-stop", "world-retired", "poll-allocation", "policies" })
             {
                 var rig = AuthorityRig.Create(players: 1);
                 rig.Host.World.Proxies.IsSharedMod = mod => mod == WorldPeer.ModId || mod == "io.example.robot-provider";
