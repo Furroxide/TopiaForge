@@ -15,6 +15,8 @@
 
 - Robot dialogue capture now holds the runtime microphone lease, yields to native recording, and returns Conflict when preempted without ending the native recording.
 
+- A composed robot whose native context cannot be verified now makes `Spawn` return `Unavailable` with its own message. If the context stays unverified for two seconds, the composed type leaves `RobotTypes` until discovery finds it again, while robots already spawned from it keep running; a definite replacement, an ended lifetime or a failing identity read still destroys them.
+
 ## 0.2.0
 
 - Target the TopiaForge 0.2 loader and SDK line.
