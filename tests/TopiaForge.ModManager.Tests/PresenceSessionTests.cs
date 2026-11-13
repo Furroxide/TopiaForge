@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
@@ -21,7 +22,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 TheRunningWorldNamesItsSessionAndSpawn(root.FullName);
                 foreach (var change in new[] { SceneLifecyclePhase.Activated, SceneLifecyclePhase.Loaded, SceneLifecyclePhase.Unloaded })
-                    ReplacedScenesCannotReuseReadiness(root.FullName, change);
+                    ReplacedScenesEndWithAReadinessFailure(root.FullName, change);
             }
             finally
             {
@@ -62,13 +63,25 @@ namespace TopiaForge.ModManager.Tests
             That(menu.Result.Succeeded && test.Hosted.RunningWorldId == null && test.Hosted.RunningSpawn == null, "back at the menu, nothing runs");
         }
 
-        private static void ReplacedScenesCannotReuseReadiness(string root, SceneLifecyclePhase change)
+        private static void ReplacedScenesEndWithAReadinessFailure(string root, SceneLifecyclePhase change)
         {
-            using var test = new SessionFixture(root);
-            var spawn = new TransformState(new Vec3(900, 0, 0), Quat.Identity, new Vec3(1, 1, 1));
-            SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new SpawnWorld(spawn)));
-            test.Launch();
+            // The host starts its world alone and opens it to players afterwards, so the realm at launch is single player.
             var rig = new PresenceRig();
+            using var test = new SessionFixture(root, replication: rig.Host.Replication);
+            rig.Host.Runtime.SessionPhaseSource = () => test.Hosted.RealmPhase;
+            var spawn = new TransformState(new Vec3(900, 0, 0), Quat.Identity, new Vec3(1, 1, 1));
+            var world = new SpawnWorld(spawn);
+            SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(world));
+            var controllersDisposed = 0;
+            SessionFixture.Start = (session, _) =>
+            {
+                SessionFixture.ModeSession = session;
+                return Task.FromResult(OperationResult<IGamemodeController>.Success(new SessionTestController(() => controllersDisposed++)));
+            };
+            rig.Frames(1);
+            That(rig.Host.Runtime.Realm == NetRealm.Offline, "the world starts in single player");
+            test.Launch();
+            var original = SessionFixture.ModeSession!;
             var scene = new FollowedScene();
             scene.Activated("World", -12);
             rig.Host.Presence.RunningWorld = () => test.Hosted.RunningWorldId;
@@ -79,47 +92,95 @@ namespace TopiaForge.ModManager.Tests
             rig.Frames(3);
             raw.SendPose(new NetVector3(900, 0, 0));
             rig.Frames(3);
-            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue, "real running readiness establishes the original pose");
+            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue && rig.Host.Presence.TryGetAvatar(raw.Id, out _),
+                "real running readiness establishes the original pose and avatar");
             test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-14, "Background", SceneLifecyclePhase.Loaded,
                 SceneLoadMode.Additive, isActive: false));
             test.Host.Drain();
-            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue, "unrelated additive loading retains current readiness");
+            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue && controllersDisposed == 0,
+                "unrelated additive loading retains the controller and current readiness");
+
             if (change != SceneLifecyclePhase.Unloaded) scene.Activated("World", -13);
-            test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(change == SceneLifecyclePhase.Unloaded ? -12 : -13, "World", change,
-                SceneLoadMode.Single, isActive: change != SceneLifecyclePhase.Unloaded));
-            That(test.Hosted.RunningSpawn == null, "scene replacement invalidates settled readiness even when its requested spawn is known");
-            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null, "scene evidence invalidates range before queued policy handling");
-            test.Host.Drain();
-            That(test.Hosted.Current.Phase == Core.SessionPhase.Running, "keep-controller policy retains the session across native replacement");
-            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null, "replacement invalidates range before receive");
+            var replacement = new SceneLifecycleEvent(change == SceneLifecyclePhase.Unloaded ? -12 : -13, "World", change,
+                SceneLoadMode.Single, isActive: change != SceneLifecyclePhase.Unloaded);
+            test.Dispatch.HoldNextPost = true;
+            test.Hosted.OnSceneLifecycle(replacement);
+            That(test.Hosted.RunningWorldId == null && test.Hosted.RunningSpawn == null,
+                "owned-scene loss immediately invalidates both world and settled spawn");
+            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null,
+                "scene evidence invalidates range before queued policy handling");
             raw.SendPose(new NetVector3(900, 0, 0), PresenceFlags.Teleported);
             rig.Frames(3);
-            Console.WriteLine("Retained readiness " + change + ": avatar=" + rig.Host.Presence.TryGetAvatar(raw.Id, out _) +
-                ", validated=" + rig.Host.Presence.ValidatedPosition(raw.Id).HasValue);
-            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null && !rig.Host.Presence.TryGetAvatar(raw.Id, out _) &&
-                !rig.Host.Presence.TryGetPose(raw.Id, out _), "a retained session cannot reuse old-scene readiness to validate a late first pose");
-            var restart = SessionFixture.ModeSession!.RestartAsync();
-            test.Wait(restart);
-            rig.Frames(1);
-            raw.SendPose(new NetVector3(900, 0, 0));
+            That(test.Hosted.Current.Phase == Core.SessionPhase.Running && controllersDisposed == 0,
+                "the held stop exposes the interval between immediate invalidation and queued cleanup");
+            AssertNoRemotePose(rig, raw, "old-scene packets cannot bypass closed readiness while the stop is queued");
+
+            test.Hosted.OnSceneLifecycle(replacement); // A duplicate may reach the queue before the held callback.
+            test.Dispatch.Release();
+            test.Until(() => test.Hosted.Current.Phase == Core.SessionPhase.Idle);
+            var terminal = test.Outcomes.Where(item => item.Kind == "session" && item.SessionId == original.SessionId).ToArray();
+            That(terminal.Length == 1 && terminal[0].Status == "failed"
+                && terminal[0].Error?.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage,
+                "one actionable failed outcome replaces a permanently hidden Running session");
+            That(world.Reads == 1 && world.Disposals == 1 && controllersDisposed == 1 && original.Lifetime.IsStopping,
+                "cleanup disposes the old world and controller once without rereading immutable readiness");
+            raw.SendPose(new NetVector3(900, 0, 0), PresenceFlags.Teleported);
             rig.Frames(3);
-            That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue, "new world readiness restores trust without changing keep-controller policy");
+            AssertNoRemotePose(rig, raw, "Idle cannot reuse the lost world's spawn as a trusted anchor");
+
+            // Recovery is a new provider load, not a new label on the old world's immutable evidence.
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                var nextSpawn = new TransformState(new Vec3(-900 - attempt * 100, 0, 0), Quat.Identity, new Vec3(1, 1, 1));
+                var nextScene = -20 - attempt;
+                var nextWorld = new SpawnWorld(nextSpawn, nextScene);
+                SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(nextWorld));
+                scene.Activated("World", nextScene);
+                test.Launch("fresh-world-" + attempt);
+                var nextSession = SessionFixture.ModeSession!;
+                That(nextSession.SessionId != original.SessionId && test.Hosted.RunningSpawn == nextSpawn,
+                    "a new world start commits a new identity and a genuinely different spawn");
+                var stale = original.StopAsync();
+                test.Wait(stale);
+                That(!stale.Result.Succeeded && test.Hosted.RunningWorldId == nextSession.SessionId,
+                    "an old session handle cannot stop its replacement");
+                rig.Frames(1);
+                raw.SendPose(new NetVector3(nextSpawn.Position.X, 0, 0));
+                rig.Frames(3);
+                That(rig.Host.Presence.ValidatedPosition(raw.Id).HasValue && rig.Host.Presence.TryGetAvatar(raw.Id, out _)
+                    && rig.Host.Presence.TryGetPose(raw.Id, out var pose) && pose.Position.X == nextSpawn.Position.X,
+                    "fresh provider readiness restores avatar presentation at the new world's spawn");
+                test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(nextScene, "World", SceneLifecyclePhase.Unloaded,
+                    SceneLoadMode.Single, isActive: false));
+                test.Until(() => test.Hosted.Current.Phase == Core.SessionPhase.Idle);
+                rig.Frames(1);
+                AssertNoRemotePose(rig, raw, "each later scene loss retires its own avatar and readiness");
+                That(nextWorld.Reads == 1 && nextWorld.Disposals == 1 && controllersDisposed == attempt + 2
+                    && test.Outcomes.Count(item => item.Kind == "session" && item.SessionId == nextSession.SessionId
+                        && item.Status == "failed" && item.Error?.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage) == 1,
+                    "repeated replacements each terminate once with the same bounded failure");
+            }
         }
+
+        private static void AssertNoRemotePose(PresenceRig rig, RawPresencePlayer raw, string message) =>
+            That(rig.Host.Presence.ValidatedPosition(raw.Id) == null && !rig.Host.Presence.TryGetAvatar(raw.Id, out _)
+                && !rig.Host.Presence.TryGetPose(raw.Id, out _), message);
 
         /// <summary>A world whose readiness puts the player at a spawn of the test's choosing.</summary>
         private sealed class SpawnWorld : IWorldInstance
         {
-            internal SpawnWorld(TransformState spawn)
+            private readonly WorldReadiness readiness;
+            internal int Reads;
+            internal int Disposals;
+            internal SpawnWorld(TransformState spawn, int scene = -12)
             {
-                Readiness = new WorldReadiness(new WorldSceneIdentity(-12, "World"), spawn,
+                readiness = new WorldReadiness(new WorldSceneIdentity(scene, "World"), spawn,
                     new TransformState(new Vec3(spawn.Position.X, spawn.Position.Y - 0.13f, spawn.Position.Z), spawn.Rotation, spawn.Scale));
             }
 
-            public WorldReadiness Readiness { get; }
+            public WorldReadiness Readiness { get { Reads++; return readiness; } }
 
-            public void Dispose()
-            {
-            }
+            public void Dispose() => Disposals++;
         }
     }
 }

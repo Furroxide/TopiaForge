@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
+using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -79,6 +80,53 @@ namespace TopiaForge.ModManager.Tests
             Dispatch = new DelayedSessionDispatcher(Host);
             Hosted = new GamemodeSessionOrchestrator(Dispatch, decorateNative?.Invoke(Native) ?? Native, this, "runtime-fixture");
             Hosted.Outcome += Outcomes.Add;
+        }
+
+        private MultiplayerRuntime? runtime;
+        private LoopbackNetPair? network;
+
+        /// <summary>Gets the session follow a hostable fixture installed, whose host announces this game's world to players.</summary>
+        internal SessionFollow? Follow { get; private set; }
+
+        /// <summary>
+        /// A session fixture whose composition root starts in single player over a loopback provider, as a host who starts a
+        /// world alone does; <see cref="OpenToPlayers"/> then makes it a listen host, before or after a launch. Session follow
+        /// is installed as ModRuntime installs it, as the runtime's observer and its frame stage, so the orchestrator hears
+        /// the realm change and the host announces its world the way the game does.
+        /// </summary>
+        internal static SessionFixture Hostable(string root, bool endOnScene = false)
+        {
+            var log = new RecordingRuntimeLog();
+            var network = new LoopbackNetPair();
+            var runtime = new MultiplayerRuntime(() => network.Host, new MultiplayerRuntimeHost("2545", "0.2.0", log), log);
+            var test = new SessionFixture(root, endOnScene, replication: new MultiplayerReplication(runtime)) { runtime = runtime, network = network };
+            runtime.SessionPhaseSource = () => test.Hosted.RealmPhase;
+            var follow = new SessionFollow(test.Hosted, new FollowedScene(), new MultiplayerSceneTransitionAuthorityPolicy(() => null).GrantFollow,
+                () => runtime.Leave(), () => new NetworkWorldProgress(NetworkWorldPhase.Hosting, 0, 0, 0), null, () => runtime.Control == null,
+                () => runtime.LaunchedJoin, test.Host, log);
+            runtime.AddObserver(follow);
+            runtime.SessionFollow = follow;
+            test.Follow = follow;
+            GamemodeSessionOrchestratorTests.Assert(runtime.Connect(), "a hostable fixture attaches its provider");
+            test.Frame();
+            GamemodeSessionOrchestratorTests.Assert(runtime.Realm == NetRealm.Offline && follow.IsOpen, "a hostable fixture starts in single player");
+            return test;
+        }
+
+        /// <summary>Opens this game to players, as hosting does, and runs one frame so the realm follows.</summary>
+        internal void OpenToPlayers()
+        {
+            if (runtime == null || network == null) throw new InvalidOperationException("Only a hostable fixture opens to players.");
+            GamemodeSessionOrchestratorTests.Assert(network.Host.StartHosting(new InternalHostSettings("Hostable", 4)).Succeeded, "the loopback host hosts");
+            Frame();
+            GamemodeSessionOrchestratorTests.Assert(runtime.Realm == NetRealm.ListenHost, "the fixture is a listen host once open");
+        }
+
+        /// <summary>Runs one frame of a hostable fixture's composition root, session follow's stage included.</summary>
+        internal void Frame()
+        {
+            if (runtime == null) throw new InvalidOperationException("Only a hostable fixture runs frames.");
+            Seam.Frame(runtime);
         }
 
         public GameplayContextServices Create(string ownerModId, string packagePath, string dataPath,

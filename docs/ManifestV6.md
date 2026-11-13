@@ -254,6 +254,9 @@ implementation of `IGamemodeParticipantFactory` also gives every player a partic
 Omitting `worldRequirements` means no extra requirement. A present object must be nonempty and may
 contain `transitions` (nonempty unique supported transitions) and `spawn` (`authored-marker` or `any`).
 `sceneChangePolicy` is `end-session` or `keep-controller`; omission means `keep-controller`.
+Losing the owned scene still ends a `keep-controller` session with a failed outcome when the game is
+online, or later when it opens to players; see
+[Custom worlds](CustomWorlds.md#start-one-owned-controller).
 Scene notifications never create controllers or change the immutable session identity.
 
 ### Launch target declaration

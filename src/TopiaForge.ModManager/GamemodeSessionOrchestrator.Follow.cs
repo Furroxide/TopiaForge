@@ -61,14 +61,18 @@ namespace TopiaForge.ModManager
         /// <summary>
         /// Gets this game's world session as a listen host announces it to its players (WS3.8): its session id, the launch it
         /// made and what that resolved to, and for an additive arena the level it is built over and where the player stood as
-        /// it was built. Null while no session runs, or one starts or stops. The same instance comes back while the session
-        /// runs, so a frame at rest allocates nothing; main thread.
+        /// it was built. Null while no session runs, or one starts or stops, and for a session whose world readiness was lost
+        /// before it was ever announced. The same instance comes back while the session runs, so a frame at rest allocates
+        /// nothing; main thread.
         /// </summary>
         internal HostWorldState? DescribeRunningWorld()
         {
             var record = current;
             if (record == null || !record.ReachedRunning || record.Follow != null || lifecycle.Current.Phase != SessionPhase.Running) return null;
             if (record.Announced != null) return record.Announced;
+            // A session kept after losing its scene in single player ends when the game opens (WentOnline): its old
+            // readiness names a world players must never follow, even on the frame before that stop runs.
+            if (record.PresenceInvalidated) return null;
             var descriptor = record.Plan.Descriptor;
             string? level = null;
             TransformState? spawn = null;
