@@ -74,9 +74,11 @@ namespace TopiaForge.ModManager {
  }
 }
 namespace TopiaForge.RobotKit {
+ // The wrapper asks its service to assert the game thread; the probe runs on one thread.
+ internal sealed class RobotAgentService { internal void AssertMainThread() { } }
  internal static class WrapperFactory {
   internal static IRobotAgent Wrap(IRobotAgent agent,IModLifetime lifetime,IInternalNativeEntityReadScope? scope)
-   =>new OwnerRobotAgent(agent,lifetime.Track(agent),lifetime,scope);
+   =>new OwnerRobotAgent(new RobotAgentService(),agent,lifetime.Track(agent),lifetime,scope,null);
   /* robot wrapper */
  }
  internal sealed class NativeRobot : IRobotAgent,IInternalNativeObjectEntity {

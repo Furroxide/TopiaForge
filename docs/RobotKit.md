@@ -51,9 +51,13 @@ applying the captured state.
 `RobotPersonalityDraft` uses the verified `PersonalityAsset`/`LLMAgent` surface for autonomous behavior. Creator
 conversations apply the same persona to their explicit `RobotConversationRequest`.
 
-Every operation either uses a cheap `Try...` query, returns `OperationResult<T>`, or returns
-`Task<OperationResult<T>>` with lifetime cancellation. Check provider availability and
-`Context.Runtime.UnavailableCapabilities` before exposing a feature in Robotopia's UI.
+Use `IRobotAgentService` and its `IRobotAgent` handles on the Robotopia game thread. If work resumes
+on a worker thread, queue the robot work with `Context.Scheduler.NextFrame` and check its result.
+The service rejects off-thread calls with `TFSDK100` before it reads the scene or changes the owned robot list.
+Start `FindReachableSpawnAsync` on the game thread as well.
+
+Check provider availability and `Context.Runtime.UnavailableCapabilities` before exposing a feature
+in Robotopia's UI. Commands report expected failures through `OperationResult<T>`.
 
 ## Custom enemy health
 
@@ -128,8 +132,13 @@ for `NativeBinding`; for structural codes check the imported world's supported c
 `FindReachableSpawnAsync` automatically links cancellation to the consuming lifetime; an optional
 caller token can end the search sooner. Check its result, then spawn on collision-clear ground at
 the returned position. Check `Spawn` before issuing `MoveTo`.
-Retain and dispose the returned agent when its behavior ends; world replacement or scope teardown
-must retire it. An unreachable route needs a bounded retry or an explicit unavailable-order state.
+Retain and dispose the returned agent when its behavior ends. World replacement and scope teardown retire
+its handle. The owning code can still call `Despawn()` on the game thread to release that robot after
+retirement. `Dispose()` always releases the handle where you are. `Despawn()` asks the host to remove
+the robot: inside a guest's callback it can be refused, and the handle stays until you dispose it.
+Repeated cleanup calls succeed with `false` after the handle has been released. A retired
+client handle releases its local body without routing another robot command. An unreachable route needs
+a bounded retry or an explicit unavailable-order state.
 
 `HasReachedTarget` accepts a successful native walk completion as well as proximity within the
 horizontal stop threshold (at least 0.1 metres). The adapter trusts successful native completion

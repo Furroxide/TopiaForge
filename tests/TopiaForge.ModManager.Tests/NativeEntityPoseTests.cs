@@ -38,7 +38,7 @@ namespace TopiaForge.ModManager.Tests
                     .Replace("/* owner service */", Class(ownerService, "OwnerEntityService"))
                     .Replace("/* context scope */", Method(world, "CaptureNativeEntityReadScope") + Class(world, "NativeEntityReadScope"))
                     .Replace("/* lifetime read */", Method(Class(scoped, "LifetimeEntityService"), "TryGetTransform"))
-                    .Replace("/* robot wrapper */", Class(owner, "OwnerRobotAgent")),
+                    .Replace("/* robot wrapper */", Class(owner, "OwnerRobotAgent") + Method(owner, "IsScopeCurrent")),
                 Scenarios,
                 Read("mods/TopiaForge.RobotKit/RobotBodyService.cs"),
                 Read("mods/TopiaForge.RobotKit/RobotBodyWire.cs"),

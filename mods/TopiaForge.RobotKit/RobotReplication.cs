@@ -17,7 +17,11 @@ namespace TopiaForge.RobotKit
             Func<IEntity, TransformState> transform, IRuntimeReplication provider)
         { this.spawn = spawn; this.transform = transform; this.provider = provider; }
 
-        internal OperationResult<IRobotAgent> Spawn(IRuntimeReplication replication, RobotAgentSpawnRequest request)
+        internal OperationResult<IRobotAgent> Spawn(IRuntimeReplication replication, RobotAgentSpawnRequest request) =>
+            Spawn(replication, request, null);
+
+        internal OperationResult<IRobotAgent> Spawn(IRuntimeReplication replication, RobotAgentSpawnRequest request,
+            Func<bool>? canRouteDisposal)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
             if (replication.Realm == InternalNetRealm.Client && replication.NetworkClass == InternalNetworkClass.ClientLocal)
@@ -40,7 +44,7 @@ namespace TopiaForge.RobotKit
                 if (!result.TryGetValue(out var entity) || !states.TryGetValue(entity.Id, out var state))
                     return OperationResult<IRobotAgent>.Failure(result.ErrorCode, result.ErrorMessage);
                 BindSpeech(state.Agent, replication);
-                return OperationResult<IRobotAgent>.Success(new RoutedRobotAgent(state.Agent, replication));
+                return OperationResult<IRobotAgent>.Success(new RoutedRobotAgent(state.Agent, replication, canRouteDisposal));
             }
             catch (ArgumentException) { return OperationResult<IRobotAgent>.Failure(ModErrorCode.InvalidArgument, "Robot spawn values must be bounded plain text and finite numbers."); }
         }
@@ -88,7 +92,7 @@ namespace TopiaForge.RobotKit
         public void ReleaseReplica(IEntity replica) => Despawn(replica);
         public void Despawn(IEntity entity)
         {
-            if (!states.TryGetValue(entity.Id, out var state)) return;
+            if (!states.TryGetValue(entity.Id, out var state) || !ReferenceEquals(state.Agent, entity)) return;
             states.Remove(entity.Id);
             state.Agent.Dispose();
         }
