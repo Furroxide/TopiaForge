@@ -22,6 +22,12 @@ namespace TopiaForge.ModManager
         private readonly WorldViewWire wire = new WorldViewWire();
         private ViewSnapshot received = ViewSnapshot.Empty;
         private bool invalidStream;
+        private bool viewApplied;
+        // A complete view was read on this attachment, whatever world was bound when it arrived.
+        private bool viewReceived;
+        private MultiplayerSessionId appliedSession;
+        private bool avatarFailureLogged;
+        private bool unreadableLogged;
         private bool resetting;
         private float retry;
         internal RuntimeWorldViews(MultiplayerReplication services) { this.services = services; }
@@ -37,6 +43,53 @@ namespace TopiaForge.ModManager
             return (services.References as NetworkWorld)?.ResolveViewProviderEntity(entity);
         }
         private bool Client => services.Runtime.Role == InternalSessionRole.Client;
+        // Whether this viewer's screen holds the entity hidden: the host's own leases or the projected view.
+        internal bool HoldsLocally(IEntity entity)
+        {
+            foreach (var held in projected.Values) if (ReferenceEquals(held.Entity, entity)) return true;
+            foreach (var world in worlds.Values) if (world.HoldsEntity(entity)) return true;
+            return false;
+        }
+        // A joined player has applied the host's first complete view of this session and world, or has no view stream
+        // at all. The view a lost link left behind still counts: it holds until the next link's view replaces it.
+        internal bool ReadyToDraw => !Client || channel == null
+            || viewApplied && appliedSession.Equals(services.Runtime.Control?.SessionSnapshot.Id ?? default);
+        // Presence made an avatar root and draws it next. Apply the views now so the hold is there for that draw.
+        // False when the root should be held and is not: presence leaves it undrawn and asks again next frame.
+        internal bool AvatarMade(IEntity root)
+        {
+            string? failure = null;
+            try
+            {
+                if (Client) { ObserveRoster(); ApplyReceived(); }
+                else foreach (var world in worlds.Values) world.RefreshLocal();
+                if (!ShouldHold(root) || HoldsLocally(root)) { avatarFailureLogged = false; return true; }
+                failure = "the hold was refused";
+            }
+            catch (Exception exception)
+            {
+                failure = exception.GetType().Name;
+            }
+            if (!avatarFailureLogged)
+                services.Runtime.Log.Warn("Multiplayer: the world view could not hold a new avatar (" + failure
+                    + "); the avatar is drawn once it is held.");
+            avatarFailureLogged = true;
+            return false;
+        }
+        // A view counts for a world when it is that world's, or when the host has no world view at all (nothing to hold).
+        private static bool ViewsWorld(ViewSnapshot view, string world) => view.World.Length == 0 || view.World == world;
+        // Whether a view this player applies names the root: a listed player on a client, a local lease on the host.
+        private bool ShouldHold(IEntity root)
+        {
+            if (Client)
+            {
+                foreach (var target in received.Hidden)
+                    if (target.Kind == 3 && ReferenceEquals(ResolveListed(target), root)) return true;
+                return false;
+            }
+            foreach (var world in worlds.Values) if (world.Wants(root)) return true;
+            return false;
+        }
         private string? Local => services.Runtime.Control?.SessionSnapshot.LocalParticipantId?.Value ?? "local";
         internal WorldViewLeases For(IInternalWorldViewRenderer renderer)
         {
@@ -49,12 +102,12 @@ namespace TopiaForge.ModManager
                 (!names.TryGetValue(entity, out var known) || known.Name.Kind != 3 || ReferenceEquals(ResolveKnown(known), entity))
                 && (services.Runtime.Realm == NetRealm.Offline || player == Local || TryName(entity, out _)),
                 entity => names.TryGetValue(entity, out var target) ? ResolveKnown(target) : entity.IsAlive ? entity : null,
-                entity => { if (!names.ContainsKey(entity) && TryName(entity, out var target)) names.Add(entity, new NamedTarget(target, entity)); },
+                entity => { if (!names.ContainsKey(entity) && TryName(entity, out var target)) names.Add(entity, Named(target, entity)); },
                 entity => names.Remove(entity),
                 // A player's name stops resolving for the whole reconnect grace. The root presence retains for them
                 // keeps its hold, and RefreshNames renames the target in place when the new lifetime arrives.
                 (entity, held) => names.TryGetValue(entity, out var known) && known.Name.Kind == 3
-                    && ReferenceEquals(known.Root, held) && Retained(held));
+                    && ReferenceEquals(known.Root, held) && Retained(held, known.Player));
             worlds.Add(renderer, value);
             void End()
             {
@@ -70,6 +123,9 @@ namespace TopiaForge.ModManager
             ClearProjection();
             foreach (var world in worlds.Values.ToArray()) world.Dispose();
             worlds.Clear(); names.Clear(); binding = value;
+            // A new world waits for its own first complete view; one that already arrived for it still counts, even
+            // if it arrived while the old world was still bound.
+            viewApplied = viewReceived && ViewsWorld(received, value.WorldId);
             For(value.Renderer);
             if (Client) ApplyReceived();
             deliveries.Clear();
@@ -89,7 +145,7 @@ namespace TopiaForge.ModManager
         }
         private void Reset(bool endLeases)
         {
-            ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false;
+            ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false; viewApplied = false; viewReceived = false;
             deliveries.Clear(); admitted.Clear(); names.Clear(); seenRoster = null; generation = 0; session = default;
             resetting = true;
             try { if (endLeases) foreach (var world in worlds.Values.ToArray()) world.Dispose(); }
@@ -101,17 +157,35 @@ namespace TopiaForge.ModManager
             if (generation != channel.Generation)
             {
                 generation = channel.Generation;
-                if (Client) { ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false; }
+                // A new link restarts the wire only. Presence keeps drawing the last poses while a link is down,
+                // so the last complete view and its holds stay until the new link's first complete view replaces
+                // them: this hides too much for a moment, never too little.
+                if (Client) { wire.Reset(); invalidStream = false; }
             }
             if (Client)
             {
+                ObserveRoster();
                 while (channel.TryReceive(out var message))
                 {
                     var host = services.Runtime.Control?.SessionSnapshot.HostParticipantId ?? InternalSystemMessage.HeadlessHostSender;
                     if (invalidStream) continue;
+                    // A stream that cannot be read is ignored until the next link, and the last view keeps holding.
                     if (!message.Sender.Equals(host) || !wire.Read(message.Payload, out var next))
-                    { invalidStream = true; wire.Reset(); received = ViewSnapshot.Empty; ClearProjection(); continue; }
-                    if (next != null) { received = next; ApplyReceived(); }
+                    {
+                        invalidStream = true; wire.Reset();
+                        if (!unreadableLogged)
+                            services.Runtime.Log.Warn("Multiplayer: a world view message from the host could not be read; "
+                                + "the last view stays until the next connection.");
+                        unreadableLogged = true;
+                        continue;
+                    }
+                    if (next != null)
+                    {
+                        received = next; viewReceived = true; unreadableLogged = false;
+                        viewApplied = binding == null || ViewsWorld(next, binding.WorldId);
+                        appliedSession = services.Runtime.Control?.SessionSnapshot.Id ?? default;
+                        ApplyReceived();
+                    }
                 }
                 retry += deltaTime;
                 if (retry >= .25f) { retry = 0; ApplyReceived(); }
@@ -121,7 +195,7 @@ namespace TopiaForge.ModManager
             if (snapshot != null) RefreshRoster(snapshot);
             retry += deltaTime;
             if (retry >= .25f && names.Count != 0)
-            { retry = 0; foreach (var world in worlds.Values) world.RefreshLocal(); }
+            { retry = 0; foreach (var world in worlds.Values) world.RefreshLocal(retryRefused: true); }
             SendViews();
         }
         private void SendViews()
@@ -129,6 +203,8 @@ namespace TopiaForge.ModManager
             var snapshot = services.Runtime.Control?.SessionSnapshot;
             if (snapshot == null || channel == null) return;
             RefreshRoster(snapshot);
+            // A bound world whose renderer is ending sends nothing until it is replaced or unbound.
+            if (binding != null && !binding.Renderer.IsAlive) return;
             for (var index = 0; index < snapshot.Participants.Count; index++)
             {
                 var player = snapshot.Participants[index];
@@ -168,7 +244,7 @@ namespace TopiaForge.ModManager
             if (ReferenceEquals(seenRoster, snapshot)) return;
             seenRoster = snapshot;
             // Removing another player's leases can apply the local view immediately.
-            var namesChanged = RefreshNames();
+            var namesChanged = RefreshNames(snapshot);
             ReconcileParticipants(snapshot);
             // Quality-only or equivalent roster publications must not restart a backpressured baseline.
             if (namesChanged)
@@ -212,22 +288,35 @@ namespace TopiaForge.ModManager
             return true;
         }
 
-        private bool RefreshNames()
+        private bool RefreshNames(MultiplayerSessionSnapshot snapshot)
         {
             var changed = false;
             foreach (var target in names.Values)
-                if (target.Name.Kind == 3 && ResolveKnown(target) == null
-                    && TryPlayerName(target.Root, out var current) && !target.Name.Equals(current))
-                {
-                    target.Name = current;
-                    changed = true;
-                }
+            {
+                if (target.Name.Kind != 3) continue;
+                // A participant who left, or came back under another key, is a new player: the old target never
+                // follows them, and the gamemode decides whether to hide the new admission.
+                if (target.Player is ParticipantId id
+                    && (!snapshot.TryGetParticipant(id, out var row) || row == null || !row.PlayerKey.Equals(target.Key)))
+                    target.Player = null;
+                if (ResolveKnown(target) != null) continue;
+                // Follow the participant's current lifetime even when the old root is gone: the hold reaches the new
+                // root when presence makes it (AvatarMade), before its first draw.
+                ViewTarget current;
+                if (target.Player is ParticipantId player && services.TryCreatePlayerRef(player, out var reference))
+                    current = new ViewTarget(3, "", reference.Value!);
+                else if (!TryPlayerName(target.Root, out current)) continue;
+                if (target.Name.Equals(current)) continue;
+                target.Name = current;
+                changed = true;
+            }
             return changed;
         }
 
         private ViewSnapshot Derive(string player)
         {
-            if (binding == null || !binding.Renderer.IsAlive) return ViewSnapshot.Empty;
+            // Only a host with no world view sends the empty view: clients take it as "nothing to hold".
+            if (binding == null) return ViewSnapshot.Empty;
             var leases = For(binding.Renderer);
             var targets = new List<ViewTarget>();
             foreach (var entity in leases.HiddenFor(player)) if (TryName(entity, out var target)) targets.Add(target);
@@ -265,11 +354,22 @@ namespace TopiaForge.ModManager
             if (target.Name.Kind == 3 && root != null) target.Root = root;
             return root;
         }
-        private bool Retained(IEntity entity) => entity.IsAlive && services.Presence?.IsRetainedAvatar(entity) == true;
+        private bool Retained(IEntity entity, ParticipantId? player = null) =>
+            entity.IsAlive && services.Presence?.IsRetainedAvatar(entity, player) == true;
+        private NamedTarget Named(ViewTarget name, IEntity entity)
+        {
+            var named = new NamedTarget(name, entity);
+            if (name.Kind == 3 && services.TryGetPlayerParticipant(entity, out var participant, out var key))
+            { named.Player = participant; named.Key = key; }
+            return named;
+        }
         private sealed class NamedTarget
         {
             internal ViewTarget Name;
             internal IEntity Root;
+            // The participant and key a player name was taken for, while that admission lasts.
+            internal ParticipantId? Player;
+            internal MultiplayerPlayerKey Key;
             internal NamedTarget(ViewTarget name, IEntity root) { Name = name; Root = root; }
         }
         private sealed class Delivery

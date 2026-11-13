@@ -56,13 +56,13 @@ namespace TopiaForge.ModManager
                         && (Realm != NetRealm.ListenHost || Host.IsCurrentWorld);
             return false;
         }
-        // True while presence still holds this root for a remote player: connected, or inside the reconnect grace.
-        // A player who left or whose avatar was replaced no longer owns it.
-        internal bool IsRetainedAvatar(IEntity entity)
+        // True while presence still holds this root for a remote player (the given one, when it is known): connected,
+        // or inside the reconnect grace. A player who left or whose avatar was replaced no longer owns it.
+        internal bool IsRetainedAvatar(IEntity entity, ParticipantId? participant = null)
         {
             foreach (var peer in peers)
                 if (!peer.IsLocal && !peer.Removed && peer.Avatar?.IsAlive == true && ReferenceEquals(peer.Avatar.Entity, entity))
-                    return true;
+                    return participant == null || peer.Id.Equals(participant.Value);
             return false;
         }
     }

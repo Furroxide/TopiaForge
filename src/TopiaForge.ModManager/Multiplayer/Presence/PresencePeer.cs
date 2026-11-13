@@ -114,6 +114,9 @@ namespace TopiaForge.ModManager
 
         internal RemotePlayerAvatar? Avatar { get; set; }
 
+        /// <summary>Gets or sets whether the world view has yet to reach <see cref="Avatar"/>: it is not drawn until it has.</summary>
+        internal bool AwaitingViews { get; set; }
+
         /// <summary>Gets or sets when an avatar that could not be made is tried again.</summary>
         internal long NextAvatarMicros { get; set; }
 

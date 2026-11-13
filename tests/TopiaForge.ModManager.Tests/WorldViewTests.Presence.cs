@@ -52,9 +52,18 @@ namespace TopiaForge.ModManager.Tests
             Check(participant.PlayerWorldView(renderers[host], viewer.Id.Value).Hide(original).ErrorCode == ModErrorCode.NotAuthoritative,
                 "participant authority still rejects avatar hide");
             rig.Network.LoseLink(viewer.Control); rig.Frames(24);
-            Check(renderers[viewer].Hidden.Count == 0 && audience.IsActive, "lost audience link restores native holds while grace preserves authority lease");
-            rig.Network.Restore(viewer.Control); rig.Frames(60);
-            Check(renderers[viewer].Hidden.Contains(viewer.AvatarOf(subject)!.Entity), "reconnect reapplies the production avatar reference baseline");
+            Check(renderers[viewer].Hidden.Contains(remote!) && audience.IsActive,
+                "lost audience link keeps the last view's native holds while grace preserves authority lease");
+            // Change the viewer's view during the outage; only the restored link can deliver it.
+            Check(directory.TryGet(host.Id, out var hostPlayer) && hostPlayer!.Entity != null, "production directory finds the host player");
+            bool ViewerHolds(PresenceNode seen) => viewer.AvatarOf(seen) is { } avatar && renderers[viewer].Hidden.Contains(avatar.Entity);
+            using (Lease(seam.PlayerWorldView(renderers[host], viewer.Id.Value).Hide(hostPlayer.Entity!)))
+            {
+                rig.Frames(4);
+                Check(viewer.AvatarOf(host) != null && !ViewerHolds(host), "a view changed during the outage does not reach the lost link");
+                rig.Network.Restore(viewer.Control); rig.Frames(60);
+                Check(ViewerHolds(subject) && ViewerHolds(host), "reconnect delivers the complete current production avatar reference baseline");
+            }
             var hostOld = host.AvatarOf(subject)!; var viewerOld = viewer.AvatarOf(subject)!;
             hostOld.Dispose(); viewerOld.Dispose(); rig.Frames(40);
             var replacement = player.Entity!; var viewerReplacement = viewer.AvatarOf(subject)!.Entity;

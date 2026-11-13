@@ -314,6 +314,19 @@ namespace TopiaForge.ModManager
             }
         }
 
+        // Lifetime names exist only with the directory; presence's fallback names by key and needs neither.
+        internal bool TryGetPlayerParticipant(IEntity entity, out ParticipantId participant, out MultiplayerPlayerKey key)
+        {
+            participant = default; key = default;
+            return Players?.TryGetParticipant(entity, out participant, out key) == true;
+        }
+
+        internal bool TryCreatePlayerRef(ParticipantId participant, out InternalNetRef reference)
+        {
+            reference = default;
+            return Players?.TryCreateReference(participant, out reference) == true;
+        }
+
         internal bool TryResolveRef(InternalNetRef reference, out IEntity? entity)
         {
             entity = null;
