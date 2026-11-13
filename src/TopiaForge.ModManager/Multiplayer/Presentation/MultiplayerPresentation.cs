@@ -109,7 +109,8 @@ namespace TopiaForge.ModManager
             for (var i = surfaces.Count - 1; i >= 0; i--)
             {
                 var surface = surfaces[i];
-                if (surface.Context.Lifetime.IsStopping || !surface.IsAlive) surface.Dispose();
+                if (surface.Context.Lifetime.IsStopping) surface.Dispose();
+                else if (!surface.IsAlive) surface.Detach();
                 else surface.RefreshClockBinding(epoch);
             }
             ReconcileAudio();

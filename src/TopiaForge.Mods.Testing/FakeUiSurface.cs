@@ -123,8 +123,10 @@ namespace TopiaForge.Mods.Testing
 
             try
             {
-                if (WireBounded) UiWireCodec.Measure(content, widgetEpoch(), 32 * 1024);
-                UiClockBinding.Bind(content, widgetEpoch());
+                // Re-applying the shown tree keeps its clock binding, as every runtime surface does.
+                var retained = ReferenceEquals(content, Content);
+                if (WireBounded) UiWireCodec.Measure(content, widgetEpoch(), 32 * 1024, retained);
+                if (!retained) UiClockBinding.Bind(content, widgetEpoch());
             }
             catch (ArgumentException exception)
             {

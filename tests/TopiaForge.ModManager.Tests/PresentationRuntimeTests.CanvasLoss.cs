@@ -25,7 +25,17 @@ namespace TopiaForge.ModManager.Tests
                 local.Created[local.Created.Count - 1].Lose(); rig.Frames(10);
                 Assert(rig.Guest.ReceivedUi.Surfaces.Count == 0,
                     "a host canvas lost while " + (visible ? "visible" : "hidden") + " retires its shared slot");
-                Assert(lifetime.TrackedResourceCount == 0, "lost host surfaces release their tracking leases");
+                // While hosting, the handle answers as the solo surface does instead of throwing, and its
+                // scope still tracks it until the author disposes it or the scope ends.
+                Assert(lifetime.TrackedResourceCount == 1, "a lost host handle stays tracked by its scope, as in solo");
+                surface.SetBody("after loss"); surface.Show(); surface.Hide(); surface.Show();
+                var content = surface.SetContent(new UiText("after loss"));
+                Assert(!content.Succeeded && content.ErrorCode == ModErrorCode.InvalidState,
+                    "a lost host canvas returns the local surface's lost-state result");
+                rig.Frames(10);
+                Assert(rig.Guest.ReceivedUi.Surfaces.Count == 0, "calls on a lost host canvas never share it again");
+                surface.Dispose();
+                Assert(lifetime.TrackedResourceCount == 0, "disposing a lost host handle releases its tracking lease");
             }
         }
 

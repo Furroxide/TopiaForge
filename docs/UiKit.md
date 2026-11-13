@@ -145,7 +145,9 @@ and gameplay pause/slow motion does not pause it. To pause a round timer, displa
 and create a fresh deadline when resuming. A new solo world or replacement session expires previously bound
 countdowns. When the surface's scope and recipient remain active, a shared HUD or targeted surface keeps its
 other content and shows the expired timer at zero. Use `SetContent` with a new countdown built from the current
-`ClockTime` to start another timer. A new composition cannot reuse a countdown node bound to an ended epoch.
+`ClockTime` to start another timer. A new composition cannot reuse a countdown node bound to an ended epoch, on
+any surface kind. Passing the tree a surface already shows to `SetContent` again succeeds on every kind and keeps its
+expired timer at zero.
 
 Remote compositions are validated in full before any surface is created. Unsupported nodes, unknown widget
 versions and invalid shapes are refused; authored shape failures return `InvalidArgument` with the cause.
