@@ -10,6 +10,7 @@
   native brain is refused on a guest's PC and in host code running on a guest's input. Previews and snapshot
   restoration stop if a scene target comes under RobotKit management.
 - Host callbacks acting for a guest now receive `NotAuthoritative` when requesting an Autonomous spawn, before any robot is created. Dormant requests keep their existing native-talk normalization; client requests and replicas remain Dormant. The testing kit models these callback restrictions and distinguishes player dismissals from host hides.
+- `SayAsync` now succeeds when at least one listener played the line to the end; a listener lost during playback no longer fails a line that others heard, and `Unavailable` means nobody did.
 - Guests now report a reason-free refusal before robot speech playback, so hidden, missing or out-of-earshot replicas and full receive budgets do not hold other listeners until the deadline. Speech schema 3 requires matching peers; all-declined lines return `Success(false)` after the existing pace.
 
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
