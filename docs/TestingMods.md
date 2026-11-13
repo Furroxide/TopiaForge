@@ -64,6 +64,24 @@ dotnet test --configuration Release
   behavior and leak-observable handles.
 - `ControlledOperation<T>` lets a test choose when asynchronous work completes, fails, or cancels.
 
+## Check engine-facing thread access
+
+Use `FakeModContext.CreateWithThreadChecks()` when a test needs to reject worker calls to entity and UI
+service entry points with `TFSDK100`. Ordinary contexts and standalone services remain permissive. The
+factory captures the creating thread for the five `IEntityService` operations and the UI service's
+accessibility update, surface/modal/toast creation, clock and label access. Fixture helpers, returned
+handles and other services keep their existing behavior; this is not full scoped-lifetime parity.
+A stopped strict context's transform read returns `false` and identity. Other operations retain their
+existing fake stopping behavior: `SetTransform` and `Destroy` do not reproduce the scoped runtime's
+early `Cancelled` result.
+
+Drive strict contexts from their creating thread. Workers may queue `Context.Scheduler.NextFrame` work;
+finish queuing before advancing the fake frame. Concurrent registration and frame driving are unsupported.
+The factory supplies no synchronization context, automatic pump or continuation dispatch.
+`GamemodeSessionRunner` also supplies no runtime host dispatcher: a participant may start on a worker
+after an asynchronous server start. Keep its default contexts for asynchronous runner tests, and exercise
+thread checks in tests whose calls and completions you explicitly drive on the creating thread.
+
 ## Test failure paths
 
 Cover at least these lifecycle paths for every acquired resource:

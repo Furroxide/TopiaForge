@@ -30,7 +30,11 @@ namespace TopiaForge.Mods.Testing
     /// </summary>
     /// <remarks>
     /// The server and the participant run in contexts of their own, as their scopes do in the game, so register the fakes
-    /// each controller resolves in the context it runs in.
+    /// each controller resolves in the context it runs in. This runner models controller ordering and cleanup, not
+    /// the runtime's host dispatch: after a pending server start, participant startup may continue on a worker.
+    /// Use the default permissive contexts for asynchronous runner tests. Contexts created with
+    /// <see cref="FakeModContext.CreateWithThreadChecks"/> require explicitly owner-driven calls and completions;
+    /// this runner installs no synchronization context or automatic frame pump.
     /// </remarks>
     public sealed class GamemodeSessionRunner : IDisposable
     {

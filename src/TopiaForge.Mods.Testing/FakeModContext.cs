@@ -13,6 +13,23 @@ namespace TopiaForge.Mods.Testing
         /// <param name="identity">Optional manifest identity for the mod under test.</param>
         /// <param name="runtime">Optional mutable runtime metadata.</param>
         public FakeModContext(ModIdentity? identity = null, FakeRuntimeInfo? runtime = null)
+            : this(identity, runtime, default) { }
+
+        /// <summary>Creates a context that checks entity and UI service calls against the creating thread.</summary>
+        /// <param name="identity">Optional manifest identity for the mod under test.</param>
+        /// <param name="runtime">Optional mutable runtime metadata.</param>
+        /// <remarks>
+        /// Live engine-facing entity and UI service entry points throw TFSDK100 on another thread. Fixture helpers,
+        /// returned handles and other services retain their usual behavior; this is not full runtime lifetime parity.
+        /// Drive frames and callbacks on the creating thread. No synchronization context or automatic pump is installed.
+        /// The async GamemodeSessionRunner does not dispatch continuations back to this thread; use its default
+        /// contexts for asynchronous runner tests, and drive thread-checking tests explicitly.
+        /// </remarks>
+        [RequiresTopiaForge("0.2.0")]
+        public static FakeModContext CreateWithThreadChecks(ModIdentity? identity = null, FakeRuntimeInfo? runtime = null) =>
+            new FakeModContext(identity, runtime, FakeGameThread.Capture());
+
+        private FakeModContext(ModIdentity? identity, FakeRuntimeInfo? runtime, FakeGameThread gameThread)
         {
             Identity = identity ?? new ModIdentity(
                 "example.test-mod",
@@ -30,13 +47,13 @@ namespace TopiaForge.Mods.Testing
             Time = new DeterministicGameTime();
             Scheduler = new DeterministicModScheduler(Lifetime, Logger);
             LocalPlayer = new FakeLocalPlayerService(Lifetime);
-            Entities = new FakeEntityService(Lifetime);
+            Entities = new FakeEntityService(Lifetime, gameThread);
             Physics = new FakePhysicsService(Lifetime, Entities);
             Interactions = new FakeInteractionService(Lifetime);
             Items = new FakeItemService(Entities);
             Assets = new FakeAssetService(Lifetime);
             Audio = new FakeAudioService(Lifetime);
-            Ui = new FakeUiService(Lifetime);
+            Ui = new FakeUiService(Lifetime, gameThread);
             Localization = new FakeLocalizationService(Lifetime);
             Commands = new FakeCommandService(Identity, Lifetime);
             Diagnostics = new FakeDiagnosticsService();

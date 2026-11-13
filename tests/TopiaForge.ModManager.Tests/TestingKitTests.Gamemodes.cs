@@ -73,6 +73,51 @@ namespace TopiaForge.ModManager.Tests
                 "the participant cannot share the server's context, since the game never shares their scopes");
         }
 
+        private static void TestGamemodeSessionRunnerAsyncServer()
+        {
+            var ownerThread = Thread.CurrentThread.ManagedThreadId;
+            var gamemode = new PendingServerGamemode();
+            using var runner = new GamemodeSessionRunner(gamemode);
+            var entity = runner.ParticipantContext.Entities.Create("Participant cube", Vec3.Zero);
+            var started = runner.StartAsync();
+            Assert(!started.IsCompleted && gamemode.ParticipantThread == 0,
+                "a genuinely pending server prevents participant startup");
+            RunOnWorker(() => gamemode.Server.SetResult(OperationResult<IGamemodeController>.Success(new ProbeServer(gamemode.Calls))));
+            Assert(started.Wait(TimeSpan.FromSeconds(5)), "default async startup completes without an owner-thread pump");
+            Assert(started.Result.Succeeded && runner.IsRunning && gamemode.ParticipantThread != 0
+                && gamemode.ParticipantThread != ownerThread && gamemode.UiSucceeded && gamemode.EntitiesSucceeded,
+                "the participant can use default UI and entities after a worker completes server startup");
+            Assert(runner.ParticipantContext.Ui.Toasts.Count == 1 && entity.Position == new Vec3(1, 2, 3),
+                "the asynchronous participant's UI and entity changes are observable after completion");
+            runner.Stop();
+            Assert(runner.CleanupFailures.Count == 0, "default asynchronous runner cleanup remains compatible");
+            runner.ServerContext.AssertNoLeaks();
+            runner.ParticipantContext.AssertNoLeaks();
+        }
+
+        private sealed class PendingServerGamemode : IGamemodeParticipantFactory
+        {
+            internal readonly TaskCompletionSource<OperationResult<IGamemodeController>> Server =
+                new TaskCompletionSource<OperationResult<IGamemodeController>>();
+            internal readonly List<string> Calls = new List<string>();
+            internal int ParticipantThread;
+            internal bool UiSucceeded, EntitiesSucceeded;
+
+            public Task<OperationResult<IGamemodeController>> StartAsync(IGamemodeSession session, CancellationToken cancellationToken) =>
+                Server.Task;
+
+            public Task<OperationResult<IGamemodeParticipantController>> StartParticipantAsync(
+                IGamemodeParticipantSession participant, CancellationToken cancellationToken)
+            {
+                ParticipantThread = Thread.CurrentThread.ManagedThreadId;
+                UiSucceeded = participant.Context.Ui.ShowToast("Async participant ready.").Succeeded;
+                var entities = participant.Context.Entities.Query(new EntityQuery());
+                EntitiesSucceeded = entities.Count == 1 && participant.Context.Entities.SetTransform(entities[0],
+                    new TransformState(new Vec3(1, 2, 3), Quat.Identity, new Vec3(1, 1, 1))).Succeeded;
+                return Task.FromResult(OperationResult<IGamemodeParticipantController>.Success(new ProbeParticipant(Calls, throws: false)));
+            }
+        }
+
         private static void TestGamemodeSessionRunnerFailures()
         {
             var failing = new ProbeGamemode

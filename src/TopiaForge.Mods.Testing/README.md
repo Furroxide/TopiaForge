@@ -20,6 +20,30 @@ The fake context provides captured logging, in-memory configuration/files/storag
 scheduling, controllable scene completion, player/entity/physics state, and all other non-null V1 core services.
 SDK-owned resources are released in reverse order on ordinary unload and partial load failure.
 
+Ordinary `new FakeModContext()` and standalone service constructors do not check thread access. For a test
+that needs to catch accidental worker access, use `FakeModContext.CreateWithThreadChecks()`. The thread
+calling that factory owns the checks for that context; separately created contexts have independent owners.
+
+This opt-in mode reports `TFSDK100` for off-thread calls to the five `IEntityService` operations and to
+`IUiService.ApplyAccessibility`, `CreateSurface`, `ShowModal`, `ShowToast`, `ClockTime` and `Labels`.
+Fixture helpers, returned handles and other services retain their existing behavior. It checks live
+engine-facing entry points, not every scoped runtime lifetime rule: a stopped strict context's
+`TryGetTransform` returns `false` and identity before the thread check, but other operations retain the
+fake's existing stopping behavior. For example, `SetTransform` and `Destroy` do not reproduce the scoped
+runtime's early `Cancelled` result after stop.
+
+Drive strict test frames and callbacks on the thread that created the context. In the runtime,
+`Context.Scheduler.NextFrame` accepts worker registration and runs the callback on the game thread.
+In a test, let the worker finish queuing before advancing the fake frame on the owner thread; the
+fake scheduler does not support concurrent registration and frame driving. The factory installs no
+synchronization context and does not pump frames or move continuations between threads.
+
+`GamemodeSessionRunner` preserves controller ordering and cleanup, but does not reproduce the runtime's
+host dispatch of asynchronous controller callbacks. After a pending server start, its participant start
+may run on a worker. Use its default permissive contexts for asynchronous runner tests. Use thread-checked
+contexts in tests whose controller calls, frame driving and completion callbacks you explicitly keep on
+the creating thread; do not use them to infer runtime dispatch behavior.
+
 `FakeUiService` captures safe declarative trees. Its `FakeUiSurface` can invoke buttons, toggles,
 sliders, text input, dropdowns, virtual-list selections, and graph selection/edit/viewport requests
 by stable id, inspect the resulting state, replace content, raise dismissal when hidden, and assert
