@@ -143,10 +143,11 @@ has been granted.
 
 Environments must exist before any workflow references them, or a workflow must verify that the protected
 environment already exists before naming it. Administrator bypass is disabled on privileged environments except
-`control-plane-production`. That environment prevents self-review but allows the maintainer to force a pending
-deployment after an independent agent reviews the exact revision and deployment plan. The bypass is a recorded
-exception to GitHub reviewer approval for that run. GitHub cannot enforce the agent-review prerequisite; the
-maintainer records the reviewed SHA and review result before using bypass.
+`control-plane-production`. That environment prevents self-review, and a pending production deployment is forced
+with bypass only after a second review of the exact revision and deployment plan. The bypass is a recorded exception
+to GitHub reviewer approval for that run. GitHub cannot enforce the second review, so the reviewed SHA and the review
+result are recorded before bypass is used. The deployment preflight accepts production with bypass on or off, so
+turning bypass off needs no workflow change.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |

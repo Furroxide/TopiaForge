@@ -57,13 +57,15 @@ Create two environments under repository Settings, Environments, before any depl
 | --- | --- | --- |
 | Required reviewers | The maintainer | The maintainer |
 | Prevent self-review | Off | On |
-| Allow administrators to bypass | Off | On, after independent agent review of the exact revision |
+| Allow administrators to bypass | Off | On, used only after a second review of the exact revision; off also deploys |
 | Deployment branches | Selected: `dev` and `main` | Selected: `main` |
 | Secret `CLOUDFLARE_API_TOKEN` | Staging-only deploy token | Production-only deploy token |
 | Secret `CLOUDFLARE_ACCOUNT_ID` | The account id | The account id |
 | Variable `CONTROL_PLANE_ORIGIN` | The staging origin, `https://…` | The production origin, `https://…` |
 
-The maintainer may dispatch the protected production run after an independent agent reviews the exact source revision and deployment plan. GitHub's admin bypass then starts the pending deployment, skipping reviewer approval for that run while retaining self-review prevention. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
+A protected production run is dispatched only after a second review of the exact source revision and deployment
+plan. GitHub's admin bypass then starts the pending deployment, skipping reviewer approval for that run while
+self-review prevention stays on. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
 required reviewer, the self-review setting in the table and custom branch rules. Staging must also refuse administrator
 bypass; production deploys with bypass on or off, so turning it off needs no workflow change. That replaces the
 governance rule that an environment must exist before a workflow references it: a dispatch can never create an
@@ -140,7 +142,10 @@ Use this order for the first production service launch:
 
 1. Bring the service to `main`. The first launch on 2026-11-06 used a one-time service pull request; that route is
    closed, and service changes now reach `main` only through `release/<version>`.
-2. Record an independent agent review of that exact main revision and deployment plan, then dispatch **Control plane** from it to **control-plane-production**. GitHub cannot enforce this agent-review prerequisite, so record the reviewed SHA and review result before dispatch. The maintainer uses GitHub's admin bypass only for that pending run, noting the reviewed SHA in the bypass comment, then provisions its Worker secrets as described below. Do not use the staging credential.
+2. Review that exact `main` revision and deployment plan a second time and record the reviewed SHA and the result,
+   then dispatch **Control plane** from it to **control-plane-production**. GitHub cannot enforce that review. If
+   admin bypass starts the pending run, use it only for that run and name the reviewed SHA in the bypass comment.
+   Then provision the Worker secrets as described below. Do not use the staging credential.
 3. Check production readiness with
    `python tools/multiplayer-build.py --environment production --check-only`, then complete the production
    admin/spend checks and real relay live check from steps 4 and 5 below, using the production environment.
