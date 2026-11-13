@@ -15,8 +15,9 @@ namespace TopiaForge.ModManager.Tests
             Admission();
             OfflineHideSurvivesPromotion();
             ActiveHide();
+            PlaybackAllocation();
             LeaseLifetimes();
-            Console.WriteLine("Robot speech views: admission, offline promotion, active playback and lease lifetimes passed.");
+            Console.WriteLine("Robot speech views: admission, offline promotion, active playback, playback allocation and lease lifetimes passed.");
         }
 
         private static void Admission()
@@ -124,6 +125,36 @@ namespace TopiaForge.ModManager.Tests
             rig.World.Frames(5);
             Check(call.IsCompletedSuccessfully && !call.Result.Succeeded,
                 "revocation keeps the existing failure result for interrupted playback");
+        }
+
+        private static void PlaybackAllocation()
+        {
+            using var rig = new RobotSpeechRig(2);
+            var hiddenGuest = rig.Guests[0];
+            var visibleGuest = rig.Guests[1];
+            using var hostView = new View(rig.Host);
+            using var hiddenView = new View(hiddenGuest);
+            using var visibleView = new View(visibleGuest);
+            using var guestHide = Hide(rig, hostView, hiddenGuest);
+            var call = rig.Robot.SayAsync("A steady line while one listener is hidden.");
+            rig.World.Frames(8);
+            var speech = rig.World.Host.World.Speech;
+            Check(speech.ActiveCount == 1 && rig.Canonical.SpeechPlays == 1 && visibleGuest.Body.SpeechPlays == 1
+                && hiddenGuest.Body.SpeechPlays == 0, "the host and the visible guest play the line while a hide lease exists");
+
+            // Every frame of a playing line rechecks the host's own copy and each pending listener against the view.
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("robot speech playback with a hide lease",
+                () => speech.Run(0), 10000, 200);
+            Check(allocated == 0, "a steady playing line rechecks its listeners without allocating; measured " + allocated + " bytes");
+            Check(speech.ActiveCount == 1 && !call.IsCompleted && !visibleGuest.Body.SpeechTokens.Single().IsCancellationRequested,
+                "the measured frames leave the line playing for the visible guest");
+
+            rig.Log.Clear();
+            using var visibleHide = Hide(rig, hostView, visibleGuest);
+            speech.Run(0);
+            var cancelled = rig.Log.Where(packet => packet.Payload[1] == RobotSpeechWire.Cancel).ToArray();
+            Check(cancelled.Length == 1 && cancelled[0].To.Equals(visibleGuest.Peer.Control.Id),
+                "a hide added during playback reaches the next speech frame");
         }
 
         private static void LeaseLifetimes()
