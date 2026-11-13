@@ -17,6 +17,8 @@ The default `auto` source tries the public build archive pinned by
 `--require-latest` is always an online public release gate, even with the bundled source. It verifies the latest
 manifest against both pinned platform archives and probes both endpoints before consulting a cache. Omit it for an
 offline or bundled-only restore.
+A dropped connection or time-out on the manifest request is retried twice, after 2 and 5 seconds; an HTTP error
+status fails at once.
 
 ## Environment contract
 

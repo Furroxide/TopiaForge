@@ -167,8 +167,11 @@ jobs:
 
       - name: Install managed-reference archive dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
