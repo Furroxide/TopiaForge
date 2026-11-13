@@ -49,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
                 world.Content = new ModWorldContent { Kind = ModWorldContent.MapKind, Map = "courtyard" };
                 var published = new RuntimeDeclarationBinder(null!).Bind(package);
                 await published.Worlds[0].Create().LoadAsync(fixture, default);
-                Assert(service.Published == "courtyard", "published declaration uses the same internal provider seam");
+                Assert(service.Published == "courtyard" && service.DisplayName == world.Name, "published declaration carries its selected display name through the internal provider seam");
                 fixture.Transition = WorldLoadTransition.AdditiveArena;
                 var calls = service.Calls;
                 Assert((await published.Worlds[0].Create().LoadAsync(fixture, default)).ErrorCode == ModErrorCode.InvalidArgument && service.Calls == calls,
@@ -60,10 +60,10 @@ namespace TopiaForge.ModManager.Tests
         }
         private sealed class Service : IInternalMapWorldService
         {
-            internal OperationResult<byte[]>? Read; internal string? Published; internal int Calls;
+            internal OperationResult<byte[]>? Read; internal string? Published, DisplayName; internal int Calls;
             public async Task<OperationResult<IWorldInstance>> LoadAsync(IWorldLoadContext context, InternalMapWorldRequest request, CancellationToken token)
             {
-                Calls++; Published = request.PublishedId;
+                Calls++; Published = request.PublishedId; DisplayName = request.DisplayName;
                 if (request.ReadFile != null) Read = await request.ReadFile(token);
                 return OperationResult<IWorldInstance>.Failure(ModErrorCode.Unavailable, "Synthetic native boundary reached.");
             }

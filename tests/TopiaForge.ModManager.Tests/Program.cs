@@ -98,6 +98,11 @@ namespace TopiaForge.ModManager.Tests
                 try { MultiplayerPresentationTests.Run(); PresentationRuntimeTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
+            if (args.Length == 1 && args[0] == "--map-notice-broadcast")
+            {
+                try { PresentationRuntimeTests.RunMapNotices(); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+            }
             if (args.Length == 1 && args[0] == "--launch-session-contract")
             {
                 LaunchSessionFixtureTests.Run(FindRepoRoot());

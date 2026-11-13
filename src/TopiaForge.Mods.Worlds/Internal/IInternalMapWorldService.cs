@@ -19,12 +19,19 @@ namespace TopiaForge.Mods.Internal
         InternalMapIdentity? Identity { get; }
         ReadOnlyMemory<byte> PackedMap { get; }
     }
+    /// <summary>First-party plain-text notices; implementations disable rich-text parsing.</summary>
+    internal interface IInternalMapNoticeUi
+    {
+        OperationResult<bool> ShowMapNotice(string text, UiTone tone);
+    }
+
     internal sealed class InternalMapWorldRequest
     {
         internal InternalMapWorldRequest(string? publishedId, string? sceneId,
-            Func<CancellationToken, Task<OperationResult<byte[]>>>? readFile, string? packagePath = null)
-        { PublishedId = publishedId; SceneId = sceneId; ReadFile = readFile; PackagePath = packagePath; }
+            Func<CancellationToken, Task<OperationResult<byte[]>>>? readFile, string? packagePath = null, string? displayName = null)
+        { PublishedId = publishedId; SceneId = sceneId; ReadFile = readFile; PackagePath = packagePath; DisplayName = displayName; }
         internal string? PublishedId { get; }
+        internal string? DisplayName { get; }
         internal string? PackagePath { get; }
         internal string? SceneId { get; }
         internal Func<CancellationToken, Task<OperationResult<byte[]>>>? ReadFile { get; }

@@ -24,6 +24,7 @@ namespace TopiaForge.ModManager.Tests
             try
             {
                 References();
+                await MapStoreReviewTests.RunAsync(Path.Combine(root, "review"));
                 await RevalidationAndTrust(Path.Combine(root, "cache"));
                 CacheBound(Path.Combine(root, "bound"));
                 SharedContentRetention(Path.Combine(root, "shared"));

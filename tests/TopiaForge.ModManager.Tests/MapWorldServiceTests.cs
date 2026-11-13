@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -9,7 +10,7 @@ using static TopiaForge.ModManager.Tests.MapDocumentTests;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal static class MapWorldServiceTests
+    internal static partial class MapWorldServiceTests
     {
         internal static async Task AuthoredReadinessAsync()
         {
@@ -56,6 +57,7 @@ namespace TopiaForge.ModManager.Tests
                 await InvalidSpawn(root);
                 await PrivateNativeFailure(root);
                 await CacheFailureRecovery();
+                await CacheWarningOnce(root);
                 await PendingPreparationDrains(root);
                 await CleanupFailureAfterCancellation(root);
                 await LoreAwaiter();
@@ -153,18 +155,23 @@ namespace TopiaForge.ModManager.Tests
                 File.WriteAllText(cachePath, "A file cannot be used as a cache directory.");
                 foreach (var cleanupFails in new[] { false, true })
                 {
-                    using var fixture = Fixture(); var backend = new Backend();
+                    using var fixture = Fixture();
+                    using var cancellation = new CancellationTokenSource();
+                    var backend = new Backend { OnPrepare = cleanupFails ? cancellation.Cancel : null };
                     fixture.Native.ThrowOnDispose = cleanupFails;
                     using var service = new MapWorldService(new MapCache(cachePath), new PublishedBytes(), () => backend);
-                    var result = await service.LoadAsync(fixture, new InternalMapWorldRequest("example", "scene", null), default);
-                    Assert(result.ErrorCode == ModErrorCode.External && backend.Imported == 0 && fixture.Native.DisposeCount == 1,
-                        "cache failure refuses before import and attempts cleanup");
-                    Assert(cleanupFails
-                        ? result.ErrorMessage.Contains("cleaned up") && result.ErrorMessage.Contains("restart")
-                        : result.ErrorMessage.Contains("disk space"),
-                        "cache failure retains disk recovery unless cleanup also fails");
-                    Assert(!result.ErrorMessage.Contains("native cleanup failed") && !result.ErrorMessage.Contains(cachePath),
-                        "recovery guidance hides native and local filesystem details");
+                    var pending = service.LoadAsync(fixture, new InternalMapWorldRequest("example", "scene", null, displayName: "Selected world"), cancellation.Token);
+                    if (!cleanupFails) fixture.Native.Succeed();
+                    var result = await pending;
+                    Assert(cleanupFails ? result.ErrorCode == ModErrorCode.External && result.ErrorMessage.Contains("restart")
+                        : result.Succeeded && backend.Imported == 1,
+                        "cache failure permits validated in-memory play without hiding a subsequent cleanup fault");
+                    var warnings = fixture.Fake.Logger.Entries.Where(entry => entry.Level == TopiaForge.Mods.Testing.CapturedLogLevel.Warning).ToArray();
+                    Assert(warnings.Length == 1 && warnings[0].Message.Contains("offline copy")
+                        && !warnings[0].Message.Contains(cachePath) && !warnings[0].Message.Contains("://"),
+                        "cache-save warning is actionable, bounded to one notice and hides local details");
+                    if (result.Succeeded) result.Value!.Dispose();
+                    Assert(fixture.Native.DisposeCount == 1, "success disposal and failed cancellation cleanup retain native ownership");
                 }
             }
             finally { directory.Delete(true); }
