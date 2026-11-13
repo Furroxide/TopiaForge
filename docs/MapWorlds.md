@@ -34,7 +34,8 @@ wait at most 5 seconds when a verified copy exists (30 seconds on first play). A
 200 response with a cached predecessor gets a separate 30-second body deadline under the unchanged
 8 MiB limit. First play retains its original 30-second total deadline, including headers and body.
 Transport failures, deadline expiry, 408, 429 and 5xx responses may replay a verified saved copy;
-401, 403 and other non-transient refusals do not bypass access decisions through the cache.
+A 401, 403 or other non-transient refusal stops an online host from playing the map; a saved copy
+still plays offline and in a host's session, where followers use the host's copy.
 A validated download can play from memory when saving fails; a sanitized warning explains
 how to restore offline availability. Offline notices show the selected world's bounded name
 as plain text and distinguish a slow service from an unreachable or temporarily busy one.
