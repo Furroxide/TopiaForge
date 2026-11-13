@@ -96,7 +96,7 @@ namespace TopiaForge.RobotKit
                     selected = new RobotComposedScene(world, state, host, config, sceneRoot, mapRoot, project, entity);
                 }
                 notPresent = selected == null;
-                return selected == null ? Refuse(state, RobotComposedRefusal.NotPresent) : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.IsCurrent);
+                return selected == null ? Refuse(state, RobotComposedRefusal.NotPresent) : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.AdmitsSpawns);
             }
             catch (Exception)
             {
@@ -142,6 +142,8 @@ namespace TopiaForge.RobotKit
         {
             return currentness.IsCurrent();
         }
+
+        private bool AdmitsSpawns() => currentness.AdmitsSpawns();
 
         private static bool CanSpawn(WorldSessionPhase phase) => phase == WorldSessionPhase.StartingMode || phase == WorldSessionPhase.Running;
 

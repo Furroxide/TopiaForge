@@ -7,7 +7,8 @@ using UnityEngine;
 namespace TopiaForge.RobotKit
 {
     // Verified publications cache their native identities. Unity lifetime is checked every frame,
-    // and incomplete samples are retried during a short grace period.
+    // and incomplete samples are retried during a short grace period. A candidate that stays unverified
+    // past the grace period stops constructing; its live actors keep running until a definite change.
     internal sealed class RobotComposedCurrentness
     {
         private const double VerificationGraceSeconds = 2;
@@ -20,7 +21,7 @@ namespace TopiaForge.RobotKit
         private readonly Func<object, object?> readConfig, readSceneRoot, readMapRoot;
         private WorldSessionSnapshot? verified;
         private double? verifyBy;
-        private bool retired;
+        private bool retired, expired;
 
         internal RobotComposedCurrentness(Func<WorldSessionSnapshot?> world, WorldSessionSnapshot state,
             Component host, object config, object sceneRoot, Transform mapRoot)
@@ -34,7 +35,11 @@ namespace TopiaForge.RobotKit
             verified = state;
         }
 
-        internal bool IsVerified => !retired && verified != null && ReferenceEquals(verified, world());
+        internal bool IsVerified => !retired && !expired && verified != null && ReferenceEquals(verified, world());
+
+        // Catalogue eligibility. Live actors poll IsCurrent instead, so a verification time-out
+        // removes the candidate without destroying robots that are already running.
+        internal bool AdmitsSpawns() => IsCurrent() && !expired;
 
         internal void RequireVerified()
         {
@@ -76,8 +81,12 @@ namespace TopiaForge.RobotKit
                 || (currentMapRoot != null && !ReferenceEquals(currentMapRoot, mapRoot)))
                 return Retire(RobotComposedRetirement.NativeIdentityChanged);
 
-            if (verifyBy is double deadline && Time.unscaledTimeAsDouble >= deadline)
-                return Retire(RobotComposedRetirement.VerificationTimedOut);
+            if (!expired && verifyBy is double deadline && Time.unscaledTimeAsDouble >= deadline)
+            {
+                expired = true;
+                verifyBy = null;
+                RobotKitDiagnostics.ReportComposedRetirement(original, RobotComposedRetirement.VerificationTimedOut);
+            }
             if (currentConfig != null && currentSceneRoot != null && currentMapRoot != null)
             {
                 verified = state;
@@ -86,7 +95,7 @@ namespace TopiaForge.RobotKit
             else
             {
                 verified = null;
-                verifyBy ??= Time.unscaledTimeAsDouble + VerificationGraceSeconds;
+                if (!expired) verifyBy ??= Time.unscaledTimeAsDouble + VerificationGraceSeconds;
             }
             return true;
         }

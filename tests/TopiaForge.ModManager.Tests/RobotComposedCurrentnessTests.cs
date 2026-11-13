@@ -19,7 +19,8 @@ namespace TopiaForge.ModManager.Tests
                 .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.Text == name).ToFullString();
             // Compile the complete production guard, the actual scene dispatch and actor Update.
             // Only Unity/native objects and immutable observation data are stubbed.
-            var source = Contract.Replace("/* scene current */", Method("RobotComposedScene.cs", "IsCurrent"))
+            var source = Contract.Replace("/* scene current */", Method("RobotComposedScene.cs", "IsCurrent")
+                    + Method("RobotComposedScene.cs", "AdmitsSpawns"))
                 .Replace("/* update */", Method("RobotComposedLifetime.cs", "Update"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(p => !Path.GetFileName(p).StartsWith("UnityEngine", StringComparison.Ordinal)
@@ -96,6 +97,7 @@ namespace TopiaForge.RobotKit {
   internal RobotComposedCurrentness currentness=null!;
   /* scene current */
   internal bool Current() => IsCurrent();
+  internal bool Admits() => AdmitsSpawns();
  }
  internal class RobotComposedLifetime {
   internal GameObject? Actor=new(); internal Func<bool>? Current; internal bool Disposed;
@@ -192,15 +194,31 @@ namespace TopiaForge.RobotKit {
    rig.Actor.Frame();
    Check(!rig.Actor.Disposed && RobotKitDiagnostics.RetirementCount==reports,
     "incomplete snapshots keep actors before the original deadline");
+   Check(rig.Scene.Admits(),"the candidate admits spawns until its deadline");
    Time.unscaledTimeAsDouble=102;
    rig.Actor.Frame();
-   Check(rig.Actor.Disposed && !rig.Scene.currentness.IsVerified &&
-    RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut,
-    "a new publication cannot postpone retirement at the exact deadline");
+   Check(!rig.Actor.Disposed && !rig.Scene.currentness.IsVerified && !rig.Scene.Admits() &&
+    RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut && RobotKitDiagnostics.RetirementCount==reports+1,
+    "a new publication cannot postpone the deadline, which stops spawns and keeps the live actor");
+   Time.unscaledTimeAsDouble=500;
+   for(var i=0;i<10;i++) rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && RobotKitDiagnostics.RetirementCount==reports+1,
+    "a lasting incomplete sample keeps the live actor and reports the time-out once");
    rig.Root.Value=rig.Map;
-   rig.Publish();
-   Check(!rig.Scene.currentness.IsCurrent() && RobotKitDiagnostics.RetirementCount==reports+1,
-    "restored identity cannot revive the retired candidate or repeat its diagnostic");
+   rig.Publish(); rig.Actor.Frame();
+   var reads=rig.Host.ConfigReads; rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && rig.Scene.currentness.IsCurrent() && !rig.Scene.Admits() && !rig.Scene.currentness.IsVerified
+    && rig.Host.ConfigReads==reads && RobotKitDiagnostics.RetirementCount==reports+1,
+    "restored identity caches the live actor but cannot revive spawning or repeat its diagnostic");
+   rig.Host.Config=new Config(); rig.Publish(); rig.Actor.Frame();
+   Check(rig.Actor.Disposed && RobotKitDiagnostics.Retirement==RobotComposedRetirement.NativeIdentityChanged,
+    "a definite replacement after the time-out still retires the live actor");
+   var failing=new Rig(); failing.Publish(); failing.Root.Value=null; failing.Actor.Frame();
+   Time.unscaledTimeAsDouble=503; failing.Actor.Frame();
+   Check(!failing.Actor.Disposed && !failing.Scene.Admits(),"a second candidate times out on its own deadline");
+   failing.Publish(); failing.Host.ThrowConfig=true; failing.Actor.Frame();
+   Check(failing.Actor.Disposed && RobotKitDiagnostics.Retirement==RobotComposedRetirement.NativeIdentityReadFailed,
+    "a throwing getter after the time-out still retires the live actor");
   }
 
   private static void RecoveryResetsGrace() {
@@ -217,8 +235,9 @@ namespace TopiaForge.RobotKit {
    Time.unscaledTimeAsDouble=203.5;
    rig.Host.Root=rig.Root;
    rig.Actor.Frame();
-   Check(rig.Actor.Disposed && RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut,
-    "restoration first observed at the deadline requires a fresh candidate");
+   Check(!rig.Actor.Disposed && rig.Scene.currentness.IsCurrent() && !rig.Scene.Admits()
+    && RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut,
+    "restoration first observed at the deadline keeps the actor and requires a fresh candidate for spawns");
   }
 
   private static void GetterFailureRetires() {
