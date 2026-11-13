@@ -27,6 +27,9 @@ internal static class WorldViewLifetimeRefreshTests
         Reconnect(ReconnectCase.GraceExpiry);
         Reconnect(ReconnectCase.LateJoiner);
         Reconnect(ReconnectCase.LateJoinerHeldBack);
+        Reconnect(ReconnectCase.UnreadableFirstView);
+        Reconnect(ReconnectCase.WorldChange);
+        Reconnect(ReconnectCase.SessionReplaced);
         Console.WriteLine("Engine lifetime world-view refresh and cached references passed.");
     }
 
@@ -36,11 +39,12 @@ internal static class WorldViewLifetimeRefreshTests
     // other case keeps the subject sending, so its first pose after the rejoin races the view refresh.
     // ViewerLinkLoss cuts and restores the observer's own link, RootLostInGrace destroys the subject's roots while
     // they are away, GraceExpiry lets them leave and join again, and LateJoiner adds a viewer after the hide. The
-    // HeldBack variants hold the host's views back, so the subject's poses arrive first.
+    // HeldBack variants hold the host's views back, so the subject's poses arrive first. UnreadableFirstView spoils a
+    // late joiner's first view; WorldChange and SessionReplaced move the observer to a world or session with no view.
     private enum ReconnectCase
     {
         Normal, Quiet, PartialBaseline, Cache, ReplacementAvatar, MixedRoster, ViewerLinkLoss, RootLostInGrace, RootLostHeldBack,
-        GraceExpiry, LateJoiner, LateJoinerHeldBack
+        GraceExpiry, LateJoiner, LateJoinerHeldBack, UnreadableFirstView, WorldChange, SessionReplaced
     }
 
     private static void Reconnect(ReconnectCase scenario)
@@ -143,6 +147,20 @@ internal static class WorldViewLifetimeRefreshTests
                 "a failed native hide keeps tracking the old hold until the retry replaces it");
             Check(observer.Log.ViewFailures == 1, "a failed view on a new avatar is reported once");
             watched = retried;
+            // A renderer that refuses a hold, rather than throwing, also leaves the new root undrawn until it is held,
+            // on the host and on the observer. The observer's earlier report was cleared by its success.
+            tolerateUndrawn = true;
+            host.Renderer.RefuseNextHide = true; observer.Renderer.RefuseNextHide = true;
+            host.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, original)).Destroyed = true;
+            observer.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, watched)).Destroyed = true;
+            Frames(20);
+            tolerateUndrawn = false;
+            original = Avatar(host, subject.Id); watched = Avatar(observer, subject.Id);
+            Check(!host.Renderer.RefuseNextHide && !observer.Renderer.RefuseNextHide
+                && host.Renderer.Hidden.Contains(original) && PresenceVisible(host, original)
+                && observer.Renderer.Hidden.Contains(watched) && PresenceVisible(observer, watched),
+                "a refused hold is asked again and the new roots are drawn only once held");
+            Check(host.Log.ViewFailures == 1 && observer.Log.ViewFailures == 2, "each new failure after a success is reported again");
         }
 
         if (scenario == ReconnectCase.ViewerLinkLoss)
@@ -214,12 +232,46 @@ internal static class WorldViewLifetimeRefreshTests
                 "a player who left and joined again is not hidden by the leases taken for their earlier admission");
             return;
         }
-        if (scenario == ReconnectCase.LateJoiner || scenario == ReconnectCase.LateJoinerHeldBack)
+        if (scenario == ReconnectCase.WorldChange)
+        {
+            // The observer loads another world first: it draws nobody there until the host's view of that world arrives.
+            watching = false;
+            observer.World = "world-two";
+            using var observerTwo = new Renderer(observer);
+            observer.Services.Views.Activate(new Binding(observerTwo, "world-two"));
+            // A further view of the host's old world does not count for the observer's new one.
+            privateView.Dispose();
+            Frames(60);
+            Check(observer.Presence.TryGetPose(subject.Id, out _) && !observer.Presence.TryGetAvatar(subject.Id, out _),
+                "the observer draws nobody in its new world before the host's view of that world");
+            host.World = "world-two";
+            using var hostTwo = new Renderer(host);
+            host.Services.Views.Activate(new Binding(hostTwo, "world-two"));
+            Frames(60);
+            Check(AvatarShown(observer, Avatar(observer, subject.Id)), "the host's view of the new world lets the observer draw again");
+            return;
+        }
+        if (scenario == ReconnectCase.SessionReplaced)
+        {
+            // A replaced session waits for its own first complete view, on the same link.
+            watching = false;
+            host.Control.Views!.SendLimit = 0;
+            engine.Host.ReplaceSession(new MultiplayerSessionId("next-round"), new SessionSeed(2));
+            Frames(60);
+            Check(observer.Control.SessionSnapshot.Id.Value == "next-round" && observer.Presence.TryGetPose(subject.Id, out _)
+                && !observer.Presence.TryGetAvatar(subject.Id, out _), "the observer draws nobody in the new session before its first view");
+            host.Control.Views.SendLimit = int.MaxValue;
+            Frames(60);
+            Check(AvatarShown(observer, Avatar(observer, subject.Id)), "the new session's first view lets the observer draw again");
+            return;
+        }
+        if (scenario == ReconnectCase.LateJoiner || scenario == ReconnectCase.LateJoinerHeldBack || scenario == ReconnectCase.UnreadableFirstView)
         {
             // Hide the subject from everyone, then a viewer joins: their first avatar of the subject is never drawn.
             // Held back, the late joiner has poses before any view and draws nobody until the first complete one.
             using var everyone = Lease(seam.WorldView(host.Renderer).Hide(original));
-            var heldBack = scenario == ReconnectCase.LateJoinerHeldBack;
+            var unreadable = scenario == ReconnectCase.UnreadableFirstView;
+            var heldBack = scenario == ReconnectCase.LateJoinerHeldBack || unreadable;
             if (heldBack) host.Control.Views!.SendLimit = 0;
             var late = engine.AddClient("late"); engine.Flush();
             using var lateNode = new Node(late.Engine, engine);
@@ -230,7 +282,21 @@ internal static class WorldViewLifetimeRefreshTests
                 Check(lateNode.Presence.TryGetPose(subject.Id, out _) && !lateNode.Presence.TryGetAvatar(subject.Id, out _),
                     "the late joiner has the subject's poses and draws nobody before the first complete view");
                 host.Control.Views!.SendLimit = int.MaxValue;
-                Frames(30);
+                if (unreadable)
+                {
+                    // The first message the late joiner gets cannot be read: it waits, says so once, and the next link
+                    // brings a view it can read.
+                    Check(host.Control.Views.Send(new ArraySegment<byte>(new byte[] { 0xFF, 0xFF }), InternalSystemTarget.Only(lateNode.Id)).Succeeded,
+                        "the host sends one unreadable view message first");
+                    Frames(240);
+                    Check(!lateNode.Presence.TryGetAvatar(subject.Id, out _) && lateNode.Log.Unreadable == 1 && lateNode.Log.ViewWaits == 1,
+                        "an unreadable first view withholds the late joiner's avatars for that link and is reported once");
+                    engine.Network.Sever(late.Link); Frames(3);
+                    engine.Join(late.Engine, "late"); engine.Flush();
+                    Frames(60);
+                    Check(lateNode.Log.Unreadable == 1 && lateNode.Log.ViewWaits == 1, "recovery adds no further reports");
+                }
+                else Frames(30);
             }
             var seen = Avatar(lateNode, subject.Id);
             Check(PresenceVisible(lateNode, seen) && lateNode.Renderer.Hidden.Contains(seen),
@@ -470,11 +536,11 @@ internal static class WorldViewLifetimeRefreshTests
         public void Dispose() { Runtime.Disconnect(); Renderer.Dispose(); }
     }
 
-    private sealed class Binding(Renderer renderer) : IInternalWorldViewBinding
+    private sealed class Binding(Renderer renderer, string world = "world-one") : IInternalWorldViewBinding
     {
         private readonly Dictionary<string, IEntity> authored = new(StringComparer.Ordinal);
         internal void Add(IEntity entity) => authored.Add(entity.Id, entity);
-        public string WorldId => "world-one";
+        public string WorldId => world;
         public IInternalWorldViewRenderer Renderer => renderer;
         public bool TryNameAuthored(IEntity entity, out string scene, out string id)
         { scene = "scene"; id = entity.Id; return authored.TryGetValue(id, out var current) && ReferenceEquals(current, entity); }
@@ -487,6 +553,7 @@ internal static class WorldViewLifetimeRefreshTests
         internal int HideCalls;
         internal int ReleaseCalls;
         internal bool FailNextHide;
+        internal bool RefuseNextHide;
         public bool IsAlive { get; private set; } = true;
         public bool FogAvailable => true;
         public bool EnvironmentAvailable => true;
@@ -498,6 +565,7 @@ internal static class WorldViewLifetimeRefreshTests
         public OperationResult<IDisposable> Hide(IEntity entity)
         {
             if (FailNextHide) { FailNextHide = false; throw new InvalidOperationException("Simulated native hide failure."); }
+            if (RefuseNextHide) { RefuseNextHide = false; return OperationResult<IDisposable>.Failure(ModErrorCode.Unavailable, "Simulated refusal."); }
             if (!entity.IsAlive || !(owner.Binding.Owns(entity) || owner.Services.Views.IsCurrentAvatar(entity, this)))
                 return OperationResult<IDisposable>.Failure(ModErrorCode.Unavailable, "Target is not current.");
             HideCalls++; Hidden.Add(entity); return OperationResult<IDisposable>.Success(new Hold(this, entity));
@@ -519,7 +587,14 @@ internal static class WorldViewLifetimeRefreshTests
     {
         public void Info(string message) { }
         internal int ViewFailures;
-        public void Warn(string message) { if (message.Contains("world view could not be applied")) ViewFailures++; }
+        internal int Unreadable;
+        internal int ViewWaits;
+        public void Warn(string message)
+        {
+            if (message.Contains("could not hold a new avatar")) ViewFailures++;
+            if (message.Contains("could not be read")) Unreadable++;
+            if (message.Contains("not drawn until the host's world view arrives")) ViewWaits++;
+        }
         public void Error(string message) => throw new InvalidOperationException(message);
     }
 }

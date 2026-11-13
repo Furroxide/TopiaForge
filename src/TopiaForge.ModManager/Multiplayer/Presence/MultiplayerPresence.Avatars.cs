@@ -21,6 +21,10 @@ namespace TopiaForge.ModManager
         private int shownVersion = -1;
         private bool avatarFailureLogged;
         private bool bodyFailureLogged;
+        // When remote players began waiting for the host's first world view, and whether that wait was reported.
+        private long viewWaitSinceMicros = -1;
+        private bool viewWaitLogged;
+        internal const long ViewWaitReportMicros = 3_000_000;
 
         public int NametagCount
         {
@@ -71,6 +75,7 @@ namespace TopiaForge.ModManager
             // A joined player draws nobody until the host's first complete world view has been applied, so a pose
             // that beats the view cannot show someone the view hides.
             var viewsReady = replication.Views.ReadyToDraw;
+            if (viewsReady) { viewWaitSinceMicros = -1; viewWaitLogged = false; }
             for (var index = 0; index < peers.Count; index++)
             {
                 var peer = peers[index];
@@ -84,7 +89,8 @@ namespace TopiaForge.ModManager
                 }
 
                 // Host poses can arrive while this peer still loads and settles its native player.
-                if (!canPresent || !peer.IsConnected || !peer.HasPose || buffer == null || !viewsReady) continue;
+                if (!canPresent || !peer.IsConnected || !peer.HasPose || buffer == null) continue;
+                if (!viewsReady) { ReportViewWait(nowMicros); continue; }
                 if (avatar == null)
                 {
                     if (nowMicros < peer.NextAvatarMicros) continue;
@@ -96,7 +102,7 @@ namespace TopiaForge.ModManager
                 // the root stays undrawn and the views are tried again next frame.
                 if (peer.AwaitingViews)
                 {
-                    if (!replication.Views.AvatarMade()) continue;
+                    if (!replication.Views.AvatarMade(avatar.Entity)) continue;
                     peer.AwaitingViews = false;
                 }
 
@@ -136,6 +142,15 @@ namespace TopiaForge.ModManager
             peer.FedFeet = feet;
             peer.FedMicros = hostMicros;
             buffer.Add(new NetTransformSample(hostMicros, feet, NetQuantization.DequantizeRotation(peer.Rotation), NetQuantization.DequantizeVelocity(peer.Velocity)), nowMicros);
+        }
+
+        private void ReportViewWait(long nowMicros)
+        {
+            if (viewWaitSinceMicros < 0) viewWaitSinceMicros = nowMicros;
+            if (viewWaitLogged || nowMicros - viewWaitSinceMicros < ViewWaitReportMicros) return;
+            viewWaitLogged = true;
+            Log.Warn("Multiplayer: other players are not drawn until the host's world view arrives; none has arrived for "
+                + ViewWaitReportMicros / 1_000_000 + " s.");
         }
 
         private RemotePlayerAvatar? MakeAvatar(PresencePeer peer, long nowMicros)

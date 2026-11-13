@@ -48,6 +48,13 @@ namespace TopiaForge.ModManager
         internal VisionFog? FogFor(string? player)
         { var value = ledger.FogFor(player); return value.Distance == 0 ? (VisionFog?)null : VisionFog.Radius(value.Distance, (FogTint)value.Tint); }
         internal IEntity[] HiddenFor(string? player) => ledger.HiddenFor(player).ToArray();
+        // Whether a lease for the local viewer names a target that resolves to the object now.
+        internal bool Wants(IEntity entity)
+        {
+            if (disposed || !renderer.IsAlive) return false;
+            foreach (var target in ledger.HiddenFor(localPlayer())) if (ReferenceEquals(resolve(target), entity)) return true;
+            return false;
+        }
         // Whether one of this view's native holds is on the object right now.
         internal bool HoldsEntity(IEntity entity)
         {
@@ -108,7 +115,8 @@ namespace TopiaForge.ModManager
                     var entity = resolve(target);
                     if (entity == null) { waiting.Add(target); continue; }
                     var result = renderer.Hide(entity);
-                    if (!result.TryGetValue(out var hold)) return OperationResult<bool>.Failure(result.ErrorCode, result.ErrorMessage);
+                    // A refused hold waits like an unresolved target, so the next refresh asks the renderer again.
+                    if (!result.TryGetValue(out var hold)) { waiting.Add(target); return OperationResult<bool>.Failure(result.ErrorCode, result.ErrorMessage); }
                     hidden.Add(target, new Hidden(entity, hold));
                 }
             var nextEnvironment = ledger.EnvironmentFor(player);
