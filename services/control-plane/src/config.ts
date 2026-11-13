@@ -50,7 +50,10 @@ export interface Config {
 
 /** Minutes between scheduled relay-spend measurements. The Worker's cron is built from it (ACTIVITY_CRON). */
 export const MEASUREMENT_INTERVAL_MINUTES = 5;
-/** Failed measurements trip the kill switch after three hours of them by default, whatever the interval. */
+/**
+ * Failed measurements trip the kill switch after three hours of them by default, whatever the interval. It is also
+ * the shortest window accepted: a shorter configured value falls back to it, and only "0" turns the trip off.
+ */
 export const DEFAULT_MEASUREMENT_FAILURE_MINUTES = 180;
 
 const GIGABYTE = 1_000_000_000;
@@ -59,7 +62,11 @@ const KEY_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 const ACCOUNT_PATTERN = /^[0-9a-f]{32}$/;
 
 export function readConfig(env: Env): Config {
-  const measurementFailureMinutes = integer(env.TURN_MEASUREMENT_FAILURE_MINUTES, DEFAULT_MEASUREMENT_FAILURE_MINUTES, 0, 2880);
+  const configuredFailureMinutes = integer(env.TURN_MEASUREMENT_FAILURE_MINUTES, DEFAULT_MEASUREMENT_FAILURE_MINUTES, 0, 2880);
+  const measurementFailureMinutes =
+    configuredFailureMinutes === 0 || configuredFailureMinutes >= DEFAULT_MEASUREMENT_FAILURE_MINUTES
+      ? configuredFailureMinutes
+      : DEFAULT_MEASUREMENT_FAILURE_MINUTES;
   const limits: RelayLimits = {
     credentialTtlSeconds: integer(env.TURN_CREDENTIAL_TTL_SECONDS, 600, 60, 3600),
     ipMintsPerHour: integer(env.TURN_IP_MINTS_PER_HOUR, 20, 1, 1000),

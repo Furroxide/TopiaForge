@@ -27,7 +27,12 @@ describe("configuration", () => {
     expect(config.limits).toMatchObject({ credentialTtlSeconds: 600, ipMintsPerHour: 20, ipMintsPerMinute: 5, ticketMaxMints: 36, measurementFailureMinutes: 180, measurementFailureLimit: 36 });
     expect(readConfig(env({ TURN_CREDENTIAL_TTL_SECONDS: "3600" })).limits.credentialTtlSeconds).toBe(3600);
     expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "0" })).limits.measurementFailureLimit).toBe(0);
-    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "7" })).limits.measurementFailureLimit).toBe(2);
+    // Only "0" or a window of at least three hours is accepted; anything shorter falls back to three hours.
+    for (const short of ["1", "7", "15", "179"]) {
+      expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: short })).limits, short).toMatchObject({ measurementFailureMinutes: 180, measurementFailureLimit: 36 });
+    }
+    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "181" })).limits).toMatchObject({ measurementFailureMinutes: 181, measurementFailureLimit: 37 });
+    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "2880" })).limits.measurementFailureMinutes).toBe(2880);
     expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "2881" })).limits.measurementFailureMinutes).toBe(180);
     expect(readConfig(env({ ENVIRONMENT: "Prod!" })).environment).toBe("development");
   });
@@ -57,12 +62,15 @@ describe("configuration", () => {
     // last good measurement. A shorter interval must raise the count, not shorten the time to trip.
     const THREE_HOURS_IN_MINUTES = 180;
     expect(ACTIVITY_CRON).toBe(`*/${MEASUREMENT_INTERVAL_MINUTES} * * * *`);
+    // A step cron fires evenly only when its step divides the hour: */7 would run at :56 and again at :00.
+    expect(60 % MEASUREMENT_INTERVAL_MINUTES).toBe(0);
     const sections = wranglerToml.split(/^\[env\.(?:staging|production)\]$/m);
     expect(sections).toHaveLength(3);
     const configured: [string, Config][] = [["default", readConfig(env({}))]];
     for (const [index, text] of sections.entries()) {
       const minutes = /^TURN_MEASUREMENT_FAILURE_MINUTES = "([^"]*)"$/m.exec(text)?.[1];
       expect(minutes, `wrangler.toml section ${index}`).toBeDefined();
+      expect(Number(minutes), `wrangler.toml section ${index}`).toBeGreaterThanOrEqual(THREE_HOURS_IN_MINUTES);
       configured.push([`wrangler.toml section ${index}`, readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: minutes! }))]);
     }
     for (const [label, config] of configured) {

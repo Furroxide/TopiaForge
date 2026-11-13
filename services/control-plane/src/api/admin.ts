@@ -87,6 +87,7 @@ function stateJson(context: RequestContext, flags: Flags, spend: SpendReport): J
       measuredAt: spend.measurement.measuredAt,
       measurementFailures: spend.measurement.failures,
       lastMeasurementFailureAt: spend.measurement.lastFailureAt,
+      measurementFailingSince: spend.measurement.failingSince ?? null,
       activeCredentials: spend.activeCredentials,
       pendingRevocations: spend.pendingRevocations,
       dailyCapBytes: spend.dailyCapBytes,

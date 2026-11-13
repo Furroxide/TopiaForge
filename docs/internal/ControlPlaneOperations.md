@@ -318,9 +318,13 @@ The five-minute cron trips the kill switch itself, with a reason in admin state:
 | `spend-cap` | Today's measured relay egress reached `TURN_DAILY_CAP_GB` |
 | `measurement-failed` | Every measurement failed for `TURN_MEASUREMENT_FAILURE_MINUTES` (180) after the last good one: 36 in a row at the five-minute interval |
 
-The limit is a duration, and the service turns it into a count at the measurement interval, so a change of interval
-does not shorten the time to trip. Admin state reports both as `measurementFailureMinutes` and
-`measurementFailureLimit`. An automatic trip stays engaged until you release it: nothing re-enables relay on its own.
+The limit is a duration, and the service turns it into a count at the measurement interval. The switch trips only
+when both hold: at least that many measurements have failed in a row, and the time since the last good measurement
+(counted from no earlier than one interval before the first failure) has reached the duration. Extra measurements
+you run with `POST /v1/admin/spend/measure` therefore add to the count but cannot trip the switch sooner. Values from
+1 to 179 fall back to 180; only `0` turns the trip off. Admin state reports `measurementFailureMinutes`,
+`measurementFailureLimit` and, while measurements fail, `measurementFailingSince`. An automatic trip stays engaged
+until you release it: nothing re-enables relay on its own.
 Failing closed on a failed measurement is deliberate, because the relay has no spend cap of its own. Setting
 `TURN_MEASUREMENT_FAILURE_MINUTES` to `0` disables that trip; do so only briefly, while fixing the analytics token.
 

@@ -319,6 +319,28 @@ describe("the kill switch", () => {
     expect((await spendState())["measurementFailures"]).toBe(36);
   });
 
+  it("is not tripped sooner by extra measurements an operator runs while measurement keeps failing", async () => {
+    const interval = MEASUREMENT_INTERVAL_MINUTES * 60;
+    const killSwitch = async () => (await admin("GET", "/v1/admin/state")).json["killSwitch"] as Record<string, unknown>;
+    await runCron();
+    const lastGood = seconds();
+    scenario.relay.failUsage = true;
+    // Two manual measurements after each of the first 24 cron runs: 72 failures within two hours.
+    for (let run = 1; seconds() - lastGood < 6 * 3600 && (await killSwitch())["engaged"] !== true; run++) {
+      scenario.clock.advance(interval);
+      await runCron();
+      if (run <= 24) {
+        for (let manual = 0; manual < 2; manual++) expect((await admin("POST", "/v1/admin/spend/measure")).status).toBe(200);
+      }
+      if ((await killSwitch())["engaged"] === true) break;
+      expect(seconds() - lastGood, `run ${run}`).toBeLessThan(3 * 3600);
+    }
+    expect(await killSwitch()).toMatchObject({ engaged: true, reason: "measurement-failed" });
+    expect(seconds() - lastGood).toBeGreaterThanOrEqual(3 * 3600);
+    expect(seconds() - lastGood).toBeLessThan(3 * 3600 + interval);
+    expect((await spendState())["measurementFailingSince"]).toBe(lastGood);
+  });
+
   it("revokes a credential whose mint was waiting on the provider when it engaged", async () => {
     const session = await host("in-flight-manual", 2);
     const held = await heldMint(session.serverId, "10.8.0.1");

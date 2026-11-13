@@ -51,7 +51,7 @@ export interface Env {
   readonly TURN_IP_MINTS_PER_HOUR?: string;
   readonly TURN_IP_MINTS_PER_MINUTE?: string;
   readonly TURN_TICKET_MAX_MINTS?: string;
-  /** Minutes of failed measurements in a row, from the last good one, that trip the kill switch; "0" never trips. */
+  /** Minutes of failed measurements, from the last good one, that trip the kill switch: "0" never trips, 180 to 2880. */
   readonly TURN_MEASUREMENT_FAILURE_MINUTES?: string;
   readonly FLAG_CACHE_SECONDS?: string;
 }
