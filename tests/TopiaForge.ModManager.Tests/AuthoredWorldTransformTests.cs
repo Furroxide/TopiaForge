@@ -146,14 +146,19 @@ namespace TopiaForge.ModManager.Tests
                 Near(rotated.Scale, plain.Scale, "rotated mirrored record retains axis signs");
                 Basis(rotated, new Vec3(0, -2 * sx, 0), new Vec3(3 * sy, 0, 0), new Vec3(0, 0, 4 * sz), "rotated reconstruction");
                 var grandchild = map.Entity("grandchild").WorldTransform;
-                Near(grandchild.Scale, new Vec3(-15 * sy, -12 * sx, 28 * sz), "multiple parents permute and cancel reflections");
+                // The child's Rz(90) is mirrored to Rz(90 * sx * sy) under its parent's reflection, so
+                // its world turn is Rz(180) or none; the signs follow that turn and keep the basis.
+                var turned = sx * sy == 1;
+                Near(grandchild.Rotation * new Vec3(1, 0, 0), new Vec3(turned ? -1 : 1, 0, 0), "mirrored turns compose");
+                Near(grandchild.Scale, turned ? new Vec3(-15 * sy, -12 * sx, 28 * sz) : new Vec3(15 * sy, 12 * sx, 28 * sz),
+                    "multiple parents permute and cancel reflections");
                 Basis(grandchild, new Vec3(15 * sy, 0, 0), new Vec3(0, 12 * sx, 0), new Vec3(0, 0, 28 * sz), "nested reconstruction");
             }
         }
         private static void NonAlignedReflectionAndZeroProjection()
         {
-            // Sx * Rz(30) has orthogonal columns but cannot be reconstructed with the
-            // preserved Rz(30) and diagonal scale. The complete basis still places children.
+            // Sx * Rz(30) has orthogonal columns: it is exactly Rz(-30) with scale (-2, 2, 2).
+            // The child's turn is mirrored by the parent's reflection before composing.
             var radians = Math.PI / 12;
             var rotation = new Quat(0, 0, (float)Math.Sin(radians), (float)Math.Cos(radians));
             var reflected = AuthoredAffine.From(Vec3.Zero, Quat.Identity, new Vec3(-2, 2, 2))
@@ -161,11 +166,32 @@ namespace TopiaForge.ModManager.Tests
             var sqrt3 = (float)Math.Sqrt(3);
             Near(reflected.X, new Vec3(-sqrt3, 1, 0), "noncommuting reflection X column");
             Near(reflected.Y, new Vec3(1, sqrt3, 0), "noncommuting reflection Y column");
-            Near(reflected.Pose.Scale, new Vec3(-2, 2, 2), "nonaligned projection signs");
-            Near(reflected.Pose.Rotation * new Vec3(1, 0, 0), new Vec3(sqrt3 / 2, 0.5f, 0), "composed rotation remains unchanged");
-            Near(reflected.Pose.Rotation * new Vec3(reflected.Pose.Scale.X, 0, 0), new Vec3(-sqrt3, -1, 0), "nonaligned TRS remains approximate");
+            Near(reflected.Pose.Scale, new Vec3(-2, 2, 2), "mirrored parent keeps its reflected axis");
+            Near(reflected.Pose.Rotation * new Vec3(1, 0, 0), new Vec3(sqrt3 / 2, -0.5f, 0), "child turn is mirrored to Rz(-30)");
+            Basis(reflected.Pose, reflected.X, reflected.Y, reflected.Z, "turned child under a mirrored parent");
             Near(reflected.Append(AuthoredAffine.From(new Vec3(1, 1, 0), Quat.Identity, new Vec3(1, 1, 1))).Position,
                 new Vec3(1 - sqrt3, 1 + sqrt3, 0), "nonaligned reflection retains full affine child position");
+            var turns = new[]
+            {
+                new Quat((float)Math.Sin(radians), 0, 0, (float)Math.Cos(radians)),
+                new Quat(0, (float)Math.Sin(radians), 0, (float)Math.Cos(radians)),
+                rotation,
+                AuthoredAffine.NormalizeRotation(new Quat(0.2f, -0.4f, 0.3f, 0.8f))
+            };
+            for (var mask = 1; mask < 8; mask++)
+            {
+                var signs = new Vec3((mask & 1) == 0 ? 1 : -1, (mask & 2) == 0 ? 1 : -1, (mask & 4) == 0 ? 1 : -1);
+                foreach (var parentTurn in new[] { Quat.Identity, turns[3] })
+                    foreach (var turn in turns)
+                    {
+                        // Uniform magnitudes keep every chain free of shear, so a TRS answer exists.
+                        var parent = AuthoredAffine.From(new Vec3(1, 2, 3), parentTurn, new Vec3(2 * signs.X, 2 * signs.Y, 2 * signs.Z));
+                        var child = parent.Append(AuthoredAffine.From(new Vec3(0, 1, 0), turn, new Vec3(3, -3, 3)));
+                        var grandchild = child.Append(AuthoredAffine.From(Vec3.Zero, turns[(mask + 1) % turns.Length], new Vec3(-1, 1, 1)));
+                        Basis(child.Pose, child.X, child.Y, child.Z, "mirrored parent " + mask + " turned child");
+                        Basis(grandchild.Pose, grandchild.X, grandchild.Y, grandchild.Z, "mirrored parent " + mask + " turned grandchild");
+                    }
+            }
             var perpendicular = new AuthoredAffine(Vec3.Zero, new Vec3(0, 2, 0), new Vec3(0, 0, 3), new Vec3(4, 0, 0), Quat.Identity);
             Near(perpendicular.Pose.Scale, new Vec3(2, 3, 4), "zero projections choose positive nonzero magnitudes on every axis");
         }

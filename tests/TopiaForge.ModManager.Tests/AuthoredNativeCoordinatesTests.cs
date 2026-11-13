@@ -74,7 +74,9 @@ namespace TopiaForge.ModManager.Tests
                     new AuthoredRecord("grandchild", "scene", "Grandchild", "child", null, null, grandchildTransform, AuthoredComponents.None) });
                 var poses = read(scene, value => AuthoredAffine.From(fake.ToWorld(value)), AuthoredAffine.From(fake.ToWorld(rootTransform)));
                 var pose = poses["grandchild"].Pose;
-                Near(pose.Scale, new Vec3(-15 * sy, -12 * sx, 28 * sz), "production import-root signs and reflection cancellation");
+                // The child's Rz(90) is mirrored to Rz(90 * sx * sy) under the reflected root (see AuthoredAffine).
+                Near(pose.Scale, sx * sy == 1 ? new Vec3(-15 * sy, -12 * sx, 28 * sz) : new Vec3(15 * sy, 12 * sx, 28 * sz),
+                    "production import-root signs and reflection cancellation");
                 Near(pose.Position, new Vec3(15 * sy, -24 * sx, 84 * sz), "production reflected import-root child position");
                 AuthoredWorldTransformTests.Basis(pose, new Vec3(15 * sy, 0, 0), new Vec3(0, 12 * sx, 0), new Vec3(0, 0, 28 * sz), "production reflected basis reconstruction");
                 Near(pose.Scale, fake.Entity("grandchild").WorldTransform.Scale, "production/fake signed scale parity");
