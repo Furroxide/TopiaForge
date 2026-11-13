@@ -140,15 +140,21 @@ void main() {
       }
     });
 
-    test('finishes an unclosed element within the budget', () {
+    test('scans an unclosed element in linear time', () {
       for (final name in const [
         'RobotopiaManagedDir',
         'TargetFramework',
         'PackageVersion',
         'Version',
       ]) {
-        final text = '<$name>${' ' * 1000}';
-        expect(withinBudget(() => firstElementText(text, name)), isNull);
+        expect(
+          expectLinear(
+            (scale) => '<$name>${' ' * (125 * scale)}',
+            (text) => firstElementText(text, name),
+            reason: name,
+          ),
+          isNull,
+        );
       }
     });
   });
@@ -216,7 +222,7 @@ void main() {
       }
     });
 
-    test('finishes many unterminated tags within the budget', () {
+    test('scans many unterminated tags in linear time', () {
       for (final name in const [
         'Project',
         'PropertyGroup',
@@ -224,8 +230,14 @@ void main() {
         'RestoreLockedMode',
         'TopiaForgeSafeProject',
       ]) {
-        final text = '<$name ' * 4000;
-        expect(withinBudget(() => firstStartTag(text, name)), isNull);
+        expect(
+          expectLinear(
+            (scale) => '<$name ' * (500 * scale),
+            (text) => firstStartTag(text, name),
+            reason: name,
+          ),
+          isNull,
+        );
       }
     });
   });
@@ -274,9 +286,14 @@ void main() {
       );
     });
 
-    test('finishes many unterminated tags within the budget', () {
-      final text = '${'<$name ' * 4000}>';
-      expect(withinBudget(() => firstTextElement(text, name)), isNull);
+    test('scans many unterminated tags in linear time', () {
+      expect(
+        expectLinear(
+          (scale) => '${'<$name ' * (500 * scale)}>',
+          (text) => firstTextElement(text, name),
+        ),
+        isNull,
+      );
     });
   });
 
@@ -331,10 +348,16 @@ void main() {
       );
     });
 
-    test('finishes unclosed strings within the budget', () {
-      final escapedQuotes = r'\"' * 20000;
-      for (final text in ['"$escapedQuotes', '"key" "$escapedQuotes']) {
-        expect(withinBudget(() => vdfQuotedPairs(text).toList()), isEmpty);
+    test('scans unclosed strings in linear time', () {
+      for (final prefix in ['"', '"key" "']) {
+        expect(
+          expectLinear(
+            (scale) => '$prefix${r'\"' * (2500 * scale)}',
+            (text) => vdfQuotedPairs(text).toList(),
+            reason: prefix,
+          ),
+          isEmpty,
+        );
       }
     });
   });
