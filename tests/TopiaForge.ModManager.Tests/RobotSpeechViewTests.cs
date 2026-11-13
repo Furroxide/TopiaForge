@@ -16,8 +16,9 @@ namespace TopiaForge.ModManager.Tests
             OfflineHideSurvivesPromotion();
             ActiveHide();
             PlaybackAllocation();
+            OfflineVerdictAfterPromotion();
             LeaseLifetimes();
-            Console.WriteLine("Robot speech views: admission, offline promotion, active playback, playback allocation and lease lifetimes passed.");
+            Console.WriteLine("Robot speech views: admission, offline promotion, active playback, playback allocation, offline verdicts and lease lifetimes passed.");
         }
 
         private static void Admission()
@@ -149,12 +150,53 @@ namespace TopiaForge.ModManager.Tests
             Check(speech.ActiveCount == 1 && !call.IsCompleted && !visibleGuest.Body.SpeechTokens.Single().IsCancellationRequested,
                 "the measured frames leave the line playing for the visible guest");
 
+            // A full speech system asks for 32 active lines, each for the host and up to 16 guests.
+            var views = rig.Host.Peer.Replication.Views;
+            var world = rig.Host.CurrentWorld!;
+            var speaker = rig.Canonical;
+            var viewers = new[] { rig.Host.Peer.Control.Id, hiddenGuest.Peer.Control.Id, visibleGuest.Peer.Control.Id }
+                .Concat(Enumerable.Range(0, 14).Select(index => new ParticipantId("listener-" + index))).ToArray();
+            var full = TopiaForge.TestSupport.AllocationProbe.Measure("robot speech verdicts for 32 lines and 17 listeners", () =>
+            {
+                for (uint line = 1; line <= 32; line++)
+                    foreach (var viewer in viewers) views.IsHiddenForSpeech(world, viewer, speaker, line);
+            }, 200, 20);
+            Check(full == 0, "verdicts for every line and listener stay cached; measured " + full + " bytes");
+
             rig.Log.Clear();
             using var visibleHide = Hide(rig, hostView, visibleGuest);
             speech.Run(0);
             var cancelled = rig.Log.Where(packet => packet.Payload[1] == RobotSpeechWire.Cancel).ToArray();
             Check(cancelled.Length == 1 && cancelled[0].To.Equals(visibleGuest.Peer.Control.Id),
                 "a hide added during playback reaches the next speech frame");
+        }
+
+        private static void OfflineVerdictAfterPromotion()
+        {
+            uint Adopted(RobotSpeechRig rig) =>
+                rig.Host.Peer.Replication.TryCreateRef(rig.Robot, out var reference) && NetworkWorldIds.TryParse(reference.Value, out var id)
+                    ? id.Value : 0;
+            uint expected;
+            using (var probe = new RobotSpeechRig(players: 0, open: false))
+            {
+                probe.World.OpenToMultiplayer();
+                expected = Adopted(probe);
+            }
+            Check(expected != 0, "an identical rig adopts the robot under a network id");
+
+            using var rig = new RobotSpeechRig(players: 0, open: false);
+            using var hostView = new View(rig.Host);
+            var result = rig.Owner.Seam.WorldView(hostView).Hide(rig.Robot);
+            Check(result.Succeeded, result.ErrorMessage);
+            using var hide = result.Value!;
+            var views = rig.Host.Peer.Replication.Views;
+            var viewer = rig.Host.Peer.Control.Id;
+            Check(!views.IsHiddenForSpeech(rig.Host.CurrentWorld!, viewer, rig.Canonical, expected),
+                "offline, the shared lease has no network name to match the speaker");
+            rig.World.OpenToMultiplayer();
+            Check(Adopted(rig) == expected, "hosting adopts the robot under the same network id");
+            Check(views.IsHiddenForSpeech(rig.Host.CurrentWorld!, viewer, rig.Canonical, expected),
+                "after hosting, the retained offline lease hides the adopted speaker");
         }
 
         private static void LeaseLifetimes()
