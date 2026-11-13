@@ -27,10 +27,12 @@ namespace TopiaForge.ModManager
         private float retry;
         // A playing line asks every frame for the host's own copy and for each pending listener. Each verdict is
         // kept until the leases change, so a steady line neither scans every lease nor allocates per frame.
-        private const int MaximumSpeechVerdicts = 256;
+        // The bound holds 32 active lines, each asked for the host and every guest, with room to spare.
+        private const int MaximumSpeechVerdicts = 1024;
         private readonly Dictionary<SpeechViewer, bool> speechVerdicts = new Dictionary<SpeechViewer, bool>();
         private WorldViewLeases? speechLeases;
         private long speechVersion;
+        private bool speechUnnamed;
         internal RuntimeWorldViews(MultiplayerReplication services) { this.services = services; }
         internal bool IsCurrentAvatar(IEntity entity, IInternalWorldViewRenderer renderer) =>
             binding != null && ReferenceEquals(binding.Renderer, renderer) && renderer.IsAlive
@@ -90,8 +92,9 @@ namespace TopiaForge.ModManager
         { channel?.Dispose(); channel = null; Reset(true); }
         public void RealmChanged(NetRealm previous, NetRealm next)
         {
-            // Opening a solo world to guests keeps its shared leases and native values.
-            if (previous == NetRealm.Offline && next == NetRealm.ListenHost) { deliveries.Clear(); return; }
+            // Opening a solo world to guests keeps its shared leases and native values. Their targets gain network
+            // names without a lease change, so speech verdicts are worked out again.
+            if (previous == NetRealm.Offline && next == NetRealm.ListenHost) { deliveries.Clear(); ForgetSpeechVerdicts(); return; }
             if (previous != next) Reset(true);
         }
         private void Reset(bool endLeases)
@@ -249,13 +252,20 @@ namespace TopiaForge.ModManager
             if (speechVerdicts.TryGetValue(key, out var hidden)) return hidden;
             // The lease can name a wrapper and may have been acquired offline, before its network ID
             // existed. Resolve it the same way as view projection.
+            speechUnnamed = false;
             hidden = leases.IsHiddenFor(player, (Views: this, Entity: entity, Id: entityId), static (target, speech) =>
-                ReferenceEquals(target, speech.Entity) || (speech.Id != 0 && speech.Views.TryName(target, out var name)
-                    && name.Kind == 2 && NetworkWorldIds.TryParse(name.Id, out var named) && named.Value == speech.Id));
+                ReferenceEquals(target, speech.Entity) || (speech.Id != 0 && speech.Views.NamesSpeaker(target, speech.Id)));
+            // A target without a network name can gain one without a lease change, so that verdict is not kept.
+            if (speechUnnamed) return hidden;
             // Bounded by the robots that speak and the players who hear them; a full table starts over.
             if (speechVerdicts.Count >= MaximumSpeechVerdicts) speechVerdicts.Clear();
             speechVerdicts.Add(key, hidden);
             return hidden;
+        }
+        private bool NamesSpeaker(IEntity target, uint id)
+        {
+            if (!TryName(target, out var name)) { speechUnnamed = true; return false; }
+            return name.Kind == 2 && NetworkWorldIds.TryParse(name.Id, out var named) && named.Value == id;
         }
         private void ForgetSpeechVerdicts() { speechVerdicts.Clear(); speechLeases = null; speechVersion = 0; }
         private ViewSnapshot Derive(string player)
