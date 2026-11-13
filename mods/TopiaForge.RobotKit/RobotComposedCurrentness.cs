@@ -19,7 +19,7 @@ namespace TopiaForge.RobotKit
         private readonly object config, sceneRoot;
         private readonly Transform mapRoot;
         private readonly Func<object, object?> readConfig, readSceneRoot, readMapRoot;
-        private WorldSessionSnapshot? verified;
+        private WorldSessionSnapshot? verified, sampled;
         private double? verifyBy;
         private bool retired, expired;
 
@@ -63,6 +63,8 @@ namespace TopiaForge.RobotKit
                 || mapRoot.gameObject.scene.handle != state.World.Scene.InstanceId)
                 return Retire(RobotComposedRetirement.NativeLifetimeEnded);
             if (ReferenceEquals(verified, state)) return true;
+            // After the time-out, an incomplete sample is read again only when a new publication arrives.
+            if (expired && ReferenceEquals(sampled, state)) return true;
 
             // Read all three: a null in one must not hide a definite replacement in another.
             object? currentConfig, currentSceneRoot, currentMapRoot;
@@ -95,7 +97,8 @@ namespace TopiaForge.RobotKit
             else
             {
                 verified = null;
-                if (!expired) verifyBy ??= Time.unscaledTimeAsDouble + VerificationGraceSeconds;
+                if (expired) sampled = state;
+                else verifyBy ??= Time.unscaledTimeAsDouble + VerificationGraceSeconds;
             }
             return true;
         }

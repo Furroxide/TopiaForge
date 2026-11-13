@@ -201,9 +201,17 @@ namespace TopiaForge.RobotKit {
     RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut && RobotKitDiagnostics.RetirementCount==reports+1,
     "a new publication cannot postpone the deadline, which stops spawns and keeps the live actor");
    Time.unscaledTimeAsDouble=500;
+   int expiredReads=rig.Host.ConfigReads, expiredRootReads=rig.Host.RootReads;
    for(var i=0;i<10;i++) rig.Actor.Frame();
    Check(!rig.Actor.Disposed && RobotKitDiagnostics.RetirementCount==reports+1,
     "a lasting incomplete sample keeps the live actor and reports the time-out once");
+   Check(rig.Host.ConfigReads==expiredReads && rig.Host.RootReads==expiredRootReads && !rig.Scene.Admits(),
+    "after the time-out an incomplete sample is not reread within one publication");
+   rig.Publish(); rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && rig.Host.ConfigReads==expiredReads+1 && rig.Host.RootReads==expiredRootReads+1,
+    "a new publication samples the native identities once more");
+   long expiredAllocated=TopiaForge.TestSupport.AllocationProbe.Measure("expired incomplete composed frames",()=>rig.Actor.Frame(),10000,200);
+   Check(expiredAllocated==0 && rig.Host.ConfigReads==expiredReads+1,"expired incomplete frames allocate nothing and read no getter");
    rig.Root.Value=rig.Map;
    rig.Publish(); rig.Actor.Frame();
    var reads=rig.Host.ConfigReads; rig.Actor.Frame();
