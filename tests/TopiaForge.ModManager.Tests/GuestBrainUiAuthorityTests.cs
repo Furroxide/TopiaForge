@@ -17,6 +17,40 @@ namespace TopiaForge.ModManager.Tests
         {
             RemoteDismissal();
             NestedCommandAndUi();
+            HostDecisionAfterGuestClick();
+        }
+
+        // The pattern docs/RobotKit.md documents: a guest's click only records a request, and host code that the
+        // gamemode registered outside every guest callback makes the Autonomous spawn.
+        private static void HostDecisionAfterGuestClick()
+        {
+            using var fixture = new Fixture();
+            using var mod = new TopiaForge.Mods.Testing.FakeModContext();
+            var gamemode = fixture.Rig.Host.Seam(ModExecutionContext.GamemodeServer);
+            IModScheduler scheduler = new NetScheduler(mod.Scheduler, gamemode);
+            var readyRequested = false;
+            OperationResult<IRobotAgent>? deferred = null, decided = null;
+            Check(scheduler.Every(TimeSpan.FromSeconds(0.1), () =>
+            {
+                if (!readyRequested) return;
+                readyRequested = false;
+                decided = fixture.SpawnAutonomous(gamemode);
+            }).Succeeded, "the gamemode registers its round timer while it starts");
+            var surface = fixture.HostUi.Player(fixture.Guest.Control.Id).Ui.CreateSurface(new UiSurfaceRequest(
+                "ready", "Round", "", content: new UiColumn(new UiButton("ready", "Ready", () =>
+                {
+                    readyRequested = true;
+                    scheduler.NextFrame(() => deferred = fixture.SpawnAutonomous(gamemode));
+                })))).Value!;
+            Check(fixture.Rig.Run(() => fixture.GuestUi.Ui.Surfaces.Count == 1), "ready button arrives");
+            ((UiButton)((UiColumn)fixture.GuestUi.Ui.Surfaces[0].Content!).Children[0]).Activated();
+            Check(fixture.Rig.Run(() => readyRequested), "the guest's click reaches the host callback");
+            mod.Scheduler.AdvanceFrame(TimeSpan.FromSeconds(0.1));
+            Check(deferred?.ErrorCode == ModErrorCode.NotAuthoritative,
+                "work the guest's callback schedules keeps the guest's origin");
+            Check(decided?.Succeeded == true && !readyRequested,
+                "host code registered outside the guest's callback spawns the Autonomous robot");
+            GC.KeepAlive(surface);
         }
 
         private static void RemoteDismissal()
@@ -169,6 +203,16 @@ namespace TopiaForge.ModManager.Tests
                 var dormantReplay = RobotReplicationWire.Spawn(((InternalSpawnDescriptor)dormantRecord.Description.Descriptor!).Payload).Request;
                 return new Observation(brain, talk, body.BrainCalls - brains, body.InteractionCalls - talks,
                     spawn, spawned, recorded, construction, replay, dormantBody.Request, dormantReplay);
+            }
+
+            internal OperationResult<IRobotAgent> SpawnAutonomous(RuntimeReplication seam)
+            {
+                var spawn = robots.Provider.Spawn(seam, new RobotAgentSpawnRequest(Vec3.Zero,
+                    brainMode: RobotBrainMode.Autonomous, interaction: RobotInteractionOptions.NativeTalk()));
+                if (spawn.TryGetValue(out var made))
+                    Check(robots.Agents[made.Id].Request.BrainMode == RobotBrainMode.Autonomous,
+                        "an admitted spawn constructs an Autonomous robot");
+                return spawn;
             }
 
             public void Dispose() { server.Lifetime.Dispose(); GuestUi.Dispose(); HostUi.Dispose(); }

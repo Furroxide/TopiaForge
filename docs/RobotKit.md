@@ -213,6 +213,47 @@ and native conversation support. There is no guest-autonomy opt-in. For a guest-
 Dormant explicitly and check the spawn result before using the handle. These rules cover RobotKit spawning
 and routed agent controls.
 
+#### Host decisions that start with a guest's click
+
+Guest origin follows the work, not the code's role. Work that a guest-origin callback schedules with
+`Context.Scheduler` (`NextFrame`, `After` or `Every`) or continues after an `await` keeps the guest's origin,
+so it is refused in the same way. When the decision belongs to the host, such as a round that starts with
+autonomous patrols once every player has pressed Ready, let the click record the request only, and act on
+it from host code that the server controller registered when it started:
+
+```csharp
+private sealed class Round : IGamemodeController
+{
+    private readonly IRobotAgentService robots;
+    private readonly IDisposable? timer;
+    private bool readyRequested;
+
+    public Round(IGamemodeSession session, IRobotAgentService robots)
+    {
+        this.robots = robots;
+        // Registered while the controller starts, outside every guest callback.
+        timer = session.Context.Scheduler.Every(TimeSpan.FromSeconds(0.1), StartWhenReady).Value;
+    }
+
+    // Wire this to the Ready button. It may run for a guest, so it only records the request.
+    public void ReadyPressed() => readyRequested = true;
+
+    private void StartWhenReady()
+    {
+        if (!readyRequested) return;
+        readyRequested = false;
+        if (!EveryPlayerReady()) return;
+        var patrol = robots.Spawn(new RobotAgentSpawnRequest(PatrolStart, brainMode: RobotBrainMode.Autonomous));
+        // Check the result before using the handle.
+    }
+
+    public void Dispose() => timer?.Dispose();
+}
+```
+
+The host's own state decides whether the round starts and what it spawns. Take nothing from the guest's
+click except the request itself.
+
 The testing kit follows these rules for `FakeRobotAgentService` and its agents. Set `IsClient = true` to
 model a guest process. Remote `FakePlayerDirectory` surface actions establish guest origin automatically;
 `FakeUiSurface.DismissFromPlayer()` simulates a player closing the window, while `Hide()` models a host call.
