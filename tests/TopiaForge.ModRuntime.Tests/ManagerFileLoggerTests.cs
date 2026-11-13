@@ -14,6 +14,7 @@ namespace TopiaForge.ModRuntime.Tests
             try
             {
                 FileAndBepInEx(root.FullName);
+                MultiplayerSink(root.FullName);
                 StartupAndWriteFailure(root.FullName);
                 ConsoleFallback(root.FullName);
                 Console.WriteLine("ManagerFileLoggerTests passed: file, BepInEx, startup, write failure, console fallback.");
@@ -52,6 +53,47 @@ namespace TopiaForge.ModRuntime.Tests
             Check(observed.Count == 11, "every entry reaches BepInEx");
             foreach (var line in observed)
                 Check(!line.Contains(root, StringComparison.OrdinalIgnoreCase) && line.Contains("[path]"), "BepInEx contains no root");
+        }
+
+        private static void MultiplayerSink(string root)
+        {
+            using var source = new ManualLogSource("Multiplayer privacy test");
+            var observed = new List<string>();
+            source.LogEvent += (_, args) => observed.Add(args.Data.ToString()!);
+            var file = Path.Combine(root, "multiplayer.log");
+            var privatePath = Path.Combine(root, "private folder", "secret");
+            var messages = new[]
+            {
+                "Dropped peer 127.0.0.1:27250; retry later.",
+                "Dropped peer ::1; retry later.",
+                "Already hidden [address]; retry later.",
+                "Could not read '" + privatePath + "' for 127.0.0.1:27250; retry later."
+            };
+            var expected = new[]
+            {
+                "Dropped peer [address]; retry later.",
+                "Dropped peer [address]; retry later.",
+                "Already hidden [address]; retry later.",
+                "Could not read '[path]' for [address]; retry later."
+            };
+            using (var manager = new ManagerFileLogger(file, source))
+            {
+                var multiplayer = new MultiplayerManagerLog(manager);
+                foreach (var message in messages)
+                {
+                    multiplayer.Info(message);
+                    multiplayer.Warn(message);
+                    multiplayer.Error(message);
+                }
+            }
+            Check(observed.Count == messages.Length * 3, "all multiplayer severities reach BepInEx");
+            for (var i = 0; i < observed.Count; i++)
+                Check(observed[i] == expected[i / 3], "multiplayer sink removes addresses and paths and keeps advice");
+            var contents = File.ReadAllText(file);
+            Check(!contents.Contains("127.0.0.1") && !contents.Contains("::1") && !contents.Contains(root),
+                "multiplayer file contains no address or private root");
+            Check(contents.Contains("[address]") && contents.Contains("[path]") && contents.Contains("retry later"),
+                "multiplayer file retains replacements and useful advice");
         }
 
         private static Exception Failure(string path)
