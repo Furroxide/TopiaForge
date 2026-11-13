@@ -17,6 +17,8 @@ namespace TopiaForge.RobotKit
         private static IModLogger? logger;
         private static readonly ConditionalWeakTable<WorldSceneIdentity, HashSet<(string SessionId, int Reason, bool Retirement)>>
             ComposedReports = new ConditionalWeakTable<WorldSceneIdentity, HashSet<(string, int, bool)>>();
+        private static readonly ConditionalWeakTable<WorldSceneIdentity, Dictionary<string, RobotComposedRefusal>> LatestDiscovery =
+            new ConditionalWeakTable<WorldSceneIdentity, Dictionary<string, RobotComposedRefusal>>();
 
         public static void Configure(IModLogger value)
         {
@@ -30,6 +32,7 @@ namespace TopiaForge.RobotKit
                 logger = value;
                 Reported.Clear();
                 ComposedReports.Clear();
+                LatestDiscovery.Clear();
             }
         }
 
@@ -42,14 +45,31 @@ namespace TopiaForge.RobotKit
                     logger = null;
                     Reported.Clear();
                     ComposedReports.Clear();
+                    LatestDiscovery.Clear();
                 }
             }
         }
 
         public static void ReportComposedDiscovery(WorldSessionSnapshot? state, RobotComposedRefusal reason)
         {
+            if (state?.Session != null && state.World != null)
+                lock (Gate) LatestDiscovery.GetOrCreateValue(state.World.Scene)[state.Session.SessionId] = reason;
             var sink = TakeComposedReport(state, (int)reason, retirement: false);
-            if (sink != null) ReportComposed(sink, "RobotKit composed discovery refused: " + reason + ".");
+            if (sink != null)
+                ReportComposed(sink, (reason == RobotComposedRefusal.CharacterUnprepared
+                    ? "RobotKit composed discovery admitted the body only: " : "RobotKit composed discovery refused: ") + reason + ".");
+        }
+
+        // The latest composed discovery result for this world and session, so a refused spawn can say why.
+        public static RobotComposedRefusal? LastComposedDiscovery(Func<WorldSessionSnapshot?>? world)
+        {
+            WorldSessionSnapshot? state;
+            try { state = world?.Invoke(); }
+            catch { return null; }
+            if (state?.Session == null || state.World == null) return null;
+            lock (Gate)
+                return LatestDiscovery.TryGetValue(state.World.Scene, out var sessions)
+                    && sessions.TryGetValue(state.Session.SessionId, out var reason) ? reason : (RobotComposedRefusal?)null;
         }
 
         public static void ReportComposedRetirement(WorldSessionSnapshot state, RobotComposedRetirement reason)

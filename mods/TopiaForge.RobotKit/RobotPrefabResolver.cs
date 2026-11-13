@@ -24,8 +24,12 @@ namespace TopiaForge.RobotKit
         private readonly Func<Transform, GameObject>? compose;
         private readonly Func<bool>? current;
 
-        internal RobotPrefabCandidate(string id, string displayName, Func<Transform, GameObject> compose, Func<bool> current)
-        { Id = id; DisplayName = displayName; this.compose = compose; this.current = current; Score = 0; }
+        internal RobotPrefabCandidate(string id, string displayName, Func<Transform, GameObject> compose, Func<bool> current,
+            bool bodyOnly = false)
+        { Id = id; DisplayName = displayName; this.compose = compose; this.current = current; Score = 0; BodyOnly = bodyOnly; }
+
+        // Set when only the body can be built: a robot of this type stays Dormant without native talk.
+        internal bool BodyOnly { get; }
 
         internal bool IsCurrent
         {

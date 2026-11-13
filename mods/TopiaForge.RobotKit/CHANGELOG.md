@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added guarded map-world MuniciPal composition and bounded discovery refusal diagnostics. Native character qualification remains pending.
+- When a MuniciPal's only unprepared catalogue references are its personality and about references, RobotKit now offers it body-only: it spawns Dormant with native talk off, and Autonomous spawns, `SetBrainMode(Autonomous)` and enabling native talk return `Unavailable` with the reason. Body-part, voice and other catalogue gaps still refuse. A `Spawn` that names a missing MuniciPal now returns a fixed sentence for the discovery code, which a gamemode can show to players. Native qualification on 2597 remains pending.
 - Empty native-prefab discovery keeps retrying beside a current composition; definite absent-character discovery backs off without surviving world or scene changes.
 - Missing native walk `ShouldIgnore` metadata now fails the Critical compatibility gate.
 - Restricted temporary scene editing to eligible native scene robots. Discovery excludes RobotKit-managed robots;

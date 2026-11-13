@@ -108,10 +108,18 @@ remain unqualified on build 2597: report it unavailable if absent, rather than r
 The synchronous composed factory uses 2597's private catalog-reference collector. Its personality and
 about dependencies are assumed to be distinct from body-part and voice-map resolution; one 2597 host
 start is still needed to confirm it. A nonblank personality value
-does not establish an inline prompt. The current synchronous path does not prepare missing catalog assets:
-unresolved dependencies refuse discovery. Character data and symbolic material values pass through unchanged.
-This bounded preflight does not establish that a native character's catalog assets have been prepared or
-that a character is qualified on 2597.
+does not establish an inline prompt. The current synchronous path does not prepare missing catalog assets.
+When the only unresolved dependencies are the character's personality and about references, MuniciPal is
+offered body-only: RobotKit builds the same body and voice without those two fields, then repeats every check.
+A body-part, voice or other catalogue gap still refuses discovery. Otherwise character data and symbolic
+material values pass through unchanged. This bounded preflight does not establish that a native character's
+catalog assets have been prepared or that a character is qualified on 2597.
+
+A body-only MuniciPal appears in `RobotTypes` like any other type and spawns only Dormant. An Autonomous request
+returns `Unavailable` with the reason, without creating a robot. Its native talk is off: the default talk
+policy is replaced by talk off, a custom interaction is kept, and `SetInteraction` with native talk, like
+`SetBrainMode(Autonomous)`, returns `Unavailable` with the same reason. Movement, speech, tint and scale
+work as for any Dormant robot.
 
 Composed MuniciPal discovery is available only during `StartingMode` and `Running` for the current
 live map world. Its native composed body has no `Health`: `ApplyDamage` returns `Unavailable` and `Kill`
@@ -128,6 +136,12 @@ body-part resolution, voice resolution, invalid collector results and unavailabl
 They contain no asset identifiers, native payloads, paths or session values. Check game compatibility
 for `NativeBinding`; for structural codes check the imported world's supported composition data.
 `CatalogAssetsUnavailable` comes from the game's own catalogue, so no map change can fix it.
+A body-only offer appears as `RobotKit composed discovery admitted the body only: CharacterUnprepared.`.
+
+When MuniciPal is missing, a `Spawn` that names it returns `Unavailable` with a fixed sentence for the
+latest code in the current world/session, such as "A MuniciPal body part is missing from the game's robot
+part catalogue. Code: BodyPartUnavailable.". The sentence names no asset or session value, so a gamemode
+can show it to players.
 
 `ContextUnverified` means a composed robot's native context could not be verified. An incomplete identity
 sample leaves existing composed actors in place, and for up to two seconds of unscaled time composed spawns
