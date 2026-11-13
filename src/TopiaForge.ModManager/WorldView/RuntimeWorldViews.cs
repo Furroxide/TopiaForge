@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -24,6 +25,14 @@ namespace TopiaForge.ModManager
         private bool invalidStream;
         private bool resetting;
         private float retry;
+        // A playing line asks every frame for the host's own copy and for each pending listener. Each verdict is
+        // kept until the leases change, so a steady line neither scans every lease nor allocates per frame.
+        // The bound holds 32 active lines, each asked for the host and every guest, with room to spare.
+        private const int MaximumSpeechVerdicts = 1024;
+        private readonly Dictionary<SpeechViewer, bool> speechVerdicts = new Dictionary<SpeechViewer, bool>();
+        private WorldViewLeases? speechLeases;
+        private long speechVersion;
+        private bool speechUnnamed;
         internal RuntimeWorldViews(MultiplayerReplication services) { this.services = services; }
         internal bool IsCurrentAvatar(IEntity entity, IInternalWorldViewRenderer renderer) =>
             binding != null && ReferenceEquals(binding.Renderer, renderer) && renderer.IsAlive
@@ -69,7 +78,7 @@ namespace TopiaForge.ModManager
             if (ReferenceEquals(binding, value)) return;
             ClearProjection();
             foreach (var world in worlds.Values.ToArray()) world.Dispose();
-            worlds.Clear(); names.Clear(); binding = value;
+            worlds.Clear(); names.Clear(); ForgetSpeechVerdicts(); binding = value;
             For(value.Renderer);
             if (Client) ApplyReceived();
             deliveries.Clear();
@@ -83,14 +92,16 @@ namespace TopiaForge.ModManager
         { channel?.Dispose(); channel = null; Reset(true); }
         public void RealmChanged(NetRealm previous, NetRealm next)
         {
-            // Opening a solo world to guests keeps its shared leases and native values.
-            if (previous == NetRealm.Offline && next == NetRealm.ListenHost) { deliveries.Clear(); return; }
+            // Opening a solo world to guests keeps its shared leases and native values. Their targets gain network
+            // names without a lease change, so speech verdicts are worked out again.
+            if (previous == NetRealm.Offline && next == NetRealm.ListenHost) { deliveries.Clear(); ForgetSpeechVerdicts(); return; }
             if (previous != next) Reset(true);
         }
         private void Reset(bool endLeases)
         {
             ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false;
             deliveries.Clear(); admitted.Clear(); names.Clear(); seenRoster = null; generation = 0; session = default;
+            ForgetSpeechVerdicts();
             resetting = true;
             try { if (endLeases) foreach (var world in worlds.Values.ToArray()) world.Dispose(); }
             finally { resetting = false; if (endLeases) worlds.Clear(); }
@@ -225,6 +236,38 @@ namespace TopiaForge.ModManager
             return changed;
         }
 
+        internal bool IsHiddenForSpeech(string worldId, ParticipantId viewer, IEntity entity, uint entityId)
+        {
+            var snapshot = services.Runtime.Control?.SessionSnapshot;
+            if (binding == null || binding.WorldId != worldId || !binding.Renderer.IsAlive
+                || !worlds.TryGetValue(binding.Renderer, out var leases) || snapshot == null
+                || (session.IsValid && !session.Equals(snapshot.Id))) return false;
+
+            string? player = viewer.Value;
+            if (admitted.TryGetValue(viewer, out var previous) && snapshot.TryGetParticipant(viewer, out var current)
+                && current != null && !current.PlayerKey.Equals(previous)) player = null;
+            if (!ReferenceEquals(speechLeases, leases) || speechVersion != leases.Version)
+            { speechVerdicts.Clear(); speechLeases = leases; speechVersion = leases.Version; }
+            var key = new SpeechViewer(player, entity, entityId);
+            if (speechVerdicts.TryGetValue(key, out var hidden)) return hidden;
+            // The lease can name a wrapper and may have been acquired offline, before its network ID
+            // existed. Resolve it the same way as view projection.
+            speechUnnamed = false;
+            hidden = leases.IsHiddenFor(player, (Views: this, Entity: entity, Id: entityId), static (target, speech) =>
+                ReferenceEquals(target, speech.Entity) || (speech.Id != 0 && speech.Views.NamesSpeaker(target, speech.Id)));
+            // A target without a network name can gain one without a lease change, so that verdict is not kept.
+            if (speechUnnamed) return hidden;
+            // Bounded by the robots that speak and the players who hear them; a full table starts over.
+            if (speechVerdicts.Count >= MaximumSpeechVerdicts) speechVerdicts.Clear();
+            speechVerdicts.Add(key, hidden);
+            return hidden;
+        }
+        private bool NamesSpeaker(IEntity target, uint id)
+        {
+            if (!TryName(target, out var name)) { speechUnnamed = true; return false; }
+            return name.Kind == 2 && NetworkWorldIds.TryParse(name.Id, out var named) && named.Value == id;
+        }
+        private void ForgetSpeechVerdicts() { speechVerdicts.Clear(); speechLeases = null; speechVersion = 0; }
         private ViewSnapshot Derive(string player)
         {
             if (binding == null || !binding.Renderer.IsAlive) return ViewSnapshot.Empty;
@@ -271,6 +314,18 @@ namespace TopiaForge.ModManager
             internal ViewTarget Name;
             internal IEntity Root;
             internal NamedTarget(ViewTarget name, IEntity root) { Name = name; Root = root; }
+        }
+        private readonly struct SpeechViewer : IEquatable<SpeechViewer>
+        {
+            private readonly string? player;
+            private readonly IEntity entity;
+            private readonly uint id;
+            internal SpeechViewer(string? player, IEntity entity, uint id) { this.player = player; this.entity = entity; this.id = id; }
+            public bool Equals(SpeechViewer other) =>
+                id == other.id && ReferenceEquals(entity, other.entity) && string.Equals(player, other.player, StringComparison.Ordinal);
+            public override bool Equals(object? obj) => obj is SpeechViewer other && Equals(other);
+            public override int GetHashCode() =>
+                HashCode.Combine(player == null ? 0 : StringComparer.Ordinal.GetHashCode(player), RuntimeHelpers.GetHashCode(entity), id);
         }
         private sealed class Delivery
         {
