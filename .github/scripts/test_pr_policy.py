@@ -27,17 +27,29 @@ class PrPolicyTests(unittest.TestCase):
 git() {
   case "$1" in
     fetch)
-      [[ "$FETCH_FAIL" != true && "$*" == "fetch --force --no-tags origin $BASE_SHA" ]] ;;
+      case "$*" in
+        "fetch --force --no-tags origin $BASE_SHA") [[ "$FETCH_FAIL" != true ]] ;;
+        "fetch --force --no-tags origin main:refs/remotes/origin/main") [[ "$MAIN_FETCH_FAIL" != true ]] ;;
+        *) return 1 ;;
+      esac ;;
     rev-parse)
       [[ "$2" == --verify ]] || return 90
       case "$3" in
         "$BASE_SHA^{commit}") [[ "$MISSING_BASE" != true ]] ;;
         "$HEAD_SHA^{commit}") [[ "$MISSING_HEAD" != true ]] ;;
+        "refs/remotes/origin/main^{commit}") [[ "$MAIN_FETCH_FAIL" != true ]] ;;
         *) return 1 ;;
       esac ;;
     rev-list)
-      [[ "$LIST_FAIL" != true && "$*" == "rev-list --reverse $BASE_SHA..$HEAD_SHA" ]] || return 1
-      [[ "$NO_COMMITS" == true ]] || printf '%s\n' incoming-one incoming-two ;;
+      # incoming-one is already on main; incoming-two is new on the head.
+      [[ "$LIST_FAIL" != true ]] || return 1
+      case "$*" in
+        "rev-list --reverse $BASE_SHA..$HEAD_SHA")
+          [[ "$NO_COMMITS" == true ]] || printf '%s\n' incoming-one incoming-two ;;
+        "rev-list --reverse $BASE_SHA..$HEAD_SHA --not refs/remotes/origin/main")
+          [[ "$NO_COMMITS" == true ]] || printf '%s\n' incoming-two ;;
+        *) return 1 ;;
+      esac ;;
     show)
       [[ "$2 $3" == '-s --format=%B' ]] || return 91
       case "$4" in
@@ -54,6 +66,7 @@ jq() { printf '%s\n' "$PRODUCT_VERSION"; }
         environment = dict(os.environ, BASE_SHA="b" * 40, HEAD_SHA="a" * 40,
                            FETCH_FAIL="false", MISSING_BASE="false", MISSING_HEAD="false",
                            LIST_FAIL="false", NO_COMMITS="false", PRODUCT_VERSION="0.2.0",
+                           MAIN_FETCH_FAIL="false", BASE_REF="dev",
                            HEAD_REF="release/0.2.0", FIRST_MESSAGE=signed, SECOND_MESSAGE=signed)
         environment.update(values)
         return subprocess.run([bash, "--noprofile", "--norc", "-c", mocks + step_body(name)],
@@ -78,6 +91,26 @@ jq() { printf '%s\n' "$PRODUCT_VERSION"; }
             result = self.dco(SECOND_MESSAGE=message)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("missing a valid Signed-off-by", result.stdout)
+
+    def test_sync_head_skips_only_commits_already_on_main(self):
+        sync = {"BASE_REF": "dev", "HEAD_REF": "sync/main-v0.2.0"}
+        on_main = self.dco(FIRST_MESSAGE="test: unsigned, already on main", **sync)
+        self.assertEqual(on_main.returncode, 0, on_main.stdout + on_main.stderr)
+        new = self.dco(SECOND_MESSAGE="test: unsigned, new on the sync branch", **sync)
+        self.assertNotEqual(new.returncode, 0)
+        self.assertIn("Commit incoming-two is missing a valid Signed-off-by", new.stdout)
+
+    def test_other_heads_check_commits_already_on_main(self):
+        for base, head in (("dev", "fix/unsigned"), ("dev", "release/0.2.0"), ("main", "sync/main-v0.2.0"),
+                           ("dev", "sync/other-v0.2.0")):
+            with self.subTest(base=base, head=head):
+                result = self.dco(FIRST_MESSAGE="test: unsigned", BASE_REF=base, HEAD_REF=head)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Commit incoming-one is missing a valid Signed-off-by", result.stdout)
+
+    def test_sync_head_fails_closed_without_main(self):
+        result = self.dco(MAIN_FETCH_FAIL="true", BASE_REF="dev", HEAD_REF="sync/main-v0.2.0")
+        self.assertNotEqual(result.returncode, 0)
 
     def test_unsigned_historical_base_is_not_checked(self):
         self.assertEqual(self.dco().returncode, 0)
