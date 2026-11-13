@@ -219,6 +219,8 @@ namespace TopiaForge.RobotKit
                     agent.Despawn();
                 }
                 else if (clone != null) RobotComposedLifetime.DestroyActor(clone);
+                if (ex is RobotComposedContextUnverifiedException)
+                    return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, "The requested composed robot's native context could not be verified.");
                 RobotKitDiagnostics.ReportOnce("robot native construction", ex);
                 return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, "The requested robot could not be constructed in this scene.");
             }

@@ -8,7 +8,12 @@ namespace TopiaForge.RobotKit
         SceneUnavailable, HostCount, MapRoot, EntryBudget, SceneShape, SceneIdentity,
         EntityShape, AssetReferences, AmbiguousIdentity, NotPresent, NativeBinding,
         ProjectCatalogShape, EntityReferencesShape, BodyPartUnavailable, VoiceUnavailable,
-        AssetReferenceSetInvalid, CatalogAssetsUnavailable
+        AssetReferenceSetInvalid, CatalogAssetsUnavailable, ContextUnverified
+    }
+
+    internal enum RobotComposedRetirement
+    {
+        WorldChanged, NativeLifetimeEnded, NativeIdentityChanged, NativeIdentityReadFailed, VerificationTimedOut
     }
 
     // Native catalog dependencies are distinct from body-part and voice-map resolution.

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -13,18 +14,20 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             var root = Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.RobotKit");
-            string Method(string file, string name) => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file)))
-                .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.Text == name).ToFullString();
+            SyntaxTree Read(string file) => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file), Encoding.UTF8));
+            string Method(string file, string name) => Read(file).GetRoot().DescendantNodes()
+                .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.Text == name).ToFullString();
             // Compile the complete production guard, the actual scene dispatch and actor Update.
             // Only Unity/native objects and immutable observation data are stubbed.
-            var source = Contract.Replace("/* scene current */", Method("RobotComposedScene.cs", "IsCurrent"))
+            var source = Contract.Replace("/* scene current */", Method("RobotComposedScene.cs", "IsCurrent")
+                    + Method("RobotComposedScene.cs", "AdmitsSpawns"))
                 .Replace("/* update */", Method("RobotComposedLifetime.cs", "Update"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(p => !Path.GetFileName(p).StartsWith("UnityEngine", StringComparison.Ordinal)
                     && !Path.GetFileName(p).StartsWith("TopiaForge", StringComparison.Ordinal))
                 .Select(p => MetadataReference.CreateFromFile(p));
             var compilation = CSharpCompilation.Create("ComposedCurrentnessProbe", new[] {
-                CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, "RobotComposedCurrentness.cs"))),
+                Read("RobotComposedCurrentness.cs"), Read("RobotComposedReferences.cs"),
                 CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(Program.FindRepoRoot(), "tests", "Shared", "AllocationProbe.cs"))),
                 CSharpSyntaxTree.ParseText(source) }, references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
@@ -33,7 +36,7 @@ namespace TopiaForge.ModManager.Tests
             if (!emitted.Success) throw new InvalidOperationException(string.Join("\n", emitted.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.RobotKit.Probe", true)!;
             ((Action)probe.GetMethod("Run")!.CreateDelegate(typeof(Action)))();
-            Console.WriteLine("Composed production currentness: transient recovery, cached getters, replacement retirement passed.");
+            Console.WriteLine("Composed production currentness: transient recovery, timeout, cached getters and retirement reasons passed.");
         }
 
         private const string Contract = """
@@ -50,6 +53,7 @@ namespace UnityEngine {
   public override bool Equals(object? o) => ReferenceEquals(this,o);
   public override int GetHashCode() => RuntimeHelpers.GetHashCode(this);
  }
+ public static class Time { public static double unscaledTimeAsDouble; }
  public class Scene { public int handle=7; }
  public class GameObject : Object { public Scene scene=new(); }
  public class Component : Object { public GameObject gameObject=new(); }
@@ -67,7 +71,14 @@ namespace TopiaForge.Mods {
  }
 }
 namespace TopiaForge.RobotKit {
- internal static class RobotKitDiagnostics { internal static void ReportOnce(string s,Exception e) { } }
+ internal static class RobotKitDiagnostics {
+  internal static RobotComposedRetirement? Retirement;
+  internal static int RetirementCount;
+  internal static void ReportComposedDiscovery(WorldSessionSnapshot s,RobotComposedRefusal r) { }
+  internal static void ReportComposedRetirement(WorldSessionSnapshot s,RobotComposedRetirement r) {
+   Retirement=r; RetirementCount++;
+  }
+ }
  public class Config { }
  public class Root {
   public Transform? Value; public int Reads;
@@ -75,7 +86,10 @@ namespace TopiaForge.RobotKit {
  }
  public class Host : Component {
   public Config? Config; public Root? Root; public int ConfigReads,RootReads;
-  public Config? RuntimeAssetConfig { get { ConfigReads++; return Config; } }
+  public bool ThrowConfig;
+  public Config? RuntimeAssetConfig {
+   get { ConfigReads++; if(ThrowConfig) throw new InvalidOperationException("private native data"); return Config; }
+  }
   public Root? SceneRoot { get { RootReads++; return Root; } }
  }
  public class WrongHost : Component { public object RuntimeAssetConfig => new(); public Root SceneRoot => new(); }
@@ -83,6 +97,7 @@ namespace TopiaForge.RobotKit {
   internal RobotComposedCurrentness currentness=null!;
   /* scene current */
   internal bool Current() => IsCurrent();
+  internal bool Admits() => AdmitsSpawns();
  }
  internal class RobotComposedLifetime {
   internal GameObject? Actor=new(); internal Func<bool>? Current; internal bool Disposed;
@@ -123,14 +138,20 @@ namespace TopiaForge.RobotKit {
    Check(allocated==0,"stable production frame allocation must be zero");
    Check(stable.Host.ConfigReads==1 && stable.Host.RootReads==1 && stable.Root.Reads==1,"stable frames must not repeat native getters/reflection");
    foreach(int missing in new[]{0,1,2}) {
+    Time.unscaledTimeAsDouble=10;
     var r=new Rig(); r.Publish();
     if(missing==0) r.Host.Config=null; if(missing==1) r.Host.Root=null; if(missing==2) r.Root.Value=null;
     r.Actor.Frame(); Check(!r.Actor.Disposed,"transient null must not retire actor");
     Check(!r.Scene.currentness.IsVerified,"incomplete snapshot must not authorize construction");
+    Time.unscaledTimeAsDouble=11.999;
     r.Host.Config=r.Config; r.Host.Root=r.Root; r.Root.Value=r.Map;
-    r.Actor.Frame(); Check(!r.Actor.Disposed && r.Scene.currentness.IsVerified,"same snapshot recovers without time threshold");
+    r.Actor.Frame(); Check(!r.Actor.Disposed && r.Scene.currentness.IsVerified,"same snapshot recovers before deadline");
     int reads=r.Host.ConfigReads; r.Actor.Frame(); Check(r.Host.ConfigReads==reads,"recovered snapshot is cached");
    }
+   TimeoutAcrossPublications();
+   RecoveryResetsGrace();
+   GetterFailureRetires();
+
    foreach(int replacement in new[]{0,1,2,3,4,5,6,7,8}) {
     var r=new Rig(); r.Publish();
     if(replacement==0) r.Host.Config=new Config();
@@ -144,15 +165,98 @@ namespace TopiaForge.RobotKit {
     if(replacement==8) r.Host.Destroyed=true;
     r.Actor.Frame(); Check(r.Actor.Disposed,"real replacement/lifetime change retires actor");
     Check(!r.Scene.currentness.IsVerified,"retired candidate cannot authorize construction");
+    var reason=replacement<3 ? RobotComposedRetirement.NativeIdentityChanged
+     : replacement<6 ? RobotComposedRetirement.WorldChanged : RobotComposedRetirement.NativeLifetimeEnded;
+    Check(RobotKitDiagnostics.Retirement==reason,"replacement or death reports its immediate retirement reason");
    }
    var deadMap=new Rig(); deadMap.State.World.Map.IsAlive=false; deadMap.Actor.Frame();
    Check(deadMap.Actor.Disposed,"dead map checked even on stable snapshot");
-   var mixed=new Rig(); mixed.Publish(); mixed.Host.Config=null; mixed.Host.Root=new Root(); mixed.Actor.Frame();
-   Check(mixed.Actor.Disposed,"null must not hide a definite replacement");
+   var mixed=new Rig(); mixed.Publish(); mixed.Host.Config=null; mixed.Actor.Frame();
+   mixed.Host.Root=new Root(); mixed.Actor.Frame();
+   Check(mixed.Actor.Disposed && RobotKitDiagnostics.Retirement==RobotComposedRetirement.NativeIdentityChanged,
+    "a definite replacement during grace retires immediately even with another getter null");
    var wrong=new Rig(); bool refused=false;
    try { _=new RobotComposedCurrentness(()=>wrong.State,wrong.State,new WrongHost(),wrong.Config,wrong.Root,wrong.Map); }
    catch(InvalidOperationException) { refused=true; }
    Check(refused,"wrong runtime getter type refused at binding");
+  }
+
+  private static void TimeoutAcrossPublications() {
+   Time.unscaledTimeAsDouble=100;
+   var rig=new Rig(); rig.Publish(); rig.Root.Value=null;
+   var reports=RobotKitDiagnostics.RetirementCount;
+   for(var i=0;i<200;i++) rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && !rig.Scene.currentness.IsVerified && RobotKitDiagnostics.RetirementCount==reports,
+    "stationary unscaled time never spends grace by polling");
+   Time.unscaledTimeAsDouble=101;
+   rig.Publish(); rig.Actor.Frame();
+   Time.unscaledTimeAsDouble=101.999;
+   rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && RobotKitDiagnostics.RetirementCount==reports,
+    "incomplete snapshots keep actors before the original deadline");
+   Check(rig.Scene.Admits(),"the candidate admits spawns until its deadline");
+   Time.unscaledTimeAsDouble=102;
+   rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && !rig.Scene.currentness.IsVerified && !rig.Scene.Admits() &&
+    RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut && RobotKitDiagnostics.RetirementCount==reports+1,
+    "a new publication cannot postpone the deadline, which stops spawns and keeps the live actor");
+   Time.unscaledTimeAsDouble=500;
+   int expiredReads=rig.Host.ConfigReads, expiredRootReads=rig.Host.RootReads;
+   for(var i=0;i<10;i++) rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && RobotKitDiagnostics.RetirementCount==reports+1,
+    "a lasting incomplete sample keeps the live actor and reports the time-out once");
+   Check(rig.Host.ConfigReads==expiredReads && rig.Host.RootReads==expiredRootReads && !rig.Scene.Admits(),
+    "after the time-out an incomplete sample is not reread within one publication");
+   rig.Publish(); rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && rig.Host.ConfigReads==expiredReads+1 && rig.Host.RootReads==expiredRootReads+1,
+    "a new publication samples the native identities once more");
+   long expiredAllocated=TopiaForge.TestSupport.AllocationProbe.Measure("expired incomplete composed frames",()=>rig.Actor.Frame(),10000,200);
+   Check(expiredAllocated==0 && rig.Host.ConfigReads==expiredReads+1,"expired incomplete frames allocate nothing and read no getter");
+   rig.Root.Value=rig.Map;
+   rig.Publish(); rig.Actor.Frame();
+   var reads=rig.Host.ConfigReads; rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && rig.Scene.currentness.IsCurrent() && !rig.Scene.Admits() && !rig.Scene.currentness.IsVerified
+    && rig.Host.ConfigReads==reads && RobotKitDiagnostics.RetirementCount==reports+1,
+    "restored identity caches the live actor but cannot revive spawning or repeat its diagnostic");
+   rig.Host.Config=new Config(); rig.Publish(); rig.Actor.Frame();
+   Check(rig.Actor.Disposed && RobotKitDiagnostics.Retirement==RobotComposedRetirement.NativeIdentityChanged,
+    "a definite replacement after the time-out still retires the live actor");
+   var failing=new Rig(); failing.Publish(); failing.Root.Value=null; failing.Actor.Frame();
+   Time.unscaledTimeAsDouble=503; failing.Actor.Frame();
+   Check(!failing.Actor.Disposed && !failing.Scene.Admits(),"a second candidate times out on its own deadline");
+   failing.Publish(); failing.Host.ThrowConfig=true; failing.Actor.Frame();
+   Check(failing.Actor.Disposed && RobotKitDiagnostics.Retirement==RobotComposedRetirement.NativeIdentityReadFailed,
+    "a throwing getter after the time-out still retires the live actor");
+  }
+
+  private static void RecoveryResetsGrace() {
+   Time.unscaledTimeAsDouble=200;
+   var rig=new Rig(); rig.Publish(); rig.Host.Config=null; rig.Actor.Frame();
+   Time.unscaledTimeAsDouble=201;
+   rig.Host.Config=rig.Config; rig.Actor.Frame();
+   Check(rig.Scene.currentness.IsVerified,"complete identities verify during grace");
+   Time.unscaledTimeAsDouble=201.5;
+   rig.Publish(); rig.Host.Root=null; rig.Actor.Frame();
+   Time.unscaledTimeAsDouble=202;
+   rig.Actor.Frame();
+   Check(!rig.Actor.Disposed,"an incomplete sample after verification gets a fresh grace period");
+   Time.unscaledTimeAsDouble=203.5;
+   rig.Host.Root=rig.Root;
+   rig.Actor.Frame();
+   Check(!rig.Actor.Disposed && rig.Scene.currentness.IsCurrent() && !rig.Scene.Admits()
+    && RobotKitDiagnostics.Retirement==RobotComposedRetirement.VerificationTimedOut,
+    "restoration first observed at the deadline keeps the actor and requires a fresh candidate for spawns");
+  }
+
+  private static void GetterFailureRetires() {
+   var rig=new Rig(); rig.Publish();
+   rig.Host.ThrowConfig=true;
+   rig.Actor.Frame();
+   Check(rig.Actor.Disposed && RobotKitDiagnostics.Retirement==RobotComposedRetirement.NativeIdentityReadFailed,
+    "a throwing getter retires the guard and actor immediately");
+   rig.Host.ThrowConfig=false;
+   Check(!rig.Scene.currentness.IsCurrent() && !rig.Scene.currentness.IsVerified && rig.Host.ConfigReads==1,
+    "getter failure stays retired when the getter would succeed on retry");
   }
  }
 }

@@ -51,9 +51,11 @@ namespace TopiaForge.RobotKit
                 var hosts = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren(Type.GetType("UgcImportHostSceneController, GameCode", true)!, true)).ToArray();
                 if (hosts.Length != 1) return Refuse(state, RobotComposedRefusal.HostCount);
                 var host = hosts[0];
-                var config = Property(host, "RuntimeAssetConfig", Type.GetType("UgcRuntimeAssetConfig, GameCode", true)!);
-                var sceneRoot = Property(host, "SceneRoot", Type.GetType("UgcSceneRoot, GameCode", true)!);
-                var mapRoot = Property(sceneRoot, "ActiveImportRoot", typeof(Transform)) as Transform;
+                var config = ReadProperty(host, "RuntimeAssetConfig", Type.GetType("UgcRuntimeAssetConfig, GameCode", true)!);
+                var sceneRoot = ReadProperty(host, "SceneRoot", Type.GetType("UgcSceneRoot, GameCode", true)!);
+                if (config == null || sceneRoot == null) return Refuse(state, RobotComposedRefusal.ContextUnverified);
+                var mapRoot = ReadProperty(sceneRoot, "ActiveImportRoot", typeof(Transform)) as Transform;
+                if (mapRoot is null) return Refuse(state, RobotComposedRefusal.ContextUnverified);
                 if (mapRoot == null || mapRoot.gameObject.scene.handle != scene.handle) return Refuse(state, RobotComposedRefusal.MapRoot);
                 var map = Property(config, "PrefabSceneMap", Type.GetType("UgcPrefabSceneMap, GameCode", true)!);
                 var entries = Property(map, "Entries", Type.GetType("UgcPrefabSceneMap+Entry, GameCode", true)!.MakeArrayType()) as Array;
@@ -94,7 +96,7 @@ namespace TopiaForge.RobotKit
                     selected = new RobotComposedScene(world, state, host, config, sceneRoot, mapRoot, project, entity);
                 }
                 notPresent = selected == null;
-                return selected == null ? Refuse(state, RobotComposedRefusal.NotPresent) : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.IsCurrent);
+                return selected == null ? Refuse(state, RobotComposedRefusal.NotPresent) : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.AdmitsSpawns);
             }
             catch (Exception)
             {
@@ -110,7 +112,7 @@ namespace TopiaForge.RobotKit
 
         private GameObject Create(Transform incubator)
         {
-            Require(IsCurrent() && currentness.IsVerified);
+            currentness.RequireVerified();
             var parent = new GameObject("RobotKit Composed Agent");
             parent.SetActive(false);
             parent.transform.SetParent(incubator, false);
@@ -126,7 +128,8 @@ namespace TopiaForge.RobotKit
                 var actor = build.Invoke(builder, new[] { project, entity, parent.transform }) as GameObject;
                 Require(actor != null && actor.transform.IsChildOf(parent.transform) && !actor.activeInHierarchy);
                 lease.Actor = actor;
-                Require(IsCurrent() && currentness.IsVerified && GameReflection.HasComponent(actor!, "RobotBody")
+                currentness.RequireVerified();
+                Require(GameReflection.HasComponent(actor!, "RobotBody")
                     && GameReflection.HasComponent(actor!, "LLMAgent") && GameReflection.HasComponent(actor!, "AgentHead")
                     && GameReflection.HasComponent(actor!, "LocomotionController"));
                 actor!.SetActive(false);
@@ -139,6 +142,8 @@ namespace TopiaForge.RobotKit
         {
             return currentness.IsCurrent();
         }
+
+        private bool AdmitsSpawns() => currentness.AdmitsSpawns();
 
         private static bool CanSpawn(WorldSessionPhase phase) => phase == WorldSessionPhase.StartingMode || phase == WorldSessionPhase.Running;
 
@@ -210,11 +215,14 @@ namespace TopiaForge.RobotKit
                 .Invoke(null, new[] { json, (object)Type.GetType("UgcExportProject, GameCode", true)!, settings }) ?? throw new InvalidOperationException();
         }
 
-        private static object Property(object instance, string name, Type type)
+        private static object Property(object instance, string name, Type type) =>
+            ReadProperty(instance, name, type) ?? throw new InvalidOperationException();
+
+        private static object? ReadProperty(object instance, string name, Type type)
         {
             var property = instance.GetType().GetProperty(name, PublicInstance);
             Require(property != null && property.PropertyType == type && property.GetIndexParameters().Length == 0);
-            return property!.GetValue(instance) ?? throw new InvalidOperationException();
+            return property!.GetValue(instance);
         }
         private static MethodInfo RequireMethod(Type type, string name, bool isStatic, Type returns, params Type[] parameters)
         {

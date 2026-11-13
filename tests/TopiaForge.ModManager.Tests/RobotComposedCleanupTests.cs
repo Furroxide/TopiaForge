@@ -47,7 +47,7 @@ namespace TopiaForge.ModManager.Tests
                 throw new InvalidOperationException(string.Join("\n", emitted.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.RobotKit.RobotAgentService", true)!;
             ((Action)probe.GetMethod("Run")!.CreateDelegate(typeof(Action)))();
-            Console.WriteLine("Composed robot cleanup: activation, corpse sweep and both spawn rollback paths passed.");
+            Console.WriteLine("Composed robot cleanup: activation, corpse sweep, both spawn rollback paths and the unverified context refusal passed.");
         }
 
         private static string Methods(SyntaxTree tree, params string[] names) => string.Join("\n", names.Select(name =>
@@ -83,6 +83,7 @@ namespace TopiaForge.RobotKit
         private readonly NativeAssetOwner mapOwner = new GameObject("Map").AddComponent<NativeAssetOwner>();
         private readonly NativeAssetOwner siblingOwner = new GameObject("Unrelated scene object").AddComponent<NativeAssetOwner>();
         private Build? lastBuild;
+        private bool unverifiedContext;
         private static readonly RobotAgentSpawnRequest Request = new();
 
         private RobotAgentService() => catalog = new[] { new RobotPrefabCandidate("composed", "Composed", Compose, () => true) };
@@ -97,6 +98,7 @@ namespace TopiaForge.RobotKit
 
         private GameObject Compose(Transform parent)
         {
+            if (unverifiedContext) throw new RobotComposedContextUnverifiedException();
             siblingOwner.transform.SetParent(root!.transform, false);
             var builder = new GameObject("Builder");
             builder.transform.SetParent(parent, false);
@@ -119,6 +121,7 @@ namespace TopiaForge.RobotKit
             CorpseSweep();
             Rollback(afterPublication: false);
             Rollback(afterPublication: true);
+            UnverifiedContext();
         }
 
         private static void Activation()
@@ -184,6 +187,22 @@ namespace TopiaForge.RobotKit
             Check(result.ErrorCode == ModErrorCode.Unavailable && ReferenceEquals(RobotKitDiagnostics.LastError, fault),
                 "spawn must report the injected construction failure");
             CheckReleased(service.lastBuild!, afterPublication ? "published actor rollback" : "unregistered clone rollback");
+            service.CheckEmpty();
+            service.CheckSurroundings();
+        }
+
+        private static void UnverifiedContext()
+        {
+            var service = new RobotAgentService { unverifiedContext = true };
+            RobotKitDiagnostics.LastError = null;
+
+            var result = service.Spawn(Request);
+
+            Check(result.ErrorCode == ModErrorCode.Unavailable
+                && result.Message == "The requested composed robot's native context could not be verified."
+                && RobotKitDiagnostics.LastError == null,
+                "an unverified composed context must return its own message without a construction diagnostic");
+            Check(service.lastBuild == null, "an unverified composed context must not build an actor");
             service.CheckEmpty();
             service.CheckSurroundings();
         }
@@ -346,10 +365,10 @@ namespace TopiaForge.Mods
         public float Scale => 1f;
         public int? Tint => null;
     }
-    public readonly record struct OperationResult<T>(ModErrorCode? ErrorCode)
+    public readonly record struct OperationResult<T>(ModErrorCode? ErrorCode, string? Message = null)
     {
         public static OperationResult<T> Success(T value) => new(null);
-        public static OperationResult<T> Failure(ModErrorCode code, string message) => new(code);
+        public static OperationResult<T> Failure(ModErrorCode code, string message) => new(code, message);
     }
 }
 
@@ -360,6 +379,7 @@ namespace TopiaForge.RobotKit
         internal int Releases;
         public void DestroyAssets() => Releases++;
     }
+    internal sealed class RobotComposedContextUnverifiedException : Exception { }
     internal sealed class RobotAgentEntityIdentityAnchor : MonoBehaviour { internal void Initialize(string id) { } }
     internal static class GameReflection
     {

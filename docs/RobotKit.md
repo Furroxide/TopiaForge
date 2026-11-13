@@ -129,6 +129,14 @@ They contain no asset identifiers, native payloads, paths or session values. Che
 for `NativeBinding`; for structural codes check the imported world's supported composition data.
 `CatalogAssetsUnavailable` comes from the game's own catalogue, so no map change can fix it.
 
+`ContextUnverified` means a composed robot's native context could not be verified. An incomplete identity
+sample leaves existing composed actors in place, and for up to two seconds of unscaled time composed spawns
+return `Unavailable`. If the context is still unverified at the deadline, the candidate retires: it spawns
+nothing more and the next catalog lookup retries discovery, while robots already spawned from it keep running.
+A definite replacement, ended lifetime or throwing identity getter retires the candidate and destroys its
+robots immediately. Retirement reasons appear at Info as `RobotKit composed context retired: <code>.`, at most
+once per reason for each world and session.
+
 `FindReachableSpawnAsync` automatically links cancellation to the consuming lifetime; an optional
 caller token can end the search sooner. Check its result, then spawn on collision-clear ground at
 the returned position. Check `Spawn` before issuing `MoveTo`.
