@@ -102,7 +102,8 @@ Discovery describes loaded native prefabs, not a promise that every named charac
 Robot01 and CopBot have navigated sampled imported-map routes. MuniciPal discovery and spawning
 remain unqualified on build 2597: report it unavailable if absent, rather than relabeling the default robot.
 The synchronous composed factory uses 2597's private catalog-reference collector. Its personality and
-about dependencies are distinct from body-part and voice-map resolution. A nonblank personality value
+about dependencies are assumed to be distinct from body-part and voice-map resolution; one 2597 host
+start is still needed to confirm it. A nonblank personality value
 does not establish an inline prompt. The current synchronous path does not prepare missing catalog assets:
 unresolved dependencies refuse discovery. Character data and symbolic material values pass through unchanged.
 This bounded preflight does not establish that a native character's catalog assets have been prepared or
@@ -121,7 +122,8 @@ missing scene identity, entity shape, asset references, ambiguous identity, abse
 failure. Reference-specific codes distinguish unexpected project catalogues, reference DTO shape,
 body-part resolution, voice resolution, invalid collector results and unavailable catalog assets.
 They contain no asset identifiers, native payloads, paths or session values. Check game compatibility
-for `NativeBinding`; for structural/reference codes check the imported world's supported composition data.
+for `NativeBinding`; for structural codes check the imported world's supported composition data.
+`CatalogAssetsUnavailable` comes from the game's own catalogue, so no map change can fix it.
 
 `FindReachableSpawnAsync` automatically links cancellation to the consuming lifetime; an optional
 caller token can end the search sooner. Check its result, then spawn on collision-clear ground at
