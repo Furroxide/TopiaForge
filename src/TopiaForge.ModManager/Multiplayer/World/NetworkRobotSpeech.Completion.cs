@@ -54,6 +54,7 @@ namespace TopiaForge.ModManager
                         return true;
                     }
                     recipient.Completed = true;
+                    recipient.Heard = status == RobotSpeechWire.Completed;
                     if (status == RobotSpeechWire.Failed) operation.Failure = OperationResult<bool>.Failure(ModErrorCode.Unavailable,
                         "A robot speech listener could not complete playback.");
                     return true;

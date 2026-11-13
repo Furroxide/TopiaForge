@@ -90,13 +90,13 @@ namespace TopiaForge.ModManager
             return operation.Completion.Task;
         }
 
-        private bool Eligible(ParticipantId participant, IEntity entity, uint entityId, bool checkView = true)
+        private bool Eligible(ParticipantId participant, IEntity entity, uint entityId)
         {
             var presence = services.Players?.Presence;
             if (presence == null || runningWorld == null || !presence.Host.IsCurrentWorld
                 || !presence.TryGetPeer(participant, out var peer) || peer == null || !peer.IsConnected || peer.Removed
                 || (!peer.IsLocal && peer.PlacedWorld != runningWorld)
-                || (checkView && services.Views.IsHiddenForSpeech(runningWorld, participant, entity, entityId))) return false;
+                || services.Views.IsHiddenForSpeech(runningWorld, participant, entity, entityId)) return false;
             var position = presence.ValidatedPosition(participant);
             return position.HasValue && Near(entity.Position, new Vec3(position.Value.X, position.Value.Y, position.Value.Z));
         }
@@ -154,6 +154,8 @@ namespace TopiaForge.ModManager
             internal readonly ReadyPeer Gate;
             internal readonly uint Entity;
             internal bool Completed;
+            // Reported that it played the line to the end, not only that it stopped.
+            internal bool Heard;
             internal Recipient(ParticipantId id, ReadyPeer gate, uint entity) { Id = id; Gate = gate; Entity = entity; }
         }
         private sealed class Playback
@@ -169,6 +171,7 @@ namespace TopiaForge.ModManager
             internal readonly TaskCompletionSource<OperationResult<bool>> Completion = new TaskCompletionSource<OperationResult<bool>>();
             internal Task<OperationResult<bool>>? Task;
             internal OperationResult<bool>? Failure;
+            internal bool ListenerLost;
             private CancellationTokenSource? localCancellation;
             private bool cancellingLocal;
             internal uint WireId;

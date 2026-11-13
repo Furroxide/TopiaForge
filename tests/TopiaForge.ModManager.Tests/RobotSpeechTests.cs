@@ -147,10 +147,12 @@ namespace TopiaForge.ModManager.Tests
                 "caller cancellation reaches active native synthesis on both peers");
             Check(rig.Robot.SayAsync("Cancellation cannot evade pacing").Result.ErrorCode == ModErrorCode.RateLimited,
                 "per-robot pace survives cancellation");
-            rig.Later(); rig.Robot.SayAsync("Second."); rig.World.Frames(4);
+            rig.Later(); var replaced = rig.Robot.SayAsync("Second."); rig.World.Frames(4);
             rig.Later(); rig.Robot.SayAsync("Replacement."); rig.World.Frames(4);
             Check(rig.Canonical.SpeechTokens[1].IsCancellationRequested && rig.Guests[0].Body.SpeechTokens[1].IsCancellationRequested,
                 "retargeting a line cancels its predecessor");
+            Check(replaced.IsCompleted && replaced.Result.ErrorCode == ModErrorCode.Cancelled,
+                "replacement keeps the caller's Cancelled result");
             rig.Owner.Lifetime.Dispose(); rig.World.Frames(4);
             Check(rig.Canonical.SpeechTokens.Last().IsCancellationRequested && rig.Guests[0].Body.SpeechTokens.Last().IsCancellationRequested,
                 "scope disposal cancels every active copy");
