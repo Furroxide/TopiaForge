@@ -496,6 +496,12 @@ jobs:
           expected=$'feat: exercise hook\n\nCo-authored-by: Human Developer <human@example.invalid>'
           test "$(<"$message")" = "$expected"
 
+      # The analyzer preparation script needs Python 3.12 or newer
+      # (TemporaryDirectory(delete=False)) and curl 8.4 or newer (the streamed
+      # size limit); the runner image has both. A cached archive that fails its
+      # size or SHA-256 check fails this job closed and is never replaced here.
+      # Recover by deleting that cache entry, then re-run:
+      #   gh cache delete psscriptanalyzer-<SHA256 in prepare_psscriptanalyzer.py>
       - name: Test analyzer archive preparation
         run: python3 .github/scripts/test_prepare_psscriptanalyzer.py
 
