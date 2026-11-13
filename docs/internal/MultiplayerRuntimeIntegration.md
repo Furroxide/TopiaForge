@@ -2635,8 +2635,9 @@ The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in
   keep-controller session still Running when its queued scene handler executes ends with a failed session outcome if
   the game is online at that moment; the handler reads the realm then, not the realm recorded at launch, so a world
   started alone and opened to players later counts as online. Offline, the session keeps running with its world and
-  spawn still withheld, so opening it to players afterwards places no avatars until the world starts again. Online,
-  the provider's immutable readiness cannot validate replacement content and spawn. The host must start the world again;
+  spawn still withheld. When that kept session's game becomes a listen host, session follow's realm change ends it
+  with the same failure, reported once, before the host announces its world. Online, the provider's immutable
+  readiness cannot validate replacement content and spawn. The host must start the world again;
   a Players placement cannot recover that session. An explicit stop, restart, new launch or menu return that starts
   retirement first keeps its own result. The delayed scene handler cannot fail that retirement or affect a successor.
   End-session worlds and followers retain their normal stop path, and followers re-follow the host. Initial snapshots,

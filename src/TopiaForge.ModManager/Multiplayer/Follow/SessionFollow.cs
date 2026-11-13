@@ -98,7 +98,12 @@ namespace TopiaForge.ModManager
             preparingMap = false;
             if (previous == NetRealm.Client) Follower.Left(detaching());
             if (previous == NetRealm.ListenHost) Host.Deactivate();
-            if (next == NetRealm.ListenHost) Host.Activate();
+            if (next == NetRealm.ListenHost)
+            {
+                // A session kept after losing its scene in single player cannot place arriving players: it ends first.
+                sessions.WentOnline();
+                Host.Activate();
+            }
             if (next == NetRealm.Client && control != null) Follower.Joined(control, launchedJoin());
         }
 

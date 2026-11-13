@@ -149,21 +149,52 @@ namespace TopiaForge.ModManager
                 var record = current;
                 if (record == null || !ReferenceEquals(record.Identity, owner) || lifecycle.Current.Phase != SessionPhase.Running
                     || !InvalidatesPresenceReadiness(record, scene)) return;
-                if (record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy)
+                if (KeepsController(record))
                 {
                     // Single player keeps its controller: no other player's presence needs the lost readiness. The realm
                     // is read now, not at launch, because a host that started alone and opened to players later is online.
+                    // Opening the kept session to players later ends it (WentOnline).
                     if (RealmOf(record.Snapshot.Contexts[record.Mode.Package.Id]) == NetRealm.Offline) return;
-                    // Online, the provider owns immutable readiness for the lost scene. Retaining the controller here would
-                    // leave Running with presence permanently closed; no existing contract can revalidate its world.
-                    if (!record.PresenceFailureReported)
-                    {
-                        record.PresenceFailureReported = true; // Stop admission may defer; duplicate events report once.
-                        record.Errors.Add(new InvalidOperationException(LostWorldReadinessMessage));
-                    }
+                    ReportLostWorldReadiness(record);
                 }
                 RequestBoundStop(record.Identity.SessionId);
             });
+        }
+
+        /// <summary>
+        /// Tells the orchestrator this game became a listen host. A local keep-controller session that lost its world's
+        /// readiness while in single player cannot place the players who now arrive, so it ends with the failure an online
+        /// scene loss gives, reported once. A session whose readiness still holds keeps running.
+        /// </summary>
+        internal void WentOnline()
+        {
+            var observed = lifecycle.Current;
+            // Only readiness already lost when the realm changes counts; a later loss online is the scene handler's.
+            if (observed.Phase != SessionPhase.Running || current == null || !ReferenceEquals(current.Identity, observed.Identity)
+                || !current.PresenceInvalidated) return;
+            var owner = observed.Identity;
+            dispatcher.Post(() =>
+            {
+                var record = current;
+                if (record == null || !ReferenceEquals(record.Identity, owner) || lifecycle.Current.Phase != SessionPhase.Running
+                    || !KeepsController(record)
+                    || RealmOf(record.Snapshot.Contexts[record.Mode.Package.Id]) == NetRealm.Offline) return;
+                ReportLostWorldReadiness(record);
+                RequestBoundStop(record.Identity.SessionId);
+            });
+        }
+
+        /// <summary>Gets whether a scene loss leaves <paramref name="record"/> running offline: a local keep-controller session.</summary>
+        private static bool KeepsController(SessionRecord record) =>
+            record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy;
+
+        // Online, the provider owns immutable readiness for the lost scene. Retaining the controller would leave Running
+        // with presence permanently closed; no existing contract can revalidate its world.
+        private static void ReportLostWorldReadiness(SessionRecord record)
+        {
+            if (record.PresenceFailureReported) return; // Stop admission may defer; duplicate events report once.
+            record.PresenceFailureReported = true;
+            record.Errors.Add(new InvalidOperationException(LostWorldReadinessMessage));
         }
     }
 }

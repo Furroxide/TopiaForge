@@ -27,6 +27,9 @@ namespace TopiaForge.ModManager.Tests
             TestFailures(root + "-failures");
             TestSelfStop(root + "-self-stop");
             TestScenePolicy(root + "-scene-policy");
+            foreach (var lost in new[] { false, true })
+                foreach (var queued in lost ? new[] { false, true } : new[] { false })
+                    TestOpeningAfterSinglePlayerSceneLoss(root + "-open-after-scene-" + lost + queued, lost, queued);
             TestDeferredSceneFailure(root + "-deferred-scene-failure");
             TestExplicitRestartBeforeSceneFailure(root + "-explicit-scene-restart");
             TestNativeDrain(root + "-native");
@@ -200,6 +203,60 @@ namespace TopiaForge.ModManager.Tests
                     : terminal.Status == "failed" && terminal.Error?.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage,
                     "owned-scene loss stops end-session normally and fails an online keep-controller session without fresh readiness");
             }
+        }
+
+        /// <summary>
+        /// A single-player session that kept running after losing its scene cannot place the players a later listen host
+        /// admits, so opening to players ends it with the readiness failure, once; one that never lost its scene keeps
+        /// running. With <paramref name="queued"/>, the realm opens while the scene handler is still queued.
+        /// </summary>
+        private static void TestOpeningAfterSinglePlayerSceneLoss(string root, bool lost, bool queued)
+        {
+            using var test = SessionFixture.Hostable(root);
+            var disposed = 0;
+            var failures = 0;
+            SessionFixture.Start = (started, _) =>
+            {
+                SessionFixture.ModeSession = started;
+                return Task.FromResult(OperationResult<IGamemodeController>.Success(new SessionTestController(() => disposed++)));
+            };
+            test.Hosted.DiagnosticFailure += error =>
+            {
+                if (error.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage) failures++;
+            };
+            test.Launch();
+            var session = SessionFixture.ModeSession!;
+            if (lost)
+            {
+                test.Dispatch.HoldNextPost = queued;
+                test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-20, "Replacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
+                test.Until(() => !test.Host.HasPendingWork);
+                Assert(test.Hosted.Current.Phase == SessionPhase.Running && disposed == 0 && test.Hosted.RunningWorldId == null,
+                    "single player keeps the session after losing its scene, with its world withheld");
+            }
+
+            test.OpenToPlayers();
+            if (queued) test.Dispatch.Release();
+            if (!lost)
+            {
+                test.Until(() => !test.Host.HasPendingWork);
+                Assert(test.Hosted.Current.Phase == SessionPhase.Running && disposed == 0 && test.Hosted.RunningWorldId == session.SessionId
+                    && test.Hosted.RunningSpawn.HasValue && !test.Outcomes.Any(item => item.Kind == "session"),
+                    "opening to players keeps a session whose world readiness still holds");
+                var stopped = session.StopAsync(); test.Wait(stopped);
+                test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+                Assert(stopped.Result.Succeeded && failures == 0
+                    && test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == session.SessionId).Status == "succeeded",
+                    "the opened session later stops normally");
+                return;
+            }
+
+            test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+            test.Until(() => !test.Host.HasPendingWork);
+            var terminal = test.Outcomes.Where(item => item.Kind == "session" && item.SessionId == session.SessionId).ToArray();
+            Assert(terminal.Length == 1 && terminal[0].Status == "failed"
+                && terminal[0].Error?.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage && failures == 1 && disposed == 1,
+                "opening a session that lost its scene in single player ends it once with the readiness failure");
         }
 
         private static void TestDeferredSceneFailure(string root)

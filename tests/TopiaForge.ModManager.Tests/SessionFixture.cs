@@ -87,16 +87,20 @@ namespace TopiaForge.ModManager.Tests
 
         /// <summary>
         /// A session fixture whose composition root starts in single player, as a host who starts a world alone does;
-        /// <see cref="OpenToPlayers"/> then makes it a listen host, before or after a launch.
+        /// <see cref="OpenToPlayers"/> then makes it a listen host, before or after a launch. Session follow observes the
+        /// realm as the runtime installs it, so the orchestrator hears the change the way the game does.
         /// </summary>
         internal static SessionFixture Hostable(string root, bool endOnScene = false)
         {
-            var (runtime, control, _) = Seam.Runtime(() => SessionPhase.Idle);
+            var (runtime, control, log) = Seam.Runtime(() => SessionPhase.Idle);
             control.Role = InternalSessionRole.Solo;
-            runtime.Connect();
-            Seam.Frame(runtime);
             var test = new SessionFixture(root, endOnScene, replication: new MultiplayerReplication(runtime)) { runtime = runtime, control = control };
             runtime.SessionPhaseSource = () => test.Hosted.RealmPhase;
+            runtime.AddObserver(new SessionFollow(test.Hosted, new FollowedScene(), new MultiplayerSceneTransitionAuthorityPolicy(() => null).GrantFollow,
+                () => runtime.Leave(), () => new NetworkWorldProgress(NetworkWorldPhase.Hosting, 0, 0, 0), null, () => runtime.Control == null,
+                () => runtime.LaunchedJoin, test.Host, log));
+            runtime.Connect();
+            Seam.Frame(runtime);
             GamemodeSessionOrchestratorTests.Assert(runtime.Realm == NetRealm.Offline, "a hostable fixture starts in single player");
             return test;
         }
