@@ -17,6 +17,46 @@ namespace TopiaForge.ModManager.Tests
         {
             RemoteDismissal();
             NestedCommandAndUi();
+            HostDecisionAfterGuestClick();
+        }
+
+        // The pattern docs/RobotKit.md documents: a guest's click only records a request, and host code that the
+        // gamemode registered outside every guest callback makes the Autonomous spawn.
+        private static void HostDecisionAfterGuestClick()
+        {
+            using var fixture = new Fixture();
+            using var mod = new TopiaForge.Mods.Testing.FakeModContext();
+            var gamemode = fixture.Rig.Host.Seam(ModExecutionContext.GamemodeServer);
+            IModScheduler scheduler = new NetScheduler(mod.Scheduler, gamemode);
+            var readyRequested = false;
+            OperationResult<IRobotAgent>? deferred = null, decided = null;
+            Check(scheduler.Every(TimeSpan.FromSeconds(0.1), () =>
+            {
+                if (!readyRequested) return;
+                readyRequested = false;
+                decided = fixture.SpawnAutonomous(gamemode);
+            }).Succeeded, "the gamemode registers its round timer while it starts");
+            var surface = fixture.HostUi.Player(fixture.Guest.Control.Id).Ui.CreateSurface(new UiSurfaceRequest(
+                "ready", "Round", "", content: new UiColumn(new UiButton("ready", "Ready", () =>
+                {
+                    readyRequested = true;
+                    scheduler.NextFrame(() => deferred = fixture.SpawnAutonomous(gamemode));
+                })))).Value!;
+            Check(fixture.Rig.Run(() => fixture.GuestUi.Ui.Surfaces.Count == 1), "ready button arrives");
+            ((UiButton)((UiColumn)fixture.GuestUi.Ui.Surfaces[0].Content!).Children[0]).Activated();
+            Check(fixture.Rig.Run(() => readyRequested), "the guest's click reaches the host callback");
+            mod.Scheduler.AdvanceFrame(TimeSpan.FromSeconds(0.1));
+            Check(deferred?.ErrorCode == ModErrorCode.NotAuthoritative,
+                "work the guest's callback schedules keeps the guest's origin");
+            Check(decided?.Succeeded == true && !readyRequested,
+                "host code registered outside the guest's callback spawns the Autonomous robot");
+            // In the first frame the timer ran before the guest-scoped work; now it runs after it.
+            readyRequested = true;
+            decided = null;
+            mod.Scheduler.AdvanceFrame(TimeSpan.FromSeconds(0.1));
+            Check(decided?.Succeeded == true,
+                "guest-scoped scheduled work leaves no guest origin behind for later timer work");
+            GC.KeepAlive(surface);
         }
 
         private static void RemoteDismissal()
@@ -146,6 +186,8 @@ namespace TopiaForge.ModManager.Tests
                 var brains = body.BrainCalls; var talks = body.InteractionCalls;
                 var brain = robot.SetBrainMode(RobotBrainMode.Autonomous);
                 var talk = robot.SetInteraction(RobotInteractionOptions.NativeTalk());
+                var count = robots.Agents.Count;
+                var records = Rig.Host.Runtime.Spawns.Live().Count;
                 var spawn = robots.Provider.Spawn(server.Seam, new RobotAgentSpawnRequest(Vec3.Zero,
                     brainMode: RobotBrainMode.Autonomous, interaction: RobotInteractionOptions.NativeTalk()));
                 RobotAgentSpawnRequest? construction = null, replay = null;
@@ -158,7 +200,25 @@ namespace TopiaForge.ModManager.Tests
                     if (record?.Description.Descriptor is InternalSpawnDescriptor descriptor)
                         replay = RobotReplicationWire.Spawn(descriptor.Payload).Request;
                 }
-                return new Observation(brain, talk, body.BrainCalls - brains, body.InteractionCalls - talks, construction, replay);
+                var spawned = robots.Agents.Count - count;
+                var recorded = Rig.Host.Runtime.Spawns.Live().Count - records;
+                var dormant = robots.Provider.Spawn(server.Seam, new RobotAgentSpawnRequest(Vec3.Zero));
+                Check(dormant.TryGetValue(out var safe), "Dormant spawn still succeeds inside either callback");
+                var dormantBody = robots.Agents[safe!.Id];
+                var dormantRecord = Rig.Host.Runtime.Spawns.Find(dormantBody)!;
+                var dormantReplay = RobotReplicationWire.Spawn(((InternalSpawnDescriptor)dormantRecord.Description.Descriptor!).Payload).Request;
+                return new Observation(brain, talk, body.BrainCalls - brains, body.InteractionCalls - talks,
+                    spawn, spawned, recorded, construction, replay, dormantBody.Request, dormantReplay);
+            }
+
+            internal OperationResult<IRobotAgent> SpawnAutonomous(RuntimeReplication seam)
+            {
+                var spawn = robots.Provider.Spawn(seam, new RobotAgentSpawnRequest(Vec3.Zero,
+                    brainMode: RobotBrainMode.Autonomous, interaction: RobotInteractionOptions.NativeTalk()));
+                if (spawn.TryGetValue(out var made))
+                    Check(robots.Agents[made.Id].Request.BrainMode == RobotBrainMode.Autonomous,
+                        "an admitted spawn constructs an Autonomous robot");
+                return spawn;
             }
 
             public void Dispose() { server.Lifetime.Dispose(); GuestUi.Dispose(); HostUi.Dispose(); }
@@ -169,19 +229,37 @@ namespace TopiaForge.ModManager.Tests
             private readonly OperationResult<bool> brain, talk;
             private readonly int brains, talks;
             private readonly RobotAgentSpawnRequest? construction, replay;
+            private readonly RobotAgentSpawnRequest dormant, dormantReplay;
+            private readonly OperationResult<IRobotAgent> spawn;
+            private readonly int spawned, recorded;
             internal Observation(OperationResult<bool> brain, OperationResult<bool> talk, int brains, int talks,
-                RobotAgentSpawnRequest? construction, RobotAgentSpawnRequest? replay)
-            { this.brain = brain; this.talk = talk; this.brains = brains; this.talks = talks; this.construction = construction; this.replay = replay; }
+                OperationResult<IRobotAgent> spawn, int spawned, int recorded,
+                RobotAgentSpawnRequest? construction, RobotAgentSpawnRequest? replay,
+                RobotAgentSpawnRequest dormant, RobotAgentSpawnRequest dormantReplay)
+            {
+                this.brain = brain; this.talk = talk; this.brains = brains; this.talks = talks;
+                this.spawn = spawn; this.spawned = spawned; this.recorded = recorded;
+                this.construction = construction; this.replay = replay;
+                this.dormant = dormant; this.dormantReplay = dormantReplay;
+            }
 
             internal void Verify(bool guest)
             {
                 Check(guest ? brain.ErrorCode == ModErrorCode.NotAuthoritative && talk.ErrorCode == ModErrorCode.NotAuthoritative
                     : brain.Succeeded && talk.Succeeded, "wake result follows authenticated callback origin");
                 Check(brains == (guest ? 0 : 1) && talks == (guest ? 0 : 1), "wake guard runs before either native adapter effect");
+                Check(guest ? spawn.ErrorCode == ModErrorCode.NotAuthoritative && spawn.Value == null : spawn.Succeeded,
+                    "host Autonomous spawn reports the authenticated callback restriction");
+                Check(spawned == (guest ? 0 : 1) && recorded == (guest ? 0 : 1),
+                    "Autonomous refusal occurs before construction and initial ledger insertion");
                 foreach (var request in new[] { construction, replay })
-                    Check(request != null && request.BrainMode == (guest ? RobotBrainMode.Dormant : RobotBrainMode.Autonomous) &&
-                        request.Interaction.NativeTalkMode == (guest ? RobotNativeTalkMode.Disabled : RobotNativeTalkMode.Enabled),
-                        "construction and initial replay follow authenticated origin");
+                    Check(guest ? request == null : request != null && request.BrainMode == RobotBrainMode.Autonomous &&
+                        request.Interaction.NativeTalkMode == RobotNativeTalkMode.Enabled,
+                        "only trusted Autonomous requests reach construction or initial replay");
+                foreach (var request in new[] { dormant, dormantReplay })
+                    Check(request.BrainMode == RobotBrainMode.Dormant && request.Interaction.NativeTalkMode ==
+                        (guest ? RobotNativeTalkMode.Disabled : RobotNativeTalkMode.Enabled),
+                        "Dormant/default spawn preserves its existing canonical behavior");
             }
         }
 

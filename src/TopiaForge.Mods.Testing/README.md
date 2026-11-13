@@ -28,7 +28,19 @@ that one failing callback did not starve later subscribers.
 Specialist modules have first-class, engine-free fakes too:
 
 - `FakeRobotKit` groups agent, objective, brain-query, conversation, and voice-input fakes. Brain
-  queries can be held pending and completed or failed explicitly.
+  queries can be held pending and completed or failed explicitly. `Agents.IsClient = true` models safe
+  client spawning. `Agents.RunAsGuest(() => ...)` models a host callback acting for a guest: Autonomous
+  spawns and native-brain wake calls return `NotAuthoritative`, while Dormant spawns remain available.
+  Remote `FakePlayerDirectory` surface actions apply guest origin automatically. Use
+  `FakeUiSurface.DismissFromPlayer()` for a player dismissal and `Hide()` for a host-initiated hide.
+  Nested local callbacks retain guest origin; a captured context retains it on the originating thread,
+  and returning or throwing restores the caller's scope. Construct the agent service and invoke simulated
+  callbacks on the same thread: `RunAsGuest`, and spawn or native-brain calls made on another thread while
+  a guest scope is visible, throw `InvalidOperationException` rather than silently acting as the host.
+  `NextFrame`, `After` and `Every` work that the deterministic scheduler receives inside a guest scope runs
+  with that guest's origin; a continuation after `await DelayAsync(...)` resumes on a pool thread, so schedule
+  guest follow-ups with `NextFrame` or `After`. Fake modal completions need an explicit `Agents.RunAsGuest` scope; only
+  remote surface actions receive guest origin automatically.
 - `FakeCreatorContentService`, `FakeCreatorMutationSafetyService`,
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover catalog registrations, owned
   spawns, temporary native edits, persistence-isolation leases, and local event projects.

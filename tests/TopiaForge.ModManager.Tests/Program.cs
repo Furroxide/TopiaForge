@@ -75,6 +75,8 @@ namespace TopiaForge.ModManager.Tests
             { RobotInteractionAuthorityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-editor-authority")
             { RobotEditorAuthorityTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--testing-kit-robot-authority")
+            { TestingKitTests.RunRobotCallOriginTests(); return 0; }
             if (args.Length == 1 && args[0] == "--guest-brain-authority")
             { FirstPartyGuestBrainTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--first-party-local-robots")

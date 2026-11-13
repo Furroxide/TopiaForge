@@ -56,7 +56,7 @@ internal sealed class InteractionProbe
         if (scenario == "guest-custom")
         {
             using (forwarded()) result = owner.Spawn(new RobotAgentSpawnRequest(Vec3.Zero,
-                brainMode: RobotBrainMode.Autonomous, interaction: Custom()));
+                brainMode: RobotBrainMode.Dormant, interaction: Custom()));
         }
         else
         {

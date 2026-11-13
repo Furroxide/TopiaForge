@@ -164,7 +164,7 @@ namespace TopiaForge.Mods.Testing
             try
             {
                 return OperationResult<IDisposable>.Success(
-                    Add(action, dueSeconds, dueFrame, intervalSeconds, null));
+                    Add(FakeGuestOrigin.Capture(action), dueSeconds, dueFrame, intervalSeconds, null));
             }
             catch (ObjectDisposedException)
             {
