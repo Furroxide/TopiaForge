@@ -82,12 +82,10 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-        run: |
-          latest=()
-          if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
-          dotnet run --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
-            -c Release -- --source public "${latest[@]}"
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
 
       - name: Restore solution
         run: dotnet restore TopiaForge.slnx
@@ -274,13 +272,10 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
-          latest=()
-          if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
           dotnet run \
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
-            -c Release -- --source public "${latest[@]}" --write-local-props
+            -c Release -- --source public --require-latest --write-local-props
 
       - name: Build CLI test fixtures
         if: matrix.package == 'apps/topiaforge_cli'
@@ -652,12 +647,10 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-        run: |
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
-          dotnet run `
-            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
-            -c Release -- --source public @latest
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
 
       - name: Restore pinned documentation tools
         run: dotnet tool restore

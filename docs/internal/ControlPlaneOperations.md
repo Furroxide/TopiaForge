@@ -64,8 +64,10 @@ Create two environments under repository Settings, Environments, before any depl
 | Variable `CONTROL_PLANE_ORIGIN` | The staging origin, `https://…` | The production origin, `https://…` |
 
 The maintainer may dispatch the protected production run after an independent agent reviews the exact source revision and deployment plan. GitHub's admin bypass then starts the pending deployment, skipping reviewer approval for that run while retaining self-review prevention. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
-required reviewer, the documented admin-bypass and self-review settings, and custom branch rules. That replaces the governance rule that an
-environment must exist before a workflow references it: a dispatch can never create an unprotected environment.
+required reviewer, the self-review setting in the table and custom branch rules. Staging must also refuse administrator
+bypass; production deploys with bypass on or off, so turning it off needs no workflow change. That replaces the
+governance rule that an environment must exist before a workflow references it: a dispatch can never create an
+unprotected environment.
 
 Once both environments exist, register them in the governance desired state, so the live audit watches them:
 
@@ -136,8 +138,8 @@ embeds the production origin. A compiled client is not evidence that Internet pl
 
 Use this order for the first production service launch:
 
-1. Review and merge the narrowly scoped `service/production-multiplayer` pull request to `main`; its PR policy
-   permits only the service, its fixtures, deployment workflow, governance and operations documentation.
+1. Bring the service to `main`. The first launch on 2026-11-06 used a one-time service pull request; that route is
+   closed, and service changes now reach `main` only through `release/<version>`.
 2. Record an independent agent review of that exact main revision and deployment plan, then dispatch **Control plane** from it to **control-plane-production**. GitHub cannot enforce this agent-review prerequisite, so record the reviewed SHA and review result before dispatch. The maintainer uses GitHub's admin bypass only for that pending run, noting the reviewed SHA in the bypass comment, then provisions its Worker secrets as described below. Do not use the staging credential.
 3. Check production readiness with
    `python tools/multiplayer-build.py --environment production --check-only`, then complete the production
@@ -401,7 +403,7 @@ must say so before Internet play is enabled.
 
 | Symptom | Check |
 | --- | --- |
-| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, match the documented self-review and admin-bypass settings, and use custom branch rules. |
+| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, match the self-review setting in section 2.2, use custom branch rules and, for staging, refuse administrator bypass. |
 | The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
 | `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |

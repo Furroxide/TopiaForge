@@ -64,14 +64,12 @@ jobs:
           FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
           ROBOTOPIA_REFS_SOURCE: public
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/service/production-multiplayer' || github.ref == 'refs/heads/main' }}
         run: |
           $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
           try {
             dotnet run `
               --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
-              -c Release -- --probe @latest
+              -c Release -- --probe --require-latest
             if ($LASTEXITCODE -ne 0) {
               throw "Managed-reference probe failed with exit code $LASTEXITCODE."
             }
@@ -140,12 +138,10 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/service/production-multiplayer' || github.ref == 'refs/heads/main' }}
-        run: |
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
-          dotnet run `
-            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
-            -c Release -- --source public @latest
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
 
       - name: Validate 11 SDK packages and all 7 C# harnesses
         shell: bash
@@ -352,12 +348,10 @@ jobs:
           ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
           ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
           ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-          PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/service/production-multiplayer' || github.ref == 'refs/heads/main' }}
-        run: |
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
-          dotnet run `
-            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
-            -c Release -- @latest
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --require-latest
 
       - name: Download macOS x64 CLI
         if: matrix.platform == 'macos'

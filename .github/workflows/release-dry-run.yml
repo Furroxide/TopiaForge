@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - "release/**"
-      - "service/production-multiplayer"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +19,6 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' ||
       github.ref == 'refs/heads/main' ||
-      github.ref == 'refs/heads/service/production-multiplayer' ||
       startsWith(github.ref, 'refs/heads/release/')
     uses: ./.github/workflows/release-package-build.yml
     with:
