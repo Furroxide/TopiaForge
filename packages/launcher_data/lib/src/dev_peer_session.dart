@@ -137,8 +137,19 @@ final class DevPeerSession {
     );
     _launch = result;
     if (!result.processStarted) {
+      final shown = _devPeerLaunchFailure(result);
+      if (shown == result.message) {
+        throw StateError('The development peer did not start. $shown');
+      }
+      // The terminal gets only safe text; the peer's own launcher log under
+      // its overlay keeps the full error for diagnosis.
+      await repository.appendLauncherLog(
+        'Development peer ${overlay.index + 1} did not start: '
+        '${result.message}',
+      );
       throw StateError(
-        'The development peer did not start. ${_devPeerLaunchFailure(result)}',
+        'The development peer did not start. $shown The full launch error is '
+        'in ${repository.launcherLogPath}.',
       );
     }
     if (result.process == null || result.requestId == null) {
@@ -312,6 +323,13 @@ String _devPeerLaunchFailure(LaunchResult result) {
     'The reviewed host packages changed. Review hosting again.',
   };
   if (safeMessages.contains(result.message)) return result.message;
+  // This refusal carries only a variable name, so it is shown when that name
+  // is a plain identifier.
+  final reserved = _reservedVariableFailure.firstMatch(result.message);
+  if (reserved != null) {
+    return 'Profile environment cannot replace required variable '
+        '${reserved[1]}.';
+  }
   if (result.blocks.isNotEmpty) {
     final codes = result.blocks.map((block) => block.code.name).toSet().toList()
       ..sort();
@@ -321,3 +339,8 @@ String _devPeerLaunchFailure(LaunchResult result) {
   return 'Launch preparation failed. Check the development overlay and its '
       'selected packages, then retry.';
 }
+
+final _reservedVariableFailure = RegExp(
+  r'^Launch could not proceed: FormatException: Profile environment cannot '
+  r'replace required variable ([A-Za-z_][A-Za-z0-9_]*)\.$',
+);

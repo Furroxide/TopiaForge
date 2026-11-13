@@ -26,6 +26,7 @@ final class PeerSessionFixture extends LocalLauncherRepository {
   final GameProcessStopper stopOwnedProcess;
   final Future<void> Function()? disposeRepository;
   bool omitIdentity = false;
+  LaunchResult? refusal;
   void Function()? onReportPublished;
   Socket? _publicationSocket;
   void completePublication() => _publicationSocket?.write('continue\n');
@@ -87,6 +88,8 @@ final class PeerSessionFixture extends LocalLauncherRepository {
     String? expectedPackageDigest,
   }) async {
     sessionRequest = request;
+    final refused = refusal;
+    if (refused != null) return refused;
     final script = File(p.join(gameRoot, 'inert peer.dart'));
     script.writeAsStringSync(r'''
 import 'dart:async'; import 'dart:convert'; import 'dart:io';
