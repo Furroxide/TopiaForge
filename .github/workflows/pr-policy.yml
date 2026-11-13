@@ -109,8 +109,8 @@ jobs:
           git rev-parse --verify "$BASE_SHA^{commit}" >/dev/null
           git rev-parse --verify "$HEAD_SHA^{commit}" >/dev/null
           range=("$BASE_SHA..$HEAD_SHA")
-          # A sync pull request brings main's history into dev. main's own policy
-          # admitted those commits, so only the sync branch's own commits are checked.
+          # A sync pull request brings main's history into dev. Those commits are already
+          # on the protected main, so only the sync branch's own commits are checked.
           if [[ "$BASE_REF" == dev && "$HEAD_REF" == sync/main-v* ]]; then
             git fetch --force --no-tags origin main:refs/remotes/origin/main
             git rev-parse --verify "refs/remotes/origin/main^{commit}" >/dev/null
