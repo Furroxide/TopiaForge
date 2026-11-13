@@ -57,8 +57,11 @@ jobs:
 
       - name: Install managed-reference archive dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
@@ -148,8 +151,11 @@ jobs:
 
       - name: Install managed-reference archive dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
@@ -229,8 +235,11 @@ jobs:
       - name: Install managed-reference archive dependency
         if: matrix.package != 'packages/launcher_domain' && runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Install Windows managed-reference archive dependency
         if: runner.os == 'Windows'
@@ -299,7 +308,8 @@ jobs:
 
   flutter-tests:
     name: Analyze and test Flutter packages
-    # Keep the native GLib fixture's Linux baseline stable during the ubuntu-latest rollout.
+    # Pinned because the GLib helper's fallback package source names the noble suites. The pin does not fix the
+    # runners' failures to resolve the Ubuntu mirror names; the helper's signed fallback mirror handles those.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -610,8 +620,11 @@ jobs:
 
       - name: Install managed-reference archive dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache

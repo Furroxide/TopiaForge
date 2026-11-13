@@ -37,6 +37,7 @@ internal static class Program
             ("cache key output preserves CI contract", TestCacheKeyAsync),
             ("environment cache override wins over runner cache", TestCacheEnvironmentOverrideAsync),
             ("RequireLatest gates bundled probes through both public archives", TestRequireLatestBundledAsync),
+            ("a dropped manifest connection is retried twice, then fails", TestManifestRetriesAsync),
             ("auto source falls back with bundled-only authorization", TestAutoFallbackAsync),
             ("valid caches are reused and invalid caches are atomically replaced", TestCacheReuseAndRepairAsync),
             ("SHA mismatch fails before extraction", TestShaMismatchAsync),
@@ -462,6 +463,89 @@ internal static class Program
         var bundledCall = http.Calls.Single(call => call.Uri.Host == "bundled.example.invalid");
         Assert(bundledCall.Method == "HEAD", "Bundled probe did not use HEAD.");
         Assert(bundledCall.BearerToken == "secret-token" && bundledCall.HideUri, "Bundled auth/privacy policy changed.");
+    }
+
+    private static async Task TestManifestRetriesAsync()
+    {
+        foreach (var (failures, succeeds) in new[] { (2, true), (3, false) })
+        {
+            using var workspace = new TemporaryWorkspace();
+            var configPath = workspace.WriteConfiguration(WindowsSha, MacSha);
+            var environment = BundledEnvironment(Array.Empty<byte>(), "secret-token");
+            var http = new FakeHttpTransport { ManifestJson = CreateManifestJson(), ManifestConnectionFailures = failures };
+            var waits = new List<TimeSpan>();
+            using var restore = new ManagedRefsRestore(
+                CreateOptions(ManagedRefsSource.Bundled, configPath, probe: true, requireLatest: true),
+                name => environment.GetValueOrDefault(name),
+                workspace.Root,
+                workspace.TemporaryDirectory,
+                http,
+                new MarkerExtractor(),
+                new MarkerValidator(),
+                TextWriter.Null,
+                TextWriter.Null)
+            {
+                RetryDelay = (delay, _) =>
+                {
+                    waits.Add(delay);
+                    return Task.CompletedTask;
+                },
+            };
+            if (succeeds)
+            {
+                await restore.RunAsync().ConfigureAwait(false);
+                Assert(waits.Count == 2, $"Two dropped manifest connections were not retried twice ({waits.Count}).");
+                Assert(http.Calls.Count(call => call.Method == "GET-STRING") == 1, "The manifest GET ran more than once.");
+            }
+            else
+            {
+                var failed = false;
+                try
+                {
+                    await restore.RunAsync().ConfigureAwait(false);
+                }
+                catch (InvalidDataException)
+                {
+                    failed = true;
+                }
+
+                Assert(failed, "Three dropped manifest connections did not fail the restore.");
+                Assert(waits.Count == 2, $"The manifest was tried more than three times ({waits.Count + 1}).");
+            }
+        }
+
+        using (var workspace = new TemporaryWorkspace())
+        {
+            var configPath = workspace.WriteConfiguration(WindowsSha, MacSha);
+            var http = new FakeHttpTransport { ManifestJson = CreateManifestJson(), FailPublic = true };
+            var waits = 0;
+            using var restore = new ManagedRefsRestore(
+                CreateOptions(ManagedRefsSource.Bundled, configPath, probe: true, requireLatest: true),
+                name => BundledEnvironment(Array.Empty<byte>(), "secret-token").GetValueOrDefault(name),
+                workspace.Root,
+                workspace.TemporaryDirectory,
+                http,
+                new MarkerExtractor(),
+                new MarkerValidator(),
+                TextWriter.Null,
+                TextWriter.Null)
+            {
+                RetryDelay = (_, _) =>
+                {
+                    waits++;
+                    return Task.CompletedTask;
+                },
+            };
+            try
+            {
+                await restore.RunAsync().ConfigureAwait(false);
+            }
+            catch (InvalidDataException)
+            {
+            }
+
+            Assert(waits == 0, "A refused manifest request (not a dropped connection) was retried.");
+        }
     }
 
     private static async Task TestAutoFallbackAsync()
