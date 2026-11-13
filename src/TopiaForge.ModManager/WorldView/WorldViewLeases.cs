@@ -25,14 +25,24 @@ namespace TopiaForge.ModManager
         private readonly Func<IEntity, IEntity?> resolve;
         private readonly Action<IEntity>? addedTarget;
         private readonly Action<IEntity>? removedTarget;
+        private readonly Func<IEntity, IEntity, bool>? retains;
         internal long Version { get; private set; }
         internal event Action Ended = delegate { };
         internal WorldViewLeases(IInternalWorldViewRenderer renderer, Func<string?>? localPlayer = null, Func<IEntity, string?, bool>? canHide = null,
-            Func<IEntity, IEntity?>? resolve = null, Action<IEntity>? addedTarget = null, Action<IEntity>? removedTarget = null)
+            Func<IEntity, IEntity?>? resolve = null, Action<IEntity>? addedTarget = null, Action<IEntity>? removedTarget = null,
+            Func<IEntity, IEntity, bool>? retains = null)
         {
             this.renderer = renderer; this.localPlayer = localPlayer ?? (() => null); this.canHide = canHide;
             this.resolve = resolve ?? (entity => entity.IsAlive ? entity : null); this.addedTarget = addedTarget; this.removedTarget = removedTarget;
+            this.retains = retains;
             renderer.Stopped += Dispose;
+        }
+        // An unresolved target keeps a hold it already has when the owner says the held object is still that target
+        // (a player's avatar through a reconnect). It never takes a new hold on an object it cannot resolve.
+        private bool Holds(IEntity target, Hidden hold)
+        {
+            var current = resolve(target);
+            return ReferenceEquals(current, hold.Entity) || (current == null && retains?.Invoke(target, hold.Entity) == true);
         }
         internal string? EnvironmentFor(string? player) => ledger.EnvironmentFor(player);
         internal VisionFog? FogFor(string? player)
@@ -44,7 +54,7 @@ namespace TopiaForge.ModManager
         {
             if (disposed || !renderer.IsAlive) return;
             var changed = appliedPlayer != localPlayer();
-            foreach (var item in hidden) if (!ReferenceEquals(resolve(item.Key), item.Value.Entity)) { changed = true; break; }
+            foreach (var item in hidden) if (!Holds(item.Key, item.Value)) { changed = true; break; }
             if (!changed) foreach (var target in waiting) if (resolve(target) != null) { changed = true; break; }
             if (changed) Apply();
         }
@@ -83,7 +93,7 @@ namespace TopiaForge.ModManager
             waiting.Clear();
             var desired = new HashSet<IEntity>(ledger.HiddenFor(player), EntityIdentity.Instance);
             foreach (var target in hidden.Keys.ToArray())
-                if (!desired.Contains(target) || !ReferenceEquals(resolve(target), hidden[target].Entity))
+                if (!desired.Contains(target) || !Holds(target, hidden[target]))
                 { var hold = hidden[target]; hidden.Remove(target); hold.Lease.Dispose(); }
             foreach (var target in desired)
                 if (!hidden.ContainsKey(target))

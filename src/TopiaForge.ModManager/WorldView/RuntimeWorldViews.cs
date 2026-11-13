@@ -50,7 +50,11 @@ namespace TopiaForge.ModManager
                 && (services.Runtime.Realm == NetRealm.Offline || player == Local || TryName(entity, out _)),
                 entity => names.TryGetValue(entity, out var target) ? ResolveKnown(target) : entity.IsAlive ? entity : null,
                 entity => { if (!names.ContainsKey(entity) && TryName(entity, out var target)) names.Add(entity, new NamedTarget(target, entity)); },
-                entity => names.Remove(entity));
+                entity => names.Remove(entity),
+                // A player's name stops resolving for the whole reconnect grace. The root presence retains for them
+                // keeps its hold, and RefreshNames renames the target in place when the new lifetime arrives.
+                (entity, held) => names.TryGetValue(entity, out var known) && known.Name.Kind == 3
+                    && ReferenceEquals(known.Root, held) && Retained(held));
             worlds.Add(renderer, value);
             void End()
             {
@@ -261,6 +265,7 @@ namespace TopiaForge.ModManager
             if (target.Name.Kind == 3 && root != null) target.Root = root;
             return root;
         }
+        private bool Retained(IEntity entity) => entity.IsAlive && services.Presence?.IsRetainedAvatar(entity) == true;
         private sealed class NamedTarget
         {
             internal ViewTarget Name;
