@@ -101,8 +101,8 @@ bounded reference preflight, not that the native builder has fetched lore or tha
 
 Composed MuniciPal discovery is available only during `StartingMode` and `Running` for the current
 live map world. Its native composed body has no `Health`: `ApplyDamage` returns `Unavailable` and `Kill`
-despawns it. A current composition does not stop retries for native prefabs that have not loaded yet.
-Empty prefab scans retry every two seconds. A validated catalogue with no MuniciPal entry backs off
+despawns it. Native prefabs are rescanned every two seconds only while none has loaded; once one is
+cached, a current composition ends the rescans. A validated catalogue with no MuniciPal entry backs off
 from two seconds to at most thirty seconds; scene/world/session publications reset that delay.
 Other refusals keep the ordinary two-second retry so temporarily incomplete data can recover.
 
