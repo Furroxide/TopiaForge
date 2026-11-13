@@ -217,7 +217,9 @@ The testing kit follows these rules for `FakeRobotAgentService` and its agents. 
 model a guest process. Remote `FakePlayerDirectory` surface actions establish guest origin automatically;
 `FakeUiSurface.DismissFromPlayer()` simulates a player closing the window, while `Hide()` models a host call.
 Use `agents.RunAsGuest(() => ...)` for other forwarded host callbacks. Nested local surface actions cannot
-remove the outer guest origin. Captured execution contexts retain it on the originating thread, workers do
-not observe it, and return or exception cleanup restores the caller's scope. Construct the fake agent service
-and invoke simulated callbacks on the same thread, including in async test runners. Fake modal completions
-need an explicit `RunAsGuest` scope.
+remove the outer guest origin. Captured execution contexts retain it on the originating thread, and return or
+exception cleanup restores the caller's scope. The thread that constructs the fake agent service owns guest
+origin: `RunAsGuest` on another thread, and a spawn or native-brain call on another thread while a guest
+scope is visible, throw `InvalidOperationException` instead of answering as the host. An async test must
+resume on the constructing thread before it acts for a guest. Fake modal completions need an explicit
+`RunAsGuest` scope.

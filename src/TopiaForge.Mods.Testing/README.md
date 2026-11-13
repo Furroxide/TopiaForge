@@ -34,9 +34,9 @@ Specialist modules have first-class, engine-free fakes too:
   Remote `FakePlayerDirectory` surface actions apply guest origin automatically. Use
   `FakeUiSurface.DismissFromPlayer()` for a player dismissal and `Hide()` for a host-initiated hide.
   Nested local callbacks retain guest origin; a captured context retains it on the originating thread,
-  workers do not observe it, and returning or throwing restores the caller's scope. Construct the agent
-  service and invoke simulated callbacks on the same thread; async test runners must preserve that thread
-  when exercising authority. Fake modal completions need an explicit `Agents.RunAsGuest` scope; only
+  and returning or throwing restores the caller's scope. Construct the agent service and invoke simulated
+  callbacks on the same thread: `RunAsGuest`, and spawn or native-brain calls made on another thread while
+  a guest scope is visible, throw `InvalidOperationException` rather than silently acting as the host. Fake modal completions need an explicit `Agents.RunAsGuest` scope; only
   remote surface actions receive guest origin automatically.
 - `FakeCreatorContentService`, `FakeCreatorMutationSafetyService`,
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover catalog registrations, owned

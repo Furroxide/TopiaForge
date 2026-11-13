@@ -15,16 +15,22 @@ namespace TopiaForge.Mods.Testing
 
         /// <summary>
         /// Runs a host callback on behalf of a guest. Remote fake player UI actions apply this scope automatically.
-        /// Nested calls retain guest origin; a captured execution context retains it on this service's owning
-        /// thread, while worker threads do not observe it. Returning or throwing restores the caller's scope.
-        /// The thread that constructs this service owns authority: invoke simulated callbacks on that thread,
-        /// including when using an async test runner. Use this helper explicitly for fake modal completions.
+        /// Nested calls retain guest origin, and a captured execution context retains it on this service's owning
+        /// thread. Returning or throwing restores the caller's scope. The thread that constructs this service owns
+        /// authority: calling this method on another thread, or making a spawn or native-brain call on another
+        /// thread while a guest scope is visible, throws <see cref="InvalidOperationException"/> instead of
+        /// silently answering as the host. Use this helper explicitly for fake modal completions.
         /// </summary>
         [RequiresTopiaForge("0.2.0")]
-        public void RunAsGuest(Action callback) => FakeGuestOrigin.Run(
-            Environment.CurrentManagedThreadId == ownerThread, callback);
+        public void RunAsGuest(Action callback)
+        {
+            if (callback == null) throw new ArgumentNullException(nameof(callback));
+            if (Environment.CurrentManagedThreadId != ownerThread)
+                throw new InvalidOperationException(FakeGuestOrigin.OwnerThreadRule);
+            FakeGuestOrigin.Run(true, callback);
+        }
 
-        private bool IsGuestOrigin => Environment.CurrentManagedThreadId == ownerThread && FakeGuestOrigin.IsActive;
+        private bool IsGuestOrigin => FakeGuestOrigin.IsActiveFor(ownerThread);
 
         private OperationResult<IRobotAgent>? PrepareSpawn(ref RobotAgentSpawnRequest request)
         {
@@ -39,11 +45,12 @@ namespace TopiaForge.Mods.Testing
                 return OperationResult<IRobotAgent>.Failure(ModErrorCode.InvalidArgument,
                     "Robot brain and native talk values must be valid and bounded.");
 
-            if (!IsClient && IsGuestOrigin && request.BrainMode == RobotBrainMode.Autonomous)
+            var guestOrigin = !IsClient && IsGuestOrigin;
+            if (guestOrigin && request.BrainMode == RobotBrainMode.Autonomous)
                 return OperationResult<IRobotAgent>.Failure(ModErrorCode.NotAuthoritative,
                     "A guest-origin callback cannot spawn an Autonomous robot, even when it runs on the host. Request Dormant instead.");
 
-            if (IsClient || IsGuestOrigin)
+            if (IsClient || guestOrigin)
                 request = new RobotAgentSpawnRequest(request.Position, request.Facing, RobotBrainMode.Dormant,
                     request.Gait, request.MoveSpeed, request.TurnSpeed, request.StopDistance, request.Tint,
                     request.Name, request.Scale, request.Interaction.CustomInteraction != null

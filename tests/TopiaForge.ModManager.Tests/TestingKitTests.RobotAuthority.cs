@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
             TestRobotAuthorityScopes();
             TestRobotAuthorityClient();
             TestRobotAuthorityUi();
+            TestRobotCallOriginOwnerThread();
             Console.WriteLine("Testing kit robot authority passed.");
         }
 
@@ -59,10 +60,16 @@ namespace TopiaForge.ModManager.Tests
                     "host guest-origin Dormant spawn retains custom interaction support");
                 Assert(service.Spawn(new RobotAgentSpawnRequest(Vec3.Zero, brainMode: (RobotBrainMode)2)).ErrorCode ==
                     ModErrorCode.InvalidArgument, "invalid original brain is not normalized into success");
-                // Observe without mutating fake collections concurrently with the owner thread.
-                Assert(Task.Run(() => robot.SetBrainMode(RobotBrainMode.Autonomous).Succeeded).GetAwaiter().GetResult(),
-                    "workers do not observe owner-thread forwarded origin, matching the production scope");
-                robot.SetBrainMode(RobotBrainMode.Dormant);
+                // Each refusal throws before the fake mutates anything, so the owner thread is never raced.
+                var agents = service.ActiveAgents.Count;
+                AssertThrows<InvalidOperationException>(() => Task.Run(() =>
+                    robot.SetBrainMode(RobotBrainMode.Autonomous)).GetAwaiter().GetResult(),
+                    "a worker that inherits guest origin fails instead of waking the robot as the host");
+                AssertThrows<InvalidOperationException>(() => Task.Run(() =>
+                    service.Spawn(AutonomousRobot())).GetAwaiter().GetResult(),
+                    "a worker that inherits guest origin fails instead of spawning as the host");
+                Assert(robot.BrainMode == RobotBrainMode.Dormant && service.ActiveAgents.Count == agents,
+                    "off-thread guest calls change nothing");
             });
 
             Assert(captured != null, "forwarded context captured");
@@ -81,6 +88,35 @@ namespace TopiaForge.ModManager.Tests
             context.Dispose();
             service.RunAsGuest(() => Assert(!robot.SetBrainMode(RobotBrainMode.Autonomous).Succeeded && !robot.IsAlive,
                 "guest helper cannot revive an ended robot lifetime"));
+        }
+
+        private static void TestRobotCallOriginOwnerThread()
+        {
+            using var context = new FakeModContext();
+            using var players = new FakePlayerDirectory();
+            var service = new FakeRobotKit(context.Lifetime).Agents;
+            var invoked = false;
+            var thrown = Task.Run(() =>
+            {
+                try { service.RunAsGuest(() => invoked = true); return null; }
+                catch (InvalidOperationException exception) { return exception; }
+            }).GetAwaiter().GetResult();
+            Assert(thrown != null && thrown.Message.Contains("thread that created it", StringComparison.Ordinal) && !invoked,
+                "RunAsGuest on another thread names the owning-thread rule and runs nothing");
+
+            var remotePlayer = players.Add(new ParticipantId("guest"), "Guest");
+            var remote = (FakeUiSurface)remotePlayer.Ui.CreateSurface(new UiSurfaceRequest("remote", "Robot", "",
+                content: new UiColumn(new UiButton("wake", "Wake", () => service.Spawn(AutonomousRobot()))))).Value!;
+            var pressed = Task.Run(() => remote.ActivateButton("wake")).GetAwaiter().GetResult();
+            Assert(!pressed.Succeeded && service.ActiveAgents.Count == 0 && remote.CallbackErrors.Count == 1 &&
+                remote.CallbackErrors[0].Contains("thread that created it", StringComparison.Ordinal),
+                "a remote player action on another thread fails its callback instead of spawning as the host");
+            Assert(remote.ActivateButton("wake").Succeeded && service.ActiveAgents.Count == 0,
+                "the same action on the owning thread is refused as a guest callback");
+
+            var hosted = Task.Run(() => service.Spawn(AutonomousRobot())).GetAwaiter().GetResult();
+            Assert(hosted.Succeeded && hosted.Value!.BrainMode == RobotBrainMode.Autonomous,
+                "host calls outside any guest scope keep working on other threads");
         }
 
         private static void TestRobotAuthorityClient()

@@ -5,14 +5,26 @@ using System.Threading;
 namespace TopiaForge.Mods.Testing
 {
     // The fake models the runtime's flowing record and synchronous ancestors separately.
-    // Captured contexts remain restricted on their originating thread; workers never observe them.
+    // Captured contexts remain restricted on their originating thread. Guest origin is only meaningful on the
+    // thread that owns the fake robot service, so reading it anywhere else fails instead of answering as the host.
     internal static class FakeGuestOrigin
     {
+        internal const string OwnerThreadRule =
+            "The fake robot service models guest origin only on the thread that created it. Call RunAsGuest, " +
+            "simulate player UI actions and make the robot calls they trigger on that thread; an async test must " +
+            "resume on that thread before acting for a guest.";
+
         private static readonly AsyncLocal<Record?> flowing = new AsyncLocal<Record?>();
         [ThreadStatic] private static List<Record>? ancestors;
 
-        internal static bool IsActive =>
-            flowing.Value?.Thread == Environment.CurrentManagedThreadId || ancestors?.Count > 0;
+        internal static bool IsActiveFor(int ownerThread)
+        {
+            var record = flowing.Value;
+            if (record == null && !(ancestors?.Count > 0)) return false;
+            if (Environment.CurrentManagedThreadId != ownerThread || (record != null && record.Thread != ownerThread))
+                throw new InvalidOperationException(OwnerThreadRule);
+            return true;
+        }
 
         internal static void Run(bool guest, Action callback)
         {
