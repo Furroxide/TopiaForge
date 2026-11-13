@@ -252,7 +252,8 @@ private sealed class Round : IGamemodeController
 ```
 
 The host's own state decides whether the round starts and what it spawns. Take nothing from the guest's
-click except the request itself.
+click except the request itself. Register the timer from code that a guest's input did not start: a timer
+registered inside a guest-origin callback keeps that guest's origin for as long as it runs.
 
 The testing kit follows these rules for `FakeRobotAgentService` and its agents. Set `IsClient = true` to
 model a guest process. Remote `FakePlayerDirectory` surface actions establish guest origin automatically;

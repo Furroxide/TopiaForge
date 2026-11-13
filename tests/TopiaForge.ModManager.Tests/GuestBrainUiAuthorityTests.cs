@@ -50,6 +50,12 @@ namespace TopiaForge.ModManager.Tests
                 "work the guest's callback schedules keeps the guest's origin");
             Check(decided?.Succeeded == true && !readyRequested,
                 "host code registered outside the guest's callback spawns the Autonomous robot");
+            // In the first frame the timer ran before the guest-scoped work; now it runs after it.
+            readyRequested = true;
+            decided = null;
+            mod.Scheduler.AdvanceFrame(TimeSpan.FromSeconds(0.1));
+            Check(decided?.Succeeded == true,
+                "guest-scoped scheduled work leaves no guest origin behind for later timer work");
             GC.KeepAlive(surface);
         }
 
