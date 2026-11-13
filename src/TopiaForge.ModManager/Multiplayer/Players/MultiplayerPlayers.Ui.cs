@@ -92,7 +92,7 @@ namespace TopiaForge.ModManager
             Writer.WriteString(message); Writer.WriteByte((byte)tone);
             return SendUi(player);
         }
-        internal OperationResult<bool> SendSurface(RemoteUiSurface surface)
+        internal OperationResult<bool> SendSurface(RemoteUiSurface surface, bool retained = false)
         {
             try
             {
@@ -102,7 +102,8 @@ namespace TopiaForge.ModManager
                 Writer.WriteByte((byte)request.Kind); Writer.WriteSingle(request.Width); Writer.WriteSingle(request.Height);
                 Writer.WriteByte((byte)request.HudAnchor); Writer.WriteByte((byte)request.HudVisibility);
                 Writer.WriteByte(surface.Visible ? (byte)1 : (byte)0);
-                UiNodeWireCodec.Write(Writer, surface.Content, UiClockEpoch);
+                if (retained) UiNodeWireCodec.WriteRetained(Writer, surface.Content, UiClockEpoch);
+                else UiNodeWireCodec.Write(Writer, surface.Content, UiClockEpoch);
                 var result = SendUi(surface.Target.Id);
                 if (result.Succeeded) { surface.Dirty = false; surface.Stream = Channel?.GetGeneration(surface.Target.Id) ?? 0; }
                 return result;
@@ -158,7 +159,7 @@ namespace TopiaForge.ModManager
                 {
                     if (!Present(s.Target.Id) || CloseRemote(s.Context, s.Target.Id, s.Token)) surfaces.RemoveAt(i);
                 }
-                else if (s.Dirty || s.Stream != (Channel?.GetGeneration(s.Target.Id) ?? 0)) SendSurface(s);
+                else if (s.Dirty || s.Stream != (Channel?.GetGeneration(s.Target.Id) ?? 0)) SendSurface(s, retained: true);
             }
             for (var i = modals.Count - 1; i >= 0; i--)
             {

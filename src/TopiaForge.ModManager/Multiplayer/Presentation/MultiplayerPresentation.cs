@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager
         private readonly Func<PresentationSink> receiverFactory;
         private PresentationSink? receiver;
         private byte[] baseline = Array.Empty<byte>();
+        private string? baselineClockEpoch;
         private ulong version = 1, publishedVersion, nextToken;
         private int surfaceBytes;
         internal long Now => players.Now;
@@ -69,19 +70,19 @@ namespace TopiaForge.ModManager
             return OperationResult<IUiSurface>.Success(hud);
         }
 
-        internal bool Change(MirroredHudPresenter hud, byte[]? payload, bool commit = true)
+        internal bool Change(MirroredHudPresenter hud, MirroredHudPresenter.EncodedHud? payload, bool commit = true)
         {
             var registered = surfaces.Contains(hud);
-            var next = surfaceBytes - (registered ? hud.Bytes : 0) + (payload?.Length ?? 0) + 4;
+            var next = surfaceBytes - (registered ? hud.Bytes : 0) + (payload?.Bytes.Length ?? 0) + 4;
             if (payload == null || next > MaximumBytes || (!registered && surfaces.Count >= MaximumSurfaces))
             {
                 if (Hosting) return false;
-                if (commit) { Remove(hud); hud.Payload = null; }
+                if (commit) { Remove(hud); hud.Encoded = null; }
                 return true;
             }
             if (!commit) return true;
             if (!registered) surfaces.Add(hud);
-            surfaceBytes = next; hud.Payload = payload; version++;
+            surfaceBytes = next; hud.Encoded = payload; version++;
             return true;
         }
 
@@ -91,23 +92,31 @@ namespace TopiaForge.ModManager
             surfaceBytes -= hud.Bytes; version++;
         }
 
-        internal bool ChangeVisibility(MirroredHudPresenter hud, byte[]? payload, bool commit = true) =>
+        internal bool ChangeVisibility(MirroredHudPresenter hud, MirroredHudPresenter.EncodedHud? payload, bool commit = true) =>
             !surfaces.Contains(hud) || Change(hud, payload, commit);
 
         internal void RefreshClockBindings()
         {
+            var epoch = UiClockEpoch;
             for (var i = surfaces.Count - 1; i >= 0; i--)
-                if (surfaces[i].IsAlive) surfaces[i].RefreshClockBinding();
+                if (surfaces[i].IsAlive) surfaces[i].RefreshClockBinding(epoch);
         }
 
         internal void Send()
         {
             if (!Hosting) return;
+            var epoch = UiClockEpoch;
             for (var i = surfaces.Count - 1; i >= 0; i--)
-                if (surfaces[i].Context.Lifetime.IsStopping || !surfaces[i].IsAlive) surfaces[i].Dispose();
+            {
+                var surface = surfaces[i];
+                if (surface.Context.Lifetime.IsStopping || !surface.IsAlive) surface.Dispose();
+                else surface.RefreshClockBinding(epoch);
+            }
             ReconcileAudio();
             if (coalescer.Offer(version, Now) == HudMirrorDecision.SendNow || coalescer.TryFlush(Now, out _))
                 PublishBaseline();
+            // A new stream must wait for the coalescer rather than receive a baseline from an ended clock.
+            if (baselineClockEpoch != null && baselineClockEpoch != epoch) return;
             var snapshot = players.Snapshot!;
             var channel = players.Channel!;
             departed.Clear();
@@ -135,7 +144,13 @@ namespace TopiaForge.ModManager
         {
             writer.Begin(30); writer.WriteString(""); writer.WriteVarUInt(version);
             writer.WriteVarUInt((ulong)surfaces.Count);
-            for (var i = 0; i < surfaces.Count; i++) writer.WriteBytes(surfaces[i].Payload!);
+            baselineClockEpoch = null;
+            for (var i = 0; i < surfaces.Count; i++)
+            {
+                var payload = surfaces[i].Encoded!.Value;
+                writer.WriteBytes(payload.Bytes);
+                baselineClockEpoch ??= payload.ClockEpoch;
+            }
             WriteLoops(writer);
             baseline = Copy(writer); publishedVersion = version;
         }
