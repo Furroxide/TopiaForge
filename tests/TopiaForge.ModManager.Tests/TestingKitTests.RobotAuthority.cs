@@ -9,13 +9,19 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class TestingKitTests
     {
+        // The focused selector reports this group by name; the full testing-kit run reports one summary line.
         internal static void RunRobotCallOriginTests()
+        {
+            TestRobotCallOrigin();
+            Console.WriteLine("Testing kit robot authority passed.");
+        }
+
+        private static void TestRobotCallOrigin()
         {
             TestRobotAuthorityScopes();
             TestRobotAuthorityClient();
             TestRobotAuthorityUi();
             TestRobotCallOriginOwnerThread();
-            Console.WriteLine("Testing kit robot authority passed.");
         }
 
         private static RobotAgentSpawnRequest AutonomousRobot() =>

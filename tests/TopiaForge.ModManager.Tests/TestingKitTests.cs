@@ -16,7 +16,7 @@ namespace TopiaForge.ModManager.Tests
             TestSchedulerAndControlledCompletion();
             TestExpectedCancellationResults();
             TestSpecialistModuleFakes();
-            RunRobotCallOriginTests();
+            TestRobotCallOrigin();
             TestWorldAssetOverrideFake();
             TestLocalWorldFake();
             TestWorldPauseMenuFake();
