@@ -43,6 +43,13 @@ namespace TopiaForge.ModManager
             finally { ticking = false; }
         }
 
+        private static bool Heard(Playback operation)
+        {
+            var heard = operation.Task?.IsCompleted == true && operation.Task.Result.Succeeded && operation.Task.Result.Value;
+            foreach (var recipient in operation.Recipients) heard |= recipient.Heard;
+            return heard;
+        }
+
         private void TickCore()
         {
             var nextRealm = services.Runtime.Realm;
@@ -91,6 +98,9 @@ namespace TopiaForge.ModManager
                 var cancelled = operation.CancellationRequested;
                 if (cancelled || deadlineReached)
                 {
+                    // At the deadline, a line that a listener already heard to the end succeeds even though another
+                    // listener has not finished or reported.
+                    var heardBeforeDeadline = !cancelled && realm != NetRealm.Client && Heard(operation);
                     var failure = cancelled || realm == NetRealm.Client
                         ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Robot speech was cancelled.")
                         : OperationResult<bool>.Failure(ModErrorCode.TimedOut, "Robot speech did not finish within 15 seconds.");
@@ -100,7 +110,7 @@ namespace TopiaForge.ModManager
                     foreach (var recipient in operation.Recipients) SendCancel(operation, recipient);
                     if (realm == NetRealm.Client) SendFinished(operation, completed: false);
                     operation.DisposeLocal();
-                    operation.Completion.TrySetResult(failure);
+                    operation.Completion.TrySetResult(heardBeforeDeadline ? OperationResult<bool>.Success(true) : failure);
                     i = active.Count;
                     continue;
                 }
@@ -142,9 +152,7 @@ namespace TopiaForge.ModManager
                 var result = operation.Failure;
                 // A line is heard when at least one listener played it to the end, even if another listener left
                 // or one copy failed: a caller that retries would otherwise repeat it to everyone who heard it.
-                var heard = operation.Task?.IsCompleted == true && operation.Task.Result.Succeeded && operation.Task.Result.Value;
-                foreach (var recipient in operation.Recipients) heard |= recipient.Heard;
-                if (heard) result = null;
+                if (Heard(operation)) result = null;
                 else if (operation.ListenerLost)
                     result = OperationResult<bool>.Failure(ModErrorCode.Unavailable, "A robot speech listener became unavailable.");
                 else if (result?.ErrorCode == ModErrorCode.Cancelled)

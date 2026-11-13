@@ -21,8 +21,9 @@ namespace TopiaForge.Mods
         /// waits the same pace without synthesis or replay. Sequential awaits therefore do not replace or rate-limit
         /// their predecessor.
         /// A listener lost during playback does not fail the line while another heard it to the end; Unavailable
-        /// means nobody did, so check who could have heard it before repeating a line. A line still pending at
-        /// the host's 15-second deadline returns TimedOut. Caller cancellation, replacement, or retirement
+        /// means nobody did, so check who could have heard it before repeating a line. At the host's 15-second
+        /// deadline the remaining copies stop, and the line returns TimedOut unless a listener had already heard it to
+        /// the end. Caller cancellation, replacement, or retirement
         /// of the owning scope, provider or world returns Cancelled.
         /// Completion reports native task completion, not proof of audible sound. Concurrent calls still share budgets.
         /// </summary>
