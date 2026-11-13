@@ -2632,7 +2632,10 @@ The rules are `PresencePolicy`'s, checked in exact arithmetic on the grid and in
   A link or stream return retains the last accepted anchor and those allowances, so ordinary movement during a short
   interruption stands while a new arbitrary position does not. Disconnected and stale positions still fail motion.
   Losing the owned scene or activating a replacement immediately withholds the running world and spawn. A local
-  keep-controller session still Running when its queued scene handler executes ends with a failed session outcome:
+  keep-controller session still Running when its queued scene handler executes ends with a failed session outcome if
+  the game is online at that moment; the handler reads the realm then, not the realm recorded at launch, so a world
+  started alone and opened to players later counts as online. Offline, the session keeps running with its world and
+  spawn still withheld, so opening it to players afterwards places no avatars until the world starts again. Online,
   the provider's immutable readiness cannot validate replacement content and spawn. The host must start the world again;
   a Players placement cannot recover that session. An explicit stop, restart, new launch or menu return that starts
   retirement first keeps its own result. The delayed scene handler cannot fail that retirement or affect a successor.

@@ -158,10 +158,18 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestScenePolicy(string root)
         {
-            foreach (var ends in new[] { false, true })
+            foreach (var (ends, online) in new[] { (true, false), (false, false), (false, true) })
             {
-                using var test = new SessionFixture(root + ends, ends);
+                using var test = SessionFixture.Hostable(root + ends + online, ends);
+                var disposed = 0;
+                SessionFixture.Start = (started, _) =>
+                {
+                    SessionFixture.ModeSession = started;
+                    return Task.FromResult(OperationResult<IGamemodeController>.Success(new SessionTestController(() => disposed++)));
+                };
                 test.Launch();
+                // Opened after launch: the realm recorded when the world started is still single player.
+                if (online) test.OpenToPlayers();
                 var session = SessionFixture.ModeSession!;
                 test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-12, "World", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
                 test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(100, "Background", SceneLifecyclePhase.Loaded, SceneLoadMode.Additive, false));
@@ -170,18 +178,34 @@ namespace TopiaForge.ModManager.Tests
                 test.Host.Drain();
                 Assert(test.Hosted.Current.Phase == SessionPhase.Running, "duplicate, additive background and initial events do not end gameplay");
                 test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-20, "Replacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
+                if (!ends && !online)
+                {
+                    test.Until(() => !test.Host.HasPendingWork);
+                    Assert(test.Hosted.Current.Phase == SessionPhase.Running && test.Hosted.Current.Identity?.SessionId == session.SessionId
+                        && disposed == 0 && ReferenceEquals(session, SessionFixture.ModeSession) && !test.Outcomes.Any(item => item.Kind == "session"),
+                        "single player keeps its keep-controller session, controller and world after losing the owned scene");
+                    Assert(test.Hosted.RunningWorldId == null && test.Hosted.RunningSpawn == null,
+                        "the kept session's old readiness still names no running world or spawn");
+                    var stopped = session.StopAsync(); test.Wait(stopped);
+                    test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+                    var kept = test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == session.SessionId);
+                    Assert(stopped.Result.Succeeded && kept.Status == "succeeded" && kept.Error == null && disposed == 1,
+                        "the kept session later stops normally, with no readiness failure attached");
+                    continue;
+                }
                 test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
                 var terminal = test.Outcomes.Single(item => item.Kind == "session" && item.SessionId == session.SessionId);
-                Assert(ReferenceEquals(session, SessionFixture.ModeSession), "scene notifications never reconstruct a controller");
+                Assert(ReferenceEquals(session, SessionFixture.ModeSession) && disposed == 1, "scene notifications never reconstruct a controller");
                 Assert(ends ? terminal.Status == "succeeded" && terminal.Error == null
                     : terminal.Status == "failed" && terminal.Error?.Message == GamemodeSessionOrchestrator.LostWorldReadinessMessage,
-                    "owned-scene loss stops end-session normally and explicitly fails keep-controller without fresh readiness");
+                    "owned-scene loss stops end-session normally and fails an online keep-controller session without fresh readiness");
             }
         }
 
         private static void TestDeferredSceneFailure(string root)
         {
-            using var test = new SessionFixture(root);
+            using var test = SessionFixture.Hostable(root);
+            test.OpenToPlayers();
             var failures = 0;
             var deferred = false;
             test.Hosted.DiagnosticFailure += error =>
@@ -252,8 +276,10 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestDelayedSceneOwnership(string root, bool endOnScene)
         {
-            using var test = new SessionFixture(root, endOnScene: endOnScene);
+            // Keep-controller loses its world only online, so that case is a host that opened to players.
+            using var test = SessionFixture.Hostable(root, endOnScene);
             test.Launch();
+            if (!endOnScene) test.OpenToPlayers();
             var previous = SessionFixture.ModeSession!;
             test.Dispatch.HoldNextPost = true;
             test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-20, "OldReplacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
@@ -277,8 +303,9 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestExplicitRestartBeforeSceneFailure(string root)
         {
-            using var test = new SessionFixture(root);
+            using var test = SessionFixture.Hostable(root);
             test.Launch();
+            test.OpenToPlayers();
             var previous = SessionFixture.ModeSession!;
             var readiness = new WorldReadiness(new WorldSceneIdentity(-30, "Replacement"),
                 new TransformState(new Vec3(100, 0, 0), Quat.Identity, new Vec3(1, 1, 1)));
@@ -321,10 +348,11 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestCapturedReadiness(string root, bool endOnScene)
         {
-            using var test = new SessionFixture(root, endOnScene: endOnScene);
+            using var test = SessionFixture.Hostable(root, endOnScene);
             var world = new ChangingReadinessWorld();
             SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(world));
             test.Launch();
+            if (!endOnScene) test.OpenToPlayers();
             test.Hosted.OnSceneLifecycle(new SceneLifecycleEvent(-20, "Replacement", SceneLifecyclePhase.Activated, SceneLoadMode.Single, true));
             test.Until(() => !test.Host.HasPendingWork);
             Assert(test.Hosted.Current.Phase == SessionPhase.Idle && world.Reads == 1,

@@ -173,9 +173,12 @@ before admission, and a stale or stopped session cannot affect a successor. Rest
 the original selection. `sceneChangePolicy` defaults to `keep-controller`. Initial snapshots,
 activation of the current scene instance, and unrelated background additive loads leave the
 controller running. Losing the owned scene or activating a replacement invalidates world readiness:
-`end-session` stops normally. If the queued scene handler still owns a running keep-controller
-session, it ends that session with a failed outcome explaining that fresh world readiness cannot
-be established. Start the world again to continue. An explicit stop, restart, new launch or menu
+`end-session` stops normally. In single player, a keep-controller session keeps running with its
+controller, but its old readiness can no longer place other players, so start the world again
+before opening it to players. Online, including a world started alone and opened to players later,
+a queued scene handler that still owns a running keep-controller session ends it with a failed
+outcome explaining that fresh world readiness cannot be established. Start the world again to
+continue. An explicit stop, restart, new launch or menu
 return that starts retiring the session first keeps its own result; the delayed scene handler
 cannot fail that retirement or affect a successor. The provider's original readiness cannot
 validate replacement content or its spawn, and scene notifications never create a replacement

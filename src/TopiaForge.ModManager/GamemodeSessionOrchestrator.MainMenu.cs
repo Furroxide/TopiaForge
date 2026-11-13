@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -148,13 +149,18 @@ namespace TopiaForge.ModManager
                 var record = current;
                 if (record == null || !ReferenceEquals(record.Identity, owner) || lifecycle.Current.Phase != SessionPhase.Running
                     || !InvalidatesPresenceReadiness(record, scene)) return;
-                // The provider owns immutable readiness for the lost scene. Retaining the controller here would
-                // leave Running with presence permanently closed; no existing contract can revalidate its world.
-                if (record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy
-                    && !record.PresenceFailureReported)
+                if (record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy)
                 {
-                    record.PresenceFailureReported = true; // Stop admission may defer; duplicate events report once.
-                    record.Errors.Add(new InvalidOperationException(LostWorldReadinessMessage));
+                    // Single player keeps its controller: no other player's presence needs the lost readiness. The realm
+                    // is read now, not at launch, because a host that started alone and opened to players later is online.
+                    if (RealmOf(record.Snapshot.Contexts[record.Mode.Package.Id]) == NetRealm.Offline) return;
+                    // Online, the provider owns immutable readiness for the lost scene. Retaining the controller here would
+                    // leave Running with presence permanently closed; no existing contract can revalidate its world.
+                    if (!record.PresenceFailureReported)
+                    {
+                        record.PresenceFailureReported = true; // Stop admission may defer; duplicate events report once.
+                        record.Errors.Add(new InvalidOperationException(LostWorldReadinessMessage));
+                    }
                 }
                 RequestBoundStop(record.Identity.SessionId);
             });

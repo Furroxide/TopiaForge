@@ -65,7 +65,10 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ReplacedScenesEndWithAReadinessFailure(string root, SceneLifecyclePhase change)
         {
-            using var test = new SessionFixture(root);
+            // The host starts its world alone and opens it to players afterwards, so the realm at launch is single player.
+            var rig = new PresenceRig();
+            using var test = new SessionFixture(root, replication: rig.Host.Replication);
+            rig.Host.Runtime.SessionPhaseSource = () => test.Hosted.RealmPhase;
             var spawn = new TransformState(new Vec3(900, 0, 0), Quat.Identity, new Vec3(1, 1, 1));
             var world = new SpawnWorld(spawn);
             SessionFixture.Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(world));
@@ -75,12 +78,12 @@ namespace TopiaForge.ModManager.Tests
                 SessionFixture.ModeSession = session;
                 return Task.FromResult(OperationResult<IGamemodeController>.Success(new SessionTestController(() => controllersDisposed++)));
             };
+            rig.Frames(1);
+            That(rig.Host.Runtime.Realm == NetRealm.Offline, "the world starts in single player");
             test.Launch();
             var original = SessionFixture.ModeSession!;
-            var rig = new PresenceRig();
             var scene = new FollowedScene();
             scene.Activated("World", -12);
-            rig.Host.Runtime.SessionPhaseSource = () => test.Hosted.RealmPhase;
             rig.Host.Presence.RunningWorld = () => test.Hosted.RunningWorldId;
             rig.Host.Presence.RunningSpawn = () => test.Hosted.RunningSpawn;
             rig.Host.Presence.SceneVersion = () => scene.Version;

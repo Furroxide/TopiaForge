@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
+using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -79,6 +80,34 @@ namespace TopiaForge.ModManager.Tests
             Dispatch = new DelayedSessionDispatcher(Host);
             Hosted = new GamemodeSessionOrchestrator(Dispatch, decorateNative?.Invoke(Native) ?? Native, this, "runtime-fixture");
             Hosted.Outcome += Outcomes.Add;
+        }
+
+        private MultiplayerRuntime? runtime;
+        private FakeMultiplayerControl? control;
+
+        /// <summary>
+        /// A session fixture whose composition root starts in single player, as a host who starts a world alone does;
+        /// <see cref="OpenToPlayers"/> then makes it a listen host, before or after a launch.
+        /// </summary>
+        internal static SessionFixture Hostable(string root, bool endOnScene = false)
+        {
+            var (runtime, control, _) = Seam.Runtime(() => SessionPhase.Idle);
+            control.Role = InternalSessionRole.Solo;
+            runtime.Connect();
+            Seam.Frame(runtime);
+            var test = new SessionFixture(root, endOnScene, replication: new MultiplayerReplication(runtime)) { runtime = runtime, control = control };
+            runtime.SessionPhaseSource = () => test.Hosted.RealmPhase;
+            GamemodeSessionOrchestratorTests.Assert(runtime.Realm == NetRealm.Offline, "a hostable fixture starts in single player");
+            return test;
+        }
+
+        /// <summary>Opens this game to players, as hosting does, and runs one frame so the realm follows.</summary>
+        internal void OpenToPlayers()
+        {
+            if (runtime == null || control == null) throw new InvalidOperationException("Only a hostable fixture opens to players.");
+            control.Role = InternalSessionRole.ListenHost;
+            Seam.Frame(runtime);
+            GamemodeSessionOrchestratorTests.Assert(runtime.Realm == NetRealm.ListenHost, "the fixture is a listen host once open");
         }
 
         public GameplayContextServices Create(string ownerModId, string packagePath, string dataPath,
