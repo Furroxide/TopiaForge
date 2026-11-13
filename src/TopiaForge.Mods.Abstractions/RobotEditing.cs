@@ -4,12 +4,11 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods
 {
     /// <summary>
-    /// Discovers robots that RobotKit can edit temporarily without expanding the ownership of
-    /// <see cref="IRobotAgentService"/>.
+    /// Discovers native scene robots eligible for temporary editing.
     /// </summary>
     /// <remarks>
-    /// This optional extension is published by RobotKit. Every edit is represented by a lease whose disposal
-    /// restores the captured native state; the contract deliberately has no commit operation.
+    /// This optional extension is published by RobotKit. Leases restore captured native state for eligible
+    /// targets on disposal. RobotKit-managed robots, including replicas, are outside the editor's authority.
     /// </remarks>
     public interface IRobotSceneEditorService
     {
@@ -19,7 +18,10 @@ namespace TopiaForge.Mods
         /// <summary>Gets the current bounded, deterministic set of editable robots.</summary>
         IReadOnlyList<IRobotEditTarget> Targets { get; }
 
-        /// <summary>Resolves a RobotKit-managed agent to an editable scene target.</summary>
+        /// <summary>
+        /// Resolves a RobotKit robot to an edit target that allows only a temporary personality preview; move it and
+        /// change its brain through <see cref="IRobotAgent"/>. Returns false when the robot cannot be edited.
+        /// </summary>
         bool TryResolve(IRobotAgent agent, out IRobotEditTarget? target);
 
         /// <summary>Begins an exclusive, lifetime-owned temporary edit.</summary>
@@ -102,7 +104,10 @@ namespace TopiaForge.Mods
         /// <summary>Applies a temporary native autonomous personality.</summary>
         OperationResult<bool> PreviewPersonality(RobotPersonalityDraft personality);
 
-        /// <summary>Restores every changed property. Repeated calls succeed with <c>false</c>.</summary>
+        /// <summary>
+        /// Restores changes that still belong to this lease. If the target becomes RobotKit-managed, the
+        /// lease ends without writing its captured state back. Repeated calls succeed with <c>false</c>.
+        /// </summary>
         OperationResult<bool> Restore();
     }
 }

@@ -5,13 +5,14 @@ namespace TopiaForge.RobotKit
 {
     internal sealed class RobotEditTarget : IRobotEditTarget
     {
+        internal const string ManagedRobotMessage = "RobotKit-managed robots cannot be edited by the scene editor.";
         private readonly GameObject root;
 
-        public RobotEditTarget(GameObject root, Component agent, bool isNativeSceneObject)
+        public RobotEditTarget(GameObject root, Component agent, bool managed = false)
         {
             this.root = root;
             Agent = agent;
-            IsNativeSceneObject = isNativeSceneObject;
+            Managed = managed;
             InstanceId = root.GetInstanceID();
             SceneHandle = root.scene.handle;
             Id = "robot-scene:" + InstanceId;
@@ -21,11 +22,23 @@ namespace TopiaForge.RobotKit
         public string DisplayName => root != null ? root.name : string.Empty;
         public string SceneName => root != null && root.scene.IsValid() ? root.scene.name : string.Empty;
         public bool IsAlive => root != null && Agent != null && root.scene.IsValid() && root.scene.handle == SceneHandle;
-        public bool IsNativeSceneObject { get; }
+        public bool IsNativeSceneObject => !Managed;
+        // Resolved from a RobotKit robot's own agent: only a personality preview is allowed.
+        internal bool Managed { get; }
         public int InstanceId { get; }
         public int SceneHandle { get; }
         internal GameObject Root => root;
         internal Component Agent { get; }
+        internal bool IsManaged => HasManagedRobot(root, Agent);
+
+        internal static bool HasManagedRobot(GameObject root, Component agent)
+        {
+            // The spawn anchor can be above a composed RobotBody. Brain and transform edits also
+            // reach below the selected root, so check its subtree without scanning adjacent actors.
+            return root.GetComponentInParent<RobotAgentEntityIdentityAnchor>(true) != null
+                || root.GetComponentInChildren<RobotAgentEntityIdentityAnchor>(true) != null
+                || agent.GetComponentInParent<RobotAgentEntityIdentityAnchor>(true) != null;
+        }
 
         public bool TryGetTransform(out TransformState transform)
         {

@@ -9,6 +9,7 @@ namespace TopiaForge.RobotKit
         private readonly RobotEditTarget target;
         private readonly IModLogger logger;
         private readonly Action released;
+        private readonly Func<bool>? remoteCaller;
         private readonly TransformState originalTransform;
         private readonly GameReflection.BrainStateSnapshot? originalBrain;
         private readonly object? originalHackedPersonality;
@@ -18,11 +19,15 @@ namespace TopiaForge.RobotKit
         private object? temporaryPersonality;
         private bool active = true;
 
-        public RobotEditLease(RobotEditTarget target, IModLogger logger, Action released)
+        internal const string RemoteCallerMessage = "Only the host's own code can give a robot a personality or wake its brain.";
+        internal const string ManagedEditMessage = "A RobotKit robot accepts only a personality preview here; move it and change its brain through IRobotAgent.";
+
+        public RobotEditLease(RobotEditTarget target, IModLogger logger, Action released, Func<bool>? remoteCaller = null)
         {
             this.target = target ?? throw new ArgumentNullException(nameof(target));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.released = released ?? throw new ArgumentNullException(nameof(released));
+            this.remoteCaller = remoteCaller;
             if (!target.TryGetTransform(out originalTransform))
             {
                 throw new InvalidOperationException("Robot target disappeared before its edit snapshot was captured.");
@@ -37,6 +42,7 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<TransformState> PreviewTransform(TransformState transform)
         {
+            if (target.Managed) return OperationResult<TransformState>.Failure(ModErrorCode.Conflict, ManagedEditMessage);
             var unavailable = EnsureActive<TransformState>();
             if (unavailable != null)
             {
@@ -72,10 +78,16 @@ namespace TopiaForge.RobotKit
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Unknown robot brain mode.");
             }
 
+            if (target.Managed) return OperationResult<bool>.Failure(ModErrorCode.Conflict, ManagedEditMessage);
             var unavailable = EnsureActive<bool>();
             if (unavailable != null)
             {
                 return unavailable;
+            }
+
+            if (mode == RobotBrainMode.Autonomous && remoteCaller?.Invoke() == true)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, RemoteCallerMessage);
             }
 
             if (originalBrain == null)
@@ -92,10 +104,15 @@ namespace TopiaForge.RobotKit
             try
             {
                 GameReflection.ApplyBrainMode(target.Root, mode, originalBrain, logger);
+                if (target.IsManaged)
+                {
+                    return OperationResult<bool>.Failure(ModErrorCode.Conflict, RobotEditTarget.ManagedRobotMessage);
+                }
+
                 lastBrainState = GameReflection.CaptureBrainState(target.Root);
                 if (lastBrainState == null)
                 {
-                    GameReflection.RestoreBrainState(target.Root, before, logger);
+                    RestoreBrainPreview(before);
                     return OperationResult<bool>.Failure(ModErrorCode.External, "The temporary brain state could not be verified.");
                 }
                 MarkEdited(EditedProperty.Brain);
@@ -103,7 +120,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                GameReflection.RestoreBrainState(target.Root, before, logger);
+                RestoreBrainPreview(before);
                 return OperationResult<bool>.Failure(ModErrorCode.External,
                     "The temporary robot brain mode could not be applied: " + RobotKitLog.ExceptionType(exception));
             }
@@ -120,6 +137,11 @@ namespace TopiaForge.RobotKit
             if (unavailable != null)
             {
                 return unavailable;
+            }
+
+            if (remoteCaller?.Invoke() == true)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, RemoteCallerMessage);
             }
 
             var applied = RobotPersonalityBridge.Apply(target.Agent, personality);
@@ -153,6 +175,12 @@ namespace TopiaForge.RobotKit
                         break;
                     }
 
+                    if (target.IsManaged != target.Managed)
+                    {
+                        conflict = true;
+                        break;
+                    }
+
                     switch (editOrder[index])
                     {
                         case EditedProperty.Transform:
@@ -173,9 +201,15 @@ namespace TopiaForge.RobotKit
                 }
             }
 
-            RobotPersonalityBridge.DestroyTemporary(temporaryPersonality);
-            temporaryPersonality = null;
-            released();
+            try
+            {
+                RobotPersonalityBridge.DestroyTemporary(temporaryPersonality);
+            }
+            finally
+            {
+                temporaryPersonality = null;
+                released();
+            }
 
             if (restoreFailure != null)
             {
@@ -209,7 +243,17 @@ namespace TopiaForge.RobotKit
                 return OperationResult<T>.Failure(ModErrorCode.NotFound, "Robot edit target is no longer alive.");
             }
 
-            return null;
+            return target.IsManaged != target.Managed
+                ? OperationResult<T>.Failure(ModErrorCode.Conflict, RobotEditTarget.ManagedRobotMessage)
+                : null;
+        }
+
+        private void RestoreBrainPreview(GameReflection.BrainStateSnapshot before)
+        {
+            if (target.IsAlive && !target.IsManaged)
+            {
+                GameReflection.RestoreBrainState(target.Root, before, logger);
+            }
         }
 
         private bool RestoreTransform()
