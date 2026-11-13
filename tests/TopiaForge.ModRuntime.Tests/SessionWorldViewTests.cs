@@ -156,8 +156,11 @@ namespace TopiaForge.ModRuntime.Tests
             net.LoseLink(one.Control); Frames();
             Check(one.Renderer.Fog.HasValue && one.Renderer.Hidden.Count == 3 && fog.IsActive,
                 "stream end keeps the last private view until the next link's baseline, and grace retains the host lease");
+            // Change the private view during the outage; only the next link's baseline can deliver it.
+            hideMap.Dispose(); Frames();
+            Check(one.Renderer.Hidden.Count == 3, "a view changed during the outage does not reach the lost link");
             net.Restore(one.Control); Frames(14);
-            Check(one.Renderer.Fog.HasValue && one.Renderer.Hidden.Count == 3, "reconnect generation gets complete private baseline");
+            Check(one.Renderer.Fog.HasValue && one.Renderer.Hidden.Count == 2, "reconnect generation gets the complete current private baseline");
             net.Rejoin(one.Control); Frames(14);
             Check(one.Renderer.Fog.HasValue, "rejoin stream baselines unchanged state");
             net.ReplaceSession(); Frames(14);

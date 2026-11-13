@@ -8,6 +8,10 @@ namespace TopiaForge.ModManager
     internal sealed partial class RuntimeWorldViews
     {
         private readonly Dictionary<ViewTarget, HiddenTarget> projected = new Dictionary<ViewTarget, HiddenTarget>();
+        // The participant and key each listed player name was first resolved for, while that admission lasts.
+        private readonly Dictionary<ViewTarget, ListedPlayer> listedPlayers = new Dictionary<ViewTarget, ListedPlayer>();
+        private List<ViewTarget>? unlisted;
+        private MultiplayerSessionSnapshot? observedRoster;
         private string? projectedEnvironment;
         private VisionFog? projectedFog;
         private void ApplyReceived()
@@ -31,7 +35,7 @@ namespace TopiaForge.ModManager
                 foreach (var target in received.Hidden)
                 {
                     if (projected.ContainsKey(target)) continue;
-                    var entity = Resolve(target);
+                    var entity = ResolveListed(target);
                     if (entity == null) continue;
                     // A player renamed for a new lifetime keeps the hold taken under the old name: no release, no
                     // gap. The host flushes the roster before the views' message on the same ordered stream, so the
@@ -50,14 +54,55 @@ namespace TopiaForge.ModManager
                     foreach (var target in stale)
                         if (applied || projected.ContainsKey(target.Key)) target.Value.Lease.Dispose();
                         else projected.Add(target.Key, target.Value);
+                if (listedPlayers.Count != 0) ForgetUnlisted();
             }
         }
         // A listed player keeps its hold on the root presence retains for them while the name cannot resolve: during
         // the reconnect grace, and after a rejoin until the renamed baseline arrives. A player who left releases it.
         private bool Holds(ViewTarget target, HiddenTarget held)
         {
-            var current = Resolve(target);
+            var current = ResolveListed(target);
             return ReferenceEquals(current, held.Entity) || (current == null && target.Kind == 3 && Retained(held.Entity));
+        }
+        // A listed player resolves by name or, while the name cannot resolve, to the current avatar of the participant
+        // it was first resolved for. Poses can arrive before the host's renamed view, so a root made after a rejoin is
+        // held as soon as presence makes it.
+        private IEntity? ResolveListed(ViewTarget target)
+        {
+            var entity = Resolve(target);
+            if (target.Kind != 3) return entity;
+            if (entity != null)
+            {
+                if (!listedPlayers.ContainsKey(target) && services.TryGetPlayerParticipant(entity, out var participant, out var key))
+                    listedPlayers.Add(target, new ListedPlayer(participant, key));
+                return entity;
+            }
+            return listedPlayers.TryGetValue(target, out var listed) && services.Presence?.TryGetAvatar(listed.Participant, out var avatar) == true
+                && avatar != null && avatar.IsAlive ? avatar : null;
+        }
+        // A participant who left, or came back under another key, is a new player: their old name no longer follows them.
+        private void ObserveRoster()
+        {
+            var snapshot = services.Runtime.Control?.SessionSnapshot;
+            if (snapshot == null || ReferenceEquals(observedRoster, snapshot)) return;
+            observedRoster = snapshot;
+            if (listedPlayers.Count == 0) return;
+            foreach (var listed in listedPlayers)
+                if (!snapshot.TryGetParticipant(listed.Value.Participant, out var row) || row == null || !row.PlayerKey.Equals(listed.Value.Key))
+                    (unlisted ??= new List<ViewTarget>()).Add(listed.Key);
+            ForgetCollected();
+        }
+        private void ForgetUnlisted()
+        {
+            foreach (var listed in listedPlayers)
+                if (Array.IndexOf(received.Hidden, listed.Key) < 0) (unlisted ??= new List<ViewTarget>()).Add(listed.Key);
+            ForgetCollected();
+        }
+        private void ForgetCollected()
+        {
+            if (unlisted == null || unlisted.Count == 0) return;
+            for (var index = 0; index < unlisted.Count; index++) listedPlayers.Remove(unlisted[index]);
+            unlisted.Clear();
         }
         private static HiddenTarget? Moved(List<KeyValuePair<ViewTarget, HiddenTarget>>? stale, IEntity entity)
         {
@@ -73,6 +118,7 @@ namespace TopiaForge.ModManager
         }
         private void ClearProjection()
         {
+            listedPlayers.Clear(); observedRoster = null;
             if (projected.Count == 0 && projectedEnvironment == null && projectedFog == null) return;
             var failures = new List<Exception>();
             foreach (var target in projected.Values)
@@ -86,6 +132,12 @@ namespace TopiaForge.ModManager
             }
             projectedEnvironment = null; projectedFog = null;
             if (failures.Count != 0) throw new AggregateException(failures);
+        }
+        private readonly struct ListedPlayer
+        {
+            internal readonly ParticipantId Participant;
+            internal readonly MultiplayerPlayerKey Key;
+            internal ListedPlayer(ParticipantId participant, MultiplayerPlayerKey key) { Participant = participant; Key = key; }
         }
         private sealed class HiddenTarget
         {

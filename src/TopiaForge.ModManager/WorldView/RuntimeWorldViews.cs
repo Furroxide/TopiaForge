@@ -22,6 +22,8 @@ namespace TopiaForge.ModManager
         private readonly WorldViewWire wire = new WorldViewWire();
         private ViewSnapshot received = ViewSnapshot.Empty;
         private bool invalidStream;
+        private bool viewApplied;
+        private bool avatarFailureLogged;
         private bool resetting;
         private float retry;
         internal RuntimeWorldViews(MultiplayerReplication services) { this.services = services; }
@@ -44,17 +46,26 @@ namespace TopiaForge.ModManager
             foreach (var world in worlds.Values) if (world.HoldsEntity(entity)) return true;
             return false;
         }
+        // A joined player has applied the host's first complete view of this session, or has no view stream at all.
+        // The view a lost link left behind still counts: it holds until the next link's view replaces it.
+        internal bool ReadyToDraw => !Client || channel == null || viewApplied;
         // Presence made an avatar root and draws it next. Apply the views now so the hold is there for that draw.
-        internal void AvatarMade()
+        // False when they could not be applied: presence leaves the root undrawn and asks again next frame.
+        internal bool AvatarMade()
         {
             try
             {
-                if (Client) ApplyReceived();
+                if (Client) { ObserveRoster(); ApplyReceived(); }
                 else foreach (var world in worlds.Values) world.RefreshLocal();
+                return true;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                // Presence must still drive every other avatar. The views' own Run reports the failure and retries.
+                if (!avatarFailureLogged)
+                    services.Runtime.Log.Warn("Multiplayer: the world view could not be applied to a new avatar ("
+                        + exception.GetType().Name + "); the avatar is drawn once it is.");
+                avatarFailureLogged = true;
+                return false;
             }
         }
         private string? Local => services.Runtime.Control?.SessionSnapshot.LocalParticipantId?.Value ?? "local";
@@ -109,7 +120,7 @@ namespace TopiaForge.ModManager
         }
         private void Reset(bool endLeases)
         {
-            ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false;
+            ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false; viewApplied = false;
             deliveries.Clear(); admitted.Clear(); names.Clear(); seenRoster = null; generation = 0; session = default;
             resetting = true;
             try { if (endLeases) foreach (var world in worlds.Values.ToArray()) world.Dispose(); }
@@ -128,13 +139,15 @@ namespace TopiaForge.ModManager
             }
             if (Client)
             {
+                ObserveRoster();
                 while (channel.TryReceive(out var message))
                 {
                     var host = services.Runtime.Control?.SessionSnapshot.HostParticipantId ?? InternalSystemMessage.HeadlessHostSender;
                     if (invalidStream) continue;
+                    // A stream that cannot be read is ignored until the next link, and the last view keeps holding.
                     if (!message.Sender.Equals(host) || !wire.Read(message.Payload, out var next))
-                    { invalidStream = true; wire.Reset(); received = ViewSnapshot.Empty; ClearProjection(); continue; }
-                    if (next != null) { received = next; ApplyReceived(); }
+                    { invalidStream = true; wire.Reset(); continue; }
+                    if (next != null) { received = next; viewApplied = true; ApplyReceived(); }
                 }
                 retry += deltaTime;
                 if (retry >= .25f) { retry = 0; ApplyReceived(); }

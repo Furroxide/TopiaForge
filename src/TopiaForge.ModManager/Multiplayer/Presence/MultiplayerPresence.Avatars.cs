@@ -68,6 +68,9 @@ namespace TopiaForge.ModManager
             // Native levels outside an authored session are Idle and still present trusted peers. The runtime
             // reports native scene operations as Stopping; authored loads wait for their committed Running world.
             var canPresent = phase == SessionPhase.Idle || phase == SessionPhase.Running && world != null;
+            // A joined player draws nobody until the host's first complete world view has been applied, so a pose
+            // that beats the view cannot show someone the view hides.
+            var viewsReady = replication.Views.ReadyToDraw;
             for (var index = 0; index < peers.Count; index++)
             {
                 var peer = peers[index];
@@ -81,14 +84,20 @@ namespace TopiaForge.ModManager
                 }
 
                 // Host poses can arrive while this peer still loads and settles its native player.
-                if (!canPresent || !peer.IsConnected || !peer.HasPose || buffer == null) continue;
+                if (!canPresent || !peer.IsConnected || !peer.HasPose || buffer == null || !viewsReady) continue;
                 if (avatar == null)
                 {
                     if (nowMicros < peer.NextAvatarMicros) continue;
                     avatar = MakeAvatar(peer, nowMicros);
                     if (avatar == null) continue;
-                    // The views' holds reach a new root before its first draw, not at their next retry.
-                    replication.Views.AvatarMade();
+                    peer.AwaitingViews = true;
+                }
+                // The views' holds reach a new root before its first draw, not at their next retry. If they cannot,
+                // the root stays undrawn and the views are tried again next frame.
+                if (peer.AwaitingViews)
+                {
+                    if (!replication.Views.AvatarMade()) continue;
+                    peer.AwaitingViews = false;
                 }
 
                 if (peer.Presentation != null && (Realm != TopiaForge.ModManager.Core.Multiplayer.NetRealm.Client || peer.HasPresentation)) avatar.Present(peer.Presentation.Current, peer.Presentation.PoweredDown);
