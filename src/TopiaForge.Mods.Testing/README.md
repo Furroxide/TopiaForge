@@ -36,7 +36,10 @@ Specialist modules have first-class, engine-free fakes too:
   Nested local callbacks retain guest origin; a captured context retains it on the originating thread,
   and returning or throwing restores the caller's scope. Construct the agent service and invoke simulated
   callbacks on the same thread: `RunAsGuest`, and spawn or native-brain calls made on another thread while
-  a guest scope is visible, throw `InvalidOperationException` rather than silently acting as the host. Fake modal completions need an explicit `Agents.RunAsGuest` scope; only
+  a guest scope is visible, throw `InvalidOperationException` rather than silently acting as the host.
+  `NextFrame`, `After` and `Every` work that the deterministic scheduler receives inside a guest scope runs
+  with that guest's origin; a continuation after `await DelayAsync(...)` resumes on a pool thread, so schedule
+  guest follow-ups with `NextFrame` or `After`. Fake modal completions need an explicit `Agents.RunAsGuest` scope; only
   remote surface actions receive guest origin automatically.
 - `FakeCreatorContentService`, `FakeCreatorMutationSafetyService`,
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover catalog registrations, owned

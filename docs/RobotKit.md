@@ -262,5 +262,8 @@ remove the outer guest origin. Captured execution contexts retain it on the orig
 exception cleanup restores the caller's scope. The thread that constructs the fake agent service owns guest
 origin: `RunAsGuest` on another thread, and a spawn or native-brain call on another thread while a guest
 scope is visible, throw `InvalidOperationException` instead of answering as the host. An async test must
-resume on the constructing thread before it acts for a guest. Fake modal completions need an explicit
-`RunAsGuest` scope.
+resume on the constructing thread before it acts for a guest. `FakeModContext.Scheduler` carries guest origin
+like the runtime: `NextFrame`, `After` and `Every` work scheduled inside a guest scope runs with that guest's
+origin when the test advances the scheduler, and work scheduled outside one runs as the host. A continuation
+after `await Scheduler.DelayAsync(...)` resumes on a pool thread, so a robot call there throws; schedule the
+follow-up with `NextFrame` or `After` instead. Fake modal completions need an explicit `RunAsGuest` scope.

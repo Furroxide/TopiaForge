@@ -12,7 +12,9 @@ namespace TopiaForge.Mods.Testing
         internal const string OwnerThreadRule =
             "The fake robot service models guest origin only on the thread that created it. Call RunAsGuest, " +
             "simulate player UI actions and make the robot calls they trigger on that thread; an async test must " +
-            "resume on that thread before acting for a guest.";
+            "resume on that thread before acting for a guest. An await that resumes on a pool thread, such as one " +
+            "after DeterministicModScheduler.DelayAsync, cannot act for a guest: schedule the follow-up with " +
+            "Scheduler.NextFrame or After instead, which run on the advancing thread and keep the guest's origin.";
 
         private static readonly AsyncLocal<Record?> flowing = new AsyncLocal<Record?>();
         [ThreadStatic] private static List<Record>? ancestors;
@@ -24,6 +26,28 @@ namespace TopiaForge.Mods.Testing
             if (Environment.CurrentManagedThreadId != ownerThread || (record != null && record.Thread != ownerThread))
                 throw new InvalidOperationException(OwnerThreadRule);
             return true;
+        }
+
+        // Work scheduled inside a guest scope keeps that guest's origin, as the runtime's scheduler does.
+        internal static Action Capture(Action action)
+        {
+            var record = flowing.Value;
+            if (record == null && ancestors?.Count > 0) record = ancestors[ancestors.Count - 1];
+            return record == null ? action : () => RunCaptured(record, action);
+        }
+
+        private static void RunCaptured(Record record, Action callback)
+        {
+            var previous = flowing.Value;
+            var active = ancestors ??= new List<Record>();
+            active.Add(record);
+            flowing.Value = record;
+            try { callback(); }
+            finally
+            {
+                flowing.Value = previous;
+                active.RemoveAt(active.Count - 1);
+            }
         }
 
         internal static void Run(bool guest, Action callback)

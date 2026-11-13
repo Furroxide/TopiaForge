@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager.Tests
             TestRobotAuthorityClient();
             TestRobotAuthorityUi();
             TestRobotCallOriginOwnerThread();
+            TestRobotCallOriginScheduler();
         }
 
         private static RobotAgentSpawnRequest AutonomousRobot() =>
@@ -123,6 +124,49 @@ namespace TopiaForge.ModManager.Tests
             var hosted = Task.Run(() => service.Spawn(AutonomousRobot())).GetAwaiter().GetResult();
             Assert(hosted.Succeeded && hosted.Value!.BrainMode == RobotBrainMode.Autonomous,
                 "host calls outside any guest scope keep working on other threads");
+        }
+
+        private static void TestRobotCallOriginScheduler()
+        {
+            using var context = new FakeModContext();
+            var service = new FakeRobotKit(context.Lifetime).Agents;
+            var scheduler = context.Scheduler;
+            var interval = TimeSpan.FromSeconds(0.1);
+            OperationResult<IRobotAgent>? nextFrame = null, after = null, guestTimer = null, hostTimer = null;
+            var hostTicks = 0;
+            service.RunAsGuest(() =>
+            {
+                Assert(scheduler.NextFrame(() => nextFrame = service.Spawn(AutonomousRobot())).Succeeded &&
+                    scheduler.After(interval, () => after = service.Spawn(AutonomousRobot())).Succeeded &&
+                    scheduler.Every(interval, () => guestTimer ??= service.Spawn(AutonomousRobot())).Succeeded,
+                    "a guest callback can schedule work");
+            });
+            // Registered after the guest's work, so it runs after that work in every frame and would see a leak.
+            Assert(scheduler.Every(interval, () => { hostTicks++; hostTimer = service.Spawn(AutonomousRobot()); }).Succeeded,
+                "host code registers its own timer");
+            scheduler.AdvanceFrame(interval);
+            Assert(nextFrame?.ErrorCode == ModErrorCode.NotAuthoritative && after?.ErrorCode == ModErrorCode.NotAuthoritative &&
+                guestTimer?.ErrorCode == ModErrorCode.NotAuthoritative,
+                "NextFrame, After and Every scheduled from a guest callback keep the guest's origin");
+            Assert(hostTicks == 1 && hostTimer?.Succeeded == true && hostTimer.Value!.BrainMode == RobotBrainMode.Autonomous,
+                "a timer registered outside every guest callback runs as the host after guest-scheduled work");
+            scheduler.AdvanceFrame(interval);
+            Assert(hostTicks == 2 && hostTimer?.Succeeded == true && service.Spawn(AutonomousRobot()).Succeeded,
+                "guest-scheduled work leaves no guest scope behind");
+
+            Exception? continuation = null;
+            Task? pending = null;
+            service.RunAsGuest(() => pending = Resume());
+            async Task Resume()
+            {
+                await scheduler.DelayAsync(TimeSpan.Zero);
+                try { service.Spawn(AutonomousRobot()); }
+                catch (InvalidOperationException exception) { continuation = exception; }
+            }
+            scheduler.AdvanceFrame(TimeSpan.Zero);
+            pending!.GetAwaiter().GetResult();
+            Assert(continuation != null && continuation.Message.Contains("Scheduler.NextFrame", StringComparison.Ordinal),
+                "a guest continuation that resumes on a pool thread names the scheduler remedy");
         }
 
         private static void TestRobotAuthorityClient()
