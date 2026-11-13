@@ -46,22 +46,22 @@ namespace TopiaForge.ModManager.Tests
             var types = new StringBuilder();
             var overloads = new StringBuilder("public static partial class UgcRotationHelper {\n");
             foreach (var family in new[] { "Vector", "Rotation" })
-            foreach (var field in family == "Vector" ? new[] { "x", "y", "z" } : new[] { "x", "y", "z", "w" })
-            foreach (var missing in new[] { true, false })
-            {
-                var name = "Bad" + family + field + (missing ? "Missing" : "Wrong");
-                types.Append("public sealed class ").Append(name).Append(" {\n");
-                foreach (var component in family == "Vector" ? new[] { "x", "y", "z" } : new[] { "x", "y", "z", "w" })
-                {
-                    if (component == field && missing) continue;
-                    var type = component == field ? "double" : component == "w" ? "float?" : "float";
-                    types.Append("public ").Append(type).Append(' ').Append(component).Append(";\n");
-                }
-                if (family == "Vector") types.Append("public UnityEngine.Vector3 ToUnityPosition() => new UnityEngine.Vector3(0,0,0);\n");
-                else overloads.Append("public static UnityEngine.Quaternion ToUnityQuaternion(").Append(name)
-                    .Append(" value) => new UnityEngine.Quaternion(0,0,0,1);\n");
-                types.Append("}\n");
-            }
+                foreach (var field in family == "Vector" ? new[] { "x", "y", "z" } : new[] { "x", "y", "z", "w" })
+                    foreach (var missing in new[] { true, false })
+                    {
+                        var name = "Bad" + family + field + (missing ? "Missing" : "Wrong");
+                        types.Append("public sealed class ").Append(name).Append(" {\n");
+                        foreach (var component in family == "Vector" ? new[] { "x", "y", "z" } : new[] { "x", "y", "z", "w" })
+                        {
+                            if (component == field && missing) continue;
+                            var type = component == field ? "double" : component == "w" ? "float?" : "float";
+                            types.Append("public ").Append(type).Append(' ').Append(component).Append(";\n");
+                        }
+                        if (family == "Vector") types.Append("public UnityEngine.Vector3 ToUnityPosition() => new UnityEngine.Vector3(0,0,0);\n");
+                        else overloads.Append("public static UnityEngine.Quaternion ToUnityQuaternion(").Append(name)
+                            .Append(" value) => new UnityEngine.Quaternion(0,0,0,1);\n");
+                        types.Append("}\n");
+                    }
             // Methods are valid for every malformed type, so a constructor that skips field
             // validation cannot accidentally pass these refusals by failing method resolution.
             return types.Append(overloads).Append("}\n").ToString();
