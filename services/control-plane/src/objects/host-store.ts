@@ -96,7 +96,8 @@ export class HostStore {
       descriptor: row.descriptor,
       descriptorSha256: row.descriptor_sha256,
       issuedAt: row.issued_at,
-      visibility: row.visibility === "invite" ? "invite" : "public",
+      // Fails closed: only a stored "public" counts as public, so an unexpected value never reaches public activity.
+      visibility: row.visibility === "public" ? "public" : "invite",
       directory: row.directory,
       summary: JSON.parse(row.summary) as DescriptorSummary,
       players: row.players,

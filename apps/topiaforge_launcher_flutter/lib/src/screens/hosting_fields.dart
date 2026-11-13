@@ -83,6 +83,10 @@ class _HostingFieldsState extends State<_HostingFields> {
           onChanged: (value) => setState(() => _visibility = value!),
         ),
         const SizedBox(height: 12),
+        if (HostActivityText.noticeFor(_visibility) case final notice?) ...[
+          Text(notice, key: const Key('hosting-activity-disclosure')),
+          const SizedBox(height: 12),
+        ],
         TextFormField(
           key: const Key('hosting-port'),
           controller: _port,

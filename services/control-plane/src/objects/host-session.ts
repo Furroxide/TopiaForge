@@ -497,6 +497,7 @@ export class HostSession extends DurableObject<Env> {
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
       this.store.wiped();
+      this.activity.wiped();
       return;
     }
     await this.scheduleAlarm();
