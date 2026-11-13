@@ -146,8 +146,10 @@ environment already exists before naming it. Administrator bypass is disabled on
 `control-plane-production`. That environment prevents self-review, and a pending production deployment is forced
 with bypass only after a second review of the exact revision and deployment plan. The bypass is a recorded exception
 to GitHub reviewer approval for that run. GitHub cannot enforce the second review, so the reviewed SHA and the review
-result are recorded before bypass is used. The deployment preflight accepts production with bypass on or off, so
-turning bypass off needs no workflow change.
+result are recorded before bypass is used. The deployment preflight accepts production with bypass on or off, and
+staging with self-review prevention on or off, so tightening either needs no workflow change. The live audit compares
+exact values, so the same change also sets `can_admins_bypass` or `prevent_self_review` for that environment in
+`.github/repository-governance.json`.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |

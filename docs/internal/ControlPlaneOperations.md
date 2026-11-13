@@ -56,7 +56,7 @@ Create two environments under repository Settings, Environments, before any depl
 | Setting | `control-plane-staging` | `control-plane-production` |
 | --- | --- | --- |
 | Required reviewers | The maintainer | The maintainer |
-| Prevent self-review | Off | On |
+| Prevent self-review | Off (on also deploys) | On |
 | Allow administrators to bypass | Off | On, used only after a second review of the exact revision; off also deploys |
 | Deployment branches | Selected: `dev` and `main` | Selected: `main` |
 | Secret `CLOUDFLARE_API_TOKEN` | Staging-only deploy token | Production-only deploy token |
@@ -65,11 +65,13 @@ Create two environments under repository Settings, Environments, before any depl
 
 A protected production run is dispatched only after a second review of the exact source revision and deployment
 plan. GitHub's admin bypass then starts the pending deployment, skipping reviewer approval for that run while
-self-review prevention stays on. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
-required reviewer, the self-review setting in the table and custom branch rules. Staging must also refuse administrator
-bypass; production deploys with bypass on or off, so turning it off needs no workflow change. That replaces the
-governance rule that an environment must exist before a workflow references it: a dispatch can never create an
-unprotected environment.
+self-review prevention stays on. The workflow's preflight job reads the environment before any job names it, and stops
+unless it exists with a required reviewer and custom branch rules. Production must also prevent self-review, and
+staging must refuse administrator bypass. Production deploys with bypass on or off, and staging with self-review
+prevention on or off, so tightening either needs no workflow change. The live governance audit compares the exact
+values, so after changing either setting, also set `can_admins_bypass` or `prevent_self_review` for that environment
+in `.github/repository-governance.json`. That replaces the governance rule that an environment must exist before a
+workflow references it: a dispatch can never create an unprotected environment.
 
 Once both environments exist, register them in the governance desired state, so the live audit watches them:
 
@@ -408,7 +410,7 @@ must say so before Internet play is enabled.
 
 | Symptom | Check |
 | --- | --- |
-| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, match the self-review setting in section 2.2, use custom branch rules and, for staging, refuse administrator bypass. |
+| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer and custom branch rules; production must prevent self-review, and staging must refuse administrator bypass. |
 | The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
 | `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |

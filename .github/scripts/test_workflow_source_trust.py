@@ -182,7 +182,7 @@ class ControlPlaneDeployTests(unittest.TestCase):
         self.assertIn(".deployment_branch_policy.custom_branch_policies == true", preflight)
         self.assertLess(self.source.index("  preflight:\n"), self.source.index("  deploy:\n"))
 
-    def test_environment_check_accepts_production_bypass_on_or_off(self):
+    def test_environment_check_accepts_either_tightening_without_a_workflow_change(self):
         preflight = self.jobs["preflight"]
         step = preflight.split("      - name: Require the environment to exist with a required reviewer\n", 1)[1]
         match = re.search(r"--arg name \"\$TARGET\" \\\n\s*'(.*?)' \\\n", step, re.S)
@@ -214,7 +214,9 @@ class ControlPlaneDeployTests(unittest.TestCase):
             (production, environment(staging, False, True), False),
             (staging, environment(staging, False, False), True),
             (staging, environment(staging, True, False), False),
-            (staging, environment(staging, False, True), False),
+            (staging, environment(staging, True, True), False),
+            (staging, environment(staging, False, True), True),
+            (staging, environment(staging, False, False, reviewers=0), False),
         ]:
             with self.subTest(target=target, payload=payload):
                 result = subprocess.run(
