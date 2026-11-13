@@ -33,6 +33,8 @@ namespace TopiaForge.ModManager.Tests
                 PresentationRuntimeTests.CountdownWidgets();
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--robot-discovery-catalog")
+            { RobotCatalogDiscoveryTests.Run(); RobotComposedDiscoveryTests.Run(); RobotComposedBindingTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-world-lifetime")
             { RobotBodyTests.RunWorldRecovery(); RobotComposedCurrentnessTests.Run(); RobotComposedSceneTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robot-body-views")

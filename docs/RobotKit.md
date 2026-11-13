@@ -99,6 +99,13 @@ Unknown references (including unresolved lore or material assets) refuse discove
 are passed unchanged and are not counted as resolved assets. Prompt fields are preserved. This proves a
 bounded reference preflight, not that the native builder has fetched lore or that a 2597 character is qualified.
 
+Composed MuniciPal discovery is available only during `StartingMode` and `Running` for the current
+live map world. Its native composed body has no `Health`: `ApplyDamage` returns `Unavailable` and `Kill`
+despawns it. Native prefabs are rescanned every two seconds only while none has loaded; once one is
+cached, a current composition ends the rescans. A validated catalogue with no MuniciPal entry backs off
+from two seconds to at most thirty seconds; scene/world/session publications reset that delay.
+Other refusals keep the ordinary two-second retry so temporarily incomplete data can recover.
+
 Refusals appear at Info as `RobotKit composed discovery refused: <code>.`, at most once per code for the
 current world/session. Codes identify unavailable scenes, host count, map root, entry budget, malformed scene,
 missing scene identity, entity shape, asset references, ambiguous identity, absent character or native binding
