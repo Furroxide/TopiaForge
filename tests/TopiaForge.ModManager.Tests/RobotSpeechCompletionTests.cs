@@ -63,13 +63,13 @@ namespace TopiaForge.ModManager.Tests
                 Check(second.Succeeded && second.Value, "the next awaited line completes successfully");
             }
 
-            // The first read checks the outgoing budget; the next records the playback start.
-            // Another read for the pace would move its deadline one microsecond later.
+            // Every clock read moves time on, so a pace that read the clock again after admission would end
+            // later than the admitted line. The boundary is measured from the start the line recorded.
             clock.ReadIncrement = 1;
-            var started = clock.Now + 1;
             var dialogue = Dialogue();
             clock.ReadIncrement = 0;
-            Check(!dialogue.IsCompleted && body.SpeechPlays == 1, "the first line begins local playback");
+            Check(!dialogue.IsCompleted && body.SpeechPlays == 1 && speech.ActiveCount == 1, "the first line begins local playback");
+            var started = speech.StartedAt(0);
             body.SpeechCompletions[0].SetResult(OperationResult<bool>.Success(true));
 
             clock.Now = started + 999_999;
