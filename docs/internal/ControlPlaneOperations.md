@@ -415,7 +415,7 @@ must say so before Internet play is enabled.
 | Symptom | Check |
 | --- | --- |
 | The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer and custom branch rules; production must prevent self-review, and staging must refuse administrator bypass. |
-| The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
+| The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be the environment's own origin exactly: `https://mp-staging.topiaforge.dev` for staging and `https://mp.topiaforge.dev` for production, with no path or trailing slash. The smoke test refuses any other value before it calls the service. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
 | `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |
 | Relay-only joins fail while other relay joins work | The joiner receives a `candidates-withheld` notice for its relay candidates, so the relay addresses it was given lie outside `RELAY_ADDRESS_RANGES`. Compare the list with Cloudflare's (section 4.1). |
