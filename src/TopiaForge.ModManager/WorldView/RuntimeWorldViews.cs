@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -30,6 +31,12 @@ namespace TopiaForge.ModManager
         private bool unreadableLogged;
         private bool resetting;
         private float retry;
+        // A playing line asks every frame for the host's own copy and for each pending listener. Each verdict is
+        // kept until the leases change, so a steady line neither scans every lease nor allocates per frame.
+        private const int MaximumSpeechVerdicts = 256;
+        private readonly Dictionary<SpeechViewer, bool> speechVerdicts = new Dictionary<SpeechViewer, bool>();
+        private WorldViewLeases? speechLeases;
+        private long speechVersion;
         internal RuntimeWorldViews(MultiplayerReplication services) { this.services = services; }
         internal bool IsCurrentAvatar(IEntity entity, IInternalWorldViewRenderer renderer) =>
             binding != null && ReferenceEquals(binding.Renderer, renderer) && renderer.IsAlive
@@ -122,7 +129,7 @@ namespace TopiaForge.ModManager
             if (ReferenceEquals(binding, value)) return;
             ClearProjection();
             foreach (var world in worlds.Values.ToArray()) world.Dispose();
-            worlds.Clear(); names.Clear(); binding = value;
+            worlds.Clear(); names.Clear(); ForgetSpeechVerdicts(); binding = value;
             // A new world waits for its own first complete view; one that already arrived for it still counts, even
             // if it arrived while the old world was still bound.
             viewApplied = viewReceived && ViewsWorld(received, value.WorldId);
@@ -147,6 +154,7 @@ namespace TopiaForge.ModManager
         {
             ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false; viewApplied = false; viewReceived = false;
             deliveries.Clear(); admitted.Clear(); names.Clear(); seenRoster = null; generation = 0; session = default;
+            ForgetSpeechVerdicts();
             resetting = true;
             try { if (endLeases) foreach (var world in worlds.Values.ToArray()) world.Dispose(); }
             finally { resetting = false; if (endLeases) worlds.Clear(); }
@@ -323,12 +331,21 @@ namespace TopiaForge.ModManager
             string? player = viewer.Value;
             if (admitted.TryGetValue(viewer, out var previous) && snapshot.TryGetParticipant(viewer, out var current)
                 && current != null && !current.PlayerKey.Equals(previous)) player = null;
+            if (!ReferenceEquals(speechLeases, leases) || speechVersion != leases.Version)
+            { speechVerdicts.Clear(); speechLeases = leases; speechVersion = leases.Version; }
+            var key = new SpeechViewer(player, entity, entityId);
+            if (speechVerdicts.TryGetValue(key, out var hidden)) return hidden;
             // The lease can name a wrapper and may have been acquired offline, before its network ID
             // existed. Resolve it the same way as view projection.
-            return leases.IsHiddenFor(player, (Views: this, Entity: entity, Id: entityId), static (target, speech) =>
+            hidden = leases.IsHiddenFor(player, (Views: this, Entity: entity, Id: entityId), static (target, speech) =>
                 ReferenceEquals(target, speech.Entity) || (speech.Id != 0 && speech.Views.TryName(target, out var name)
                     && name.Kind == 2 && NetworkWorldIds.TryParse(name.Id, out var named) && named.Value == speech.Id));
+            // Bounded by the robots that speak and the players who hear them; a full table starts over.
+            if (speechVerdicts.Count >= MaximumSpeechVerdicts) speechVerdicts.Clear();
+            speechVerdicts.Add(key, hidden);
+            return hidden;
         }
+        private void ForgetSpeechVerdicts() { speechVerdicts.Clear(); speechLeases = null; speechVersion = 0; }
         private ViewSnapshot Derive(string player)
         {
             // Only a host with no world view sends the empty view: clients take it as "nothing to hold".
@@ -387,6 +404,18 @@ namespace TopiaForge.ModManager
             internal ParticipantId? Player;
             internal MultiplayerPlayerKey Key;
             internal NamedTarget(ViewTarget name, IEntity root) { Name = name; Root = root; }
+        }
+        private readonly struct SpeechViewer : IEquatable<SpeechViewer>
+        {
+            private readonly string? player;
+            private readonly IEntity entity;
+            private readonly uint id;
+            internal SpeechViewer(string? player, IEntity entity, uint id) { this.player = player; this.entity = entity; this.id = id; }
+            public bool Equals(SpeechViewer other) =>
+                id == other.id && ReferenceEquals(entity, other.entity) && string.Equals(player, other.player, StringComparison.Ordinal);
+            public override bool Equals(object? obj) => obj is SpeechViewer other && Equals(other);
+            public override int GetHashCode() =>
+                HashCode.Combine(player == null ? 0 : StringComparer.Ordinal.GetHashCode(player), RuntimeHelpers.GetHashCode(entity), id);
         }
         private sealed class Delivery
         {
