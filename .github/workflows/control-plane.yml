@@ -78,8 +78,9 @@ jobs:
           WRANGLER_SEND_METRICS: "false"
         run: |
           set -euo pipefail
-          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-staging" --env staging
-          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-production" --env production
+          node scripts/deployment-config.mjs
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/control-plane-staging" --env staging
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/control-plane-production" --env production
 
   # Runs before any job names an environment, so a dispatch can never create an unprotected one.
   preflight:
@@ -180,7 +181,8 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           [[ "$WRANGLER_ENVIRONMENT" == staging || "$WRANGLER_ENVIRONMENT" == production ]]
-          npx wrangler deploy --env "$WRANGLER_ENVIRONMENT"
+          node scripts/deployment-config.mjs
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT"
 
       - name: Smoke-test the deployed status endpoint
         env:
