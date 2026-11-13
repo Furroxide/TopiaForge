@@ -72,7 +72,8 @@ namespace TopiaForge.ModManager.Tests
                     var body = decorate(inner, request);
                     localBodies.Add(body, ((FirstPartyRobot)inner).Body);
                     return body;
-                } : null);
+                }
+                : null);
                 // The same-ID scenario needs the fake engine to keep each body distinct while the
                 // production command table continues to resolve both handles by their shared ID.
                 if (clientScenario)

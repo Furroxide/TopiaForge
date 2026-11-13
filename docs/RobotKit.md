@@ -134,7 +134,9 @@ caller token can end the search sooner. Check its result, then spawn on collisio
 the returned position. Check `Spawn` before issuing `MoveTo`.
 Retain and dispose the returned agent when its behavior ends. World replacement and scope teardown retire
 its handle. The owning code can still call `Despawn()` on the game thread to release that robot after
-retirement. Repeated cleanup calls succeed with `false` after the handle has been released. A retired
+retirement. `Dispose()` always releases the handle where you are. `Despawn()` asks the host to remove
+the robot: inside a guest's callback it can be refused, and the handle stays until you dispose it.
+Repeated cleanup calls succeed with `false` after the handle has been released. A retired
 client handle releases its local body without routing another robot command. An unreachable route needs
 a bounded retry or an explicit unavailable-order state.
 
