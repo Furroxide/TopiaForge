@@ -280,7 +280,7 @@ Revocation reaches every credential promptly, but not in one step:
 
 - It runs in passes of at most 40 calls to the provider, six at a time. A pass therefore stays inside the smallest
   number of subrequests Workers allow one invocation, 50.
-- The request that engages the switch, or the hourly run that trips it, runs the first pass itself. Each further pass
+- The request that engages the switch, or the five-minute run that trips it, runs the first pass itself. Each further pass
   starts as soon as the one before it ends.
 - A pass in which the provider confirms nothing is tried again a minute later.
 - A credential not yet revoked keeps working until it is, or until it expires: at most `TURN_CREDENTIAL_TTL_SECONDS`,
@@ -302,16 +302,18 @@ new ones.
 
 ### 5.2 Automatic trips
 
-The hourly cron trips the kill switch itself, with a reason in admin state:
+The five-minute cron trips the kill switch itself, with a reason in admin state:
 
 | Reason | Cause |
 | --- | --- |
 | `spend-cap` | Today's measured relay egress reached `TURN_DAILY_CAP_GB` |
-| `measurement-failed` | `TURN_MEASUREMENT_FAILURE_LIMIT` (3) five-minute measurements in a row failed |
+| `measurement-failed` | Every measurement failed for `TURN_MEASUREMENT_FAILURE_MINUTES` (180) after the last good one: 36 in a row at the five-minute interval |
 
-An automatic trip stays engaged until you release it: nothing re-enables relay on its own. Failing closed on a failed
-measurement is deliberate, because the relay has no spend cap of its own. Setting `TURN_MEASUREMENT_FAILURE_LIMIT` to
-`0` disables that trip; do so only briefly, while fixing the analytics token.
+The limit is a duration, and the service turns it into a count at the measurement interval, so a change of interval
+does not shorten the time to trip. Admin state reports both as `measurementFailureMinutes` and
+`measurementFailureLimit`. An automatic trip stays engaged until you release it: nothing re-enables relay on its own.
+Failing closed on a failed measurement is deliberate, because the relay has no spend cap of its own. Setting
+`TURN_MEASUREMENT_FAILURE_MINUTES` to `0` disables that trip; do so only briefly, while fixing the analytics token.
 
 ## 6. Spend
 

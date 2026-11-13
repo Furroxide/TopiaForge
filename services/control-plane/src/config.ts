@@ -13,7 +13,9 @@ export interface RelayLimits {
   readonly ticketMaxMints: number;
   /** Bytes a credential may plan to relay per peer per second: the 256 kbit/s per-connection budget. */
   readonly reserveBytesPerPeerSecond: number;
-  /** Consecutive failed five-minute measurements that trip the kill switch; 0 never trips on failure. */
+  /** How long measurements may keep failing, counted from the last good one, before the kill switch trips; 0 never trips. */
+  readonly measurementFailureMinutes: number;
+  /** That window as consecutive failed measurements at MEASUREMENT_INTERVAL_MINUTES; 0 never trips on failure. */
   readonly measurementFailureLimit: number;
   /** How far past its reservation a credential's measured egress may go before it is revoked. */
   readonly overuseFactor: number;
@@ -46,19 +48,26 @@ export interface Config {
   readonly flagCacheMilliseconds: number;
 }
 
+/** Minutes between scheduled relay-spend measurements. The Worker's cron is built from it (ACTIVITY_CRON). */
+export const MEASUREMENT_INTERVAL_MINUTES = 5;
+/** Failed measurements trip the kill switch after three hours of them by default, whatever the interval. */
+export const DEFAULT_MEASUREMENT_FAILURE_MINUTES = 180;
+
 const GIGABYTE = 1_000_000_000;
 const TOKEN_PATTERN = /^[A-Za-z0-9._~+/=-]{8,512}$/;
 const KEY_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 const ACCOUNT_PATTERN = /^[0-9a-f]{32}$/;
 
 export function readConfig(env: Env): Config {
+  const measurementFailureMinutes = integer(env.TURN_MEASUREMENT_FAILURE_MINUTES, DEFAULT_MEASUREMENT_FAILURE_MINUTES, 0, 2880);
   const limits: RelayLimits = {
     credentialTtlSeconds: integer(env.TURN_CREDENTIAL_TTL_SECONDS, 600, 60, 3600),
     ipMintsPerHour: integer(env.TURN_IP_MINTS_PER_HOUR, 20, 1, 1000),
     ipMintsPerMinute: integer(env.TURN_IP_MINTS_PER_MINUTE, 5, 1, 100),
     ticketMaxMints: integer(env.TURN_TICKET_MAX_MINTS, 36, 1, 1000),
     reserveBytesPerPeerSecond: 32 * 1024,
-    measurementFailureLimit: integer(env.TURN_MEASUREMENT_FAILURE_LIMIT, 3, 0, 48),
+    measurementFailureMinutes,
+    measurementFailureLimit: Math.ceil(measurementFailureMinutes / MEASUREMENT_INTERVAL_MINUTES),
     overuseFactor: 2,
   };
   const dailyCapBytes = gigabytes(env.TURN_DAILY_CAP_GB);

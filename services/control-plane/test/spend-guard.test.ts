@@ -1,6 +1,8 @@
 import { createExecutionContext, createScheduledController, runDurableObjectAlarm, runInDurableObject, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ACTIVITY_CRON } from "../src/activity";
+import { MEASUREMENT_INTERVAL_MINUTES } from "../src/config";
 import worker from "../src/index";
 import { REVOCATIONS_PER_PASS, REVOCATION_RETRY_SECONDS } from "../src/objects/spend-guard";
 import type { JsonObject } from "../src/shared/canonical-json";
@@ -55,7 +57,7 @@ async function keepAlive(sessions: readonly { readonly serverId: string; readonl
 
 async function runCron(): Promise<void> {
   const context = createExecutionContext();
-  await worker.scheduled(createScheduledController({ scheduledTime: scenario.clock.now(), cron: "*/5 * * * *" }), env, context);
+  await worker.scheduled(createScheduledController({ scheduledTime: scenario.clock.now(), cron: ACTIVITY_CRON }), env, context);
   await waitOnExecutionContext(context);
 }
 
@@ -294,17 +296,27 @@ describe("the kill switch", () => {
     expect((await mint(session.serverId, await ticket(session.serverId), "10.6.0.2")).status).toBe(503);
   });
 
-  it("trips after three measurements in a row fail, and a success clears the count", async () => {
+  it("trips after three hours of failed measurements in a row, and a success clears the count", async () => {
+    const interval = MEASUREMENT_INTERVAL_MINUTES * 60;
+    const killSwitch = async () => (await admin("GET", "/v1/admin/state")).json["killSwitch"] as Record<string, unknown>;
     scenario.relay.failUsage = true;
     await runCron();
     await runCron();
-    expect(((await admin("GET", "/v1/admin/state")).json["spend"] as Record<string, number>)["measurementFailures"]).toBe(2);
+    expect((await spendState())["measurementFailures"]).toBe(2);
     scenario.relay.failUsage = false;
     await runCron();
-    expect(((await admin("GET", "/v1/admin/state")).json["spend"] as Record<string, number>)["measurementFailures"]).toBe(0);
+    expect((await spendState())["measurementFailures"]).toBe(0);
+    const lastGood = seconds();
     scenario.relay.failUsage = true;
-    for (let run = 0; run < 3; run++) await runCron();
-    expect((await admin("GET", "/v1/admin/state")).json["killSwitch"]).toMatchObject({ engaged: true, reason: "measurement-failed" });
+    // The cron's cadence, one failed measurement per interval, until the switch engages or six hours pass.
+    while (seconds() - lastGood < 6 * 3600 && (await killSwitch())["engaged"] !== true) {
+      scenario.clock.advance(interval);
+      await runCron();
+    }
+    expect(await killSwitch()).toMatchObject({ engaged: true, reason: "measurement-failed" });
+    expect(seconds() - lastGood).toBeGreaterThanOrEqual(3 * 3600);
+    expect(seconds() - lastGood).toBeLessThan(3 * 3600 + interval);
+    expect((await spendState())["measurementFailures"]).toBe(36);
   });
 
   it("revokes a credential whose mint was waiting on the provider when it engaged", async () => {

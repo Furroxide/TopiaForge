@@ -99,6 +99,7 @@ function stateJson(context: RequestContext, flags: Flags, spend: SpendReport): J
       ipMintsPerMinute: context.config.limits.ipMintsPerMinute,
       ipMintsPerHour: context.config.limits.ipMintsPerHour,
       ticketMaxMints: context.config.limits.ticketMaxMints,
+      measurementFailureMinutes: context.config.limits.measurementFailureMinutes,
       measurementFailureLimit: context.config.limits.measurementFailureLimit,
     },
   };

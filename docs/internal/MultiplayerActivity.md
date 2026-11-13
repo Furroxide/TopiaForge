@@ -10,7 +10,7 @@ The five-minute cron collects all sixteen shards. A partial read becomes `unavai
 
 `GET /v1/monitor/activity` requires the dedicated bearer token and returns only schema `topiaforge.activity/1`, `sampledAt` (UTC seconds), `state` (`available`, `suppressed`, `unavailable`), `sessions`, and `players`. Both counts are null for suppressed or unavailable data. Until a delayed snapshot exists it returns 503. Wrong or absent credentials uniformly return 401. Neither public browsing nor `/v1/status` changes its response contract. The status page must never expose this credential.
 
-The existing `7 * * * *` relay-spend cron remains separate from `*/5 * * * *` collection. Durable Object migration `v2` appends `ActivityShard` and `ActivitySnapshot`; migration `v1` is unchanged. Invocation logs and preview domains remain disabled.
+One `*/5 * * * *` cron runs both activity collection and the relay-spend measurement. Durable Object migration `v2` appends `ActivityShard` and `ActivitySnapshot`; migration `v1` is unchanged. Invocation logs and preview domains remain disabled.
 
 Deploy staging through the existing protected workflow and verify a real released snapshot before enabling production. Production activation remains part of the production service release. The page, runner, source-reviewed incident notes and commissioning instructions live in `Furroxide/TopiaForge-Status`.
 

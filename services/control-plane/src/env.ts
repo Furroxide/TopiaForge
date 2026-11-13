@@ -34,7 +34,7 @@ export interface Env {
   /** The Cloudflare Realtime TURN key id and its API token. Relay is unavailable without them. */
   readonly TURN_KEY_ID?: string;
   readonly TURN_KEY_API_TOKEN?: string;
-  /** Account id and an Account Analytics read token for the hourly TURN usage measurement. */
+  /** Account id and an Account Analytics read token for the five-minute TURN usage measurement. */
   readonly ANALYTICS_ACCOUNT_ID?: string;
   readonly ANALYTICS_API_TOKEN?: string;
   /** Spend ceilings in decimal gigabytes. Relay is unavailable until both are set. */
@@ -51,6 +51,7 @@ export interface Env {
   readonly TURN_IP_MINTS_PER_HOUR?: string;
   readonly TURN_IP_MINTS_PER_MINUTE?: string;
   readonly TURN_TICKET_MAX_MINTS?: string;
-  readonly TURN_MEASUREMENT_FAILURE_LIMIT?: string;
+  /** Minutes of failed measurements in a row, from the last good one, that trip the kill switch; "0" never trips. */
+  readonly TURN_MEASUREMENT_FAILURE_MINUTES?: string;
   readonly FLAG_CACHE_SECONDS?: string;
 }

@@ -257,7 +257,7 @@ are refused with `429` before any lookup, so a refusal reveals nothing either. C
 - Credentials are short-lived (`ttlSeconds`, ten minutes by default). Expiry ends the allocation, so a client mints the
   next credential before the current one expires and moves its relayed path to the new allocation.
 - Every mint goes through the spend guard. It may refuse with `429` (the per-prefix mint limit), `403 ticket-limit`
-  (the ticket has minted its share, or the hourly measurement blocked it for relaying far past its plan),
+  (the ticket has minted its share, or the five-minute measurement blocked it for relaying far past its plan),
   `503 relay-unavailable` (relay off, kill switch engaged, or the day's relay budget spent) or `502 upstream-failed`. A
   failed mint costs the caller nothing.
 - The kill switch revokes every live credential (ControlPlaneOperations.md, section 5.1). That includes a credential
@@ -265,7 +265,7 @@ are refused with `429` before any lookup, so a refusal reveals nothing either. C
   the mint answers `503 relay-unavailable`. A mint that is waiting when an operator turns relay off answers the same
   way, even if relay is on again by the time the provider answers.
 - Once the provider answers, the service also checks the caller again: that its ticket has not expired, that its
-  admission holds, and that the hourly measurement has not blocked its ticket meanwhile. If any of that changed while
+  admission holds, and that the five-minute measurement has not blocked its ticket meanwhile. If any of that changed while
   the mint waited, the credential is revoked the same way, and the mint answers as a request made then would: `401`
   for a join ticket that expired or stopped holding (section 5.2) or a host token that no longer opens the session,
   `404` for a joiner whose session has ended, and `403 ticket-limit` for a blocked ticket. If the service cannot ask
@@ -394,7 +394,7 @@ is the same `401`. See ControlPlaneOperations.md for when to use each.
 | `PUT /v1/admin/kill-switch` `{"engaged":bool,"note":text|null}` | Engage (revoking every live credential) or release |
 | `PUT /v1/admin/features` `{"hosting"?,"invites"?,"signaling"?,"relay"?}` | Turn features on or off; at least one member |
 | `POST /v1/admin/servers/{serverId}/delist` `{"holdSeconds":0-2592000}` | End a session now and refuse its key for the hold |
-| `POST /v1/admin/spend/measure` (no body) | Run the hourly relay usage measurement now |
+| `POST /v1/admin/spend/measure` (no body) | Run the five-minute relay usage measurement now |
 
 ## 10. Durable Objects
 
@@ -422,7 +422,7 @@ ControlPlaneOperations.md.
   the uniform miss under concurrency, ticket scope (mints whose ticket stops holding or expires while they wait
   included), signaling and candidate stripping, the room's places, the host's goodbyes and what the room remembers for
   them, host sockets across registrations, the spend guard's caps and concurrency, the kill switch, turning relay off
-  and a measurement blocking a ticket with mints in flight, the switch's revocation passes and its hourly trip, admin
+  and a measurement blocking a ticket with mints in flight, the switch's revocation passes and its measurement trip, admin
   access, semantic versions (hostile ones read in bounded time), and a property test that no response and no stored
   byte carries an address.
 
