@@ -179,7 +179,7 @@ within the 15-second lifetime; task completion is not proof of audible sound. Na
 pre-recorded-clip overrides are outside this replicated speech contract.
 
 Speech requires matching speech schemas on both peers; older builds can join but exchange no robot speech.
-See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/e11332c76bc2f29592d3526acd19a3825aa542ea/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
+See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/dev/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
 
 ## Deterministic Robotopia gameplay first
 
