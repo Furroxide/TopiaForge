@@ -47,7 +47,8 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var probe = Assembly.Load(bytes.ToArray()).GetType("RobotEditorProbe", throwOnError: true)!;
-            foreach (var scenario in new[] { "DiscoveryAndResolution", "RetainedTarget", "ManagedTransition",
+            foreach (var scenario in new[] { "DiscoveryAndResolution", "ManagedPersonalityOnly", "RemoteCallersRefused",
+                "RetainedTarget", "ManagedTransition",
                 "ManagedSceneTeardown", "PreviewRollback", "MovedTreeRestoration", "OrdinaryRestoration" })
             {
                 ((Action)probe.GetMethod(scenario)!.CreateDelegate(typeof(Action)))();
@@ -111,6 +112,7 @@ namespace UnityEngine
         public GameObject? Parent;
         public bool Active = true;
         public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
+        public bool activeInHierarchy => ActiveInHierarchy;
 
         public GameObject(string name, GameObject? parent = null)
         {
@@ -353,12 +355,45 @@ public static class RobotEditorProbe
         foreach (var root in new[] { rootMarked.Root, wrapper, ancestorMarked.Root, descendantMarked.Root })
         {
             ((AgentHandle)handle).NativeGameObject = root;
-            Check(!editor.TryResolve(handle, out var target) && target == null, "Resolution must hide managed actors: " + root.name);
+            // A RobotKit robot resolves to a managed target that allows only a personality preview.
+            Check(editor.TryResolve(handle, out var target) && target != null && !target.IsNativeSceneObject,
+                "Resolution must return a managed target for a RobotKit robot: " + root.name);
         }
 
         wrapper.Active = false;
         ((AgentHandle)handle).NativeGameObject = wrapper;
         Check(!editor.TryResolve(handle, out var inactive) && inactive == null, "Resolution must honor inactive ancestors.");
+    }
+
+    public static void ManagedPersonalityOnly()
+    {
+        using var editor = CreateEditor(out var agents);
+        var robot = CreateRobot("Managed robot");
+        MarkManaged(robot.Root);
+        Check(!editor.Targets.Any(), "Discovery must not offer a managed robot.");
+        var handle = DispatchProxy.Create<IRobotAgent, AgentHandle>();
+        agents.Agent = handle;
+        ((AgentHandle)handle).NativeGameObject = robot.Root;
+        Check(editor.TryResolve(handle, out var target) && target != null, "The host can resolve its own RobotKit robot.");
+        using var lease = Value(editor.BeginTemporaryEdit(target!));
+        Refused(lease.PreviewTransform(Moved), "Managed transform preview");
+        Refused(lease.PreviewBrainMode(RobotBrainMode.Autonomous), "Managed brain preview");
+        Check(Value(lease.PreviewPersonality(Draft)), "A managed robot accepts a personality preview.");
+        Check(Value(lease.Restore()), "The managed personality preview restores cleanly.");
+    }
+
+    public static void RemoteCallersRefused()
+    {
+        using var editor = CreateEditor(out _);
+        CreateRobot("Scene robot");
+        var target = editor.Targets.Single();
+        using var lease = Value(editor.BeginTemporaryEdit(target, () => true));
+        var personality = lease.PreviewPersonality(Draft);
+        Check(!personality.Succeeded && personality.ErrorCode == ModErrorCode.NotAuthoritative,
+            "A guest's input or a client must not give a robot a personality.");
+        var wake = lease.PreviewBrainMode(RobotBrainMode.Autonomous);
+        Check(!wake.Succeeded && wake.ErrorCode == ModErrorCode.NotAuthoritative, "A guest's input or a client must not wake a robot's brain.");
+        Check(Value(lease.PreviewBrainMode(RobotBrainMode.Dormant)), "Keeping a robot dormant needs no authority.");
     }
 
     public static void RetainedTarget()

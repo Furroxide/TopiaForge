@@ -8,10 +8,11 @@ namespace TopiaForge.RobotKit
         internal const string ManagedRobotMessage = "RobotKit-managed robots cannot be edited by the scene editor.";
         private readonly GameObject root;
 
-        public RobotEditTarget(GameObject root, Component agent)
+        public RobotEditTarget(GameObject root, Component agent, bool managed = false)
         {
             this.root = root;
             Agent = agent;
+            Managed = managed;
             InstanceId = root.GetInstanceID();
             SceneHandle = root.scene.handle;
             Id = "robot-scene:" + InstanceId;
@@ -21,7 +22,9 @@ namespace TopiaForge.RobotKit
         public string DisplayName => root != null ? root.name : string.Empty;
         public string SceneName => root != null && root.scene.IsValid() ? root.scene.name : string.Empty;
         public bool IsAlive => root != null && Agent != null && root.scene.IsValid() && root.scene.handle == SceneHandle;
-        public bool IsNativeSceneObject => true;
+        public bool IsNativeSceneObject => !Managed;
+        // Resolved from a RobotKit robot's own agent: only a personality preview is allowed.
+        internal bool Managed { get; }
         public int InstanceId { get; }
         public int SceneHandle { get; }
         internal GameObject Root => root;

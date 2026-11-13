@@ -37,9 +37,11 @@ integration.
 | `IRobotSceneEditorService` | Optional discovery and exclusive temporary edit leases for eligible native scene robots. |
 | `IRobotEditTarget` / `IRobotEditLease` | Opaque scene target plus snapshot-backed transform, brain-mode, and autonomous-personality previews with conflict-safe restoration. |
 
-Use the scene editor for eligible native scene robots. RobotKit-managed robots, including guest replicas, are excluded
-from discovery, resolution, and edit leases. Use the routed `IRobotAgent` controls for managed robots. Temporary native
-personality previews apply only to eligible scene robots.
+Use the scene editor for eligible native scene robots; RobotKit-managed robots are not in `Targets`. `TryResolve`
+turns a RobotKit robot into a target that allows only a temporary personality preview: move it and change its brain
+through the routed `IRobotAgent` controls. A personality preview, or waking a robot's native brain, is refused with
+`NotAuthoritative` on a guest's PC and in host code that runs on a guest's input, so a robot never runs text a guest
+wrote.
 
 Every scene edit is temporary and exclusive. A lease snapshots each reversible property once, restores changes in
 reverse order, and leaves a property untouched if another system changed it after the preview. If the target comes under

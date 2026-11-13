@@ -18,7 +18,10 @@ namespace TopiaForge.Mods
         /// <summary>Gets the current bounded, deterministic set of editable robots.</summary>
         IReadOnlyList<IRobotEditTarget> Targets { get; }
 
-        /// <summary>Tries to resolve an eligible scene target. Returns false for RobotKit-managed agents.</summary>
+        /// <summary>
+        /// Resolves a RobotKit robot to an edit target that allows only a temporary personality preview; move it and
+        /// change its brain through <see cref="IRobotAgent"/>. Returns false when the robot cannot be edited.
+        /// </summary>
         bool TryResolve(IRobotAgent agent, out IRobotEditTarget? target);
 
         /// <summary>Begins an exclusive, lifetime-owned temporary edit.</summary>

@@ -5,8 +5,10 @@
 - Added guarded map-world MuniciPal composition and bounded discovery refusal diagnostics. Native character qualification remains pending.
 - Empty native-prefab discovery keeps retrying beside a current composition; definite absent-character discovery backs off without surviving world or scene changes.
 - Missing native walk `ShouldIgnore` metadata now fails the Critical compatibility gate.
-- Restricted temporary scene editing to eligible native scene robots. The editor excludes RobotKit-managed robots,
-  including guest replicas, and skips previews and snapshot restoration if a target comes under RobotKit management.
+- Restricted temporary scene editing to eligible native scene robots. Discovery excludes RobotKit-managed robots;
+  `TryResolve` turns one into a target that allows only a personality preview. A personality preview or waking a
+  native brain is refused on a guest's PC and in host code running on a guest's input. Previews and snapshot
+  restoration stop if a scene target comes under RobotKit management.
 
 - Added automatic private earshot speech for host-owned robots, native voice matching and scoped cancellation; guests synthesize locally and retain dormant brains.
 

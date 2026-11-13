@@ -9,7 +9,7 @@ namespace TopiaForge.RobotKit
 {
     internal sealed class RobotSceneEditorService :
         IRobotSceneEditorService,
-        IOwnerBoundExtensionFactory,
+        IOwnerContextBoundExtensionFactory,
         IDisposable
     {
         private const int MaximumTargets = 256;
@@ -41,7 +41,7 @@ namespace TopiaForge.RobotKit
                 {
                     return UnityEngine.Object.FindObjectsByType(agentType, FindObjectsSortMode.InstanceID)
                         .OfType<Component>()
-                        .Select(CreateTarget)
+                        .Select(agent => CreateTarget(agent))
                         .Where(target => target != null)
                         .Cast<IRobotEditTarget>()
                         .Take(MaximumTargets)
@@ -65,11 +65,13 @@ namespace TopiaForge.RobotKit
             }
 
             var component = GameReflection.FindComponent(native.NativeGameObject, "LLMAgent");
-            target = component == null ? null : CreateTarget(component);
+            target = component == null || !component.gameObject.activeInHierarchy ? null : CreateTarget(component, managed: true);
             return target != null;
         }
 
-        public OperationResult<IRobotEditLease> BeginTemporaryEdit(IRobotEditTarget target)
+        public OperationResult<IRobotEditLease> BeginTemporaryEdit(IRobotEditTarget target) => BeginTemporaryEdit(target, null);
+
+        internal OperationResult<IRobotEditLease> BeginTemporaryEdit(IRobotEditTarget target, Func<bool>? remoteCaller)
         {
             if (disposed)
             {
@@ -90,7 +92,7 @@ namespace TopiaForge.RobotKit
 
             try
             {
-                if (nativeTarget.IsManaged)
+                if (nativeTarget.IsManaged != nativeTarget.Managed)
                 {
                     return OperationResult<IRobotEditLease>.Failure(ModErrorCode.Conflict, RobotEditTarget.ManagedRobotMessage);
                 }
@@ -101,7 +103,7 @@ namespace TopiaForge.RobotKit
                     return OperationResult<IRobotEditLease>.Failure(ModErrorCode.Conflict, "Another creator session is editing this robot.");
                 }
 
-                var lease = new RobotEditLease(nativeTarget, logger, () => leases.Remove(instanceId));
+                var lease = new RobotEditLease(nativeTarget, logger, () => leases.Remove(instanceId), remoteCaller);
                 leases[instanceId] = lease;
                 return OperationResult<IRobotEditLease>.Success(lease);
             }
@@ -130,17 +132,19 @@ namespace TopiaForge.RobotKit
             RestoreAll();
         }
 
-        object IOwnerBoundExtensionFactory.CreateOwnerFacade(Type contractType, string ownerModId, IModLifetime lifetime)
+        object IOwnerContextBoundExtensionFactory.CreateOwnerFacade(Type contractType, IModContext context)
         {
             if (contractType != typeof(IRobotSceneEditorService))
             {
                 throw new ArgumentException("Unsupported RobotKit editor contract: " + contractType.FullName, nameof(contractType));
             }
 
-            return new OwnerFacade(this, lifetime);
+            return new OwnerFacade(this, context.Lifetime, (context as IInternalReplicationContext)?.Replication);
         }
 
-        private RobotEditTarget? CreateTarget(Component agent)
+        // Scene discovery offers only native scene robots. A RobotKit robot resolved from its own agent is a managed
+        // target, which allows a personality preview and nothing that RobotKit's routed controls already own.
+        private RobotEditTarget? CreateTarget(Component agent, bool managed = false)
         {
             if (agent == null || agent.gameObject == null || !agent.gameObject.scene.IsValid())
             {
@@ -149,12 +153,12 @@ namespace TopiaForge.RobotKit
 
             var body = agent.GetComponentInParent(RobotPersonalityBridge.RobotBodyType ?? agent.GetType());
             var root = body == null ? agent.gameObject : body.gameObject;
-            if (RobotEditTarget.HasManagedRobot(root, agent) || HasProgressionComponent(root))
+            if (RobotEditTarget.HasManagedRobot(root, agent) != managed || HasProgressionComponent(root))
             {
                 return null;
             }
 
-            return new RobotEditTarget(root, agent);
+            return new RobotEditTarget(root, agent, managed);
         }
 
         private static bool HasProgressionComponent(GameObject root)
@@ -193,12 +197,19 @@ namespace TopiaForge.RobotKit
         {
             private readonly RobotSceneEditorService service;
             private readonly IModLifetime lifetime;
+            private readonly IRuntimeReplication? replication;
 
-            public OwnerFacade(RobotSceneEditorService service, IModLifetime lifetime)
+            public OwnerFacade(RobotSceneEditorService service, IModLifetime lifetime, IRuntimeReplication? replication)
             {
                 this.service = service;
                 this.lifetime = lifetime;
+                this.replication = replication;
             }
+
+            // A client's process, or host code running on a guest's input, must not give a robot a personality or wake
+            // its native brain: that would run text a guest wrote, or a brain only one PC runs.
+            private bool RemoteCaller() => replication != null && (replication.Realm == InternalNetRealm.Client ||
+                replication is IInternalEntityCommands commands && commands.IsGuestOrigin);
 
             public bool IsAvailable => !lifetime.IsStopping && service.IsAvailable;
             public IReadOnlyList<IRobotEditTarget> Targets => IsAvailable ? service.Targets : Array.Empty<IRobotEditTarget>();
@@ -221,7 +232,7 @@ namespace TopiaForge.RobotKit
                     return OperationResult<IRobotEditLease>.Failure(ModErrorCode.Cancelled, "The consuming mod is stopping.");
                 }
 
-                var result = service.BeginTemporaryEdit(target);
+                var result = service.BeginTemporaryEdit(target, RemoteCaller);
                 if (!result.TryGetValue(out var lease))
                 {
                     return result;
