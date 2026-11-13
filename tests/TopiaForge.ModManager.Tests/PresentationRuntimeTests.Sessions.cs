@@ -88,10 +88,8 @@ namespace TopiaForge.ModManager.Tests
             using var rig = new Rig(); rig.Start();
             rig.Host.Ui.CreateSurface(Hud("steady", "unchanged")); rig.Frames(10);
             var presentation = rig.Guest.Players.Presentation!;
-            for (var i = 0; i < 100; i++) { rig.Network.Clock.Advance(16_000); presentation.RetryReceived(); presentation.ReconcileReceivedAudio(); }
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 10_000; i++) { rig.Network.Clock.Advance(16_000); presentation.RetryReceived(); presentation.ReconcileReceivedAudio(); }
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("resting guest recovery",
+                () => { rig.Network.Clock.Advance(16_000); presentation.RetryReceived(); presentation.ReconcileReceivedAudio(); }, 10_000, 100);
             Assert(allocated == 0, "resting guest recovery allocates zero bytes, got " + allocated);
             Console.WriteLine("Guest presentation: 0 B over 10,000 resting recovery and audio checks.");
         }

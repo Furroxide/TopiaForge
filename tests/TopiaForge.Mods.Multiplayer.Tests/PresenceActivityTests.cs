@@ -84,10 +84,10 @@ internal static partial class PresenceActivityTests
             new[] { Member("host", 1), Member("speaker", 2), Member("listener", 1) }, Array.Empty<CommunicationRoute>())).Value!;
         r.Frames(6); Flags(listener, speaker, 0, "policy denial wakes suppressed stationary typing pose"); r.Frames(30);
         r.Host.Control.Inbox!.RecordPoses = false;
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 1000; i++)
-        { r.Host.Presence.TryGetPose(speaker.Id, out _); r.Host.Presence.Host.Send(r.Engine.NowMicros + i * PresenceHost.RelayIntervalMicros); }
-        Check(GC.GetAllocatedBytesForCurrentThread() - before == 0, "projection and idle routed relay allocate exactly zero bytes");
+        var relay = 0;
+        var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("projection and idle routed relay", () =>
+        { r.Host.Presence.TryGetPose(speaker.Id, out _); r.Host.Presence.Host.Send(r.Engine.NowMicros + relay++ * PresenceHost.RelayIntervalMicros); }, 1000);
+        Check(allocated == 0, "projection and idle routed relay allocate exactly zero bytes");
     }
     private static void SchedulerSkip()
     {

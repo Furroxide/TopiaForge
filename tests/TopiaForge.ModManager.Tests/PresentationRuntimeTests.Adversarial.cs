@@ -56,10 +56,8 @@ namespace TopiaForge.ModManager.Tests
             using var rig = new Rig(); rig.Start();
             var hud = rig.Host.Ui.CreateSurface(Hud("score", "steady")).Value!; rig.Frames(20);
             var presentation = rig.Host.Players.Presentation!;
-            for (var i = 0; i < 100; i++) { hud.Show(); hud.SetBody("steady"); presentation.Send(); }
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 10_000; i++) { hud.Show(); hud.SetBody("steady"); presentation.Send(); }
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("resting presentation",
+                () => { hud.Show(); hud.SetBody("steady"); presentation.Send(); }, 10_000, 100);
             Assert(allocated == 0, "resting presentation allocates zero bytes, got " + allocated);
             Console.WriteLine("Shared presentation: 0 B over 10,000 resting sends.");
         }

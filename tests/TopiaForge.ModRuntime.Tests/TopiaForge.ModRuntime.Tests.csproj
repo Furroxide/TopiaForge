@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../Shared/AllocationProbe.cs" Link="TestSupport/AllocationProbe.cs" />
     <Compile Include="../Shared/IsolatedTestProcess.cs" Link="TestSupport/IsolatedTestProcess.cs" />
     <ProjectReference Include="..\..\src\TopiaForge.ModManager\TopiaForge.ModManager.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />

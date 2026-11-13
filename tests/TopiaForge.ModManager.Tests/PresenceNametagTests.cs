@@ -54,25 +54,7 @@ namespace TopiaForge.ModManager.Tests
             That(source.Highest == 31 && feed.Active.Count(active => active) == 31, "capacity bounds source reads and visible slots");
             source.Failed = -1; source.Count = 8; feed.Tick(source, true);
             That(!feed.Active.Skip(8).Any(active => active), "shrinking the roster hides retired slots");
-            for (var i = 0; i < 200; i++) feed.Tick(source, true);
-            var started = System.Diagnostics.Stopwatch.GetTimestamp();
-            long firstTick = 0, firstElapsed = 0, firstBytes = 0;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < 10000; i++)
-            {
-                feed.Tick(source, true);
-                var observed = GC.GetAllocatedBytesForCurrentThread() - before;
-                if (firstTick == 0 && observed != 0)
-                {
-                    firstTick = i + 1; firstBytes = observed;
-                    firstElapsed = System.Diagnostics.Stopwatch.GetTimestamp() - started;
-                }
-            }
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            var elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - started;
-            Console.WriteLine("Nametag feed allocation: bytes=" + allocated + " firstTick=" + firstTick + " firstBytes=" + firstBytes
-                + " firstElapsedMs=" + firstElapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency
-                + " elapsedMs=" + elapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("nametag feed", () => feed.Tick(source, true), 10000, 200);
             That(allocated == 0, "eight-player feed allocates exactly zero bytes; actual=" + allocated);
             feed.Tick(null, true); That(!feed.Active.Any(active => active), "provider loss hides every slot");
             feed.Tick(source, true); feed.Tick(source, false);

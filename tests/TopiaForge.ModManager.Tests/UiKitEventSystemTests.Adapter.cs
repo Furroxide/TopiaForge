@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 Read("src", "TopiaForge.Mods.UnityUi", "Core", "TopiaForgeEventSystemPolicy.cs"),
                 Read("src", "TopiaForge.Mods.UnityUi", "Runtime", "TopiaForgeEventSystems.cs"),
+                Read("tests", "Shared", "AllocationProbe.cs"),
                 EventSystemUnityContract,
                 EventSystemAdapterScenarios,
             };
@@ -171,13 +172,12 @@ namespace TopiaForge.ModManager.Tests
                         Time.unscaledTimeAsDouble = frame;
                         TopiaForgeEventSystems.Tick();
                     }
-                    var before = GC.GetAllocatedBytesForCurrentThread();
-                    for (var frame = 121; frame <= 240; frame++)
+                    var time = 120;
+                    var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("event-system adapter checks", () =>
                     {
-                        Time.unscaledTimeAsDouble = frame;
+                        Time.unscaledTimeAsDouble = ++time;
                         TopiaForgeEventSystems.Tick();
-                    }
-                    var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                    }, 120);
                     Check(allocated == 0, "Steady adapter checks allocated " + allocated + " bytes.");
                     Check(EventSystem.current != null, "A disabled foreign system must not retire the kit's own.");
                 }

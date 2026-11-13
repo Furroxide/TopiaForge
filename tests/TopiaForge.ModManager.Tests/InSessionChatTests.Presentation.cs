@@ -155,14 +155,13 @@ namespace TopiaForge.ModManager.Tests
             using var rig = new PresenterRig(true);
             rig.Screen.Open(); rig.Screen.SetTyping(true);
             for (var index = 0; index < 200; index++) rig.Screen.Tick(0.016f);
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var index = 0; index < 10_000; index++)
+            var allocated = TopiaForge.TestSupport.AllocationProbe.Measure("open idle chat", () =>
             {
                 rig.Screen.Tick(0.016f);
                 _ = rig.Screen.ConnectionText; _ = rig.Screen.IsReconnecting; _ = rig.Screen.IsOpen;
                 rig.Screen.SetTyping(true);
-            }
-            That(GC.GetAllocatedBytesForCurrentThread() == before, "open idle chat and shown connection state allocate zero bytes over 10,000 frames");
+            }, 10_000);
+            That(allocated == 0, "open idle chat and shown connection state allocate zero bytes over 10,000 frames");
         }
 
         private sealed class PresenterRig : IDisposable

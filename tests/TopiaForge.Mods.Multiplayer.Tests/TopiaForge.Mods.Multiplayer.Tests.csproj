@@ -28,6 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../Shared/AllocationProbe.cs" Link="TestSupport/AllocationProbe.cs" />
     <Compile Include="../../mods/Shared/DiagnosticPathRedactor.cs" />
     <!-- The game's binder, which the testing kit's lifecycle runner must match, failures included. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\GeneratedMultiplayerBinder.cs" Link="Runtime\GeneratedMultiplayerBinder.cs" />
