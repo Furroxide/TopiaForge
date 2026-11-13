@@ -23,7 +23,8 @@ namespace TopiaForge.ModManager.Tests
                 .Replace("/* service methods */", Methods(service, "Spawn", "SpawnNative", "Tick")
                     + Methods(sceneResources, "EnsureRoots", "EnsureKinematicRoot", "NextId", "LogSpawnModeOnce", "ClearAgents")
                     + Property(service, "ActiveAgents"))
-                .Replace("/* agent lifetime */", Methods(agent, "Despawn") + Property(agent, "IsAlive"));
+                .Replace("/* agent lifetime */", Methods(agent, "Despawn", "SetBrainMode", "SetInteraction", "RestrictToBody", "Unavailable")
+                    + Property(agent, "IsAlive"));
             var candidate = Read("RobotPrefabResolver.cs").GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
                 .Single(c => c.Identifier.Text == "RobotPrefabCandidate");
             var candidateSource = "using System; using UnityEngine; namespace TopiaForge.RobotKit { " + candidate + " }";
@@ -34,6 +35,7 @@ namespace TopiaForge.ModManager.Tests
                 CSharpSyntaxTree.ParseText(candidateSource, path: "RobotPrefabCandidate.cs"),
                 Read("RobotPrefabSelection.cs"),
                 Read("RobotComposedLifetime.cs"),
+                Read("RobotComposedReferences.cs"),
             };
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(p => !Path.GetFileName(p).StartsWith("UnityEngine", StringComparison.Ordinal)
@@ -47,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
                 throw new InvalidOperationException(string.Join("\n", emitted.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.RobotKit.RobotAgentService", true)!;
             ((Action)probe.GetMethod("Run")!.CreateDelegate(typeof(Action)))();
-            Console.WriteLine("Composed robot cleanup: activation, corpse sweep, both spawn rollback paths and the unverified context refusal passed.");
+            Console.WriteLine("Composed robot cleanup: activation, corpse sweep, both spawn rollback paths, the unverified context refusal and body-only spawns passed.");
         }
 
         private static string Methods(SyntaxTree tree, params string[] names) => string.Join("\n", names.Select(name =>
@@ -79,14 +81,19 @@ namespace TopiaForge.RobotKit
         private Replication? Replication => null;
         private bool IsNavigationAvailable => true;
 
-        private readonly RobotPrefabCandidate[] catalog;
+        private RobotPrefabCandidate[] catalog;
+        private readonly object? world = null;
         private readonly NativeAssetOwner mapOwner = new GameObject("Map").AddComponent<NativeAssetOwner>();
         private readonly NativeAssetOwner siblingOwner = new GameObject("Unrelated scene object").AddComponent<NativeAssetOwner>();
         private Build? lastBuild;
         private bool unverifiedContext;
         private static readonly RobotAgentSpawnRequest Request = new();
 
-        private RobotAgentService() => catalog = new[] { new RobotPrefabCandidate("composed", "Composed", Compose, () => true) };
+        private RobotAgentService() => catalog = new[]
+        {
+            new RobotPrefabCandidate("composed", "Composed", Compose, () => true),
+            new RobotPrefabCandidate("municipal", "MuniciPal", Compose, () => true, bodyOnly: true)
+        };
         private IReadOnlyList<RobotPrefabCandidate> ResolveCachedCatalog() => catalog;
         private static void Quieten(GameObject actor, bool cosmetic) => throw new InvalidOperationException("Unexpected replica.");
         private static object? ResolveAnimator(GameObject actor) => null;
@@ -122,6 +129,58 @@ namespace TopiaForge.RobotKit
             Rollback(afterPublication: false);
             Rollback(afterPublication: true);
             UnverifiedContext();
+            BodyOnly();
+            MissingReason();
+        }
+
+        private static void BodyOnly()
+        {
+            var service = new RobotAgentService();
+            var refused = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal", BrainMode = RobotBrainMode.Autonomous });
+            Check(refused.ErrorCode == ModErrorCode.Unavailable && refused.Message == RobotComposedReferences.BodyOnly + " Request Dormant instead."
+                && service.lastBuild == null, "an Autonomous body-only spawn is refused with its reason before construction");
+            service.CheckEmpty();
+            var full = service.Spawn(new RobotAgentSpawnRequest { BrainMode = RobotBrainMode.Autonomous });
+            Check(full.ErrorCode == null && ((RobotAgent)full.Value!).Interaction.NativeTalkMode == RobotNativeTalkMode.Enabled,
+                "a complete character keeps its Autonomous brain and native talk");
+
+            var spawned = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal" });
+            var agent = (RobotAgent)spawned.Value!;
+            Check(spawned.ErrorCode == null && agent.Interaction.NativeTalkMode == RobotNativeTalkMode.Disabled,
+                "a Dormant body-only spawn succeeds with native talk off");
+            var wake = agent.SetBrainMode(RobotBrainMode.Autonomous);
+            Check(wake.ErrorCode == ModErrorCode.Unavailable && wake.Message == RobotComposedReferences.BodyOnly
+                && agent.BrainMode == RobotBrainMode.Dormant, "a body-only robot cannot wake a native brain");
+            var talk = agent.SetInteraction(RobotInteractionOptions.NativeTalk());
+            Check(talk.ErrorCode == ModErrorCode.Unavailable && talk.Message == RobotComposedReferences.BodyOnly
+                && agent.Interaction.NativeTalkMode == RobotNativeTalkMode.Disabled, "a body-only robot cannot enable native talk");
+            Check(agent.SetInteraction(RobotInteractionOptions.DisableNativeTalk()).ErrorCode == null, "a body-only robot accepts talk off");
+
+            var custom = RobotInteractionOptions.Custom();
+            var prompt = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal", Interaction = custom });
+            Check(prompt.ErrorCode == null && ReferenceEquals(((RobotAgent)prompt.Value!).Interaction, custom),
+                "a body-only robot keeps a custom interaction from its author");
+        }
+
+        private static void MissingReason()
+        {
+            var service = new RobotAgentService();
+            service.catalog = service.catalog.Take(1).ToArray();
+            const string plain = "The requested robot type is unavailable in this scene.";
+            try
+            {
+                RobotKitDiagnostics.Last = RobotComposedRefusal.BodyPartUnavailable;
+                var missing = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "MuniciPal" });
+                Check(missing.ErrorCode == ModErrorCode.Unavailable
+                    && missing.Message == plain + " " + RobotComposedReferences.Explain(RobotComposedRefusal.BodyPartUnavailable),
+                    "a missing MuniciPal reports its discovery reason to the author");
+                Check(service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "copbot" }).Message == plain,
+                    "other missing types do not borrow the composed reason");
+                RobotKitDiagnostics.Last = null;
+                Check(service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal" }).Message == plain,
+                    "no recorded discovery reason keeps the plain message");
+            }
+            finally { RobotKitDiagnostics.Last = null; }
         }
 
         private static void Activation()
@@ -246,6 +305,16 @@ namespace TopiaForge.RobotKit
         internal string Id => id;
         private readonly GameObject go = actor;
         private bool despawned;
+        private readonly object? replicaAnimation = null;
+        private readonly object nativeBrainSnapshot = brainSnapshot;
+        private RobotBrainMode brainMode = request.BrainMode;
+        private RobotInteractionOptions interaction = request.Interaction;
+        private string? bodyOnly;
+        internal RobotBrainMode BrainMode => brainMode;
+        internal RobotInteractionOptions Interaction => interaction;
+        private static OperationResult<bool> ReplicaRefusal() => throw new InvalidOperationException("Unexpected replica.");
+        private void Stop() { }
+        private void ApplyInteraction() { }
         internal void RegisterSpeech() { }
         internal void ReleaseSpeech() { }
         internal void ReleaseWalk() { }
@@ -354,20 +423,32 @@ namespace UnityEngine
 namespace TopiaForge.Mods
 {
     public enum ModErrorCode { InvalidState, Unavailable }
+    public enum RobotBrainMode { Dormant, Autonomous }
+    public enum RobotNativeTalkMode { Enabled, Disabled }
+    public sealed class RobotInteractionOptions
+    {
+        public RobotNativeTalkMode NativeTalkMode { get; private init; }
+        public object? CustomInteraction { get; private init; }
+        public static RobotInteractionOptions NativeTalk() => new();
+        public static RobotInteractionOptions DisableNativeTalk() => new() { NativeTalkMode = RobotNativeTalkMode.Disabled };
+        public static RobotInteractionOptions Custom() => new() { NativeTalkMode = RobotNativeTalkMode.Disabled, CustomInteraction = new object() };
+        public RobotInteractionOptions Clone() => this;
+    }
     public interface IRobotAgent { }
     public sealed class RobotAgentSpawnRequest
     {
-        public string RobotTypeId => "composed";
+        public string RobotTypeId { get; init; } = "composed";
         public string? Name => null;
         public Vector3 Position => default;
         public Vector3? Facing => null;
-        public int BrainMode => 0;
+        public RobotBrainMode BrainMode { get; init; }
+        public RobotInteractionOptions Interaction { get; init; } = RobotInteractionOptions.NativeTalk();
         public float Scale => 1f;
         public int? Tint => null;
     }
-    public readonly record struct OperationResult<T>(ModErrorCode? ErrorCode, string? Message = null)
+    public readonly record struct OperationResult<T>(ModErrorCode? ErrorCode, string? Message = null, T? Value = default)
     {
-        public static OperationResult<T> Success(T value) => new(null);
+        public static OperationResult<T> Success(T value) => new(null, null, value);
         public static OperationResult<T> Failure(ModErrorCode code, string message) => new(code, message);
     }
 }
@@ -384,7 +465,8 @@ namespace TopiaForge.RobotKit
     internal static class GameReflection
     {
         internal static object CaptureBrainState(GameObject actor) => new();
-        internal static void ConfigureBrain(GameObject actor, int mode, Logger logger) => logger.OnConfigureBrain?.Invoke();
+        internal static void ConfigureBrain(GameObject actor, TopiaForge.Mods.RobotBrainMode mode, Logger logger) => logger.OnConfigureBrain?.Invoke();
+        internal static void ApplyBrainMode(GameObject actor, TopiaForge.Mods.RobotBrainMode mode, object snapshot, Logger logger) { }
         internal static bool HasKilledComponent(GameObject actor) => actor.NativeDead;
     }
     internal sealed class Logger
@@ -397,7 +479,9 @@ namespace TopiaForge.RobotKit
     internal static class RobotKitDiagnostics
     {
         internal static Exception? LastError;
+        internal static RobotComposedRefusal? Last;
         internal static void ReportOnce(string category, Exception error) => LastError = error;
+        internal static RobotComposedRefusal? LastComposedDiscovery(object? world) => Last;
     }
     internal static class RobotKitLog { internal static string ExceptionType(Exception error) => error.GetType().Name; }
     internal sealed class Replication { internal void Forget(string id) { } }

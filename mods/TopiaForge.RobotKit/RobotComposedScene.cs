@@ -17,6 +17,7 @@ namespace TopiaForge.RobotKit
         private readonly RobotComposedCurrentness currentness;
         private readonly Type builderType, ownerType;
         private readonly MethodInfo build, addOwner, destroyAssets;
+        private bool bodyOnly;
 
         private RobotComposedScene(Func<WorldSessionSnapshot?> world, WorldSessionSnapshot state,
             Component host, object config, object sceneRoot, Transform mapRoot, object project, object entity)
@@ -69,38 +70,73 @@ namespace TopiaForge.RobotKit
                     // Re-serialize parsed data: the native serializer receives plain data and explicit safe settings.
                     var sceneId = data!.TryGetValue("id", out var id) ? id as string : null;
                     if (string.IsNullOrEmpty(sceneId)) return Refuse(state, RobotComposedRefusal.SceneIdentity);
-                    var envelope = new Dictionary<string, object?>
+                    if (!Load(data, sceneId!, out var project, out var entity, out var loadRefusal)) return Refuse(state, loadRefusal);
+                    var bodyOnly = false;
+                    if (!ReferencesResolve(config, map, project!, entity!, out var referenceRefusal))
                     {
-                        ["scenes"] = new Dictionary<string, object?> { [sceneId!] = data },
-                        ["assets"] = new Dictionary<string, object?>(),
-                        ["local-assets"] = new Dictionary<string, object?>()
-                    };
-                    var project = DeserializeProject(MiniJson.Serialize(envelope));
-                    // Check the native alias and serializer result as well as the input envelope. This
-                    // synchronous factory owns no asset catalogue and must not acquire one through defaults.
-                    if (!(GameReflection.GetFieldValue(project, "assets") is IDictionary assets) || assets.Count != 0
-                        || !(GameReflection.GetFieldValue(project, "localAssets") is IDictionary localAssets) || localAssets.Count != 0)
-                        return Refuse(state, RobotComposedRefusal.ProjectCatalogShape);
-                    var nativeScenes = GameReflection.GetFieldValue(project, "scenes") as IDictionary;
-                    var nativeScene = nativeScenes?[sceneId!];
-                    if (nativeScene == null || nativeScene.GetType() != Type.GetType("UgcExportScene, GameCode", true)!)
-                        return Refuse(state, RobotComposedRefusal.EntityShape);
-                    var entities = GameReflection.GetFieldValue(nativeScene, "entities") as IDictionary;
-                    if (entities?.Count != 1) return Refuse(state, RobotComposedRefusal.EntityShape);
-                    var entity = entities.Values.Cast<object>().Single();
-                    if (entity == null || entity.GetType() != Type.GetType("UgcExportEntity, GameCode", true)!)
-                        return Refuse(state, RobotComposedRefusal.EntityShape);
-                    if (!ReferencesResolve(config, map, project, entity, out var referenceRefusal)) return Refuse(state, referenceRefusal);
+                        // Only unprepared catalogue content may fall back to the body. Rebuild the entity without
+                        // its personality and lore and run every check again, so any body-part, voice or other
+                        // catalogue gap still refuses.
+                        if (referenceRefusal != RobotComposedRefusal.CatalogAssetsUnavailable) return Refuse(state, referenceRefusal);
+                        WithoutCharacter(data);
+                        if (!Load(data, sceneId!, out project, out entity, out _)
+                            || !ReferencesResolve(config, map, project!, entity!, out _)) return Refuse(state, referenceRefusal);
+                        bodyOnly = true;
+                    }
                     // Ambiguous catalog identities are unavailable rather than chosen by ordering.
                     if (selected != null) return Refuse(state, RobotComposedRefusal.AmbiguousIdentity);
-                    selected = new RobotComposedScene(world, state, host, config, sceneRoot, mapRoot, project, entity);
+                    selected = new RobotComposedScene(world, state, host, config, sceneRoot, mapRoot, project!, entity!) { bodyOnly = bodyOnly };
                 }
                 notPresent = selected == null;
-                return selected == null ? Refuse(state, RobotComposedRefusal.NotPresent) : new RobotPrefabCandidate("municipal", "MuniciPal", selected.Create, selected.AdmitsSpawns);
+                if (selected == null) return Refuse(state, RobotComposedRefusal.NotPresent);
+                if (selected.bodyOnly) RobotKitDiagnostics.ReportComposedDiscovery(state, RobotComposedRefusal.CharacterUnprepared);
+                return new RobotPrefabCandidate(RobotComposedReferences.MunicipalId, "MuniciPal", selected.Create, selected.AdmitsSpawns,
+                    selected.bodyOnly);
             }
             catch (Exception)
             {
                 return Refuse(state, RobotComposedRefusal.NativeBinding);
+            }
+        }
+
+        private static bool Load(Dictionary<string, object?> data, string sceneId, out object? project, out object? entity,
+            out RobotComposedRefusal refusal)
+        {
+            entity = null;
+            refusal = RobotComposedRefusal.EntityShape;
+            var envelope = new Dictionary<string, object?>
+            {
+                ["scenes"] = new Dictionary<string, object?> { [sceneId] = data },
+                ["assets"] = new Dictionary<string, object?>(),
+                ["local-assets"] = new Dictionary<string, object?>()
+            };
+            project = DeserializeProject(MiniJson.Serialize(envelope));
+            // Check the native alias and serializer result as well as the input envelope. This
+            // synchronous factory owns no asset catalogue and must not acquire one through defaults.
+            if (!(GameReflection.GetFieldValue(project, "assets") is IDictionary assets) || assets.Count != 0
+                || !(GameReflection.GetFieldValue(project, "localAssets") is IDictionary localAssets) || localAssets.Count != 0)
+            {
+                refusal = RobotComposedRefusal.ProjectCatalogShape;
+                return false;
+            }
+            var nativeScenes = GameReflection.GetFieldValue(project, "scenes") as IDictionary;
+            var nativeScene = nativeScenes?[sceneId];
+            if (nativeScene == null || nativeScene.GetType() != Type.GetType("UgcExportScene, GameCode", true)!) return false;
+            var entities = GameReflection.GetFieldValue(nativeScene, "entities") as IDictionary;
+            if (entities?.Count != 1) return false;
+            entity = entities.Values.Cast<object>().Single();
+            return entity != null && entity.GetType() == Type.GetType("UgcExportEntity, GameCode", true)!;
+        }
+
+        // The body-only fallback: the agent keeps its voice, and its personality and about (lore) references go.
+        private static void WithoutCharacter(Dictionary<string, object?> data)
+        {
+            foreach (var record in ((Dictionary<string, object?>)data["entities"]!).Values)
+            {
+                var components = (Dictionary<string, object?>)((Dictionary<string, object?>)record!)["components"]!;
+                var agent = (Dictionary<string, object?>)components["agent"]!;
+                if (agent.ContainsKey("personality")) agent["personality"] = "";
+                agent.Remove("about");
             }
         }
 

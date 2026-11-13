@@ -136,11 +136,20 @@ namespace TopiaForge.RobotKit
             var candidate = RobotPrefabSelection.Select(ResolveCachedCatalog(), request.RobotTypeId, item => item.Id);
             if (candidate == null)
             {
+                // A missing composed character carries its fixed discovery reason, for the author and the player.
+                var reason = string.Equals(request.RobotTypeId, RobotComposedReferences.MunicipalId, StringComparison.OrdinalIgnoreCase)
+                    ? RobotKitDiagnostics.LastComposedDiscovery(world) : null;
                 return OperationResult<IRobotAgent>.Failure(
                     ModErrorCode.Unavailable,
                     string.IsNullOrWhiteSpace(request.RobotTypeId)
                         ? "No spawnable robot prefab is available in this scene."
-                        : "The requested robot type is unavailable in this scene.");
+                        : "The requested robot type is unavailable in this scene."
+                            + (reason is { } code ? " " + RobotComposedReferences.Explain(code) : string.Empty));
+            }
+
+            if (candidate.BodyOnly && request.BrainMode != RobotBrainMode.Dormant)
+            {
+                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, RobotComposedReferences.BodyOnly + " Request Dormant instead.");
             }
 
             EnsureRoots();
@@ -186,6 +195,7 @@ namespace TopiaForge.RobotKit
                     ?? clone.AddComponent<RobotAgentEntityIdentityAnchor>();
                 identityAnchor.Initialize(agentId);
                 agent = new RobotAgent(agentId, clone, request, logger, brainSnapshot);
+                if (candidate.BodyOnly) agent.RestrictToBody();
 
                 agent.RegisterSpeech();
                 if (replica) Quieten(clone, cosmetic: false);
