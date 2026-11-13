@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager
         private string? runningWorld;
         private int sceneVersion;
         internal int ActiveCount => active.Count;
+        internal long StartedAt(int index) => active[index].Started;
 
         internal NetworkRobotSpeech(NetworkWorld world, MultiplayerReplication services, Func<long> clock)
         {
