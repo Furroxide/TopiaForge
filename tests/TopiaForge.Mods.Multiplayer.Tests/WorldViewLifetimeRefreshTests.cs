@@ -21,6 +21,10 @@ internal static class WorldViewLifetimeRefreshTests
         Reconnect(ReconnectCase.PartialBaseline);
         Reconnect(ReconnectCase.ReplacementAvatar);
         Reconnect(ReconnectCase.MixedRoster);
+        Reconnect(ReconnectCase.ViewerLinkLoss);
+        Reconnect(ReconnectCase.RootLostInGrace);
+        Reconnect(ReconnectCase.GraceExpiry);
+        Reconnect(ReconnectCase.LateJoiner);
         Console.WriteLine("Engine lifetime world-view refresh and cached references passed.");
     }
 
@@ -28,7 +32,12 @@ internal static class WorldViewLifetimeRefreshTests
 
     // Quiet stops the subject sending across the rejoin to pin that view delivery never stands in for a pose. Every
     // other case keeps the subject sending, so its first pose after the rejoin races the view refresh.
-    private enum ReconnectCase { Normal, Quiet, PartialBaseline, Cache, ReplacementAvatar, MixedRoster }
+    // ViewerLinkLoss cuts and restores the observer's own link, RootLostInGrace destroys the subject's roots while
+    // they are away, GraceExpiry lets them leave and join again, and LateJoiner adds a viewer after the hide.
+    private enum ReconnectCase
+    {
+        Normal, Quiet, PartialBaseline, Cache, ReplacementAvatar, MixedRoster, ViewerLinkLoss, RootLostInGrace, GraceExpiry, LateJoiner
+    }
 
     private static void Reconnect(ReconnectCase scenario)
     {
@@ -36,7 +45,7 @@ internal static class WorldViewLifetimeRefreshTests
         var quiet = scenario == ReconnectCase.Quiet;
         using var engine = new EngineHarness(MultiplayerProcessKind.Interactive, options =>
         {
-            if (mixedRoster) options.ParticipantGraceMicros = 500_000;
+            if (mixedRoster || scenario == ReconnectCase.GraceExpiry) options.ParticipantGraceMicros = 500_000;
         });
         var guest = engine.AddClient("subject");
         var watcher = engine.AddClient("watcher");
@@ -44,9 +53,19 @@ internal static class WorldViewLifetimeRefreshTests
         using var host = new Node(engine.Host, engine);
         using var subject = new Node(guest.Engine, engine);
         using var observer = new Node(watcher.Engine, engine);
-        var nodes = new[] { host, subject, observer };
+        var nodes = new List<Node> { host, subject, observer };
+        var viewers = new List<Node> { host, observer };
         var watching = false;
-        var watchObserver = true;
+        var displayName = Row(engine.Host, subject.Id).DisplayName;
+        // What a viewer sees of the hidden subject: their current root, if presence has one, is held by the
+        // renderer, and their name is not drawn.
+        void CheckHidden(Node node)
+        {
+            var where = scenario + " at tick " + engine.Tick + ": the " + (node == host ? "host" : node == observer ? "observer" : "late joiner");
+            if (node.Presence.TryGetAvatar(subject.Id, out var root) && root != null)
+                Check(node.Renderer.Hidden.Contains(root), where + " holds the hidden subject's current root");
+            Check(!HasNametag(node, displayName), where + " draws no name for the hidden subject");
+        }
         // The runtime's order at 60 frames a second: receive, views after the mods' Update, send, then draw.
         void Frames(int count)
         {
@@ -57,18 +76,13 @@ internal static class WorldViewLifetimeRefreshTests
                 foreach (var node in nodes) { node.Control.Views!.Frame(); node.Services.Views.Run(1f / 60); }
                 foreach (var node in nodes) if (node.SendEnabled) node.Presence.Send.Run(1f / 60);
                 foreach (var node in nodes) node.Presence.Avatars.Run(1f / 60);
-                if (watching)
-                {
-                    Check(!SubjectShown(host, subject.Id), scenario + ": the hidden subject is never drawn on the host (tick " + engine.Tick + ")");
-                    if (watchObserver) Check(!SubjectShown(observer, subject.Id), scenario + ": the hidden subject is never drawn on the observer (tick " + engine.Tick + ")");
-                }
+                if (watching) foreach (var viewer in viewers) CheckHidden(viewer);
             }
         }
         Frames(40);
         var original = Avatar(host, subject.Id);
         var watched = Avatar(observer, subject.Id);
         var originalLifetime = Row(engine.Host, subject.Id).LifetimeId;
-        var displayName = Row(engine.Host, subject.Id).DisplayName;
         Check(AvatarShown(host, original) && AvatarShown(observer, watched)
             && HasNametag(host, displayName) && HasNametag(observer, displayName),
             "host and observer both present the subject before link loss");
@@ -94,13 +108,10 @@ internal static class WorldViewLifetimeRefreshTests
 
         if (scenario == ReconnectCase.ReplacementAvatar)
         {
+            // The holds reach a root replaced inside one lifetime before its first draw.
             host.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, original)).Destroyed = true;
             observer.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, watched)).Destroyed = true;
-            // A root replaced inside one lifetime is followed by the views' 0.25 s retry, not by a rename. This step
-            // checks where the holds end up; the frames before they follow are not part of the reconnect watch.
-            watching = false;
             Frames(20);
-            watching = true;
             var replacement = Avatar(host, subject.Id);
             var watchedReplacement = Avatar(observer, subject.Id);
             Check(!ReferenceEquals(original, replacement) && !ReferenceEquals(watched, watchedReplacement)
@@ -113,6 +124,78 @@ internal static class WorldViewLifetimeRefreshTests
                 "the existing host and observer hides have already followed the replacement roots");
             original = replacement;
             watched = watchedReplacement;
+            // A native hide that throws while the observer follows a replacement leaves no hold untracked: the old
+            // hold is kept and released by the retry that hides the new root.
+            watching = false;
+            observer.Renderer.FailNextHide = true;
+            observer.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, watched)).Destroyed = true;
+            Frames(20);
+            var retried = Avatar(observer, subject.Id);
+            Check(!observer.Renderer.FailNextHide && !ReferenceEquals(retried, watched)
+                && !observer.Renderer.Hidden.Contains(watched) && observer.Renderer.Hidden.Contains(retried),
+                "a failed native hide keeps tracking the old hold until the retry replaces it");
+            watched = retried;
+            watching = true;
+        }
+
+        if (scenario == ReconnectCase.ViewerLinkLoss)
+        {
+            // Presence keeps drawing the last poses while the observer's own link is down; the last view holds.
+            engine.Network.Sever(watcher.Link);
+            Frames(40);
+            Check(PresenceVisible(observer, watched) && privateView.IsActive,
+                "the observer still draws the subject from its last poses while its own link is down");
+            engine.Join(watcher.Engine, "watcher"); engine.Flush();
+            Frames(40);
+            var rejoined = Avatar(observer, subject.Id);
+            Check(Row(engine.Host, observer.Id).IsConnected && privateView.IsActive && PresenceVisible(observer, rejoined)
+                && observer.Renderer.Hidden.Contains(rejoined), "the observer's new link replaces the last view with a complete one");
+            return;
+        }
+        if (scenario == ReconnectCase.RootLostInGrace)
+        {
+            // The game destroys the subject's roots while they are away; presence makes new ones after the rejoin.
+            engine.Network.Sever(guest.Link); Frames(3);
+            host.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, original)).Destroyed = true;
+            observer.Backend.Avatars.Single(avatar => ReferenceEquals(avatar.Entity, watched)).Destroyed = true;
+            Frames(30);
+            Check(!host.Presence.TryGetAvatar(subject.Id, out _) && !observer.Presence.TryGetAvatar(subject.Id, out _),
+                "no root is made for the subject while they are away");
+            engine.Join(subject.Engine, "subject"); engine.Flush();
+            Frames(60);
+            Check(PresenceVisible(host, Avatar(host, subject.Id)) && PresenceVisible(observer, Avatar(observer, subject.Id))
+                && local.IsActive && privateView.IsActive, "the rejoined subject's new roots are drawn by presence and stay held");
+            return;
+        }
+        if (scenario == ReconnectCase.GraceExpiry)
+        {
+            // The subject's grace runs out: they left. Their next admission is a new player the old leases do not hide.
+            engine.Network.Sever(guest.Link);
+            Frames(45);
+            Check(!engine.Host.Snapshot.TryGetParticipant(subject.Id, out _) && !host.Presence.TryGetAvatar(subject.Id, out _),
+                "the subject's grace expires and their root is gone");
+            watching = false;
+            var again = engine.AddClient("subject"); engine.Flush();
+            using var returned = new Node(again.Engine, engine);
+            nodes.Remove(subject); nodes.Add(returned);
+            Frames(60);
+            Check(local.IsActive && privateView.IsActive && AvatarShown(host, Avatar(host, subject.Id))
+                && AvatarShown(observer, Avatar(observer, subject.Id)),
+                "a player who left and joined again is not hidden by the leases taken for their earlier admission");
+            return;
+        }
+        if (scenario == ReconnectCase.LateJoiner)
+        {
+            // Hide the subject from everyone, then a viewer joins: their first avatar of the subject is never drawn.
+            using var everyone = Lease(seam.WorldView(host.Renderer).Hide(original));
+            var late = engine.AddClient("late"); engine.Flush();
+            using var lateNode = new Node(late.Engine, engine);
+            nodes.Add(lateNode); viewers.Add(lateNode);
+            Frames(60);
+            var seen = Avatar(lateNode, subject.Id);
+            Check(PresenceVisible(lateNode, seen) && lateNode.Renderer.Hidden.Contains(seen),
+                "the late joiner's presence draws the subject while the hold that reached the new root keeps it hidden");
+            return;
         }
 
         if (scenario == ReconnectCase.Cache)
@@ -124,8 +207,6 @@ internal static class WorldViewLifetimeRefreshTests
         {
             if (mixedRoster)
             {
-                // The observer's own link is gone from here on; only the host's screen is part of this case.
-                watchObserver = false;
                 engine.Network.Sever(watcher.Link);
                 Frames(3);
                 Check(!Row(engine.Host, observer.Id).IsConnected && privateView.IsActive,
@@ -304,10 +385,6 @@ internal static class WorldViewLifetimeRefreshTests
     private static bool AvatarShown(Node node, IEntity entity) =>
         PresenceVisible(node, entity) && !node.Renderer.Hidden.Contains(entity);
 
-    // What a viewer sees: the subject's avatar drawn by presence and not held by the renderer.
-    private static bool SubjectShown(Node node, ParticipantId subject) =>
-        node.Presence.TryGetAvatar(subject, out var entity) && entity != null && AvatarShown(node, entity);
-
     private static bool PresenceVisible(Node node, IEntity entity) =>
         node.Backend.Avatars.Any(avatar => avatar.IsAlive && ReferenceEquals(avatar.Entity, entity) && avatar.IsVisible);
 
@@ -368,6 +445,7 @@ internal static class WorldViewLifetimeRefreshTests
         internal readonly HashSet<IEntity> Hidden = new();
         internal int HideCalls;
         internal int ReleaseCalls;
+        internal bool FailNextHide;
         public bool IsAlive { get; private set; } = true;
         public bool FogAvailable => true;
         public bool EnvironmentAvailable => true;
@@ -378,6 +456,7 @@ internal static class WorldViewLifetimeRefreshTests
         public OperationResult<bool> SetFog(VisionFog? fog) => OperationResult<bool>.Success(true);
         public OperationResult<IDisposable> Hide(IEntity entity)
         {
+            if (FailNextHide) { FailNextHide = false; throw new InvalidOperationException("Simulated native hide failure."); }
             if (!entity.IsAlive || !(owner.Binding.Owns(entity) || owner.Services.Views.IsCurrentAvatar(entity, this)))
                 return OperationResult<IDisposable>.Failure(ModErrorCode.Unavailable, "Target is not current.");
             HideCalls++; Hidden.Add(entity); return OperationResult<IDisposable>.Success(new Hold(this, entity));

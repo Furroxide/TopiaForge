@@ -52,7 +52,8 @@ namespace TopiaForge.ModManager.Tests
             Check(participant.PlayerWorldView(renderers[host], viewer.Id.Value).Hide(original).ErrorCode == ModErrorCode.NotAuthoritative,
                 "participant authority still rejects avatar hide");
             rig.Network.LoseLink(viewer.Control); rig.Frames(24);
-            Check(renderers[viewer].Hidden.Count == 0 && audience.IsActive, "lost audience link restores native holds while grace preserves authority lease");
+            Check(renderers[viewer].Hidden.Contains(remote!) && audience.IsActive,
+                "lost audience link keeps the last view's native holds while grace preserves authority lease");
             rig.Network.Restore(viewer.Control); rig.Frames(60);
             Check(renderers[viewer].Hidden.Contains(viewer.AvatarOf(subject)!.Entity), "reconnect reapplies the production avatar reference baseline");
             var hostOld = host.AvatarOf(subject)!; var viewerOld = viewer.AvatarOf(subject)!;

@@ -41,6 +41,8 @@ namespace TopiaForge.ModManager
             var peer = shown[slot];
             var avatar = peer.Avatar;
             if (avatar == null || !avatar.IsAlive || !avatar.IsVisible || peer.Presentation?.Visible == false) return false;
+            // A player the world view hides from this viewer has no name on screen either.
+            if (replication.Views.HoldsLocally(avatar.Entity)) return false;
             nametag = new PresenceNametag(peer.Presentation?.Name ?? peer.DisplayName, avatar.HeadPosition);
             return true;
         }
@@ -85,6 +87,8 @@ namespace TopiaForge.ModManager
                     if (nowMicros < peer.NextAvatarMicros) continue;
                     avatar = MakeAvatar(peer, nowMicros);
                     if (avatar == null) continue;
+                    // The views' holds reach a new root before its first draw, not at their next retry.
+                    replication.Views.AvatarMade();
                 }
 
                 if (peer.Presentation != null && (Realm != TopiaForge.ModManager.Core.Multiplayer.NetRealm.Client || peer.HasPresentation)) avatar.Present(peer.Presentation.Current, peer.Presentation.PoweredDown);

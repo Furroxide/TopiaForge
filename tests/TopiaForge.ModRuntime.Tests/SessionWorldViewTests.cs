@@ -154,7 +154,8 @@ namespace TopiaForge.ModRuntime.Tests
                     "other link contains no private target identifiers or effective values");
             }
             net.LoseLink(one.Control); Frames();
-            Check(one.Renderer.Fog == null && one.Renderer.Hidden.Count == 0 && fog.IsActive, "stream end clears local view but grace retains host lease");
+            Check(one.Renderer.Fog.HasValue && one.Renderer.Hidden.Count == 3 && fog.IsActive,
+                "stream end keeps the last private view until the next link's baseline, and grace retains the host lease");
             net.Restore(one.Control); Frames(14);
             Check(one.Renderer.Fog.HasValue && one.Renderer.Hidden.Count == 3, "reconnect generation gets complete private baseline");
             net.Rejoin(one.Control); Frames(14);

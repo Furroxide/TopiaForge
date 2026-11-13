@@ -48,6 +48,13 @@ namespace TopiaForge.ModManager
         internal VisionFog? FogFor(string? player)
         { var value = ledger.FogFor(player); return value.Distance == 0 ? (VisionFog?)null : VisionFog.Radius(value.Distance, (FogTint)value.Tint); }
         internal IEntity[] HiddenFor(string? player) => ledger.HiddenFor(player).ToArray();
+        // Whether one of this view's native holds is on the object right now.
+        internal bool HoldsEntity(IEntity entity)
+        {
+            if (disposed) return false;
+            foreach (var hold in hidden.Values) if (ReferenceEquals(hold.Entity, entity)) return true;
+            return false;
+        }
         internal void RemovePlayer(string player)
         { foreach (var id in ledger.ForPlayer(player).ToArray()) if (leases.TryGetValue(id, out var lease)) lease.Dispose(); }
         internal void RefreshLocal()

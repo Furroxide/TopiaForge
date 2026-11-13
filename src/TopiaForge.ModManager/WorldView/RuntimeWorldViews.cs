@@ -37,6 +37,26 @@ namespace TopiaForge.ModManager
             return (services.References as NetworkWorld)?.ResolveViewProviderEntity(entity);
         }
         private bool Client => services.Runtime.Role == InternalSessionRole.Client;
+        // Whether this viewer's screen holds the entity hidden: the host's own leases or the projected view.
+        internal bool HoldsLocally(IEntity entity)
+        {
+            foreach (var held in projected.Values) if (ReferenceEquals(held.Entity, entity)) return true;
+            foreach (var world in worlds.Values) if (world.HoldsEntity(entity)) return true;
+            return false;
+        }
+        // Presence made an avatar root and draws it next. Apply the views now so the hold is there for that draw.
+        internal void AvatarMade()
+        {
+            try
+            {
+                if (Client) ApplyReceived();
+                else foreach (var world in worlds.Values) world.RefreshLocal();
+            }
+            catch (Exception)
+            {
+                // Presence must still drive every other avatar. The views' own Run reports the failure and retries.
+            }
+        }
         private string? Local => services.Runtime.Control?.SessionSnapshot.LocalParticipantId?.Value ?? "local";
         internal WorldViewLeases For(IInternalWorldViewRenderer renderer)
         {
@@ -49,12 +69,12 @@ namespace TopiaForge.ModManager
                 (!names.TryGetValue(entity, out var known) || known.Name.Kind != 3 || ReferenceEquals(ResolveKnown(known), entity))
                 && (services.Runtime.Realm == NetRealm.Offline || player == Local || TryName(entity, out _)),
                 entity => names.TryGetValue(entity, out var target) ? ResolveKnown(target) : entity.IsAlive ? entity : null,
-                entity => { if (!names.ContainsKey(entity) && TryName(entity, out var target)) names.Add(entity, new NamedTarget(target, entity)); },
+                entity => { if (!names.ContainsKey(entity) && TryName(entity, out var target)) names.Add(entity, Named(target, entity)); },
                 entity => names.Remove(entity),
                 // A player's name stops resolving for the whole reconnect grace. The root presence retains for them
                 // keeps its hold, and RefreshNames renames the target in place when the new lifetime arrives.
                 (entity, held) => names.TryGetValue(entity, out var known) && known.Name.Kind == 3
-                    && ReferenceEquals(known.Root, held) && Retained(held));
+                    && ReferenceEquals(known.Root, held) && Retained(held, known.Player));
             worlds.Add(renderer, value);
             void End()
             {
@@ -101,7 +121,10 @@ namespace TopiaForge.ModManager
             if (generation != channel.Generation)
             {
                 generation = channel.Generation;
-                if (Client) { ClearProjection(); wire.Reset(); received = ViewSnapshot.Empty; invalidStream = false; }
+                // A new link restarts the wire only. Presence keeps drawing the last poses while a link is down,
+                // so the last complete view and its holds stay until the new link's first complete view replaces
+                // them: this hides too much for a moment, never too little.
+                if (Client) { wire.Reset(); invalidStream = false; }
             }
             if (Client)
             {
@@ -168,7 +191,7 @@ namespace TopiaForge.ModManager
             if (ReferenceEquals(seenRoster, snapshot)) return;
             seenRoster = snapshot;
             // Removing another player's leases can apply the local view immediately.
-            var namesChanged = RefreshNames();
+            var namesChanged = RefreshNames(snapshot);
             ReconcileParticipants(snapshot);
             // Quality-only or equivalent roster publications must not restart a backpressured baseline.
             if (namesChanged)
@@ -212,16 +235,28 @@ namespace TopiaForge.ModManager
             return true;
         }
 
-        private bool RefreshNames()
+        private bool RefreshNames(MultiplayerSessionSnapshot snapshot)
         {
             var changed = false;
             foreach (var target in names.Values)
-                if (target.Name.Kind == 3 && ResolveKnown(target) == null
-                    && TryPlayerName(target.Root, out var current) && !target.Name.Equals(current))
-                {
-                    target.Name = current;
-                    changed = true;
-                }
+            {
+                if (target.Name.Kind != 3) continue;
+                // A participant who left, or came back under another key, is a new player: the old target never
+                // follows them, and the gamemode decides whether to hide the new admission.
+                if (target.Player is ParticipantId id
+                    && (!snapshot.TryGetParticipant(id, out var row) || row == null || !row.PlayerKey.Equals(target.Key)))
+                    target.Player = null;
+                if (ResolveKnown(target) != null) continue;
+                // Follow the participant's current lifetime even when the old root is gone: the hold reaches the new
+                // root when presence makes it (AvatarMade), before its first draw.
+                ViewTarget current;
+                if (target.Player is ParticipantId player && services.TryCreatePlayerRef(player, out var reference))
+                    current = new ViewTarget(3, "", reference.Value!);
+                else if (!TryPlayerName(target.Root, out current)) continue;
+                if (target.Name.Equals(current)) continue;
+                target.Name = current;
+                changed = true;
+            }
             return changed;
         }
 
@@ -265,11 +300,22 @@ namespace TopiaForge.ModManager
             if (target.Name.Kind == 3 && root != null) target.Root = root;
             return root;
         }
-        private bool Retained(IEntity entity) => entity.IsAlive && services.Presence?.IsRetainedAvatar(entity) == true;
+        private bool Retained(IEntity entity, ParticipantId? player = null) =>
+            entity.IsAlive && services.Presence?.IsRetainedAvatar(entity, player) == true;
+        private NamedTarget Named(ViewTarget name, IEntity entity)
+        {
+            var named = new NamedTarget(name, entity);
+            if (name.Kind == 3 && services.TryGetPlayerParticipant(entity, out var participant, out var key))
+            { named.Player = participant; named.Key = key; }
+            return named;
+        }
         private sealed class NamedTarget
         {
             internal ViewTarget Name;
             internal IEntity Root;
+            // The participant and key a player name was taken for, while that admission lasts.
+            internal ParticipantId? Player;
+            internal MultiplayerPlayerKey Key;
             internal NamedTarget(ViewTarget name, IEntity root) { Name = name; Root = root; }
         }
         private sealed class Delivery

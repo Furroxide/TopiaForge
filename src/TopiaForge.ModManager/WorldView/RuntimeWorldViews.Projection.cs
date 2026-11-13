@@ -25,17 +25,32 @@ namespace TopiaForge.ModManager
                 if (Array.IndexOf(received.Hidden, target.Key) < 0 || !Holds(target.Key, target.Value))
                     (stale ??= new List<KeyValuePair<ViewTarget, HiddenTarget>>()).Add(target);
             if (stale != null) foreach (var target in stale) projected.Remove(target.Key);
-            foreach (var target in received.Hidden)
+            var applied = false;
+            try
             {
-                if (projected.ContainsKey(target)) continue;
-                var entity = Resolve(target);
-                if (entity == null) continue;
-                // A player renamed for a new lifetime keeps the hold taken under the old name: no release, no gap.
-                var moved = Moved(stale, entity);
-                if (moved != null) { projected.Add(target, moved); continue; }
-                if (renderer.Hide(entity).TryGetValue(out var lease)) projected.Add(target, new HiddenTarget(entity, lease));
+                foreach (var target in received.Hidden)
+                {
+                    if (projected.ContainsKey(target)) continue;
+                    var entity = Resolve(target);
+                    if (entity == null) continue;
+                    // A player renamed for a new lifetime keeps the hold taken under the old name: no release, no
+                    // gap. The host flushes the roster before the views' message on the same ordered stream, so the
+                    // new name resolves here by the time the renamed view arrives.
+                    var moved = Moved(stale, entity);
+                    if (moved != null) { projected.Add(target, moved); continue; }
+                    if (renderer.Hide(entity).TryGetValue(out var lease)) projected.Add(target, new HiddenTarget(entity, lease));
+                }
+                applied = true;
             }
-            if (stale != null) foreach (var target in stale) target.Value.Lease.Dispose();
+            finally
+            {
+                // Release what this pass replaced. A failed pass keeps tracking the old holds instead, so none is left
+                // held untracked and nothing the last good view hid is shown; the next pass retries.
+                if (stale != null)
+                    foreach (var target in stale)
+                        if (applied || projected.ContainsKey(target.Key)) target.Value.Lease.Dispose();
+                        else projected.Add(target.Key, target.Value);
+            }
         }
         // A listed player keeps its hold on the root presence retains for them while the name cannot resolve: during
         // the reconnect grace, and after a rejoin until the renamed baseline arrives. A player who left releases it.

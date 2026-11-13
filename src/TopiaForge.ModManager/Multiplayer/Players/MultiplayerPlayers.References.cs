@@ -28,6 +28,35 @@ namespace TopiaForge.ModManager
             return false;
         }
 
+        // The connected participant whose current player entity this is, so a name can follow their later lifetimes.
+        internal bool TryGetParticipant(IEntity entity, out ParticipantId participant, out MultiplayerPlayerKey key)
+        {
+            participant = default; key = default;
+            var snapshot = Snapshot;
+            if (snapshot == null || !entity.IsAlive) return false;
+            for (var index = 0; index < snapshot.Participants.Count; index++)
+            {
+                var player = snapshot.Participants[index];
+                if (!player.IsConnected || player.LifetimeId == Guid.Empty) continue;
+                var target = PlayerEntity(player.Id);
+                if (target == null || !target.IsAlive || !SameEntity(target, entity)) continue;
+                participant = player.Id; key = player.PlayerKey;
+                return true;
+            }
+            return false;
+        }
+
+        // The name of a connected participant's current lifetime, which exists before any avatar is made for it.
+        internal bool TryCreateReference(ParticipantId participant, out InternalNetRef reference)
+        {
+            reference = default;
+            var snapshot = Snapshot;
+            if (snapshot == null || !snapshot.TryGetParticipant(participant, out var player) || player == null
+                || !player.IsConnected || player.LifetimeId == Guid.Empty) return false;
+            reference = new InternalNetRef(InternalNetRefKind.Player, ReferenceValue(snapshot, player));
+            return true;
+        }
+
         internal bool TryResolveReference(InternalNetRef reference, out IEntity? entity)
         {
             entity = null;
