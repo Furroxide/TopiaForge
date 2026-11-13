@@ -55,6 +55,7 @@ namespace TopiaForge.RobotKit
         private float stopDistance;
         private RobotGait gait;
         private RobotInteractionOptions interaction;
+        private string? bodyOnly;
 
         private Behaviour? nativeSpeakable;
         private bool nativeSpeakableResolved;
@@ -101,6 +102,7 @@ namespace TopiaForge.RobotKit
         public OperationResult<bool> SetBrainMode(RobotBrainMode mode)
         {
             if (replicaAnimation != null && mode != RobotBrainMode.Dormant) return ReplicaRefusal();
+            if (bodyOnly != null && mode != RobotBrainMode.Dormant) return OperationResult<bool>.Failure(ModErrorCode.Unavailable, bodyOnly);
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
@@ -289,6 +291,8 @@ namespace TopiaForge.RobotKit
         public OperationResult<bool> SetInteraction(RobotInteractionOptions options)
         {
             if (replicaAnimation != null && (options.NativeTalkMode != RobotNativeTalkMode.Disabled || options.CustomInteraction != null)) return ReplicaRefusal();
+            if (bodyOnly != null && options?.NativeTalkMode == RobotNativeTalkMode.Enabled)
+                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, bodyOnly);
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
@@ -379,6 +383,14 @@ namespace TopiaForge.RobotKit
 
         private static OperationResult<bool> Unavailable(string message) =>
             OperationResult<bool>.Failure(ModErrorCode.InvalidState, message);
+
+        // A body-only robot has no prepared native character: it stays Dormant, and native talk stays off.
+        // Called before activation, so the default talk policy never reaches the native prompt.
+        internal void RestrictToBody()
+        {
+            bodyOnly = RobotComposedReferences.BodyOnly;
+            if (interaction.CustomInteraction == null) interaction = RobotInteractionOptions.DisableNativeTalk();
+        }
 
         // Apply spawn-request speed overrides once the robot is live (the LocomotionController exists by then).
         public void OnActivated()
