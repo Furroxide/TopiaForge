@@ -140,7 +140,12 @@ namespace TopiaForge.ModManager
                 active.RemoveAt(i);
                 operation.DisposeLocal();
                 var result = operation.Failure;
-                if (operation.ListenerLost)
+                // A line is heard when at least one listener played it to the end, even if another listener left
+                // or one copy failed: a caller that retries would otherwise repeat it to everyone who heard it.
+                var heard = operation.Task?.IsCompleted == true && operation.Task.Result.Succeeded && operation.Task.Result.Value;
+                foreach (var recipient in operation.Recipients) heard |= recipient.Heard;
+                if (heard) result = null;
+                else if (operation.ListenerLost)
                     result = OperationResult<bool>.Failure(ModErrorCode.Unavailable, "A robot speech listener became unavailable.");
                 else if (result?.ErrorCode == ModErrorCode.Cancelled)
                     result = OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Native robot speech did not complete playback.");
