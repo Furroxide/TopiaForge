@@ -265,9 +265,8 @@ and [immutable releases](https://docs.github.com/en/code-security/concepts/suppl
 
 ## Multiplayer deployment environments
 
-The protected `control-plane-staging` environment permits `dev` and `main`;
-`control-plane-production` permits only `main`. Both require maintainer review
-and prohibit administrator bypass. Each holds `CLOUDFLARE_ACCOUNT_ID` and
-`CLOUDFLARE_API_TOKEN`, with a public `CONTROL_PLANE_ORIGIN` variable. The CI
-deployment token is separate from the workstation's Wrangler OAuth login.
-Client compilation needs no Cloudflare credentials.
+The control-plane Worker, its deployment workflow and its protected GitHub environments are maintained in
+TopiaForge-Status. Its staging and production environments permit only that repository's `main` branch and require
+review before deployment. TopiaForge's former control-plane environments are no longer in this repository's desired
+state; retire them after a verified deployment from TopiaForge-Status. Client compilation needs no Cloudflare
+credentials.
