@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import wranglerToml from "../wrangler.toml?raw";
-import { readConfig } from "../src/config";
+import { ACTIVITY_CRON } from "../src/activity";
+import { MEASUREMENT_INTERVAL_MINUTES, readConfig, type Config } from "../src/config";
 import type { Env } from "../src/env";
 import * as worker from "../src/index";
 import { inRanges, parseIp } from "../src/shared/ip";
@@ -23,9 +24,16 @@ function env(values: Partial<Record<keyof Env, string>>): Env {
 describe("configuration", () => {
   it("falls back to safe defaults for missing or out-of-range limits", () => {
     const config = readConfig(env({ TURN_CREDENTIAL_TTL_SECONDS: "59", TURN_IP_MINTS_PER_HOUR: "abc", TURN_TICKET_MAX_MINTS: "07" }));
-    expect(config.limits).toMatchObject({ credentialTtlSeconds: 600, ipMintsPerHour: 20, ipMintsPerMinute: 5, ticketMaxMints: 36, measurementFailureLimit: 3 });
+    expect(config.limits).toMatchObject({ credentialTtlSeconds: 600, ipMintsPerHour: 20, ipMintsPerMinute: 5, ticketMaxMints: 36, measurementFailureMinutes: 180, measurementFailureLimit: 36 });
     expect(readConfig(env({ TURN_CREDENTIAL_TTL_SECONDS: "3600" })).limits.credentialTtlSeconds).toBe(3600);
-    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_LIMIT: "0" })).limits.measurementFailureLimit).toBe(0);
+    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "0" })).limits.measurementFailureLimit).toBe(0);
+    // Only "0" or a window of at least three hours is accepted; anything shorter falls back to three hours.
+    for (const short of ["1", "7", "15", "179"]) {
+      expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: short })).limits, short).toMatchObject({ measurementFailureMinutes: 180, measurementFailureLimit: 36 });
+    }
+    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "181" })).limits).toMatchObject({ measurementFailureMinutes: 181, measurementFailureLimit: 37 });
+    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "2880" })).limits.measurementFailureMinutes).toBe(2880);
+    expect(readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: "2881" })).limits.measurementFailureMinutes).toBe(180);
     expect(readConfig(env({ ENVIRONMENT: "Prod!" })).environment).toBe("development");
   });
 
@@ -47,6 +55,30 @@ describe("configuration", () => {
     }
     for (const cap of ["0", "-1", "1e3", "1.2345", "999999", ""]) expect(readConfig(env({ ...complete, TURN_DAILY_CAP_GB: cap })).provider, cap).toBeNull();
     expect(readConfig(env({ ANALYTICS_ACCOUNT_ID: "not-an-account", ANALYTICS_API_TOKEN: "test-analytics-api-token" })).analytics).toBeNull();
+  });
+
+  it("trips on failed measurements no sooner than three hours after the last good one, at the cron's interval", () => {
+    // The cron runs the measurement every MEASUREMENT_INTERVAL_MINUTES, so the trip comes `limit` intervals after the
+    // last good measurement. A shorter interval must raise the count, not shorten the time to trip.
+    const THREE_HOURS_IN_MINUTES = 180;
+    expect(ACTIVITY_CRON).toBe(`*/${MEASUREMENT_INTERVAL_MINUTES} * * * *`);
+    // A step cron fires evenly only when its step divides the hour: */7 would run at :56 and again at :00.
+    expect(60 % MEASUREMENT_INTERVAL_MINUTES).toBe(0);
+    const sections = wranglerToml.split(/^\[env\.(?:staging|production)\]$/m);
+    expect(sections).toHaveLength(3);
+    const configured: [string, Config][] = [["default", readConfig(env({}))]];
+    for (const [index, text] of sections.entries()) {
+      const minutes = /^TURN_MEASUREMENT_FAILURE_MINUTES = "([^"]*)"$/m.exec(text)?.[1];
+      expect(minutes, `wrangler.toml section ${index}`).toBeDefined();
+      expect(Number(minutes), `wrangler.toml section ${index}`).toBeGreaterThanOrEqual(THREE_HOURS_IN_MINUTES);
+      configured.push([`wrangler.toml section ${index}`, readConfig(env({ TURN_MEASUREMENT_FAILURE_MINUTES: minutes! }))]);
+    }
+    for (const [label, config] of configured) {
+      const { measurementFailureLimit } = config.limits;
+      expect(measurementFailureLimit, label).toBeGreaterThan(0);
+      expect(measurementFailureLimit * MEASUREMENT_INTERVAL_MINUTES, label).toBeGreaterThanOrEqual(THREE_HOURS_IN_MINUTES);
+    }
+    expect(readConfig(env({})).limits.measurementFailureLimit).toBe(36);
   });
 });
 
@@ -106,6 +138,6 @@ describe("wrangler.toml", () => {
     for (const secret of ["SERVICE_KEY", "ADMIN_TOKEN", "TURN_KEY_ID", "TURN_KEY_API_TOKEN", "ANALYTICS_API_TOKEN", "ANALYTICS_ACCOUNT_ID", "TURN_DAILY_CAP_GB", "TURN_TICKET_CAP_GB"]) {
       expect(wranglerToml).not.toMatch(new RegExp(`^${secret}\\s*=`, "m"));
     }
-    expect(wranglerToml).toContain('crons = ["7 * * * *", "*/5 * * * *"]');
+    expect(wranglerToml).toContain(`crons = ["${ACTIVITY_CRON}"]`);
   });
 });

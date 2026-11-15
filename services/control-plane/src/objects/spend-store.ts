@@ -30,6 +30,11 @@ export interface Measurement {
   readonly measuredAt: number | null;
   readonly failures: number;
   readonly lastFailureAt: number | null;
+  /**
+   * When the current run of failed measurements is timed from; null while measurements succeed. Absent in state
+   * stored before it existed, which restarts the timing of a run already in progress.
+   */
+  readonly failingSince?: number | null;
 }
 
 export interface TicketAccount {
@@ -46,8 +51,8 @@ export interface DayTotals {
 
 export const DEFAULT_FEATURES: Features = { hosting: true, invites: true, signaling: true, relay: true };
 const RELEASED: KillSwitch = { engaged: false, reason: null, since: null, note: null };
-const NEVER_MEASURED: Measurement = { day: null, egressBytes: 0, measuredAt: null, failures: 0, lastFailureAt: null };
-/** Credentials are remembered this long past expiry, so the hourly measurement can still attribute their usage. */
+const NEVER_MEASURED: Measurement = { day: null, egressBytes: 0, measuredAt: null, failures: 0, lastFailureAt: null, failingSince: null };
+/** Credentials are remembered this long past expiry, so measurement can still attribute their usage. */
 export const CREDENTIAL_MEMORY_SECONDS = 2 * 60 * 60;
 const DAY_MEMORY_SECONDS = 35 * 24 * 60 * 60;
 

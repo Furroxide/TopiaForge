@@ -1,6 +1,6 @@
 /**
  * The TopiaForge multiplayer control plane (docs/internal/ControlPlaneApi.md): a Cloudflare Worker that routes the
- * versioned HTTP and WebSocket API to its Durable Objects, and an hourly cron that measures relay spend.
+ * versioned HTTP and WebSocket API to its Durable Objects, and a five-minute cron that measures relay spend.
  *
  * Routing is exact: unknown paths are 404, known paths with the wrong method are 405, and any failure a handler did
  * not anticipate is a bare 500 that names nothing.
@@ -91,7 +91,6 @@ export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if(controller.cron===ACTIVITY_CRON) {
       ctx.waitUntil(env.ACTIVITY_SNAPSHOTS.get(env.ACTIVITY_SNAPSHOTS.idFromName("snapshots")).collect());
-    } else if(controller.cron==="7 * * * *") {
       const guard = env.SPEND_GUARD.get(env.SPEND_GUARD.idFromName("spend-guard"));
       ctx.waitUntil(guard.measure().then(() => undefined));
     }

@@ -1,10 +1,12 @@
 /** Aggregate Internet activity only. No descriptors, addresses, candidates or player identities leave a host. */
+import { MEASUREMENT_INTERVAL_MINUTES } from "./config";
 import type { Env } from "./env";
 import type { SessionRow } from "./objects/host-store";
 import { clock, nowSeconds } from "./shared/runtime";
 
 export const ACTIVITY_SHARDS = 16;
-export const ACTIVITY_CRON = "*/5 * * * *";
+/** The one cron: activity collection and the relay-spend measurement, every MEASUREMENT_INTERVAL_MINUTES. */
+export const ACTIVITY_CRON = `*/${MEASUREMENT_INTERVAL_MINUTES} * * * *`;
 export interface ActivityLease {
   readonly serverId: string;
   readonly version: number;

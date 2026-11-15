@@ -7,7 +7,7 @@
  * - the ticket: at most TURN_TICKET_MAX_MINTS credentials and TURN_TICKET_CAP_GB reserved;
  * - the caller's address prefix: TURN_IP_MINTS_PER_MINUTE and TURN_IP_MINTS_PER_HOUR (sliding windows);
  * - the day: today's measured egress plus every reservation not yet measured stays under TURN_DAILY_CAP_GB.
- * A failed mint refunds all of it. The hourly measurement reads real egress: at the daily cap it trips the kill switch,
+ * A failed mint refunds all of it. Five-minute measurement reads real egress: at the daily cap it trips the kill switch,
  * after repeated failures to measure it trips it too, and a credential that relays well past its reservation is
  * revoked and its ticket blocked.
  *
@@ -22,7 +22,7 @@
  * followed at once by the next, through the alarm.
  */
 import { DurableObject } from "cloudflare:workers";
-import { readConfig, type RelayProvider } from "../config";
+import { MEASUREMENT_INTERVAL_MINUTES, readConfig, type RelayProvider } from "../config";
 import type { Env } from "../env";
 import type { IceServer, MintedCredentials } from "../relay/turn-api";
 import { generateIceServers, revokeCredential } from "../relay/turn-api";
@@ -188,7 +188,7 @@ export class SpendGuard extends DurableObject<Env> {
     return { ok: true, iceServers: minted.iceServers, expiresAt };
   }
 
-  /** The hourly measurement, also run on demand by an admin. */
+  /** The five-minute measurement, also run on demand by an admin. */
   async measure(): Promise<SpendReport> {
     const config = readConfig(this.env);
     const now = nowSeconds();
@@ -201,7 +201,7 @@ export class SpendGuard extends DurableObject<Env> {
         if (config.analytics === null) throw new Error("analytics not configured");
         const day = utcDay(now);
         const usage = await readTurnUsage(config.analytics, provider.keyId, day);
-        this.store.setMeasurement({ day, egressBytes: usage.egressBytes, measuredAt: now, failures: 0, lastFailureAt: previous.lastFailureAt });
+        this.store.setMeasurement({ day, egressBytes: usage.egressBytes, measuredAt: now, failures: 0, lastFailureAt: previous.lastFailureAt, failingSince: null });
         for (const [username, bytes] of usage.byUsername) {
           const credential = this.store.credential(username);
           if (credential !== null && bytes > credential.reservedBytes * config.limits.overuseFactor) {
@@ -212,9 +212,17 @@ export class SpendGuard extends DurableObject<Env> {
         if (usage.egressBytes >= provider.dailyCapBytes) this.trip("spend-cap", null);
       } catch {
         const failures = previous.failures + 1;
-        this.store.setMeasurement({ ...previous, failures, lastFailureAt: now });
-        const limit = config.limits.measurementFailureLimit;
-        if (limit > 0 && failures >= limit) this.trip("measurement-failed", null);
+        // The failing time runs from the last good measurement, but from no earlier than one interval before the
+        // first failure, so a stale last success cannot shorten it. Extra admin-run measurements add to the count
+        // but never to the time, so they cannot trip the switch sooner.
+        const interval = MEASUREMENT_INTERVAL_MINUTES * 60;
+        const failingSince =
+          previous.failures > 0 && typeof previous.failingSince === "number"
+            ? previous.failingSince
+            : Math.max(previous.measuredAt ?? now - interval, now - interval);
+        this.store.setMeasurement({ ...previous, failures, lastFailureAt: now, failingSince });
+        const { measurementFailureLimit: limit, measurementFailureMinutes: minutes } = config.limits;
+        if (limit > 0 && failures >= limit && now - failingSince >= minutes * 60) this.trip("measurement-failed", null);
       }
       progressed = await this.revokePass(provider);
     }

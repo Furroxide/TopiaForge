@@ -347,7 +347,7 @@ describe("activity leases and publication", () => {
       },
     );
   });
-  it("keeps activity collection separate from the hourly spend measurement", async () => {
+  it("collects activity and measures spend in the five-minute cron", async () => {
     const ctx = createExecutionContext();
     await worker.scheduled(
       {
@@ -359,7 +359,7 @@ describe("activity leases and publication", () => {
       ctx,
     );
     await waitOnExecutionContext(ctx);
-    expect(scenario.relay.authorizations).toHaveLength(0);
+    expect(scenario.relay.authorizations).toHaveLength(1);
     expect(await snapshots().released()).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 """Regression checks for executable workflow source and transitive cache trust."""
 from pathlib import Path
+import json
 import os
 import re
 import shutil
@@ -180,6 +181,50 @@ class ControlPlaneDeployTests(unittest.TestCase):
         self.assertIn('select(.type == "required_reviewers")', preflight)
         self.assertIn(".deployment_branch_policy.custom_branch_policies == true", preflight)
         self.assertLess(self.source.index("  preflight:\n"), self.source.index("  deploy:\n"))
+
+    def test_environment_check_accepts_either_tightening_without_a_workflow_change(self):
+        preflight = self.jobs["preflight"]
+        step = preflight.split("      - name: Require the environment to exist with a required reviewer\n", 1)[1]
+        match = re.search(r"--arg name \"\$TARGET\" \\\n\s*'(.*?)' \\\n", step, re.S)
+        self.assertIsNotNone(match)
+        program = match.group(1)
+        jq = shutil.which("jq")
+        if jq is None:
+            self.skipTest("jq is not installed")
+
+        def environment(name, bypass, self_review, reviewers=1, custom=True):
+            return {
+                "name": name,
+                "can_admins_bypass": bypass,
+                "deployment_branch_policy": {"protected_branches": False, "custom_branch_policies": custom},
+                "protection_rules": [{
+                    "type": "required_reviewers",
+                    "prevent_self_review": self_review,
+                    "reviewers": [{"type": "User", "reviewer": {"id": 1}}] * reviewers,
+                }],
+            }
+
+        production, staging = "control-plane-production", "control-plane-staging"
+        for target, payload, passed in [
+            (production, environment(production, True, True), True),
+            (production, environment(production, False, True), True),
+            (production, environment(production, False, False), False),
+            (production, environment(production, False, True, reviewers=0), False),
+            (production, environment(production, False, True, custom=False), False),
+            (production, environment(staging, False, True), False),
+            (staging, environment(staging, False, False), True),
+            (staging, environment(staging, True, False), False),
+            (staging, environment(staging, True, True), False),
+            (staging, environment(staging, False, True), True),
+            (staging, environment(staging, False, False, reviewers=0), False),
+        ]:
+            with self.subTest(target=target, payload=payload):
+                result = subprocess.run(
+                    [jq, "-e", "--arg", "name", target, program],
+                    input=json.dumps(payload), capture_output=True, text=True,
+                    timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, passed, result.stderr)
 
     def test_deploy_uses_the_exact_dispatched_revision_and_no_cache(self):
         steps = checkout_steps(self.jobs["deploy"])

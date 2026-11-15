@@ -141,14 +141,22 @@ has been granted.
 
 ## Trusted release and deployment environments
 
-Environments must exist before any workflow references them. Otherwise GitHub can auto-create an unprotected
-environment. Administrator bypass is disabled on every privileged environment. Self-review is temporarily allowed
-because there is one maintainer.
+Environments must exist before any workflow references them, or a workflow must verify that the protected
+environment already exists before naming it. Administrator bypass is disabled on privileged environments except
+`control-plane-production`. That environment prevents self-review, and a pending production deployment is forced
+with bypass only after a second review of the exact revision and deployment plan. The bypass is a recorded exception
+to GitHub reviewer approval for that run. GitHub cannot enforce the second review, so the reviewed SHA and the review
+result are recorded before bypass is used. The deployment preflight accepts production with bypass on or off, and
+staging with self-review prevention on or off, so tightening either needs no workflow change. The live audit compares
+exact values, so the same change also sets `can_admins_bypass` or `prevent_self_review` for that environment in
+`.github/repository-governance.json`.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
 | `release` | `v*` tags | Update-metadata signing, verification attestation, and automatic release publication |
 | `github-pages` | published `v*` tags | Deployment of release-derived Pages content |
+| `control-plane-staging` | `dev`, `main` | Staging multiplayer Worker deployment |
+| `control-plane-production` | `main` | Production multiplayer Worker deployment |
 
 Every GitHub job that can read the update-signing key, read the protected
 governance-audit token, or mutate a release declares the protected `release`
