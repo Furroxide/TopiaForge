@@ -123,6 +123,7 @@ namespace SettlementProbe
         public static int Teleports;
         public static float Lift;
         public static float Gravity;
+        public static float UpwardSpeed;
         public static Action? AfterTeleport;
         private bool pendingLift;
         private int fallingSteps;
@@ -138,11 +139,12 @@ namespace SettlementProbe
         }
         internal void FixedStep()
         {
-            // A gradual fall from rest: about 2 mm in the first 20 ms step, 8 mm after two.
+            // A gradual fall from rest (about 2 mm in the first 20 ms step, 8 mm after two),
+            // or a small upward pop that turns into a fall.
             if (Gravity != 0f)
             {
                 var time = ++fallingSteps * 0.02f;
-                transform.position.y = placedY - 0.5f * Gravity * time * time;
+                transform.position.y = placedY + UpwardSpeed * time - 0.5f * Gravity * time * time;
                 return;
             }
             if (!pendingLift) return;

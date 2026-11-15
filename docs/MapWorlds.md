@@ -66,12 +66,14 @@ and cleanup use the shared world transition owner. Native catalog lore and respa
 integration still require verification against the installed game.
 
 Spawn readiness places the player once, then accepts the pose only after it has held
-within 1 cm for 0.1 second of physics time, so a spawn over a gap is refused rather
-than falling after the map loads. The spawn wait allows 30 seconds while physics is
-unpaused and has a 120-second overall limit. A paused game tells the player after a
-few seconds to resume it to finish loading. When the spawn wait runs out, the player
-reads that the spawn did not finish settling in time; when the marker does not hold
-the player, the author reads that the spawn point should move onto solid ground.
+within 1 cm for 0.15 second of physics time, so a spawn over a gap is refused rather
+than falling after the map loads, even when the player first pops up slightly. The
+spawn wait allows 30 seconds while physics is unpaused and has a 120-second overall
+limit. When the game is paused or its time is stopped, the player is told after a few
+seconds that loading waits for it. When the spawn wait runs out, the player reads that
+the spawn did not finish settling in time; any other time-out reads that the map did
+not finish loading in time. When the marker does not hold the player, the author
+reads that the spawn point should move onto solid ground.
 
 ## Authored entities and anchors
 
@@ -103,6 +105,9 @@ rotated child of a nonuniformly scaled parent, remains approximate. Do not
 reconstruct parent matrices from this pose to place descendants. This scale
 convention does not promise equivalence to Unity's `lossyScale`. Native
 coordinate-helper and prefab-expansion parity still require in-game qualification.
+Under a mirrored parent, trust `WorldTransform.Rotation` for the turn a prop shows:
+the live rotation that `context.Entities.TryGetTransform` reads from the engine may
+keep the un-mirrored turn there until that check confirms otherwise.
 
 `WorldTransform` is captured when the index is built. It does not follow later
 physics or import-root movement: use `context.Entities.TryGetTransform` with the

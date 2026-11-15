@@ -17,16 +17,28 @@ namespace TopiaForge.ModManager.Tests
                 Check(paused.Probe(Start, Step) == null, "paused frames after a fixed step cannot add samples");
 
             var steady = new NativeSpawnSettlement(Start, 2f, 0f);
-            for (var step = 1; step < 5; step++)
-                Check(steady.Probe(Start, step * Step) == null, "steady samples must span 0.1 s of fixed time");
-            Check(steady.Probe(Start, 5 * Step)!.Succeeded, "five 20 ms steps span the steady time");
+            for (var step = 1; step < 8; step++)
+                Check(steady.Probe(Start, step * Step) == null, "steady samples must span 0.15 s of fixed time");
+            Check(steady.Probe(Start, 8 * Step)!.Succeeded, "eight 20 ms steps span the steady time");
 
             var lifted = new NativeSpawnSettlement(Start, 2f, 0f);
             var actual = Pose(0.13f);
-            for (var step = 1; step < 6; step++)
+            for (var step = 1; step < 9; step++)
                 Check(lifted.Probe(actual, step * Step) == null, "a lift starts the steady time at its first fixed observation");
-            var accepted = lifted.Probe(actual, 6 * Step);
-            Check(accepted != null && accepted.Succeeded && accepted.Value == actual, "a lifted pose settles after 0.1 s of steady fixed time");
+            var accepted = lifted.Probe(actual, 9 * Step);
+            Check(accepted != null && accepted.Succeeded && accepted.Value == actual, "a lifted pose settles after 0.15 s of steady fixed time");
+
+            // A 0.42 m/s pop stays within 1 cm for 0.1 s while it already falls; the window must see the fall.
+            var popping = new NativeSpawnSettlement(Start, 2f, 0f);
+            OperationResult<TransformState>? pop = null;
+            var popSteps = 0;
+            while (pop == null && popSteps < 30)
+            {
+                popSteps++;
+                var time = popSteps * Step;
+                pop = popping.Probe(Pose(0.42f * time - 4.905f * time * time), time);
+            }
+            Check(pop != null && pop.ErrorCode == ModErrorCode.External && popSteps == 6, "a small upward pop that turns into a fall is refused");
 
             // A body that falls from rest moves less than 1 cm in each of its first steps;
             // the steady time keeps observing until the fall passes the downward guard.

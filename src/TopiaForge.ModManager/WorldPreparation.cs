@@ -12,8 +12,10 @@ namespace TopiaForge.ModManager
         private static readonly TimeSpan ReadinessLimit = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan SpawnOverallLimit = TimeSpan.FromSeconds(120);
         // A load that waits on a paused game tells the player once, after this long, instead of failing silently later.
+        // A stopped time scale is the pause menu or a gamemode's time freeze, which this layer cannot tell apart,
+        // so the text names both and asks for nothing the player may be unable to do.
         internal static readonly TimeSpan PausedNoticeDelay = TimeSpan.FromSeconds(3);
-        internal const string PausedNotice = "Resume the game to finish loading the world.";
+        internal const string PausedNotice = "Loading the world waits while the game is paused or its time is stopped.";
         private readonly IWorldNativeLoad native;
         private readonly Action<string>? notice;
         private bool pausedNoticeShown;
@@ -182,9 +184,9 @@ namespace TopiaForge.ModManager
                 if (!paused) unpaused += now - previous;
                 previous = now;
                 if (now - started >= SpawnOverallLimit)
-                    return Failure<TransformState>(ModErrorCode.TimedOut, "World spawn readiness did not complete within 120 seconds overall.");
+                    return Failure<TransformState>(ModErrorCode.TimedOut, TopiaForge.Mods.Internal.WorldSpawnReadinessText.SettleOverallTimedOut);
                 if (unpaused >= ReadinessLimit)
-                    return Failure<TransformState>(ModErrorCode.TimedOut, "World spawn readiness did not complete within 30 unpaused seconds.");
+                    return Failure<TransformState>(ModErrorCode.TimedOut, TopiaForge.Mods.Internal.WorldSpawnReadinessText.SettleUnpausedTimedOut);
                 return null;
             }
         }

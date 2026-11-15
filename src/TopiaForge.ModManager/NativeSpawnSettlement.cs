@@ -7,9 +7,10 @@ namespace TopiaForge.ModManager
     // One teleport, then bounded observation only. The world readiness clock still owns the overall deadline.
     internal sealed class NativeSpawnSettlement
     {
-        // A body falling from rest drops about 5 cm in 0.1 s of fixed time, well past the 1 cm guards,
-        // so a steady run this long cannot hide a fall between two close samples.
-        internal const float SteadySeconds = 0.1f;
+        // A body falling from rest drops about 11 cm in 0.15 s of fixed time, well past the 1 cm guards.
+        // The window is longer than 0.1 s so a small upward pop (about 0.4 m/s) that turns into a fall
+        // inside the 1 cm band at 0.1 s is still observed falling before it can be accepted.
+        internal const float SteadySeconds = 0.15f;
         // Bounds an unsteady player: refuse after 8 fixed samples once 0.5 s of fixed time has passed.
         internal const float SettleSeconds = 0.5f;
         private const float ClockTolerance = 0.0005f;

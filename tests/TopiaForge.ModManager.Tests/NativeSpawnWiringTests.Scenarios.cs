@@ -23,6 +23,7 @@ namespace SettlementProbe
             PausedFallIsRefused();
             GradualFallIsRefused(false);
             GradualFallIsRefused(true);
+            UpwardPopIsRefused();
             LongPauseAndOverallCap();
             PausePreservesUnpausedBudget();
             LateUnpausedSettlementIsRefused();
@@ -43,7 +44,7 @@ namespace SettlementProbe
             Check(MovementController.Teleports == 1, "placement teleports exactly once while observing settlement");
             Check(result.Succeeded, "actual WorldPreparation accepts settled upward readback " + (paused ? "after resuming" : "while running"));
             Check(result.Value.Spawn == Pose(0.13f), "readiness records the actual applied readback rather than the request");
-            Check(Time.frameCount == (paused ? 9 : 6), "upward placement needs its first fixed observation and 0.1 s of steady fixed time");
+            Check(Time.frameCount == (paused ? 12 : 9), "upward placement needs its first fixed observation and 0.15 s of steady fixed time");
             Check(Time.fixedTime > 0f, "accepted readiness observes a real fixed epoch at the Unity time boundary");
             Check(!test.Player.FPSController.enabled, "placement does not enable caller-disabled movement controls");
             Check(test.Admission.Releases == 1, "completed readiness releases its existing admission once");
@@ -75,6 +76,19 @@ namespace SettlementProbe
             Check(test.Admission.Releases == 1, "a refused falling placement releases its admission");
         }
 
+        // A 0.42 m/s pop stays within 1 cm of the placement for 0.1 s (+0.6, +0.9, +0.8, +0.2, -0.7 cm)
+        // while it already falls; the steady window must outlast it and see the fall.
+        private static void UpwardPopIsRefused()
+        {
+            using var test = new Fixture(false);
+            MovementController.Gravity = 9.81f;
+            MovementController.UpwardSpeed = 0.42f;
+            var result = test.Finish();
+            Check(result.ErrorCode == ModErrorCode.External && Time.frameCount == 6 && MovementController.Teleports == 1,
+                "a small upward pop that turns into a fall is refused, not accepted at 0.1 s: " + result.ErrorCode + " at frame " + Time.frameCount);
+            Check(test.Admission.Releases == 1, "a refused popping placement releases its admission");
+        }
+
         private static void LongPauseAndOverallCap()
         {
             using (var test = new Fixture(true))
@@ -82,7 +96,7 @@ namespace SettlementProbe
                 MovementController.Lift = 0.13f;
                 test.ResumeAt(35);
                 var result = test.Finish();
-                Check(result.Succeeded && result.Value.Spawn == Pose(0.13f) && Time.frameCount == 41,
+                Check(result.Succeeded && result.Value.Spawn == Pose(0.13f) && Time.frameCount == 44,
                     "more than thirty paused seconds still allow actual fixed-step settlement after resuming");
                 Check(test.Notices.Count == 1 && test.Notices[0] == WorldPreparation.PausedNotice,
                     "a load waiting on a paused game tells the player once to resume");
@@ -122,7 +136,7 @@ namespace SettlementProbe
                 var lateProbe = false;
                 test.Clock.OnFrame = frame =>
                 {
-                    if (frame == 25) test.Clock.AdvanceFixed = true;
+                    if (frame == 22) test.Clock.AdvanceFixed = true;
                     if (frame == 30) Time.ReadingFixedTime = () => lateProbe = true;
                 };
                 Check(test.Finish().ErrorCode == ModErrorCode.TimedOut && Time.frameCount == 30 && !lateProbe,
@@ -134,14 +148,14 @@ namespace SettlementProbe
                 var enteredProbe = false;
                 test.Clock.OnFrame = frame =>
                 {
-                    if (frame != 6) return;
+                    if (frame != 9) return;
                     Time.ReadingFixedTime = () =>
                     {
                         enteredProbe = true;
-                        test.Clock.AdvanceElapsed(TimeSpan.FromSeconds(24));
+                        test.Clock.AdvanceElapsed(TimeSpan.FromSeconds(21));
                     };
                 };
-                Check(test.Finish().ErrorCode == ModErrorCode.TimedOut && Time.frameCount == 6 && enteredProbe
+                Check(test.Finish().ErrorCode == ModErrorCode.TimedOut && Time.frameCount == 9 && enteredProbe
                     && test.Clock.Elapsed == TimeSpan.FromSeconds(30) && test.Admission.Releases == 1,
                     "a probe entered within the active budget cannot publish a valid pose at its deadline");
             }
@@ -286,7 +300,7 @@ namespace SettlementProbe
                 Time.fixedTime = 0; Time.frameCount = 0; Time.timeScale = paused ? 0 : 1;
                 SceneManager.World = new Scene { handle = 7, name = "World", path = "World.unity", isLoaded = true };
                 Player = PlayerController.Create(); PlayerController.Current = Player;
-                MovementController.Teleports = 0; MovementController.Lift = 0; MovementController.Gravity = 0; MovementController.AfterTeleport = null;
+                MovementController.Teleports = 0; MovementController.Lift = 0; MovementController.Gravity = 0; MovementController.UpwardSpeed = 0; MovementController.AfterTeleport = null;
                 Native = new ProbeNativeLoad();
                 preparation = new WorldPreparation(Native, Owner.Token, Caller.Token, Clock, Dispatcher, Notices.Add);
                 preparation.Attach(Admission);
