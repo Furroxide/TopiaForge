@@ -6,6 +6,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -210,6 +211,123 @@ class PrivateStatusDeployTests(unittest.TestCase):
                 response = [{"success": success, "results": [{"name": name} for name in names]}]
                 result = subprocess.run(
                     [jq, "-e", expression.group(1)], input=json.dumps(response),
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+
+    def test_control_plane_secrets_release_only_through_protected_deploy(self):
+        deploy = jobs()["deploy"]
+        step = deploy.split("      - name: Deploy the control plane\n", 1)[1]
+        script = textwrap.dedent(step.split("          python3 - \"$secrets_file\" <<'PY'\n", 1)[1]
+                                 .split("\n          PY", 1)[0])
+        self.assertIn('trap \'rm -f -- "$secrets_file"\' EXIT', step)
+        self.assertIn('wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT" --secrets-file "$secrets_file"', step)
+        self.assertLess(step.index("python3 - \"$secrets_file\""), step.index("wrangler deploy --config"))
+
+        good = {
+            "TARGET": "control-plane-production",
+            "CLOUDFLARE_ACCOUNT_ID": "a" * 32,
+            "SERVICE_KEY": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+            "ADMIN_TOKEN": "b" * 40,
+            "TURN_KEY_ID": "c" * 32,
+            "TURN_KEY_API_TOKEN": "d" * 64,
+            "ANALYTICS_API_TOKEN": "e" * 40,
+        }
+
+        def run(variables):
+            with tempfile.TemporaryDirectory() as folder:
+                output = Path(folder) / "secrets.json"
+                env = os.environ.copy()
+                env.update(variables)
+                result = subprocess.run(
+                    [sys.executable, "-c", script, str(output)], env=env,
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                data = json.loads(output.read_text(encoding="utf-8")) if output.exists() else None
+                if output.exists() and os.name != "nt":
+                    self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+                return result, data
+
+        staging = dict(good, TARGET="control-plane-staging")
+        result, data = run(staging)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(data, {"ANALYTICS_ACCOUNT_ID": good["CLOUDFLARE_ACCOUNT_ID"],
+                                "ANALYTICS_API_TOKEN": good["ANALYTICS_API_TOKEN"]})
+        result, data = run(good)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(data, {"ANALYTICS_ACCOUNT_ID": good["CLOUDFLARE_ACCOUNT_ID"],
+                                **{name: good[name] for name in (
+                                    "SERVICE_KEY", "ADMIN_TOKEN", "TURN_KEY_ID",
+                                    "TURN_KEY_API_TOKEN", "ANALYTICS_API_TOKEN")}})
+        alternate = dict(good, TURN_KEY_ID="Key_Alpha-7",
+                         TURN_KEY_API_TOKEN="turn+token/opaque==",
+                         ANALYTICS_API_TOKEN="analytics+read/opaque==")
+        result, data = run(alternate)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(data["TURN_KEY_ID"], alternate["TURN_KEY_ID"])
+        self.assertEqual(data["TURN_KEY_API_TOKEN"], alternate["TURN_KEY_API_TOKEN"])
+        for name, invalid in (
+            ("CLOUDFLARE_ACCOUNT_ID", "wrong"),
+            ("SERVICE_KEY", "short"),
+            ("ADMIN_TOKEN", "short"),
+            ("TURN_KEY_ID", "wrong"),
+            ("TURN_KEY_API_TOKEN", "wrong"),
+            ("ANALYTICS_API_TOKEN", ""),
+        ):
+            with self.subTest(name=name):
+                result, data = run(dict(good, **{name: invalid}))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIsNone(data)
+                self.assertNotIn(good["SERVICE_KEY"], result.stderr)
+                self.assertNotIn(good["TURN_KEY_API_TOKEN"], result.stderr)
+
+    def test_status_staging_ingest_token_uses_protected_deploy(self):
+        deploy = jobs()["deploy"]
+        step = deploy.split("      - name: Apply reviewed status migrations and deploy\n", 1)[1]
+        script = textwrap.dedent(step.split("          python3 - \"$secrets_file\" <<'PY'\n", 1)[1]
+                                 .split("\n          PY", 1)[0])
+        self.assertIn('wrangler deploy --config wrangler.deploy.toml --secrets-file "$secrets_file"', step)
+        self.assertIn('trap \'rm -f -- "$secrets_file"\' EXIT', step)
+        for token, accepted in (("a" * 48, True), ("short", False), ("a" * 40 + "\n", False)):
+            with self.subTest(accepted=accepted, length=len(token)), tempfile.TemporaryDirectory() as folder:
+                output = Path(folder) / "status-secrets.json"
+                env = os.environ.copy()
+                env["STATUS_INGEST_TOKEN_STAGING"] = token
+                result = subprocess.run(
+                    [sys.executable, "-c", script, str(output)], env=env,
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+                self.assertEqual(output.exists(), accepted)
+                if accepted:
+                    self.assertEqual(json.loads(output.read_text(encoding="utf-8")),
+                                     {"INGEST_TOKEN_STAGING": token})
+                    if os.name != "nt":
+                        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+                self.assertNotIn(token, result.stderr)
+
+    def test_production_public_smoke_rejects_enabled_features(self):
+        smoke = jobs()["deploy"].split("      - name: Smoke-test public routes after domain cutover\n", 1)[1]
+        base = re.search(r"predicate='([^']+)'", smoke)
+        production = re.search(r'predicate="\$predicate and ([^"]+)"', smoke)
+        self.assertIsNotNone(base)
+        self.assertIsNotNone(production)
+        jq = shutil.which("jq")
+        if jq is None:
+            self.skipTest("jq is required to execute the public smoke predicate")
+        predicate = f"{base.group(1)} and {production.group(1)}"
+        disabled = {name: False for name in ("hosting", "invites", "signaling", "relay")}
+        for features, accepted in (
+            (disabled, True),
+            (dict(disabled, relay=True), False),
+            (dict(disabled, hosting=True), False),
+            ({"hosting": False, "invites": False, "signaling": False}, False),
+        ):
+            with self.subTest(features=features):
+                response = {"schema": "topiaforge.control-plane-status/1", "api": 1,
+                            "features": features}
+                result = subprocess.run(
+                    [jq, "-e", predicate], input=json.dumps(response),
                     capture_output=True, text=True, timeout=10, check=False,
                 )
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)

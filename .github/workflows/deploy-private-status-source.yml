@@ -211,11 +211,29 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STATUS_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STATUS_INGEST_TOKEN_STAGING: ${{ secrets.STATUS_INGEST_TOKEN_STAGING }}
           WRANGLER_SEND_METRICS: 'false'
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
+          secrets_file="$RUNNER_TEMP/status-secrets.json"
+          trap 'rm -f -- "$secrets_file"' EXIT
+          python3 - "$secrets_file" <<'PY'
+          import json
+          import os
+          import sys
+
+          token = os.environ.get('STATUS_INGEST_TOKEN_STAGING', '')
+          if len(token) < 32 or any(ord(char) <= 32 for char in token):
+              raise SystemExit('STATUS_INGEST_TOKEN_STAGING is missing or invalid')
+          try:
+              fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              with os.fdopen(fd, 'w', encoding='utf-8') as output:
+                  json.dump({'INGEST_TOKEN_STAGING': token}, output)
+          except OSError:
+              raise SystemExit('Could not create temporary status secrets file') from None
+          PY
           migration_rows=$(npx --no-install wrangler d1 execute DB --remote \
             --command 'SELECT name FROM d1_migrations ORDER BY id' \
             --json --config wrangler.deploy.toml)
@@ -225,7 +243,7 @@ jobs:
              (.[0].results | map(.name)) == ["0001_status.sql", "0002_claim_owners.sql", "0003_public_activity.sql"])
           ' <<<"$migration_rows" >/dev/null
           npx --no-install wrangler d1 migrations apply DB --remote --config wrangler.deploy.toml
-          npx --no-install wrangler deploy --config wrangler.deploy.toml
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --secrets-file "$secrets_file"
 
       - name: Deploy the control plane
         if: inputs.target != 'status'
@@ -233,13 +251,70 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SERVICE_KEY: ${{ secrets.SERVICE_KEY }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          TURN_KEY_ID: ${{ secrets.TURN_KEY_ID }}
+          TURN_KEY_API_TOKEN: ${{ secrets.TURN_KEY_API_TOKEN }}
+          ANALYTICS_API_TOKEN: ${{ secrets.ANALYTICS_API_TOKEN }}
+          TARGET: ${{ inputs.target }}
           WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
           WRANGLER_SEND_METRICS: 'false'
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-          npx --no-install wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT"
+          secrets_file="$RUNNER_TEMP/control-plane-secrets.json"
+          trap 'rm -f -- "$secrets_file"' EXIT
+          python3 - "$secrets_file" <<'PY'
+          import base64
+          import binascii
+          import json
+          import os
+          import re
+          import sys
+
+          target = os.environ['TARGET']
+          account_id = os.environ['CLOUDFLARE_ACCOUNT_ID']
+          if not re.fullmatch(r'[0-9a-f]{32}', account_id):
+              raise SystemExit('CLOUDFLARE_ACCOUNT_ID is missing or invalid')
+          values = {'ANALYTICS_ACCOUNT_ID': account_id}
+          analytics_token = os.environ.get('ANALYTICS_API_TOKEN', '')
+          if not re.fullmatch(r'[A-Za-z0-9._~+/=-]{8,512}', analytics_token):
+              raise SystemExit('ANALYTICS_API_TOKEN is missing or invalid')
+          values['ANALYTICS_API_TOKEN'] = analytics_token
+          if target == 'control-plane-production':
+              required = ('SERVICE_KEY', 'ADMIN_TOKEN', 'TURN_KEY_ID',
+                          'TURN_KEY_API_TOKEN')
+              for name in required:
+                  value = os.environ.get(name, '')
+                  if not value or any(ord(char) <= 32 for char in value):
+                      raise SystemExit(f'{name} is missing or invalid')
+                  values[name] = value
+              service_key = values['SERVICE_KEY']
+              if not re.fullmatch(r'[A-Za-z0-9_-]+', service_key):
+                  raise SystemExit('SERVICE_KEY is invalid')
+              try:
+                  decoded = base64.urlsafe_b64decode(service_key + '=' * (-len(service_key) % 4))
+              except (ValueError, binascii.Error):
+                  raise SystemExit('SERVICE_KEY is invalid') from None
+              if not 32 <= len(decoded) <= 64 or base64.urlsafe_b64encode(decoded).decode().rstrip('=') != service_key:
+                  raise SystemExit('SERVICE_KEY is invalid')
+              if len(values['ADMIN_TOKEN']) < 32:
+                  raise SystemExit('ADMIN_TOKEN is invalid')
+              if not re.fullmatch(r'[A-Za-z0-9_-]{8,128}', values['TURN_KEY_ID']):
+                  raise SystemExit('TURN_KEY_ID is invalid')
+              if not re.fullmatch(r'[A-Za-z0-9._~+/=-]{8,512}', values['TURN_KEY_API_TOKEN']):
+                  raise SystemExit('TURN_KEY_API_TOKEN is invalid')
+          elif target != 'control-plane-staging':
+              raise SystemExit('Unexpected control-plane target')
+          try:
+              fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              with os.fdopen(fd, 'w', encoding='utf-8') as output:
+                  json.dump(values, output)
+          except OSError:
+              raise SystemExit('Could not create temporary secrets file') from None
+          PY
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT" --secrets-file "$secrets_file"
 
       - name: Smoke-test public routes after domain cutover
         if: inputs.verify_public_routes
@@ -265,7 +340,11 @@ jobs:
             *) exit 1 ;;
           esac
           if [[ "$TARGET" == control-plane-* ]]; then
+            predicate='.schema == "topiaforge.control-plane-status/1" and .api == 1'
+            if [[ "$TARGET" == control-plane-production ]]; then
+              predicate="$predicate and .features == {hosting:false, invites:false, signaling:false, relay:false}"
+            fi
             curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 \
               --connect-timeout 10 --max-time 20 "$origin/v1/status" \
-              | jq -e '.schema == "topiaforge.control-plane-status/1" and .api == 1'
+              | jq -e "$predicate"
           fi
