@@ -111,6 +111,7 @@ void main() {
                 ).readAsStringSync(),
               )
               as Map<String, dynamic>;
+      readiness['releaseVersion'] = '0.1.0-rc.1';
       readiness['status'] = 'ready';
       for (final gate in readiness['gates'] as List) {
         if (gate['enforcement'] != 'blocking') continue;

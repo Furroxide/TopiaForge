@@ -335,12 +335,12 @@ if ($windowsDistribution -ceq "unsigned") {
     }
     # Match the Dart SemVer reader, including metadata and numeric identifier rules.
     $prereleaseIdentifier = '(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
-    $unsignedVersionPattern = '\A0\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-' +
-        $prereleaseIdentifier + '(?:\.' + $prereleaseIdentifier + ')*' +
+    $unsignedVersionPattern = '\A0\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-' +
+        $prereleaseIdentifier + '(?:\.' + $prereleaseIdentifier + ')*)?' +
         '(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z'
     if ($policy.versioning.productVersion -isnot [string] -or
         $policy.versioning.productVersion -cnotmatch $unsignedVersionPattern) {
-        throw "An unsigned Windows distribution is only allowed for a 0.x prerelease."
+        throw "An unsigned Windows distribution is only allowed for a 0.x version."
     }
 }
 if ($windowsDistribution -ceq "signed" -and -not $hasWindowsCertificatePin) {

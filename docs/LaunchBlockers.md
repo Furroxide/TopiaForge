@@ -525,14 +525,18 @@ automated tests cannot close Unity object lifetime.
   certificate is a purchase decision, not a code defect, so it should not be what a `0.x` alpha's readiness register
   hangs on; the intended `0.x` disposition is to ship unsigned behind a documented SmartScreen warning.
 
-  Progress 2026-08-24: the explicit recorded mode now exists.
+  Progress 2026-08-24: at that checkpoint, the explicit recorded mode existed.
   `signingIdentities.windowsDistribution` is `signed` (the default when the key is absent) or `unsigned`, so a
   missing certificate can no longer be mistaken for a decision to ship without one. `release validate-policy`
-  enforces the guard rails — an unsigned distribution may not also pin a certificate, must be a prerelease, and
-  must be on a `0.x` line — and `tools/release/build-windows.ps1` drops `--require-windows-signing` while adding
+  enforced the guard rails — an unsigned distribution could not also pin a certificate and
+  had to be a prerelease on a `0.x` line — and `tools/release/build-windows.ps1` dropped `--require-windows-signing` while adding
   `--require-windows-unsigned`, so the artifacts are *proved* unsigned rather than merely unchecked. Preflight and
   handoff staging in `tools/release-admin.ps1` skip the certificate and the detached CMS signature, and the two
   `release.yml` handoff-verification steps expect the P7S to be absent.
+
+  **Scope extended 2026-11-16:** explicit unsigned Windows distribution also permits stable `0.x` releases.
+  Release notes must disclose the unsigned executables and possible Windows publisher or SmartScreen warnings.
+  `1.0` and later still require signing. Exact artifact checks, signed update metadata and all other gates remain.
 
   **Finished 2026-08-28.** [#87](https://github.com/Furroxide/TopiaForge/pull/87) reshaped the published trust
   envelope, which was the remaining piece: the hosted-verification evidence, the final public asset inventory, the

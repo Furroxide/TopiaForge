@@ -24,7 +24,7 @@ void main() {
           readinessBytes: utf8.encode(document),
           schemaBytes: schema,
           targetSha: 'a' * 40,
-          expectedReleaseVersion: '0.1.0-rc.1',
+          expectedReleaseVersion: '0.2.0',
         ),
         throwsStateError,
       );

@@ -106,20 +106,21 @@ foreach ($rawCase in @(
 # Match SemanticVersion.tryParse: metadata is allowed, numeric prerelease
 # identifiers cannot have leading zeros, and alpha/hyphen identifiers can.
 foreach ($version in @(
-    "0.1.0", "0.1.0+build.1", "1.0.0-rc.1", "10.0.0-rc.1",
-    "not-a-version", "00.1.0-rc.1", "0.01.0-rc.1", "0.1.00-rc.1",
+    "1.0.0", "1.0.0+build.1", "1.0.0-rc.1", "10.0.0-rc.1",
+    "not-a-version", "00.1.0", "0.01.0", "0.1.00", "0.1.0+", "0.1.0+build..1",
+    "00.1.0-rc.1", "0.01.0-rc.1", "0.1.00-rc.1",
     "0.1.0-01", "0.1.0-rc.01", "0.1.0-rc..1", "0.1.0-",
     "0.1.0-rc.1+", "0.1.0-rc.1+build..1", "0.1.0-rc_1",
     " 0.1.0-rc.1", "0.1.0-rc.1 ", "0.1.0-r$([char]0x00e9)lease",
     "0.1.0-rc.1`n", "0.1.0-rc.1`r`n"
 )) {
-    Add-AdmissionCase -Name "unsigned rejects version '$version'" -Version $version -Message "0.x prerelease"
+    Add-AdmissionCase -Name "unsigned rejects version '$version'" -Version $version -Message "0.x version"
 }
 # Hyphen-only identifiers ending in an empty one must be refused at once: a
 # pattern that can split each identifier at any hyphen tries every split.
-Add-AdmissionCase -Name "unsigned refuses a hostile prerelease quickly" -Version ("0.1.0-" + ("----." * 24)) -Message "0.x prerelease"
+Add-AdmissionCase -Name "unsigned refuses a hostile prerelease quickly" -Version ("0.1.0-" + ("----." * 24)) -Message "0.x version"
 foreach ($version in @(
-    "0.0.0-0", "0.1.0-rc.1+build.01", "0.1.0-01a",
+    "0.0.0", "0.2.0", "0.1.0+build.1", "0.0.0-0", "0.1.0-rc.1+build.01", "0.1.0-01a",
     "0.1.0-rc-01", "0.1.0--", "0.1.0-0.0+0",
     "0.999999999999999999999999.0-rc.1"
 )) {
