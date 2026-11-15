@@ -9,7 +9,7 @@ inside Worlds, not a separate source mod or package.
 
 Every manifest is schema version 6 and declares AGPL-3.0-or-later with a package-relative `LICENSE`. Robotopia
 compatibility follows the per-mod rule in [the compatibility policy](CompatibilityPolicy.md): mods with
-native bindings pin `0.0.2640`, and SDK-only mods declare `>=0.0.2640 <0.0.2600`. The loader and SDK are
+native bindings pin `0.0.2640`, and SDK-only mods declare `>=0.0.2640 <0.0.2700`. The loader and SDK are
 constrained to `>=0.2.0 <0.3.0`.
 Release packaging injects the reviewed shared mod license and verifies it in
 every deterministic archive.

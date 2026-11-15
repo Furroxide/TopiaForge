@@ -17,7 +17,7 @@ namespace TopiaForge.ModManager.Tests
         // builds do not step by a fixed amount, so the ceiling is reviewed at every bump rather than derived, and
         // it admits nothing beyond that review.
         private const string BoundGameRange = "0.0.2640";
-        private const string SdkOnlyGameRange = ">=0.0.2640 <0.0.2600";
+        private const string SdkOnlyGameRange = ">=0.0.2640 <0.0.2700";
         private const string InstalledGameVersion = "0.0.2640";
 
         // Exactly the mods carrying a bindings/<id>.gamebindings.json manifest.
