@@ -266,15 +266,17 @@ void main() {
     test('scans nested or unclosed items in linear time', () {
       const open = '<PackageReference Update="A">';
       const end = '</PackageReference>';
-      for (final (name, text, count) in <(String, String Function(int), int)>[
-        ('nested', (s) => '${open * (1000 * s)}${end * (1000 * s)}', 8000),
-        ('unclosed', (s) => open * (1000 * s), 0),
-        ('commented', (s) => '$open${'<!-- -->' * (2500 * s)}$end' * 2, 2),
-      ]) {
+      for (final (name, text, full, count)
+          in <(String, String Function(int), int, int)>[
+            ('nested', (n) => '${open * n}${end * n}', 8000, 8000),
+            ('unclosed', (n) => open * n, 8000, 0),
+            ('commented', (n) => '$open${'<!-- -->' * n}$end' * 2, 20000, 2),
+          ]) {
         expect(
           expectLinear(
             text,
             (text) => packageReferences(text).length,
+            fullCount: full,
             reason: name,
           ),
           count,
@@ -394,19 +396,20 @@ void main() {
 
     test('scans unclosed items, tags and comments in linear time', () {
       const open = '<PackageReference Include="$_abstractions"';
-      for (final (index, text) in <String Function(int)>[
-        (s) => '$open>' * (1000 * s),
-        (s) => '${open * (1000 * s)}>',
-        (s) => '$open>${'<!-- -->' * (2500 * s)}',
-        (s) => '$open${' a="1"' * (2500 * s)}',
-        (s) => '${'<PackageReference a="' * (1000 * s)}>',
-        (s) => '${'<!--' * (2500 * s)}$open />',
-        (s) => '${'$open>' * (1000 * s)}${'</PackageReferenc>' * (1000 * s)}',
+      for (final (index, (text, full)) in <(String Function(int), int)>[
+        ((n) => '$open>' * n, 8000),
+        ((n) => '${open * n}>', 8000),
+        ((n) => '$open>${'<!-- -->' * n}', 20000),
+        ((n) => '$open${' a="1"' * n}', 20000),
+        ((n) => '${'<PackageReference a="' * n}>', 8000),
+        ((n) => '${'<!--' * n}$open />', 20000),
+        ((n) => '${'$open>' * n}${'</PackageReferenc>' * n}', 8000),
       ].indexed) {
         expect(
           expectLinear(
             text,
             (text) => firstPackageReference(text, _abstractions),
+            fullCount: full,
             reason: 'input $index',
           ),
           isNull,

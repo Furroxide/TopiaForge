@@ -149,8 +149,9 @@ void main() {
       ]) {
         expect(
           expectLinear(
-            (scale) => '<$name>${' ' * (125 * scale)}',
+            (count) => '<$name>${' ' * count}',
             (text) => firstElementText(text, name),
+            fullCount: 1000,
             reason: name,
           ),
           isNull,
@@ -232,8 +233,9 @@ void main() {
       ]) {
         expect(
           expectLinear(
-            (scale) => '<$name ' * (500 * scale),
+            (count) => '<$name ' * count,
             (text) => firstStartTag(text, name),
+            fullCount: 4000,
             reason: name,
           ),
           isNull,
@@ -289,8 +291,9 @@ void main() {
     test('scans many unterminated tags in linear time', () {
       expect(
         expectLinear(
-          (scale) => '${'<$name ' * (500 * scale)}>',
+          (count) => '${'<$name ' * count}>',
           (text) => firstTextElement(text, name),
+          fullCount: 4000,
         ),
         isNull,
       );
@@ -352,8 +355,9 @@ void main() {
       for (final prefix in ['"', '"key" "']) {
         expect(
           expectLinear(
-            (scale) => '$prefix${r'\"' * (2500 * scale)}',
+            (count) => '$prefix${r'\"' * count}',
             (text) => vdfQuotedPairs(text).toList(),
+            fullCount: 20000,
             reason: prefix,
           ),
           isEmpty,

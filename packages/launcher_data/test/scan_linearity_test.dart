@@ -5,12 +5,19 @@ import 'scan_agreement.dart';
 void main() {
   group('expectLinear', () {
     test('accepts a scan whose time grows with its input', () {
-      expect(expectLinear((scale) => 'ab' * (12500 * scale), _countB), 100000);
+      expect(
+        expectLinear((count) => 'ab' * count, _countB, fullCount: 100000),
+        100000,
+      );
     });
 
     test('refuses a scan that compares every pair of characters', () {
       expect(
-        () => expectLinear((scale) => 'ab' * (100 * scale), _countEqualPairs),
+        () => expectLinear(
+          (count) => 'ab' * count,
+          _countEqualPairs,
+          fullCount: 800,
+        ),
         throwsA(
           isA<TestFailure>().having(
             (failure) => failure.message,
