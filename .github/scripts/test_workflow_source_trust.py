@@ -1,5 +1,6 @@
 """Regression checks for executable workflow source and transitive cache trust."""
 from pathlib import Path
+import json
 import os
 import re
 import shutil
@@ -229,6 +230,34 @@ class PrivateStatusDeploymentTests(unittest.TestCase):
     def setUp(self):
         self.source = read_workflow("deploy-private-status-source.yml")
         self.jobs = workflow_jobs(self.source)
+
+    def test_branch_policy_accepts_only_existing_staging_and_production_rules(self):
+        expression = re.search(
+            r'jq -e --arg name "\$DEPLOYMENT_ENVIRONMENT" \'(.*?)\' '
+            r'<<<"\$branch_policy" >/dev/null', self.jobs["preflight"], re.DOTALL,
+        )
+        self.assertIsNotNone(expression)
+        jq = shutil.which("jq")
+        self.assertIsNotNone(jq)
+        cases = [
+            ("control-plane-staging", ["dev", "main"], True),
+            ("control-plane-staging", ["main"], False),
+            ("control-plane-staging", ["dev", "main", "release/*"], False),
+            ("control-plane-production", ["main"], True),
+            ("control-plane-production", ["dev", "main"], False),
+        ]
+        for environment, names, accepted in cases:
+            with self.subTest(environment=environment, names=names):
+                response = {
+                    "total_count": len(names),
+                    "branch_policies": [{"name": name, "type": "branch"} for name in names],
+                }
+                result = subprocess.run(
+                    [jq, "-e", "--arg", "name", environment, expression.group(1)],
+                    input=json.dumps(response), capture_output=True, text=True,
+                    timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
     def test_dispatch_targets_require_main_and_a_full_status_sha(self):
         preflight = self.jobs["preflight"]
