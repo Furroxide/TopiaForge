@@ -5,6 +5,9 @@ on:
     branches:
       - "release/**"
       - "service/production-multiplayer"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -18,13 +21,18 @@ jobs:
   build-packages:
     name: Build release packages
     if: >-
-      github.event_name != 'workflow_dispatch' ||
-      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'push' &&
+      (github.ref == 'refs/heads/service/production-multiplayer' ||
+      startsWith(github.ref, 'refs/heads/release/'))) ||
+      (github.event_name == 'workflow_dispatch' &&
+      (github.ref == 'refs/heads/main' ||
       github.ref == 'refs/heads/service/production-multiplayer' ||
-      startsWith(github.ref, 'refs/heads/release/')
+      startsWith(github.ref, 'refs/heads/release/'))) ||
+      (github.event_name == 'pull_request' &&
+      github.base_ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository)
     uses: ./.github/workflows/release-package-build.yml
     with:
-      source_sha: ${{ github.sha }}
       fail_on_missing_refs: true
       artifact_retention_days: 7
 

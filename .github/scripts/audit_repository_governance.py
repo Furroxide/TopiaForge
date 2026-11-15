@@ -265,6 +265,21 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
     }
 
 
+def fold_login(value: Any) -> Any:
+    """Compare GitHub logins case-insensitively while preserving actor IDs."""
+
+    if isinstance(value, str):
+        return value.casefold()
+    if isinstance(value, list):
+        return [fold_login(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: fold_login(item) if key in {"login", "full_name"} else item
+            for key, item in value.items()
+        }
+    return value
+
+
 def add_mismatch(
     failures: list[str], label: str, actual: Any, expected: Any
 ) -> None:
@@ -561,7 +576,8 @@ def check_release_mutation_authority(
             "type": collaborator.get("type"),
         }
         if (
-            identity["login"] == PINNED_RELEASE_STAGING_PRINCIPAL["login"]
+            fold_login(identity["login"])
+            == fold_login(PINNED_RELEASE_STAGING_PRINCIPAL["login"])
             or identity["actor_id"]
             == PINNED_RELEASE_STAGING_PRINCIPAL["actor_id"]
         ):
@@ -593,7 +609,9 @@ def check_release_mutation_authority(
             or permissions["maintain"]
             or permissions["admin"]
         )
-        if write_capable and identity != PINNED_RELEASE_STAGING_PRINCIPAL:
+        if write_capable and fold_login(identity) != fold_login(
+            PINNED_RELEASE_STAGING_PRINCIPAL
+        ):
             failures.append(
                 f"{label}: write-capable collaborator is not the pinned "
                 "release-staging principal"
@@ -609,12 +627,14 @@ def check_release_mutation_authority(
     add_mismatch(
         failures,
         "release-staging principal.identity",
-        {
-            "login": principal.get("login"),
-            "actor_id": principal.get("id"),
-            "type": principal.get("type"),
-        },
-        PINNED_RELEASE_STAGING_PRINCIPAL,
+        fold_login(
+            {
+                "login": principal.get("login"),
+                "actor_id": principal.get("id"),
+                "type": principal.get("type"),
+            }
+        ),
+        fold_login(PINNED_RELEASE_STAGING_PRINCIPAL),
     )
     add_mismatch(
         failures,
@@ -642,14 +662,14 @@ def evaluate_snapshot(snapshot: dict[str, Any], policy: dict[str, Any]) -> list[
     add_mismatch(
         failures,
         "repository.full_name",
-        repository.get("full_name"),
-        policy["repository_full_name"],
+        fold_login(repository.get("full_name")),
+        fold_login(policy["repository_full_name"]),
     )
     add_mismatch(
         failures,
         "repository_administrators",
-        sorted(snapshot.get("repository_administrators", [])),
-        sorted(policy.get("repository_administrators", [])),
+        sorted(fold_login(snapshot.get("repository_administrators", []))),
+        sorted(fold_login(policy.get("repository_administrators", []))),
     )
     compare_mapping(
         failures,
