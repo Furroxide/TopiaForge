@@ -74,7 +74,7 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2597 metadata capture currently contains 60 types and 15 simple-name lookups. Offline metadata verification
+The build 2640 metadata capture currently contains 60 types and 15 simple-name lookups. Offline metadata verification
 resolves 222 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings, errors, or
 warnings; installed verification last ran before presence added nine of them. All 44 Manager and 34 Worlds bindings
 are verifiable. The remaining uncheckable
@@ -194,9 +194,9 @@ allowlisted advanced mod genuinely needs a new native binding:
   arrives through the launcher (see the launcher Diagnostics integration), not the raw CLI.
 
 
-### Composition metadata extension for build 2597
+### Composition metadata extension for build 2640
 
-The composition surface extension was captured from cached build 2597 assembly metadata at
+The composition surface extension was captured from cached build 2640 assembly metadata at
 `2026-11-02T16:47:14.0743853Z`, GameCode MVID `ca6b3eab-422a-43f6-80bb-88ac23255cd7`.
 It adds nine complete type records: `UgcAgentComponent`, `UgcExportEntity`, `UgcExportEntityComponents`,
 `UgcPrefabSceneMap`, `UgcPrefabSceneMap+Entry`, `UgcRobotPartMap`, `UgcRuntimeAssetOwner`, `UgcSceneBuilder`
