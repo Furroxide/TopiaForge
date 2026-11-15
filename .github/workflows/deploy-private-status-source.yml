@@ -74,7 +74,7 @@ jobs:
           esac
 
       # Runs before any job names an environment, so a typo cannot create one.
-      - name: Require reviewer and main-only branch policy
+      - name: Require reviewer and approved branch policy
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,12 +93,17 @@ jobs:
                ((.prevent_self_review == true or $name != "control-plane-production") and
                 (.reviewers | length) > 0)] | any)' \
             <<<"$environment" >/dev/null
-          gh api \
+          branch_policy=$(gh api \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/$GITHUB_REPOSITORY/environments/$DEPLOYMENT_ENVIRONMENT/deployment-branch-policies" \
-            --jq '.total_count == 1 and (.branch_policies[0] | .name == "main" and .type == "branch")' \
-            | grep -qx true
+            "repos/$GITHUB_REPOSITORY/environments/$DEPLOYMENT_ENVIRONMENT/deployment-branch-policies")
+          jq -e --arg name "$DEPLOYMENT_ENVIRONMENT" '
+            .total_count == (if $name == "control-plane-staging" then 2 else 1 end) and
+            ([.branch_policies[] | {name, type}] | sort_by(.name)) ==
+              (if $name == "control-plane-staging"
+               then [{name: "dev", type: "branch"}, {name: "main", type: "branch"}]
+               else [{name: "main", type: "branch"}] end)
+          ' <<<"$branch_policy" >/dev/null
 
   deploy:
     name: Deploy ${{ inputs.target }}
