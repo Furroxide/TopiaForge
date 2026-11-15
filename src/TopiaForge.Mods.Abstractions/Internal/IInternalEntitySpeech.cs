@@ -19,7 +19,7 @@ namespace TopiaForge.Mods.Internal
 
     internal interface IInternalSpeechProvider
     {
-        bool IsSpeechVisible(IEntity entity);
+        bool IsSpeechVisible(IEntity entity, bool canonical);
         OperationResult<string> VoiceIdentity(IEntity entity);
         Task<OperationResult<bool>> PlaySpeechAsync(IEntity entity, string voice, string text, CancellationToken cancellationToken);
     }

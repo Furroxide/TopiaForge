@@ -49,6 +49,8 @@ namespace TopiaForge.ModManager
         internal string? EnvironmentFor(string? player) => ledger.EnvironmentFor(player);
         internal VisionFog? FogFor(string? player)
         { var value = ledger.FogFor(player); return value.Distance == 0 ? (VisionFog?)null : VisionFog.Radius(value.Distance, (FogTint)value.Tint); }
+        internal bool IsHiddenFor<TState>(string? player, TState state, Func<IEntity, TState, bool> matches) =>
+            ledger.IsHiddenFor(player, state, matches);
         internal IEntity[] HiddenFor(string? player) => ledger.HiddenFor(player).ToArray();
         // Whether a lease for the local viewer names a target that resolves to the object now.
         // Reads the targets the last Apply held or left waiting, so it allocates nothing.

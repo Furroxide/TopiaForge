@@ -1,13 +1,27 @@
 using System;
 using System.Collections.Generic;
 
-namespace TopiaForge.Worlds
+namespace TopiaForge.Mods.Internal
 {
     // Renderer state ownership is independent of Unity, including overlapping parent/child hides.
     internal sealed class OwnedRendererVisibility<T> : IDisposable where T : class
     {
         private sealed class Entry { internal bool Original; internal int Count; }
-        private readonly Dictionary<T, Entry> entries = new Dictionary<T, Entry>();
+        // First-party renderers are owned on the frame thread. Overlapping view instances
+        // share the original value until the last hold on that renderer is released.
+        private static readonly Dictionary<T, Entry> entries = new Dictionary<T, Entry>();
+        private readonly HashSet<Hold> holds = new HashSet<Hold>();
+
+        internal static bool TryGetOriginal(T target, out bool enabled)
+        {
+            if (entries.TryGetValue(target, out var entry))
+            {
+                enabled = entry.Original;
+                return true;
+            }
+            enabled = false;
+            return false;
+        }
         private readonly Func<T, bool> alive;
         private readonly Func<T, bool> read;
         private readonly Action<T, bool> write;
@@ -93,7 +107,9 @@ namespace TopiaForge.Worlds
                     }
                     entry.Count++; held.Add(target);
                 }
-                return new Hold(() => Release(held));
+                var hold = new Hold(this, held);
+                holds.Add(hold);
+                return hold;
             }
             catch { Release(held); throw; }
         }
@@ -117,16 +133,20 @@ namespace TopiaForge.Worlds
             var failed = false;
             while (dynamic.Count > 0)
                 try { dynamic[dynamic.Count - 1].Dispose(); } catch { failed = true; }
-            foreach (var entry in entries)
-                try { Restore(entry.Key, entry.Value); } catch { failed = true; }
-            entries.Clear();
+            foreach (var hold in new List<Hold>(holds))
+                try { hold.Dispose(); } catch { failed = true; }
             if (failed) throw new InvalidOperationException("A renderer could not be restored.");
         }
         private sealed class Hold : IDisposable
         {
-            private Action? end;
-            internal Hold(Action end) { this.end = end; }
-            public void Dispose() { var action = end; end = null; action?.Invoke(); }
+            private readonly OwnedRendererVisibility<T> owner;
+            private readonly List<T> targets;
+            internal Hold(OwnedRendererVisibility<T> owner, List<T> targets)
+            { this.owner = owner; this.targets = targets; }
+            public void Dispose()
+            {
+                if (owner.holds.Remove(this)) owner.Release(targets);
+            }
         }
     }
 }

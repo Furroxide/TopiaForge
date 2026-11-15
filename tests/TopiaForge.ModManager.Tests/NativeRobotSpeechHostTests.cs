@@ -160,7 +160,7 @@ namespace TopiaForge.RobotKit {
   internal IInternalNativeSpeechPlayback? speechPlayback;
   private readonly CancellationTokenSource speechLifetime=new();
   internal readonly SemaphoreSlim speechSerial=new(1,1);
-  public bool SpeechVisible=>IsAlive;
+  public bool IsSpeechVisible(bool canonical)=>IsAlive;
   /* binding methods */
   internal TaskCompletionSource<OperationResult<bool>>? Pending;
   internal Task<OperationResult<bool>> RouteSpeech(string text,CancellationToken token) {

@@ -20,18 +20,20 @@ namespace TopiaForge.RobotKit
         private IInternalNativeSpeechPlayback? speechPlayback;
         private CancellationToken speechOwnerStopping;
         internal CancellationToken SpeechStoppingToken => speechOwnerStopping;
-        public bool SpeechVisible
+        public bool IsSpeechVisible(bool canonical)
         {
-            get
+            // RobotKit bodies live under a persistent root. The owning world/context association
+            // determines whether this body is current.
+            if (speechAssociation == null || !OwnsSpeechAssociation(speechAssociation) || !go.activeInHierarchy) return false;
+            renderers ??= go.GetComponentsInChildren<Renderer>(true);
+            foreach (var renderer in renderers)
             {
-                // RobotKit bodies live under a persistent root. The owning world/context association,
-                // not that root's special Unity scene, determines whether this body is current.
-                if (speechAssociation == null || !OwnsSpeechAssociation(speechAssociation) || !go.activeInHierarchy) return false;
-                renderers ??= go.GetComponentsInChildren<Renderer>(true);
-                foreach (var renderer in renderers)
-                    if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy) return true;
-                return false;
+                if (renderer == null || !renderer.gameObject.activeInHierarchy) continue;
+                var enabled = OwnedRendererVisibility<Renderer>.TryGetOriginal(renderer, out var original)
+                    ? canonical && original : renderer.enabled;
+                if (enabled) return true;
             }
+            return false;
         }
 
         internal void RegisterSpeech()
@@ -78,12 +80,12 @@ namespace TopiaForge.RobotKit
         internal Task<OperationResult<bool>> RouteSpeech(string text, CancellationToken token) =>
             speechRoute != null && IsAlive ? speechRoute(text, token)
                 : Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, "This robot has no owning host speech context."));
-        public OperationResult<string> VoiceIdentity() => SpeechVisible && NativeRobotSpeech.IsInstalled && speechHead != null
+        public OperationResult<string> VoiceIdentity() => IsSpeechVisible(canonical: true) && NativeRobotSpeech.IsInstalled && speechHead != null
             ? NativeRobotVoice.Identity(speechHead)
             : OperationResult<string>.Failure(ModErrorCode.Unavailable, "Native robot speech bindings are unavailable; retry after recovery.");
         public async Task<OperationResult<bool>> PlaySpeechAsync(string voice, string text, CancellationToken token)
         {
-            if (!SpeechVisible || !NativeRobotSpeech.IsInstalled || speechHead == null || speechPlayback == null)
+            if (!IsSpeechVisible(canonical: false) || !NativeRobotSpeech.IsInstalled || speechHead == null || speechPlayback == null)
                 return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The robot's native voice does not match; retry after its bindings recover.");
             var playback = speechPlayback;
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, speechLifetime.Token);
@@ -94,7 +96,7 @@ namespace TopiaForge.RobotKit
                 await speechSerial.WaitAsync(linked.Token);
                 entered = true;
                 linked.Token.ThrowIfCancellationRequested();
-                if (!ReferenceEquals(playback, speechPlayback) || !playback.IsAvailable)
+                if (!ReferenceEquals(playback, speechPlayback) || !playback.IsAvailable || !IsSpeechVisible(canonical: false))
                     return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The robot's speech association has ended.");
                 var asset = NativeRobotVoice.Resolve(voice);
                 if (asset == null) return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The requested native voice binding is unavailable; retry after recovery.");

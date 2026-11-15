@@ -9,7 +9,7 @@ namespace TopiaForge.RobotKit
     // Implemented only by native bodies, never exposed as a mod service.
     internal interface IRobotNativeSpeech
     {
-        bool SpeechVisible { get; }
+        bool IsSpeechVisible(bool canonical);
         OperationResult<string> VoiceIdentity();
         Task<OperationResult<bool>> PlaySpeechAsync(string voice, string text, CancellationToken token);
         void BindSpeech(Func<string, CancellationToken, Task<OperationResult<bool>>> route);
@@ -48,7 +48,7 @@ namespace TopiaForge.RobotKit
         private IRobotNativeSpeech? Speech(IEntity entity) => states.TryGetValue(entity.Id, out var state)
             && ReferenceEquals(state.Agent, entity) && state.Agent.IsAlive ? state.Agent as IRobotNativeSpeech : null;
 
-        public bool IsSpeechVisible(IEntity entity) => Speech(entity)?.SpeechVisible == true;
+        public bool IsSpeechVisible(IEntity entity, bool canonical) => Speech(entity)?.IsSpeechVisible(canonical) == true;
         public OperationResult<string> VoiceIdentity(IEntity entity) => Speech(entity)?.VoiceIdentity()
             ?? OperationResult<string>.Failure(ModErrorCode.Unavailable, "Robot voice bindings are unavailable; retry after the provider recovers.");
         public Task<OperationResult<bool>> PlaySpeechAsync(IEntity entity, string voice, string text, CancellationToken cancellationToken) =>

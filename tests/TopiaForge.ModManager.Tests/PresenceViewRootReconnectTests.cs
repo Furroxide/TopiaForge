@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using TopiaForge.ModManager.Core.Multiplayer;
-using TopiaForge.Worlds;
+using TopiaForge.Mods.Internal;
 using static TopiaForge.ModManager.Tests.PresenceAssert;
 
 namespace TopiaForge.ModManager.Tests

@@ -22,15 +22,16 @@ namespace TopiaForge.ModManager.Tests
         {
             // Execute the shipped registration, cleanup, Despawn and service Tick, with only the native boundary
             // replaced. A destroyed head deliberately compares null while its managed reference remains alive.
-            var root = Path.Combine(Program.FindRepoRoot(), "mods/TopiaForge.RobotKit");
-            CompilationUnitSyntax Read(string file) => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file))).GetCompilationUnitRoot();
+            var root = Program.FindRepoRoot();
+            string Source(string file) => File.ReadAllText(Path.Combine(root, file));
+            CompilationUnitSyntax Read(string file) => CSharpSyntaxTree.ParseText(Source("mods/TopiaForge.RobotKit/" + file)).GetCompilationUnitRoot();
             string Methods(CompilationUnitSyntax syntax, params string[] names) => string.Join("\n", names.Select(name =>
                 syntax.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.Text == name).ToFullString()));
             var speech = Read("RobotAgent.Speech.cs");
             var agent = Read("RobotAgent.cs");
             var native = Read("NativeRobotSpeech.cs");
             var source = Contract.Replace("/* speech fields */", string.Join("\n", speech.DescendantNodes().OfType<FieldDeclarationSyntax>()))
-                .Replace("/* visibility */", speech.DescendantNodes().OfType<PropertyDeclarationSyntax>().Single(p => p.Identifier.Text == "SpeechVisible").ToFullString() + Methods(speech, "OwnsSpeechAssociation"))
+                .Replace("/* visibility */", Methods(speech, "IsSpeechVisible", "OwnsSpeechAssociation"))
                 .Replace("/* agent methods */", Methods(speech, "RegisterSpeech", "ReleaseSpeech", "BindSpeech") + Methods(agent, "Despawn"))
                 .Replace("/* composed destroy */", Methods(Read("RobotComposedLifetime.cs"), "DestroyActor"))
                 .Replace("/* alive */", agent.DescendantNodes().OfType<PropertyDeclarationSyntax>().Single(p => p.Identifier.Text == "IsAlive").ToFullString())
@@ -41,7 +42,13 @@ namespace TopiaForge.ModManager.Tests
                 .Where(p => !Path.GetFileName(p).StartsWith("UnityEngine", StringComparison.Ordinal)
                     && !Path.GetFileName(p).StartsWith("TopiaForge", StringComparison.Ordinal))
                 .Select(p => MetadataReference.CreateFromFile(p));
-            var compilation = CSharpCompilation.Create("RobotSpeechLifetimeProbe", new[] { CSharpSyntaxTree.ParseText(source) }, references,
+            // Resolve marker types from the managed fixture instead of loading game assemblies.
+            var hiding = Source("mods/TopiaForge.Worlds/View/NativeViewHiding.cs")
+                .Replace("Type.GetType(\"UgcImportedEntity, GameCode\", false)", "typeof(UgcImportedEntity)")
+                .Replace("Type.GetType(\"UgcImportedVisualRoot, GameCode\", false)", "typeof(UgcImportedVisualRoot)");
+            var sources = new[] { source, hiding, Source("mods/TopiaForge.Worlds/View/ViewRendererSelection.cs"),
+                Source("src/TopiaForge.Mods.Abstractions/Internal/OwnedRendererVisibility.cs") };
+            var compilation = CSharpCompilation.Create("RobotSpeechLifetimeProbe", sources.Select(s => CSharpSyntaxTree.ParseText(s)), references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
             using var bytes = new MemoryStream();
             var emitted = compilation.Emit(bytes);
@@ -79,22 +86,33 @@ namespace UnityEngine {
   public bool activeSelf=true; public bool activeInHierarchy => activeSelf && (transform.parent?.Owner?.activeInHierarchy ?? true);
   public Renderer[] Renderers=Array.Empty<Renderer>();
   public T[] GetComponentsInChildren<T>(bool inactive) => Renderers.OfType<T>().ToArray();
+  public void GetComponentsInChildren<T>(bool inactive, List<T> into) => into.AddRange(Renderers.OfType<T>());
   public Transform transform;
   public GameObject() { transform=new Transform { Owner=this }; }
   public T GetComponentInChildren<T>(bool inactive) where T:class => (Head as T)!;
  }
- public class Renderer : Object { public bool enabled=true; public GameObject gameObject=new(); }
+ public class Renderer : Object {
+  public bool enabled=true; public GameObject gameObject=new(); public Transform transform=>gameObject.transform;
+ }
  public class Transform {
   public Transform? parent; public GameObject? Owner;
   public void SetParent(Transform value, bool preserve) { parent=value; }
   internal TopiaForge.RobotKit.RobotComposedLifetime? Lease;
   public T? GetComponent<T>() where T:class => Lease as T;
+  public object? GetComponent(Type type) => null;
  }
 }
 namespace UnityEngine.SceneManagement { public static class SceneManager { public static int GetActiveScene()=>1; } }
 public class AgentHead : UnityEngine.Object { }
+public sealed class UgcImportedEntity { }
+public sealed class UgcImportedVisualRoot { }
 namespace TopiaForge.Mods {
- public class OperationResult<T> { public static OperationResult<T> Success(T value) => new(); }
+ public enum ModErrorCode { Unavailable, External }
+ public class OperationResult<T> {
+  public T Value=default!;
+  public static OperationResult<T> Success(T value) => new() { Value=value };
+  public static OperationResult<T> Failure(ModErrorCode code,string message) => throw new InvalidOperationException(message);
+ }
 }
 namespace TopiaForge.Mods.Internal { internal interface IInternalNativeSpeechPlayback : IDisposable { } }
 namespace TopiaForge.RobotKit {
@@ -147,17 +165,36 @@ namespace TopiaForge.RobotKit {
      var renderer=new Renderer { gameObject=renderedChild }; a.go.Renderers=new[]{renderer};
      var currentWorld=true; a.Associate(()=>currentWorld);
      Check(a.go.scene!=SceneManager.GetActiveScene(),"DDOL boundary models the actual persistent parent scene");
-     Check(a.SpeechVisible,"DdolProductionVisibility: current owned DDOL child must be speech-visible");
-     root.activeSelf=false; Check(!a.SpeechVisible,"inactive persistent parent refuses"); root.activeSelf=true;
-     renderer.enabled=false; Check(!a.SpeechVisible,"hidden renderer refuses"); renderer.enabled=true;
-     renderedChild.activeSelf=false; Check(!a.SpeechVisible,"inactive rendered child refuses"); renderedChild.activeSelf=true;
-     a.go.activeSelf=false; Check(!a.SpeechVisible,"inactive body refuses"); a.go.activeSelf=true;
-     currentWorld=false; Check(!a.SpeechVisible,"old owning world refuses despite live persistent body"); currentWorld=true;
+     Check(a.IsSpeechVisible(canonical: true),"DdolProductionVisibility: current owned DDOL child must be speech-visible");
+     root.activeSelf=false; Check(!a.IsSpeechVisible(canonical: true),"inactive persistent parent refuses"); root.activeSelf=true;
+     renderer.enabled=false; Check(!a.IsSpeechVisible(canonical: true),"hidden renderer refuses"); renderer.enabled=true;
+     using var hiding=new TopiaForge.Worlds.NativeViewHiding();
+     using var overlapping=new TopiaForge.Worlds.NativeViewHiding();
+     using (var first=hiding.Hide(a.go,()=>true).Value) {
+      using (var second=overlapping.Hide(a.go,()=>true).Value) {
+       Check(!renderer.enabled && a.IsSpeechVisible(canonical: true) && !a.IsSpeechVisible(canonical: false),
+        "real view hide keeps an enabled original speakable while refusing local playback");
+       hiding.Dispose();
+       Check(!renderer.enabled && a.IsSpeechVisible(canonical: true),"overlapping owners retain the original until the final release");
+       root.activeSelf=false;
+       Check(!a.IsSpeechVisible(canonical: true),"a view hold cannot bypass an inactive hierarchy");
+       root.activeSelf=true;
+      }
+      Check(renderer.enabled && a.IsSpeechVisible(canonical: false),"last hold restores local renderer and playback eligibility");
+     }
+     renderer.enabled=false;
+     using (var disabled=overlapping.Hide(a.go,()=>true).Value)
+      Check(!a.IsSpeechVisible(canonical: true),"a view hold never enables canonical speech on an originally disabled renderer");
+     Check(!renderer.enabled,"release keeps an originally disabled renderer disabled");
+     renderer.enabled=true;
+     renderedChild.activeSelf=false; Check(!a.IsSpeechVisible(canonical: true),"inactive rendered child refuses"); renderedChild.activeSelf=true;
+     a.go.activeSelf=false; Check(!a.IsSpeechVisible(canonical: true),"inactive body refuses"); a.go.activeSelf=true;
+     currentWorld=false; Check(!a.IsSpeechVisible(canonical: true),"old owning world refuses despite live persistent body"); currentWorld=true;
      using var stopping=new CancellationTokenSource(); a.Associate(()=>true,stopping.Token); stopping.Cancel();
-     Check(!a.SpeechVisible,"stopped owning context refuses"); a.Associate(()=>true);
-     a.ReleaseSpeech(); Check(!a.SpeechVisible,"released body association refuses");
+     Check(!a.IsSpeechVisible(canonical: true),"stopped owning context refuses"); a.Associate(()=>true);
+     a.ReleaseSpeech(); Check(!a.IsSpeechVisible(canonical: true),"released body association refuses");
      var disposed=new RobotAgent(); disposed.go.Renderers=new[]{new Renderer {gameObject=disposed.go}};
-     disposed.Associate(()=>true); disposed.Despawn(); Check(!disposed.SpeechVisible,"disposed body refuses");
+     disposed.Associate(()=>true); disposed.Despawn(); Check(!disposed.IsSpeechVisible(canonical: true),"disposed body refuses");
      Console.WriteLine("DdolProductionVisibility: passed actual getter and association lifetime negatives.");
    }
    // Both native death with a retained corpse and outright destruction must release speech during prune.
@@ -212,12 +249,13 @@ namespace TopiaForge.RobotKit {
         internal CancellationToken PlaybackStopping;
         public void BindSpeechPlayback(object association, Func<bool> isCurrent, CancellationToken ownerStopping = default)
         { PlaybackAssociation = association; PlaybackCurrent = isCurrent; PlaybackStopping = ownerStopping; }
-        public bool SpeechVisible => IsAlive && Visible;
+        public bool IsSpeechVisible(bool canonical) => IsAlive
+            && (OwnedRendererVisibility<FirstPartyRobot>.TryGetOriginal(this, out var original) ? canonical && original : Visible);
         public OperationResult<string> VoiceIdentity() => MissingVoice
             ? OperationResult<string>.Failure(ModErrorCode.Unavailable, "No voice binding.") : OperationResult<string>.Success(Voice);
         public Task<OperationResult<bool>> PlaySpeechAsync(string voice, string text, CancellationToken token)
         {
-            if (MissingVoice || voice != Voice) return Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "No matching voice."));
+            if (!IsSpeechVisible(canonical: false) || MissingVoice || voice != Voice) return Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "No matching voice."));
             SpeechPlays++; SpeechTokens.Add(token);
             var completion = new TaskCompletionSource<OperationResult<bool>>();
             SpeechCompletions.Add(completion);
@@ -235,11 +273,11 @@ namespace TopiaForge.RobotKit {
         internal readonly AuthorityMod Owner;
         internal readonly IRobotAgent Robot;
         internal FirstPartyRobot Canonical => Host.Robots.Agents.Values.Single();
-        internal RobotSpeechRig(int players = 1)
+        internal RobotSpeechRig(int players = 1, bool open = true)
         {
             World.UseScene(scene => scene.AddScene("Yard"));
             Host = new SpeechPeer(World, World.Host);
-            World.OpenToMultiplayer();
+            if (open) World.OpenToMultiplayer();
             World.Host.World.Proxies.IsSharedMod = _ => true;
             Owner = new AuthorityMod(World.Host, ModExecutionContext.GamemodeServer);
             Robot = Host.Robots.Provider.Spawn(Owner.Seam, new RobotAgentSpawnRequest(Vec3.Zero, brainMode: RobotBrainMode.Autonomous)).Value!;
