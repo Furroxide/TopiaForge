@@ -24,7 +24,7 @@ extension _AcceptanceStages on LiveAcceptanceRunner {
       throw LiveAcceptanceError(
         'TFACCEPT102',
         'Robotopia game directory does not exist: ${options.gameDirectory}',
-        'Select the installed build-2597 game directory.',
+        'Select the installed build-2640 game directory.',
       );
     }
     _validateReleaseJourney(options);

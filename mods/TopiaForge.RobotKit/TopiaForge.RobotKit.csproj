@@ -29,6 +29,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
     <Compile Include="..\Shared\NativeDamageSource.cs" Link="Shared\NativeDamageSource.cs" />
+    <Compile Include="..\Shared\UgcImportProblems.cs" Link="Shared\UgcImportProblems.cs" />
   </ItemGroup>
 
   <ItemGroup>

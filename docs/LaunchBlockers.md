@@ -259,8 +259,8 @@ check is silently skipped.
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two current-tree builds matched SHA-256 `afa3e9195e8e03199b414f8a5c9002e9f89831041a63c7e1c9b8eef173d9057d`; manifests, editor provenance, and companion/VPM inputs matched. |
 | Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The administrator-controlled Windows release flow must regenerate and scrub that evidence from the frozen candidate. |
-| Robotopia compatibility | PASS | Build `2545`; **224 bindings across the manager and 8 mods, 213 verifiable offline**, 11 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings. Re-audited 2026-10-09 against the live 2545 install's `Managed` directory after the 2478 → 2545 retarget: `gamecompat verify` exits 0 and `audit --strict` reports no undeclared or stale entries. The full surface moved 80 members (27 removed, 53 added) across 10 of 60 captured types. The only change TopiaForge reaches is the local import host: build 2545 removed `UgcImportHostSceneController.ImportFile` and the `LastImportedScene` property that was its only result, which broke two critical Worlds bindings. Worlds now imports through `ImportProject`, unchanged since 2478, and treats the scene it returns as the evidence of a fresh import. Every binding for a member a mod calls, or patches with a hook that reads its arguments or result, now pins the full signature, so another re-signing fails `verify`; three RobotKit calls that no manifest declared are declared too. The 8 declaring mods are exactly the ones pinned to `0.0.2545` — Chronos, CreatorContent, NoFeedbackUrl, PerfFixes, Performance, Prompts, RobotKit, Worlds; safe GravityGun, Multiplayer, OppositeDay, Sandbox, UiGallery, and Zombies declare the bounded range and have no native binding declarations. Metadata compatibility does not establish native behaviour on 2545. On 2026-10-17 the network world (WS3.6) added four degraded Manager bindings, for the native systems a joined player turns off; `verify` against the same install and `audit --strict` still pass. On 2026-10-25 presence (WS3.10) added seven degraded Manager bindings and two optional RobotKit ones; the offline gate resolves all nine against the 2545 capture, and `audit --strict` passes with no undeclared or stale bindings. `verify` against the install is still to run. |
-| Public build freshness | PASS | On 2026-10-09 the public latest manifest identifies build `2545` (manifest last modified 2026-10-07), matching the pin; CI/release fail if it changes. The public build moved past 2478 after the 2026-09-24 retarget, so the pin moved from 2478 to 2545 with the audit above. |
+| Robotopia compatibility | PARTIAL | Build `2640`; **375 bindings across the manager and 8 mods, 364 verifiable offline**, 11 explicitly uncheckable offline, zero errors or indeterminate findings, and two Degraded warnings: the Worlds catalog lore loader, which build 2640 re-signed (`COMPAT-2640-LORE` below). Audited 2026-11-15 against the managed assemblies of the official build 2640 Windows archive after the 2597 → 2640 retarget: `gamecompat verify` reports no errors and `audit --strict` reports no undeclared or stale entries. Build 2640 replaced `OvertoneVoiceAsset` with `TTSVoiceAsset` (RobotKit speech and composition rebound, voice fingerprint version 2 including the new phonemizer) and added a caller-owned `UgcImportReport` to the scene builder, the import host's `ImportProject` and the environment applier (RobotKit and Worlds pass one and log a fixed-text problem count). The hooked parameter names `camera`, `collision` and `options` are unchanged. The surface change summary is in [GameCompat](GameCompat.md#build-2640-capture). The 8 declaring mods are exactly the ones pinned to `0.0.2640`; the safe mods declare `>=0.0.2640 <0.0.2700`. Metadata compatibility does not establish native behaviour on 2640, and the row stays PARTIAL until `COMPAT-2640-LORE` lands and `COMPAT-2640-BOOTSTRAP` is checked in the game. |
+| Public build freshness | PASS | On 2026-11-15 the public latest manifest identifies build `2640`, matching the pin, with both archive paths and SHA-256 values equal to the pin; CI/release fail if it changes. The public build moved past 2597, so the pin moved from 2597 to 2640 with the audit above. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
 | macOS release package | OUT OF RC1 | Generic packaging remains in source, but macOS is not in RC1 policy, catalog, update metadata, handoff, or public assets. It requires a separately reviewed future release. |
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover AGPL-3.0-or-later, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
@@ -820,13 +820,31 @@ automated tests cannot close Unity object lifetime.
   only. Opening submissions requires namespace ownership, moderation, malware review, transfer/dispute, yank,
   revocation, appeal, and installed-user response governance plus tests.
 - [x] **P2-WORLDS-01 — Custom worlds are Windows/Proton-only for v1.** Do not advertise native macOS Robotopia support.
-- [x] **P2-COMPAT-01 — Build `2545` is the supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
-  Compatibility is declared per mod: mods with native `GameCode` bindings pin `0.0.2545`; SDK-only mods declare the
-  bounded range `>=0.0.2545 <0.0.2600`. See [the compatibility policy](CompatibilityPolicy.md). Retargeted from
-  2478 on 2026-10-09 (and from 2409 on 2026-09-24) through `topiaforge compat bump`; the audit is recorded in the
-  Robotopia compatibility row.
+- [ ] **P2-COMPAT-01 — Build `2640` is the supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
+  Compatibility is declared per mod: mods with native `GameCode` bindings pin `0.0.2640`; SDK-only mods declare the
+  bounded range `>=0.0.2640 <0.0.2700`. See [the compatibility policy](CompatibilityPolicy.md). Retargeted from
+  2597 on 2026-11-15 (from 2545 to 2597 earlier, from 2478 on 2026-10-09 and from 2409 on 2026-09-24) through
+  `topiaforge compat bump`; the audit is recorded in the Robotopia compatibility row.
   Any change in the public latest manifest stops release for a new compatibility audit; unknown constrained versions
-  block mods but never block an empty safe-mode launch.
+  block mods but never block an empty safe-mode launch. Two items stay open on 2640:
+  - [ ] **`COMPAT-2640-LORE` — Published and packaged map worlds are unavailable.** Build 2640 changed
+    `UgcCatalogLoreLoader` to `(UgcRuntimeAssetConfig, string linkCatalogUrl)`, where the URL is non-nullable with no
+    default, and `AddMissingLoreAsync(UgcExportProject, UgcImportReport, CancellationToken)` now returns a plain
+    `UniTask`. `mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs` still binds the 2597 shape, so every map load through
+    `PrepareMapAsync` fails closed with `Unavailable` before any native import; local `.roboworld` imports are
+    unaffected. Metadata does not show which URL value native play passes; `UgcPlayLaunchRequest.CatalogUrl`,
+    `UgcPlayLauncherLastRun.CatalogUrl` and the public static `UgcCatalogLoreLoader.ValidateLinkCatalogUrl(string)`
+    point at the launch request. Exit criteria: confirm the value in the game, adapt the loader (awaiting a plain
+    `UniTask` and passing a fresh report), re-declare the two Degraded `worlds.map.UgcCatalogLoreLoader` bindings, and
+    load a published map on 2640.
+  - [ ] **`COMPAT-2640-BOOTSTRAP` — The native bootstrap's new launch-request fields need an in-game check.** Build 2640
+    gave `UgcPlayLauncherLastRun` a public `CatalogUrl`, gave `UgcPlayLaunchRequest` `CatalogUrl`, `FailureMessage` and
+    `CreateFailed`, and gave `UgcImportPlayBootstrap` `ShowStartupProblem`, `ReturnToMainMenu`,
+    `ShowLoadReport(UgcImportReport)` and a player hold (`HoldPlayerUntilWorldLoads`, `holdingPlayer`).
+    `mods/Shared/UgcNoOpLaunchRequest.cs` never sets `CatalogUrl`, and every binding it declares still resolves, so
+    `verify` cannot see a behaviour change. Exit criteria: run the authoritative bootstrap and one TopiaForge world
+    load on 2640 and confirm no startup problem, menu return or held player; only if one appears, set `CatalogUrl` to
+    what the official launcher writes and declare that field.
 
 ## Ship decision
 

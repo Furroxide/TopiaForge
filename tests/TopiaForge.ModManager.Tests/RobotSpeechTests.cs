@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager.Tests
             RobotSpeechNativeLifetimeTests.Run();
             RobotSpeechCompletionTests.Run();
             NativeRobotSpeechHostTests.Run();
+            NativeRobotVoiceFingerprintTests.Run();
             NativeSpeechContextTests.Run();
             NativeSpeechOwnershipTests.Run();
             PlaybackAssociations();

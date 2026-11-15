@@ -36,7 +36,8 @@ namespace TopiaForge.ModManager.Tests
                     && !Path.GetFileName(p).StartsWith("TopiaForge", StringComparison.Ordinal)
                     && !string.Equals(Path.GetFileName(p), "GameCode.dll", StringComparison.OrdinalIgnoreCase))
                 .Select(p => MetadataReference.CreateFromFile(p));
-            var sources = new[] { "MiniJson.cs", "RobotComposedSceneShape.cs", "RobotComposedReferences.cs", "RobotComposedCurrentness.cs" }
+            var sources = new[] { "MiniJson.cs", "RobotComposedSceneShape.cs", "RobotComposedReferences.cs", "RobotComposedCurrentness.cs",
+                    Path.Combine("..", "Shared", "UgcImportProblems.cs") }
                 .Select(Read).Append(CSharpSyntaxTree.Create((CSharpSyntaxNode)tree)).Append(CSharpSyntaxTree.ParseText(probeSource));
             var compilation = CSharpCompilation.Create("GameCode", sources, references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
@@ -99,23 +100,34 @@ namespace TopiaForge.Mods {
  public class Identity { public int InstanceId=7; }
  public class Readiness { public Identity Scene=new(); public Map Map=new(); }
  public class WorldSessionSnapshot { public WorldSessionPhase Phase=WorldSessionPhase.Running; public Session Session=new(); public Readiness World=new(); }
+ public interface IModLogger { void Warn(string message); }
 }
 public enum ComposerPartType { Head }
-public class OvertoneVoiceAsset : UnityEngine.Object { }
+public class TTSVoiceAsset : UnityEngine.Object { }
+public readonly struct UgcImportProblem { public readonly string title; public UgcImportProblem(string t){title=t;} }
+public sealed class UgcImportReport {
+ private readonly List<UgcImportProblem> problems=new();
+ public IReadOnlyList<UgcImportProblem> Problems=>problems;
+ public void Add(string title,string detail,UnityEngine.Object? context=null)=>problems.Add(new UgcImportProblem(title));
+}
 public class UgcPrefabSceneMap { public Entry[] Entries {get;set;}=Array.Empty<Entry>(); public class Entry {public string scenePath="MuniciPal/test";public string sceneJson="";} }
 public class UgcRobotPartMap {
  public bool TryResolve(string uri,out ComposerPartType part,out GameObject prefab) { part=ComposerPartType.Head; prefab=new GameObject();return uri=="part"; }
 }
-public class UgcVoiceMap {public bool TryResolve(string uri,out OvertoneVoiceAsset asset){ asset=new(); return uri=="voice";}}
+public class UgcVoiceMap {public bool TryResolve(string uri,out TTSVoiceAsset asset){ asset=new(); return uri=="voice";}}
 public class UgcRuntimeAssetConfig { public UgcPrefabSceneMap PrefabSceneMap {get;}=new();public UgcRobotPartMap RobotPartMap {get;}=new();public UgcVoiceMap VoiceMap {get;}=new(); }
 public class UgcSceneRoot {public Transform ActiveImportRoot {get;set;}=null!;}
 public class UgcImportHostSceneController : Component {public UgcRuntimeAssetConfig RuntimeAssetConfig {get;}=new();public UgcSceneRoot SceneRoot {get;}=new();}
 public class UgcRuntimeAssetOwner : Component {public void DestroyOwnedAssets(){}}
 public class UgcSceneBuilder {
  private const string PlasticMaterialField="PlasticMaterial";private const string MetalMaterialField="MetalMaterial";
- public UgcSceneBuilder(UgcRuntimeAssetConfig config){}
- public GameObject BuildEntity(UgcExportProject project,UgcExportEntity entity,Transform parent)=>new();
- public static UgcRuntimeAssetOwner GetOrAddAssetOwner(Transform parent)=>new();
+ private readonly UgcImportReport report;
+ public UgcSceneBuilder(UgcRuntimeAssetConfig config,UgcImportReport report){this.report=report;}
+ public GameObject BuildEntity(UgcExportProject project,UgcExportEntity entity,Transform parent) {
+  for(var i=0;i<TopiaForge.RobotKit.Probe.BuildProblems;i++)report.Add("Missing prefab C:/Users/someone/private.prefab","detail");
+  return new();
+ }
+ public static UgcRuntimeAssetOwner GetOrAddAssetOwner(Transform parent)=>new() {gameObject=parent.gameObject};
 }
 public class UgcExportProject {public IDictionary scenes=new Hashtable();public IDictionary assets=new Hashtable();public IDictionary localAssets=new Hashtable();}
 public class UgcExportScene {public IDictionary entities=new Hashtable();}
@@ -154,13 +166,15 @@ namespace TopiaForge.RobotKit {
  }
  internal static class RobotKitDiagnostics {
   internal static RobotComposedRefusal? Last;
+  internal static string? ImportProblems;
+  internal static void ReportImportProblems(string operation,object? report)=>ImportProblems=TopiaForge.Mods.GameBridge.UgcImportProblems.Summary(operation,report)??"none";
   internal static RobotComposedRetirement? Retirement;
   internal static void ReportComposedDiscovery(WorldSessionSnapshot? s,RobotComposedRefusal r) { Last=r; }
   internal static void ReportComposedRetirement(WorldSessionSnapshot s,RobotComposedRetirement r) { Retirement=r; }
  }
  public static class Probe {
   public static GameObject Root=new(); public static Component[] Hosts=Array.Empty<Component>();
-  public static int SceneScans;
+  public static int SceneScans, BuildProblems;
   public static IReadOnlyList<string> Assets=new[]{"part","voice"};
   private static bool OverrideAssets;
   private static string? LastPersonality;
@@ -214,7 +228,7 @@ namespace TopiaForge.RobotKit {
    host.RuntimeAssetConfig.PrefabSceneMap.Entries=new[]{new UgcPrefabSceneMap.Entry {sceneJson=Json}};
    Hosts=new Component[]{host};Assets=new[]{"part","voice"};OverrideAssets=false;
    LastCollected=Array.Empty<string>();LastPersonality=null;WrongType=InjectCatalog=SceneScans=0;
-   RobotKitDiagnostics.Last=null;RobotKitDiagnostics.Retirement=null;return host;
+   RobotKitDiagnostics.Last=null;RobotKitDiagnostics.Retirement=null;RobotKitDiagnostics.ImportProblems=null;BuildProblems=0;return host;
   }
   public static void Run() {
    Reset();Check(RobotComposedScene.Discover(()=>State)!=null && LastCollected.Length==0,
@@ -263,7 +277,21 @@ namespace TopiaForge.RobotKit {
    Reset();Hosts=Array.Empty<Component>();
    Check(RobotComposedScene.Discover(()=>State,out absent)==null && !absent,"transient host refusal never admits absence backoff");
    Reset();Check(RobotComposedScene.Discover(()=>State,out absent)!=null && !absent,"successful discovery is not negative cached");
+   ImportReport();
    CatalogRecovery();
+  }
+
+  private static void ImportReport() {
+   Reset();
+   var clean=RobotComposedScene.Discover(()=>State)!;
+   Check(clean.Create(Root.transform)!=null && RobotKitDiagnostics.ImportProblems=="none",
+    "a composed build whose native report stays empty logs nothing");
+   Reset();BuildProblems=2;
+   var noisy=RobotComposedScene.Discover(()=>State)!;
+   Check(noisy.Create(Root.transform)!=null && RobotKitDiagnostics.ImportProblems!=null
+    && RobotKitDiagnostics.ImportProblems.Contains("2 problems while building a composed robot")
+    && !RobotKitDiagnostics.ImportProblems.Contains("private.prefab"),
+    "a composed build reports the native problem count from its own report without native text");
   }
 
   private static void CatalogRecovery() {

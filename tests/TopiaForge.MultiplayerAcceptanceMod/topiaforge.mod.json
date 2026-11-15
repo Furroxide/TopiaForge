@@ -12,7 +12,7 @@
     "io.github.furroxide.topiaforge.multiplayer": "0.2.0",
     "io.github.furroxide.topiaforge.worlds": ">=0.2.0 <0.3.0"
   },
-  "supportedGameVersionRange": ">=0.0.2545 <0.0.2600",
+  "supportedGameVersionRange": ">=0.0.2640 <0.0.2700",
   "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "platforms": ["windows"],

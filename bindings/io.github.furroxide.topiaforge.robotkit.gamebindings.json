@@ -1431,7 +1431,7 @@
       "feature": "Private robot speech with native local synthesis",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
       "member": "ActiveVoice",
-      "returnType": "OvertoneVoiceAsset",
+      "returnType": "TTSVoiceAsset",
       "requireReadable": true,
       "isStatic": false
     },
@@ -1439,7 +1439,7 @@
       "id": "robotkit.speech.modelasset",
       "kind": "Field",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSVoiceAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
@@ -1451,7 +1451,7 @@
       "id": "robotkit.speech.configasset",
       "kind": "Field",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSVoiceAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
@@ -1463,7 +1463,7 @@
       "id": "robotkit.speech.speedmultiplier",
       "kind": "Field",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSVoiceAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
@@ -1472,124 +1472,52 @@
       "returnType": "System.Single"
     },
     {
-      "id": "robotkit.speech.ellipsisbreaktime",
+      "id": "robotkit.speech.phonemizer",
       "kind": "Field",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSVoiceAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "ellipsisBreakTime",
-      "returnType": "System.Single"
+      "member": "phonemizer",
+      "returnType": "TTSPhonemizerAsset"
     },
     {
-      "id": "robotkit.speech.periodbreaktime",
+      "id": "robotkit.speech.phonemizer.modelasset",
       "kind": "Field",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSPhonemizerAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "periodBreakTime",
-      "returnType": "System.Single"
+      "member": "modelAsset",
+      "returnType": "UnityEngine.TextAsset"
     },
     {
-      "id": "robotkit.speech.colonbreaktime",
+      "id": "robotkit.speech.phonemizer.tokenizerasset",
       "kind": "Field",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSPhonemizerAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "colonBreakTime",
-      "returnType": "System.Single"
+      "member": "tokenizerAsset",
+      "returnType": "UnityEngine.TextAsset"
     },
     {
-      "id": "robotkit.speech.exclamationbreaktime",
+      "id": "robotkit.speech.phonemizer.dictasset",
       "kind": "Field",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSPhonemizerAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Private robot speech with native local synthesis",
       "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "exclamationBreakTime",
-      "returnType": "System.Single"
-    },
-    {
-      "id": "robotkit.speech.questionbreaktime",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
-      "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "questionBreakTime",
-      "returnType": "System.Single"
-    },
-    {
-      "id": "robotkit.speech.semicolonbreaktime",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
-      "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "semicolonBreakTime",
-      "returnType": "System.Single"
-    },
-    {
-      "id": "robotkit.speech.commabreaktime",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
-      "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "commaBreakTime",
-      "returnType": "System.Single"
-    },
-    {
-      "id": "robotkit.speech.dashbreaktime",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
-      "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "dashBreakTime",
-      "returnType": "System.Single"
-    },
-    {
-      "id": "robotkit.speech.singledashbreaktime",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
-      "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "singleDashBreakTime",
-      "returnType": "System.Single"
-    },
-    {
-      "id": "robotkit.speech.newlinebreaktime",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
-      "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Private robot speech with native local synthesis",
-      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
-      "member": "newlineBreakTime",
-      "returnType": "System.Single"
+      "member": "dictAsset",
+      "returnType": "UnityEngine.TextAsset"
     },
     {
       "id": "robotkit.speech.override",
@@ -1608,7 +1536,7 @@
           "constrained": true
         },
         {
-          "type": "OvertoneVoiceAsset",
+          "type": "TTSVoiceAsset",
           "constrained": true
         }
       ],
@@ -1620,7 +1548,7 @@
       "id": "robotkit.speech.audio",
       "kind": "Property",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSVoiceAsset",
       "member": "FmodVoiceAsset",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
@@ -1851,10 +1779,20 @@
       "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
     },
     {
-      "id": "robotkit.composed.type.overtonevoiceasset",
+      "id": "robotkit.composed.type.ttsvoiceasset",
       "kind": "Type",
       "assembly": "GameCode",
-      "declaringType": "OvertoneVoiceAsset",
+      "declaringType": "TTSVoiceAsset",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs"
+    },
+    {
+      "id": "robotkit.composed.type.ugcimportreport",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
       "matchMode": "StaticFullName",
       "criticality": "Critical",
       "feature": "Bounded native robot composition",
@@ -2253,7 +2191,7 @@
           "constrained": true
         },
         {
-          "type": "OvertoneVoiceAsset&",
+          "type": "TTSVoiceAsset&",
           "constrained": true
         }
       ],
@@ -2299,9 +2237,42 @@
         {
           "type": "UgcRuntimeAssetConfig",
           "constrained": true
+        },
+        {
+          "type": "UgcImportReport",
+          "constrained": true
         }
       ],
       "exactParameters": true
+    },
+    {
+      "id": "robotkit.composed.ugcimportreport.ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Bounded native robot composition",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotComposedScene.cs",
+      "isPublic": true,
+      "parameters": [],
+      "exactParameters": true
+    },
+    {
+      "id": "robotkit.composed.ugcimportreport.problems",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Native composition problem summary",
+      "sourceRef": "mods/Shared/UgcImportProblems.cs",
+      "member": "Problems",
+      "returnType": "System.Collections.Generic.IReadOnlyList<UgcImportProblem>",
+      "requireReadable": true,
+      "isPublic": true,
+      "isStatic": false,
+      "indexParameterCount": 0
     }
   ]
 }

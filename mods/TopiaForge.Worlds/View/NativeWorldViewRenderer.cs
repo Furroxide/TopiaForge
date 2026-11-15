@@ -26,7 +26,7 @@ namespace TopiaForge.Worlds
         {
             this.scene = scene; this.context = context; this.map = map;
             readScope = (context as IInternalNativeEntityReadContext)?.CaptureNativeEntityReadScope();
-            environment = map?.BindEnvironment(); fog = new NativeVisionFog(scene, context.Events);
+            environment = map?.BindEnvironment(context.Logger); fog = new NativeVisionFog(scene, context.Events);
             if (UnityWorldScene.TryGetLoaded(scene, out var loaded))
             {
                 try

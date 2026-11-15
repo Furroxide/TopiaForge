@@ -50,7 +50,7 @@ namespace TopiaForge.Worlds
                 // The default mirrors native map play. Its adapter isolates the lore-loading choice for native verification.
                 await MapLorePreparation.PrepareAsync(project, config, token);
                 token.ThrowIfCancellationRequested();
-                return OperationResult<IMapImportTransaction>.Success(new ImportTransaction(host, null,
+                return OperationResult<IMapImportTransaction>.Success(new ImportTransaction(host, logger, null,
                     overrides, scene, project, exportProjectType, selected, label));
             }
             catch (OperationCanceledException) { return OperationResult<IMapImportTransaction>.Failure(ModErrorCode.Cancelled, "Map loading was cancelled."); }

@@ -1,9 +1,9 @@
 {
-  "capturedUtc": "2026-10-30T13:49:40.8357558Z",
+  "capturedUtc": "2026-11-15T18:09:38.4755714Z",
   "extractorVersion": "1.1.0-rc.1",
-  "gameCodeMvid": "ca6b3eab-422a-43f6-80bb-88ac23255cd7",
-  "gameVersion": "0.0.2597",
-  "gameVersionLabel": "build 2597",
+  "gameCodeMvid": "161054ac-25a4-4892-ba9b-0174d7ba4b30",
+  "gameVersion": "0.0.2640",
+  "gameVersionLabel": "build 2640",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "c16e396f97d1a96ea243a3756afc4867f47d91a0ff68900a8d100d07621bd94b",
+  "surfaceContentHash": "118173ef8ce781cfe6cfd728c23b913fccb8aae5e2e702069de432852983f248",
   "types": {
     "FMODUnity|FMOD.GUID": {
       "assembly": "FMODUnity",
@@ -821,7 +821,7 @@
           "isPublic": false,
           "isStatic": false,
           "name": "overtoneActor",
-          "type": "OvertoneVoiceAsset"
+          "type": "TTSVoiceAsset"
         },
         {
           "isPublic": false,
@@ -1165,7 +1165,7 @@
           "name": "OverrideSpeech",
           "parameters": [
             "System.String",
-            "OvertoneVoiceAsset"
+            "TTSVoiceAsset"
           ],
           "returnType": "AgentHead+SpeechOverrideToken"
         },
@@ -1307,7 +1307,7 @@
           "isStatic": false,
           "name": "ActiveVoice",
           "setterIsPublic": false,
-          "type": "OvertoneVoiceAsset"
+          "type": "TTSVoiceAsset"
         },
         {
           "canRead": true,
@@ -3925,7 +3925,13 @@
           "isPublic": false,
           "isStatic": false,
           "name": "currentScene",
-          "type": "System.String"
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "currentSceneExamples",
+          "type": "FactMapAsset[]"
         },
         {
           "isPublic": false,
@@ -4081,7 +4087,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<Awake>b__162_0",
+          "name": "<Awake>b__165_0",
           "parameters": [
             "AgentHead"
           ],
@@ -4091,7 +4097,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<EnterStandbyImpl>b__121_0",
+          "name": "<EnterStandbyImpl>b__124_0",
           "parameters": [
             "IStandbyReceiver"
           ],
@@ -4101,7 +4107,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<OnDisable>b__174_0",
+          "name": "<OnDisable>b__177_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -4111,7 +4117,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<OnEnable>b__165_0",
+          "name": "<OnEnable>b__168_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -4121,7 +4127,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<UpdateThinking>b__106_0",
+          "name": "<UpdateThinking>b__109_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -4131,7 +4137,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<WaitUntilIdle>b__132_0",
+          "name": "<WaitUntilIdle>b__135_0",
           "parameters": [],
           "returnType": "System.Boolean"
         },
@@ -4972,7 +4978,17 @@
           "isStatic": false,
           "name": "CurrentScene",
           "setterIsPublic": false,
-          "type": "System.String"
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "CurrentSceneExamples",
+          "setterIsPublic": false,
+          "type": "System.Collections.Generic.IReadOnlyList<FactMapAsset>"
         },
         {
           "canRead": true,
@@ -6835,182 +6851,6 @@
       "status": "Resolved",
       "typeKey": "GameCode|OpenFeedBackURL"
     },
-    "GameCode|OvertoneVoiceAsset": {
-      "assembly": "GameCode",
-      "baseChainSimpleNames": [
-        "ScriptableObject",
-        "Object",
-        "Object"
-      ],
-      "constructors": [
-        {
-          "isPublic": true,
-          "parameters": []
-        }
-      ],
-      "enumMembers": {},
-      "fields": [
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "colonBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "commaBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "configAsset",
-          "type": "UnityEngine.TextAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "dashBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "ellipsisBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "exclamationBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "fmodVoiceAsset",
-          "type": "FMODUnity.EventReference"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "loadSemaphore",
-          "type": "System.Threading.SemaphoreSlim"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "loadedConfigAsset",
-          "type": "UnityEngine.TextAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "loadedModelAsset",
-          "type": "UnityEngine.TextAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "modelAsset",
-          "type": "UnityEngine.TextAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "newlineBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "periodBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "questionBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "semicolonBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "singleDashBreakTime",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "speedMultiplier",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "voiceNative",
-          "type": "LeastSquares.Overtone.TTSVoiceNative"
-        }
-      ],
-      "fullName": "OvertoneVoiceAsset",
-      "isAbstract": false,
-      "isEnum": false,
-      "isInterface": false,
-      "methods": [
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": false,
-          "name": "<LoadVoiceAsync>b__20_0",
-          "parameters": [],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
-          "name": "LoadVoiceAsync",
-          "parameters": [
-            "System.Threading.CancellationToken"
-          ],
-          "returnType": "Cysharp.Threading.Tasks.UniTask<LeastSquares.Overtone.TTSVoiceNative>"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
-          "name": "Speak",
-          "parameters": [
-            "System.String",
-            "System.Collections.Generic.List<System.Single>",
-            "System.Threading.CancellationToken"
-          ],
-          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Int32>"
-        }
-      ],
-      "properties": [
-        {
-          "canRead": true,
-          "canWrite": false,
-          "getterIsPublic": true,
-          "indexParameterCount": 0,
-          "isStatic": false,
-          "name": "FmodVoiceAsset",
-          "setterIsPublic": false,
-          "type": "FMODUnity.EventReference"
-        }
-      ],
-      "simpleName": "OvertoneVoiceAsset",
-      "status": "Resolved",
-      "typeKey": "GameCode|OvertoneVoiceAsset"
-    },
     "GameCode|PerformanceLogger": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -7483,6 +7323,12 @@
         {
           "isPublic": false,
           "isStatic": true,
+          "name": "UI_ACTION_MAP",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
           "name": "VIEWPORT_CENTER",
           "type": "UnityEngine.Vector2"
         },
@@ -7738,6 +7584,14 @@
           "isPublic": true,
           "isStatic": false,
           "name": "EnterInspectActionMap",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "EnterUIActionMap",
           "parameters": [],
           "returnType": "System.Void"
         },
@@ -10282,8 +10136,10 @@
           "parameters": [
             "UnityEngine.Transform",
             "UnityEngine.Transform",
+            "ComposerPartType",
             "UnityEngine.GameObject",
-            "System.Collections.Generic.Dictionary<ComposerPartType, AccessoryData>"
+            "System.Collections.Generic.Dictionary<ComposerPartType, AccessoryData>",
+            "System.Collections.Generic.Dictionary<ComposerPartType, UnityEngine.Pose>"
           ],
           "returnType": "System.Void"
         },
@@ -10347,7 +10203,7 @@
         },
         {
           "genericArity": 0,
-          "isPublic": false,
+          "isPublic": true,
           "isStatic": true,
           "name": "MapPartTypeToBone",
           "parameters": [
@@ -10369,6 +10225,17 @@
           "isStatic": false,
           "name": "RandomizeParts",
           "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "RecordSeats",
+          "parameters": [
+            "UnityEngine.Transform",
+            "System.Collections.Generic.Dictionary<ComposerPartType, UnityEngine.Pose>"
+          ],
           "returnType": "System.Void"
         },
         {
@@ -10861,6 +10728,203 @@
       "status": "Resolved",
       "typeKey": "GameCode|SettingsScreen"
     },
+    "GameCode|TTSPhonemizerAsset": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "dictAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadSemaphore",
+          "type": "System.Threading.SemaphoreSlim"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "modelAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "phonemizer",
+          "type": "RobotVoiceNative+Phonemizer"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "tokenizerAsset",
+          "type": "UnityEngine.TextAsset"
+        }
+      ],
+      "fullName": "TTSPhonemizerAsset",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "LoadAsync",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<RobotVoiceNative+Phonemizer>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnDisable",
+          "parameters": [],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "TTSPhonemizerAsset",
+      "status": "Resolved",
+      "typeKey": "GameCode|TTSPhonemizerAsset"
+    },
+    "GameCode|TTSVoiceAsset": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "configAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "fmodVoiceAsset",
+          "type": "FMODUnity.EventReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadSemaphore",
+          "type": "System.Threading.SemaphoreSlim"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadedConfigAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadedModelAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "modelAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "phonemizer",
+          "type": "TTSPhonemizerAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "speedMultiplier",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "voice",
+          "type": "RobotVoiceNative"
+        }
+      ],
+      "fullName": "TTSVoiceAsset",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "LoadVoiceAsync",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<RobotVoiceNative>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnDisable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Speak",
+          "parameters": [
+            "System.String",
+            "System.Collections.Generic.List<System.Single>",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Int32>"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "FmodVoiceAsset",
+          "setterIsPublic": false,
+          "type": "FMODUnity.EventReference"
+        }
+      ],
+      "simpleName": "TTSVoiceAsset",
+      "status": "Resolved",
+      "typeKey": "GameCode|TTSVoiceAsset"
+    },
     "GameCode|TaskGraph": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -11011,12 +11075,19 @@
         {
           "isPublic": true,
           "parameters": [
-            "UgcRuntimeAssetConfig"
+            "UgcRuntimeAssetConfig",
+            "System.String"
           ]
         }
       ],
       "enumMembers": {},
       "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "LEGACY_PACKAGE_VERSION",
+          "type": "System.String"
+        },
         {
           "isPublic": false,
           "isStatic": true,
@@ -11038,8 +11109,14 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "failureLogged",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "loreCache",
-          "type": "System.Collections.Generic.Dictionary<System.ValueTuple<System.String, System.String>, Newtonsoft.Json.Linq.JToken>"
+          "type": "System.Collections.Generic.Dictionary<System.String, Newtonsoft.Json.Linq.JToken>"
         },
         {
           "isPublic": false,
@@ -11060,9 +11137,10 @@
           "name": "AddMissingLoreAsync",
           "parameters": [
             "UgcExportProject",
+            "UgcImportReport",
             "System.Threading.CancellationToken"
           ],
-          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Exception>"
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
         },
         {
           "genericArity": 0,
@@ -11071,6 +11149,7 @@
           "name": "AddMissingLoreOrThrowAsync",
           "parameters": [
             "UgcExportProject",
+            "UgcImportReport",
             "System.Threading.CancellationToken"
           ],
           "returnType": "Cysharp.Threading.Tasks.UniTask"
@@ -11081,8 +11160,10 @@
           "isStatic": true,
           "name": "CollectEntityAssetUris",
           "parameters": [
+            "UgcExportProject",
             "UgcExportEntity",
             "UgcPrefabSceneMap",
+            "System.Collections.Generic.List<System.String>",
             "System.Collections.Generic.List<System.String>"
           ],
           "returnType": "System.Void"
@@ -11104,9 +11185,8 @@
           "isStatic": false,
           "name": "FetchLoreAsync",
           "parameters": [
-            "System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
             "System.String",
-            "System.String",
+            "System.Uri",
             "System.Threading.CancellationToken"
           ],
           "returnType": "Cysharp.Threading.Tasks.UniTask<Newtonsoft.Json.Linq.JToken>"
@@ -11128,21 +11208,21 @@
           "isStatic": false,
           "name": "LoadManifestAsync",
           "parameters": [
+            "System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>",
+            "UgcImportReport",
             "System.Threading.CancellationToken"
           ],
-          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>>"
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.Collections.Generic.Dictionary<System.String, System.ValueTuple<System.String, System.String>>>"
         },
         {
           "genericArity": 0,
           "isPublic": false,
-          "isStatic": true,
-          "name": "MergeManifest",
+          "isStatic": false,
+          "name": "LogFailureOnce",
           "parameters": [
-            "System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
-            "System.Collections.Generic.Dictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
-            "System.String"
+            "System.Exception"
           ],
-          "returnType": "System.Void"
+          "returnType": "System.Boolean"
         },
         {
           "genericArity": 0,
@@ -11153,6 +11233,18 @@
             "System.Collections.Generic.IEnumerable<System.String>"
           ],
           "returnType": "System.Collections.Generic.IEnumerable<System.String>"
+        },
+        {
+          "genericArity": 1,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ParseCatalogJson",
+          "parameters": [
+            "Newtonsoft.Json.Linq.JToken",
+            "System.Uri",
+            "System.String"
+          ],
+          "returnType": "T"
         },
         {
           "genericArity": 0,
@@ -11167,24 +11259,21 @@
         },
         {
           "genericArity": 0,
-          "isPublic": true,
-          "isStatic": true,
-          "name": "ResolveAssetUri",
-          "parameters": [
-            "System.Uri",
-            "System.Collections.Generic.IReadOnlyDictionary<System.String, System.Collections.Generic.Dictionary<System.String, System.String>>",
-            "System.String",
-            "System.String"
-          ],
-          "returnType": "System.Uri"
-        },
-        {
-          "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
           "name": "ResolveBaseUri",
           "parameters": [],
           "returnType": "System.Uri"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ValidateLinkCatalogUrl",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
         }
       ],
       "properties": [],
@@ -11504,6 +11593,26 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": true,
+          "name": "ParseRawProject",
+          "parameters": [
+            "System.Byte[]"
+          ],
+          "returnType": "Newtonsoft.Json.Linq.JObject"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ReadProjectJson",
+          "parameters": [
+            "System.Byte[]"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
           "name": "ReadProjectJsonBytes",
           "parameters": [
             "System.String"
@@ -11567,6 +11676,12 @@
         {
           "isPublic": true,
           "isStatic": false,
+          "name": "imports",
+          "type": "System.Collections.Generic.Dictionary<System.String, UgcImportedMapEntry>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
           "name": "localAssets",
           "type": "System.Collections.Generic.Dictionary<System.String, Newtonsoft.Json.Linq.JToken>"
         },
@@ -11585,8 +11700,26 @@
         {
           "isPublic": true,
           "isStatic": false,
+          "name": "packages",
+          "type": "System.Collections.Generic.Dictionary<System.String, System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "prefabScenes",
+          "type": "System.Collections.Generic.Dictionary<System.String, System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
           "name": "scenes",
           "type": "System.Collections.Generic.Dictionary<System.String, UgcExportScene>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ugcId",
+          "type": "System.String"
         },
         {
           "isPublic": true,
@@ -12056,7 +12189,8 @@
           "parameters": [
             "UgcExportProject",
             "System.String",
-            "System.String"
+            "System.String",
+            "UgcImportReport"
           ],
           "returnType": "UgcExportScene"
         },
@@ -12227,6 +12361,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "holdingPlayer",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "importMode",
           "type": "UgcImportPlayBootstrap+StartupImportMode"
         },
@@ -12378,6 +12518,14 @@
         {
           "genericArity": 0,
           "isPublic": false,
+          "isStatic": true,
+          "name": "CloseLoadReport",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
           "isStatic": false,
           "name": "ConfigurePlayTelemetrySource",
           "parameters": [
@@ -12446,6 +12594,14 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
+          "name": "HoldPlayerUntilWorldLoads",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
           "name": "ImportStartupAsync",
           "parameters": [
             "UgcImportHostSceneController",
@@ -12477,7 +12633,8 @@
           "name": "OnLiveImportCompleted",
           "parameters": [
             "UgcExportProject",
-            "UgcExportScene"
+            "UgcExportScene",
+            "UgcImportReport"
           ],
           "returnType": "System.Void"
         },
@@ -12486,6 +12643,14 @@
           "isPublic": true,
           "isStatic": false,
           "name": "ReissueLaunchRequest",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ReleasePlayerAtSpawn",
           "parameters": [],
           "returnType": "System.Void"
         },
@@ -12530,9 +12695,38 @@
         {
           "genericArity": 0,
           "isPublic": false,
+          "isStatic": true,
+          "name": "ReturnToMainMenu",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ShowLoadReport",
+          "parameters": [
+            "UgcImportReport"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
           "isStatic": false,
           "name": "ShowStartupFailure",
           "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ShowStartupProblem",
+          "parameters": [
+            "System.String",
             "System.String"
           ],
           "returnType": "System.Void"
@@ -12591,6 +12785,60 @@
       "simpleName": "UgcImportPlayBootstrap",
       "status": "Resolved",
       "typeKey": "GameCode|UgcImportPlayBootstrap"
+    },
+    "GameCode|UgcImportReport": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "problems",
+          "type": "System.Collections.Generic.List<UgcImportProblem>"
+        }
+      ],
+      "fullName": "UgcImportReport",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Add",
+          "parameters": [
+            "System.String",
+            "System.String",
+            "UnityEngine.Object"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "Problems",
+          "setterIsPublic": false,
+          "type": "System.Collections.Generic.IReadOnlyList<UgcImportProblem>"
+        }
+      ],
+      "simpleName": "UgcImportReport",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcImportReport"
     },
     "GameCode|UgcImportedEntity": {
       "assembly": "GameCode",
@@ -12770,9 +13018,21 @@
       "fields": [
         {
           "isPublic": false,
+          "isStatic": false,
+          "name": "<CatalogUrl>k__BackingField",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
           "isStatic": true,
           "name": "<Current>k__BackingField",
           "type": "UgcPlayLaunchRequest"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<FailureMessage>k__BackingField",
+          "type": "System.String"
         },
         {
           "isPublic": false,
@@ -12855,9 +13115,37 @@
             "UgcPlayLauncherLastRun"
           ],
           "returnType": "UgcPlayLaunchRequest"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CreateEmpty",
+          "parameters": [],
+          "returnType": "UgcPlayLaunchRequest"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "CreateFailed",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "UgcPlayLaunchRequest"
         }
       ],
       "properties": [
+        {
+          "canRead": true,
+          "canWrite": true,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "CatalogUrl",
+          "setterIsPublic": false,
+          "type": "System.String"
+        },
         {
           "canRead": true,
           "canWrite": true,
@@ -12867,6 +13155,16 @@
           "name": "Current",
           "setterIsPublic": false,
           "type": "UgcPlayLaunchRequest"
+        },
+        {
+          "canRead": true,
+          "canWrite": true,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "FailureMessage",
+          "setterIsPublic": false,
+          "type": "System.String"
         },
         {
           "canRead": true,
@@ -12966,6 +13264,12 @@
       ],
       "enumMembers": {},
       "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "CatalogUrl",
+          "type": "System.String"
+        },
         {
           "isPublic": true,
           "isStatic": false,
@@ -13354,6 +13658,16 @@
       "methods": [
         {
           "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "BuildImportManifestUrl",
+          "parameters": [
+            "UgcMapImportSource"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
           "isPublic": false,
           "isStatic": true,
           "name": "BuildManifestUrl",
@@ -13393,6 +13707,17 @@
             "System.Threading.CancellationToken"
           ],
           "returnType": "Cysharp.Threading.Tasks.UniTask<System.Byte[]>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "DownloadProjectAsync",
+          "parameters": [
+            "System.String",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<System.ValueTuple<System.Byte[], System.String>>"
         },
         {
           "genericArity": 0,
@@ -14142,7 +14467,8 @@
         {
           "isPublic": true,
           "parameters": [
-            "UgcRuntimeAssetConfig"
+            "UgcRuntimeAssetConfig",
+            "UgcImportReport"
           ]
         }
       ],
@@ -14175,6 +14501,18 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "expandingPrefabs",
+          "type": "System.Collections.Generic.List<System.String>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "report",
+          "type": "UgcImportReport"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "runtimeAssetConfig",
           "type": "UgcRuntimeAssetConfig"
         }
@@ -14200,7 +14538,7 @@
         {
           "genericArity": 0,
           "isPublic": false,
-          "isStatic": true,
+          "isStatic": false,
           "name": "ApplyAoiComponent",
           "parameters": [
             "UnityEngine.GameObject",
@@ -14249,7 +14587,7 @@
         {
           "genericArity": 0,
           "isPublic": false,
-          "isStatic": true,
+          "isStatic": false,
           "name": "ApplyPoiComponent",
           "parameters": [
             "UnityEngine.GameObject",
@@ -14405,9 +14743,21 @@
           "name": "CreatePlaceholderVisual",
           "parameters": [
             "UgcExportProject",
+            "System.String",
             "System.String"
           ],
           "returnType": "UnityEngine.GameObject"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DescribePrefabProblem",
+          "parameters": [
+            "System.String",
+            "UgcImportPrefabProblem"
+          ],
+          "returnType": "System.String"
         },
         {
           "genericArity": 0,
@@ -14452,6 +14802,16 @@
         },
         {
           "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ReportUnsupportedComponents",
+          "parameters": [
+            "UgcExportEntity"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
           "isPublic": true,
           "isStatic": true,
           "name": "ResetImportedVisualRoots",
@@ -14472,16 +14832,6 @@
         },
         {
           "genericArity": 0,
-          "isPublic": false,
-          "isStatic": false,
-          "name": "ResolvePrefabSceneJson",
-          "parameters": [
-            "UgcPrefabInstanceComponent"
-          ],
-          "returnType": "System.String"
-        },
-        {
-          "genericArity": 0,
           "isPublic": true,
           "isStatic": true,
           "name": "ResolveSourceAssetId",
@@ -14497,16 +14847,6 @@
           "name": "WarmUpRuntimeEmbeddings",
           "parameters": [
             "UnityEngine.Transform"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": true,
-          "name": "WarnAboutUnsupportedComponents",
-          "parameters": [
-            "UgcExportEntity"
           ],
           "returnType": "System.Void"
         }
@@ -14545,6 +14885,7 @@
             "UgcExportScene",
             "UgcEnvironmentPrefabMap",
             "UnityEngine.Transform",
+            "UgcImportReport",
             "UnityEngine.Object"
           ],
           "returnType": "System.Void"
@@ -14828,7 +15169,7 @@
           "name": "TryResolve",
           "parameters": [
             "System.String",
-            "OvertoneVoiceAsset&"
+            "TTSVoiceAsset&"
           ],
           "returnType": "System.Boolean"
         }

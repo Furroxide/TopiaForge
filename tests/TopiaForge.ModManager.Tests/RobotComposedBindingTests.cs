@@ -30,7 +30,8 @@ namespace TopiaForge.ModManager.Tests
                 "robotkit.composed.type.ugcexportentitycomponents",
                 "robotkit.composed.type.ugcagentcomponent",
                 "robotkit.composed.type.composerparttype",
-                "robotkit.composed.type.overtonevoiceasset",
+                "robotkit.composed.type.ttsvoiceasset",
+                "robotkit.composed.type.ugcimportreport",
                 "robotkit.composed.ugcscenebuilder.plasticmaterialfield",
                 "robotkit.composed.ugcscenebuilder.metalmaterialfield",
                 "robotkit.composed.ugcprefabscenemap.entry.scenejson",
@@ -56,7 +57,8 @@ namespace TopiaForge.ModManager.Tests
                 "robotkit.composed.ugcrobotpartmap.tryresolve",
                 "robotkit.composed.ugcvoicemap.tryresolve",
                 "robotkit.composed.ugccatalogloreloader.collectreferencedasseturis",
-                "robotkit.composed.ugcscenebuilder.ctor"
+                "robotkit.composed.ugcscenebuilder.ctor",
+                "robotkit.composed.ugcimportreport.ctor"
             };
             foreach (var id in expected)
             {

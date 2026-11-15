@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using TopiaForge.Mods;
+using TopiaForge.Mods.GameBridge;
 
 namespace TopiaForge.RobotKit
 {
@@ -67,6 +68,17 @@ namespace TopiaForge.RobotKit
                 return logger != null && ComposedReports.GetOrCreateValue(state.World.Scene).Add((state.Session.SessionId, reason, retirement))
                     ? logger : null;
             }
+        }
+
+        /// <summary>
+        /// Logs a fixed-text count of the problems a native import report collected. The entries themselves stay
+        /// unlogged: they are native text that can name files or assets.
+        /// </summary>
+        public static void ReportImportProblems(string operation, object? report)
+        {
+            IModLogger? sink;
+            lock (Gate) sink = logger;
+            UgcImportProblems.Warn(sink, "RobotKit", operation, report);
         }
 
         private static void ReportComposed(IModLogger sink, string message)

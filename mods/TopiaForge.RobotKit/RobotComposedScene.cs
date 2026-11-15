@@ -15,7 +15,7 @@ namespace TopiaForge.RobotKit
         private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
         private readonly object config, project, entity;
         private readonly RobotComposedCurrentness currentness;
-        private readonly Type builderType, ownerType;
+        private readonly Type builderType, ownerType, reportType;
         private readonly MethodInfo build, addOwner, destroyAssets;
 
         private RobotComposedScene(Func<WorldSessionSnapshot?> world, WorldSessionSnapshot state,
@@ -24,10 +24,13 @@ namespace TopiaForge.RobotKit
             this.config = config; this.project = project; this.entity = entity;
             currentness = new RobotComposedCurrentness(world, state, host, config, sceneRoot, mapRoot);
             builderType = Type.GetType("UgcSceneBuilder, GameCode", true)!; ownerType = Type.GetType("UgcRuntimeAssetOwner, GameCode", true)!;
+            reportType = Type.GetType("UgcImportReport, GameCode", true)!;
             build = RequireMethod(builderType, "BuildEntity", false, typeof(GameObject), project.GetType(), entity.GetType(), typeof(Transform));
             addOwner = RequireMethod(builderType, "GetOrAddAssetOwner", true, ownerType, typeof(Transform));
             destroyAssets = RequireMethod(ownerType, "DestroyOwnedAssets", false, typeof(void));
-            Require(builderType.GetConstructor(new[] { config.GetType() }) != null);
+            // Build 2640's builder collects import problems in a caller-owned report. Each build gets a fresh one.
+            Require(builderType.GetConstructor(new[] { config.GetType(), reportType }) != null
+                && reportType.GetConstructor(Type.EmptyTypes) != null);
         }
 
         internal static RobotPrefabCandidate? Discover(Func<WorldSessionSnapshot?>? world) => Discover(world, out _);
@@ -124,8 +127,10 @@ namespace TopiaForge.RobotKit
                 // Force native ownership onto this brand-new subtree, never the provider or active map root.
                 var owner = addOwner.Invoke(null, new object[] { parent.transform }) as Component;
                 Require(owner != null && owner.transform == parent.transform);
-                var builder = Activator.CreateInstance(builderType, config);
+                var report = Activator.CreateInstance(reportType);
+                var builder = Activator.CreateInstance(builderType, config, report);
                 var actor = build.Invoke(builder, new[] { project, entity, parent.transform }) as GameObject;
+                RobotKitDiagnostics.ReportImportProblems("building a composed robot", report);
                 Require(actor != null && actor.transform.IsChildOf(parent.transform) && !actor.activeInHierarchy);
                 lease.Actor = actor;
                 currentness.RequireVerified();
@@ -190,7 +195,7 @@ namespace TopiaForge.RobotKit
                 refusal = RobotComposedRefusal.VoiceUnavailable;
                 var voiceMap = Property(config, "VoiceMap", Type.GetType("UgcVoiceMap, GameCode", true)!);
                 var args = new object?[] { voice, null };
-                var method = RequireMethod(voiceMap.GetType(), "TryResolve", false, typeof(bool), typeof(string), Type.GetType("OvertoneVoiceAsset, GameCode", true)!.MakeByRefType());
+                var method = RequireMethod(voiceMap.GetType(), "TryResolve", false, typeof(bool), typeof(string), Type.GetType("TTSVoiceAsset, GameCode", true)!.MakeByRefType());
                 if (!(method.Invoke(voiceMap, args) is true) || !(args[1] is UnityEngine.Object asset) || asset == null) return false;
             }
             var collector = Type.GetType("UgcCatalogLoreLoader, GameCode", true)!.GetMethod("CollectReferencedAssetUris",

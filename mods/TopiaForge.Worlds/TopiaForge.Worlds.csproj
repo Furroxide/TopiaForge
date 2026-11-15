@@ -32,6 +32,7 @@
     <Compile Include="..\Shared\UgcNoOpLaunchRequest.cs" Link="Shared\UgcNoOpLaunchRequest.cs" />
     <Compile Include="..\Shared\NativePlayerTeleport.cs" Link="Shared\NativePlayerTeleport.cs" />
     <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
+    <Compile Include="..\Shared\UgcImportProblems.cs" Link="Shared\UgcImportProblems.cs" />
     <Compile Remove="SceneClaimMatcher.cs" />
   </ItemGroup>
 

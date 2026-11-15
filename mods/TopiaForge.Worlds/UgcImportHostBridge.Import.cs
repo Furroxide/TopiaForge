@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Mods.GameBridge;
 using TopiaForge.Worlds.Maps;
 using UnityEngine;
 
@@ -25,7 +26,7 @@ namespace TopiaForge.Worlds
                 var hosts = nativeScene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren(importHostControllerType, true)).ToArray();
                 if (hosts.Length != 1)
                     return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "The session scene must contain exactly one local import host.");
-                return OperationResult<ILocalImportTransaction>.Success(new ImportTransaction(hosts[0], plan, overrides, scene, project!, exportProjectType!));
+                return OperationResult<ILocalImportTransaction>.Success(new ImportTransaction(hosts[0], logger, plan, overrides, scene, project!, exportProjectType!));
             }
             catch (Exception error)
             { return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "Local import ownership bindings are unavailable: " + Unwrap(error).Message); }
@@ -34,6 +35,7 @@ namespace TopiaForge.Worlds
         private sealed class ImportTransaction : IMapImportTransaction
         {
             private readonly Component host;
+            private readonly IModLogger logger;
             private readonly RoboWorldImportPlan? plan;
             private readonly string? mapScene;
             private readonly string? mapLabel;
@@ -46,6 +48,7 @@ namespace TopiaForge.Worlds
             private readonly object project;
             private readonly MethodInfo configureFolder;
             private readonly MethodInfo importProject;
+            private readonly Type importReportType;
             private readonly NativeImportSelection? selection;
             private readonly List<(string Id, GameObject Prefab, Vector3? Offset)> overrides = new List<(string, GameObject, Vector3?)>();
             private readonly object? assetConfig;
@@ -53,11 +56,11 @@ namespace TopiaForge.Worlds
             private readonly IDictionary? overrideTable;
             private LocalImportOwnership? temporary;
             private bool used;
-            internal ImportTransaction(Component host, RoboWorldImportPlan? plan,
+            internal ImportTransaction(Component host, IModLogger logger, RoboWorldImportPlan? plan,
                 IReadOnlyList<WorldAssetOverride> values, WorldSceneIdentity scene, object project, Type projectType,
                 string? mapScene = null, string? mapLabel = null)
             {
-                this.host = host; this.plan = plan; this.scene = scene; this.project = project;
+                this.host = host; this.logger = logger; this.plan = plan; this.scene = scene; this.project = project;
                 this.mapScene = mapScene; this.mapLabel = mapLabel;
                 var type = host.GetType();
                 var rootProperty = RequireProperty(type, "SceneRoot", "UgcSceneRoot");
@@ -67,8 +70,13 @@ namespace TopiaForge.Worlds
                 configureFolder = RequireMethod(type, "ConfigureRuntimeImportFolder", typeof(void), typeof(string));
                 // Build 2545 removed the void ImportFile(path) and the LastImportedScene property that was its only
                 // result. ImportProject, which 2478 already exposed, takes the project parsed in Prepare and returns
-                // the scene it imported.
-                importProject = RequireMethod(type, "ImportProject", "UgcExportScene", projectType, typeof(string), typeof(string));
+                // the scene it imported. Build 2640 added a caller-owned problem report as its last parameter.
+                importReportType = Type.GetType("UgcImportReport, GameCode", false)
+                    ?? throw new InvalidOperationException("The native import report is unavailable.");
+                if (importReportType.GetConstructor(Type.EmptyTypes) == null)
+                    throw new MissingMethodException(importReportType.FullName, ".ctor");
+                importProject = RequireMethod(type, "ImportProject", "UgcExportScene", projectType, typeof(string), typeof(string),
+                    importReportType);
                 selection = plan == null ? null : new NativeImportSelection(host, type, plan);
                 if (values.Count == 0) return;
                 assetConfig = RequireProperty(type, "RuntimeAssetConfig", "UgcRuntimeAssetConfig").GetValue(host)
@@ -119,7 +127,9 @@ namespace TopiaForge.Worlds
                     NativeEntered = true;
                     // A null scene id requests the project's own default scene, as UgcExportProject.ResolveScene's
                     // optional parameter of the same name declares. The label is the file name, never the full path.
-                    var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName });
+                    var report = Activator.CreateInstance(importReportType);
+                    var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName, report });
+                    UgcImportProblems.Warn(logger, "Worlds", "importing a world", report);
                     importedScene = data;
                     NativeReturned = true;
                     var root = activeRoot.GetValue(sceneRoot) as Transform;
