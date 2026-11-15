@@ -145,6 +145,7 @@ namespace TopiaForge.RobotKit
 
         // Scene discovery offers only native scene robots. A RobotKit robot resolved from its own agent is a managed
         // target, which allows a personality preview and nothing that RobotKit's routed controls already own.
+        // Progression-bearing roots stay ineligible on both paths, including managed personality previews.
         private RobotEditTarget? CreateTarget(Component agent, bool managed = false, bool bodyOnly = false)
         {
             if (agent == null || agent.gameObject == null || !agent.gameObject.scene.IsValid())

@@ -42,12 +42,13 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<TransformState> PreviewTransform(TransformState transform)
         {
-            if (target.Managed) return OperationResult<TransformState>.Failure(ModErrorCode.Conflict, ManagedEditMessage);
             var unavailable = EnsureActive<TransformState>();
             if (unavailable != null)
             {
                 return unavailable;
             }
+
+            if (target.Managed) return OperationResult<TransformState>.Failure(ModErrorCode.Conflict, ManagedEditMessage);
 
             try
             {
@@ -78,12 +79,13 @@ namespace TopiaForge.RobotKit
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Unknown robot brain mode.");
             }
 
-            if (target.Managed) return OperationResult<bool>.Failure(ModErrorCode.Conflict, ManagedEditMessage);
             var unavailable = EnsureActive<bool>();
             if (unavailable != null)
             {
                 return unavailable;
             }
+
+            if (target.Managed) return OperationResult<bool>.Failure(ModErrorCode.Conflict, ManagedEditMessage);
 
             if (mode == RobotBrainMode.Autonomous && remoteCaller?.Invoke() == true)
             {

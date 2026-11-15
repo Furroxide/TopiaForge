@@ -4,23 +4,25 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods
 {
     /// <summary>
-    /// Discovers native scene robots eligible for temporary editing.
+    /// Discovers eligible native scene robots and resolves RobotKit robots for temporary personality previews.
     /// </summary>
     /// <remarks>
     /// This optional extension is published by RobotKit. Leases restore captured native state for eligible
-    /// targets on disposal. RobotKit-managed robots, including replicas, are outside the editor's authority.
+    /// targets on disposal. RobotKit-managed robots are excluded from discovery; resolved managed targets allow only
+    /// personality previews. Robots with progression components remain ineligible on either path.
     /// </remarks>
     public interface IRobotSceneEditorService
     {
         /// <summary>Gets whether the verified native editing surface is available in the current scene.</summary>
         bool IsAvailable { get; }
 
-        /// <summary>Gets the current bounded, deterministic set of editable robots.</summary>
+        /// <summary>Gets the current bounded, deterministic set of editable native scene robots.</summary>
         IReadOnlyList<IRobotEditTarget> Targets { get; }
 
         /// <summary>
         /// Resolves a RobotKit robot to an edit target that allows only a temporary personality preview; move it and
         /// change its brain through <see cref="IRobotAgent"/>. Returns false when the robot cannot be edited.
+        /// Progression-bearing robots are ineligible, including RobotKit-managed robots.
         /// </summary>
         bool TryResolve(IRobotAgent agent, out IRobotEditTarget? target);
 
@@ -96,19 +98,27 @@ namespace TopiaForge.Mods
         bool IsActive { get; }
 
         /// <summary>Previews a transform until the lease is restored or disposed.</summary>
+        /// <remarks>An active managed target returns <see cref="ModErrorCode.Conflict"/>.</remarks>
         OperationResult<TransformState> PreviewTransform(TransformState transform);
 
         /// <summary>Previews a native brain mode until the lease is restored or disposed.</summary>
+        /// <remarks>
+        /// An active managed target returns <see cref="ModErrorCode.Conflict"/>. Autonomous previews return
+        /// <see cref="ModErrorCode.NotAuthoritative"/> on a client or when host code acts on a guest's input.
+        /// </remarks>
         OperationResult<bool> PreviewBrainMode(RobotBrainMode mode);
 
         /// <summary>
         /// Applies a temporary native autonomous personality. A RobotKit robot whose type is offered body-only has
         /// no native character to preview: it returns <see cref="ModErrorCode.Unavailable"/> with the reason.
         /// </summary>
+        /// <remarks>
+        /// Returns <see cref="ModErrorCode.NotAuthoritative"/> on a client or when host code acts on a guest's input.
+        /// </remarks>
         OperationResult<bool> PreviewPersonality(RobotPersonalityDraft personality);
 
         /// <summary>
-        /// Restores changes that still belong to this lease. If the target becomes RobotKit-managed, the
+        /// Restores changes that still belong to this lease. If the target's RobotKit-managed status changes, the
         /// lease ends without writing its captured state back. Repeated calls succeed with <c>false</c>.
         /// </summary>
         OperationResult<bool> Restore();
