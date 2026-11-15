@@ -7,12 +7,19 @@ final class DevPeerHandle {
     required this.alive,
     required this.lines,
     required this.close,
+    this.launchErrorLogged = _noLaunchError,
   });
   final int index;
   final Future<bool?> Function() alive;
   final Future<List<String>> Function() lines;
   final Future<void> Function() close;
+
+  /// True when this peer's launch was refused and its full error went to the
+  /// peer's own log inside the run folder.
+  final bool Function() launchErrorLogged;
 }
+
+bool _noLaunchError() => false;
 
 Future<void> superviseDevPeers(
   List<DevPeerHandle> peers,
@@ -79,4 +86,30 @@ Future<bool> closeDevPeers(List<DevPeerHandle> peers) async {
     }
   }
   return confirmed;
+}
+
+/// What happened to a development run's folder when the run ended.
+enum DevPeerRunFolder {
+  /// Every peer stopped and nothing needed the folder; it was removed.
+  removed,
+
+  /// A peer's launch was refused; the folder holds the log its error names.
+  keptForLaunchError,
+
+  /// A peer could not be confirmed stopped; the folder is kept for recovery.
+  keptUnconfirmed,
+}
+
+/// Closes every peer, then calls [removeRun] only when every close was
+/// confirmed and no peer's refused launch wrote its error into the run folder.
+Future<DevPeerRunFolder> endDevPeerRun(
+  List<DevPeerHandle> peers,
+  void Function() removeRun,
+) async {
+  if (!await closeDevPeers(peers)) return DevPeerRunFolder.keptUnconfirmed;
+  if (peers.any((peer) => peer.launchErrorLogged())) {
+    return DevPeerRunFolder.keptForLaunchError;
+  }
+  removeRun();
+  return DevPeerRunFolder.removed;
 }

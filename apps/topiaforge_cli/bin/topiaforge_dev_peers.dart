@@ -79,6 +79,7 @@ extension _TopiaForgeDevPeers on _TopiaForgeCli {
               alive: session.isAlive,
               lines: session.recentLog,
               close: session.close,
+              launchErrorLogged: () => session.launchErrorLogged,
             ),
           );
           await session.prepare(
@@ -163,16 +164,30 @@ extension _TopiaForgeDevPeers on _TopiaForgeCli {
     } finally {
       if (!stopped.isCompleted) stopped.complete();
       await signal?.cancel();
-      final closed = await closeDevPeers(handles);
-      await discovery.dispose();
-      if (runRoot != null && closed) {
-        overlays.cleanup(runRoot!);
-      } else if (!closed) {
+      final DevPeerRunFolder folder;
+      try {
+        folder = await endDevPeerRun(handles, () {
+          final run = runRoot;
+          if (run != null) overlays.cleanup(run);
+        });
+      } finally {
+        await discovery.dispose();
+      }
+      if (folder == DevPeerRunFolder.keptUnconfirmed) {
         throw _DevStageFailure(
           _DevStage.tail,
           StateError(
             'A peer could not be confirmed stopped. Its private dev-instances directory was retained; inspect it before retrying.',
           ),
+        );
+      }
+      final run = runRoot;
+      if (folder == DevPeerRunFolder.keptForLaunchError && run != null) {
+        // Named relative to the data folder, so no profile path is printed.
+        stderr.writeln(
+          'A peer launch was refused, so its run folder was kept for the log '
+          'its error names: ${p.join('dev-instances', p.basename(run))} '
+          'in the TopiaForge data folder. Delete that folder after reading the log.',
         );
       }
     }

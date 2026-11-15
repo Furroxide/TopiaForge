@@ -33,6 +33,11 @@ final class DevPeerSession {
   GameInstall? _install;
   LauncherProfile? _profile;
   LaunchResult? _launch;
+  bool _launchErrorLogged = false;
+
+  /// True once a refused launch wrote its full error to this peer's own log.
+  /// The dev loop then keeps the run folder, so the log the error names stays.
+  bool get launchErrorLogged => _launchErrorLogged;
 
   Future<void> prepare(
     List<String> packages,
@@ -144,12 +149,18 @@ final class DevPeerSession {
       // The terminal gets only safe text; the peer's own launcher log under
       // its overlay keeps the full error for diagnosis.
       await repository.appendLauncherLog(
-        'Development peer ${overlay.index + 1} did not start: '
-        '${result.message}',
+        'Development peer ${overlay.index} did not start: ${result.message}',
+      );
+      _launchErrorLogged = true;
+      // Named relative to the peer's folder, so the terminal never shows the
+      // user's profile path.
+      final log = p.relative(
+        repository.launcherLogPath,
+        from: p.dirname(overlay.launcherRoot),
       );
       throw StateError(
         'The development peer did not start. $shown The full launch error is '
-        'in ${repository.launcherLogPath}.',
+        "in peer ${overlay.index}'s folder at $log.",
       );
     }
     if (result.process == null || result.requestId == null) {

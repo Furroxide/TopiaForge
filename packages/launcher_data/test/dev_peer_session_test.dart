@@ -77,6 +77,11 @@ void main() {
               'Launch could not proceed: FileSystemException: '
               'Cannot open file, path = \'$secret\'',
         );
+        expect(session.launchErrorLogged, isFalse);
+        final named = p.relative(
+          fixture.launcherLogPath,
+          from: p.dirname(fixture.overlay.launcherRoot),
+        );
         await expectLater(
           session.launch(2),
           throwsA(
@@ -86,19 +91,22 @@ void main() {
               allOf(
                 contains('Launch preparation failed.'),
                 contains(
-                  'The full launch error is in '
-                  '${fixture.launcherLogPath}.',
+                  'The full launch error is in peer '
+                  "${fixture.overlay.index}'s folder at $named.",
                 ),
+                // No absolute path, so no profile name, reaches the terminal.
                 isNot(contains(secret)),
+                isNot(contains(root.path)),
               ),
             ),
           ),
         );
+        expect(session.launchErrorLogged, isTrue);
         final log = File(fixture.launcherLogPath).readAsStringSync();
         expect(
           log,
           contains(
-            'Development peer 1 did not start: Launch could not '
+            'Development peer ${fixture.overlay.index} did not start: Launch could not '
             'proceed: FileSystemException: Cannot open file, '
             'path = \'$secret\'',
           ),
