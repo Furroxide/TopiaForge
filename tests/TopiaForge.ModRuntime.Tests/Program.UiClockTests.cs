@@ -123,8 +123,10 @@ namespace TopiaForge.ModRuntime.Tests
                 var elapsed = loadedAuthor.Ui.ClockTime;
                 network.ReplaceSession();
                 Assert(runtime.Multiplayer.UiClockEpoch != epoch && loadedAuthor.Ui.ClockTime == elapsed &&
-                    loadedSurface.SetContent(loadedTimer).ErrorCode == ModErrorCode.InvalidArgument,
+                    loadedSurface.SetContent(new UiColumn(loadedTimer)).ErrorCode == ModErrorCode.InvalidArgument,
                     "actual runtime session replacement retires the adopted timer without resetting elapsed time");
+                Assert(loadedSurface.SetContent(loadedTimer).Succeeded,
+                    "the shown tree can be applied again after replacement and keeps its binding");
                 var fresh = new UiCountdown(loadedAuthor.Ui.ClockTime + 5, id: "timer");
                 Assert(loadedSurface.SetContent(fresh).Succeeded, "a fresh timer works after session replacement");
                 network.StopHosting();
@@ -132,7 +134,7 @@ namespace TopiaForge.ModRuntime.Tests
                 epoch = runtime.Multiplayer.UiClockEpoch;
                 runtime.Multiplayer.BeginUiWorld();
                 Assert(runtime.Multiplayer.UiClockEpoch != epoch && loadedAuthor.Ui.ClockTime == 0 &&
-                    loadedSurface.SetContent(fresh).ErrorCode == ModErrorCode.InvalidArgument,
+                    loadedSurface.SetContent(new UiColumn(fresh)).ErrorCode == ModErrorCode.InvalidArgument,
                     "a later solo world rotates identity and resets origin instead of adopting again");
                 Console.WriteLine("Runtime UI clock: OnLoad, delayed Connect, same-world hosting and replacement passed.");
             }

@@ -63,8 +63,10 @@ namespace TopiaForge.ModManager.Tests
             network.ReplaceSession();
             That(network.Host.UiClockEpoch != epoch && ui.ClockTime == elapsed,
                 "loopback session replacement changes identity while preserving elapsed time");
-            That(created.Value!.SetContent(countdown).ErrorCode == ModErrorCode.InvalidArgument,
-                "loopback session replacement refuses the previous countdown");
+            That(created.Value!.SetContent(new UiColumn(countdown)).ErrorCode == ModErrorCode.InvalidArgument,
+                "loopback session replacement refuses the previous countdown in a new tree");
+            That(created.Value.SetContent(countdown).Succeeded,
+                "re-applying the shown tree keeps its binding after loopback session replacement");
             That(((FakeUiSurface)created.Value).TryGetCountdownSeconds("timer", out var remaining) && remaining == 0,
                 "an already displayed loopback timer expires at replacement");
             That(created.Value.SetContent(new UiCountdown(ui.ClockTime + 5, id: "timer")).Succeeded,
