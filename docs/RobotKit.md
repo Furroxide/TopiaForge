@@ -34,7 +34,7 @@ integration.
 | `IRobotConversationService` | Run bounded multi-turn dialogue with closed-set decisions. |
 | `IPlayerDialogueInputService` | Typed text helpers and optional push-to-talk capture/transcription. |
 | `IRobotBrainQueryService` | Asynchronous structured queries with typed output fields and stable failures. |
-| `IRobotSceneEditorService` | Optional discovery and exclusive temporary edit leases for eligible native scene robots. |
+| `IRobotSceneEditorService` | Optional discovery and exclusive temporary edit leases for eligible native scene robots, plus personality previews for resolved RobotKit robots. |
 | `IRobotEditTarget` / `IRobotEditLease` | Opaque scene target plus snapshot-backed transform, brain-mode, and autonomous-personality previews with conflict-safe restoration. |
 
 Use the scene editor for eligible native scene robots; RobotKit-managed robots are not in `Targets`. `TryResolve`
@@ -43,10 +43,15 @@ through the routed `IRobotAgent` controls. A personality preview, or waking a ro
 `NotAuthoritative` on a guest's PC and in host code that runs on a guest's input, so a robot never runs text a guest
 wrote.
 
+Robots with components whose type names contain `Quest`, `Checkpoint`, `Achievement`, or `Progress` (ignoring case) are excluded,
+including RobotKit-managed robots resolved for personality previews. This conservative filter protects progression
+state from temporary edits.
+
 Every scene edit is temporary and exclusive. A lease snapshots each reversible property once, restores changes in
 reverse order, and leaves a property untouched if another system changed it after the preview. If the target comes under
-RobotKit management, further previews fail. Restoring or disposing the lease then releases its resources without
-applying the captured state.
+RobotKit management, or a managed target loses that status, further previews fail. Restoring or disposing the lease
+then releases its resources without applying the captured state. Transform and brain previews on an active managed
+target return `Conflict`; previews with valid arguments on a restored lease return `InvalidState`.
 
 `RobotPersonalityDraft` uses the verified `PersonalityAsset`/`LLMAgent` surface for autonomous behavior. Creator
 conversations apply the same persona to their explicit `RobotConversationRequest`.

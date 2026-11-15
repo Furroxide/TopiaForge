@@ -93,7 +93,9 @@ namespace TopiaForge.ModManager
 
         public void SetVisible(bool visible)
         {
-            if (!disposed && visuals != null) visuals.SetActive(visible);
+            if (disposed) return;
+            if (visuals != null) visuals.SetActive(visible);
+            if (collider != null) collider.enabled = visible;
         }
 
         public void Place(NetVector3 feet, float yawDegrees)

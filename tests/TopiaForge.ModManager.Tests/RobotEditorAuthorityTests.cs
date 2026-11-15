@@ -48,6 +48,7 @@ namespace TopiaForge.ModManager.Tests
 
             var probe = Assembly.Load(bytes.ToArray()).GetType("RobotEditorProbe", throwOnError: true)!;
             foreach (var scenario in new[] { "DiscoveryAndResolution", "ManagedPersonalityOnly", "BodyOnlyPersonalityRefused", "RemoteCallersRefused",
+                "FacadeClientRealmRefused", "FacadeGuestOriginRefused", "FacadeAuthorityRechecked", "ManagedProgressionRefused",
                 "RetainedTarget", "ManagedTransition",
                 "ManagedSceneTeardown", "PreviewRollback", "MovedTreeRestoration", "OrdinaryRestoration" })
             {
@@ -182,6 +183,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.RobotKit
@@ -224,6 +226,43 @@ namespace TopiaForge.RobotKit
             "get_Id" => "robotkit:fixture",
             "get_IsAlive" => true,
             _ => throw new InvalidOperationException("Unexpected agent call.")
+        };
+    }
+
+    public class ContextHandle : DispatchProxy, IInternalReplicationContext
+    {
+        internal IModLifetime Lifetime = null!;
+        internal IRuntimeReplication Seam = null!;
+        IRuntimeReplication IInternalReplicationContext.Replication => Seam;
+        protected override object Invoke(MethodInfo? method, object?[]? args) => method?.Name switch
+        {
+            "get_Lifetime" => Lifetime,
+            _ => throw new InvalidOperationException("Unexpected context call: " + method?.Name)
+        };
+    }
+
+    public class ReplicationHandle : DispatchProxy, IInternalEntityCommands
+    {
+        internal InternalNetRealm Realm = InternalNetRealm.ListenHost;
+        internal bool GuestOrigin;
+        bool IInternalEntityCommands.IsGuestOrigin => GuestOrigin;
+        OperationResult<bool> IInternalEntityCommands.SubmitEntityCommand(IEntity target, string kind, byte[] payload) =>
+            throw new InvalidOperationException("Unexpected entity command.");
+        protected override object Invoke(MethodInfo? method, object?[]? args) => method?.Name switch
+        {
+            "get_Realm" => Realm,
+            _ => throw new InvalidOperationException("Unexpected replication call: " + method?.Name)
+        };
+    }
+
+    public class LifetimeHandle : DispatchProxy
+    {
+        internal IDisposable? Tracked;
+        protected override object? Invoke(MethodInfo? method, object?[]? args) => method?.Name switch
+        {
+            "get_IsStopping" => false,
+            "Track" => Tracked = (IDisposable)args![0]!,
+            _ => throw new InvalidOperationException("Unexpected lifetime call: " + method?.Name)
         };
     }
 
@@ -324,6 +363,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using TopiaForge.RobotKit;
 using UnityEngine;
 
@@ -378,10 +418,95 @@ public static class RobotEditorProbe
         ((AgentHandle)handle).NativeGameObject = robot.Root;
         Check(editor.TryResolve(handle, out var target) && target != null, "The host can resolve its own RobotKit robot.");
         using var lease = Value(editor.BeginTemporaryEdit(target!));
+        var transformReads = robot.Root.TransformReads;
+        var brainReads = robot.Brain.BrainReads;
+        var brainApplies = robot.Brain.BrainApplies;
         Refused(lease.PreviewTransform(Moved), "Managed transform preview");
         Refused(lease.PreviewBrainMode(RobotBrainMode.Autonomous), "Managed brain preview");
+        Refused(lease.PreviewBrainMode(RobotBrainMode.Dormant), "Managed dormant preview");
+        Check(robot.Root.TransformReads == transformReads && robot.Brain.BrainReads == brainReads
+            && robot.Brain.BrainApplies == brainApplies,
+            "Managed transform and brain refusal must precede native reads and applies.");
         Check(Value(lease.PreviewPersonality(Draft)), "A managed robot accepts a personality preview.");
         Check(Value(lease.Restore()), "The managed personality preview restores cleanly.");
+        var transform = lease.PreviewTransform(Moved);
+        var brain = lease.PreviewBrainMode(RobotBrainMode.Autonomous);
+        var personality = lease.PreviewPersonality(Draft);
+        Check(!transform.Succeeded && transform.ErrorCode == ModErrorCode.InvalidState
+            && !brain.Succeeded && brain.ErrorCode == ModErrorCode.InvalidState
+            && !personality.Succeeded && personality.ErrorCode == ModErrorCode.InvalidState,
+            "Restored managed leases must report InvalidState before managed-target restrictions.");
+        Check(robot.Root.TransformReads == transformReads && robot.Brain.BrainReads == brainReads
+            && robot.Brain.BrainApplies == brainApplies,
+            "A restored managed lease must not read or apply transforms or brain state.");
+    }
+
+    public static void ManagedProgressionRefused()
+    {
+        using var editor = CreateEditor(out var agents);
+        var robot = CreateRobot("Managed progression robot");
+        MarkManaged(robot.Root);
+        var progression = new GameObject("Inactive progression child", robot.Root);
+        progression.Active = false;
+        progression.AddComponent<QuestProgress>();
+        var handle = DispatchProxy.Create<IRobotAgent, AgentHandle>();
+        agents.Agent = handle;
+        ((AgentHandle)handle).NativeGameObject = robot.Root;
+        Check(!editor.TryResolve(handle, out var target) && target == null,
+            "Managed roots with progression components, including inactive children, must remain ineligible.");
+        Check(robot.Root.TransformReads == 0 && robot.Brain.BrainReads == 0 && robot.Brain.PersonalityReads == 0,
+            "Progression refusal must not capture native edit state.");
+    }
+
+    public static void FacadeClientRealmRefused() => FacadeRemoteCaller(InternalNetRealm.Client, false, false);
+    public static void FacadeGuestOriginRefused() => FacadeRemoteCaller(InternalNetRealm.ListenHost, true, false);
+
+    public static void FacadeAuthorityRechecked()
+    {
+        FacadeRemoteCaller(InternalNetRealm.Client, false, true);
+        FacadeRemoteCaller(InternalNetRealm.ListenHost, true, true);
+    }
+
+    private static void FacadeRemoteCaller(InternalNetRealm realm, bool guestOrigin, bool changeAfterAdmission)
+    {
+        using var editor = CreateEditor(out _);
+        var robot = CreateRobot("Facade scene robot");
+        var replication = DispatchProxy.Create<IRuntimeReplication, ReplicationHandle>();
+        var state = (ReplicationHandle)replication;
+        var lifetime = DispatchProxy.Create<IModLifetime, LifetimeHandle>();
+        var context = DispatchProxy.Create<IModContext, ContextHandle>();
+        ((ContextHandle)context).Lifetime = lifetime;
+        ((ContextHandle)context).Seam = replication;
+        if (!changeAfterAdmission)
+        {
+            state.Realm = realm;
+            state.GuestOrigin = guestOrigin;
+        }
+
+        var facade = (IRobotSceneEditorService)((IOwnerContextBoundExtensionFactory)editor)
+            .CreateOwnerFacade(typeof(IRobotSceneEditorService), context);
+        using var lease = Value(facade.BeginTemporaryEdit(facade.Targets.Single()));
+        Check(ReferenceEquals(((LifetimeHandle)lifetime).Tracked, lease), "The facade must track its lease on the consuming lifetime.");
+        state.Realm = realm;
+        state.GuestOrigin = guestOrigin;
+        var transformReads = robot.Root.TransformReads;
+        var brainReads = robot.Brain.BrainReads;
+        var personalityReads = robot.Brain.PersonalityReads;
+        var personality = lease.PreviewPersonality(Draft);
+        var wake = lease.PreviewBrainMode(RobotBrainMode.Autonomous);
+        Check(!personality.Succeeded && personality.ErrorCode == ModErrorCode.NotAuthoritative
+            && !wake.Succeeded && wake.ErrorCode == ModErrorCode.NotAuthoritative,
+            "The owner facade must refuse personality and autonomous previews for the current client or guest caller.");
+        Check(robot.Root.TransformReads == transformReads && robot.Brain.BrainReads == brainReads
+            && robot.Brain.PersonalityReads == personalityReads && robot.Brain.BrainApplies == 0
+            && robot.Brain.PersonalityApplies == 0,
+            "The facade's remote refusal must precede native reads and applies.");
+        Check(Value(lease.PreviewTransform(Moved)).Equals(Moved), "Remote scene transform previews remain available.");
+        Check(Value(lease.PreviewBrainMode(RobotBrainMode.Dormant)), "Remote dormant previews remain available.");
+        state.Realm = InternalNetRealm.ListenHost;
+        state.GuestOrigin = false;
+        Check(Value(lease.PreviewPersonality(Draft)) && Value(lease.PreviewBrainMode(RobotBrainMode.Autonomous)),
+            "The same facade lease must allow the host's own previews when the current caller changes.");
     }
 
     public static void BodyOnlyPersonalityRefused()

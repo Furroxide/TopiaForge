@@ -481,7 +481,11 @@ namespace TopiaForge.Mods
         /// <summary>Tries to resolve a server-assigned network object identity to this process's entity.</summary>
         bool TryGetEntity(NetworkObjectId id, out IEntity? entity);
 
-        /// <summary>Tries to get a participant's avatar entity.</summary>
+        /// <summary>
+        /// Tries to get a participant's avatar entity. During reconnect grace a disconnected participant's entity may
+        /// remain available with its visuals and collision suppressed; use the participant's connection state before
+        /// presenting a marker or treating the entity's retained transform as a current position.
+        /// </summary>
         bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar);
 
         /// <summary>Tries to get a participant's latest replicated pose.</summary>

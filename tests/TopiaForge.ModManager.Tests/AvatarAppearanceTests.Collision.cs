@@ -22,7 +22,7 @@ namespace TopiaForge.ModManager.Tests
             var constants = string.Join("\n", unity.DescendantNodes().OfType<FieldDeclarationSyntax>()
                 .Where(field => field.Declaration.Variables.Any(variable => variable.Identifier.ValueText is "Height" or "Radius" or "CrouchedHeight")));
             var source = Contracts + "\nclass PhysicalAvatar { " + PhysicalFields + constants
-                + Method(unity, "Animate") + Method(unity, "Present") + Method(unity, "Shape")
+                + Method(unity, "Animate") + Method(unity, "Present") + Method(unity, "Shape") + Method(unity, "SetVisible")
                 + " }\nclass RemoteAvatar { " + RemoteFields + Method(remote, "Draw") + " }\n" + CollisionProbe;
             var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
             var compilation = CSharpCompilation.Create("AppearanceCollisionProbe", new[] { CSharpSyntaxTree.ParseText(source) },
@@ -39,12 +39,13 @@ namespace TopiaForge.ModManager.Tests
         private const string PhysicalFields = """
             public readonly CapsuleCollider collider = new();
             public readonly Transform capsuleTransform = new();
+            public readonly GameObject visuals = new();
             private readonly object root = new();
             private readonly GameObject capsule = new();
             private bool disposed, crouching, poweredDown;
             private const int BaseColor = 1, Color = 2;
             public void Place(NetVector3 feet, float yaw) { }
-            public void SetVisible(bool visible) { }
+            public void Retire() { disposed = true; }
             """;
 
         private const string RemoteFields = """
@@ -67,6 +68,13 @@ namespace TopiaForge.ModManager.Tests
                     foreach (var provider in new[] { false, true })
                     {
                         var remote = new RemoteAvatar { body = provider ? new Body() : null };
+                        var physical = remote.avatar;
+                        foreach (var visible in new[] { true, false, false, true })
+                        {
+                            physical.SetVisible(visible);
+                            Check(physical.visuals.activeSelf == visible && physical.collider.enabled == visible,
+                                "presence suppression changes visuals and collision together, with or without a provider body");
+                        }
                         var tick = 0;
                         void Frame(bool crouched, string stage)
                         {
@@ -100,6 +108,10 @@ namespace TopiaForge.ModManager.Tests
                             Frame(initiallyCrouched, "after down");
                             Frame(!initiallyCrouched, "crouch transition after down");
                         }
+                        physical.SetVisible(false);
+                        physical.Retire();
+                        physical.SetVisible(true);
+                        Check(!physical.visuals.activeSelf && !physical.collider.enabled, "a retired avatar cannot restore collision or visuals");
                     }
                 }
                 private static bool Near(float actual, float expected) => Math.Abs(actual - expected) < 0.00001f;
@@ -139,14 +151,19 @@ namespace TopiaForge.ModManager.Tests
                 }
                 public struct Color { public Color(float r, float g, float b, float a) { } }
                 public class Transform { public Vector3 localPosition, localScale; public Quaternion localRotation; }
-                public class CapsuleCollider { public float height; public Vector3 center; }
+                public class CapsuleCollider { public float height; public Vector3 center; public bool enabled = true; }
                 public class MaterialPropertyBlock { public void SetColor(int id, Color color) { } }
                 public class Renderer
                 {
                     public void GetPropertyBlock(MaterialPropertyBlock block) { }
                     public void SetPropertyBlock(MaterialPropertyBlock block) { }
                 }
-                public class GameObject { public T GetComponent<T>() where T : new() => new(); }
+                public class GameObject
+                {
+                    public bool activeSelf = true;
+                    public void SetActive(bool active) { activeSelf = active; }
+                    public T GetComponent<T>() where T : new() => new();
+                }
             }
             """;
     }
