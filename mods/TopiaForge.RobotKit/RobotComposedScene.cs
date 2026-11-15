@@ -44,6 +44,8 @@ namespace TopiaForge.RobotKit
             try
             {
                 state = world();
+                // Every run replaces the session's reason; a success or a later run never shows an older one.
+                RobotKitDiagnostics.ClearComposedDiscovery(state);
                 if (state == null || !CanSpawn(state.Phase) || state.Session == null || state.World?.Map?.IsAlive != true) return null;
                 var scene = default(Scene);
                 for (var index = 0; index < SceneManager.sceneCount; index++)

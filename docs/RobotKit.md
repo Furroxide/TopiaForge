@@ -119,11 +119,12 @@ A body-part, voice or other catalogue gap still refuses discovery. Otherwise cha
 material values pass through unchanged. This bounded preflight does not establish that a native character's
 catalog assets have been prepared or that a character is qualified on 2640.
 
-A body-only MuniciPal appears in `RobotTypes` like any other type and spawns only Dormant. An Autonomous request
-returns `Unavailable` with the reason, without creating a robot. Its native talk is off: the default talk
-policy is replaced by talk off, a custom interaction is kept, and `SetInteraction` with native talk, like
-`SetBrainMode(Autonomous)`, returns `Unavailable` with the same reason. Movement, speech, tint and scale
-work as for any Dormant robot.
+A body-only MuniciPal appears in `RobotTypes` like any other type and spawns only Dormant. An Autonomous
+request, or an explicit native talk distance, returns `Unavailable` with the reason, without creating a
+robot. Its native talk is off: the default talk policy is replaced by talk off, a custom interaction is
+kept, and `SetInteraction` with native talk, like `SetBrainMode(Autonomous)`, returns `Unavailable` with the
+same reason. The scene editor resolves it but refuses a personality preview with the same reason.
+Movement, speech, tint and scale work as for any Dormant robot.
 
 Composed MuniciPal discovery is available only during `StartingMode` and `Running` for the current
 live map world. Its native composed body has no `Health`: `ApplyDamage` returns `Unavailable` and `Kill`
@@ -138,14 +139,16 @@ missing scene identity, entity shape, asset references, ambiguous identity, abse
 failure. Reference-specific codes distinguish unexpected project catalogues, reference DTO shape,
 body-part resolution, voice resolution, invalid collector results and unavailable catalog assets.
 They contain no asset identifiers, native payloads, paths or session values. Check game compatibility
-for `NativeBinding`; for structural codes check the imported world's supported composition data.
+for `NativeBinding` and `ProjectCatalogShape`; for structural codes check the imported world's supported
+composition data.
 `CatalogAssetsUnavailable` comes from the game's own catalogue, so no map change can fix it.
 A body-only offer appears as `RobotKit composed discovery admitted the body only: CharacterUnprepared.`.
 
 When MuniciPal is missing, a `Spawn` that names it returns `Unavailable` with a fixed sentence for the
-latest code in the current world/session, such as "A MuniciPal body part is missing from the game's robot
-part catalogue. Code: BodyPartUnavailable.". The sentence names no asset or session value, so a gamemode
-can show it to players.
+code of the latest discovery run in the current world/session, such as "A MuniciPal body part is missing
+from the game's robot part catalogue. Code: BodyPartUnavailable.". The sentence names no asset or session
+value, so a gamemode can show it to players. Each discovery run clears the previous code first, and a
+body-only offer never explains a missing type.
 
 `ContextUnverified` means a composed robot's native context could not be verified. An incomplete identity
 sample leaves existing composed actors in place, and for up to two seconds of unscaled time composed spawns

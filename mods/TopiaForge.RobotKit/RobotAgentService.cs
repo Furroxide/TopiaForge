@@ -119,6 +119,8 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request) => SpawnNative(request, false);
 
+        internal static bool IsBodyOnly(IRobotAgent agent) => agent is RobotAgent { BodyOnly: true };
+
         internal OperationResult<IRobotAgent> SpawnNative(RobotAgentSpawnRequest request, bool replica)
         {
             if (request == null)
@@ -137,8 +139,10 @@ namespace TopiaForge.RobotKit
             if (candidate == null)
             {
                 // A missing composed character carries its fixed discovery reason, for the author and the player.
+                // A body-only offer is not why the type is missing now, so it never explains an absence.
                 var reason = string.Equals(request.RobotTypeId, RobotComposedReferences.MunicipalId, StringComparison.OrdinalIgnoreCase)
                     ? RobotKitDiagnostics.LastComposedDiscovery(world) : null;
+                if (reason == RobotComposedRefusal.CharacterUnprepared) reason = null;
                 return OperationResult<IRobotAgent>.Failure(
                     ModErrorCode.Unavailable,
                     string.IsNullOrWhiteSpace(request.RobotTypeId)
@@ -147,9 +151,10 @@ namespace TopiaForge.RobotKit
                             + (reason is { } code ? " " + RobotComposedReferences.Explain(code) : string.Empty));
             }
 
-            if (candidate.BodyOnly && request.BrainMode != RobotBrainMode.Dormant)
+            // The default talk policy is turned off quietly; an explicit talk distance is a request that cannot be met.
+            if (candidate.BodyOnly && (request.BrainMode != RobotBrainMode.Dormant || request.Interaction.NativeTalkDistance > 0f))
             {
-                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, RobotComposedReferences.BodyOnly + " Request Dormant instead.");
+                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, RobotComposedReferences.BodyOnly);
             }
 
             EnsureRoots();

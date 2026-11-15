@@ -94,7 +94,7 @@ namespace UnityEngine {
  }
 }
 namespace TopiaForge.Mods {
- public enum WorldSessionPhase { StartingMode, Running }
+ public enum WorldSessionPhase { StartingMode, Running, Idle }
  public class Session { public string SessionId="private-session"; }
  public class Map { public bool IsAlive=true; }
  public class Identity { public int InstanceId=7; }
@@ -171,6 +171,7 @@ namespace TopiaForge.RobotKit {
   internal static void ReportImportProblems(string operation,object? report)=>ImportProblems=TopiaForge.Mods.GameBridge.UgcImportProblems.Summary(operation,report)??"none";
   internal static RobotComposedRetirement? Retirement;
   internal static void ReportComposedDiscovery(WorldSessionSnapshot? s,RobotComposedRefusal r) { Last=r; }
+  internal static void ClearComposedDiscovery(WorldSessionSnapshot? s) { if(s!=null)Last=null; }
   internal static void ReportComposedRetirement(WorldSessionSnapshot s,RobotComposedRetirement r) { Retirement=r; }
  }
  public static class Probe {
@@ -248,7 +249,10 @@ namespace TopiaForge.RobotKit {
     && Built.components.agent.voiceset=="voice" && Built.components.humanoidBodyParts.Count==2;
   }
   public static void Run() {
-   Reset();var full=RobotComposedScene.Discover(()=>State);
+   Reset();RobotKitDiagnostics.Last=RobotComposedRefusal.CharacterUnprepared;
+   Check(RobotComposedScene.Discover(()=>new WorldSessionSnapshot {Phase=WorldSessionPhase.Idle})==null && RobotKitDiagnostics.Last==null,
+    "a discovery run outside a spawnable phase clears the session's older reason");
+   Reset();RobotKitDiagnostics.Last=RobotComposedRefusal.CharacterUnprepared;var full=RobotComposedScene.Discover(()=>State);
    Check(full!=null && !full.BodyOnly && LastCollected.Length==0 && RobotKitDiagnostics.Last==null,
     "resolved body/voice with no catalog dependencies discovers without pretending those maps contain lore");
    full!.Create(new GameObject().transform);Check(Built!=null && Built.components.agent.voiceset=="voice","a complete character builds its own entity");

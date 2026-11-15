@@ -137,7 +137,7 @@ namespace TopiaForge.RobotKit
         {
             var service = new RobotAgentService();
             var refused = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal", BrainMode = RobotBrainMode.Autonomous });
-            Check(refused.ErrorCode == ModErrorCode.Unavailable && refused.Message == RobotComposedReferences.BodyOnly + " Request Dormant instead."
+            Check(refused.ErrorCode == ModErrorCode.Unavailable && refused.Message == RobotComposedReferences.BodyOnly
                 && service.lastBuild == null, "an Autonomous body-only spawn is refused with its reason before construction");
             service.CheckEmpty();
             var full = service.Spawn(new RobotAgentSpawnRequest { BrainMode = RobotBrainMode.Autonomous });
@@ -155,6 +155,15 @@ namespace TopiaForge.RobotKit
             Check(talk.ErrorCode == ModErrorCode.Unavailable && talk.Message == RobotComposedReferences.BodyOnly
                 && agent.Interaction.NativeTalkMode == RobotNativeTalkMode.Disabled, "a body-only robot cannot enable native talk");
             Check(agent.SetInteraction(RobotInteractionOptions.DisableNativeTalk()).ErrorCode == null, "a body-only robot accepts talk off");
+
+            var distance = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal", Interaction = RobotInteractionOptions.NativeTalkAtDistance(5f) });
+            Check(distance.ErrorCode == ModErrorCode.Unavailable && distance.Message == RobotComposedReferences.BodyOnly,
+                "an explicit native talk distance on a body-only spawn is refused with the reason");
+            var fallback = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal", Interaction = RobotInteractionOptions.NativeTalkAtDistance(0f) });
+            Check(fallback.ErrorCode == null && ((RobotAgent)fallback.Value!).Interaction.NativeTalkMode == RobotNativeTalkMode.Disabled,
+                "the default talk distance on a body-only spawn still turns talk off quietly");
+            var fullDistance = service.Spawn(new RobotAgentSpawnRequest { Interaction = RobotInteractionOptions.NativeTalkAtDistance(5f) });
+            Check(fullDistance.ErrorCode == null, "a complete character keeps an explicit native talk distance");
 
             var custom = RobotInteractionOptions.Custom();
             var prompt = service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal", Interaction = custom });
@@ -176,6 +185,9 @@ namespace TopiaForge.RobotKit
                     "a missing MuniciPal reports its discovery reason to the author");
                 Check(service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "copbot" }).Message == plain,
                     "other missing types do not borrow the composed reason");
+                RobotKitDiagnostics.Last = RobotComposedRefusal.CharacterUnprepared;
+                Check(service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal" }).Message == plain,
+                    "a stale body-only offer never explains a missing type");
                 RobotKitDiagnostics.Last = null;
                 Check(service.Spawn(new RobotAgentSpawnRequest { RobotTypeId = "municipal" }).Message == plain,
                     "no recorded discovery reason keeps the plain message");
@@ -428,6 +440,8 @@ namespace TopiaForge.Mods
     public sealed class RobotInteractionOptions
     {
         public RobotNativeTalkMode NativeTalkMode { get; private init; }
+        public float NativeTalkDistance { get; private init; }
+        public static RobotInteractionOptions NativeTalkAtDistance(float distance) => new() { NativeTalkDistance = distance };
         public object? CustomInteraction { get; private init; }
         public static RobotInteractionOptions NativeTalk() => new();
         public static RobotInteractionOptions DisableNativeTalk() => new() { NativeTalkMode = RobotNativeTalkMode.Disabled };

@@ -57,6 +57,8 @@ namespace TopiaForge.ModManager.Tests
                     Check(text.Length > 20 + reason.ToString().Length && text.EndsWith(" Code: " + reason + ".", StringComparison.Ordinal),
                         "every discovery code has a fixed sentence for the author and the player");
                 }
+                Check(RobotComposedReferences.Explain(RobotComposedRefusal.ProjectCatalogShape).StartsWith(
+                    "This game version does not expose", StringComparison.Ordinal), "a native serializer result is a game-version cause, not map data");
                 var count = Enum.GetValues<RobotComposedRefusal>().Length;
                 Check(logger.Messages.Count == count, "each refusal is bounded per world/session");
                 var rebound = new WorldSessionSnapshot(WorldSessionPhase.Running, session,
@@ -65,6 +67,15 @@ namespace TopiaForge.ModManager.Tests
                 Check(logger.Messages.Count == count, "snapshot/readiness rebinding does not reset diagnostics");
                 Check(RobotKitDiagnostics.LastComposedDiscovery(() => rebound) == RobotComposedRefusal.HostCount,
                     "a repeated code is still the latest reason");
+                var otherSession = new WorldSessionSnapshot(WorldSessionPhase.Running, new Session("private-other"), ready, 5);
+                RobotKitDiagnostics.ClearComposedDiscovery(otherSession);
+                RobotKitDiagnostics.ClearComposedDiscovery(null);
+                Check(RobotKitDiagnostics.LastComposedDiscovery(() => state) == RobotComposedRefusal.HostCount,
+                    "clearing another session keeps this session's reason");
+                RobotKitDiagnostics.ClearComposedDiscovery(rebound);
+                Check(RobotKitDiagnostics.LastComposedDiscovery(() => state) == null, "a new discovery run clears the session's reason");
+                RobotKitDiagnostics.ReportComposedDiscovery(state, RobotComposedRefusal.HostCount);
+                Check(logger.Messages.Count == count, "clearing the reason keeps the log budget");
                 var next = new WorldSessionSnapshot(WorldSessionPhase.Running, session,
                     new WorldReadiness(new WorldSceneIdentity(7, "private-world"), TransformState.Identity), 3);
                 Check(RobotKitDiagnostics.LastComposedDiscovery(() => next) == null

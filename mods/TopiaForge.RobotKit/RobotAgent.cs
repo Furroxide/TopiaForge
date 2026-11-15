@@ -384,6 +384,8 @@ namespace TopiaForge.RobotKit
         private static OperationResult<bool> Unavailable(string message) =>
             OperationResult<bool>.Failure(ModErrorCode.InvalidState, message);
 
+        internal bool BodyOnly => bodyOnly != null;
+
         // A body-only robot has no prepared native character: it stays Dormant, and native talk stays off.
         // Called before activation, so the default talk policy never reaches the native prompt.
         internal void RestrictToBody()

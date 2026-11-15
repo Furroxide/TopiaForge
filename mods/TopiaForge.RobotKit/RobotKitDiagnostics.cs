@@ -61,6 +61,13 @@ namespace TopiaForge.RobotKit
                     ? "RobotKit composed discovery admitted the body only: " : "RobotKit composed discovery refused: ") + reason + ".");
         }
 
+        public static void ClearComposedDiscovery(WorldSessionSnapshot? state)
+        {
+            if (state?.Session == null || state.World == null) return;
+            lock (Gate)
+                if (LatestDiscovery.TryGetValue(state.World.Scene, out var sessions)) sessions.Remove(state.Session.SessionId);
+        }
+
         // The latest composed discovery result for this world and session, so a refused spawn can say why.
         public static RobotComposedRefusal? LastComposedDiscovery(Func<WorldSessionSnapshot?>? world)
         {

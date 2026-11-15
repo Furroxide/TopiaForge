@@ -53,6 +53,9 @@ namespace TopiaForge.Mods
         /// Autonomous request, without creating a robot. Its Dormant requests still succeed with native talk
         /// disabled. Direct client spawns normalize Autonomous to Dormant and disable native talk; every replica
         /// is Dormant. Host calls outside guest-origin callbacks retain the requested brain and talk policy.
+        /// A type offered body-only spawns only Dormant with native talk off: an Autonomous request or an explicit
+        /// native talk distance returns <see cref="ModErrorCode.Unavailable"/> with the reason, without creating
+        /// a robot.
         /// Returns a stable failure when the service is unavailable or no prefab could be resolved.
         /// </summary>
         OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request);

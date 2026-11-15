@@ -65,7 +65,8 @@ namespace TopiaForge.RobotKit
             }
 
             var component = GameReflection.FindComponent(native.NativeGameObject, "LLMAgent");
-            target = component == null || !component.gameObject.activeInHierarchy ? null : CreateTarget(component, managed: true);
+            target = component == null || !component.gameObject.activeInHierarchy
+                ? null : CreateTarget(component, managed: true, bodyOnly: RobotAgentService.IsBodyOnly(resolved));
             return target != null;
         }
 
@@ -144,7 +145,7 @@ namespace TopiaForge.RobotKit
 
         // Scene discovery offers only native scene robots. A RobotKit robot resolved from its own agent is a managed
         // target, which allows a personality preview and nothing that RobotKit's routed controls already own.
-        private RobotEditTarget? CreateTarget(Component agent, bool managed = false)
+        private RobotEditTarget? CreateTarget(Component agent, bool managed = false, bool bodyOnly = false)
         {
             if (agent == null || agent.gameObject == null || !agent.gameObject.scene.IsValid())
             {
@@ -158,7 +159,7 @@ namespace TopiaForge.RobotKit
                 return null;
             }
 
-            return new RobotEditTarget(root, agent, managed);
+            return new RobotEditTarget(root, agent, managed, bodyOnly);
         }
 
         private static bool HasProgressionComponent(GameObject root)
