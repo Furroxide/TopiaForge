@@ -46,6 +46,7 @@ namespace TopiaForge.Worlds
             private readonly object project;
             private readonly MethodInfo configureFolder;
             private readonly MethodInfo importProject;
+            private readonly Type importReportType;
             private readonly NativeImportSelection? selection;
             private readonly List<(string Id, GameObject Prefab, Vector3? Offset)> overrides = new List<(string, GameObject, Vector3?)>();
             private readonly object? assetConfig;
@@ -67,8 +68,13 @@ namespace TopiaForge.Worlds
                 configureFolder = RequireMethod(type, "ConfigureRuntimeImportFolder", typeof(void), typeof(string));
                 // Build 2545 removed the void ImportFile(path) and the LastImportedScene property that was its only
                 // result. ImportProject, which 2478 already exposed, takes the project parsed in Prepare and returns
-                // the scene it imported.
-                importProject = RequireMethod(type, "ImportProject", "UgcExportScene", projectType, typeof(string), typeof(string));
+                // the scene it imported. Build 2640 added a caller-owned problem report as its last parameter.
+                importReportType = Type.GetType("UgcImportReport, GameCode", false)
+                    ?? throw new InvalidOperationException("The native import report is unavailable.");
+                if (importReportType.GetConstructor(Type.EmptyTypes) == null)
+                    throw new MissingMethodException(importReportType.FullName, ".ctor");
+                importProject = RequireMethod(type, "ImportProject", "UgcExportScene", projectType, typeof(string), typeof(string),
+                    importReportType);
                 selection = plan == null ? null : new NativeImportSelection(host, type, plan);
                 if (values.Count == 0) return;
                 assetConfig = RequireProperty(type, "RuntimeAssetConfig", "UgcRuntimeAssetConfig").GetValue(host)
@@ -119,7 +125,8 @@ namespace TopiaForge.Worlds
                     NativeEntered = true;
                     // A null scene id requests the project's own default scene, as UgcExportProject.ResolveScene's
                     // optional parameter of the same name declares. The label is the file name, never the full path.
-                    var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName });
+                    var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName,
+                        Activator.CreateInstance(importReportType) });
                     importedScene = data;
                     NativeReturned = true;
                     var root = activeRoot.GetValue(sceneRoot) as Transform;

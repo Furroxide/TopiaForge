@@ -308,11 +308,39 @@
         {
           "type": "System.String",
           "constrained": true
+        },
+        {
+          "type": "UgcImportReport",
+          "constrained": true
         }
       ],
       "isPublic": true,
       "isStatic": false,
       "genericArity": 0
+    },
+    {
+      "id": "worlds.import.type.UgcImportReport",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs"
+    },
+    {
+      "id": "worlds.import.UgcImportReport..ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "isPublic": true,
+      "exactParameters": true,
+      "parameters": [],
+      "member": ".ctor"
     },
     {
       "id": "worlds.import.host.ConfigureRuntimeImportFolder",
@@ -1227,6 +1255,10 @@
           "constrained": true
         },
         {
+          "type": "UgcImportReport",
+          "constrained": true
+        },
+        {
           "type": "UnityEngine.Object",
           "constrained": true
         }
@@ -1234,6 +1266,30 @@
       "exactParameters": true,
       "isStatic": true,
       "genericArity": 0
+    },
+    {
+      "id": "worlds.view.type.UgcImportReport",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.UgcImportReport..ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "isPublic": true,
+      "exactParameters": true,
+      "parameters": [],
+      "member": ".ctor"
     },
     {
       "id": "worlds.view.scene.environment",

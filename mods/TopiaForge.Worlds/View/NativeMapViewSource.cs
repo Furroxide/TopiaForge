@@ -31,13 +31,16 @@ namespace TopiaForge.Worlds
                 var hostType = Type.GetType("UgcImportHostSceneController, GameCode", false);
                 var applierType = Type.GetType("UgcSceneEnvironmentApplier, GameCode", false);
                 var instanceType = Type.GetType("UgcSceneEnvironmentInstance, GameCode", false);
+                // Build 2640 added a caller-owned problem report before the optional context.
+                var reportType = Type.GetType("UgcImportReport, GameCode", false);
                 var map = hostType?.GetProperty("EnvironmentPrefabMap", Instance)?.GetValue(host);
                 var apply = applierType?.GetMethod("Apply", BindingFlags.Public | BindingFlags.Static, null,
-                    new[] { sceneType!, mapType!, typeof(Transform), typeof(UnityEngine.Object) }, null);
+                    new[] { sceneType!, mapType!, typeof(Transform), reportType!, typeof(UnityEngine.Object) }, null);
                 var find = mapType?.GetMethod("TryGetPrefab", Instance, null,
                     new[] { typeof(string), typeof(GameObject).MakeByRefType() }, null);
                 var environment = sceneType?.GetField("environment", Instance);
-                if (map == null || apply == null || find == null || instanceType == null || environment?.FieldType != typeof(string)) return null;
+                if (map == null || apply == null || find == null || instanceType == null || environment?.FieldType != typeof(string)
+                    || reportType?.GetConstructor(Type.EmptyTypes) == null) return null;
                 var keys = new List<string>();
                 // Listing is optional: a missing list must not disable TryGetPrefab or applying a known key.
                 try
@@ -53,7 +56,7 @@ namespace TopiaForge.Worlds
                         }
                 }
                 catch { keys.Clear(); }
-                return new NativeEnvironment(this, map, apply, find, environment,
+                return new NativeEnvironment(this, map, apply, find, environment, reportType,
                     environment.GetValue(scene) as string ?? "", keys.Distinct(StringComparer.Ordinal).OrderBy(k => k, StringComparer.Ordinal).ToArray());
             }
             catch { return null; }
@@ -68,11 +71,13 @@ namespace TopiaForge.Worlds
             private readonly MethodInfo apply;
             private readonly MethodInfo find;
             private readonly FieldInfo environment;
+            private readonly Type reportType;
             private readonly OwnedEnvironment<Component> ownership;
             internal NativeEnvironment(NativeMapViewSource owner, object map, MethodInfo apply, MethodInfo find,
-                FieldInfo environment, string original, string[] keys)
+                FieldInfo environment, Type reportType, string original, string[] keys)
             {
                 this.owner = owner; this.map = map; this.apply = apply; this.find = find; this.environment = environment;
+                this.reportType = reportType;
                 Presets = Array.AsReadOnly(keys);
                 var instance = Type.GetType("UgcSceneEnvironmentInstance, GameCode", true)!;
                 ownership = new OwnedEnvironment<Component>(original,
@@ -82,7 +87,7 @@ namespace TopiaForge.Worlds
             {
                 var descriptor = Activator.CreateInstance(owner.scene.GetType());
                 environment.SetValue(descriptor, key);
-                apply.Invoke(null, new object[] { descriptor!, map, owner.root, owner.host });
+                apply.Invoke(null, new object[] { descriptor!, map, owner.root, Activator.CreateInstance(reportType)!, owner.host });
             }
             internal IReadOnlyList<string> Presets { get; }
             internal bool HasPreset(string key)
