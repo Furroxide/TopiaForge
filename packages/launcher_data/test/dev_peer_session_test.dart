@@ -65,6 +65,100 @@ void main() {
       },
     );
 
+    test(
+      'an unexpected launch refusal keeps its full error in the peer log',
+      () async {
+        final session = await prepare();
+        final fixture = fixtures.single;
+        final secret = p.join(root.path, 'private', 'Directory.Build.props');
+        fixture.refusal = LaunchResult(
+          started: false,
+          message:
+              'Launch could not proceed: FileSystemException: '
+              'Cannot open file, path = \'$secret\'',
+        );
+        expect(session.launchErrorLogged, isFalse);
+        final named = p.relative(
+          fixture.launcherLogPath,
+          from: p.dirname(fixture.overlay.launcherRoot),
+        );
+        await expectLater(
+          session.launch(2),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              allOf(
+                contains('Launch preparation failed.'),
+                contains(
+                  'The full launch error is in peer '
+                  "${fixture.overlay.index}'s folder at $named.",
+                ),
+                // No absolute path, so no profile name, reaches the terminal.
+                isNot(contains(secret)),
+                isNot(contains(root.path)),
+              ),
+            ),
+          ),
+        );
+        expect(session.launchErrorLogged, isTrue);
+        final log = File(fixture.launcherLogPath).readAsStringSync();
+        expect(
+          log,
+          contains(
+            'Development peer ${fixture.overlay.index} did not start: Launch could not '
+            'proceed: FileSystemException: Cannot open file, '
+            'path = \'$secret\'',
+          ),
+        );
+        expect(
+          p.isWithin(fixture.overlay.launcherRoot, fixture.launcherLogPath),
+          isTrue,
+        );
+
+        fixture.refusal = const LaunchResult(
+          started: false,
+          message:
+              'Launch could not proceed: FormatException: Profile environment '
+              'cannot replace required variable TOPIAFORGE_DATA_ROOT.',
+        );
+        await expectLater(
+          session.launch(2),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              startsWith(
+                'The development peer did not start. Profile environment '
+                'cannot replace required variable TOPIAFORGE_DATA_ROOT. ',
+              ),
+            ),
+          ),
+        );
+        fixture.refusal = LaunchResult(
+          started: false,
+          message:
+              'Launch could not proceed: FormatException: Profile environment '
+              'cannot replace required variable $secret.',
+        );
+        await expectLater(
+          session.launch(2),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              allOf(
+                contains('Launch preparation failed.'),
+                isNot(contains(secret)),
+              ),
+            ),
+          ),
+        );
+        expect(fixture.receipt, isNull);
+        await session.close();
+      },
+    );
+
     test('cancelled preparation and launch do not start a peer', () async {
       final cancellation = CancellationToken();
       final session = await prepare(cancellation: cancellation);

@@ -104,7 +104,9 @@ verification. Native game preferences remain shared by the operating system.
 `--no-launch` or `--no-wait`. `--no-tail` hides streaming output but still reports a crash
 with its last log lines. Ctrl+C stops every process owned by the run before cleanup.
 An unconfirmed process, including a started process with no receipt, keeps its directory
-for manual recovery. Failed or cancelled startup outcomes stop waiting immediately,
+for manual recovery. A refused peer launch writes its full error to that peer's own
+launcher log, and the run keeps its `dev-instances` folder so the log stays readable;
+delete the folder after reading it. Failed or cancelled startup outcomes stop waiting immediately,
 and Ctrl+C cancels a pending descriptor fetch. Cleanup accepts only
 the unchanged, owned run below `dev-instances`, removing directory links first.
 The stages print elapsed milliseconds; initial host and join confirmation each allow

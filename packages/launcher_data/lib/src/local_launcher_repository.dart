@@ -228,6 +228,14 @@ class LocalLauncherRepository
   Directory get _packageCache =>
       Directory(p.join(_dataRoot.path, 'package-cache'));
 
+  /// The launcher log under this repository's data root.
+  String get launcherLogPath => _launcherLogFile.path;
+
+  /// Appends one sanitized line to [launcherLogPath]. An unavailable log sink
+  /// is reported on stderr and never changes the caller's result.
+  Future<void> appendLauncherLog(String message) =>
+      _tracked(() => _appendLauncherLogBestEffort(message));
+
   @override
   Future<LauncherSnapshot> loadSnapshot() => _tracked(_loadSnapshot);
 

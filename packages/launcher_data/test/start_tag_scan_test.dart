@@ -263,15 +263,24 @@ void main() {
       expect(packageReferences('$open$inner'), hasLength(1));
     });
 
-    test('finishes nested or unclosed items within the budget', () {
+    test('scans nested or unclosed items in linear time', () {
       const open = '<PackageReference Update="A">';
       const end = '</PackageReference>';
-      for (final (text, count) in [
-        ('${open * 8000}${end * 8000}', 8000),
-        (open * 8000, 0),
-        ('$open${'<!-- -->' * 20000}$end' * 2, 2),
-      ]) {
-        expect(withinBudget(() => packageReferences(text).length), count);
+      for (final (name, text, full, count)
+          in <(String, String Function(int), int, int)>[
+            ('nested', (n) => '${open * n}${end * n}', 8000, 8000),
+            ('unclosed', (n) => open * n, 8000, 0),
+            ('commented', (n) => '$open${'<!-- -->' * n}$end' * 2, 20000, 2),
+          ]) {
+        expect(
+          expectLinear(
+            text,
+            (text) => packageReferences(text).length,
+            fullCount: full,
+            reason: name,
+          ),
+          count,
+        );
       }
     });
   });
@@ -385,19 +394,24 @@ void main() {
       }
     });
 
-    test('finishes unclosed items, tags and comments within the budget', () {
+    test('scans unclosed items, tags and comments in linear time', () {
       const open = '<PackageReference Include="$_abstractions"';
-      for (final text in [
-        '$open>' * 8000,
-        '${open * 8000}>',
-        '$open>${'<!-- -->' * 20000}',
-        '$open${' a="1"' * 20000}',
-        '${'<PackageReference a="' * 8000}>',
-        '${'<!--' * 20000}$open />',
-        '${'$open>' * 8000}${'</PackageReferenc>' * 8000}',
-      ]) {
+      for (final (index, (text, full)) in <(String Function(int), int)>[
+        ((n) => '$open>' * n, 8000),
+        ((n) => '${open * n}>', 8000),
+        ((n) => '$open>${'<!-- -->' * n}', 20000),
+        ((n) => '$open${' a="1"' * n}', 20000),
+        ((n) => '${'<PackageReference a="' * n}>', 8000),
+        ((n) => '${'<!--' * n}$open />', 20000),
+        ((n) => '${'$open>' * n}${'</PackageReferenc>' * n}', 8000),
+      ].indexed) {
         expect(
-          withinBudget(() => firstPackageReference(text, _abstractions)),
+          expectLinear(
+            text,
+            (text) => firstPackageReference(text, _abstractions),
+            fullCount: full,
+            reason: 'input $index',
+          ),
           isNull,
         );
       }

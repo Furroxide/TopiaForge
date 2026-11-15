@@ -241,38 +241,38 @@ void main() {
         'expressions',
         'package-list',
       ];
-      final fixtureWatch = Stopwatch()..start();
-      final values = [
-        ';' * 200000,
-        '*' * 200000,
-        '?' * 200000,
-        '${'*a' * 100000}x',
-        '&#59;' * 40000,
-        '&' * 200000,
-        '&${'a' * 200000}',
-        '&#${'0' * 200000}115;',
-        '%' * 200000,
-        '%73' * 70000,
-        '\$(' * 70000,
-        '$_abstractions;' * 13000,
+      final values = <String Function(int)>[
+        (s) => ';' * (25000 * s),
+        (s) => '*' * (25000 * s),
+        (s) => '?' * (25000 * s),
+        (s) => '${'*a' * (12500 * s)}x',
+        (s) => '&#59;' * (5000 * s),
+        (s) => '&' * (25000 * s),
+        (s) => '&${'a' * (25000 * s)}',
+        (s) => '&#${'0' * (25000 * s)}115;',
+        (s) => '%' * (25000 * s),
+        (s) => '%73' * (8750 * s),
+        (s) => '\$(' * (8750 * s),
+        (s) => '$_abstractions;' * (1625 * s),
       ];
-      fixtureWatch.stop();
       expect(values, hasLength(names.length));
       for (final (index, value) in values.indexed) {
         for (final attribute in const ['Include', 'Update']) {
-          // Keep the original combined boundary and strict 100 ms gate.
-          // Diagnostics and assertions run only after this watch stops.
-          final watch = Stopwatch()..start();
-          final result = _naming(attribute, value);
-          watch.stop();
-          final elapsed = watch.elapsed;
-          final reason = StringBuffer(
-            '${names[index]}/$attribute (${value.length} code units); '
-            'fixture list: ${fixtureWatch.elapsedMicroseconds} us; '
-            'original combined: ${elapsed.inMicroseconds} us; '
-            'result: ${result.name}',
+          // Measured alone, these scans grow unevenly between sizes (2.5 to 5
+          // times for some doublings from 12,500 to 100,000 units, about
+          // linear over the whole range), so a ratio at N and 2N is not
+          // stable: only the best of three full scans is bounded. Each tag is
+          // built before timing.
+          final result = expectWithinBudget(
+            '<PackageReference $attribute="${value(fullScale)}" />',
+            (tag) => packageNaming(
+              tag,
+              readStartTag(tag, 0)!,
+              attribute,
+              _abstractions,
+            ),
+            reason: '${names[index]}/$attribute',
           );
-          expect(elapsed, lessThan(scanBudget), reason: reason.toString());
           final expected = names[index] == 'package-list'
               ? PackageNaming.alone
               : names[index] == 'stars' && attribute == 'Update'

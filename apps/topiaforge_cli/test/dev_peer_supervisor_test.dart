@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:topiaforge/src/dev_peer_supervisor.dart';
@@ -124,4 +125,69 @@ void main() {
       }
     },
   );
+
+  group('ending a run', () {
+    late Directory run;
+    setUp(() => run = Directory.systemTemp.createTempSync('tf-dev-run-'));
+    tearDown(() {
+      if (run.existsSync()) run.deleteSync(recursive: true);
+    });
+
+    List<DevPeerHandle> peers(
+      List<int> closed, {
+      int? refused,
+      int? unconfirmed,
+    }) => List.generate(
+      3,
+      (index) => DevPeerHandle(
+        index: index,
+        alive: () async => false,
+        lines: () async => const [],
+        close: () async {
+          closed.add(index);
+          if (index == unconfirmed) throw StateError('not confirmed');
+        },
+        launchErrorLogged: () => index == refused,
+      ),
+    );
+
+    test(
+      'keeps the run folder when a refused launch logged its error',
+      () async {
+        final closed = <int>[];
+        final log = File('${run.path}/peer-1/launcher/logs/launcher.log')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('Development peer 1 did not start: detail');
+        final folder = await endDevPeerRun(
+          peers(closed, refused: 1),
+          () => run.deleteSync(recursive: true),
+        );
+        expect(folder, DevPeerRunFolder.keptForLaunchError);
+        expect(closed, [2, 1, 0]);
+        expect(log.readAsStringSync(), contains('detail'));
+      },
+    );
+
+    test('removes the run folder when every peer stopped cleanly', () async {
+      final closed = <int>[];
+      final folder = await endDevPeerRun(
+        peers(closed),
+        () => run.deleteSync(recursive: true),
+      );
+      expect(folder, DevPeerRunFolder.removed);
+      expect(closed, [2, 1, 0]);
+      expect(run.existsSync(), isFalse);
+    });
+
+    test('keeps the run folder when a peer is not confirmed stopped', () async {
+      final closed = <int>[];
+      final folder = await endDevPeerRun(
+        peers(closed, unconfirmed: 2),
+        () => run.deleteSync(recursive: true),
+      );
+      expect(folder, DevPeerRunFolder.keptUnconfirmed);
+      expect(closed, [2, 1, 0]);
+      expect(run.existsSync(), isTrue);
+    });
+  });
 }
