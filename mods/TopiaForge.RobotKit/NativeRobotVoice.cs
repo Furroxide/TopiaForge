@@ -13,39 +13,41 @@ namespace TopiaForge.RobotKit
     internal static class NativeRobotVoice
     {
         private static ConditionalWeakTable<TextAsset, Digest> assets = new ConditionalWeakTable<TextAsset, Digest>();
-        private static readonly string[] settings = { "speedMultiplier", "ellipsisBreakTime", "periodBreakTime", "colonBreakTime",
-            "exclamationBreakTime", "questionBreakTime", "semicolonBreakTime", "commaBreakTime", "dashBreakTime", "singleDashBreakTime", "newlineBreakTime" };
+        // Build 2640 replaced OvertoneVoiceAsset with TTSVoiceAsset and dropped its ten punctuation break times;
+        // the speed multiplier is the only native synthesis setting left on the asset.
+        private static readonly string[] settings = { "speedMultiplier" };
         private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         internal static void Clear() => assets = new ConditionalWeakTable<TextAsset, Digest>();
         internal static OperationResult<string> Identity(AgentHead head)
         {
             try
             {
-                var voice = typeof(AgentHead).GetProperty("ActiveVoice", Instance)?.GetValue(head) as OvertoneVoiceAsset;
+                var voice = typeof(AgentHead).GetProperty("ActiveVoice", Instance)?.GetValue(head) as TTSVoiceAsset;
                 return voice == null ? Missing() : Identity(voice);
             }
             catch (Exception) { return Missing(); }
         }
-        internal static OvertoneVoiceAsset? Resolve(string identity)
+        internal static TTSVoiceAsset? Resolve(string identity)
         {
             // Only locally loaded native assets are candidates. A descriptor never requests an arbitrary asset or file.
-            var voices = Resources.FindObjectsOfTypeAll<OvertoneVoiceAsset>();
+            var voices = Resources.FindObjectsOfTypeAll<TTSVoiceAsset>();
             if (voices.Length > 128) return null;
             foreach (var voice in voices)
                 if (voice != null && Identity(voice).TryGetValue(out var key) && key == identity) return voice;
             return null;
         }
-        private static OperationResult<string> Identity(OvertoneVoiceAsset voice)
+        private static OperationResult<string> Identity(TTSVoiceAsset voice)
         {
             try
             {
-                var type = typeof(OvertoneVoiceAsset);
+                var type = typeof(TTSVoiceAsset);
                 var model = type.GetField("modelAsset", Instance)?.GetValue(voice) as TextAsset;
                 var config = type.GetField("configAsset", Instance)?.GetValue(voice) as TextAsset;
                 if (model == null || config == null) return Missing();
                 using var data = new MemoryStream();
                 using var writer = new BinaryWriter(data, Encoding.UTF8, true);
-                writer.Write((byte)1);
+                // Version 2: the settings list changed shape, so no version 2 fingerprint equals a version 1 one.
+                writer.Write((byte)2);
                 writer.Write(assets.GetValue(model, Hash).Bytes); writer.Write(assets.GetValue(config, Hash).Bytes);
                 var audio = voice.FmodVoiceAsset.Guid;
                 writer.Write(audio.Data1); writer.Write(audio.Data2); writer.Write(audio.Data3); writer.Write(audio.Data4);

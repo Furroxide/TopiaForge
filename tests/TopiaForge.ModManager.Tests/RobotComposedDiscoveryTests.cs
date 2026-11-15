@@ -101,19 +101,20 @@ namespace TopiaForge.Mods {
  public class WorldSessionSnapshot { public WorldSessionPhase Phase=WorldSessionPhase.Running; public Session Session=new(); public Readiness World=new(); }
 }
 public enum ComposerPartType { Head }
-public class OvertoneVoiceAsset : UnityEngine.Object { }
+public class TTSVoiceAsset : UnityEngine.Object { }
+public sealed class UgcImportReport { }
 public class UgcPrefabSceneMap { public Entry[] Entries {get;set;}=Array.Empty<Entry>(); public class Entry {public string scenePath="MuniciPal/test";public string sceneJson="";} }
 public class UgcRobotPartMap {
  public bool TryResolve(string uri,out ComposerPartType part,out GameObject prefab) { part=ComposerPartType.Head; prefab=new GameObject();return uri=="part"; }
 }
-public class UgcVoiceMap {public bool TryResolve(string uri,out OvertoneVoiceAsset asset){ asset=new(); return uri=="voice";}}
+public class UgcVoiceMap {public bool TryResolve(string uri,out TTSVoiceAsset asset){ asset=new(); return uri=="voice";}}
 public class UgcRuntimeAssetConfig { public UgcPrefabSceneMap PrefabSceneMap {get;}=new();public UgcRobotPartMap RobotPartMap {get;}=new();public UgcVoiceMap VoiceMap {get;}=new(); }
 public class UgcSceneRoot {public Transform ActiveImportRoot {get;set;}=null!;}
 public class UgcImportHostSceneController : Component {public UgcRuntimeAssetConfig RuntimeAssetConfig {get;}=new();public UgcSceneRoot SceneRoot {get;}=new();}
 public class UgcRuntimeAssetOwner : Component {public void DestroyOwnedAssets(){}}
 public class UgcSceneBuilder {
  private const string PlasticMaterialField="PlasticMaterial";private const string MetalMaterialField="MetalMaterial";
- public UgcSceneBuilder(UgcRuntimeAssetConfig config){}
+ public UgcSceneBuilder(UgcRuntimeAssetConfig config,UgcImportReport report){}
  public GameObject BuildEntity(UgcExportProject project,UgcExportEntity entity,Transform parent)=>new();
  public static UgcRuntimeAssetOwner GetOrAddAssetOwner(Transform parent)=>new();
 }

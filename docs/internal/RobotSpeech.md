@@ -26,9 +26,10 @@ Brain queries continue to run on the host with its own local credential.
 ## Native voice binding
 
 The voice fingerprint is SHA-256 over the actual bound `AgentHead.ActiveVoice`: the model/configuration
-asset contents, native FMOD event GUID and eleven native synthesis timing/speed settings. No catalog id
-is invented. Asset hashes are cached weakly; tuning is read again. Receivers resolve the fingerprint only
-against locally loaded native `OvertoneVoiceAsset` instances, capped at 128 candidates. Missing assets,
+asset contents, native FMOD event GUID and the native speed multiplier, the only synthesis setting build 2640
+leaves on the asset (it dropped the ten punctuation break times). No catalog id is invented. Asset hashes are
+cached weakly; tuning is read again. Receivers resolve the fingerprint only
+against locally loaded native `TTSVoiceAsset` instances, capped at 128 candidates. Missing assets,
 settings, hooks or matching fingerprints fail closed with `Unavailable`. No assets are fetched.
 
 Playback uses a scoped native `OverrideSpeech`, empty `HintGroup.FromAssets`, and a named `TaskGraph`.
