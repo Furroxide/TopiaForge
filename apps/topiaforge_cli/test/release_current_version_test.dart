@@ -47,8 +47,6 @@ void main() {
         issues,
         unorderedEquals([
           'Release 0.2.0 is blocked; set its manually reviewed catalog status to ready.',
-          'Release 0.2.0 must target only Windows x64 packages.',
-          'An unsigned Windows distribution is only allowed for a prerelease.',
         ]),
       );
     },

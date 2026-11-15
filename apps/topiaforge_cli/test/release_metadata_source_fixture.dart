@@ -3,9 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-/// Metadata tampering tests need a valid prerelease policy. Build an explicit
-/// synthetic prerelease from current components without editing real policy or
-/// treating the blocked stable target as permission to publish unsigned bytes.
+/// Metadata tampering tests use a synthetic prerelease with current components.
+/// This fixture does not qualify the blocked stable target or edit real policy.
 Directory writeMetadataPrereleaseFixture(String source) {
   final output = Directory.systemTemp.createTempSync(
     'topiaforge-policy-fixture-',

@@ -120,7 +120,7 @@ foreach ($requiredSource in @(
         "dispatch-requested",
         "finalizerDispatchAttempt",
         "Wait-ExactFinalizerRunCompletion",
-        "Assert-ExactPublishedPrerelease",
+        "Assert-ExactPublishedRelease",
         "Non-publishing two-platform rehearsal passed."
     )) {
     Assert-True ($adminSource.Contains($requiredSource)) (
@@ -2062,6 +2062,10 @@ exit 64
         Join-Path $PSScriptRoot "test-release-isolation-paths.ps1"
     )
     if ($LASTEXITCODE -ne 0) { throw "Release isolation path regression tests failed." }
+    & (Join-Path $PSHOME $powerShellName) -NoProfile -File (
+        Join-Path $PSScriptRoot "release/test-published-release-policy.ps1"
+    )
+    if ($LASTEXITCODE -ne 0) { throw "Published release policy regression tests failed." }
     Write-Host "release-admin orchestration tests passed."
 }
 finally {

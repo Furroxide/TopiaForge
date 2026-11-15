@@ -113,10 +113,9 @@ class ReleasePackageBuilder {
     final version = SemanticVersion.tryParse(policy.productVersion);
     if (policy.windowsCertificateSha256.isNotEmpty ||
         version == null ||
-        version.majorDigits != '0' ||
-        !version.isPrerelease) {
+        version.majorDigits != '0') {
       throw StateError(
-        'An unsigned Windows policy requires a 0.x prerelease and no certificate pin.',
+        'An unsigned Windows policy requires a 0.x version and no certificate pin.',
       );
     }
     return policy;

@@ -87,7 +87,7 @@ void main() {
   });
 
   test(
-    'release policy preserves unsigned prerelease and signed default rules',
+    'release policy preserves explicit unsigned and signed default rules',
     () {
       final policyFile = File(p.join(root, 'release', 'release-policy.json'));
       final schemaFile = File(

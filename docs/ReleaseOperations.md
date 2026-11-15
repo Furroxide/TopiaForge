@@ -2,7 +2,7 @@
 
 The current development target is [0.2.0](../release/notes/v0.2.0.md), with catalog status
 blocked. RC1 examples and approvals below remain historical; they do not qualify 0.2.0.
-Stable signing, current-version readiness and exact-candidate native evidence remain required.
+Explicit distribution mode, current-version readiness and exact-candidate native evidence remain required.
 
 
 The interim owner for the first TopiaForge release line is repository administrator `@furroxide`. Before
