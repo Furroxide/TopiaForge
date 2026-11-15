@@ -61,7 +61,7 @@ namespace TopiaForge.ModManager.Tests
             var directory = Path.Combine(root!.FullName, "tests", "TopiaForge.MultiplayerAcceptanceMod");
             var manifest = ModManifestJson.Deserialize(File.ReadAllText(Path.Combine(directory, "topiaforge.mod.json")));
             var errors = new List<string>(ManifestValidator.Validate(manifest,
-                new ManifestValidationContext("0.0.2545", requireKnownGameVersion: true,
+                new ManifestValidationContext("0.0.2640", requireKnownGameVersion: true,
                     platform: "windows", architecture: "x64", contentTargets: new[] { "code" }, enforceRuntimeCompatibility: true)));
             foreach (var name in new[] { "Multiplayer", "Worlds" })
             {
