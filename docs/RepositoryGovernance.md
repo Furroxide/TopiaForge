@@ -30,7 +30,7 @@ forcing `main` to absorb unrelated development work merely to satisfy strict sta
 
 - Owner-authored topic and stabilization pull requests use **squash merge**. The Conventional Commit pull-request
   title and body become the commit subject and body.
-- `release/*` to `main` and `sync/main-v*` to `dev` use **merge commits** to preserve ancestry.
+- `release/*`, scoped service and governance pull requests to `main`, and `sync/main-v*` to `dev` use **merge commits**. The `main` ruleset permits only this method.
 - Dependabot version-update pull requests target `dev` and use **merge commits**. The maintainer is not the bot-authored
   PR author, and GitHub cannot create an accepted squash commit for that case under required signed commits.
 - Rebase merging is disabled. Auto-merge and automatic branch deletion remain disabled. "Update branch" is enabled.
@@ -50,11 +50,11 @@ matrix jobs are never configured directly as required checks.
 | --- | --- |
 | `dev` | `Required / PR policy`, `Required / CI validation`, `Required / Unity source validation`, `Required / Registry validation`, `Required / Dependency review` |
 | `release/*` | The same five common checks. Each release-head update also produces `Required / Release packages` for later promotion. |
-| `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. The scoped production service branch also runs this check on its own exact head. |
+| `main` | The five common checks plus `Required / Release packages` on the pull request's test merge commit. This unsigned package dry run also applies to scoped service and governance changes; it does not publish a release. |
 
-For the one-time service branch, CI and the required package build verify the historical stable `main` game build
+For scoped service and governance pull requests, CI and the required package build verify the historical stable `main` game build
 against its pinned public archive. The upstream game has advanced since that release, so the latest-build check would
-reject this unchanged client baseline. Release branches retain the latest-build requirement.
+reject this unchanged client baseline. Release-branch pushes and their `main` pull requests retain the latest-build requirement.
 
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
@@ -131,8 +131,9 @@ The stable PR-policy check enforces these routing rules:
 - Dependabot PRs may target only `dev`.
 - `release/*` accepts same-repository stabilization branches only.
 - `main` accepts the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
-  from that head's `release/release-policy.json`. The exact `service/production-multiplayer` branch is a one-time,
-  file-allowlisted exception for the production multiplayer service launch.
+  from that head's `release/release-policy.json`. The exact `service/production-multiplayer` and
+  `cloudflare/deploy-host-main` branches are file-allowlisted service exceptions. The exact
+  `maintenance/main-governance` branch is limited to repository governance and release-check workflow files.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
 - Once `v1.0.0-rc.1` exists, every introduced commit must contain a valid
@@ -155,7 +156,7 @@ maintainer records the reviewed SHA and review result before using bypass.
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
 | `release` | `v*` tags | Update-metadata signing, verification attestation, and automatic release publication |
-| `github-pages` | published `v*` tags | Deployment of release-derived Pages content |
+| `github-pages` | protected `main` and published `v*` tags | Deployment after successful `main` CI and release-derived Pages refreshes |
 | `control-plane-staging` | `dev`, `main` | Staging multiplayer Worker deployment |
 | `control-plane-production` | `main` | Production multiplayer Worker deployment |
 
