@@ -72,7 +72,8 @@ jobs:
           PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/service/production-multiplayer' || github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) }}
         run: |
           $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
           try {
             dotnet run `
               --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
@@ -142,7 +143,8 @@ jobs:
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
           PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/service/production-multiplayer' || github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) }}
         run: |
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
           dotnet run `
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
             -c Release -- --source public @latest
@@ -356,7 +358,8 @@ jobs:
           ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
           PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/service/production-multiplayer' || github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) }}
         run: |
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
           dotnet run `
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
             -c Release -- @latest
