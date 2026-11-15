@@ -190,14 +190,15 @@ namespace TopiaForge.ModManager
                 foreach (var operation in active) if (operation.Nonce == lineNonce && operation.WireId == entityId) operation.RequestCancellation();
                 return true;
             }
-            if (type != RobotSpeechWire.Line || lineNonce <= seenNonce) return false;
+            if (type != RobotSpeechWire.Line || lineNonce <= seenNonce || (long)stamp > clock()) return false;
             seenNonce = lineNonce;
-            // The receiver's own monotonic clock was echoed, so no clock synchronization or queue-age guess is needed.
-            if ((long)stamp > clock() || clock() - (long)stamp > 2_000_000) return false;
-            if (!incoming.TryTake(clock()) || active.Count >= 32) return false;
+            // Only a well-formed, authenticated, fresh-nonce line may receive a reason-free refusal.
+            // The receiver's own monotonic clock was echoed, so no clock synchronization is needed.
+            if (clock() - (long)stamp > 2_000_000) return Decline(lineNonce, (uint)entityId);
+            if (!incoming.TryTake(clock()) || active.Count >= 32) return Decline(lineNonce, (uint)entityId);
             if (!world.Client.SpeechTarget((uint)entityId, mod, kind, out var entity) || entity == null || !LocalEligible(entity)
                 || !services.TryGetReplicaFactory(kind, out var factory) || factory is not IInternalSpeechProvider provider
-                || !provider.IsSpeechVisible(entity)) return false;
+                || !provider.IsSpeechVisible(entity)) return Decline(lineNonce, (uint)entityId);
             foreach (var previous in active) if (ReferenceEquals(previous.Entity, entity)) previous.RequestCancellation();
             bool Current() => world.Client.SpeechTarget((uint)entityId, mod, kind, out var current) && ReferenceEquals(current, entity)
                 && services.TryGetReplicaFactory(kind, out var registered) && ReferenceEquals(registered, provider);

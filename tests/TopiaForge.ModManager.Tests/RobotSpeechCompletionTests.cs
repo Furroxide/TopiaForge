@@ -7,13 +7,14 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal static class RobotSpeechCompletionTests
+    internal static partial class RobotSpeechCompletionTests
     {
         internal static void Run()
         {
             FarHostSequential(); NoRecipients(); AllListeners(); Failures(); AcknowledgementValidation(); ResetContinuation();
             WorkerCancellation(); FrameDeadlines();
-            Console.WriteLine("Robot speech completion: 8 focused groups passed.");
+            DeclinedAdmissions(); DeclineValidation(); SchemaCompatibility(); ActiveCapDecline();
+            Console.WriteLine("Robot speech completion: 12 focused groups passed.");
         }
         private static void Check(bool value, string reason)
         { if (!value) throw new InvalidOperationException("Robot speech completion: " + reason); }
@@ -234,10 +235,10 @@ namespace TopiaForge.ModManager.Tests
                 "only an admitted remote sender can report its own completion");
             for (var i = 1; i <= 4; i++) Check(!Deliver(rig, Finished(rig.LastLine, changed: i), sender), "world/challenge/nonce/entity must match exactly");
             for (var size = 0; size < ack.Length; size++) Check(!Deliver(rig, ack.Take(size).ToArray(), sender), "truncated acknowledgements fail closed");
-            Check(!Deliver(rig, Finished(rig.LastLine, 2), sender) && !Deliver(rig, ack.Concat(new byte[] { 0 }).ToArray(), sender),
+            Check(!Deliver(rig, Finished(rig.LastLine, 3), sender) && !Deliver(rig, ack.Concat(new byte[] { 0 }).ToArray(), sender),
                 "status and exact framing are validated");
             var oldVersion = (byte[])ack.Clone(); oldVersion[2] = 1;
-            Check(!Deliver(rig, oldVersion, sender), "schema one cannot certify schema two completion");
+            Check(!Deliver(rig, oldVersion, sender), "older schemas cannot certify current completion");
             rig.Later(); Check(!call.IsCompleted, "invalid acknowledgements cannot finish playback");
             rig.Guests[0].Body.SpeechCompletions[0].SetResult(OperationResult<bool>.Success(true)); rig.World.Frames(5);
             Check(call.IsCompleted && call.Result.Succeeded && !Deliver(rig, ack, sender), "real completion accepted once, replay rejected");
