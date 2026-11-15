@@ -124,8 +124,8 @@ namespace TopiaForge.ModManager.Tests
             Check(!call.IsCompleted, "the call still waits for the visible guest");
             visibleGuest.Body.SpeechCompletions.Single().SetResult(OperationResult<bool>.Success(true));
             rig.World.Frames(5);
-            Check(call.IsCompletedSuccessfully && !call.Result.Succeeded,
-                "revocation keeps the existing failure result for interrupted playback");
+            Check(call.IsCompletedSuccessfully && call.Result.Succeeded && call.Result.Value,
+                "the visible guest heard the line, so hiding it from another viewer does not fail it");
         }
 
         private static void PlaybackAllocation()
