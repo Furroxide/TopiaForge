@@ -31,17 +31,20 @@ const _rounds = 10;
 /// repeat count, and returns its result on the full input, `input(fullCount)`.
 ///
 /// The best of three scans of the full input must stay under [scanBudget].
-/// Growth is timed on two smaller inputs, `input(n)` (N) and `input(4 * n)`
-/// (4N), where n is the largest power of two whose 4N input has at most
-/// [maxTimedChars] characters. Sizing them by characters rather than by count
-/// keeps both in a core's L1 data cache however long the repeated text is, so
-/// a linear scan costs the same per character at both sizes: a larger input
-/// that spills to a slower cache level raises that cost, which a ratio of
-/// timings cannot tell from superlinear growth. The best timing at 4N must
-/// stay under [linearGrowthLimit] times the best at N. Each timing repeats the
-/// scan for about 2 ms, and the two sizes alternate over several rounds, so
-/// neither the timer's resolution nor a slow stretch of a shared runner
-/// decides the result.
+/// Growth is timed on two inputs sized by characters, `input(n)` (N) and
+/// `input(4 * n)` (4N), where n is the largest power of two whose 4N input has
+/// at most [maxTimedChars] characters. Sizing them by characters rather than
+/// by count keeps both in a core's L1 data cache however long the repeated
+/// text is, so a linear scan costs the same per character at both sizes: a
+/// larger input that spills to a slower cache level raises that cost, which a
+/// ratio of timings cannot tell from superlinear growth. The best timing at 4N
+/// must stay under [linearGrowthLimit] times the best at N. Each timing
+/// repeats the scan as many times as fill about 2 ms at N (about 8 ms at 4N),
+/// and the two sizes alternate over several rounds, so neither the timer's
+/// resolution nor a slow stretch of a shared runner decides the result. A scan
+/// that does cheap work for each pair of repeats can stay under the limit when
+/// each repeat is long, because few repeats fit at these sizes and the work
+/// per character dominates; only [scanBudget] bounds it on the full input.
 T expectLinear<T>(
   String Function(int count) input,
   T Function(String text) scan, {
