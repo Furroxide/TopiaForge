@@ -374,6 +374,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeModContext : System.Object,
   method System.Void AdvanceFrame(System.TimeSpan duration)
   method System.Void AssertNoLeaks()
   method System.Void StepFixed(System.TimeSpan duration)
+  method [static] TopiaForge.Mods.Testing.FakeModContext CreateWithThreadChecks(TopiaForge.Mods.ModIdentity? identity = null, TopiaForge.Mods.Testing.FakeRuntimeInfo? runtime = null) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Void Dispose()
   property TopiaForge.Mods.ModIdentity Identity { get [virtual,final,newslot]; }
   property TopiaForge.Mods.Testing.CapturedModLogger Logger { get; }

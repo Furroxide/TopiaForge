@@ -49,8 +49,11 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Deterministic entity registry and motion-control factory.</summary>
+    /// <remarks>Standalone instances do not check thread access. Use <see cref="FakeModContext.CreateWithThreadChecks"/>
+    /// to check this service's engine-facing entry points on the context's creating thread.</remarks>
     public sealed class FakeEntityService : IEntityService
     {
+        private readonly FakeGameThread gameThread;
         private readonly FakeModLifetime lifetime;
         private readonly Dictionary<string, FakeEntity> entities =
             new Dictionary<string, FakeEntity>(StringComparer.Ordinal);
@@ -59,9 +62,12 @@ namespace TopiaForge.Mods.Testing
         private int nextId;
 
         /// <summary>Creates a fake entity service.</summary>
-        public FakeEntityService(FakeModLifetime lifetime)
+        public FakeEntityService(FakeModLifetime lifetime) : this(lifetime, default(FakeGameThread)) { }
+
+        internal FakeEntityService(FakeModLifetime lifetime, FakeGameThread gameThread)
         {
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
+            this.gameThread = gameThread;
         }
 
         internal FakeModLifetime Lifetime => lifetime;
@@ -123,6 +129,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public OperationResult<IEntityMotion> AcquireMotion(IEntity entity)
         {
+            gameThread.AssertCurrent();
             if (entity == null)
             {
                 throw new ArgumentNullException(nameof(entity));
@@ -165,6 +172,9 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public bool TryGetTransform(IEntity entity, out TransformState transform)
         {
+            transform = TransformState.Identity;
+            if (gameThread.IsEnabled && lifetime.IsStopping) return false;
+            gameThread.AssertCurrent();
             if (entity is FakeBlocker blocker) entity = blocker.Entity;
             if (entity is FakeEntity fake && entities.ContainsKey(fake.Id) && fake.IsAlive)
             {
@@ -172,13 +182,13 @@ namespace TopiaForge.Mods.Testing
                 return true;
             }
 
-            transform = TransformState.Identity;
             return false;
         }
 
         /// <inheritdoc/>
         public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform)
         {
+            gameThread.AssertCurrent();
             if (entity is FakeBlocker blocker) entity = blocker.Entity;
             if (!(entity is FakeEntity fake) || !entities.ContainsKey(fake.Id))
             {
@@ -203,6 +213,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public IReadOnlyList<IEntity> Query(EntityQuery query)
         {
+            gameThread.AssertCurrent();
             if (query == null) throw new ArgumentNullException(nameof(query));
             var found = new List<IEntity>();
             var radiusSquared = query.Radius * query.Radius;
@@ -230,6 +241,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public OperationResult<bool> Destroy(IEntity entity)
         {
+            gameThread.AssertCurrent();
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             if (entity is FakeEntity fake && entities.ContainsKey(fake.Id))
             {

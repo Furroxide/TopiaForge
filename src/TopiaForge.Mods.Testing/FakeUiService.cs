@@ -4,8 +4,11 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Captures UI surfaces, modals, and toasts without rendering.</summary>
+    /// <remarks>Standalone instances do not check thread access. Use <see cref="FakeModContext.CreateWithThreadChecks"/>
+    /// to check this service's engine-facing entry points on the context's creating thread.</remarks>
     public sealed partial class FakeUiService : IUiService
     {
+        private readonly FakeGameThread gameThread;
         private readonly FakeModLifetime lifetime;
         private readonly List<FakeUiSurface> surfaces = new List<FakeUiSurface>();
         private readonly List<FakeUiModal> modals = new List<FakeUiModal>();
@@ -19,9 +22,12 @@ namespace TopiaForge.Mods.Testing
         /// Creates a fake UI service. Its gameplay HUDs show whenever they are shown, until <see cref="FakeModContext"/>
         /// connects it to its fake scenes, after which they show only in gameplay, as in the game.
         /// </summary>
-        public FakeUiService(FakeModLifetime lifetime)
+        public FakeUiService(FakeModLifetime lifetime) : this(lifetime, default(FakeGameThread)) { }
+
+        internal FakeUiService(FakeModLifetime lifetime, FakeGameThread gameThread)
         {
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
+            this.gameThread = gameThread;
         }
 
         /// <summary>Gets active fake UI surfaces.</summary>
@@ -70,6 +76,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences)
         {
+            gameThread.AssertCurrent();
             if (preferences == null) throw new ArgumentNullException(nameof(preferences));
             if (lifetime.IsStopping)
             {
@@ -85,6 +92,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)
         {
+            gameThread.AssertCurrent();
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
@@ -114,7 +122,7 @@ namespace TopiaForge.Mods.Testing
                 request,
                 value => surfaces.Remove(value),
                 scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay);
-            surface.SetClock(() => ClockTime, () => WidgetEpoch());
+            surface.SetClock(() => widgetClock(), () => WidgetEpoch());
             if (pendingContentFailures.TryGetValue(request.Id, out var contentFailure))
             {
                 pendingContentFailures.Remove(request.Id);
@@ -139,6 +147,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed)
         {
+            gameThread.AssertCurrent();
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
@@ -175,6 +184,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral)
         {
+            gameThread.AssertCurrent();
             if (string.IsNullOrWhiteSpace(message))
             {
                 throw new ArgumentException("A toast message is required.", nameof(message));

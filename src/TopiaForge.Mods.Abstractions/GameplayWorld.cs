@@ -56,6 +56,11 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>Provides safe operations over opaque world-entity handles.</summary>
+    /// <remarks>
+    /// Call these operations on Robotopia's game thread. An off-thread call that reaches the engine adapter throws
+    /// an <see cref="InvalidOperationException"/> with diagnostic <c>TFSDK100</c>. Use
+    /// <see cref="IModScheduler.NextFrame"/> to queue entity work from a background thread.
+    /// </remarks>
     public interface IEntityService
     {
         /// <summary>Tries to read a complete transform for an entity created by this runtime.</summary>
