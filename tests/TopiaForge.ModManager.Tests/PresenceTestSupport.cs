@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
             PresenceTests.Run();
             PresenceRulesTests.Run();
             PresenceHostileTests.Run();
+            PresenceDisconnectedPoseTests.Run();
             PresenceSpawnRingTests.Run();
             PresenceAvatarTests.Run();
             PresenceBudgetTests.Run();

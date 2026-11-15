@@ -57,7 +57,12 @@ namespace TopiaForge.Mods
         /// <summary>Gets whether the player is still in the session.</summary>
         bool IsPresent { get; }
 
-        /// <summary>Gets the player's avatar entity, usable wherever an entity target is accepted, or null while none is spawned.</summary>
+        /// <summary>
+        /// Gets the player's avatar entity, usable wherever an entity target is accepted, or null while none is spawned.
+        /// During reconnect grace a disconnected player's entity may remain available with its visuals and collision
+        /// suppressed. Require a successful <see cref="TryGetSnapshot"/> before presenting a marker or using its
+        /// retained position.
+        /// </summary>
         IEntity? Entity { get; }
 
         /// <summary>Tries to read the player's latest position and aim.</summary>

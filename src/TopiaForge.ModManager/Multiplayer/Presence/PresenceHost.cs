@@ -115,7 +115,7 @@ namespace TopiaForge.ModManager
             while (open.IsOpen && open.TryReceiveDatagram(out var datagram))
             {
                 presence.Counters.PosesReceived++;
-                if (!presence.TryGetPeer(datagram.Sender, out var peer) || peer == null || peer.IsLocal || peer.Removed || peer.Plausibility == null)
+                if (!presence.TryGetPeer(datagram.Sender, out var peer) || peer == null || peer.IsLocal || !peer.IsConnected || peer.Removed || peer.Plausibility == null)
                 {
                     presence.Counters.Forged++;
                     continue;

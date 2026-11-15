@@ -105,6 +105,76 @@ void _registerDiagnosticDataTests({
     );
   });
 
+  test('diagnostic log exports remove addresses before hashing', () async {
+    final game = gameRoot();
+    final selected = await repository().selectGameDirectory(game.path);
+    final install = selected.copyWith(gameVersion: '10.20.30.40');
+    final sources = <String, File>{
+      'launcher.log': File(p.join(dataRoot().path, 'logs', 'launcher.log')),
+      'manager.log': File(
+        p.join(game.path, 'BepInEx', 'TopiaForge', 'logs', 'manager.log'),
+      ),
+      'bepinex-log.txt': File(p.join(game.path, 'BepInEx', 'LogOutput.log')),
+    };
+    const addresses = [
+      '192.0.2.45',
+      '198.51.100.27:27250',
+      '2001:db8::37',
+      'fe80::12ab%4',
+      '::ffff:203.0.113.7',
+      'peer.example.invalid:27250',
+    ];
+    final original = <String, String>{};
+    for (final source in sources.entries) {
+      final text = [
+        'Diagnostic source ${source.key}',
+        for (final address in addresses) 'Peer endpoint [$address]',
+        'Connection failed: retry available',
+      ].join('\n');
+      source.value.parent.createSync(recursive: true);
+      source.value.writeAsStringSync(text);
+      original[source.key] = text;
+    }
+
+    final bundle = await repository().createDiagnosticBundle(
+      install,
+      const DependencyPlanner().resolveInstalled(const []),
+    );
+    final archive = ZipDecoder().decodeBytes(
+      File(bundle.path).readAsBytesSync(),
+      verify: true,
+    );
+    final files = {
+      for (final file in archive.files.where((file) => file.isFile))
+        file.name: List<int>.from(file.content as List<int>),
+    };
+    final manifest =
+        jsonDecode(utf8.decode(files['diagnostic-manifest.json']!)) as Map;
+    for (final source in sources.entries) {
+      final bytes = files[source.key]!;
+      final text = utf8.decode(bytes);
+      expect(text, contains('Diagnostic source ${source.key}'));
+      expect(text, contains('Connection failed: retry available'));
+      expect(text, contains(withheldAddress));
+      for (final address in addresses) {
+        expect(text, isNot(contains(address)), reason: source.key);
+      }
+      final metadata = (manifest['entries'] as List).cast<Map>().singleWhere(
+        (entry) => entry['name'] == source.key,
+      );
+      expect(metadata['sha256'], sha256.convert(bytes).toString());
+      expect(metadata['includedBytes'], bytes.length);
+      // Exporting manager and game logs must not rewrite their originals.
+      // The launcher appends its own bundle-created message after exporting.
+      expect(
+        source.value.readAsStringSync(),
+        startsWith(original[source.key]!),
+      );
+    }
+    final summary = jsonDecode(utf8.decode(files['summary.json']!)) as Map;
+    expect(summary['gameVersion'], '10.20.30.40');
+  });
+
   test('diagnostic bundles never include the multiplayer folder', () async {
     final install = await repository().selectGameDirectory(gameRoot().path);
     // The folder holds the player's name and favorites, and known-hosts

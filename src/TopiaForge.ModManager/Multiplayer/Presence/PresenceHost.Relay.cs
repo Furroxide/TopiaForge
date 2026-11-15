@@ -227,7 +227,7 @@ namespace TopiaForge.ModManager
                 for (var other = 0; other < all.Count; other++)
                 {
                     var candidate = all[other];
-                    if (ReferenceEquals(candidate, recipient) || !candidate.HasPose || candidate.Index == 0 || candidate.Removed) continue;
+                    if (ReferenceEquals(candidate, recipient) || !candidate.IsConnected || !candidate.HasPose || candidate.Index == 0 || candidate.Removed) continue;
                     var flags = presence.ActivityFlagsFor(candidate, recipient.Id);
                     var flagsChanged = recipient.RelayedFlags[candidate.Index] != flags;
                     candidates.Add(new ReplicationCandidate(new NetworkEntityId(candidate.Index), PriorityOf(recipient, candidate),

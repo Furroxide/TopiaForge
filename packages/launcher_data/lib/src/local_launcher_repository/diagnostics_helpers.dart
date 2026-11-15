@@ -36,6 +36,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       'launcher.log',
       _launcherLogFile,
       gamePaths,
+      redactAddresses: true,
     );
     await _addDiagnosticFileIfExists(
       archive,
@@ -52,6 +53,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       'manager.log',
       File(p.join(_managerLogs(install).path, 'manager.log')),
       gamePaths,
+      redactAddresses: true,
     );
     await _addDiagnosticFileIfExists(
       archive,
@@ -60,6 +62,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       'bepinex-log.txt',
       File(p.join(install.path, 'BepInEx', 'LogOutput.log')),
       gamePaths,
+      redactAddresses: true,
     );
     final manifest = _prettyJson({
       'schemaVersion': 2,
@@ -140,8 +143,9 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
     List<DiagnosticEntryMetadata> entries,
     String name,
     File file,
-    List<String> gamePaths,
-  ) async {
+    List<String> gamePaths, {
+    bool redactAddresses = false,
+  }) async {
     if (_isMultiplayerData(file)) return;
     final type = FileSystemEntity.typeSync(file.path, followLinks: false);
     if (type == FileSystemEntityType.notFound) {
@@ -180,6 +184,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
         truncationReasons: reasons,
         byteLimit: _maxDiagnosticSourceBytes,
         lineLimit: _maxDiagnosticSourceLines,
+        redactAddresses: redactAddresses,
       ),
     );
   }
@@ -205,9 +210,13 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
     List<String> truncationReasons = const [],
     int? byteLimit,
     int? lineLimit,
+    bool redactAddresses = false,
   }) {
     final raw = utf8.encode(text);
-    final bytes = utf8.encode(_redact(text, gamePaths));
+    final redacted = _redact(text, gamePaths);
+    final bytes = utf8.encode(
+      redactAddresses ? withoutAddresses(redacted) : redacted,
+    );
     archive.addFile(ArchiveFile.bytes(name, bytes));
     included.add(name);
     return DiagnosticEntryMetadata(
