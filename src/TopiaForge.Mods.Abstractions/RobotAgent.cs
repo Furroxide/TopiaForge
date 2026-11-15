@@ -30,7 +30,9 @@ namespace TopiaForge.Mods
         /// Switches the robot's brain mode at runtime. To <see cref="RobotBrainMode.Dormant"/>: the native
         /// LLM brain and behaviour tree are suppressed and mod movement intents take over — the way to
         /// reprogram/override an autonomous robot. To <see cref="RobotBrainMode.Autonomous"/>: mod intents are
-        /// cleared and the native brain is best-effort woken back up. Idempotent; never throws.
+        /// cleared and the native brain is best-effort woken back up. Idempotent; never throws. A robot whose type is
+        /// offered body-only has no native brain to wake: Autonomous returns <see cref="ModErrorCode.Unavailable"/>
+        /// with the reason.
         /// </summary>
         OperationResult<bool> SetBrainMode(RobotBrainMode mode);
 
@@ -93,7 +95,8 @@ namespace TopiaForge.Mods
         /// <summary>
         /// Updates how the player can interact with this robot: native talk, disabled native talk, a native talk
         /// distance override, or a custom synchronous callback. Custom interactions take precedence over native
-        /// talk while installed.
+        /// talk while installed. A robot whose type is offered body-only has no native talk: enabling it returns
+        /// <see cref="ModErrorCode.Unavailable"/> with the reason.
         /// </summary>
         OperationResult<bool> SetInteraction(RobotInteractionOptions options);
 

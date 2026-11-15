@@ -144,6 +144,11 @@ namespace TopiaForge.RobotKit
                 return OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, RemoteCallerMessage);
             }
 
+            if (target.BodyOnly)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, RobotComposedReferences.BodyOnly);
+            }
+
             var applied = RobotPersonalityBridge.Apply(target.Agent, personality);
             if (!applied.TryGetValue(out var created))
             {

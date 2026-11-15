@@ -16,7 +16,7 @@ namespace TopiaForge.ModManager.Tests
             var production = new[]
             {
                 "RobotSceneEditorService.cs", "RobotEditTarget.cs", "RobotEditLease.cs",
-                "NativeEntityAdapter.cs", "RobotKitLog.cs"
+                "NativeEntityAdapter.cs", "RobotKitLog.cs", "RobotComposedReferences.cs"
             };
             var reflection = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(robotKit, "GameReflection.cs")))
                 .GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -47,7 +47,7 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var probe = Assembly.Load(bytes.ToArray()).GetType("RobotEditorProbe", throwOnError: true)!;
-            foreach (var scenario in new[] { "DiscoveryAndResolution", "ManagedPersonalityOnly", "RemoteCallersRefused",
+            foreach (var scenario in new[] { "DiscoveryAndResolution", "ManagedPersonalityOnly", "BodyOnlyPersonalityRefused", "RemoteCallersRefused",
                 "RetainedTarget", "ManagedTransition",
                 "ManagedSceneTeardown", "PreviewRollback", "MovedTreeRestoration", "OrdinaryRestoration" })
             {
@@ -211,6 +211,8 @@ namespace TopiaForge.RobotKit
     {
         internal IRobotAgent? Agent;
         internal IRobotAgent? FindAgentByEntity(IEntity entity) => entity.Id == Agent?.Id ? Agent : null;
+        internal static bool BodyOnlyAgents;
+        internal static bool IsBodyOnly(IRobotAgent agent) => BodyOnlyAgents;
     }
 
     public class AgentHandle : DispatchProxy, INativeEntityAdapter
@@ -380,6 +382,28 @@ public static class RobotEditorProbe
         Refused(lease.PreviewBrainMode(RobotBrainMode.Autonomous), "Managed brain preview");
         Check(Value(lease.PreviewPersonality(Draft)), "A managed robot accepts a personality preview.");
         Check(Value(lease.Restore()), "The managed personality preview restores cleanly.");
+    }
+
+    public static void BodyOnlyPersonalityRefused()
+    {
+        using var editor = CreateEditor(out var agents);
+        var robot = CreateRobot("Body-only robot");
+        MarkManaged(robot.Root);
+        var handle = DispatchProxy.Create<IRobotAgent, AgentHandle>();
+        agents.Agent = handle;
+        ((AgentHandle)handle).NativeGameObject = robot.Root;
+        RobotAgentService.BodyOnlyAgents = true;
+        try
+        {
+            Check(editor.TryResolve(handle, out var target) && target != null, "The host can resolve its body-only robot.");
+            using var lease = Value(editor.BeginTemporaryEdit(target!));
+            var personality = lease.PreviewPersonality(Draft);
+            Check(!personality.Succeeded && personality.ErrorCode == ModErrorCode.Unavailable
+                && personality.ErrorMessage == RobotComposedReferences.BodyOnly,
+                "A body-only robot refuses a personality preview with its reason.");
+            Check(Value(lease.Restore()), "The refused preview leaves nothing to restore.");
+        }
+        finally { RobotAgentService.BodyOnlyAgents = false; }
     }
 
     public static void RemoteCallersRefused()

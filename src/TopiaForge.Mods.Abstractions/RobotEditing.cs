@@ -101,7 +101,10 @@ namespace TopiaForge.Mods
         /// <summary>Previews a native brain mode until the lease is restored or disposed.</summary>
         OperationResult<bool> PreviewBrainMode(RobotBrainMode mode);
 
-        /// <summary>Applies a temporary native autonomous personality.</summary>
+        /// <summary>
+        /// Applies a temporary native autonomous personality. A RobotKit robot whose type is offered body-only has
+        /// no native character to preview: it returns <see cref="ModErrorCode.Unavailable"/> with the reason.
+        /// </summary>
         OperationResult<bool> PreviewPersonality(RobotPersonalityDraft personality);
 
         /// <summary>

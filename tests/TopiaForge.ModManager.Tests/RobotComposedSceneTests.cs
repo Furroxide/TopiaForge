@@ -48,22 +48,46 @@ namespace TopiaForge.ModManager.Tests
                 foreach (var reason in Enum.GetValues<RobotComposedRefusal>())
                 {
                     for (var i = 0; i < 1000; i++) RobotKitDiagnostics.ReportComposedDiscovery(state, reason);
-                    Check(logger.Messages.Last() == "RobotKit composed discovery refused: " + reason + ".",
+                    Check(logger.Messages.Last() == (reason == RobotComposedRefusal.CharacterUnprepared
+                            ? "RobotKit composed discovery admitted the body only: " : "RobotKit composed discovery refused: ") + reason + ".",
                         "only a static refusal code reaches Info diagnostics");
+                    Check(RobotKitDiagnostics.LastComposedDiscovery(() => state) == reason,
+                        "the latest discovery reason is kept for a refused spawn");
+                    var text = RobotComposedReferences.Explain(reason);
+                    Check(text.Length > 20 + reason.ToString().Length && text.EndsWith(" Code: " + reason + ".", StringComparison.Ordinal),
+                        "every discovery code has a fixed sentence for the author and the player");
                 }
+                Check(RobotComposedReferences.Explain(RobotComposedRefusal.ProjectCatalogShape).StartsWith(
+                    "This game version does not expose", StringComparison.Ordinal), "a native serializer result is a game-version cause, not map data");
                 var count = Enum.GetValues<RobotComposedRefusal>().Length;
                 Check(logger.Messages.Count == count, "each refusal is bounded per world/session");
                 var rebound = new WorldSessionSnapshot(WorldSessionPhase.Running, session,
                     new WorldReadiness(ready.Scene, TransformState.Identity), 2);
                 RobotKitDiagnostics.ReportComposedDiscovery(rebound, RobotComposedRefusal.HostCount);
                 Check(logger.Messages.Count == count, "snapshot/readiness rebinding does not reset diagnostics");
+                Check(RobotKitDiagnostics.LastComposedDiscovery(() => rebound) == RobotComposedRefusal.HostCount,
+                    "a repeated code is still the latest reason");
+                var otherSession = new WorldSessionSnapshot(WorldSessionPhase.Running, new Session("private-other"), ready, 5);
+                RobotKitDiagnostics.ClearComposedDiscovery(otherSession);
+                RobotKitDiagnostics.ClearComposedDiscovery(null);
+                Check(RobotKitDiagnostics.LastComposedDiscovery(() => state) == RobotComposedRefusal.HostCount,
+                    "clearing another session keeps this session's reason");
+                RobotKitDiagnostics.ClearComposedDiscovery(rebound);
+                Check(RobotKitDiagnostics.LastComposedDiscovery(() => state) == null, "a new discovery run clears the session's reason");
+                RobotKitDiagnostics.ReportComposedDiscovery(state, RobotComposedRefusal.HostCount);
+                Check(logger.Messages.Count == count, "clearing the reason keeps the log budget");
                 var next = new WorldSessionSnapshot(WorldSessionPhase.Running, session,
                     new WorldReadiness(new WorldSceneIdentity(7, "private-world"), TransformState.Identity), 3);
+                Check(RobotKitDiagnostics.LastComposedDiscovery(() => next) == null
+                    && RobotKitDiagnostics.LastComposedDiscovery(() => null) == null
+                    && RobotKitDiagnostics.LastComposedDiscovery(() => throw new InvalidOperationException()) == null,
+                    "a reason never crosses into another world or an unreadable observation");
                 RobotKitDiagnostics.ReportComposedDiscovery(next, RobotComposedRefusal.HostCount);
                 Check(logger.Messages.Count == count + 1, "real world lifetime replacement reports again even with reused numeric scene handle");
                 RobotKitDiagnostics.ReportComposedDiscovery(null, RobotComposedRefusal.HostCount);
                 Check(logger.Messages.Count == count + 1, "missing observation cannot reset a real world diagnostic budget");
                 var replacement = new WorldSessionSnapshot(WorldSessionPhase.Running, new Session("private-replacement"), next.World, 4);
+                Check(RobotKitDiagnostics.LastComposedDiscovery(() => replacement) == null, "a reason never crosses into another session");
                 RobotKitDiagnostics.ReportComposedDiscovery(replacement, RobotComposedRefusal.HostCount);
                 Check(logger.Messages.Count == count + 2, "actual session replacement reports again with the same world identity");
 
