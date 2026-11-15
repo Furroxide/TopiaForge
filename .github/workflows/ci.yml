@@ -79,7 +79,7 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
           latest=()
           if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
@@ -182,7 +182,7 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
           latest=()
           if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
@@ -315,6 +315,9 @@ jobs:
 
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
+
+      - name: Test private Status deployment gate
+        run: python3 .github/scripts/test_private_status_deploy.py
 
       - name: Test protected release evidence gates
         run: |
@@ -485,7 +488,7 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
           $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
           dotnet run `

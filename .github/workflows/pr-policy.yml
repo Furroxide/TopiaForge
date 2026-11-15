@@ -59,8 +59,8 @@ jobs:
             if [[ "$same_repository" == false ]]; then
               failures+=("main accepts only same-repository release branches.")
             fi
-            if [[ ! $HEAD_REF =~ ^release/$semver$ && "$HEAD_REF" != service/production-multiplayer ]]; then
-              failures+=("main accepts only release/<semver> or the scoped production service pull request.")
+            if [[ ! $HEAD_REF =~ ^release/$semver$ && "$HEAD_REF" != service/production-multiplayer && "$HEAD_REF" != cloudflare/deploy-host-main ]]; then
+              failures+=("main accepts only release/<semver> or scoped production-service pull requests.")
             fi
           elif [[ "$BASE_REF" == release/* ]]; then
             if [[ ! $BASE_REF =~ ^release/$semver$ ]]; then
@@ -133,8 +133,34 @@ jobs:
             esac
           done < <(git diff --name-only --no-renames "$BASE_SHA" HEAD)
 
+      - name: Limit the Cloudflare deploy-host pull request
+        if: github.base_ref == 'main' && github.head_ref == 'cloudflare/deploy-host-main'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin "$BASE_SHA"
+          changed=0
+          while IFS= read -r -d '' path; do
+            changed=$((changed + 1))
+            case "$path" in
+              .github/workflows/deploy-private-status-source.yml|\
+              .github/scripts/test_private_status_deploy.py|\
+              .github/workflows/pr-policy.yml|\
+              .github/workflows/ci.yml|\
+              docs/internal/CloudflareDeploymentHost.md) ;;
+              *) echo "::error::Out-of-scope Cloudflare deploy-host file: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only -z --no-renames "$BASE_SHA" HEAD)
+          test "$changed" -gt 0
+          test -f .github/workflows/deploy-private-status-source.yml
+
       - name: Validate release source against the product version
-        if: github.base_ref == 'main' && github.head_ref != 'service/production-multiplayer'
+        if: >-
+          github.base_ref == 'main' &&
+          github.head_ref != 'service/production-multiplayer' &&
+          github.head_ref != 'cloudflare/deploy-host-main'
         shell: bash
         env:
           HEAD_REF: ${{ github.head_ref }}

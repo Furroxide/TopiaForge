@@ -1,0 +1,271 @@
+name: Deploy Cloudflare services from Status source
+
+# The service source stays in the private Status repository. Only this public
+# repository can provide the required reviewer gate on the current GitHub plan.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Existing protected environment and Worker to deploy
+        required: true
+        type: choice
+        options:
+          - status
+          - control-plane-staging
+          - control-plane-production
+      source_sha:
+        description: Full, reviewed commit SHA at the tip of Status main
+        required: true
+        type: string
+      migration_sql_sha256:
+        description: SHA-256 of the approved 0003 SQL; required for status only
+        required: false
+        type: string
+      verify_public_routes:
+        description: Run public smoke checks after the custom domains are attached
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-status-source
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Require an existing protected environment
+    if: github.repository == 'Furroxide/TopiaForge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      deployment_environment: ${{ steps.target.outputs.deployment_environment }}
+      wrangler_environment: ${{ steps.target.outputs.wrangler_environment }}
+    steps:
+      - name: Require main and a reviewed Status commit
+        id: target
+        shell: bash
+        env:
+          TARGET: ${{ inputs.target }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          case "$TARGET" in
+            status)
+              echo 'deployment_environment=control-plane-production' >> "$GITHUB_OUTPUT"
+              echo 'wrangler_environment=' >> "$GITHUB_OUTPUT"
+              ;;
+            control-plane-staging)
+              echo 'deployment_environment=control-plane-staging' >> "$GITHUB_OUTPUT"
+              echo 'wrangler_environment=staging' >> "$GITHUB_OUTPUT"
+              ;;
+            control-plane-production)
+              echo 'deployment_environment=control-plane-production' >> "$GITHUB_OUTPUT"
+              echo 'wrangler_environment=production' >> "$GITHUB_OUTPUT"
+              ;;
+            *) echo '::error::Unknown deployment target.'; exit 1 ;;
+          esac
+
+      # Runs before any job names an environment, so a typo cannot create one.
+      - name: Require reviewer and approved branch policy
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ENVIRONMENT: ${{ steps.target.outputs.deployment_environment }}
+        run: |
+          set -euo pipefail
+          environment=$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GITHUB_REPOSITORY/environments/$DEPLOYMENT_ENVIRONMENT")
+          jq -e --arg name "$DEPLOYMENT_ENVIRONMENT" \
+            '.name == $name and
+             (.can_admins_bypass == false or $name == "control-plane-production") and
+             .deployment_branch_policy.custom_branch_policies == true and
+             ([.protection_rules[] | select(.type == "required_reviewers") |
+               ((.prevent_self_review == true or $name != "control-plane-production") and
+                (.reviewers | length) > 0)] | any)' \
+            <<<"$environment" >/dev/null
+          branch_policy=$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GITHUB_REPOSITORY/environments/$DEPLOYMENT_ENVIRONMENT/deployment-branch-policies")
+          jq -e --arg name "$DEPLOYMENT_ENVIRONMENT" '
+            .total_count == (if $name == "control-plane-staging" then 2 else 1 end) and
+            ([.branch_policies[] | {name, type}] | sort_by(.name)) ==
+              (if $name == "control-plane-staging"
+               then [{name: "dev", type: "branch"}, {name: "main", type: "branch"}]
+               else [{name: "main", type: "branch"}] end)
+          ' <<<"$branch_policy" >/dev/null
+
+  deploy:
+    name: Deploy ${{ inputs.target }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: ${{ needs.preflight.outputs.deployment_environment }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the exact private source revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Furroxide/TopiaForge-Status
+          ref: ${{ inputs.source_sha }}
+          token: ${{ secrets.STATUS_REPO_READ_TOKEN }}
+          persist-credentials: false
+          path: source
+
+      - name: Require the checked-out revision to be Status main
+        env:
+          GH_TOKEN: ${{ secrets.STATUS_REPO_READ_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(gh api repos/Furroxide/TopiaForge-Status/commits/main --jq .sha)" = "$EXPECTED_SHA"
+
+      - name: Require the exact approved status migration
+        if: inputs.target == 'status'
+        working-directory: source
+        env:
+          MIGRATION_SQL_SHA256: ${{ inputs.migration_sql_sha256 }}
+        run: |
+          set -euo pipefail
+          approved=514a6f4deef1303f83887a81e38d1c28525e06b5b1ab7d84819b4d24c0f99e51
+          test "$MIGRATION_SQL_SHA256" = "$approved"
+          test "$(find migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort)" = \
+            "$(printf '%s\n' 0001_status.sql 0002_claim_owners.sql 0003_public_activity.sql)"
+          test "$(sha256sum migrations/0003_public_activity.sql | cut -d' ' -f1)" = "$approved"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.18.0'
+
+      - name: Test and dry-run the status page
+        if: inputs.target == 'status'
+        working-directory: source
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = v24.18.0
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run check
+          node scripts/deployment-config.mjs
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/status"
+
+      - name: Test and dry-run the control plane
+        if: inputs.target != 'status'
+        working-directory: source/services/control-plane
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+          WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = v24.18.0
+          [[ "$WRANGLER_ENVIRONMENT" == staging || "$WRANGLER_ENVIRONMENT" == production ]]
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          test -f ../../migrations/0003_public_activity.sql
+          node scripts/deployment-config.mjs
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/control-plane" --env "$WRANGLER_ENVIRONMENT"
+
+      - name: Bind the existing status database
+        if: inputs.target == 'status'
+        working-directory: source
+        env:
+          STATUS_DATABASE_ID: ${{ secrets.STATUS_DATABASE_ID }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const id = process.env.STATUS_DATABASE_ID;
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id) ||
+              id === '00000000-0000-0000-0000-000000000000') {
+            throw new Error('Database binding is missing or invalid');
+          }
+          const config = fs.readFileSync('wrangler.toml', 'utf8');
+          if (!config.includes('00000000-0000-0000-0000-000000000000')) {
+            throw new Error('Expected database placeholder is missing');
+          }
+          fs.writeFileSync('wrangler.toml', config.replace('00000000-0000-0000-0000-000000000000', id));
+          NODE
+          node scripts/deployment-config.mjs
+
+      - name: Apply reviewed status migrations and deploy
+        if: inputs.target == 'status'
+        working-directory: source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STATUS_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          migration_rows=$(npx --no-install wrangler d1 execute DB --remote \
+            --command 'SELECT name FROM d1_migrations ORDER BY id' \
+            --json --config wrangler.deploy.toml)
+          jq -e '
+            type == "array" and length == 1 and .[0].success == true and
+            ((.[0].results | map(.name)) == ["0001_status.sql", "0002_claim_owners.sql"] or
+             (.[0].results | map(.name)) == ["0001_status.sql", "0002_claim_owners.sql", "0003_public_activity.sql"])
+          ' <<<"$migration_rows" >/dev/null
+          npx --no-install wrangler d1 migrations apply DB --remote --config wrangler.deploy.toml
+          npx --no-install wrangler deploy --config wrangler.deploy.toml
+
+      - name: Deploy the control plane
+        if: inputs.target != 'status'
+        working-directory: source/services/control-plane
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT"
+
+      - name: Smoke-test public routes after domain cutover
+        if: inputs.verify_public_routes
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            status)
+              curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 \
+                --connect-timeout 10 --max-time 20 https://status.topiaforge.dev/api/status \
+                | jq -e '.schema == "topiaforge.public-status/1" and (.environments.production.launched | type == "boolean")'
+              curl --fail --silent --show-error --max-time 20 \
+                'https://status.topiaforge.dev/api/history?environment=staging&range=24h' \
+                | jq -e '.environment == "staging" and (.components | length == 5)'
+              for path in claim run-claim observations; do
+                test "$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
+                  -X POST "https://status.topiaforge.dev/internal/$path")" = 401
+              done
+              ;;
+            control-plane-staging) origin=https://mp-staging.topiaforge.dev ;;
+            control-plane-production) origin=https://mp.topiaforge.dev ;;
+            *) exit 1 ;;
+          esac
+          if [[ "$TARGET" == control-plane-* ]]; then
+            curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 \
+              --connect-timeout 10 --max-time 20 "$origin/v1/status" \
+              | jq -e '.schema == "topiaforge.control-plane-status/1" and .api == 1'
+          fi
