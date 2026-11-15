@@ -77,6 +77,13 @@ class ReleasePackageSourceTests(unittest.TestCase):
             self.assertIn("github.head_ref == 'maintenance/main-governance'", expression)
             self.assertIn("github.head_ref == 'cloudflare/deploy-host-main'", expression)
             self.assertNotIn("github.base_ref == 'main' }}", expression)
+        ci_baselines = re.findall(
+            r"(?m)^          PINNED_STABLE_BASELINE: (.+)$", workflow("ci.yml")
+        )
+        self.assertEqual(3, len(ci_baselines))
+        for expression in ci_baselines:
+            self.assertIn("github.head_ref == 'maintenance/main-governance'", expression)
+            self.assertNotIn("github.head_ref == 'release/", expression)
 
 
 if __name__ == "__main__":

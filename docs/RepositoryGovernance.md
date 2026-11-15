@@ -52,7 +52,7 @@ matrix jobs are never configured directly as required checks.
 | `release/*` | The same five common checks. Each release-head update also produces `Required / Release packages` for later promotion. |
 | `main` | The five common checks plus `Required / Release packages` on the pull request's test merge commit. This unsigned package dry run also applies to scoped service and governance changes; it does not publish a release. |
 
-For the one-time service branch, CI and the required package build verify the historical stable `main` game build
+For scoped service and governance pull requests, CI and the required package build verify the historical stable `main` game build
 against its pinned public archive. The upstream game has advanced since that release, so the latest-build check would
 reject this unchanged client baseline. Release-branch pushes and their `main` pull requests retain the latest-build requirement.
 
