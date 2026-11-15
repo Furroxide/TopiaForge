@@ -13,6 +13,10 @@ import unittest
 
 WORKFLOW = (Path(__file__).resolve().parents[1] / "workflows" /
             "deploy-private-status-source.yml").read_text(encoding="utf-8")
+POLICY = (Path(__file__).resolve().parents[1] / "workflows" /
+          "pr-policy.yml").read_text(encoding="utf-8")
+CI = (Path(__file__).resolve().parents[1] / "workflows" /
+      "ci.yml").read_text(encoding="utf-8")
 
 
 def jobs():
@@ -34,6 +38,70 @@ def git_bash():
 
 
 class PrivateStatusDeployTests(unittest.TestCase):
+    def test_scoped_main_branch_exception_keeps_other_branches_blocked(self):
+        step = POLICY.split("      - name: Validate title and branch routing\n", 1)[1]
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]).strip()
+        bash = git_bash()
+        self.assertIsNotNone(bash)
+        for head, head_repo, accepted in [
+            ("cloudflare/deploy-host-main", "Furroxide/TopiaForge", True),
+            ("release/0.2.0", "Furroxide/TopiaForge", True),
+            ("unrelated/main-change", "Furroxide/TopiaForge", False),
+            ("cloudflare/deploy-host-main", "fork/TopiaForge", False),
+        ]:
+            with self.subTest(head=head, head_repo=head_repo):
+                variables = {
+                    "AUTHOR_LOGIN": "Furroxide", "BASE_REF": "main",
+                    "BASE_REPOSITORY": "Furroxide/TopiaForge", "HEAD_REF": head,
+                    "HEAD_REPOSITORY": head_repo,
+                    "PR_TITLE": "ci: host protected Cloudflare deploys from private Status",
+                }
+                if os.name == "nt":
+                    variables["SystemRoot"] = os.environ["SystemRoot"]
+                result = subprocess.run(
+                    [bash, "--noprofile", "--norc", "-c", script], env=variables,
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+
+        scope = POLICY.split("      - name: Limit the Cloudflare deploy-host pull request\n", 1)[1]
+        scope = scope.split("\n      - name:", 1)[0]
+        self.assertIn("git diff --name-only -z --no-renames", scope)
+        self.assertIn(".github/workflows/deploy-private-status-source.yml", scope)
+        self.assertIn("docs/internal/CloudflareDeploymentHost.md", scope)
+        self.assertIn("test -f .github/workflows/deploy-private-status-source.yml", scope)
+        self.assertIn("github.head_ref != 'cloudflare/deploy-host-main'", POLICY)
+        self.assertEqual(CI.count("PINNED_STABLE_BASELINE:"), 3)
+        self.assertEqual(CI.count("github.head_ref == 'cloudflare/deploy-host-main'"), 3)
+        self.assertIn("python3 .github/scripts/test_private_status_deploy.py", CI)
+
+    def test_scoped_main_branch_rejects_client_file_changes(self):
+        step = POLICY.split("      - name: Limit the Cloudflare deploy-host pull request\n", 1)[1]
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]).strip()
+        bash = git_bash()
+        self.assertIsNotNone(bash)
+        fake_git = (
+            'git() { if [[ "$1" == fetch ]]; then return 0; fi; '
+            'if [[ "$1" == diff ]]; then printf "%s\\0" "$SCOPED_PATH"; return 0; fi; return 1; }\n'
+        )
+        for path, accepted in [
+            (".github/workflows/deploy-private-status-source.yml", True),
+            ("src/TopiaForge.Client/Changed.cs", False),
+        ]:
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as folder:
+                workflow = Path(folder) / ".github/workflows/deploy-private-status-source.yml"
+                workflow.parent.mkdir(parents=True)
+                workflow.touch()
+                variables = {"BASE_SHA": "a" * 40, "SCOPED_PATH": path}
+                if os.name == "nt":
+                    variables["SystemRoot"] = os.environ["SystemRoot"]
+                result = subprocess.run(
+                    [bash, "--noprofile", "--norc", "-c", fake_git + script],
+                    env=variables, cwd=folder, capture_output=True, text=True,
+                    timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+
     def test_branch_policy_accepts_only_existing_staging_and_production_rules(self):
         preflight = jobs()["preflight"]
         expression = re.search(
