@@ -190,6 +190,39 @@ verify audible sound. Native subtitle-only and pre-recorded-clip overrides are o
 Speech requires matching speech schemas on both peers; older builds can join but exchange no robot speech.
 See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/dev/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
 
+### Speech results
+
+Call `SayAsync` on the main thread from the host context that spawned the robot. A refused line returns at once.
+An admitted line that is not cancelled completes no sooner than the one-second speech pace, so awaiting each line
+before the next never cuts off or rate-limits the previous one. A cancelled line returns as soon as it stops.
+
+| Result | What happened | What to do |
+|---|---|---|
+| `Success(true)` | At least one listener played the line to the end, even if others left, failed or had not reported by the 15-second deadline. | Continue. |
+| `Success(false)` | Nobody accepted the line: no listener was in earshot, or each one had the robot hidden or declined it. Nothing was synthesized. | Continue. Repeat the line later only if your design needs it heard. |
+| `Unavailable` | The robot could not speak (no visible current-world body or matching voice binding), or nobody finished the line because listeners left, had the robot hidden or failed playback. | Do not repeat it in a loop. Speak a fresh line when the robot is next needed. |
+| `TimedOut` | Nobody had heard the line to the end by the host's 15-second deadline, and every copy stopped. | Keep lines short enough to finish within 15 seconds. |
+| `Cancelled` | Your token was cancelled, a newer line replaced this one, or the owning scope, provider or world retired. | Stop the dialogue. |
+| `RateLimited` | The robot spoke less than a second ago, or the speech budget is full. | Await each line before the next. Retry a fresh line shortly. |
+| `InvalidArgument` | The text is empty, longer than 512 characters or not plain text. | Fix the text. |
+| `NotAuthoritative` | The caller does not own a current host robot, for example on a guest. | Speak from the host context that owns the robot. |
+
+A dialogue that stops at the first failure and moves on when nobody was near:
+
+```csharp
+async Task<bool> TellAsync(IRobotAgent witness, IReadOnlyList<string> lines, CancellationToken cancellationToken)
+{
+    foreach (var line in lines)
+    {
+        var said = await witness.SayAsync(line, cancellationToken);
+        // said.Value is false when nobody was in earshot; the dialogue still moves on.
+        if (!said.Succeeded) return false; // Stop instead of repeating a line some players heard.
+    }
+
+    return true;
+}
+```
+
 ## Deterministic Robotopia gameplay first
 
 Remote brain text is untrusted presentation. Drive Robotopia state only from bounded, validated fields
