@@ -103,15 +103,18 @@ Preflight the required cast against `RobotTypes` in the loaded scene and retain 
 Pass the selected descriptor's `Id` as `robotTypeId`. An omitted type selects the default;
 an explicit unavailable type returns `Unavailable`, without silently substituting another robot.
 Discovery describes loaded native prefabs, not a promise that every named character exists in every map.
-Robot01 and CopBot have navigated sampled imported-map routes. MuniciPal discovery and spawning
-remain unqualified on build 2597: report it unavailable if absent, rather than relabeling the default robot.
-The synchronous composed factory uses 2597's private catalog-reference collector. Its personality and
-about dependencies are assumed to be distinct from body-part and voice-map resolution; one 2597 host
-start is still needed to confirm it. A nonblank personality value
-does not establish an inline prompt. The current synchronous path does not prepare missing catalog assets:
-unresolved dependencies refuse discovery. Character data and symbolic material values pass through unchanged.
-This bounded preflight does not establish that a native character's catalog assets have been prepared or
-that a character is qualified on 2597.
+Robot01 and CopBot have navigated sampled imported-map routes on earlier builds. MuniciPal discovery and
+spawning remain unqualified on build 2640: report it unavailable if absent, rather than relabeling the default
+robot. The synchronous composed factory uses build 2640's private catalog-reference collector, whose signature is
+unchanged from 2597. Its personality and about dependencies are assumed to be distinct from body-part and
+voice-map resolution; one 2640 host start is still needed to confirm it. Build 2640 also changed the native
+builder around it (it lost `ResolvePrefabSceneJson` and gained prefab-expansion state, the project gained
+`prefabScenes`, and import problems now go to a report that RobotKit summarizes as a count), so native
+composition is unverified on 2640. A nonblank
+personality value does not establish an inline prompt. The current synchronous path does not prepare missing
+catalog assets: unresolved dependencies refuse discovery. Character data and symbolic material values pass
+through unchanged. This bounded preflight does not establish that a native character's catalog assets have been
+prepared or that a character is qualified on 2640.
 
 Composed MuniciPal discovery is available only during `StartingMode` and `Running` for the current
 live map world. Its native composed body has no `Health`: `ApplyDamage` returns `Unavailable` and `Kill`

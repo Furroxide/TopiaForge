@@ -7,7 +7,7 @@ namespace TopiaForge.Mods.Analyzers
     internal sealed class EnvironmentPresetCatalogue
     {
         // Engine metadata proves the lookup shape, not the shipped asset keys. Qualify only after native capture.
-        internal static readonly EnvironmentPresetCatalogue Shipped = new EnvironmentPresetCatalogue("0.0.2545", false, Array.Empty<string>());
+        internal static readonly EnvironmentPresetCatalogue Shipped = new EnvironmentPresetCatalogue("0.0.2640", false, Array.Empty<string>());
         internal EnvironmentPresetCatalogue(string build, bool verified, IEnumerable<string> keys)
         {
             Build = build;
