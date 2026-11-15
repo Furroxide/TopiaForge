@@ -23,6 +23,8 @@ namespace TopiaForge.ModManager.Tests
             LowerHudAnchorsReserveScreenSpaceWithoutMovingTheirPivot();
             TheGateIsSampledEveryFrameBeforeModsUpdate();
             ToastsStackFromTheBottomRight();
+            APausedWorldLoadToastsThroughItsProvider();
+            ALocalSurfaceKeepsTheClockOfItsShownTree();
             AWindowShownDuringItsCloseFadeStaysShown();
             AWindowFollowsItsCanvasSize();
             Console.WriteLine("UiSurfaceLifetimeConventionTests passed.");
@@ -165,6 +167,24 @@ namespace TopiaForge.ModManager.Tests
             RequireSource(toast, "root.Rect.anchorMin = new Vector2(1f, 0f);", "Toasts must dock at the bottom right.");
             RequireSource(toast, "root.Rect.pivot = new Vector2(1f, 0f);", "A toast must rest on its bottom edge.");
             RequireSource(toast, "var targetY = TopiaForgeTokens.SafeMargin + top;", "Toasts must stack upwards from the bottom margin.");
+        }
+
+        // A world load that waits on a paused game tells the player through its provider's own toasts.
+        private static void APausedWorldLoadToastsThroughItsProvider()
+        {
+            var core = Read("src", "TopiaForge.ModManager", "CoreGameplayServices.cs");
+            RequireMatch(core, @"new OwnerWorldRuntimeService\(lifetime, sceneTransitions, worlds, new WorldRuntimeClock\(ownerScheduler\), dispatcher,\s*message => ui\.ShowToast\(message\)\)",
+                "A provider's world runtime must show the paused-load notice as the provider's toast.");
+        }
+
+        // Re-applying the shown tree failed on a local surface once its countdown expired, and succeeded on a shared HUD.
+        private static void ALocalSurfaceKeepsTheClockOfItsShownTree()
+        {
+            var surface = Read("src", "TopiaForge.ModManager", "UnityUiSurface.cs");
+            RequireSource(surface, "if (!ReferenceEquals(content, admitted)) UiClockBinding.Bind(content, callbacks.ClockEpoch());",
+                "A local surface must re-apply its shown tree without binding it to the current clock again.");
+            RequireMatch(surface, @"compositionRoot = next;\s*admitted = content;",
+                "A local surface must remember the tree it shows once that tree is committed.");
         }
 
         // A surface's Hide followed at once by Show left the window hidden, though the surface said it showed.

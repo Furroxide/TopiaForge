@@ -37,6 +37,17 @@ namespace TopiaForge.ModManager.Tests
                 surface.Dispose();
                 Assert(lifetime.TrackedResourceCount == 0, "disposing a lost host handle releases its tracking lease");
             }
+            // A call made before the next frame notices the loss answers as the solo surface does, even for the shown tree.
+            var shown = new UiText("shown");
+            var early = ui.CreateSurface(Hud("lost-now", "old", shown)).Value!;
+            rig.Frames(10);
+            local.Created[local.Created.Count - 1].Lose();
+            var again = early.SetContent(shown);
+            Assert(!again.Succeeded && again.ErrorCode == ModErrorCode.InvalidState,
+                "a host canvas lost before the next frame already returns the local lost-state result");
+            rig.Frames(10);
+            Assert(rig.Guest.ReceivedUi.Surfaces.Count == 0, "a canvas lost before the next frame is never shared again");
+            early.Dispose();
         }
 
         private static void GuestCanvasLossRecoversLatestState()
