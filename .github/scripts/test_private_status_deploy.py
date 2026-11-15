@@ -187,6 +187,33 @@ class PrivateStatusDeployTests(unittest.TestCase):
         self.assertLess(deploy.index("Require the exact approved status migration"),
                         deploy.index("Apply reviewed status migrations and deploy"))
 
+    def test_status_migration_guard_rejects_unapproved_history(self):
+        deploy = jobs()["deploy"]
+        expression = re.search(
+            r"(?ms)^          jq -e '\n(.*?)\n          ' <<<\"\$migration_rows\" >/dev/null$",
+            deploy,
+        )
+        self.assertIsNotNone(expression)
+        jq = shutil.which("jq")
+        self.assertIsNotNone(jq)
+        old = ["0001_status.sql", "0002_claim_owners.sql"]
+        approved = old + ["0003_public_activity.sql"]
+        for names, success, accepted in [
+            (old, True, True),
+            (approved, True, True),
+            (old[:1], True, False),
+            (list(reversed(old)), True, False),
+            (approved + ["0004_unreviewed.sql"], True, False),
+            (old, False, False),
+        ]:
+            with self.subTest(names=names, success=success):
+                response = [{"success": success, "results": [{"name": name} for name in names]}]
+                result = subprocess.run(
+                    [jq, "-e", expression.group(1)], input=json.dumps(response),
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
