@@ -138,6 +138,11 @@ namespace TopiaForge.ModManager.Tests
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.robotkit"],
                 "network", "remote-ai", "player-token", "microphone", "speech-to-text");
+            // Development opt-in controls activation, not the capabilities a package can exercise. Live sessions
+            // open sockets and can reveal peer addresses; the voice path consumes the runtime's microphone capture.
+            AssertCapabilities(
+                manifests["io.github.furroxide.topiaforge.multiplayer"],
+                "network", "peer-network", "microphone");
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.opposite-day"],
                 "prompt-overrides", "remote-ai");
