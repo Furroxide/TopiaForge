@@ -6,6 +6,7 @@ using provider::TopiaForge.Multiplayer.Voice;
 using TopiaForge.Mods;
 using Provider = provider::TopiaForge.Multiplayer.MultiplayerProvider;
 using Routed = provider::TopiaForge.Multiplayer.RoutedDiagnostics;
+using Developer = provider::TopiaForge.Multiplayer.DeveloperSessions;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
@@ -23,14 +24,16 @@ internal static class VoiceProviderTests
         var previous = Environment.GetEnvironmentVariable(LiveSwitch);
         try
         {
-            foreach (var value in new[] { null, "0", "true" })
+            foreach (var value in new[] { null, "", "0", "true", "01" })
             {
                 Environment.SetEnvironmentVariable(LiveSwitch, value);
+                Assert(!Developer.IsLiveEnabled(), "live sessions require the explicit developer switch value 1");
                 using var off = new Provider("voice.off-test", clockMicros: () => 0);
                 Assert(off.Voice == null && !off.Engine.IsVoiceEnabled, "with the switch at '" + value + "' there is no voice, codec or worker");
             }
 
             Environment.SetEnvironmentVariable(LiveSwitch, "1");
+            Assert(Developer.IsLiveEnabled(), "the explicit developer switch enables live-session setup");
             var on = new Provider("voice.on-test");
             try
             {

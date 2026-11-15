@@ -603,6 +603,6 @@ owns relay authorization, validated positions and scope cleanup; ordinary sessio
 
 Every client command is bounded and rate-limited by the provider and revalidated by the server. Matching package or
 content hashes is compatibility and integrity evidence, not anti-cheat. TopiaForge mods remain trusted in-process
-code. Live transport, dedicated Robotopia hosting, redistribution, and a genuinely headless Robotopia build remain a
-later provider milestone and require the evidence in the
-[multiplayer hosting feasibility gate](MultiplayerHostingFeasibility.md).
+code. Live transport exists behind the developer switch and still needs public-release qualification. Dedicated
+Robotopia hosting, game redistribution and a genuinely headless Robotopia build remain unsupported; their separate
+requirements are in the [multiplayer hosting feasibility gate](MultiplayerHostingFeasibility.md).
