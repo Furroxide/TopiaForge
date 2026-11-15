@@ -3,7 +3,7 @@
 Safe TopiaForge consumer mods don't compile against `GameCode.dll` and use the V1 SDK instead. Loader-owned
 adapters, specialist providers, and explicitly allowlisted advanced mods still need a bounded native integration
 layer. Those implementations may resolve Robotopia symbols by name — for example `Type.GetType("RobotBody, GameCode")`,
-`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 220 declared bindings across nine current
+`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 368 declared bindings across nine current
 native implementations. When a Robotopia update renames, removes, re-signs, or **re-orders** one of those symbols, a
 guarded binding can otherwise fail quietly. This subsystem turns that runtime drift into a loud, offline,
 reviewable signal while keeping native details out of consumer mods.
@@ -74,10 +74,10 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2640 metadata capture currently contains 60 types and 15 simple-name lookups. Offline metadata verification
-resolves 222 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings, errors, or
-warnings; installed verification last ran before presence added nine of them. All 44 Manager and 34 Worlds bindings
-are verifiable. The remaining uncheckable
+The build 2640 metadata capture contains 91 types and 15 simple-name lookups. Offline metadata verification
+resolves 368 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings or errors.
+It reports two warnings: the Worlds catalog lore loader, whose build 2640 shape is not adapted yet (see
+[Build 2640 capture](#build-2640-capture)). All 57 Manager and 87 Worlds bindings are verifiable. The uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
@@ -194,16 +194,23 @@ allowlisted advanced mod genuinely needs a new native binding:
   arrives through the launcher (see the launcher Diagnostics integration), not the raw CLI.
 
 
-### Composition metadata extension for build 2640
+### Build 2640 capture
 
-The composition surface extension was captured from cached build 2640 assembly metadata at
-`2026-11-02T16:47:14.0743853Z`, GameCode MVID `ca6b3eab-422a-43f6-80bb-88ac23255cd7`.
-It adds nine complete type records: `UgcAgentComponent`, `UgcExportEntity`, `UgcExportEntityComponents`,
-`UgcPrefabSceneMap`, `UgcPrefabSceneMap+Entry`, `UgcRobotPartMap`, `UgcRuntimeAssetOwner`, `UgcSceneBuilder`
-and `UgcVoiceMap`. Every existing type record, reference identity, version and simple-name lookup is unchanged;
-the baseline's top-level capture time retains the original records' provenance. The merged canonical surface
-hash is `c16e396f97d1a96ea243a3756afc4867f47d91a0ff68900a8d100d07621bd94b`.
-This metadata-only extension declares Critical composition dependencies, including the private
+The baseline is one complete capture of the official build 2640 Windows archive's managed assemblies, taken at
+`2026-11-15T17:05:50.0495997Z`, GameCode MVID `161054ac-25a4-4892-ba9b-0174d7ba4b30`, canonical surface hash
+`7c4c9c0bec879dc655e548836d88bc0b4e2417175f7f0e8af26cca0430628f21`. It replaces the build 2597 baseline and its
+separately captured composition extension; both remain in history.
+
+Build 2640 replaced `OvertoneVoiceAsset` with `TTSVoiceAsset`, which keeps the model, configuration, FMOD event
+and speed multiplier but drops the ten punctuation break times, so the RobotKit voice fingerprint moved to
+version 2 over the remaining settings. `UgcSceneBuilder`'s constructor, `UgcImportHostSceneController.ImportProject`
+and `UgcSceneEnvironmentApplier.Apply` gained a caller-owned `UgcImportReport`; RobotKit and Worlds pass a fresh
+one per call and do not read it yet. `UgcCatalogLoreLoader` now also takes a non-nullable link-catalog URL and
+returns a plain `UniTask` from `AddMissingLoreAsync`. Metadata does not say which URL value selects the default
+catalog, so Worlds map lore preparation is left on the build 2597 shape and fails closed until that is confirmed
+in the game.
+
+The composition dependencies remain Critical metadata contracts, including the private
 `CollectReferencedAssetUris` signature. It does not inspect method bodies or establish native startup,
 builder behavior, material interpretation or cleanup acceptance. Field snapshots capture type, visibility and
 static shape, not constant values or constness; the composition binder additionally requires its two native
