@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Mods.GameBridge;
 using TopiaForge.Worlds.Maps;
 using UnityEngine;
 
@@ -25,7 +26,7 @@ namespace TopiaForge.Worlds
                 var hosts = nativeScene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren(importHostControllerType, true)).ToArray();
                 if (hosts.Length != 1)
                     return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "The session scene must contain exactly one local import host.");
-                return OperationResult<ILocalImportTransaction>.Success(new ImportTransaction(hosts[0], plan, overrides, scene, project!, exportProjectType!));
+                return OperationResult<ILocalImportTransaction>.Success(new ImportTransaction(hosts[0], logger, plan, overrides, scene, project!, exportProjectType!));
             }
             catch (Exception error)
             { return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "Local import ownership bindings are unavailable: " + Unwrap(error).Message); }
@@ -34,6 +35,7 @@ namespace TopiaForge.Worlds
         private sealed class ImportTransaction : IMapImportTransaction
         {
             private readonly Component host;
+            private readonly IModLogger logger;
             private readonly RoboWorldImportPlan? plan;
             private readonly string? mapScene;
             private readonly string? mapLabel;
@@ -54,11 +56,11 @@ namespace TopiaForge.Worlds
             private readonly IDictionary? overrideTable;
             private LocalImportOwnership? temporary;
             private bool used;
-            internal ImportTransaction(Component host, RoboWorldImportPlan? plan,
+            internal ImportTransaction(Component host, IModLogger logger, RoboWorldImportPlan? plan,
                 IReadOnlyList<WorldAssetOverride> values, WorldSceneIdentity scene, object project, Type projectType,
                 string? mapScene = null, string? mapLabel = null)
             {
-                this.host = host; this.plan = plan; this.scene = scene; this.project = project;
+                this.host = host; this.logger = logger; this.plan = plan; this.scene = scene; this.project = project;
                 this.mapScene = mapScene; this.mapLabel = mapLabel;
                 var type = host.GetType();
                 var rootProperty = RequireProperty(type, "SceneRoot", "UgcSceneRoot");
@@ -125,8 +127,9 @@ namespace TopiaForge.Worlds
                     NativeEntered = true;
                     // A null scene id requests the project's own default scene, as UgcExportProject.ResolveScene's
                     // optional parameter of the same name declares. The label is the file name, never the full path.
-                    var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName,
-                        Activator.CreateInstance(importReportType) });
+                    var report = Activator.CreateInstance(importReportType);
+                    var data = importProject.Invoke(host, new object?[] { project, mapScene, mapLabel ?? plan!.FileName, report });
+                    UgcImportProblems.Warn(logger, "Worlds", "importing a world", report);
                     importedScene = data;
                     NativeReturned = true;
                     var root = activeRoot.GetValue(sceneRoot) as Transform;

@@ -156,7 +156,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && args[0] == "--overlay-refresh") { OverlayRefreshTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--arena-lifecycle") { ArenaLifecycleTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--log-privacy")
-            { DiagnosticPathRedactorTests.Run(); SafeEventTests.Run(); return 0; }
+            { DiagnosticPathRedactorTests.Run(); SafeEventTests.Run(); UgcImportProblemsTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--multiplayer-acceptance") { AcceptanceIsolationTests.Run(); AcceptanceIsolationStagingTests.Run(); AcceptancePluginLifecycleTests.Run(); MultiplayerAcceptanceProbeTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit-event-systems")
             {
@@ -638,6 +638,7 @@ namespace TopiaForge.ModManager.Tests
                 ZombiesControllerTests.Run();
                 UgcNoOpLaunchRequestTests.Run();
                 NativeDamageSourceTests.Run();
+                UgcImportProblemsTests.Run();
                 SdkSurfaceTests.Run();
                 RuntimeInfoTests.Run();
                 MultiplayerRuntimeHostTests.Run(root);

@@ -70,6 +70,7 @@
     <Compile Include="..\..\mods\Shared\SafeEvent.cs" />
     <Compile Include="..\..\mods\Shared\UgcNoOpLaunchRequest.cs" />
     <Compile Include="..\..\mods\Shared\NativeDamageSource.cs" />
+    <Compile Include="..\..\mods\Shared\UgcImportProblems.cs" />
   </ItemGroup>
 
   <!-- Same pattern for the OVERRIDE feature: its Unity-free pieces (the RoboAPI wire protocol + JSON, and the

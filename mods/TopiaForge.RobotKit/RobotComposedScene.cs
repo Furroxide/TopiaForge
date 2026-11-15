@@ -127,8 +127,10 @@ namespace TopiaForge.RobotKit
                 // Force native ownership onto this brand-new subtree, never the provider or active map root.
                 var owner = addOwner.Invoke(null, new object[] { parent.transform }) as Component;
                 Require(owner != null && owner.transform == parent.transform);
-                var builder = Activator.CreateInstance(builderType, config, Activator.CreateInstance(reportType));
+                var report = Activator.CreateInstance(reportType);
+                var builder = Activator.CreateInstance(builderType, config, report);
                 var actor = build.Invoke(builder, new[] { project, entity, parent.transform }) as GameObject;
+                RobotKitDiagnostics.ReportImportProblems("building a composed robot", report);
                 Require(actor != null && actor.transform.IsChildOf(parent.transform) && !actor.activeInHierarchy);
                 lease.Actor = actor;
                 currentness.RequireVerified();
