@@ -1,5 +1,5 @@
 {
-  "capturedUtc": "2026-11-15T17:05:50.0495997Z",
+  "capturedUtc": "2026-11-15T18:09:38.4755714Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "161054ac-25a4-4892-ba9b-0174d7ba4b30",
   "gameVersion": "0.0.2640",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "7c4c9c0bec879dc655e548836d88bc0b4e2417175f7f0e8af26cca0430628f21",
+  "surfaceContentHash": "118173ef8ce781cfe6cfd728c23b913fccb8aae5e2e702069de432852983f248",
   "types": {
     "FMODUnity|FMOD.GUID": {
       "assembly": "FMODUnity",
@@ -10727,6 +10727,81 @@
       "simpleName": "SettingsScreen",
       "status": "Resolved",
       "typeKey": "GameCode|SettingsScreen"
+    },
+    "GameCode|TTSPhonemizerAsset": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "dictAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loadSemaphore",
+          "type": "System.Threading.SemaphoreSlim"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "modelAsset",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "phonemizer",
+          "type": "RobotVoiceNative+Phonemizer"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "tokenizerAsset",
+          "type": "UnityEngine.TextAsset"
+        }
+      ],
+      "fullName": "TTSPhonemizerAsset",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "LoadAsync",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask<RobotVoiceNative+Phonemizer>"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnDisable",
+          "parameters": [],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "TTSPhonemizerAsset",
+      "status": "Resolved",
+      "typeKey": "GameCode|TTSPhonemizerAsset"
     },
     "GameCode|TTSVoiceAsset": {
       "assembly": "GameCode",

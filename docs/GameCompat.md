@@ -3,7 +3,7 @@
 Safe TopiaForge consumer mods don't compile against `GameCode.dll` and use the V1 SDK instead. Loader-owned
 adapters, specialist providers, and explicitly allowlisted advanced mods still need a bounded native integration
 layer. Those implementations may resolve Robotopia symbols by name — for example `Type.GetType("RobotBody, GameCode")`,
-`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 368 declared bindings across nine current
+`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 375 declared bindings across nine current
 native implementations. When a Robotopia update renames, removes, re-signs, or **re-orders** one of those symbols, a
 guarded binding can otherwise fail quietly. This subsystem turns that runtime drift into a loud, offline,
 reviewable signal while keeping native details out of consumer mods.
@@ -74,10 +74,10 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2640 metadata capture contains 91 types and 15 simple-name lookups. Offline metadata verification
-resolves 368 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings or errors.
+The build 2640 metadata capture contains 92 types and 15 simple-name lookups. Offline metadata verification
+resolves 375 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings or errors.
 It reports two warnings: the Worlds catalog lore loader, whose build 2640 shape is not adapted yet (see
-[Build 2640 capture](#build-2640-capture)). All 57 Manager and 87 Worlds bindings are verifiable. The uncheckable
+[Build 2640 capture](#build-2640-capture)). All 57 Manager and 89 Worlds bindings are verifiable. The uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
@@ -187,7 +187,9 @@ allowlisted advanced mod genuinely needs a new native binding:
   the manifest author, not machine-derived.
 - Snapshots record parameter types, not parameter names. A Harmony hook that binds a target argument by name
   (PerfFixes' `camera` and `collision`, the Performance Sentry `options`) breaks on a rename that `verify` cannot
-  see, so those names are compared against the new build by hand at each bump.
+  see, so those names are compared against the new build by hand at each bump. On build 2640 they are unchanged:
+  `camera` on `CameraUtils.TryGetMainCamera`, `collision` on `CollisionEventProxy.OnCollisionEnter` and
+  `OnCollisionExit`, and `options` on `SentryRuntimeConfiguration.Configure`.
 - The audit requires a declaration for every `"X, GameCode"` type literal, but not for every member name. A member
   looked up by name on a captured type is covered by the full surface diff, not by `verify`, until it is declared.
 - The live check needs both a Robotopia installation and this tool present, so for most end users the update-time signal
@@ -197,18 +199,35 @@ allowlisted advanced mod genuinely needs a new native binding:
 ### Build 2640 capture
 
 The baseline is one complete capture of the official build 2640 Windows archive's managed assemblies, taken at
-`2026-11-15T17:05:50.0495997Z`, GameCode MVID `161054ac-25a4-4892-ba9b-0174d7ba4b30`, canonical surface hash
-`7c4c9c0bec879dc655e548836d88bc0b4e2417175f7f0e8af26cca0430628f21`. It replaces the build 2597 baseline and its
+`2026-11-15T18:09:38.4755714Z`, GameCode MVID `161054ac-25a4-4892-ba9b-0174d7ba4b30`, canonical surface hash
+`118173ef8ce781cfe6cfd728c23b913fccb8aae5e2e702069de432852983f248`. It replaces the build 2597 baseline and its
 separately captured composition extension; both remain in history.
 
-Build 2640 replaced `OvertoneVoiceAsset` with `TTSVoiceAsset`, which keeps the model, configuration, FMOD event
-and speed multiplier but drops the ten punctuation break times, so the RobotKit voice fingerprint moved to
-version 2 over the remaining settings. `UgcSceneBuilder`'s constructor, `UgcImportHostSceneController.ImportProject`
-and `UgcSceneEnvironmentApplier.Apply` gained a caller-owned `UgcImportReport`; RobotKit and Worlds pass a fresh
-one per call and do not read it yet. `UgcCatalogLoreLoader` now also takes a non-nullable link-catalog URL and
-returns a plain `UniTask` from `AddMissingLoreAsync`. Metadata does not say which URL value selects the default
-catalog, so Worlds map lore preparation is left on the build 2597 shape and fails closed until that is confirmed
-in the game.
+Against build 2597 the captured types changed as follows. `OvertoneVoiceAsset` is gone; `TTSVoiceAsset`,
+`TTSPhonemizerAsset` and `UgcImportReport` are new captures. Members changed on `AgentHead`, `LLMAgent`,
+`PlayerController`, `RobotBodyComposer`, `UgcCatalogLoreLoader`, `UgcExportLoader`, `UgcExportProject`,
+`UgcImportHostSceneController`, `UgcImportPlayBootstrap`, `UgcPlayLaunchRequest`, `UgcPlayLauncherLastRun`,
+`UgcPublishedProjectLoader`, `UgcSceneBuilder`, `UgcSceneEnvironmentApplier` and `UgcVoiceMap`. The ones
+TopiaForge reaches:
+
+- `TTSVoiceAsset` keeps the model, configuration, FMOD event and speed multiplier, drops the ten punctuation break
+  times and adds a `phonemizer` (`TTSPhonemizerAsset`, with model, tokenizer and dictionary text assets). The
+  RobotKit voice fingerprint is version 2 over all of those inputs, the phonemizer's assets included.
+- `UgcSceneBuilder`'s constructor, `UgcImportHostSceneController.ImportProject` and
+  `UgcSceneEnvironmentApplier.Apply` gained a caller-owned `UgcImportReport`. RobotKit and Worlds pass a fresh report
+  per call and log a fixed-text count of its `Problems`; the entries themselves can name files or assets, so they
+  are never logged.
+- `UgcCatalogLoreLoader`'s constructor now also takes a non-nullable `linkCatalogUrl` with no default value, and
+  `AddMissingLoreAsync(UgcExportProject, UgcImportReport, CancellationToken)` returns a plain `UniTask`. Metadata
+  does not show which value native map play passes; `UgcPlayLaunchRequest.CatalogUrl` and the public static
+  `ValidateLinkCatalogUrl` suggest the launch request supplies it. Worlds map lore preparation stays on the build
+  2597 shape and fails closed until that is confirmed in the game (`COMPAT-2640-LORE` under P2-COMPAT-01 in the launch blockers).
+- Nothing binds the other changes. `UgcExportProject` gained `imports`, `packages`, `prefabScenes` and `ugcId`;
+  `UgcExportLoader` and `UgcPublishedProjectLoader` gained raw-project parsing and download helpers;
+  `UgcPlayLaunchRequest` and `UgcPlayLauncherLastRun` gained `CatalogUrl`, and the request also `FailureMessage`
+  and `CreateFailed`; `UgcImportPlayBootstrap` gained a player hold until the world loads, a startup-problem path
+  and a load report. The no-op launch request TopiaForge creates leaves `CatalogUrl` unset; whether the bootstrap
+  accepts that is still to confirm in the game (`COMPAT-2640-BOOTSTRAP`).
 
 The composition dependencies remain Critical metadata contracts, including the private
 `CollectReferencedAssetUris` signature. It does not inspect method bodies or establish native startup,

@@ -1472,6 +1472,54 @@
       "returnType": "System.Single"
     },
     {
+      "id": "robotkit.speech.phonemizer",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "TTSVoiceAsset",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
+      "member": "phonemizer",
+      "returnType": "TTSPhonemizerAsset"
+    },
+    {
+      "id": "robotkit.speech.phonemizer.modelasset",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "TTSPhonemizerAsset",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
+      "member": "modelAsset",
+      "returnType": "UnityEngine.TextAsset"
+    },
+    {
+      "id": "robotkit.speech.phonemizer.tokenizerasset",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "TTSPhonemizerAsset",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
+      "member": "tokenizerAsset",
+      "returnType": "UnityEngine.TextAsset"
+    },
+    {
+      "id": "robotkit.speech.phonemizer.dictasset",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "TTSPhonemizerAsset",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Private robot speech with native local synthesis",
+      "sourceRef": "mods/TopiaForge.RobotKit/NativeRobotVoice.cs:1",
+      "member": "dictAsset",
+      "returnType": "UnityEngine.TextAsset"
+    },
+    {
       "id": "robotkit.speech.override",
       "kind": "Method",
       "assembly": "GameCode",
@@ -2209,6 +2257,22 @@
       "isPublic": true,
       "parameters": [],
       "exactParameters": true
+    },
+    {
+      "id": "robotkit.composed.ugcimportreport.problems",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Native composition problem summary",
+      "sourceRef": "mods/Shared/UgcImportProblems.cs",
+      "member": "Problems",
+      "returnType": "System.Collections.Generic.IReadOnlyList<UgcImportProblem>",
+      "requireReadable": true,
+      "isPublic": true,
+      "isStatic": false,
+      "indexParameterCount": 0
     }
   ]
 }
