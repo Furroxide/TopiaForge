@@ -26,6 +26,11 @@ on:
         required: true
         type: boolean
         default: false
+      retire_legacy_bindings:
+        description: Remove the retired migration secret, and the unused production ingest secret on Status
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -315,6 +320,52 @@ jobs:
               raise SystemExit('Could not create temporary secrets file') from None
           PY
           npx --no-install wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT" --secrets-file "$secrets_file"
+
+      - name: Retire unused Worker secrets through the protected environment
+        if: inputs.retire_legacy_bindings
+        working-directory: source
+        env:
+          TARGET: ${{ inputs.target }}
+          STATUS_TOKEN: ${{ secrets.STATUS_CLOUDFLARE_API_TOKEN }}
+          CONTROL_PLANE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          environment_args=()
+          if [[ "$TARGET" == status ]]; then
+            export CLOUDFLARE_API_TOKEN="$STATUS_TOKEN"
+          else
+            [[ "$TARGET" == control-plane-staging || "$TARGET" == control-plane-production ]]
+            export CLOUDFLARE_API_TOKEN="$CONTROL_PLANE_TOKEN"
+            cd services/control-plane
+            environment_args=(--env "$WRANGLER_ENVIRONMENT")
+          fi
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          existing=$(npx --no-install wrangler secret list --config wrangler.deploy.toml \
+            --format json "${environment_args[@]}")
+          jq -e 'type == "array" and all(.[]; (.name | type) == "string")' \
+            <<<"$existing" >/dev/null
+          retirement=$(jq -cn --argjson existing "$existing" --arg target "$TARGET" '
+            (if $target == "status" then ["__TF_MIGRATION_CAP", "INGEST_TOKEN_PRODUCTION"]
+             else ["__TF_MIGRATION_CAP"] end) as $wanted |
+            ($existing | map(.name)) as $present |
+            reduce ($wanted[] | select(. as $name | $present | index($name))) as $name
+              ({}; .[$name] = null)
+          ')
+          if [[ "$retirement" != '{}' ]]; then
+            printf '%s\n' "$retirement" | npx --no-install wrangler secret bulk \
+              --config wrangler.deploy.toml "${environment_args[@]}"
+          fi
+          remaining=$(npx --no-install wrangler secret list --config wrangler.deploy.toml \
+            --format json "${environment_args[@]}")
+          jq -e --arg target "$TARGET" '
+            type == "array" and
+            (map(.name) | index("__TF_MIGRATION_CAP") == null and
+             ($target != "status" or index("INGEST_TOKEN_PRODUCTION") == null))
+          ' <<<"$remaining" >/dev/null
 
       - name: Smoke-test public routes after domain cutover
         if: inputs.verify_public_routes
