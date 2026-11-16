@@ -41,8 +41,16 @@ test('release operations does not reopen the recorded support ownership decision
   assert.doesNotMatch(source, /first-RC support gate remains open/u);
 });
 
+test('admin release permits explicit unsigned stable 0.x without granting qualification', () => {
+  const guide = read('docs/AdminRelease.md').replace(/\s+/gu, ' ');
+  assert.equal(policy.signingIdentities.windowsDistribution, 'unsigned');
+  assert.match(guide, /`unsigned` is accepted on the `0\.x` line, including stable releases, only when no certificate is pinned/u);
+  assert.match(guide, /`1\.0` and later still require signing/u);
+  assert.match(guide, /No candidate is qualified\. Building the exact frozen payloads, isolated live acceptance and remaining gate approvals are still required\./u);
+  assert.match(guide, /Ed25519 update signing, candidate qualification and protected publication approval remain required in either mode\./u);
+});
+
 for (const path of [
-  'docs/AdminRelease.md',
   'docs/LaunchBlockers.md',
   'release/notes/v0.1.0-rc.1.md',
 ]) {

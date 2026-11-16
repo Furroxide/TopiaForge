@@ -83,7 +83,7 @@ Linked output directories and linked existing ancestors are rejected before clea
 The record identifies a separate QA game installation, launcher/output roots and
 measured primary-token/known-folder identity. The build/acceptance process must already be
 in that isolated Windows user/session or VM. Its provisioning `outputRoot` must
-exactly equal `<StateRoot>/0.1.0-rc.1/evidence/windows/robotopia`. Authenticated
+exactly equal `<StateRoot>/<version>/evidence/windows/robotopia`. Authenticated
 preflight may run as the release operator, followed by the frozen-state build in
 the QA session and qualification/publication back in the operator session. Use
 the same controlled checkout and state paths; do not copy GitHub credentials
