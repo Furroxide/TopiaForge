@@ -1046,6 +1046,11 @@ exit 0
             Join-Path $repositoryRootForTest `
                 ".github/repository-governance.json"
         ) -Destination $stageGovernanceDirectory
+        # Stage and dispatch both use the production catalog reader. Keep its
+        # version, tag and channel inputs in this isolated fixture repository.
+        Copy-Item -LiteralPath (
+            Join-Path $repositoryRootForTest "release/catalog.json"
+        ) -Destination (Join-Path $stageRepository "release/catalog.json")
         # GitHub reports canonical casing even when the requested repository is lowercase.
         $stageGovernancePath = Join-Path $stageGovernanceDirectory "repository-governance.json"
         $stageGovernance = Get-Content -LiteralPath $stageGovernancePath -Raw | ConvertFrom-Json
@@ -1231,7 +1236,6 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
         $originalAssertGitHubTagSigningIdentity =
             ${function:Assert-GitHubTagSigningIdentity}
         $originalGetDartAndFlutter = ${function:Get-DartAndFlutter}
-        $originalGetReleaseCatalogEntry = ${function:Get-ReleaseCatalogEntry}
         $originalGetStagedAssetPaths = ${function:Get-StagedAssetPaths}
         $originalAssertRemoteAssetMatches =
             ${function:Assert-RemoteAssetMatches}
@@ -1293,13 +1297,6 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                 return @{
                     Dart = $stageDart
                     Flutter = $stageDart
-                }
-            }
-            function Get-ReleaseCatalogEntry {
-                return [pscustomobject]@{
-                    notesFile = "release/notes/v0.1.0-rc.1.md"
-                    prerelease = $true
-                    artifacts = @("asset.bin")
                 }
             }
             function Get-StagedAssetPaths {
@@ -1492,8 +1489,6 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                 -Value $originalAssertGitHubTagSigningIdentity
             Set-Item Function:Get-DartAndFlutter `
                 -Value $originalGetDartAndFlutter
-            Set-Item Function:Get-ReleaseCatalogEntry `
-                -Value $originalGetReleaseCatalogEntry
             Set-Item Function:Get-StagedAssetPaths `
                 -Value $originalGetStagedAssetPaths
             Set-Item Function:Assert-RemoteAssetMatches `
@@ -1799,6 +1794,46 @@ exit 64
                 param()
 
                 return $env:FAKE_DISPATCH_REQUEST_ID
+            }
+
+            $channelVersionBefore = $script:Version
+            $channelTagBefore = $script:tag
+            $channelReleaseBefore = $env:FAKE_DISPATCH_RELEASE_JSON
+            try {
+                foreach ($channel in @(
+                        @{ Version = "0.2.0"; Prerelease = $false },
+                        @{ Version = $historicalVersion; Prerelease = $true }
+                    )) {
+                    $script:Version = $channel.Version
+                    $script:tag = "v$($channel.Version)"
+                    $catalogChannel = Get-ReleaseCatalogEntry
+                    Assert-True (
+                        $catalogChannel.prerelease -eq $channel.Prerelease
+                    ) "The fixture catalog does not contain the expected release channel."
+                    $publishedChannel = [ordered]@{
+                        tagName = $tag
+                        isDraft = $false
+                        isImmutable = $true
+                        isPrerelease = $channel.Prerelease
+                        targetCommitish = $stageSourceSha
+                    }
+                    $env:FAKE_DISPATCH_RELEASE_JSON = $publishedChannel |
+                        ConvertTo-Json -Compress
+                    Assert-ExactPublishedRelease -SourceSha $stageSourceSha
+                    $publishedChannel.isPrerelease = -not $channel.Prerelease
+                    $env:FAKE_DISPATCH_RELEASE_JSON = $publishedChannel |
+                        ConvertTo-Json -Compress
+                    Assert-ThrowsMatch -Action {
+                        Assert-ExactPublishedRelease -SourceSha $stageSourceSha
+                    } -Pattern "exact immutable release" -Message (
+                        "Published release verifier accepted a channel that differs from the fixture catalog."
+                    )
+                }
+            }
+            finally {
+                $script:Version = $channelVersionBefore
+                $script:tag = $channelTagBefore
+                $env:FAKE_DISPATCH_RELEASE_JSON = $channelReleaseBefore
             }
 
             $successRequestId =
