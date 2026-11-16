@@ -37,8 +37,11 @@ function Get-ReleaseCatalogEntry {
 function Invoke-Checked {
     param([string]$Executable, [string[]]$Arguments, [switch]$Capture)
     if (-not $Capture) { throw "The verifier must capture its response." }
-    if ($Executable -ceq "fixture-gh" -and $Arguments[0] -ceq "release" -and
-        $Arguments[1] -ceq "view" -and $Arguments[2] -ceq $tag) {
+    if ($Executable -ceq $gitHubCli -and $Arguments.Count -eq 7 -and
+        $Arguments[0] -ceq "release" -and $Arguments[1] -ceq "view" -and
+        $Arguments[2] -ceq $tag -and $Arguments[3] -ceq "--repo" -and
+        $Arguments[4] -ceq $Repository -and $Arguments[5] -ceq "--json" -and
+        $Arguments[6] -ceq "tagName,isDraft,isImmutable,isPrerelease,targetCommitish") {
         return $script:published | ConvertTo-Json -Compress
     }
     if ($Executable -ceq "git" -and $Arguments[0] -ceq "-C" -and
