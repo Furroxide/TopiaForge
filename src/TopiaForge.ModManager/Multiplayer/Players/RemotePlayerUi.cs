@@ -52,9 +52,11 @@ namespace TopiaForge.ModManager
             }
             if (Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Put interactive controls in a window.");
+            // Re-sending the tree this player already has keeps its clock binding; a new tree binds strictly.
             var old = Content;
+            var retained = ReferenceEquals(content, old);
             Content = content; Revision++;
-            var result = Runtime.SendSurface(this);
+            var result = Runtime.SendSurface(this, retained);
             if (!result.Succeeded) { Content = old; Revision--; }
             return result;
         }

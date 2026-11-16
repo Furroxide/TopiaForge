@@ -30,9 +30,11 @@ internal static class UiEpochLifetimeTests
         var button = new UiButton("confirm", "Confirm", () => clicked++);
         using var window = (RemoteUiSurface)playerUi.CreateSurface(new UiSurfaceRequest("window", "Window", "Original",
             content: new UiColumn(new UiText("Keep"), timer, button))).Value!;
+        var targetedTimer = new UiCountdown(deadline, "Targeted", id: "targeted-timer");
         using var targeted = (RemoteUiSurface)playerUi.CreateSurface(new UiSurfaceRequest("targeted", "Targeted HUD", "Original",
-            UiSurfaceKind.Hud, 320, 160, new UiCountdown(deadline, "Targeted", id: "targeted-timer"))).Value!;
-        using var shared = host.CreateSharedHud(new UiCountdown(deadline, "Shared", id: "shared-timer"));
+            UiSurfaceKind.Hud, 320, 160, targetedTimer)).Value!;
+        var sharedTimer = new UiCountdown(deadline, "Shared", id: "shared-timer");
+        using var shared = host.CreateSharedHud(sharedTimer);
         targeted.Hide();
         Check(rig.Run(() => guest.Ui.Surfaces.Count == 3 && !guest.Surface("Targeted HUD").IsVisible), "initial UI and hidden state reach the real recipient");
         var original = guest.Surface("Window");
@@ -59,6 +61,18 @@ internal static class UiEpochLifetimeTests
             "the new stream receives no stale baseline and the authored timer keeps its clock identity");
         Check(current.ActivateButton("confirm").Succeeded && rig.Run(() => clicked == 1), "the recovered window routes its original control through the new stream");
 
+        // One rule on every surface kind: the tree a surface shows can be applied again and keeps its
+        // binding, so its expired countdown stays at zero; a new tree that reuses that countdown is refused.
+        var windowTree = window.Content!;
+        Check(window.SetContent(windowTree).Succeeded && targeted.SetContent(targetedTimer).Succeeded
+            && shared.SetContent(sharedTimer).Succeeded, "re-applying each shown tree succeeds after the epoch change");
+        Check(targeted.SetContent(new UiColumn(targetedTimer)).ErrorCode == ModErrorCode.InvalidArgument
+            && shared.SetContent(new UiColumn(sharedTimer)).ErrorCode == ModErrorCode.InvalidArgument,
+            "a new targeted or shared tree that reuses an expired countdown is refused");
+        Check(rig.Run(() => window.Stream == stream && !window.Dirty && guest.Surface("Window").Content is UiColumn again
+            && again.Children[1] is UiText { Text: "Remaining 0" }), "the re-applied window keeps its zero display on the guest");
+        LocalSurfaceFollowsTheSameRule();
+
         shared.SetBody("Updated");
         var fresh = new UiCountdown(host.Ui.ClockTime + 60, id: "new");
         Check(window.SetContent(new UiColumn(timer, button)).ErrorCode == ModErrorCode.InvalidArgument, "new stale content stays invalid after a real replacement");
@@ -70,6 +84,22 @@ internal static class UiEpochLifetimeTests
         Check(guest.Players.Rejected == rejected && window.Stream == stream && !window.Dirty && !targeted.Dirty,
             "steady frames after recovery produce no further rejection or dirty retry");
         Console.WriteLine("Retained UI survives real provider session replacement.");
+    }
+
+    private static void LocalSurfaceFollowsTheSameRule()
+    {
+        using var lifetime = new FakeModLifetime();
+        var local = new FakeUiService(lifetime);
+        var epoch = "local-1";
+        ((IUiClockReceiver)local).FollowClock(() => 0, () => epoch);
+        var timer = new UiCountdown(30, "Local", id: "local-timer");
+        var tree = new UiColumn(new UiText("Keep"), timer);
+        using var surface = local.CreateSurface(new UiSurfaceRequest("local", "Local", "Body", content: tree)).Value!;
+        epoch = "local-2";
+        Check(surface.SetContent(tree).Succeeded, "a local surface re-applies its shown tree after the epoch change");
+        Check(surface.SetContent(new UiColumn(timer)).ErrorCode == ModErrorCode.InvalidArgument,
+            "a new local tree that reuses an expired countdown is refused");
+        Check(ReferenceEquals(((FakeUiSurface)surface).Content, tree), "the refused tree leaves the shown tree in place");
     }
 
     private static void Check(bool condition, string message)

@@ -65,9 +65,15 @@ no peer address or new author networking code is needed. Import, spawn, cancella
 and cleanup use the shared world transition owner. Native catalog lore and respawn
 integration still require verification against the installed game.
 
-Spawn readiness waits for a physics step after placing the player and records the
-settled pose. The spawn wait allows 30 seconds while physics is unpaused and has a
-120-second overall limit. Resume a paused load to let the spawn finish settling.
+Spawn readiness places the player once, then accepts the pose only after it has held
+within 1 cm for 0.15 second of physics time, so a spawn over a gap is refused rather
+than falling after the map loads, even when the player first pops up slightly. The
+spawn wait allows 30 seconds while physics is unpaused and has a 120-second overall
+limit. When the game is paused or its time is stopped, the player is told after a few
+seconds that loading waits for it. When the spawn wait runs out, the player reads that
+the spawn did not finish settling in time; any other time-out reads that the map did
+not finish loading in time. When the marker does not hold the player, the author
+reads that the spawn point should move onto solid ground.
 
 ## Authored entities and anchors
 
@@ -85,20 +91,23 @@ finds all records using a model; repeated names are not identities.
 pose, including the complete parent chain and import root, even without a live
 marker. The native adapter converts each local transform with the game's helpers.
 Position preserves the full affine chain, including rotated, nonuniform and
-reflected scales. Rotation is the normalized product of converted quaternions;
-each scale magnitude is the length of its world basis column. Its sign is negative
-only when the dot product of that column with the corresponding composed-rotation
-axis is negative; a zero dot product chooses positive. This preserves reflections
-on their respective axes when the columns align with those rotation axes, such as
-scales `(2, -3, 4)` and `(-1, -1, 1)` with identity rotations.
+reflected scales. Rotation is the normalized product of converted quaternions,
+with each child's rotation mirrored by its parent's reflected axes first, so a
+prop turned 30 degrees inside a room mirrored on X turns -30 degrees in the world,
+as it appears. Each scale magnitude is the length of its world basis column. Its
+sign is negative only when the dot product of that column with the corresponding
+composed-rotation axis is negative; a zero dot product chooses positive. This keeps
+reflections on their axes, such as scales `(2, -3, 4)` and `(-1, -1, 1)`.
 
-The returned position/rotation/scale reconstructs the basis only when each column
-aligns with its corresponding composed-rotation axis. Shear remains approximate,
-and a reflected parent followed by a rotated child can also be approximate even
-without shear, because the composed rotation is preserved. Do not reconstruct
-parent matrices from this pose to place descendants. This scale convention does
-not promise equivalence to Unity's `lossyScale`. Native coordinate-helper and
-prefab-expansion parity still require in-game qualification.
+The returned position/rotation/scale reconstructs the basis for every chain
+without shear, including rotated children under mirrored parents. Shear, from a
+rotated child of a nonuniformly scaled parent, remains approximate. Do not
+reconstruct parent matrices from this pose to place descendants. This scale
+convention does not promise equivalence to Unity's `lossyScale`. Native
+coordinate-helper and prefab-expansion parity still require in-game qualification.
+Under a mirrored parent, trust `WorldTransform.Rotation` for the turn a prop shows:
+the live rotation that `context.Entities.TryGetTransform` reads from the engine may
+keep the un-mirrored turn there until that check confirms otherwise.
 
 `WorldTransform` is captured when the index is built. It does not follow later
 physics or import-root movement: use `context.Entities.TryGetTransform` with the

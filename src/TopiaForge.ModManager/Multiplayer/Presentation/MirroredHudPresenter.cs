@@ -67,6 +67,19 @@ namespace TopiaForge.ModManager
             UnityMainThreadGuard.AssertCurrent();
             if (disposed || Context.Lifetime.IsStopping) throw new ObjectDisposedException(nameof(MirroredHudPresenter));
         }
+        // A canvas destroyed outside TopiaForge leaves the shared set. As in solo, the handle stays usable and tracked
+        // by its scope, and returns the local surface's own lost-state answers; only the author's Dispose or a
+        // stopping scope throws.
+        internal void Detach()
+        {
+            owner.Remove(this); Encoded = null;
+        }
+        private bool Lost()
+        {
+            if (MultiplayerPresentation.SurfaceAlive(inner)) return false;
+            Detach();
+            return true;
+        }
         public void Show()
         {
             SetVisible(true);
@@ -78,7 +91,7 @@ namespace TopiaForge.ModManager
         private void SetVisible(bool visible)
         {
             RequireActive();
-            if (shown == visible) { if (visible) inner.Show(); else inner.Hide(); return; }
+            if (shown == visible || Lost()) { shown = visible; if (visible) inner.Show(); else inner.Hide(); return; }
             var payload = Encode(body, content, visible, owner.UiClockEpoch, retained: true);
             // A solo HUD outside the shared bounds still owns a fully usable local surface.
             if (!owner.ChangeVisibility(this, payload, false)) throw TooLarge();
@@ -98,6 +111,7 @@ namespace TopiaForge.ModManager
         {
             RequireActive(); value ??= string.Empty;
             if (body == value) return;
+            if (Lost()) { inner.SetBody(value); body = value; return; }
             var payload = Encode(value, content, shown, owner.UiClockEpoch, retained: true);
             if (!owner.Change(this, payload, false)) throw TooLarge();
             inner.SetBody(value);
@@ -106,6 +120,7 @@ namespace TopiaForge.ModManager
         public OperationResult<bool> SetContent(UiNode value)
         {
             RequireActive();
+            if (Lost()) return inner.SetContent(value);
             if (ReferenceEquals(content, value)) return OperationResult<bool>.Success(true);
             if (UiComposition.ContainsInteractive(value)) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
                 "HUD surfaces are read-only; put controls in a window or a player's targeted UI.");

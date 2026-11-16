@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
             PreparationBounds();
             FailedContentCannotFinish();
             RefusedContentCannotFinish();
+            SpawnOutcomesNameTheirCause();
             Console.WriteLine("Map preparation contract passed: packaged/published success and four failure/cancellation phases each; four content drain cases; single-use and readiness bounds.");
         }
 
@@ -256,6 +257,42 @@ namespace TopiaForge.ModManager.Tests
             Assert(backend.ContentDisposals == 1 && test.Load.Disposals == 1, "world disposal releases imported content and preparation once");
         }
 
+        private static void SpawnOutcomesNameTheirCause()
+        {
+            const string native = "Native failure at C:/private/game/path.";
+            foreach (var outcome in new[] { "time-out", "scene-wait", "other-time-out", "settle-refusal", "native" })
+            {
+                using var test = new Fixture();
+                var backend = new MapWorldServiceTests.Backend();
+                using var service = test.Maps(backend);
+                if (outcome == "settle-refusal")
+                    test.Load.SpawnResult = OperationResult<TransformState>.Failure(ModErrorCode.External, WorldSpawnReadinessText.SettleRefused);
+                if (outcome == "native")
+                    test.Load.SpawnResult = OperationResult<TransformState>.Failure(ModErrorCode.External, native);
+                // A time-out outside the settle stage is not about the spawn, whatever stage reports it.
+                if (outcome == "other-time-out")
+                    test.Load.SpawnResult = OperationResult<TransformState>.Failure(ModErrorCode.TimedOut, "Synthetic content time-out.");
+                if (outcome == "scene-wait") test.Load.DefaultReady = false;
+                var loading = test.Dispatcher.InvokeCallbackAsync(() => service.LoadAsync(test.Context, Request(true), default));
+                test.Until(() => test.Load.SpawnApplications > 0 || test.Load.DefaultReads > 0 || loading.IsCompleted);
+                if (outcome is "time-out" or "scene-wait")
+                {
+                    test.Clock.Offset = TimeSpan.FromSeconds(31);
+                    test.Clock.Advance();
+                }
+                test.Wait(loading);
+                var expected = outcome == "time-out" ? MapWorldService.SpawnTimedOut
+                    : outcome is "scene-wait" or "other-time-out" ? MapWorldService.LoadTimedOut
+                    : outcome == "settle-refusal" ? MapWorldService.SpawnRefused
+                    : "The map could not be built or cleaned up. Update TopiaForge or restart the game.";
+                var timedOut = outcome is "time-out" or "scene-wait" or "other-time-out";
+                Assert(!loading.Result.Succeeded && loading.Result.ErrorMessage == expected
+                    && loading.Result.ErrorCode == (timedOut ? ModErrorCode.TimedOut : ModErrorCode.External),
+                    "map spawn " + outcome + " shows its fixed text: " + loading.Result.ErrorCode + ": " + loading.Result.ErrorMessage);
+                test.AssertReleased();
+            }
+        }
+
         private static TransformState Settled(TransformState spawn) => new TransformState(
             new Vec3(spawn.Position.X, spawn.Position.Y + 0.13f, spawn.Position.Z), spawn.Rotation, spawn.Scale);
 
@@ -342,7 +379,9 @@ namespace TopiaForge.ModManager.Tests
         private sealed class NativeLoad : IWorldNativeLoad
         {
             internal bool PlayerReady;
+            internal OperationResult<TransformState>? SpawnResult;
             internal bool DefaultReady = true, SceneValid = true;
+            internal int DefaultReads;
             internal int Disposals;
             public string ExpectedSceneName => "Scene";
             public bool RequiresDispatch { get; set; } = true;
@@ -357,11 +396,16 @@ namespace TopiaForge.ModManager.Tests
             public OperationResult<bool> ValidateScene() => SceneValid ? OperationResult<bool>.Success(true)
                 : OperationResult<bool>.Failure(ModErrorCode.InvalidState, "Synthetic scene loss.");
             public OperationResult<bool> ValidateContent(IEntity? root) => OperationResult<bool>.Success(true);
-            public OperationResult<TransformState>? ReadDefaultSpawn() => DefaultReady ? OperationResult<TransformState>.Success(TransformState.Identity) : null;
+            public OperationResult<TransformState>? ReadDefaultSpawn()
+            {
+                DefaultReads++;
+                return DefaultReady ? OperationResult<TransformState>.Success(TransformState.Identity) : null;
+            }
             public OperationResult<IReadOnlyList<TransformState>> FindSpawnMarkers(IEntity? root, string marker) => throw new NotSupportedException();
             public OperationResult<TransformState>? ApplySpawn(TransformState spawn)
             {
                 SpawnApplications++;
+                if (SpawnResult != null) return SpawnResult;
                 return PlayerReady ? OperationResult<TransformState>.Success(Settled(spawn)) : null;
             }
             public void Dispose() { Disposals++; }
@@ -370,7 +414,8 @@ namespace TopiaForge.ModManager.Tests
         {
             private TaskCompletionSource<OperationResult<bool>> frame = new TaskCompletionSource<OperationResult<bool>>();
             private readonly System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
-            public TimeSpan Elapsed => elapsed.Elapsed;
+            internal TimeSpan Offset;
+            public TimeSpan Elapsed => elapsed.Elapsed + Offset;
             public bool IsPhysicsPaused => false;
             public Task<OperationResult<bool>> NextFrameAsync(CancellationToken token) => frame.Task;
             internal void Advance()

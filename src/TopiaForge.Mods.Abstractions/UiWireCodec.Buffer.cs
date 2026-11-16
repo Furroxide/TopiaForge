@@ -28,10 +28,11 @@ namespace TopiaForge.Mods
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
         /// <summary>Runs the real encoder without retaining bytes, preserving its shape and capacity failures.</summary>
-        internal static int Measure(UiNode? node, string clockEpoch, int capacity)
+        internal static int Measure(UiNode? node, string clockEpoch, int capacity, bool retained = false)
         {
             var writer = new Counter(capacity);
-            Write(writer, node, clockEpoch);
+            if (retained) WriteRetained(writer, node, clockEpoch);
+            else Write(writer, node, clockEpoch);
             return writer.Length;
         }
 

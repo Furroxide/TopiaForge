@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager
             private Action<UnityUiSurface>? release;
             private Action? nativeClosed;
             private IDisposable? lifetimeLease;
+            private UiNode? admitted;
             private UnityUiHudPlacement? placement;
             private int dockHandle;
             private int disposed;
@@ -173,7 +174,9 @@ namespace TopiaForge.ModManager
                 UiGraphRetentionTransaction? graphTransaction = null;
                 try
                 {
-                    UiClockBinding.Bind(content, callbacks.ClockEpoch());
+                    // The tree this surface already shows keeps its clock binding, as shared and targeted
+                    // surfaces keep it: an expired countdown in it shows zero instead of refusing the tree.
+                    if (!ReferenceEquals(content, admitted)) UiClockBinding.Bind(content, callbacks.ClockEpoch());
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
                     RenderNode(content, next, callbacks, graphTransaction);
@@ -195,6 +198,7 @@ namespace TopiaForge.ModManager
 
                 var previous = compositionRoot;
                 compositionRoot = next;
+                admitted = content;
                 retainedGraphs = graphTransaction!.Commit();
                 try
                 {

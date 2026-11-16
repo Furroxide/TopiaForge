@@ -54,14 +54,27 @@ namespace TopiaForge.Mods.Internal
             // Both factors are already unit quaternions, so their product cannot overflow;
             // the constructor renormalizes every generation rather than accumulating drift.
             return new AuthoredAffine(Apply(child.Position, Position), Vector(child.X), Vector(child.Y), Vector(child.Z),
-                Rotation * child.Rotation, collapsed || child.collapsed);
+                Rotation * Mirror(child.Rotation), collapsed || child.collapsed);
+        }
+        // A reflection S = diag(sx, sy, sz) satisfies S·R = (S·R·S)·S, and S·R·S turns by the same
+        // angle about det(S)·S·axis. Turning the child's rotation that way keeps the parent's reflection
+        // on its scale axes, so a turned child under a mirrored parent keeps its true basis.
+        private Quat Mirror(Quat child)
+        {
+            var scale = LossyScale;
+            var sx = scale.X < 0 ? -1 : 1;
+            var sy = scale.Y < 0 ? -1 : 1;
+            var sz = scale.Z < 0 ? -1 : 1;
+            return sx == 1 && sy == 1 && sz == 1 ? child
+                : new Quat(sy * sz * child.X, sx * sz * child.Y, sx * sy * child.Z, child.W);
         }
         internal Vec3 LossyScale
         {
             get
             {
                 // Keep basis magnitudes and choose each sign relative to the composed rotation.
-                // This reconstructs aligned columns; shear and rotated reflections can remain lossy.
+                // With reflection-aware rotation composition this is exact for shear-free chains;
+                // a rotated, nonuniformly scaled parent shears its children and remains lossy.
                 return new Vec3(SignedLength(X, Rotate(Rotation, new Vec3(1, 0, 0))),
                     SignedLength(Y, Rotate(Rotation, new Vec3(0, 1, 0))),
                     SignedLength(Z, Rotate(Rotation, new Vec3(0, 0, 1))));
