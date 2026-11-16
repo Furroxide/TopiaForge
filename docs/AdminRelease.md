@@ -2,7 +2,7 @@
 
 The current development target is [0.2.0](../release/notes/v0.2.0.md), with catalog status
 blocked. RC1 examples and approvals below remain historical; they do not qualify 0.2.0.
-Stable signing, current-version readiness and exact-candidate native evidence remain required.
+Explicit distribution mode, current-version readiness and exact-candidate native evidence remain required.
 
 
 Production archives are built only on maintainer-controlled machines. GitHub
@@ -83,7 +83,7 @@ Linked output directories and linked existing ancestors are rejected before clea
 The record identifies a separate QA game installation, launcher/output roots and
 measured primary-token/known-folder identity. The build/acceptance process must already be
 in that isolated Windows user/session or VM. Its provisioning `outputRoot` must
-exactly equal `<StateRoot>/0.1.0-rc.1/evidence/windows/robotopia`. Authenticated
+exactly equal `<StateRoot>/<version>/evidence/windows/robotopia`. Authenticated
 preflight may run as the release operator, followed by the frozen-state build in
 the QA session and qualification/publication back in the operator session. Use
 the same controlled checkout and state paths; do not copy GitHub credentials
@@ -225,12 +225,12 @@ which one this candidate is. The key is optional and its absence means `signed`,
 so a certificate that simply went missing can never be read as a decision to
 ship without one — shipping unsigned has to be written down.
 
-`unsigned` is accepted by policy validation only on a `0.x` prerelease and only
-when no certificate is pinned; `release validate-policy` rejects a policy that
-carries both. Unsigned Windows RC1 is authorized, and the checked-in policy now
-records `windowsDistribution: unsigned`. The construction repairs are implemented
-and their synthetic regressions pass. Final source CI, including Windows/Linux
-tests and documentation publication, passes; revision-specific evidence is in
+`unsigned` is accepted on the `0.x` line, including stable releases, only when no
+certificate is pinned; `release validate-policy` rejects a policy that carries both.
+This distribution scope was extended on 2026-11-16. The checked-in policy records
+`windowsDistribution: unsigned`; `1.0` and later still require signing. Release notes
+must disclose the unsigned executables and possible Windows publisher or SmartScreen
+warnings. Earlier construction repairs and their revision-specific verification are in
 [`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
 No candidate is qualified. Building the exact frozen payloads, isolated live
 acceptance and remaining gate approvals are still required.

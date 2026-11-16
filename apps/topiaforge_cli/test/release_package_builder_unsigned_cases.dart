@@ -80,25 +80,25 @@ void _registerReleaseUnsignedBuilderTests() {
           diagnostic: 'certificate',
         ),
         (
-          name: 'stable version',
+          name: 'stable nonzero major version',
           mode: 'unsigned',
           pin: null,
-          version: '0.1.0',
-          diagnostic: 'prerelease',
+          version: '1.0.0',
+          diagnostic: '0.x version',
         ),
         (
           name: 'nonzero major version',
           mode: 'unsigned',
           pin: null,
           version: '1.0.0-rc.1',
-          diagnostic: 'prerelease',
+          diagnostic: '0.x version',
         ),
         (
           name: 'malformed version',
           mode: 'unsigned',
           pin: null,
           version: 'not-a-version',
-          diagnostic: 'prerelease',
+          diagnostic: '0.x version',
         ),
         (
           name: 'unknown mode',
@@ -169,6 +169,31 @@ void _registerReleaseUnsignedBuilderTests() {
         expect(failure.toString(), contains(boundary.diagnostic));
       });
     }
+  }
+
+  for (final version in ['0.2.0', '0.2.0+build.1', '0.2.0-rc.1']) {
+    test('Windows policy admits explicit unsigned $version', () async {
+      final repo = _writeFixtureRepo(temp);
+      _writeUnsignedPolicy(repo, version: version);
+      final output = Directory(p.join(temp.path, 'unsigned-admitted'));
+      await expectLater(
+        ReleasePackageBuilder(
+          repositoryRoot: repo.path,
+          platform: ReleasePackagePlatform.windows,
+          outputRoot: output.path,
+          rebuildRuntimePayload: false,
+          prebuiltLauncher: p.join(temp.path, 'missing-launcher'),
+        ).build(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('Prebuilt launcher was not found'),
+          ),
+        ),
+      );
+      expect(output.existsSync(), isTrue);
+    });
   }
 
   for (final mode in <String?>[null, 'signed']) {

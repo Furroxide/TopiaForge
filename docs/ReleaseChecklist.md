@@ -24,9 +24,10 @@ Machine setup and the resumable command sequence are in
       tracked register. Reviewer references and evidence hashes do not prove
       reviewer identity: the protected approver must verify actual records and
       authorization. Never infer approval from a test pass.
-- [ ] Review stable 0.2.0 signing policy. The unsigned Windows RC1 decision remains historical and cannot authorize a stable release. The construction repairs have passing
-      synthetic regressions; see [Status](internal/gamemode-contract/Status.md) for revision-specific evidence.
-      The exact candidate build and isolated acceptance remain required.
+- [ ] Verify the explicitly selected Windows distribution mode and release-note disclosure. Unsigned stable and
+      prerelease `0.x` builds are permitted from 2026-11-16; no certificate may be pinned in unsigned mode, and
+      `1.0` and later still require signing. Verify exact unsigned artifacts, signed update metadata and the
+      remaining candidate and isolated-acceptance requirements.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
 - [x] Robotopia support is build `2640` (`0.0.2640`). Public-latest drift stops CI and release, which makes an

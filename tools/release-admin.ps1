@@ -3330,7 +3330,7 @@ function Wait-ExactFinalizerRunCompletion {
     return $run
 }
 
-function Assert-ExactPublishedPrerelease {
+function Assert-ExactPublishedRelease {
     param(
         [Parameter(Mandatory = $true)]
         [ValidatePattern("^[0-9a-f]{40}$")]
@@ -3358,12 +3358,18 @@ function Assert-ExactPublishedPrerelease {
             throw "The published GitHub release is missing '$property'."
         }
     }
+    foreach ($property in @("isDraft", "isImmutable", "isPrerelease")) {
+        if ($release.$property -isnot [bool]) {
+            throw "The published GitHub release '$property' must be a boolean."
+        }
+    }
+    $catalogEntry = Get-ReleaseCatalogEntry
     if ([string]$release.tagName -cne $tag -or
         [bool]$release.isDraft -or
         -not [bool]$release.isImmutable -or
-        -not [bool]$release.isPrerelease) {
+        [bool]$release.isPrerelease -ne [bool]$catalogEntry.prerelease) {
         throw (
-            "The finalizer must publish the exact immutable prerelease " +
+            "The finalizer must publish the exact immutable release " +
             "for $tag."
         )
     }
@@ -3372,7 +3378,7 @@ function Assert-ExactPublishedPrerelease {
         "rev-parse", "$($release.targetCommitish)^{commit}"
     ) -Capture
     if ($resolvedTarget -cne $SourceSha) {
-        throw "The published prerelease does not target the frozen source SHA."
+        throw "The published release does not target the frozen source SHA."
     }
 }
 
@@ -3408,10 +3414,10 @@ function Invoke-Dispatch {
             throw "The recorded published finalizer run is no longer successful."
         }
         Invoke-Stage | Out-Null
-        Assert-ExactPublishedPrerelease -SourceSha ([string]$state.sourceSha)
+        Assert-ExactPublishedRelease -SourceSha ([string]$state.sourceSha)
         Write-Host (
             "Exact rerun verified without mutation; finalizer run " +
-            "$publishedRunId published the immutable prerelease."
+            "$publishedRunId published the immutable release."
         )
         return
     }
@@ -3504,13 +3510,13 @@ function Invoke-Dispatch {
         -RequestId $requestId `
         -SourceSha ([string]$state.sourceSha)
     Invoke-Stage | Out-Null
-    Assert-ExactPublishedPrerelease -SourceSha ([string]$state.sourceSha)
+    Assert-ExactPublishedRelease -SourceSha ([string]$state.sourceSha)
     Write-FinalizerState -Phase "published" -State $state `
         -RequestId $requestId -RunId ([string]$run.databaseId) `
         -DispatchAttempt $dispatchAttempt
     Write-Host (
         "Protected GitHub finalizer run $($run.databaseId) published " +
-        "the immutable prerelease for $tag."
+        "the immutable release for $tag."
     )
 }
 

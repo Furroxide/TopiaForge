@@ -30,7 +30,7 @@ void main() {
   test('current decision is an honest blocked exact-gate summary', () {
     final decision = _parse(readinessBytes, schemaBytes, targetSha: targetSha);
 
-    expect(decision.releaseVersion, '0.1.0-rc.1');
+    expect(decision.releaseVersion, '0.2.0');
     expect(decision.status, 'blocked');
     expect(decision.isReady, isFalse);
     expect(decision.gates, hasLength(12));
@@ -102,6 +102,24 @@ void main() {
     ]) {
       expect(encoded, isNot(contains('"$forbidden"')));
     }
+  });
+
+  test('the current register cannot qualify a different release version', () {
+    expect(
+      () => ReleaseReadinessDecision.fromCandidateBlobs(
+        readinessBytes: readinessBytes,
+        schemaBytes: schemaBytes,
+        targetSha: targetSha,
+        expectedReleaseVersion: '0.1.0-rc.1',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('Release readiness is not for 0.1.0-rc.1'),
+        ),
+      ),
+    );
   });
 
   test('readiness and BOM schemas define exactly the same gate contract', () {
@@ -393,7 +411,7 @@ ReleaseReadinessDecision _parse(
     readinessBytes: readinessBytes,
     schemaBytes: schemaBytes,
     targetSha: targetSha,
-    expectedReleaseVersion: '0.1.0-rc.1',
+    expectedReleaseVersion: '0.2.0',
   );
 }
 

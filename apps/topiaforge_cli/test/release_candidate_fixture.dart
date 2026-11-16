@@ -43,7 +43,7 @@ final class CandidateFixture {
       final readinessFile = File(
         p.join(root.path, 'release/release-readiness.json'),
       );
-      final readiness = readObject(readinessFile);
+      final readiness = readObject(readinessFile)..['releaseVersion'] = version;
       for (final gate in readiness['gates'] as List) {
         if (gate['enforcement'] == 'blocking' && gate['id'] != 'P0-GAME-01') {
           gate['status'] = 'approved';

@@ -113,9 +113,14 @@ class ReleasePolicyValidator {
     // Windows-only is a property of the product's current state (Linux is descoped by P0-LINUX-01 and
     // macOS has no packaging evidence), not of one version string. Gating this on a literal made the whole
     // rule evaporate the moment the version changed, with no test failure to show for it.
-    if (!release.prerelease || !policy.targetsWindows || policy.targetsMacOS) {
+    if (!policy.targetsWindows || policy.targetsMacOS) {
       issues.add(
         'Release ${release.version} must target only Windows x64 packages.',
+      );
+    }
+    if (!release.prerelease && !release.version.startsWith('0.')) {
+      issues.add(
+        'Stable releases outside 0.x require separate release qualification.',
       );
     }
     final windowsIdentityIsValid =
@@ -131,8 +136,8 @@ class ReleasePolicyValidator {
       );
     }
     // An unsigned distribution has to be a recorded decision, and it is only
-    // allowed to be one on a 0.x prerelease. Requiring the certificate pin to be
-    // absent as well means a policy can never carry both, so "we meant to sign
+    // allowed on the 0.x line, including stable releases. Requiring the certificate
+    // pin to be absent as well means a policy can never carry both, so "we meant to sign
     // and the pin went missing" and "we meant to ship unsigned" stay
     // distinguishable from the file alone.
     if (policy.distributesWindowsUnsigned) {
@@ -140,11 +145,6 @@ class ReleasePolicyValidator {
         issues.add(
           'An unsigned Windows distribution must not also pin a signing '
           'certificate; remove one or the other.',
-        );
-      }
-      if (!release.prerelease) {
-        issues.add(
-          'An unsigned Windows distribution is only allowed for a prerelease.',
         );
       }
       if (!release.version.startsWith('0.')) {

@@ -103,6 +103,7 @@ class _Fixture {
                 ).readAsStringSync(),
               )
               as Map;
+      readiness['releaseVersion'] = _version;
       for (final gate in (readiness['gates'] as List).cast<Map>()) {
         if (!approvals.contains(gate['id'])) continue;
         gate['status'] = 'approved';
