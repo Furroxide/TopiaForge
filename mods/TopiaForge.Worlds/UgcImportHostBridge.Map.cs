@@ -48,7 +48,7 @@ namespace TopiaForge.Worlds
                 var config = RequireProperty(importHostControllerType, "RuntimeAssetConfig", "UgcRuntimeAssetConfig").GetValue(host);
                 if (config == null) throw Unavailable();
                 // The default mirrors native map play. Its adapter isolates the lore-loading choice for native verification.
-                await MapLorePreparation.PrepareAsync(project, config, token);
+                await MapLorePreparation.PrepareAsync(project, config, logger, token);
                 token.ThrowIfCancellationRequested();
                 return OperationResult<IMapImportTransaction>.Success(new ImportTransaction(host, logger, null,
                     overrides, scene, project, exportProjectType, selected, label));

@@ -879,6 +879,10 @@
         {
           "type": "UgcRuntimeAssetConfig",
           "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
         }
       ]
     },
@@ -892,7 +896,7 @@
       "feature": "Map world loading",
       "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
       "member": "AddMissingLoreAsync",
-      "returnType": "Cysharp.Threading.Tasks.UniTask<System.Exception>",
+      "returnType": "Cysharp.Threading.Tasks.UniTask",
       "isPublic": true,
       "isStatic": false,
       "genericArity": 0,
@@ -903,10 +907,84 @@
           "constrained": true
         },
         {
+          "type": "UgcImportReport",
+          "constrained": true
+        },
+        {
           "type": "System.Threading.CancellationToken",
           "constrained": true
         }
       ]
+    },
+    {
+      "id": "worlds.map.UgcCatalogLoreLoader.ValidateLinkCatalogUrl",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcCatalogLoreLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "ValidateLinkCatalogUrl",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.map.UgcRuntimeAssetConfig.CatalogBaseUrl",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "CatalogBaseUrl",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.map.UgcPlayLaunchRequest.Current",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLaunchRequest",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Map catalog address from the launch request",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "Current",
+      "returnType": "UgcPlayLaunchRequest",
+      "isPublic": true,
+      "isStatic": true,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.map.UgcPlayLaunchRequest.CatalogUrl",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLaunchRequest",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Map catalog address from the launch request",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "CatalogUrl",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
     },
     {
       "id": "worlds.authored.UgcVector3Value",

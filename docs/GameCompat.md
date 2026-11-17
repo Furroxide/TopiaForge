@@ -3,7 +3,7 @@
 Safe TopiaForge consumer mods don't compile against `GameCode.dll` and use the V1 SDK instead. Loader-owned
 adapters, specialist providers, and explicitly allowlisted advanced mods still need a bounded native integration
 layer. Those implementations may resolve Robotopia symbols by name — for example `Type.GetType("RobotBody, GameCode")`,
-`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 375 declared bindings across nine current
+`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 379 declared bindings across nine current
 native implementations. When a Robotopia update renames, removes, re-signs, or **re-orders** one of those symbols, a
 guarded binding can otherwise fail quietly. This subsystem turns that runtime drift into a loud, offline,
 reviewable signal while keeping native details out of consumer mods.
@@ -75,9 +75,9 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 retains the requested external types' own members and full nested generic type shapes.
 
 The build 2640 metadata capture contains 92 types and 15 simple-name lookups. Offline metadata verification
-resolves 375 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings or errors.
-It reports two warnings: the Worlds catalog lore loader, whose build 2640 shape is not adapted yet (see
-[Build 2640 capture](#build-2640-capture)). All 57 Manager and 89 Worlds bindings are verifiable. The uncheckable
+resolves 379 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings, errors or
+warnings; the Worlds catalog lore loader is bound to its build 2640 shape (see
+[Build 2640 capture](#build-2640-capture)). All 57 Manager and 93 Worlds bindings are verifiable. The uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
@@ -219,9 +219,16 @@ TopiaForge reaches:
   are never logged.
 - `UgcCatalogLoreLoader`'s constructor now also takes a non-nullable `linkCatalogUrl` with no default value, and
   `AddMissingLoreAsync(UgcExportProject, UgcImportReport, CancellationToken)` returns a plain `UniTask`. Metadata
-  does not show which value native map play passes; `UgcPlayLaunchRequest.CatalogUrl` and the public static
-  `ValidateLinkCatalogUrl` suggest the launch request supplies it. Worlds map lore preparation stays on the build
-  2597 shape and fails closed until that is confirmed in the game (`COMPAT-2640-LORE` under P2-COMPAT-01 in the launch blockers).
+  does not show which value native map play passes. The loader still has a single `catalogBaseUrl` field, which
+  build 2597 filled from `UgcRuntimeAssetConfig.CatalogBaseUrl`. Worlds map lore preparation binds the 2640 shape: it
+  passes the current `UgcPlayLaunchRequest.CatalogUrl` when it is set, otherwise the asset configuration's
+  `CatalogBaseUrl`, and only a value the game's own `ValidateLinkCatalogUrl` accepts. Without one it fails closed. It
+  passes a fresh report, logs a fixed-text count of its problems and logs which source supplied the address, never
+  the address. In a TopiaForge session the current launch request is usually the empty bootstrap request TopiaForge
+  queued itself, so the asset configuration normally supplies it. Unlike 2597's exception result, the plain
+  `UniTask` may complete although some lore could not be fetched; that shows only as a problem count. Whether the
+  address is right is still to confirm in the game, by seeing the lore itself (`COMPAT-2640-LORE` under
+  P2-COMPAT-01 in the launch blockers).
 - Nothing binds the other changes. `UgcExportProject` gained `imports`, `packages`, `prefabScenes` and `ugcId`;
   `UgcExportLoader` and `UgcPublishedProjectLoader` gained raw-project parsing and download helpers;
   `UgcPlayLaunchRequest` and `UgcPlayLauncherLastRun` gained `CatalogUrl`, and the request also `FailureMessage`
