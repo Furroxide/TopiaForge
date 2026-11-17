@@ -1,14 +1,16 @@
 # Multiplayer control plane operations
 
-Status: Ready for first deploy (WS7 of the live-multiplayer plan) · Date: 2026-10-14 · Owner: maintainer
+Status: Archived deployment procedure · Date: 2026-11-17
 
-This is the runbook for the control plane in `services/control-plane/`: what to create before the first deploy, how
-to deploy and update it, how to rotate its secrets, how to use and recover from the kill switch, how to watch relay
-spend, and what the service keeps and for how long. The API is in [ControlPlaneApi.md](ControlPlaneApi.md).
+> **Deployment path changed.** The live Workers deploy from private `TopiaForge-Status` main through the
+> [protected Status-source workflow](https://github.com/Furroxide/TopiaForge/blob/main/.github/workflows/deploy-private-status-source.yml) on public `main`.
+> The `Control plane` workflow here only tests and dry-runs the old source. Do not use the provisioning, Wrangler,
+> or manual dispatch instructions below. Use the current private Status operations runbook for deployments and
+> credential changes.
 
-**This is the only document that carries the control plane's budget figures.** Keep spend ceilings and money out of
-the API document, the code and every player-facing page. The relay pricing facts themselves are recorded once, in
-[MultiplayerTransportOptions.md](MultiplayerTransportOptions.md), section 1.
+This archived runbook records the prior control plane in `services/control-plane/`, including its budget and behavior
+decisions. The API is in [ControlPlaneApi.md](ControlPlaneApi.md). The budget figures below are historical; check
+Cloudflare's current TURN pricing before changing a limit.
 
 ## 1. What runs where
 
@@ -19,7 +21,7 @@ the API document, the code and every player-facing page. The relay pricing facts
 | Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter` | Inside each Worker, SQLite-backed, created by migration `v1` on the first deploy |
 | Hourly cron (minute 7) | Each Worker; measures relay usage and can trip the kill switch |
 | Relay | Cloudflare Realtime TURN, one key per environment |
-| Deploy | `.github/workflows/control-plane.yml`, manual dispatch through a protected GitHub environment; staging may also be deployed from a maintainer's machine (section 3) |
+| Deploy | [Protected Status-source workflow](https://github.com/Furroxide/TopiaForge/blob/main/.github/workflows/deploy-private-status-source.yml); this document's old dispatch and local steps are archived |
 
 `wrangler.toml` holds no account details. The deploy reads the account from the environment, and every Worker
 secret is set by hand, out of band.
