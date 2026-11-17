@@ -259,7 +259,7 @@ check is silently skipped.
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two current-tree builds matched SHA-256 `afa3e9195e8e03199b414f8a5c9002e9f89831041a63c7e1c9b8eef173d9057d`; manifests, editor provenance, and companion/VPM inputs matched. |
 | Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The administrator-controlled Windows release flow must regenerate and scrub that evidence from the frozen candidate. |
-| Robotopia compatibility | PARTIAL | Build `2640`; **375 bindings across the manager and 8 mods, 364 verifiable offline**, 11 explicitly uncheckable offline, zero errors or indeterminate findings, and two Degraded warnings: the Worlds catalog lore loader, which build 2640 re-signed (`COMPAT-2640-LORE` below). Audited 2026-11-15 against the managed assemblies of the official build 2640 Windows archive after the 2597 → 2640 retarget: `gamecompat verify` reports no errors and `audit --strict` reports no undeclared or stale entries. Build 2640 replaced `OvertoneVoiceAsset` with `TTSVoiceAsset` (RobotKit speech and composition rebound, voice fingerprint version 2 including the new phonemizer) and added a caller-owned `UgcImportReport` to the scene builder, the import host's `ImportProject` and the environment applier (RobotKit and Worlds pass one and log a fixed-text problem count). The hooked parameter names `camera`, `collision` and `options` are unchanged. The surface change summary is in [GameCompat](GameCompat.md#build-2640-capture). The 8 declaring mods are exactly the ones pinned to `0.0.2640`; the safe mods declare `>=0.0.2640 <0.0.2700`. Metadata compatibility does not establish native behaviour on 2640, and the row stays PARTIAL until `COMPAT-2640-LORE` lands and `COMPAT-2640-BOOTSTRAP` is checked in the game. |
+| Robotopia compatibility | PARTIAL | Build `2640`; **379 bindings across the manager and 8 mods, 368 verifiable offline**, 11 explicitly uncheckable offline, and zero errors, warnings or indeterminate findings. The Worlds catalog lore loader, which build 2640 re-signed, is bound to its new shape; which catalog address native play passes is still to confirm in the game (`COMPAT-2640-LORE` below). Audited 2026-11-15 against the managed assemblies of the official build 2640 Windows archive after the 2597 → 2640 retarget, and again on 2026-11-17 after the map lore loader was bound to its 2640 shape: `gamecompat verify` reports no errors and `audit --strict` reports no undeclared or stale entries. Build 2640 replaced `OvertoneVoiceAsset` with `TTSVoiceAsset` (RobotKit speech and composition rebound, voice fingerprint version 2 including the new phonemizer) and added a caller-owned `UgcImportReport` to the scene builder, the import host's `ImportProject` and the environment applier (RobotKit and Worlds pass one and log a fixed-text problem count). The hooked parameter names `camera`, `collision` and `options` are unchanged. The surface change summary is in [GameCompat](GameCompat.md#build-2640-capture). The 8 declaring mods are exactly the ones pinned to `0.0.2640`; the safe mods declare `>=0.0.2640 <0.0.2700`. Metadata compatibility does not establish native behaviour on 2640, and the row stays PARTIAL until `COMPAT-2640-LORE` and `COMPAT-2640-BOOTSTRAP` are checked in the game. |
 | Public build freshness | PASS | On 2026-11-15 the public latest manifest identifies build `2640`, matching the pin, with both archive paths and SHA-256 values equal to the pin; CI/release fail if it changes. The public build moved past 2597, so the pin moved from 2597 to 2640 with the audit above. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
 | macOS release package | OUT OF RC1 | Generic packaging remains in source, but macOS is not in RC1 policy, catalog, update metadata, handoff, or public assets. It requires a separately reviewed future release. |
@@ -831,16 +831,21 @@ automated tests cannot close Unity object lifetime.
   `topiaforge compat bump`; the audit is recorded in the Robotopia compatibility row.
   Any change in the public latest manifest stops release for a new compatibility audit; unknown constrained versions
   block mods but never block an empty safe-mode launch. Two items stay open on 2640:
-  - [ ] **`COMPAT-2640-LORE` — Published and packaged map worlds are unavailable.** Build 2640 changed
+  - [ ] **`COMPAT-2640-LORE` — Published and packaged map worlds are unconfirmed on 2640.** Build 2640 changed
     `UgcCatalogLoreLoader` to `(UgcRuntimeAssetConfig, string linkCatalogUrl)`, where the URL is non-nullable with no
     default, and `AddMissingLoreAsync(UgcExportProject, UgcImportReport, CancellationToken)` now returns a plain
-    `UniTask`. `mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs` still binds the 2597 shape, so every map load through
-    `PrepareMapAsync` fails closed with `Unavailable` before any native import; local `.roboworld` imports are
-    unaffected. Metadata does not show which URL value native play passes; `UgcPlayLaunchRequest.CatalogUrl`,
-    `UgcPlayLauncherLastRun.CatalogUrl` and the public static `UgcCatalogLoreLoader.ValidateLinkCatalogUrl(string)`
-    point at the launch request. Exit criteria: confirm the value in the game, adapt the loader (awaiting a plain
-    `UniTask` and passing a fresh report), re-declare the two Degraded `worlds.map.UgcCatalogLoreLoader` bindings, and
-    load a published map on 2640.
+    `UniTask`. `mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs` now binds that shape: it awaits the plain `UniTask`,
+    passes a fresh report, and passes the current `UgcPlayLaunchRequest.CatalogUrl` when set, otherwise
+    `UgcRuntimeAssetConfig.CatalogBaseUrl` (the value build 2597's loader read), and only a value
+    `ValidateLinkCatalogUrl` accepts; without one, map loads fail closed with `Unavailable`. Local `.roboworld` imports
+    are unaffected. Metadata does not show which value native play passes, so the choice is unconfirmed. In a
+    TopiaForge session the current launch request is usually TopiaForge's own empty bootstrap request, so the asset
+    configuration normally supplies the address. A plain `UniTask` may also complete although lore was not fetched,
+    leaving only a problem count in the log, so a completed preparation does not prove the lore loaded. Exit
+    criteria: in the game, load a published map on 2640, read the Worlds log line that names the address source and
+    any problem count, and confirm the map's lore content is actually present; only if it is not, take the value
+    the official launcher writes. The re-declared
+    `worlds.map` bindings resolve against the build 2640 capture.
   - [ ] **`COMPAT-2640-BOOTSTRAP` — The native bootstrap's new launch-request fields need an in-game check.** Build 2640
     gave `UgcPlayLauncherLastRun` a public `CatalogUrl`, gave `UgcPlayLaunchRequest` `CatalogUrl`, `FailureMessage` and
     `CreateFailed`, and gave `UgcImportPlayBootstrap` `ShowStartupProblem`, `ReturnToMainMenu`,

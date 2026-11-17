@@ -60,36 +60,10 @@ namespace TopiaForge.ModManager.Tests
                 await CacheWarningOnce(root);
                 await PendingPreparationDrains(root);
                 await CleanupFailureAfterCancellation(root);
-                await LoreAwaiter();
+                await MapLorePreparationTests.RunAsync();
                 Console.WriteLine("Map world service passed: readiness, ownership, six cancellation phases, pending preparation drain, failed cleanup, cache recovery, ambiguous spawn and native failure privacy.");
             }
             finally { owned.Delete(true); }
-        }
-        private static async Task LoreAwaiter()
-        {
-            var pending = new LorePending();
-            var drain = MapLorePreparation.DrainAsync(pending);
-            Assert(!drain.IsCompleted, "native lore operation must drain before ownership can end");
-            pending.Awaiter.Finish(); await drain;
-            Assert(pending.Awaiter.Reads == 1, "native awaiter result is consumed once");
-            pending = new LorePending(); pending.Awaiter.Failure = new Exception("private https://example.test/path");
-            drain = MapLorePreparation.DrainAsync(pending); pending.Awaiter.Finish();
-            try { await drain; throw new InvalidOperationException("lore failure was ignored"); }
-            catch (MapProblem error) { Assert(error.Code == ModErrorCode.Unavailable && !error.Message.Contains("private"), "lore failures are fixed and private"); }
-        }
-        private sealed class LorePending
-        {
-            internal readonly LoreAwaiterFixture Awaiter = new LoreAwaiterFixture();
-            public LoreAwaiterFixture GetAwaiter() => Awaiter;
-        }
-        private sealed class LoreAwaiterFixture
-        {
-            private Action? continuation;
-            internal int Reads; internal Exception? Failure;
-            public bool IsCompleted { get; private set; }
-            public Exception? GetResult() { Reads++; return Failure; }
-            public void OnCompleted(Action value) { continuation = value; }
-            internal void Finish() { IsCompleted = true; continuation?.Invoke(); }
         }
         private static BuiltinWorldFixture Fixture() => new BuiltinWorldFixture
         {

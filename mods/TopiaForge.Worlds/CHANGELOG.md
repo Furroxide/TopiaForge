@@ -3,6 +3,10 @@
 ## 0.2.0
 
 - Target the TopiaForge 0.2 loader and SDK line.
+- Prepare map lore through Robotopia build 2640's catalog lore loader instead of refusing every published and
+  packaged map at that step. The catalog address comes from the game's launch request or, failing that, its asset
+  configuration, and only an address the game's own validator accepts is used; without one the map still fails
+  closed. The log names the source, never the address. Native map play on 2640 is not yet confirmed.
 
 ## 0.1.0-rc.1
 
