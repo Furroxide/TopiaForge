@@ -133,94 +133,37 @@ def workflow_jobs(source):
     return {parts[index]: parts[index + 1] for index in range(1, len(parts), 2)}
 
 
-def git_bash():
-    bash = shutil.which("bash")
-    if os.name == "nt":
-        git = shutil.which("git")
-        if git is None:
-            return None
-        directory = Path(git).parent
-        bash = next((str(path) for path in (
-            directory / "bash.exe", directory.parent / "bin" / "bash.exe",
-        ) if path.is_file()), None)
-    return bash
-
-
-class ControlPlaneDeployTests(unittest.TestCase):
-    """The control-plane deployment is manual, preflighted and confined to one job."""
+class ControlPlaneValidationTests(unittest.TestCase):
+    """The retired workflow retains only credential-free source validation."""
 
     def setUp(self):
         self.source = read_workflow("control-plane.yml")
         self.jobs = workflow_jobs(self.source)
 
-    def test_deployment_runs_only_on_a_manual_dispatch(self):
+    def test_only_pull_requests_and_pushes_trigger_validation(self):
         triggers = self.source.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-        self.assertIn("  workflow_dispatch:\n", triggers)
-        self.assertNotIn("pull_request_target", self.source)
-        self.assertNotIn("workflow_run", triggers)
-        self.assertIn("    if: github.event_name == 'workflow_dispatch'\n", self.jobs["deploy"])
-        self.assertIn("github.event_name == 'workflow_dispatch'", self.jobs["preflight"])
-        self.assertEqual(set(self.jobs), {"test", "preflight", "deploy"})
+        self.assertIn("  pull_request:\n", triggers)
+        self.assertIn("  push:\n", triggers)
+        for forbidden in ("workflow_dispatch", "pull_request_target", "workflow_run"):
+            self.assertNotIn(forbidden, self.source)
+        self.assertEqual(set(self.jobs), {"test"})
 
-    def test_only_the_deploy_job_names_an_environment_or_reads_secrets(self):
-        for name, body in self.jobs.items():
-            with self.subTest(job=name):
-                if name == "deploy":
-                    self.assertIn("    environment:\n      name: ${{ inputs.environment }}\n", body)
-                    self.assertIn("${{ secrets.CLOUDFLARE_API_TOKEN }}", body)
-                    continue
-                self.assertNotRegex(body, r"(?m)^    environment:")
-                self.assertNotIn("secrets.", body)
-
-    def test_every_deployment_waits_for_the_preflight_and_the_tests(self):
-        self.assertIn("    needs: [preflight, test]\n", self.jobs["deploy"])
-        preflight = self.jobs["preflight"]
-        self.assertIn("github.repository == 'Furroxide/TopiaForge'", preflight)
-        self.assertIn(".can_admins_bypass == false", preflight)
-        self.assertIn('select(.type == "required_reviewers")', preflight)
-        self.assertIn(".deployment_branch_policy.custom_branch_policies == true", preflight)
-        self.assertLess(self.source.index("  preflight:\n"), self.source.index("  deploy:\n"))
-
-    def test_deploy_uses_the_exact_dispatched_revision_and_no_cache(self):
-        steps = checkout_steps(self.jobs["deploy"])
+    def test_validation_preserves_tests_and_both_dry_runs(self):
+        test = self.jobs["test"]
+        self.assertIn("    name: Test and dry-run the control plane\n", test)
+        self.assertIn("npm test", test)
+        self.assertIn("wrangler deploy --dry-run", test)
+        self.assertIn("--env staging", test)
+        self.assertIn("--env production", test)
+        steps = checkout_steps(test)
         self.assertEqual(len(steps), 1)
-        self.assertRegex(steps[0], r"(?m)^          ref: \$\{\{ github\.sha \}\}$")
-        for step in checkout_steps(self.source):
-            self.assertIn("persist-credentials: false", step)
-        self.assertNotIn("cache:", self.jobs["deploy"])
-        self.assertIn("npm ci --ignore-scripts", self.jobs["deploy"])
+        self.assertIn("persist-credentials: false", steps[0])
 
-    def test_targets_accept_only_their_source_branches(self):
-        preflight = self.jobs["preflight"]
-        step = preflight.split("      - name: Require a trusted source branch for the target\n", 1)[1]
-        script = textwrap.dedent(step.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]).strip()
-        bash = git_bash()
-        self.assertIsNotNone(bash)
-        for target, ref, passed in [
-            ("control-plane-staging", "refs/heads/dev", True),
-            ("control-plane-staging", "refs/heads/main", True),
-            ("control-plane-staging", "refs/heads/feature", False),
-            ("control-plane-staging", "refs/tags/v1.0.0", False),
-            ("control-plane-production", "refs/heads/main", True),
-            ("control-plane-production", "refs/heads/dev", False),
-            ("control-plane-production", "refs/heads/main-copy", False),
-            ("control-plane-preview", "refs/heads/main", False),
-        ]:
-            with self.subTest(target=target, ref=ref), tempfile.TemporaryDirectory() as folder:
-                output = Path(folder) / "output"
-                output.write_text("", encoding="utf-8")
-                environment = {"TARGET": target, "SOURCE_REF": ref, "GITHUB_OUTPUT": str(output)}
-                if os.name == "nt":
-                    environment["SystemRoot"] = os.environ["SystemRoot"]
-                result = subprocess.run(
-                    [bash, "--noprofile", "--norc", "-c", script],
-                    env=environment, capture_output=True, text=True,
-                    timeout=10, check=False,
-                )
-                self.assertEqual(result.returncode == 0, passed, result.stderr)
-                if passed:
-                    expected = "staging" if target.endswith("staging") else "production"
-                    self.assertEqual(output.read_text(encoding="utf-8").strip(), f"wrangler_environment={expected}")
+    def test_validation_has_no_deployment_environment_or_credentials(self):
+        self.assertNotRegex(self.source, r"(?m)^    environment:")
+        self.assertNotIn("secrets.", self.source)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN", self.source)
+        self.assertNotIn("CLOUDFLARE_ACCOUNT_ID", self.source)
 
 
 if __name__ == "__main__":
