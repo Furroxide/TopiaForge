@@ -450,14 +450,13 @@ npx() {
 
     def test_production_public_smoke_matches_the_expected_features(self):
         smoke = jobs()["deploy"].split("      - name: Smoke-test public routes after domain cutover\n", 1)[1]
-        base = re.search(r"predicate='([^']+)'", smoke)
-        production = re.search(r"predicate\+='([^']+)'", smoke)
-        self.assertIsNotNone(base)
-        self.assertIsNotNone(production)
+        run = smoke.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+        script = 'curl() { printf "%s\\n" "$SMOKE_RESPONSE"; }\n' + textwrap.dedent(run)
+        bash = git_bash()
+        self.assertIsNotNone(bash)
         jq = shutil.which("jq")
         if jq is None:
-            self.skipTest("jq is required to execute the public smoke predicate")
-        predicate = base.group(1) + production.group(1)
+            self.skipTest("jq is required to execute the public smoke test")
         disabled = {name: False for name in ("hosting", "invites", "signaling", "relay")}
         enabled = dict.fromkeys(disabled, True)
         for open_expected, features, kill_switch, accepted in (
@@ -473,9 +472,11 @@ npx() {
             with self.subTest(open_expected=open_expected, features=features, kill_switch=kill_switch):
                 response = {"schema": "topiaforge.control-plane-status/1", "api": 1,
                             "features": features, "killSwitch": kill_switch}
+                environment = dict(os.environ, TARGET="control-plane-production",
+                                   EXPECT_OPEN_PRODUCTION=str(open_expected).lower(),
+                                   SMOKE_RESPONSE=json.dumps(response))
                 result = subprocess.run(
-                    [jq, "-e", "--argjson", "open", json.dumps(open_expected), predicate],
-                    input=json.dumps(response),
+                    [bash, "--noprofile", "--norc", "-c", script], env=environment,
                     capture_output=True, text=True, timeout=10, check=False,
                 )
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)

@@ -460,7 +460,7 @@ jobs:
           if [[ "$TARGET" == control-plane-* ]]; then
             predicate='.schema == "topiaforge.control-plane-status/1" and .api == 1'
             if [[ "$TARGET" == control-plane-production ]]; then
-              predicate+=' and .features == {hosting:$open, invites:$open, signaling:$open, relay:$open} and ($open == false or .killSwitch == false)'
+              predicate+=" and .features == {hosting:\$open, invites:\$open, signaling:\$open, relay:\$open} and (\$open == false or .killSwitch == false)"
             fi
             curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 \
               --connect-timeout 10 --max-time 20 "$origin/v1/status" \
