@@ -134,6 +134,8 @@ The stable PR-policy check enforces these routing rules:
   from that head's `release/release-policy.json`. The exact `service/production-multiplayer` and
   `cloudflare/deploy-host-main` branches are file-allowlisted service exceptions. The exact
   `maintenance/main-governance` branch is limited to repository governance and release-check workflow files.
+  The one-time sidecar security backport also admits the exact reviewed manifest and lockfile transition
+  together. After the backport lands, the old base blobs no longer match and the exception closes.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
 - Once `v1.0.0-rc.1` exists, every introduced commit must contain a valid
