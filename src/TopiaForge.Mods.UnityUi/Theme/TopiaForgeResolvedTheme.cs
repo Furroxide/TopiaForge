@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace TopiaForge.Mods.UnityUi
 {
@@ -10,6 +11,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeResolvedTheme
     {
+        private readonly TopiaForgeFillPaint[] fills;
         private readonly Color primaryText;
         private readonly Color accentText;
         private readonly Color successText;
@@ -44,7 +46,7 @@ namespace TopiaForge.Mods.UnityUi
         public Color Primary { get; }
         /// <summary>Gets the primary pressed color.</summary>
         public Color PrimaryPressed { get; }
-        /// <summary>Gets the on primary color.</summary>
+        /// <summary>Gets the color of a label on <see cref="Primary"/>, readable in every state a filled button is drawn in.</summary>
         public Color OnPrimary { get; }
         /// <summary>Gets the accent color.</summary>
         public Color Accent { get; }
@@ -62,14 +64,20 @@ namespace TopiaForge.Mods.UnityUi
         public Color Warning { get; }
         /// <summary>Gets the danger color.</summary>
         public Color Danger { get; }
-        /// <summary>Gets the on status color.</summary>
-        public Color OnStatus { get; }
+        /// <summary>Gets the color of a label on <see cref="Danger"/>, readable in every state a danger button is drawn in.</summary>
+        public Color OnDanger { get; }
         /// <summary>Gets the shadow color.</summary>
         public Color Shadow { get; }
         /// <summary>Gets the shadow strong color.</summary>
         public Color ShadowStrong { get; }
         /// <summary>Gets the focus ring color.</summary>
         public Color FocusRing { get; }
+
+        /// <summary>
+        /// Gets a slider handle's color: on Paper the accent, opaque and darkened if it must be, so the handle shows on its
+        /// light track and surface; on the HUD white, which shows on the HUD's dark ones.
+        /// </summary>
+        internal Color SliderHandle { get; }
 
         /// <summary>Creates a resolved theme.</summary>
         public TopiaForgeResolvedTheme(TopiaForgeScheme scheme, TopiaForgeRgba? accentOverride)
@@ -107,10 +115,26 @@ namespace TopiaForge.Mods.UnityUi
             Success = ToColor(colors.Success);
             Warning = ToColor(colors.Warning);
             Danger = ToColor(colors.Danger);
-            OnStatus = ToColor(colors.OnStatus);
+            OnDanger = ToColor(colors.OnDanger);
             Shadow = ToColor(colors.Shadow);
             ShadowStrong = ToColor(colors.ShadowStrong);
             FocusRing = ToColor(colors.FocusRing);
+
+            // What the kit draws on a fill is resolved against that fill, and each state's tint keeps it readable.
+            var resolvedFills = TopiaForgeOnColors.ResolveAll(scheme, colors, HighContrast);
+            fills = new TopiaForgeFillPaint[resolvedFills.Length];
+            for (var index = 0; index < resolvedFills.Length; index++)
+            {
+                var resolved = resolvedFills[index];
+                fills[index] = new TopiaForgeFillPaint(
+                    ToColor(resolved.Fill),
+                    ToColor(resolved.Content),
+                    StateTint(resolved.Hovered),
+                    StateTint(resolved.Selected),
+                    StateTint(resolved.Pressed));
+            }
+
+            SliderHandle = ToColor(TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast));
 
             // Status and brand colors are made for fills and rings. On Paper their text is darkened until it reads on every
             // surface; the HUD's are bright on dark already.
@@ -186,6 +210,14 @@ namespace TopiaForge.Mods.UnityUi
             };
         }
 
+        /// <summary>
+        /// Gets a fill, the color of the label, icon, thumb or check the kit draws on it, and the tints its control's color
+        /// block uses while hovered, selected or pressed. The content reads on the fill in every one of those states: a label
+        /// at WCAG AA and a mark at 3:1, or 7:1 and 4.5:1 in high contrast. The fill is the brand's own unless nothing reads
+        /// on it.
+        /// </summary>
+        internal TopiaForgeFillPaint Fill(TopiaForgeFillRole role) => fills[(int)role];
+
         /// <summary>High-contrast emphasis for consumer-supplied custom colors.</summary>
         public Color Emphasize(Color color)
         {
@@ -206,6 +238,51 @@ namespace TopiaForge.Mods.UnityUi
         private static TopiaForgeRgba ToRgba(Color value)
         {
             return new TopiaForgeRgba(value.r, value.g, value.b, value.a);
+        }
+
+        private static Color StateTint(float value)
+        {
+            return new Color(value, value, value, 1f);
+        }
+    }
+
+    /// <summary>
+    /// A fill, the color drawn on it, and the color block tints that keep that color readable while the control is
+    /// hovered, selected or pressed.
+    /// </summary>
+    internal readonly struct TopiaForgeFillPaint
+    {
+        internal TopiaForgeFillPaint(Color fill, Color content, Color hovered, Color selected, Color pressed)
+        {
+            Fill = fill;
+            Content = content;
+            Hovered = hovered;
+            Selected = selected;
+            Pressed = pressed;
+        }
+
+        /// <summary>Gets the fill.</summary>
+        internal Color Fill { get; }
+
+        /// <summary>Gets the color of the label, icon, thumb or check drawn on the fill.</summary>
+        internal Color Content { get; }
+
+        /// <summary>Gets the color block's hovered tint.</summary>
+        internal Color Hovered { get; }
+
+        /// <summary>Gets the color block's selected tint.</summary>
+        internal Color Selected { get; }
+
+        /// <summary>Gets the color block's pressed tint.</summary>
+        internal Color Pressed { get; }
+
+        /// <summary>Gets a color block with these state tints and the rest of <paramref name="block"/> unchanged.</summary>
+        internal ColorBlock Tinted(ColorBlock block)
+        {
+            block.highlightedColor = Hovered;
+            block.selectedColor = Selected;
+            block.pressedColor = Pressed;
+            return block;
         }
     }
 

@@ -122,11 +122,9 @@ namespace TopiaForge.Mods.UnityUi
             button.targetGraphic = fill;
             button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "Button click"));
 
+            // ApplyTheme sets the hovered, selected and pressed tints, which keep the label readable on the fill.
             var colors = button.colors;
             colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.06f, 1.06f, 1.06f, 1f);
-            colors.pressedColor = new Color(0.94f, 0.94f, 0.94f, 1f);
-            colors.selectedColor = new Color(1.04f, 1.04f, 1.04f, 1f);
             colors.disabledColor = Color.white; // disabled visuals are theme-driven, not multiplied
             button.colors = colors;
 
@@ -198,6 +196,17 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            // Filled and danger buttons take their role's readable tints. Outline and ghost labels sit on a surface with
+            // contrast to spare, so they keep the kit's usual tints. The block is written once, so one fade runs.
+            var paint = enabledState && style == TopiaForgeButtonStyle.Filled ? theme.Fill(TopiaForgeFillRole.FilledButton)
+                : enabledState && style == TopiaForgeButtonStyle.Danger ? theme.Fill(TopiaForgeFillRole.DangerButton)
+                : (TopiaForgeFillPaint?)null;
+            var colors = button.colors;
+            colors.highlightedColor = Tint(TopiaForgeOnColors.ButtonHoveredTint);
+            colors.selectedColor = Tint(TopiaForgeOnColors.ButtonSelectedTint);
+            colors.pressedColor = Tint(TopiaForgeOnColors.ButtonPressedTint);
+            button.colors = paint.HasValue ? paint.Value.Tinted(colors) : colors;
+
             if (!enabledState)
             {
                 fill.color = theme.Tint;
@@ -226,13 +235,13 @@ namespace TopiaForge.Mods.UnityUi
 
             switch (style)
             {
+                // A label on a fill takes the color that reads on it, dark on the brand orange where white read at 2.6:1,
+                // and the fill's state tints never move it toward that color far enough to stop it reading.
                 case TopiaForgeButtonStyle.Filled:
-                    fill.color = theme.Primary;
-                    SetContentColor(theme.OnPrimary);
-                    break;
                 case TopiaForgeButtonStyle.Danger:
-                    fill.color = theme.Danger;
-                    SetContentColor(theme.OnStatus);
+                    var resolved = paint.GetValueOrDefault();
+                    fill.color = resolved.Fill;
+                    SetContentColor(resolved.Content);
                     break;
                 case TopiaForgeButtonStyle.Outline:
                     fill.color = theme.Surface;
@@ -255,6 +264,11 @@ namespace TopiaForge.Mods.UnityUi
             {
                 shadow.color = theme.Shadow;
             }
+        }
+
+        private static Color Tint(float value)
+        {
+            return new Color(value, value, value, 1f);
         }
 
         private void SetContentColor(Color color)

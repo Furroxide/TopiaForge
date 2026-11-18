@@ -292,6 +292,27 @@ gameplay overlays. Safe consumers specify semantic tone (`Neutral`, `Success`, `
 `Danger`) rather than color literals. The provider owns layer bands, focus order, cursor state,
 font fallback, motion, high contrast, and UI scale.
 
+Enabled filled and danger button labels meet 4.5:1 (WCAG AA) at rest and while hovered, selected or
+pressed. Enabled switch thumbs and checkbox checks, and stepper marks, meet 3:1 on their fills.
+Both thresholds include 8-bit color rounding. High contrast raises them to 7:1 and 4.5:1. On brand
+orange (`#FF7A11`), Paper uses `#2D3748` and HUD uses `#10141B`; high contrast can darken the ink
+further. The HUD's bright status fills also use dark ink. An off switch's grey thumb is lightened
+or darkened until it reads on the tint.
+
+What is drawn on a fill is chosen against the fill at rest. Each interaction state then keeps the
+kit's usual tint (a button lightens on hover and darkens on press; a switch or checkbox darkens on
+both, as uGUI's default does) only while the label or mark still reads on the tinted fill. Where it
+would not, the state takes the mirror tint, which moves the fill away from what is drawn on it, so
+that state reads at least as well as rest. Paper's orange therefore lightens when pressed rather
+than darkening toward its dark label, and Paper's danger red darkens when hovered rather than
+lightening toward its white label. Selection moves the same way as hover. When hover and press
+land on the same side of rest, press goes twice as far, so a pressed button looks different from a
+hovered one even with reduced motion, which turns off its sink into its shadow. Fills keep the
+brand's colors, except where nothing would read on them: high contrast darkens Paper's danger red
+so its white label reaches 7:1. A
+slider's handle is the accent on Paper, where a white one vanished on the light track, and stays
+white on the HUD.
+
 On Paper, labels and ghost buttons read in every tone on every surface. Muted text keeps 7:1 (WCAG
 AAA) against the sunken paper a tool's content sits on. Faint text, and body text in a status or
 brand tone, keep 4.5:1 (AA) against the darkest surface text sits on: the tint, or sunken paper

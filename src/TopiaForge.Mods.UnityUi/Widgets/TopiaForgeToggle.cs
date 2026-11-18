@@ -6,8 +6,10 @@ using UImage = UnityEngine.UI.Image;
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
-    /// Labeled switch (brand: launch-orange track when on, tinted when off, white
-    /// thumb — the launcher SwitchTheme). Checkbox() gives the boxed-check variant.
+    /// Labeled switch (brand: launch-orange track when on, tinted when off, as the launcher
+    /// SwitchTheme). Its thumb, and a checkbox's check, take the color that reads on the track:
+    /// dark on the orange, where white read at 2.6:1, and a faint grey on the tint. Checkbox()
+    /// gives the boxed-check variant.
     /// </summary>
     public sealed class TopiaForgeToggle : TopiaForgeWidget, ITopiaForgeThemeAware
     {
@@ -144,30 +146,46 @@ namespace TopiaForge.Mods.UnityUi
             var theme = Theme;
             if (checkbox)
             {
-                track.color = value ? theme.Primary : theme.SurfaceSunken;
+                // An unticked box draws nothing on its sunken fill, so it keeps uGUI's default tints.
+                var on = theme.Fill(TopiaForgeFillRole.ControlOn);
+                toggle.colors = value ? on.Tinted(toggle.colors) : DefaultTints(toggle.colors);
+                track.color = value ? on.Fill : theme.SurfaceSunken;
                 if (boxRing != null)
                 {
-                    boxRing.color = value ? theme.Primary : theme.Outline;
+                    boxRing.color = value ? on.Fill : theme.Outline;
                 }
 
                 if (check != null)
                 {
-                    check.color = theme.OnPrimary;
+                    check.color = on.Content;
                     check.enabled = value;
                 }
             }
             else
             {
-                track.color = value ? theme.Primary : theme.Tint;
+                // The thumb reads on the track in every state: the track's tints never move it toward the thumb far enough to stop it reading.
+                var paint = theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff);
+                toggle.colors = paint.Tinted(toggle.colors);
+                track.color = paint.Fill;
                 if (thumb != null && thumbRect != null)
                 {
-                    thumb.color = value ? theme.OnPrimary : theme.TextFaint;
+                    thumb.color = paint.Content;
                     var x = value ? TrackWidth - (ThumbSize / 2f) - 3f : (ThumbSize / 2f) + 3f;
                     thumbRect.anchoredPosition = new Vector2(x, 0f);
                 }
             }
 
             label.color = theme.Text;
+        }
+
+        private static ColorBlock DefaultTints(ColorBlock block)
+        {
+            var highlighted = TopiaForgeOnColors.ControlHighlightedTint;
+            var pressed = TopiaForgeOnColors.ControlPressedTint;
+            block.highlightedColor = new Color(highlighted, highlighted, highlighted, 1f);
+            block.selectedColor = new Color(highlighted, highlighted, highlighted, 1f);
+            block.pressedColor = new Color(pressed, pressed, pressed, 1f);
+            return block;
         }
 
         private TMPro.TextMeshProUGUI CreateLabel(string text)

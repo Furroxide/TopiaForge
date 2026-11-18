@@ -157,16 +157,19 @@ namespace TopiaForge.Mods.UnityUi
                     view.Number.color = theme.Text;
                     view.Label.SetTone(TopiaForgeTone.Neutral);
                     break;
+                // A mark takes the color that reads on its node: dark on the HUD's bright green, where white read at 2.3:1.
                 case TopiaForgeStepStatus.Done:
-                    view.Fill.color = theme.Success;
-                    view.Ring.color = theme.Success;
-                    SetIcon(view, doneSprite!, theme.OnStatus);
+                    var done = theme.Fill(TopiaForgeFillRole.StepDone);
+                    view.Fill.color = done.Fill;
+                    view.Ring.color = done.Fill;
+                    SetIcon(view, doneSprite!, done.Content);
                     view.Label.SetTone(TopiaForgeTone.Muted);
                     break;
                 case TopiaForgeStepStatus.Failed:
-                    view.Fill.color = theme.Danger;
-                    view.Ring.color = theme.Danger;
-                    SetIcon(view, failedSprite!, theme.OnStatus);
+                    var failed = theme.Fill(TopiaForgeFillRole.StepFailed);
+                    view.Fill.color = failed.Fill;
+                    view.Ring.color = failed.Fill;
+                    SetIcon(view, failedSprite!, failed.Content);
                     view.Label.SetTone(TopiaForgeTone.Danger);
                     break;
                 case TopiaForgeStepStatus.Skipped:

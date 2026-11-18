@@ -7,7 +7,8 @@ namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
     /// Labeled slider skinning uGUI's Slider with brand chrome: tinted rounded track,
-    /// accent fill, circular handle. Shows a live value readout.
+    /// accent fill, circular handle. The handle is the accent on Paper, where a white one
+    /// vanished on the light track, and white on the HUD's dark one. Shows a live value readout.
     /// </summary>
     public sealed class TopiaForgeSlider : TopiaForgeWidget, ITopiaForgeThemeAware
     {
@@ -135,7 +136,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             track.color = theme.SurfaceSunken;
             fill.color = theme.Accent;
-            handle.color = theme.OnPrimary;
+            handle.color = theme.SliderHandle;
             label.color = theme.Text;
             valueLabel.color = theme.TextMuted;
         }
