@@ -82,10 +82,19 @@ namespace TopiaForge.ModManager
             if (selectable == null || selectable.transform is not RectTransform fieldRect) return false;
             var fieldFill = Over(selectable.targetGraphic, backdrop);
             var flags = Flags(selectable);
-            Add(path + "/value", null, "FieldValue", fieldRect, State(flags, source.Label),
-                new UiCaptureNodePaint(null, fieldFill));
             HitAndFocus(path, selectable, source.Label, backdrop);
-            // The value may be player text. Only the authored placeholder and external caption qualify.
+            var nativeValue = selectable.text;
+            if (source.Value.Length != 0 && nativeValue == source.Value)
+            {
+                if (!Text(path + "/value", null, "FieldValue", selectable.textComponent, source.Value,
+                        UiTextStyle.Body, fieldFill, flags, nativeInputValue: nativeValue)) return false;
+            }
+            else
+            {
+                Add(path + "/value", null, "FieldValue", fieldRect, State(flags, source.Label),
+                    new UiCaptureNodePaint(null, fieldFill));
+            }
+
             if (selectable.placeholder is TMP_Text placeholder && placeholder.isActiveAndEnabled &&
                 !Text(path + "/placeholder", null, "FieldPlaceholder", placeholder, source.Placeholder, UiTextStyle.Body, fieldFill))
                 return false;
@@ -113,7 +122,7 @@ namespace TopiaForge.ModManager
             for (var slot = 0; slot < scroll.content.childCount; slot++)
             {
                 if (scroll.content.GetChild(slot) is not RectTransform row || !row.gameObject.activeInHierarchy) continue;
-                var index = Mathf.RoundToInt(-row.anchoredPosition.y / TopiaForgeListView<UiListItem>.DeclarativeHeight(1));
+                var index = UiVirtualListGeometry.IndexAtRowTop(-row.anchoredPosition.y);
                 if ((uint)index >= (uint)source.Items.Count || row.GetComponent<Button>() is not { } button) return false;
                 var item = source.Items[index];
                 var itemPath = NodePath(ChildPath(path, index), item.Id);
@@ -135,29 +144,65 @@ namespace TopiaForge.ModManager
         {
             var graphFill = Over(rect.GetComponent<Image>(), backdrop);
             Add(path, source.Id, nameof(UiGraphCanvas), rect, EmptyContent, new UiCaptureNodePaint(null, graphFill));
-            foreach (var label in rect.GetComponentsInChildren<TMP_Text>())
+            var cards = rect.Find("Nodes");
+            if (cards == null) return false;
+            var index = 0;
+            for (var slot = 0; slot < cards.childCount; slot++)
             {
-                if (label.name != "Title" || label.transform.parent is not RectTransform card || card.name != "GraphNode") continue;
-                for (var index = 0; index < source.Nodes.Count; index++)
-                {
-                    var node = source.Nodes[index];
-                    if (UiGalleryCaptureFixture.SafeDisplayText(label.text, node.Title, Descriptor.GetText(UiTextStyle.Label).IsUppercase) == null) continue;
-                    var itemPath = NodePath(ChildPath(path, index), node.Id);
-                    var fill = Over(card.GetComponent<Image>(), graphFill);
-                    if (card.GetComponent<Button>() is not { } button) return false;
-                    var flags = Flags(button);
-                    var ring = card.Find("Ring")?.GetComponent<Image>();
-                    var selectedWidth = (theme.HighContrast ? 3 : TopiaForgeTokens.BorderStandard) + 1;
-                    if (ring != null && ring.isActiveAndEnabled &&
-                        ring.sprite == TopiaForgeSprites.Ring(TopiaForgeRadius.Control, selectedWidth))
-                        flags |= UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
-                    HitAndFocus(itemPath, button, node.Title, graphFill);
-                    if (!Text(itemPath, node.Id, "GraphNode", label, node.Title, UiTextStyle.Label, fill, flags) ||
-                        !Text(itemPath + "/subtitle", null, "GraphNodeSubtitle", Named<TMP_Text>(card, "Subtitle"),
-                            node.Subtitle.Length == 0 ? node.Type : node.Subtitle, UiTextStyle.Caption, fill, flags)) return false;
-                    break;
-                }
+                var child = cards.GetChild(slot);
+                if (!child.gameObject.activeInHierarchy) continue;
+                if (child is not RectTransform card || card.name != "GraphNode" || index >= source.Nodes.Count) return false;
+                var node = source.Nodes[index];
+                if (!GraphNode(node, card, NodePath(ChildPath(path, index), node.Id), graphFill)) return false;
+                index++;
             }
+            return index == source.Nodes.Count;
+        }
+
+        private bool GraphNode(UiGraphNode node, RectTransform card, string path, UiThemeColor? graphFill)
+        {
+            if (card.Find("Header") is not RectTransform header || header.GetComponent<Button>() is not { } button) return false;
+            var shell = Over(card.GetComponent<Image>(), graphFill);
+            var fill = Over(button.targetGraphic, shell);
+            var flags = Flags(button);
+            var ring = card.Find("Ring")?.GetComponent<Image>();
+            var selectedWidth = UiControlFocusGeometry.Stroke(theme.HighContrast) + 1f;
+            if (ring != null && ring.isActiveAndEnabled &&
+                ring.sprite == TopiaForgeSprites.Ring(TopiaForgeRadius.Control, selectedWidth))
+                flags |= UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
+            HitAndFocus(path, button, node.Title, shell);
+            if (!Text(path, node.Id, "GraphNode", Named<TMP_Text>(header, "Title"), node.Title, UiTextStyle.Label, fill, flags,
+                    Decoration(header, button.targetGraphic)) ||
+                !Text(path + "/subtitle", null, "GraphNodeSubtitle", Named<TMP_Text>(header, "Subtitle"),
+                    node.Subtitle.Length == 0 ? node.Type : node.Subtitle, UiTextStyle.Caption, fill, flags)) return false;
+
+            var portIndex = 0;
+            for (var slot = 0; slot < card.childCount; slot++)
+            {
+                var child = card.GetChild(slot);
+                if (child.name != "Port" || !child.gameObject.activeInHierarchy) continue;
+                if (child is not RectTransform portRect || portIndex >= node.Ports.Count) return false;
+                var port = node.Ports[portIndex];
+                var portPath = NodePath(ChildPath(path + "/ports", portIndex), port.Id);
+                if (!GraphPort(port, portRect, portPath, shell)) return false;
+                portIndex++;
+            }
+            return portIndex == node.Ports.Count;
+        }
+
+        private bool GraphPort(UiGraphPort port, RectTransform rect, string path, UiThemeColor? backdrop)
+        {
+            if (rect.GetComponent<Button>() is not { } button || Named<Image>(rect, "Indicator") is not { } mark) return false;
+            var fill = Over(button.targetGraphic, backdrop);
+            var flags = Flags(button);
+            if (mark.sprite == TopiaForgeSprites.White)
+                flags |= UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
+
+            if (!Text(path, port.Id, "GraphPort", Named<TMP_Text>(rect, "Label"), UiGraphControlGeometry.PortText(port),
+                    UiTextStyle.Label, fill, flags, Decoration(rect, button.targetGraphic))) return false;
+            Add(path + "/mark", null, "GraphPortMark", mark.rectTransform, State(flags | UiCaptureNodeFlags.SemanticMark, port.Label),
+                new UiCaptureNodePaint(ToRgb(EffectiveColor(mark)), fill), mark.isActiveAndEnabled);
+            HitAndFocus(path, button, port.Label, backdrop);
             return true;
         }
 
@@ -167,10 +212,15 @@ namespace TopiaForge.ModManager
             var graphic = selectable.GetComponent<Graphic>();
             var hit = graphic != null && graphic.raycastTarget ? graphic.rectTransform : rect;
             Add(path + "/hit", null, "HitTarget", hit, State(Flags(selectable) | UiCaptureNodeFlags.HitTarget, label), default);
-            var focus = Named<Image>(rect, "Focus ring");
+            var focus = Named<TopiaForgeRoundedImage>(rect, "Focus ring");
             if (focus == null || !focus.isActiveAndEnabled) return;
-            Add(path + "/focus", null, "FocusRing", focus.rectTransform, State(UiCaptureNodeFlags.SemanticMark, label),
-                new UiCaptureNodePaint(ToRgb(EffectiveColor(focus)), backdrop));
+            var scale = VerticalScale(focus.rectTransform);
+            var local = focus.rectTransform.rect;
+            var radius = focus.ResolvedCornerRadius is float corner
+                ? Mathf.Min(corner, Mathf.Min(local.width, local.height) / 2f) * scale : (float?)null;
+            Add(path + "/focus", null, "FocusRing", focus.rectTransform,
+                State(UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.FocusIndicator, label),
+                new UiCaptureNodePaint(ToRgb(EffectiveColor(focus)), backdrop, radius, focus.ResolvedBorderWidth * scale));
         }
 
         private UiCaptureNodePaint Decoration(RectTransform rect, Graphic? fill)

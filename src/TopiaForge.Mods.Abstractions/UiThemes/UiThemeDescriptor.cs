@@ -54,15 +54,17 @@ namespace TopiaForge.Mods
         private readonly UiThemePair[] pairs;
         private readonly UiThemeColor?[] inks;
         private readonly UiThemeColor[,] foregrounds;
+        private readonly double focusMinimum;
 
         internal UiThemeScheme(UiThemePair[] pairs, UiThemeColor muted, UiThemeColor outline, UiThemeColor focus,
-            UiThemeColor?[] inks, double minimum = 4.5d)
+            UiThemeColor?[] inks, double minimum = 4.5d, double focusMinimum = 3d)
         {
             this.pairs = pairs;
             this.inks = inks;
             Muted = muted;
             Outline = outline;
             Focus = focus;
+            this.focusMinimum = focusMinimum;
             foregrounds = new UiThemeColor[pairs.Length, inks.Length];
             for (var fill = 0; fill < pairs.Length; fill++)
             {
@@ -81,7 +83,8 @@ namespace TopiaForge.Mods
         internal UiThemePair GetPair(UiPaintRole role) => pairs[(int)role];
         internal UiThemeColor? AuthoredInk(UiTone tone) => inks[(int)tone];
         internal UiThemeColor ResolveForeground(UiTone tone, UiPaintRole background) => foregrounds[(int)background, (int)tone];
-        internal UiThemeColor ResolveFocus(UiPaintRole behindRing) => UiThemeColors.RepairForeground(Focus, GetPair(behindRing).Fill, 3d);
+        internal UiThemeColor ResolveFocus(UiPaintRole behindRing) =>
+            UiThemeColors.RepairForeground(Focus, GetPair(behindRing).Fill, focusMinimum);
         internal UiThemeColor ResolveBoundary(UiPaintRole background) => UiThemeColors.RepairForeground(Outline, GetPair(background).Fill, 3d);
 
         private UiThemeColor Candidate(UiTone tone, UiThemePair background) => tone switch
@@ -126,7 +129,7 @@ namespace TopiaForge.Mods
                 }
             }
 
-            return new UiThemeScheme(derivedPairs, Muted, Outline, Focus, derivedInks, minimum: 7d);
+            return new UiThemeScheme(derivedPairs, Muted, Outline, Focus, derivedInks, minimum: 7d, focusMinimum: 4.5d);
         }
     }
 

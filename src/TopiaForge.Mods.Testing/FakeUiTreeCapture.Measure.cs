@@ -6,7 +6,6 @@ namespace TopiaForge.Mods.Testing
     internal sealed partial class FakeUiTreeCapture
     {
         private float ControlHeight => 40f * layoutScale;
-        private float ListStride => 44f * layoutScale;
         private float LabelGap => 4f * layoutScale;
 
         private Size Measure(UiNode node, float width, bool wrap = true)
@@ -35,7 +34,7 @@ namespace TopiaForge.Mods.Testing
                     var sliderLabel = MeasureText(slider.Label, UiTextStyle.Body, width * 0.42f);
                     return new Size(width, Math.Max(ControlHeight, sliderLabel.Height));
                 case UiVirtualList list:
-                    return new Size(width, list.VisibleRows * ListStride);
+                    return new Size(width, UiVirtualListGeometry.Height(list.VisibleRows) * layoutScale);
                 case UiGraphCanvas graph:
                     return new Size(width, graph.Height * layoutScale);
                 case UiLayoutNode layout:

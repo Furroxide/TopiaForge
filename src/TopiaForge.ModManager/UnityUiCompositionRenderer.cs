@@ -163,9 +163,9 @@ namespace TopiaForge.ModManager
 
             if (node is UiVirtualList list)
             {
-                var native = parent.ListView<UiListItem>(TopiaForgeTokens.ControlHeight)
-                    .FixedHeight(TopiaForgeListView<UiListItem>.DeclarativeHeight(list.VisibleRows));
-                native.UseDeclarativeRows();
+                var native = parent.ListView<UiListItem>(UiVirtualListGeometry.RowHeight)
+                    .FixedHeight(UiVirtualListGeometry.Height(list.VisibleRows));
+                native.UseDeclarativeRows(list.VisibleRows);
                 native.Bind((row, item, _) =>
                 {
                     row.Title.SetText(item.Title);

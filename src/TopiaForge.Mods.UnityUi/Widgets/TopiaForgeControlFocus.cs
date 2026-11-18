@@ -8,9 +8,8 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>Draws a separate focus ring for a declarative control's native selectable.</summary>
     internal sealed class TopiaForgeControlFocus : TopiaForgeWidget, ITopiaForgeThemeAware
     {
-        private const float Gap = 2f;
         private readonly TopiaForgeRoundedImage image;
-        private readonly UiPaintRole backdrop;
+        private UiPaintRole backdrop;
 
         private TopiaForgeControlFocus(TopiaForgeWidget widget, Selectable control, UiPaintRole backdrop)
             : base(widget.Host, widget.Scheme, CreateRing(control.transform))
@@ -31,16 +30,20 @@ namespace TopiaForge.Mods.UnityUi
                 Install(widget, control);
         }
 
-        internal static void Install(TopiaForgeWidget widget, Selectable control, UiPaintRole backdrop = UiPaintRole.Surface)
+        internal static TopiaForgeControlFocus? Install(TopiaForgeWidget widget, Selectable control,
+            UiPaintRole backdrop = UiPaintRole.Surface) =>
+            control.GetComponent<TopiaForgeControlFocusEvents>() == null ? new TopiaForgeControlFocus(widget, control, backdrop) : null;
+
+        internal void SetBackdrop(TopiaForgeResolvedTheme theme, UiPaintRole role)
         {
-            if (control.GetComponent<TopiaForgeControlFocusEvents>() == null)
-                _ = new TopiaForgeControlFocus(widget, control, backdrop);
+            backdrop = role;
+            image.color = theme.FocusOn(role);
         }
 
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
-            var stroke = theme.HighContrast ? 3f : 2f;
-            var outset = Gap + stroke;
+            var stroke = UiControlFocusGeometry.Stroke(theme.HighContrast);
+            var outset = UiControlFocusGeometry.Gap + stroke;
             TopiaForgeAnchors.Stretch(Rect, -outset, -outset, -outset, -outset);
             image.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Control, stroke);
             image.SetShape(theme.Descriptor?.Shape.Control + outset, stroke);

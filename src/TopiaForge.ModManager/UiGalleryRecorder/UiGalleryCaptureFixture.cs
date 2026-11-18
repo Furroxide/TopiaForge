@@ -23,6 +23,16 @@ namespace TopiaForge.ModManager
             return nativeText == upper ? upper : null;
         }
 
+        internal static string? SafeAuthoredFieldValue(string? nativeValue, string? nativeLabel, string authored)
+        {
+            if (authored.Length == 0 || nativeValue != authored) return null;
+            if (nativeLabel == authored) return authored;
+            // TMP may append a zero-width caret sentinel to the rendered text component.
+            return nativeLabel != null && nativeLabel.Length == authored.Length + 1 &&
+                nativeLabel[nativeLabel.Length - 1] == '\u200B' && nativeLabel.StartsWith(authored, StringComparison.Ordinal)
+                ? authored : null;
+        }
+
         internal static UiSurfaceRequest? Match(string owner, bool remote, string? authenticatedOwner, UiSurfaceRequest request,
             string? authenticatedThemeId = null)
         {
@@ -86,8 +96,10 @@ namespace TopiaForge.ModManager
         }
 
         private static bool SameGraphNode(UiGraphNode first, UiGraphNode second) => first.Id == second.Id && first.Type == second.Type &&
-            first.Title == second.Title && first.Subtitle == second.Subtitle && first.Ports.Count == 0 && second.Ports.Count == 0 &&
-            first.Position.Equals(second.Position) && first.Tone == second.Tone && first.Enabled == second.Enabled;
+            first.Title == second.Title && first.Subtitle == second.Subtitle &&
+            first.Position.Equals(second.Position) && first.Tone == second.Tone && first.Enabled == second.Enabled &&
+            SameEntries(first.Ports, second.Ports, (left, right) => left.Id == right.Id && left.Label == right.Label &&
+                left.Direction == right.Direction && left.DataType == right.DataType && left.Required == right.Required);
 
         private static bool SameEntries<T>(IReadOnlyList<T> first, IReadOnlyList<T> second, Func<T, T, bool> equal)
         {

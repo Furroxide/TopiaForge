@@ -125,6 +125,7 @@ namespace TopiaForge.Mods.Testing
         InvalidLayout = 512,
         ScrollableClip = 1024,
         HitTarget = 2048,
+        FocusIndicator = 4096,
     }
 
     internal readonly struct UiCaptureNodeContent

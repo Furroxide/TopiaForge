@@ -14,7 +14,8 @@ namespace TopiaForge.Mods.Testing
         private readonly Dictionary<string, float> sliderValues = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> textValues = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> dropdownValues = new Dictionary<string, string>(StringComparer.Ordinal);
-        private readonly Dictionary<string, string?> listSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
+        private readonly Dictionary<string, (string? Selection, float Offset)> listViewports =
+            new Dictionary<string, (string? Selection, float Offset)>(StringComparer.Ordinal);
         private readonly Dictionary<string, string?> graphSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
         private readonly Dictionary<string, UiGraphViewport> graphViewports = new Dictionary<string, UiGraphViewport>(StringComparer.Ordinal);
         private readonly List<string> callbackErrors = new List<string>();
@@ -186,18 +187,9 @@ namespace TopiaForge.Mods.Testing
         {
             if (!TryFindNode(id, out var node) || !(node is UiVirtualList list)) return NotFound(id, "virtual list");
             if (!list.Enabled) return Disabled(id);
-            var found = false;
-            foreach (var item in list.Items)
-            {
-                if (string.Equals(item.Id, itemId, StringComparison.Ordinal))
-                {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake list item was not found.");
-            listSelections[id] = itemId;
+            var index = ListIndex(list, itemId);
+            if (index < 0) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake list item was not found.");
+            RememberListViewport(list, itemId, index);
             return Invoke(list.Selected, itemId, "virtual list '" + id + "'");
         }
 
@@ -325,7 +317,15 @@ namespace TopiaForge.Mods.Testing
         public bool TryGetDropdownValue(string id, out string? value) => dropdownValues.TryGetValue(id, out value);
 
         /// <summary>Tries to read the fake's current virtual-list selection.</summary>
-        public bool TryGetSelectedListItem(string id, out string? itemId) => listSelections.TryGetValue(id, out itemId);
+        public bool TryGetSelectedListItem(string id, out string? itemId)
+        {
+            var found = listViewports.TryGetValue(id, out var viewport);
+            itemId = viewport.Selection;
+            return found;
+        }
+
+        internal (string? Selection, float Offset) GetListViewport(string id) => listViewports.TryGetValue(id, out var viewport)
+            ? viewport : default;
 
         /// <summary>Tries to read the fake's current graph selection.</summary>
         public bool TryGetSelectedGraphNode(string id, out string? nodeId) => graphSelections.TryGetValue(id, out nodeId);

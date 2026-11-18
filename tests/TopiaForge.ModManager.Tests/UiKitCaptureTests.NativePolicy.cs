@@ -66,6 +66,17 @@ namespace TopiaForge.ModManager.Tests
             Check(UiGalleryCaptureFixture.SafeDisplayText("Unlisted text", "Field note", true) == null &&
                 UiGalleryCaptureFixture.SafeDisplayText("FIELD NOTE", "Field note", false) == null,
                 "The native text gate rejects unexpected content and unapproved transformations.");
+            const string value = "Awaiting check-in";
+            Check(UiGalleryCaptureFixture.SafeAuthoredFieldValue(value, value, value) == value &&
+                UiGalleryCaptureFixture.SafeAuthoredFieldValue(value, value + '\u200B', value) == value,
+                "The unchanged authored input value may carry one TMP caret sentinel.");
+            Check(UiGalleryCaptureFixture.SafeAuthoredFieldValue("Player input", value, value) == null &&
+                UiGalleryCaptureFixture.SafeAuthoredFieldValue(value, "Player input", value) == null &&
+                UiGalleryCaptureFixture.SafeAuthoredFieldValue(value, value + "\u200B\u200B", value) == null &&
+                UiGalleryCaptureFixture.SafeAuthoredFieldValue(string.Empty, "\u200B", string.Empty) == null &&
+                UiGalleryCaptureFixture.SafeDisplayText(value + '\u200B', value, false) == null,
+                "Edited input and unexpected transformations are ineligible for native recording.");
+            GalleryPortFixturesRequireExactAuthoredPorts();
 
             var variants = Enumerable.Range(0, GalleryRemotePreview.VariantCount).Select(GalleryRemotePreview.Request).ToArray();
             Check(variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 8,
@@ -100,6 +111,35 @@ namespace TopiaForge.ModManager.Tests
                     request.Width, request.Height, decoded ?? request.Content);
                 return request.Kind == UiSurfaceKind.Hud
                     ? converted.WithHudAnchor(request.HudAnchor).WithHudVisibility(request.HudVisibility) : converted;
+            }
+        }
+
+        private static void GalleryPortFixturesRequireExactAuthoredPorts()
+        {
+            var request = FoundationPages.CreateRequest(FoundationPage.InteractionStates, UiSurfaceKind.Window);
+            var layout = ((UiColumn)request.Content!).Children.ToArray();
+            var graph = (UiGraphCanvas)layout[^1];
+            var nodes = graph.Nodes.ToArray();
+            var camp = nodes[0];
+            var port = camp.Ports[0];
+            var mismatched = new[]
+            {
+                new UiGraphPort("altered", port.Label, port.Direction, port.DataType, port.Required),
+                new UiGraphPort(port.Id, "Unlisted input", port.Direction, port.DataType, port.Required),
+                new UiGraphPort(port.Id, port.Label, UiGraphPortDirection.Output, port.DataType, port.Required),
+                new UiGraphPort(port.Id, port.Label, port.Direction, "other", port.Required),
+                new UiGraphPort(port.Id, port.Label, port.Direction, port.DataType, !port.Required),
+            };
+            foreach (var offered in mismatched)
+            {
+                nodes[0] = new UiGraphNode(camp.Id, camp.Type, camp.Title, camp.Position,
+                    new[] { offered, camp.Ports[1] }, camp.Subtitle, camp.Tone, camp.Enabled);
+                layout[^1] = new UiGraphCanvas(graph.Id!, nodes, graph.Edges, graph.SelectionChanged, graph.SelectedNodeId,
+                    graph.Viewport, graph.Height, graph.Enabled);
+                var altered = new UiSurfaceRequest(request.Id, request.Title, request.Body, request.Kind, request.Width,
+                    request.Height, new UiColumn(layout));
+                Check(UiGalleryCaptureFixture.Match(UiGalleryCaptureFixture.Owner, false, null, altered) == null,
+                    "Native Gallery recording admits only the exact authored port fields.");
             }
         }
     }

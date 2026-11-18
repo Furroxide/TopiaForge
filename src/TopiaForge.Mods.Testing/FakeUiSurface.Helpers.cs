@@ -72,7 +72,7 @@ namespace TopiaForge.Mods.Testing
             sliderValues.Clear();
             textValues.Clear();
             dropdownValues.Clear();
-            listSelections.Clear();
+            listViewports.Clear();
             graphSelections.Clear();
             graphViewports.Clear();
             CaptureState(content);
@@ -86,7 +86,7 @@ namespace TopiaForge.Mods.Testing
             else if (node is UiSlider slider) sliderValues[slider.Id!] = slider.Value;
             else if (node is UiTextInput input) textValues[input.Id!] = input.Value;
             else if (node is UiDropdown dropdown) dropdownValues[dropdown.Id!] = dropdown.SelectedValue;
-            else if (node is UiVirtualList list) listSelections[list.Id!] = list.SelectedItemId;
+            else if (node is UiVirtualList list) RememberListViewport(list, list.SelectedItemId, ListIndex(list, list.SelectedItemId));
             else if (node is UiGraphCanvas graph)
             {
                 graphSelections[graph.Id!] = graph.SelectedNodeId;
@@ -106,6 +106,22 @@ namespace TopiaForge.Mods.Testing
                 CaptureState(split.Primary);
                 CaptureState(split.Secondary);
             }
+        }
+
+        private static int ListIndex(UiVirtualList list, string? itemId)
+        {
+            if (itemId == null) return -1;
+            for (var index = 0; index < list.Items.Count; index++)
+                if (string.Equals(list.Items[index].Id, itemId, StringComparison.Ordinal)) return index;
+            return -1;
+        }
+
+        private void RememberListViewport(UiVirtualList list, string? selection, int index)
+        {
+            var offset = GetListViewport(list.Id!).Offset;
+            if (index >= 0)
+                offset = UiVirtualListGeometry.RevealRow(index, offset, UiVirtualListGeometry.Height(list.VisibleRows), list.Items.Count);
+            listViewports[list.Id!] = (selection, offset);
         }
 
         private static bool TryFind(UiNode? current, string id, out UiNode? node)

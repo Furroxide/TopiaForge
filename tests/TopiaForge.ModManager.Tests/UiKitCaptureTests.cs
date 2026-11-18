@@ -34,6 +34,8 @@ namespace TopiaForge.ModManager.Tests
             PaintAndTypeRemainReadable();
             AuthoredBackplatesAndControlTargetsAreChecked();
             NativeControlsUseTheirResolvedRoles();
+            GraphPortsHaveIndependentTargetsAndPaint();
+            ListSelectionRevealsPaddedRows();
             TargetedBudgetsIncludeFramingWithoutEarlyClockBinding();
             UnchangedReapplicationAllocatesNothing();
             VerifyGoldenManifest();

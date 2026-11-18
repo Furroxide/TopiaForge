@@ -203,15 +203,17 @@ namespace TopiaForge.Mods.Testing
         }
 
         private void PaintFocus(string path, UiCaptureControlState state, UiCaptureRect bounds, UiCaptureRect clip,
-            UiPaintRole background)
+            UiPaintRole background, string label = "")
         {
             if (state != UiCaptureControlState.Focused) return;
-            var width = BorderWidth(true);
-            var offset = 2f * layoutScale + width;
+            var width = UiControlFocusGeometry.Stroke(preferences.HighContrast) * layoutScale;
+            var offset = UiControlFocusGeometry.Gap * layoutScale + width;
             var ring = bounds.Inset(-offset, -offset, -offset, -offset);
             var paint = new UiCaptureNodePaint(scheme.ResolveFocus(background), scheme.GetPair(background).Fill,
                 theme.Descriptor.Shape.Control * layoutScale + offset, width, 0f, 0f);
-            Add(path + "/focus", null, "FocusRing", ring, clip, EmptyContent, paint);
+            var content = new UiCaptureNodeContent(string.Empty, label, 0, 0,
+                UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.FocusIndicator);
+            Add(path + "/focus", null, "FocusRing", ring, clip, content, paint);
         }
 
         private UiThemeColor StatefulFill(UiThemePair pair, UiCaptureControlState state, float minimum, bool switchControl)

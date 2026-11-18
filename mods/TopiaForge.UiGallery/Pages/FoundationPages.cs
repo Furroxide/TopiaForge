@@ -137,9 +137,19 @@ namespace TopiaForge.UiGallery.Pages
                 new UiGraphCanvas("control-graph",
                     new[]
                     {
-                        new UiGraphNode("camp", "stop", "Camp", new Vec2(-110f, 0f), Array.Empty<UiGraphPort>()),
-                        new UiGraphNode("ridge", "stop", "Ridge closed", new Vec2(130f, 0f),
-                            Array.Empty<UiGraphPort>(), enabled: false),
+                        new UiGraphNode("camp", "stop", "Camp", new Vec2(-232f, 0f), new[]
+                        {
+                            new UiGraphPort("receive", "Run", UiGraphPortDirection.Input, required: true),
+                            new UiGraphPort("send", "Send", UiGraphPortDirection.Output),
+                        }),
+                        new UiGraphNode("trail", "stop", "Trail", new Vec2(0f, 0f), new[]
+                        {
+                            new UiGraphPort("receive", "Run", UiGraphPortDirection.Input),
+                        }),
+                        new UiGraphNode("ridge", "stop", "Ridge closed", new Vec2(232f, 0f), new[]
+                        {
+                            new UiGraphPort("receive", "Run", UiGraphPortDirection.Input),
+                        }, enabled: false),
                     },
                     Array.Empty<UiGraphEdge>(),
                     value => report(value == null ? "No stop selected." : "Selected " + value + "."),

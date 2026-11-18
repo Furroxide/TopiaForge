@@ -13,10 +13,6 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed partial class TopiaForgeGraphCanvas : TopiaForgeWidget, ITopiaForgeThemeAware
     {
-        internal const float NodeWidth = 216f;
-        internal const float PortRowHeight = 22f;
-        private const float NodeHeaderHeight = 62f;
-
         private readonly Image background;
         private readonly Image ring;
         private readonly RectTransform edgeLayer;
@@ -371,19 +367,6 @@ namespace TopiaForge.Mods.UnityUi
             image.raycastTarget = raycast;
             TopiaForgeAnchors.Stretch((RectTransform)go.transform);
             return image;
-        }
-
-        internal static float HeightFor(UiGraphNode node)
-        {
-            var inputs = 0;
-            var outputs = 0;
-            foreach (var port in node.Ports)
-            {
-                if (port.Direction == UiGraphPortDirection.Input) inputs++;
-                else outputs++;
-            }
-
-            return NodeHeaderHeight + Math.Max(1, Math.Max(inputs, outputs)) * PortRowHeight + 10f;
         }
     }
 }

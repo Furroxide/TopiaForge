@@ -212,9 +212,8 @@ namespace TopiaForge.ModManager.Tests
                 }
                 public sealed class TopiaForgeListView<T>
                 {
-                    public static float DeclarativeHeight(int rows) => 44f * rows;
                     public TopiaForgeListView<T> FixedHeight(float height) => this;
-                    public void UseDeclarativeRows() { }
+                    public void UseDeclarativeRows(int visibleRows) { }
                     public void Bind(Action<BoundaryRow, T, int> bind) { }
                     public void OnSelected(Action<int> action) { }
                     public void SetItems(IReadOnlyList<T> items) { }

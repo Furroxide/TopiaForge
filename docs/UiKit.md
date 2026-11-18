@@ -200,7 +200,11 @@ isolated, so later subscribers still run. Callbacks stop when the surface or mod
 
 Graph connections are accepted only from an output port to a same-type input port. A canvas accepts
 at most 512 nodes, 1,024 edges, and 32 ports per node; its callbacks report requested changes, so
-the mod remains responsible for validating and publishing the next immutable tree.
+the mod remains responsible for validating and publishing the next immutable tree. A node's header
+selects the node, and each typed port has its own hit target and focus ring. Dragging the card moves
+the node when the canvas supports editing.
+
+A virtual list scrolls its selected row into view when needed and leaves room for the row's focus ring.
 
 The compiled `ui` template demonstrates the standard form/list controls, accessibility changes,
 result handling, and a configurable nonreserved input action. The
@@ -393,7 +397,8 @@ The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` on the native verifica
 Opening a first-party Gallery fixture records its settled geometry and paint. Press F11 to record
 another observation of the current fixture. Hold the intended state until two frames have settled.
 The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts
-the authored fixture and omits participant identifiers and player-entered text.
+the authored fixture and omits participant identifiers and changed input values. It measures an
+input's authored value while the field still contains that exact value.
 
 The JSON uses the same accessibility checks as `FakeUiService` and records actual TMP measurements
 for the native fixture. Collect the separate raster captures and host and remote guest evidence at

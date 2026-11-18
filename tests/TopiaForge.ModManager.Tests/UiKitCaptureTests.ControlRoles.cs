@@ -46,8 +46,8 @@ namespace TopiaForge.ModManager.Tests
                 "Styled labels keep their original accessible text.");
             var listHits = paper.Nodes.Where(n => n.Kind == "HitTarget" && (n.Path.Contains(":ridge/") || n.Path.Contains(":valley/")))
                 .OrderBy(n => n.Y).ToArray();
-            Check(listHits.Length == 2 && listHits.All(n => n.Height == 40f) && listHits[1].Y - listHits[0].Y == 44f,
-                "Two virtual rows expose individual stationary 40-unit hit targets with a four-unit gap.");
+            Check(listHits.Length == 2 && listHits.All(n => n.Height == 40f) && listHits[1].Y - listHits[0].Y == 52f,
+                "Two virtual rows expose 40-unit hit targets with room for both focus rings.");
             Check(paper.Nodes.Single(n => n.Kind == "ListItem" && n.Id == "valley") is
                     { FillColor: "#000000", InkColor: "#FFFFFF" } &&
                 paper.Nodes.Single(n => n.Kind == "ListItem" && n.Id == "closed") is

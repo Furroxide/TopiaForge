@@ -109,10 +109,13 @@ namespace TopiaForge.ModManager
         }
 
         private bool Text(string path, string? id, string kind, TMP_Text? label, string authored, UiTextStyle style,
-            UiThemeColor? fill, UiCaptureNodeFlags flags = UiCaptureNodeFlags.None, UiCaptureNodePaint paint = default)
+            UiThemeColor? fill, UiCaptureNodeFlags flags = UiCaptureNodeFlags.None, UiCaptureNodePaint paint = default,
+            string? nativeInputValue = null)
         {
             if (label == null || label.font == null) return false;
-            var text = UiGalleryCaptureFixture.SafeDisplayText(label.text, authored, Descriptor.GetText(style).IsUppercase);
+            var text = nativeInputValue != null
+                ? UiGalleryCaptureFixture.SafeAuthoredFieldValue(nativeInputValue, label.text, authored)
+                : UiGalleryCaptureFixture.SafeDisplayText(label.text, authored, Descriptor.GetText(style).IsUppercase);
             if (text != null && (label.fontStyle & FontStyles.UpperCase) != 0) text = text.ToUpperInvariant();
             if (text == null)
             {
@@ -161,7 +164,8 @@ namespace TopiaForge.ModManager
         {
             var bounds = Bounds(rect);
             var (clip, scrollable) = Clip(rect);
-            if (scrollable && bounds.X >= clip.X - 0.01f && bounds.Right <= clip.Right + 0.01f && !contentClipped)
+            if (scrollable && (content.Flags & UiCaptureNodeFlags.FocusIndicator) == 0 &&
+                bounds.X >= clip.X - 0.01f && bounds.Right <= clip.Right + 0.01f && !contentClipped)
                 content = new UiCaptureNodeContent(content.Text, content.SemanticLabel, content.TextHeight,
                     content.ExpectedTextHeight, content.Flags | UiCaptureNodeFlags.ScrollableClip);
             var rendered = visible && rect.gameObject.activeInHierarchy && bounds.Overlaps(clip);

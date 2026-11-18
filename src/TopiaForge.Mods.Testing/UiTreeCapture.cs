@@ -126,8 +126,9 @@ namespace TopiaForge.Mods.Testing
                     Add(node, UiAccessibilityIssueKind.MissingLabel, "A meaningful group needs a plain-text label.");
                 if (Has(node, UiCaptureNodeFlags.RequiresNonColorCue) && !Has(node, UiCaptureNodeFlags.HasNonColorCue))
                     Add(node, UiAccessibilityIssueKind.ColorOnly, "The state needs a word, symbol, or positional cue.");
-                if (node.Clipped && !Has(node, UiCaptureNodeFlags.ScrollableClip) &&
-                    (node.Text.Length > 0 || Has(node, UiCaptureNodeFlags.RequiresLabel)))
+                if (node.Clipped && (Has(node, UiCaptureNodeFlags.FocusIndicator) ||
+                    (!Has(node, UiCaptureNodeFlags.ScrollableClip) &&
+                        (node.Text.Length > 0 || Has(node, UiCaptureNodeFlags.RequiresLabel)))))
                     Add(node, UiAccessibilityIssueKind.ClippedContent, "The viewport clips meaningful content.");
                 if (node.Occluded)
                     Add(node, UiAccessibilityIssueKind.OccludedContent, "A later paint covers meaningful content.");
