@@ -281,30 +281,126 @@ class PrivateStatusDeployTests(unittest.TestCase):
                 self.assertNotIn(good["SERVICE_KEY"], result.stderr)
                 self.assertNotIn(good["TURN_KEY_API_TOKEN"], result.stderr)
 
-    def test_status_staging_ingest_token_uses_protected_deploy(self):
+    def test_status_ingest_tokens_follow_the_reviewed_monitor_configuration(self):
         deploy = jobs()["deploy"]
         step = deploy.split("      - name: Apply reviewed status migrations and deploy\n", 1)[1]
         script = textwrap.dedent(step.split("          python3 - \"$secrets_file\" <<'PY'\n", 1)[1]
                                  .split("\n          PY", 1)[0])
         self.assertIn('wrangler deploy --config wrangler.deploy.toml --secrets-file "$secrets_file"', step)
         self.assertIn('trap \'rm -f -- "$secrets_file"\' EXIT', step)
-        for token, accepted in (("a" * 48, True), ("short", False), ("a" * 40 + "\n", False)):
-            with self.subTest(accepted=accepted, length=len(token)), tempfile.TemporaryDirectory() as folder:
+        staging = "a" * 48
+        production = "b" * 48
+        for name, config, staging_token, production_token, retire, expected in [
+            ("disabled", {"monitorEnabled": False}, staging, "", False, False),
+            ("disabled with secret", {"monitorEnabled": False}, staging, production, True, False),
+            ("prelaunch monitoring", {"monitorEnabled": True}, staging, production, False, True),
+            ("launched legacy config", {"launched": True}, staging, production, False, True),
+            ("invalid configuration", {"monitorEnabled": "true"}, staging, production, False, None),
+            ("invalid staging token", {}, "short", "", False, None),
+            ("invalid production token", {"monitorEnabled": True}, staging, production + "\n", False, None),
+            ("missing production token", {"monitorEnabled": True}, staging, "", False, None),
+            ("shared tokens", {"monitorEnabled": True}, staging, staging, False, None),
+            ("retirement while monitoring", {"monitorEnabled": True}, staging, production, True, None),
+        ]:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as folder:
                 output = Path(folder) / "status-secrets.json"
+                config_path = Path(folder) / "config" / "environments.json"
+                config_path.parent.mkdir()
+                config_path.write_text(json.dumps({"production": {"launched": False, **config}}),
+                                       encoding="utf-8")
                 env = os.environ.copy()
-                env["STATUS_INGEST_TOKEN_STAGING"] = token
+                env.update(
+                    STATUS_INGEST_TOKEN_STAGING=staging_token,
+                    STATUS_INGEST_TOKEN_PRODUCTION=production_token,
+                    RETIRE_LEGACY_BINDINGS=str(retire).lower(),
+                )
                 result = subprocess.run(
-                    [sys.executable, "-c", script, str(output)], env=env,
+                    [sys.executable, "-c", script, str(output)], cwd=folder, env=env,
                     capture_output=True, text=True, timeout=10, check=False,
                 )
+                accepted = expected is not None
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)
                 self.assertEqual(output.exists(), accepted)
                 if accepted:
-                    self.assertEqual(json.loads(output.read_text(encoding="utf-8")),
-                                     {"INGEST_TOKEN_STAGING": token})
+                    tokens = {"INGEST_TOKEN_STAGING": staging}
+                    if expected:
+                        tokens["INGEST_TOKEN_PRODUCTION"] = production
+                    self.assertEqual(json.loads(output.read_text(encoding="utf-8")), tokens)
                     if os.name != "nt":
                         self.assertEqual(output.stat().st_mode & 0o777, 0o600)
-                self.assertNotIn(token, result.stderr)
+                for token in filter(None, (staging_token, production_token)):
+                    self.assertNotIn(token, result.stderr)
+
+    def test_status_migration_only_applies_when_pending_and_approved(self):
+        deploy = jobs()["deploy"]
+        step = deploy.split("      - name: Apply reviewed status migrations and deploy\n", 1)[1]
+        step = step.split("\n      - name:", 1)[0]
+        _, commands = step.split("\n          PY\n", 1)
+        script = textwrap.dedent(commands)
+        bash = git_bash()
+        self.assertIsNotNone(bash)
+        if shutil.which("jq") is None:
+            self.skipTest("jq is required to exercise the migration gate")
+        fake_commands = """
+set -euo pipefail
+secrets_file=status-secrets.json
+sha256sum() {
+  test -n "$EXPECTED_HASH" || return 1
+  printf '%s  %s\\n' "$EXPECTED_HASH" "$1"
+}
+npx() {
+  case "$3 $4" in
+    'd1 execute') printf '%s\\n' "$MIGRATION_ROWS" ;;
+    'd1 migrations') printf 'apply\\n' ;;
+    'deploy --config') printf 'deploy\\n' ;;
+    *) return 1 ;;
+  esac
+}
+"""
+        old = ["0001_status.sql", "0002_claim_owners.sql"]
+        approved = old + ["0003_public_activity.sql"]
+        hash_value = "a" * 64
+        for names, actual, supplied, expected in [
+            (approved, hash_value, "", ["deploy"]),
+            (old, hash_value, hash_value, ["apply", "deploy"]),
+            (old, hash_value, "", []),
+            (old, hash_value, "b" * 64, []),
+            (old, "", hash_value, []),
+            (approved + ["0004_unreviewed.sql"], hash_value, hash_value, []),
+        ]:
+            with self.subTest(migrations=names, supplied=supplied):
+                response = [{"success": True, "results": [{"name": name} for name in names]}]
+                env = dict(os.environ, MIGRATION_ROWS=json.dumps(response),
+                           MIGRATION_SQL_SHA256=supplied, EXPECTED_HASH=actual)
+                result = subprocess.run(
+                    [bash, "--noprofile", "--norc", "-c", fake_commands + script],
+                    env=env, capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.stdout.splitlines(), expected, result.stderr)
+                self.assertEqual(result.returncode == 0, bool(expected), result.stderr)
+
+    def test_status_public_smoke_matches_the_reviewed_launch_flags(self):
+        smoke = jobs()["deploy"].split("      - name: Smoke-test public routes after domain cutover\n", 1)[1]
+        expression = re.search(r'--argjson flags "\$expected_flags" \'(.*?)\'', smoke, re.DOTALL)
+        self.assertIsNotNone(expression)
+        jq = shutil.which("jq")
+        self.assertIsNotNone(jq)
+        prelaunch = {"launched": False, "stableClientPublished": False}
+        service_live = dict(prelaunch, launched=True)
+        for reviewed, reported, accepted in [
+            (prelaunch, prelaunch, True), (prelaunch, service_live, False),
+            (service_live, service_live, True), (service_live, prelaunch, False),
+            (prelaunch, dict(prelaunch, launched=None), False),
+            (service_live, dict(service_live, stableClientPublished=True), False),
+        ]:
+            with self.subTest(reviewed=reviewed, reported=reported):
+                response = {"schema": "topiaforge.public-status/1",
+                            "environments": {"production": reported}}
+                result = subprocess.run(
+                    [jq, "-e", "--argjson", "flags", json.dumps(reviewed), expression.group(1)],
+                    input=json.dumps(response), capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
     def test_production_public_smoke_rejects_enabled_features(self):
         smoke = jobs()["deploy"].split("      - name: Smoke-test public routes after domain cutover\n", 1)[1]
