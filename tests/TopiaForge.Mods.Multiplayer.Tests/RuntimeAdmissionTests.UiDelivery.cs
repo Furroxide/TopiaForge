@@ -136,10 +136,11 @@ internal static partial class RuntimeAdmissionTests
         public void Dispose() { Directory?.Dispose(); lifetime.Dispose(); }
     }
 
-    private sealed class ThemeProbe : IUiService, IUiClockReceiver, IUiPresentationThemeSource, IRemoteThemedUiReceiver
+    private sealed class ThemeProbe : IUiService, IUiClockReceiver, IUiPresentationThemeSource, IRemoteUiReceiver, IRemoteThemedUiReceiver
     {
         private readonly FakeUiService ui;
         internal readonly Dictionary<string, ThemeSurfaceProbe> Surfaces = new(StringComparer.Ordinal);
+        internal bool FailNextRemoteShow;
 
         internal ThemeProbe(FakeModLifetime lifetime, bool author)
         {
@@ -162,28 +163,38 @@ internal static partial class RuntimeAdmissionTests
         public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => ui.CreateSurface(request);
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => ui.ShowModal(request, completed);
         public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral) => ui.ShowToast(message, tone);
+        public OperationResult<IUiSurface> RemoteSurface(UiSurfaceRequest request) => RemoteSurface(request, default);
+        public OperationResult<IUiModal> RemoteModal(UiModalRequest request, Action<bool> completed) => ui.ShowModal(request, completed);
+        public OperationResult<bool> RemoteToast(string message, UiTone tone) => ui.ShowToast(message, tone);
 
         public OperationResult<IUiSurface> RemoteSurface(UiSurfaceRequest request, UiRemoteThemeSelection theme)
         {
             var created = ui.CreateSurface(request);
             if (!created.TryGetValue(out var surface)) return created;
-            var wrapper = new ThemeSurfaceProbe(this, (FakeUiSurface)surface, theme);
+            var wrapper = new ThemeSurfaceProbe(this, (FakeUiSurface)surface, theme, FailNextRemoteShow);
+            FailNextRemoteShow = false;
             Surfaces.Add(request.Title, wrapper);
             return OperationResult<IUiSurface>.Success(wrapper);
         }
     }
 
-    private sealed class ThemeSurfaceProbe : IUiSurface, IRemoteThemedSurface
+    private sealed class ThemeSurfaceProbe : IUiSurface, IRemoteThemedSurface, IUiSurfaceDismissalSource
     {
         private readonly ThemeProbe owner;
+        private readonly bool failOnShow;
         internal readonly FakeUiSurface Surface;
         internal UiRemoteThemeSelection Theme;
 
-        internal ThemeSurfaceProbe(ThemeProbe owner, FakeUiSurface surface, UiRemoteThemeSelection theme)
-        { this.owner = owner; Surface = surface; Theme = theme; }
+        internal ThemeSurfaceProbe(ThemeProbe owner, FakeUiSurface surface, UiRemoteThemeSelection theme, bool failOnShow)
+        { this.owner = owner; Surface = surface; Theme = theme; this.failOnShow = failOnShow; }
         public string Id => Surface.Id;
         public bool IsVisible => Surface.IsVisible;
-        public void Show() => Surface.Show();
+        public event Action? Dismissed;
+        public void Show()
+        {
+            if (failOnShow) throw new InvalidOperationException("The receiving canvas failed to show.");
+            Surface.Show();
+        }
         public void Hide() => Surface.Hide();
         public void SetBody(string value) => Surface.SetBody(value);
         public OperationResult<bool> SetContent(UiNode content) => Surface.SetContent(content);
@@ -194,6 +205,11 @@ internal static partial class RuntimeAdmissionTests
             return result;
         }
 
-        public void Dispose() { owner.Surfaces.Remove(Surface.Request.Title); Surface.Dispose(); }
+        public void Dispose()
+        {
+            owner.Surfaces.Remove(Surface.Request.Title);
+            Surface.Dispose();
+            Dismissed?.Invoke();
+        }
     }
 }

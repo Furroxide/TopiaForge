@@ -267,7 +267,7 @@ namespace TopiaForge.ModManager.Tests
             // A ghost button has no fill, so its label sits on the surface like any body text: in the brand orange it read at
             // 2.0 to 2.6:1 on Paper, in high contrast too (REFRESH, ADD TO FAVORITES, MUTE, COPY DETAILS and CLOSE among them).
             var button = File.ReadAllText(Path.Combine(kitRoot, "Widgets", "TopiaForgeButton.cs"));
-            RequireSource(button, "SetContentColor(theme.TextToneColor(TopiaForgeTone.Primary));", "A ghost button's label must take the Primary tone's readable text color.");
+            RequireSource(button, "SetContentColor(theme.ForegroundOn(backdrop, UiTone.Primary));", "A ghost button's label must take readable Primary ink against its actual backdrop.");
             if (button.Contains("SetContentColor(theme.Primary)", StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("A button draws its label in the Primary fill color on its own surface.");

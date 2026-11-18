@@ -52,10 +52,10 @@ namespace TopiaForge.Mods.Testing
     {
         private readonly IReadOnlyList<UiAccessibilityIssue> issues;
 
-        internal UiTreeCapture(List<UiCapturedNode> nodes, bool highContrast)
+        internal UiTreeCapture(List<UiCapturedNode> nodes, bool highContrast, float minimumHitSize = 0f)
         {
             Nodes = nodes.AsReadOnly();
-            issues = FindIssues(Nodes, highContrast);
+            issues = FindIssues(Nodes, highContrast, minimumHitSize);
         }
 
         /// <summary>Gets the semantic and paint groups in tree order.</summary>
@@ -64,9 +64,11 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Checks captured contrast, text size, labels, bounds, state cues, assets, and trust isolation.</summary>
         public IReadOnlyList<UiAccessibilityIssue> CheckAccessibility() => issues;
 
-        private static IReadOnlyList<UiAccessibilityIssue> FindIssues(IReadOnlyList<UiCapturedNode> nodes, bool highContrast)
+        private static IReadOnlyList<UiAccessibilityIssue> FindIssues(IReadOnlyList<UiCapturedNode> nodes, bool highContrast,
+            float minimumHitSize)
         {
             var result = new List<UiAccessibilityIssue>();
+            var hitTargets = new List<UiCapturedNode>();
             foreach (var node in nodes)
             {
                 if (Has(node, UiCaptureNodeFlags.MissingAsset))
@@ -76,6 +78,19 @@ namespace TopiaForge.Mods.Testing
                 if (Has(node, UiCaptureNodeFlags.InvalidLayout) || !ValidBounds(node))
                     Add(node, UiAccessibilityIssueKind.InvalidLayout, "The resolved bounds are invalid.");
                 if (!node.IsRendered || node.Decorative) continue;
+
+                if (Has(node, UiCaptureNodeFlags.HitTarget))
+                {
+                    if (node.Width + 0.001f < minimumHitSize || node.Height + 0.001f < minimumHitSize)
+                        Add(node, UiAccessibilityIssueKind.InvalidLayout, "The hit target is smaller than the scaled minimum.");
+                    foreach (var previous in hitTargets)
+                    {
+                        if (!Overlaps(node, previous)) continue;
+                        Add(node, UiAccessibilityIssueKind.InvalidLayout, "The hit target overlaps " + previous.Path + ".");
+                        break;
+                    }
+                    hitTargets.Add(node);
+                }
 
                 if (node.Text.Length > 0)
                 {
@@ -112,6 +127,10 @@ namespace TopiaForge.Mods.Testing
         }
 
         private static bool Has(UiCapturedNode node, UiCaptureNodeFlags flag) => (node.Flags & flag) != 0;
+
+        private static bool Overlaps(UiCapturedNode first, UiCapturedNode second) =>
+            Math.Min(first.X + first.Width, second.X + second.Width) - Math.Max(first.X, second.X) > 0.001f &&
+            Math.Min(first.Y + first.Height, second.Y + second.Height) - Math.Max(first.Y, second.Y) > 0.001f;
 
         private static bool ValidBounds(UiCapturedNode node) => IsFinite(node.X) && IsFinite(node.Y) &&
             IsFinite(node.Width) && IsFinite(node.Height) && node.Width >= 0 && node.Height >= 0;

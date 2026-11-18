@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -97,7 +98,8 @@ namespace TopiaForge.Mods.UnityUi
             titleLayout.minHeight = TopiaForgeTokens.TitleBarHeight;
             titleLabel.margin = new Vector4(16f, 0f, 0f, 0f);
 
-            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
+            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost)
+                .Fixed(TopiaForgeTokens.ControlHeight, TopiaForgeTokens.ControlHeight).SetBackdrop(UiPaintRole.Raised);
 
             // Content area.
             Content = Column(TopiaForgeGap.Md, TopiaForgeGap.Lg);
@@ -290,7 +292,7 @@ namespace TopiaForge.Mods.UnityUi
             ring.color = theme.OutlineStrong;
             shadow.color = theme.ShadowStrong;
             titleBarFill.color = theme.SurfaceAlt;
-            titleLabel.color = theme.Text;
+            titleLabel.color = theme.ForegroundOn(UiPaintRole.Raised);
         }
 
         /// <summary>Runs the clamp that Show deferred; true once no clamp is left to run.</summary>

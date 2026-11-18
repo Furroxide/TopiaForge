@@ -5,12 +5,35 @@ namespace TopiaForge.Mods.UnityUi
 {
     public sealed partial class TopiaForgeResolvedTheme
     {
+        private readonly UiThemeScheme? packScheme;
+
         internal UiThemeDescriptor? Descriptor { get; }
 
-        internal Color DisabledInk => Descriptor is { } descriptor
-            ? ToColor(Rgba(descriptor.SelectScheme(Scheme == TopiaForgeScheme.Hud, HighContrast)
-                .ResolveForeground(UiTone.Muted, UiPaintRole.Sunken)))
-            : TextFaint;
+        internal Color DisabledInk => ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
+
+        internal Color ForegroundOn(UiPaintRole role, UiTone tone = UiTone.Neutral) => packScheme is { } scheme
+            ? ToColor(Rgba(scheme.ResolveForeground(tone, role)))
+            : TextToneColor(tone switch
+            {
+                UiTone.Muted => TopiaForgeTone.Muted,
+                UiTone.Primary => TopiaForgeTone.Primary,
+                UiTone.Accent => TopiaForgeTone.Accent,
+                UiTone.Success => TopiaForgeTone.Success,
+                UiTone.Warning => TopiaForgeTone.Warning,
+                UiTone.Danger => TopiaForgeTone.Danger,
+                _ => TopiaForgeTone.Neutral,
+            });
+
+        internal TopiaForgeFillPaint? FieldPaint(UiPaintRole role, UiTone tone, bool enabled) => packScheme is { } scheme
+            ? StatefulLabelPaint(scheme, role, enabled ? tone : UiTone.Muted, enabled)
+            : null;
+
+        private TopiaForgeFillPaint StatefulLabelPaint(UiThemeScheme scheme, UiPaintRole role, UiTone tone, bool enabled)
+        {
+            var pair = new UiThemePair(scheme.GetPair(role).Fill, scheme.ResolveForeground(tone, role));
+            return enabled ? Button(pair, TopiaForgeOnColors.LabelRatio(HighContrast))
+                : Paint(pair, new UiThemeStateTints(1f, 1f, 1f));
+        }
 
         private static TopiaForgeSchemeColors ApplyPack(TopiaForgeSchemeColors kit, UiThemeScheme scheme, bool highContrast)
         {

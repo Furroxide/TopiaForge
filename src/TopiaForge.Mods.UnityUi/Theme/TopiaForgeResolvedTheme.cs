@@ -100,6 +100,7 @@ namespace TopiaForge.Mods.UnityUi
             descriptor ??= accentOverride.HasValue ? null : UiThemePackParser.Default;
             Descriptor = descriptor;
             var authoredScheme = descriptor?.SelectScheme(scheme == TopiaForgeScheme.Hud, HighContrast);
+            packScheme = authoredScheme;
             var colors = TopiaForgeSchemes.Resolve(scheme, accentOverride, HighContrast);
             if (authoredScheme != null) colors = ApplyPack(colors, authoredScheme, HighContrast);
             Backdrop = ToColor(colors.Backdrop);

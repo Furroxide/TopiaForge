@@ -268,7 +268,7 @@ namespace TopiaForge.ModManager
         }
         private sealed class ReceivedUi : IDisposable
         {
-            internal readonly PlayerContext? Context;
+            internal PlayerContext? Context;
             internal readonly string Owner;
             internal ReceivedUi(string owner, PlayerContext? context) { Owner = owner; Context = context; }
             internal IUiSurface? Surface;

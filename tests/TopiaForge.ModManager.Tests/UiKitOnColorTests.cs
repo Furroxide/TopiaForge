@@ -332,6 +332,8 @@ namespace TopiaForge.ModManager.Tests
 
             var button = Read("Widgets", "TopiaForgeButton.cs");
             Require(button, "theme.Fill(TopiaForgeFillRole.FilledButton)", "theme.Fill(TopiaForgeFillRole.DangerButton)",
+                "theme.FieldPaint(UiPaintRole.Surface, UiTone.Neutral, enabled: true)",
+                "fill.SetShape(radius);", "shadow?.SetShape(radius);",
                 "button.colors = paint.HasValue ? paint.Value.Tinted(colors) : colors;", "SetContentColor(resolved.Content);", "fill.color = resolved.Fill;");
             var applyTheme = button.Substring(button.IndexOf("public void ApplyTheme(", StringComparison.Ordinal));
             applyTheme = applyTheme.Substring(0, applyTheme.IndexOf("private static Color Tint(", StringComparison.Ordinal));
@@ -339,8 +341,9 @@ namespace TopiaForge.ModManager.Tests
             Forbid(button, "Buttons draw the resolved label and state tints", @"theme\.OnPrimary", @"theme\.OnDanger", @"\b1\.06f", @"\b0\.94f", @"\b1\.04f");
 
             var toggle = Read("Widgets", "TopiaForgeToggle.cs");
-            Require(toggle, "theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff)", "toggle.colors = paint.Tinted(toggle.colors);",
-                "on.Tinted(toggle.colors)", "thumb.color = paint.Content;", "check.color = on.Content;");
+            Require(toggle, "theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff)", "toggle.colors = paint.Tinted(colors);",
+                "on.Tinted(colors)", "thumb.color = enabled ? paint.Content : theme.DisabledInk;",
+                "check.color = enabled ? on.Content : theme.DisabledInk;");
             Forbid(toggle, "A switch's thumb and a checkbox's check take the resolved colors and state tints", @"theme\.OnPrimary", @"theme\.TextFaint", @"PressedTint\(theme");
 
             var slider = Read("Widgets", "TopiaForgeSlider.cs");

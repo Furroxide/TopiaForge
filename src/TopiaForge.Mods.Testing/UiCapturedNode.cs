@@ -114,6 +114,7 @@ namespace TopiaForge.Mods.Testing
         IncorrectTrustTheme = 256,
         InvalidLayout = 512,
         ScrollableClip = 1024,
+        HitTarget = 2048,
     }
 
     internal readonly struct UiCaptureNodeContent

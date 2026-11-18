@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager.Tests
             SiblingPreloadsAndDrainAreIndependent();
             AssetsCommitTogetherAndEnrichTheDescriptor();
             PaintAndTypeRemainReadable();
+            AuthoredBackplatesAndControlTargetsAreChecked();
             TargetedBudgetsIncludeFramingWithoutEarlyClockBinding();
             UnchangedReapplicationAllocatesNothing();
             VerifyGoldenManifest();
@@ -219,6 +220,44 @@ namespace TopiaForge.ModManager.Tests
                 "A frame over budget once its body and headers count cannot admit or bind a proposed countdown.");
             Check(retained.TryFindNode("previous", out _) && viewer.Surfaces.Count == 1,
                 "The previous targeted composition and its handle survive the refusal.");
+        }
+
+        private static void AuthoredBackplatesAndControlTargetsAreChecked()
+        {
+            using var lifetime = new FakeModLifetime();
+            var ui = new FakeUiService(lifetime);
+            const string definition = """
+                {"schema":1,"id":"opposing-inks","paper":{"colors":{
+                    "surface":{"fill":"#767676","on":"#000000"},
+                    "raised":{"fill":"#040404","on":"#FFFFFF"},
+                    "sunken":{"fill":"#10141B","on":"#FFFFFF"},
+                    "selected":{"fill":"#151923","on":"#FFFFFF"}}}}
+                """;
+            Check(ui.AddThemeFixture(definition).Succeeded, "Each authored paint pair has a readable on-color.");
+            var content = new UiColumn(
+                new UiButton("secondary", "Check route", () => { }, UiButtonStyle.Secondary),
+                new UiTextInput("field-value", "Call sign", "North", _ => { }),
+                new UiToggle("disabled-switch", "Signal locked", true, _ => { }, enabled: false));
+            using var surface = Make(ui, new UiSurfaceRequest("opposing-colors", "Route", "", width: 520, content: content)
+                .WithTheme(new UiThemeRef("opposing-inks")));
+            ui.CompletePendingThemeRegistrations();
+            var pressed = CaptureForFixture(surface, Viewport, "Pressed", 0f, null);
+            Check(pressed.Nodes.Single(row => row.Kind == "SurfaceTitle") is { FillColor: "#040404", InkColor: "#FFFFFF" },
+                "Window title ink follows the Raised backdrop even when Surface has the opposite ink.");
+            Check(pressed.Nodes.Single(row => row.Id == "secondary") is { ContrastRatio: >= 4.5f, InkColor: "#000000" },
+                "The outline button's actual surface pair constrains its press tint.");
+            Check(pressed.Nodes.Single(row => row.Kind == "FieldValue") is { ContrastRatio: >= 4.5f, InkColor: "#FFFFFF" },
+                "The filled-in field maintains readable text over its actual Sunken fill.");
+            Check(pressed.Nodes.Single(row => row.Kind == "ToggleTrack").FillColor == "#10141B",
+                "An on switch draws a Sunken track once disabled.");
+            Check(pressed.Nodes.Count(row => row.Kind == "HitTarget" && row.Width >= 40f && row.Height >= 40f) == 3,
+                "Every reserved interactive rectangle clears the 40-unit minimum.");
+
+            var narrow = new UiSlider("narrow", "Range", 0f, 10f, 4f, _ => { });
+            using var tooSmall = Make(ui, new UiSurfaceRequest("narrow-track", "R", "", width: 130, content: narrow));
+            Check(tooSmall.Capture(Viewport).CheckAccessibility().Any(issue =>
+                issue.Kind == UiAccessibilityIssueKind.InvalidLayout && issue.Path.EndsWith("/hit", StringComparison.Ordinal)),
+                "A control whose active region is too narrow fails the capture check.");
         }
 
         private static void UnchangedReapplicationAllocatesNothing()

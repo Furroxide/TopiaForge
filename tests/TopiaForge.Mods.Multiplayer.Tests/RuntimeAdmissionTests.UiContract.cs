@@ -60,5 +60,7 @@ internal static partial class RuntimeAdmissionTests
             ContentOfferCodec.TryDecode(offered.ClientContent(descriptor), out var newOffer) && newOffer!.UiContractVersion == 2,
             "Legacy and extended offers remain distinct and decode to their declared versions.");
         FoundationEnvelopeReachesBothAuthenticatedRoutes();
+        TargetedUpgradeSurvivesGuestScopeTeardown();
+        FailedTargetedUpgradeKeepsLegacyState();
     }
 }

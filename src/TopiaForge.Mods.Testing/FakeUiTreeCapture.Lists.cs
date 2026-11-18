@@ -6,6 +6,7 @@ namespace TopiaForge.Mods.Testing
     {
         private void PaintList(UiVirtualList list, string path, UiCaptureRect bounds, UiCaptureRect clip)
         {
+            PaintHitTarget(path, bounds, clip, list.Enabled);
             Add(path, list.Id, nameof(UiVirtualList), bounds, clip, EmptyContent, default);
             surface.TryGetSelectedListItem(list.Id!, out var selection);
             var count = Math.Min(list.Items.Count, list.VisibleRows);
@@ -41,6 +42,7 @@ namespace TopiaForge.Mods.Testing
 
         private void PaintGraph(UiGraphCanvas graph, string path, UiCaptureRect bounds, UiCaptureRect clip)
         {
+            PaintHitTarget(path, bounds, clip, graph.Enabled);
             var graphBackground = scheme.GetPair(UiPaintRole.Sunken).Fill;
             Add(path, graph.Id, nameof(UiGraphCanvas), bounds, clip, EmptyContent, new UiCaptureNodePaint(null, graphBackground));
             surface.TryGetSelectedGraphNode(graph.Id!, out var selection);

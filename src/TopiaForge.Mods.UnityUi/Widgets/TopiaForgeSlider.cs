@@ -36,7 +36,11 @@ namespace TopiaForge.Mods.UnityUi
             sliderGo.transform.SetParent(Go.transform, false);
             var bodyLayout = sliderGo.AddComponent<LayoutElement>();
             bodyLayout.flexibleWidth = 1f;
-            bodyLayout.minHeight = 20f;
+            bodyLayout.minWidth = TopiaForgeTokens.ControlSmHeight;
+            bodyLayout.minHeight = TopiaForgeTokens.ControlSmHeight;
+            var hitArea = sliderGo.AddComponent<UImage>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
 
             var trackGo = new GameObject("Track", typeof(RectTransform));
             trackGo.transform.SetParent(sliderGo.transform, false);

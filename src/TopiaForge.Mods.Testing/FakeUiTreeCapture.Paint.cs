@@ -57,6 +57,7 @@ namespace TopiaForge.Mods.Testing
 
         private void PaintButton(UiButton button, string path, UiCaptureRect bounds, UiCaptureRect clip)
         {
+            PaintHitTarget(path, bounds, clip, button.Enabled);
             var state = State(button.Enabled);
             var flags = ControlFlags(button.Enabled);
             var role = !button.Enabled ? UiPaintRole.Sunken : button.Style switch
@@ -66,13 +67,15 @@ namespace TopiaForge.Mods.Testing
                 _ => UiPaintRole.Surface,
             };
             var original = PairFor(role, button.Enabled ? button.Style == UiButtonStyle.Ghost ? UiTone.Primary : UiTone.Neutral : UiTone.Muted);
-            var fill = StatefulFill(original, state, TextMinimum, switchControl: false);
+            var fill = button.Style == UiButtonStyle.Ghost && button.Enabled
+                ? original.Fill : StatefulFill(original, state, TextMinimum, switchControl: false);
             var hasShadow = button.Enabled && button.Style != UiButtonStyle.Ghost && !preferences.HighContrast;
             var shadowX = hasShadow ? -3f * layoutScale : 0f;
             var shadowY = hasShadow ? 4f * layoutScale : 0f;
             if (hasShadow && state == UiCaptureControlState.Pressed && !preferences.ReducedMotion && preferences.MotionIntensity > 0f)
             {
-                bounds = new UiCaptureRect(bounds.X + shadowX, bounds.Y + shadowY, bounds.Width, bounds.Height);
+                var strength = Math.Min(1f, preferences.MotionIntensity);
+                bounds = new UiCaptureRect(bounds.X + shadowX * strength, bounds.Y + shadowY * strength, bounds.Width, bounds.Height);
                 shadowX = 0f;
                 shadowY = 0f;
             }
@@ -86,22 +89,23 @@ namespace TopiaForge.Mods.Testing
 
         private void PaintToggle(UiToggle toggle, string path, UiCaptureRect bounds, UiCaptureRect clip)
         {
+            PaintHitTarget(path, bounds, clip, toggle.Enabled);
             surface.TryGetToggleValue(toggle.Id!, out var enabled);
-            var labelBounds = bounds.Inset(0, 0, 58f * layoutScale, 0);
+            var labelBounds = bounds.Inset(48f * layoutScale, 0, 0, 0);
             var controlStateNow = State(toggle.Enabled);
             var flags = ControlFlags(toggle.Enabled);
             Text(path, toggle.Id, nameof(UiToggle), labelBounds, clip, toggle.Label, UiTextStyle.Body,
                 toggle.Enabled ? UiTone.Neutral : UiTone.Muted, flags);
-            var trackWidth = 50f * layoutScale;
-            var trackHeight = 26f * layoutScale;
-            var track = new UiCaptureRect(bounds.Right - trackWidth, bounds.Y + (bounds.Height - trackHeight) / 2f, trackWidth, trackHeight);
-            var role = toggle.Enabled && enabled ? UiPaintRole.Primary : UiPaintRole.Sunken;
+            var trackWidth = 40f * layoutScale;
+            var trackHeight = 22f * layoutScale;
+            var track = new UiCaptureRect(bounds.X, bounds.Y + (bounds.Height - trackHeight) / 2f, trackWidth, trackHeight);
+            var role = !toggle.Enabled ? UiPaintRole.Sunken : enabled ? UiPaintRole.Primary : UiPaintRole.Selected;
             var pair = PairFor(role, toggle.Enabled && enabled ? UiTone.Neutral : UiTone.Muted);
             var draw = StatefulFill(pair, controlStateNow, MarkMinimum, switchControl: true);
             Add(path + "/track", null, "ToggleTrack", track, clip, EmptyContent,
                 new UiCaptureNodePaint(null, draw, track.Height / 2f, 0f, 0f, 0f));
 
-            var thumbSize = 18f * layoutScale;
+            var thumbSize = 16f * layoutScale;
             var inset = (trackHeight - thumbSize) / 2f;
             var thumb = new UiCaptureRect(enabled ? track.Right - thumbSize - inset : track.X + inset,
                 track.Y + inset, thumbSize, thumbSize);
@@ -121,6 +125,7 @@ namespace TopiaForge.Mods.Testing
             var labelSize = bounds.Width * 0.42f;
             var valueSize = bounds.Width * 0.16f;
             var text = slider.Enabled ? UiTone.Neutral : UiTone.Muted;
+            PaintHitTarget(path, bounds.Inset(labelSize, 0f, valueSize, 0f), clip, slider.Enabled);
             Text(path, slider.Id, nameof(UiSlider), new UiCaptureRect(bounds.X, bounds.Y, labelSize, bounds.Height), clip,
                 slider.Label, UiTextStyle.Body, text, flags);
             Text(path + "/value", null, "SliderValue", new UiCaptureRect(bounds.Right - valueSize, bounds.Y, valueSize, bounds.Height), clip,
@@ -150,11 +155,19 @@ namespace TopiaForge.Mods.Testing
             var flags = ControlFlags(enabled);
             Text(path, id, kind, caption, clip, label, UiTextStyle.Caption, UiTone.Muted, flags);
             var field = bounds.Inset(0, captionHeight + LabelGap, 0, 0);
+            PaintHitTarget(path, field, clip, enabled);
             var pair = PairFor(UiPaintRole.Sunken, muted || !enabled ? UiTone.Muted : UiTone.Neutral);
             var fill = StatefulFill(pair, state, TextMinimum, switchControl: false);
             Add(path + "/value", null, "FieldValue", field, clip, TextContent(value, UiTextStyle.Body, flags, label),
                 new UiCaptureNodePaint(pair.On, fill, theme.Descriptor.Shape.Control * layoutScale, BorderWidth(true), 0f, 0f));
             PaintFocus(path, state, field, clip, UiPaintRole.Surface);
+        }
+
+        private void PaintHitTarget(string path, UiCaptureRect bounds, UiCaptureRect clip, bool enabled)
+        {
+            var flags = UiCaptureNodeFlags.HitTarget | (enabled ? UiCaptureNodeFlags.None : UiCaptureNodeFlags.Disabled);
+            Add(path + "/hit", null, "HitTarget", bounds, clip,
+                new UiCaptureNodeContent(string.Empty, string.Empty, 0f, 0f, flags), default);
         }
 
         private void PaintProgress(UiProgress progress, string path, UiCaptureRect bounds, UiCaptureRect clip)
@@ -189,7 +202,7 @@ namespace TopiaForge.Mods.Testing
             var offset = 2f * layoutScale + width;
             var ring = bounds.Inset(-offset, -offset, -offset, -offset);
             var paint = new UiCaptureNodePaint(scheme.ResolveFocus(background), scheme.GetPair(background).Fill,
-                theme.Descriptor.Shape.Control * layoutScale, width, 0f, 0f);
+                theme.Descriptor.Shape.Control * layoutScale + offset, width, 0f, 0f);
             Add(path + "/focus", null, "FocusRing", ring, clip, EmptyContent, paint);
         }
 

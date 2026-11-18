@@ -103,6 +103,13 @@ namespace TopiaForge.ModManager.Tests
                         Require(countdown.ClockEpoch == epoch && label.Seconds == 60,
                             "An admitted countdown binds once and initially renders current seconds");
 
+                        if (kind == UiSurfaceKind.Hud)
+                        {
+                            var result = surface.SetContent(new UiColumn(new UiRow(new UiButton("control", "Action", () => { }))));
+                            Require(result.ErrorCode == ModErrorCode.InvalidArgument && ReferenceEquals(rendered, parent.Children.Single()),
+                                "A local HUD replacement rejects nested interactive controls and preserves the admitted view");
+                        }
+
                         var builds = host.ColumnsBuilt;
                         var layout = LayoutRebuilder.Requests;
                         var driverQueries = host.ComponentQueries;

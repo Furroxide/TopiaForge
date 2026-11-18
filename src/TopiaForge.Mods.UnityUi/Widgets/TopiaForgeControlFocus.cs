@@ -8,12 +8,12 @@ namespace TopiaForge.Mods.UnityUi
     internal sealed class TopiaForgeControlFocus : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private const float Gap = 2f;
-        private readonly Image image;
+        private readonly TopiaForgeRoundedImage image;
 
         private TopiaForgeControlFocus(TopiaForgeWidget widget, Selectable control)
             : base(widget.Host, widget.Scheme, CreateRing(control.transform))
         {
-            image = Go.AddComponent<Image>();
+            image = Go.AddComponent<TopiaForgeRoundedImage>();
             image.raycastTarget = false;
             image.type = Image.Type.Sliced;
             Go.AddComponent<LayoutElement>().ignoreLayout = true;
@@ -37,6 +37,7 @@ namespace TopiaForge.Mods.UnityUi
             var outset = Gap + stroke;
             TopiaForgeAnchors.Stretch(Rect, -outset, -outset, -outset, -outset);
             image.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Control, stroke);
+            image.SetShape(theme.Descriptor?.Shape.Control + outset, stroke);
             image.color = theme.FocusRing;
         }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -22,6 +23,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly UImage itemBackground;
         private readonly UImage checkmark;
         private readonly TextMeshProUGUI itemLabel;
+        private readonly Toggle itemToggle;
 
         internal TopiaForgeDropdown(TopiaForgeContainer parent, IReadOnlyList<string> options, int selected, Action<int> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Dropdown"))
@@ -78,15 +80,15 @@ namespace TopiaForge.Mods.UnityUi
             contentRect.anchorMin = new Vector2(0f, 1f);
             contentRect.anchorMax = new Vector2(1f, 1f);
             contentRect.pivot = new Vector2(0.5f, 1f);
-            contentRect.sizeDelta = new Vector2(0f, 30f);
+            contentRect.sizeDelta = new Vector2(0f, TopiaForgeTokens.ControlHeight);
 
             var itemGo = new GameObject("Item", typeof(RectTransform));
             itemGo.transform.SetParent(contentGo.transform, false);
             var itemRect = (RectTransform)itemGo.transform;
             itemRect.anchorMin = new Vector2(0f, 0.5f);
             itemRect.anchorMax = new Vector2(1f, 0.5f);
-            itemRect.sizeDelta = new Vector2(0f, 30f);
-            var itemToggle = itemGo.AddComponent<Toggle>();
+            itemRect.sizeDelta = new Vector2(0f, TopiaForgeTokens.ControlHeight);
+            itemToggle = itemGo.AddComponent<Toggle>();
 
             var itemBgGo = new GameObject("Item Background", typeof(RectTransform));
             itemBgGo.transform.SetParent(itemGo.transform, false);
@@ -163,7 +165,9 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Sets whether the dropdown accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
+            if (dropdown.interactable == enabled) return;
             dropdown.interactable = enabled;
+            ApplyTheme(Theme);
         }
 
         /// <summary>
@@ -188,14 +192,26 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
-            fill.color = theme.SurfaceSunken;
+            var enabled = dropdown.interactable;
+            var field = theme.FieldPaint(UiPaintRole.Sunken, UiTone.Neutral, enabled);
+            var item = theme.FieldPaint(UiPaintRole.Selected, UiTone.Neutral, enabled: true);
+            if (field is { } fieldPaint) dropdown.colors = WithLabelTints(fieldPaint, dropdown.colors);
+            if (item is { } itemPaint) itemToggle.colors = WithLabelTints(itemPaint, itemToggle.colors);
+            fill.color = field?.Fill ?? theme.SurfaceSunken;
             ring.color = theme.Outline;
-            chevron.color = theme.TextMuted;
-            caption.color = theme.Text;
+            chevron.color = field?.Content ?? theme.TextMuted;
+            caption.color = field?.Content ?? theme.Text;
             templateFill.color = theme.Surface;
-            itemBackground.color = theme.SelectedTint;
-            checkmark.color = theme.Primary;
-            itemLabel.color = theme.Text;
+            itemBackground.color = item?.Fill ?? theme.SelectedTint;
+            checkmark.color = item?.Content ?? theme.Primary;
+            itemLabel.color = item?.Content ?? theme.Text;
+        }
+
+        private static ColorBlock WithLabelTints(TopiaForgeFillPaint paint, ColorBlock colors)
+        {
+            colors.normalColor = Color.white;
+            colors.disabledColor = Color.white;
+            return paint.Tinted(colors);
         }
 
         private TextMeshProUGUI CreateTmp(GameObject go)

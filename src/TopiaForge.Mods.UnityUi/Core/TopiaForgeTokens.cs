@@ -115,7 +115,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>The control sm height design-token value.</summary>
         public const float ControlSmHeight = 40f;
         /// <summary>The control height design-token value.</summary>
-        public const float ControlHeight = 38f;
+        public const float ControlHeight = 40f;
         /// <summary>The control lg height design-token value.</summary>
         public const float ControlLgHeight = 46f;
         /// <summary>The title bar height design-token value.</summary>

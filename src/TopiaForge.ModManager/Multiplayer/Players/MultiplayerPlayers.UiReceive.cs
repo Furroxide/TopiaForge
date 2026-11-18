@@ -82,31 +82,76 @@ namespace TopiaForge.ModManager
             if (surfaceKind == UiSurfaceKind.Hud) surfaceRequest = surfaceRequest.WithHudAnchor(anchor).WithHudVisibility(visibility);
             if (ui.Modal != null || revision < ui.Revision ||
                 (revision == ui.Revision && !UiPresentationTheme.SameEnvelope(ui.Envelope, envelope))) return false;
-            if (ui.Surface == null)
+            var previous = ui.Surface;
+            var stageSurface = previous == null || (envelope != null && !ui.PresentationOwned);
+            if (stageSurface)
             {
+                // A legacy canvas belongs to the guest's author scope. Its first K1 revision needs the process-owned
+                // receiver so stopping that author scope cannot destroy the authenticated presentation.
                 var receiver = envelope != null ? Presentation?.UiReceiver : context?.UiService;
                 if (receiver == null) return false;
                 var created = UiPresentationTheme.CreateRemote(receiver, surfaceRequest, theme);
                 if (!created.TryGetValue(out var surface)) return false;
-                ui.Surface = surface; receivedUi.Add(token, ui);
-                if (surface is IUiSurfaceDismissalSource dismissal) dismissal.Dismissed += () =>
+
+                var prepared = false;
+                try
                 {
-                    // A surface raises Dismissed for any hide, so only a close while the host shows the window is the player's.
-                    // Answering the host's own hide would close the window again once the host shows it, whatever its revision.
-                    if (!ui.Disposed && ui.Shown)
-                        Reply(owner, ui.PresentationOwned ? null : ui.Context?.Lifetime, sender, token, ui.Revision, "", "", 15);
-                };
+                    ShowReceivedSurface(surface, visible);
+                    if (!MultiplayerPresentation.SurfaceAlive(surface)) return false;
+                    WatchReceivedDismissal(surface, ui, sender, token);
+                    prepared = true;
+                }
+                finally
+                {
+                    if (!prepared) RetireReceivedSurface(surface);
+                }
+
+                ui.Surface = surface;
+                if (previous == null) receivedUi.Add(token, ui);
             }
             else
             {
-                if (revision != ui.Revision && !UiPresentationTheme.UpdateRemote(ui.Surface, content, theme, ui.Envelope != null)) return false;
-                if (body != ui.Body) ui.Surface.SetBody(body);
+                if (revision != ui.Revision && !UiPresentationTheme.UpdateRemote(previous!, content, theme, ui.Envelope != null)) return false;
+                if (body != ui.Body) previous!.SetBody(body);
             }
+
             targetedGenerations.Commit(token, envelope);
             ui.Body = body; ui.Revision = revision; ui.Shown = visible; ui.Envelope = envelope;
-            ui.PresentationOwned |= envelope != null;
-            if (visible) ui.Surface.Show(); else ui.Surface.Hide();
+            if (envelope != null)
+            {
+                ui.PresentationOwned = true;
+                ui.Context = null;
+            }
+
+            if (!stageSurface) ShowReceivedSurface(previous!, visible);
+            else if (previous != null) RetireReceivedSurface(previous);
             return true;
+        }
+
+        private static void ShowReceivedSurface(IUiSurface surface, bool visible)
+        {
+            if (visible) surface.Show(); else surface.Hide();
+        }
+
+        private void WatchReceivedDismissal(IUiSurface surface, ReceivedUi ui, ParticipantId sender, ulong token)
+        {
+            if (surface is IUiSurfaceDismissalSource dismissal) dismissal.Dismissed += () =>
+            {
+                // A dismissal belongs to the currently installed canvas, while the host expects it to show.
+                if (!ui.Disposed && ui.Shown && ReferenceEquals(ui.Surface, surface))
+                    Reply(ui.Owner, ui.Context?.Lifetime, sender, token, ui.Revision, "", "", 15);
+            };
+        }
+
+        private void RetireReceivedSurface(IUiSurface surface)
+        {
+            try { surface.Dispose(); }
+            catch (Exception exception)
+            {
+                // Cleanup cannot undo a committed revision or turn it into a refusal.
+                try { runtime.Log.Warn("Multiplayer: could not retire a targeted UI surface (" + exception.GetType().Name + ")."); }
+                catch { }
+            }
         }
 
         private void Reply(PlayerContext context, ParticipantId host, ulong token, ulong revision, string control, string value, byte kind, bool allowStopping = false)

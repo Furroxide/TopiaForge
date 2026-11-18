@@ -29,7 +29,7 @@ namespace TopiaForge.Mods.Testing
                 case UiDropdown dropdown:
                     return MeasureLabeledControl(dropdown.Label, width);
                 case UiToggle toggle:
-                    var toggleLabel = MeasureText(toggle.Label, UiTextStyle.Body, Math.Max(0, width - 58f * layoutScale));
+                    var toggleLabel = MeasureText(toggle.Label, UiTextStyle.Body, Math.Max(0, width - 48f * layoutScale));
                     return new Size(width, Math.Max(ControlHeight, toggleLabel.Height));
                 case UiSlider slider:
                     var sliderLabel = MeasureText(slider.Label, UiTextStyle.Body, width * 0.42f);

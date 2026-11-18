@@ -192,6 +192,8 @@ namespace TopiaForge.ModManager
                     }
 
                     UiComposition.Validate(content);
+                    if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
+                        return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                     UiClockBinding.Check(content, stamp.ClockEpoch);
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);

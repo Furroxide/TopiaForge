@@ -49,7 +49,7 @@ namespace TopiaForge.Mods.Testing
             var titleHeight = TextSize(UiTextStyle.Heading);
             var title = new UiCaptureRect(interior.X, interior.Y, interior.Width, titleHeight);
             Text("/title", null, "SurfaceTitle", title, clip, surface.Request.Title, UiTextStyle.Heading, UiTone.Neutral,
-                UiCaptureNodeFlags.RequiresLabel);
+                UiCaptureNodeFlags.RequiresLabel, surface.Request.Kind == UiSurfaceKind.Hud ? UiPaintRole.Surface : UiPaintRole.Raised);
             var bodyClip = interior.Inset(0, titleHeight + gap, 12f * layoutScale, 0).Intersect(clip);
             var bodyLayout = bodyClip.Inset(8f * layoutScale, 0, 8f * layoutScale, 0);
             var top = bodyClip.Y - (scrollOffset * layoutScale);
@@ -69,7 +69,7 @@ namespace TopiaForge.Mods.Testing
                 PaintNode(surface.Content, "/0", new UiCaptureRect(bodyLayout.X, top, bodyLayout.Width, size.Height), bodyClip);
             }
 
-            return new UiTreeCapture(nodes, preferences.HighContrast);
+            return new UiTreeCapture(nodes, preferences.HighContrast, ControlHeight);
         }
 
         private void PaintNode(UiNode node, string path, UiCaptureRect bounds, UiCaptureRect clip)
