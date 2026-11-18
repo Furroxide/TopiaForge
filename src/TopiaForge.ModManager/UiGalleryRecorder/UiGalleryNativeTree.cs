@@ -41,13 +41,14 @@ namespace TopiaForge.ModManager
         internal IReadOnlyList<UiGalleryFontFact> Fonts => fonts;
         internal float? SurfaceAlpha { get; private set; }
 
-        internal bool TryCapture(UiSurfaceRequest fixture, RectTransform composition, out UiTreeCapture? result)
+        internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform composition, out UiTreeCapture? result)
         {
             result = null;
-            if (!composition.IsChildOf(canvas.transform) || fixture.Content == null ||
+            if (!surface.IsChildOf(canvas.transform) || !composition.IsChildOf(surface) || fixture.Content == null ||
                 !SingleChild(composition, out var native)) return false;
             var fill = AncestorFill(composition);
             Add("/", fixture.Id, fixture.Kind.ToString(), composition, EmptyContent, new UiCaptureNodePaint(null, fill));
+            if (fixture.Kind == UiSurfaceKind.Window && !WindowTitle(fixture, surface, fill)) return false;
             if (!Visit(fixture.Content, native!, "/0", fill)) return false;
             var covered = new bool[groups.Count];
             for (var later = 1; later < groups.Count; later++)
@@ -60,6 +61,14 @@ namespace TopiaForge.ModManager
                     Descriptor.Id, fallback, item.Rendered, item.Clipped, item.Group >= 0 && covered[item.Group]));
             result = new UiTreeCapture(nodes, theme.HighContrast, 40f * PixelsPerUnit);
             return true;
+        }
+
+        private bool WindowTitle(UiSurfaceRequest fixture, RectTransform surface, UiThemeColor? background)
+        {
+            var bar = surface.Find("TitleBar")?.GetComponent<Image>();
+            var label = bar?.transform.Find("Title")?.GetComponent<TMP_Text>();
+            return bar != null && Text("/title", null, "SurfaceTitle", label, fixture.Title, UiTextStyle.Heading,
+                Over(bar, background));
         }
 
         private bool Visit(UiNode fixture, RectTransform native, string path, UiThemeColor? backdrop)

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using TopiaForge.Mods;
+using TopiaForge.MultiplayerAcceptance;
 using TopiaForge.UiGallery.Pages;
 
 namespace TopiaForge.ModManager.Tests
@@ -10,14 +11,18 @@ namespace TopiaForge.ModManager.Tests
         private static void GalleryNativeCaptureOnlyAdmitsAuthoredFixtures()
         {
             const string owner = UiGalleryCaptureFixture.Owner;
+            const string publisher = UiGalleryCaptureFixture.RemoteFixtureOwner;
             foreach (var page in Enum.GetValues<FoundationPage>())
             {
                 var request = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.SurvivalTheme);
                 Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null,
                     "The native recorder admits each authored Gallery fixture.");
                 var targeted = Reframe(request, "remote-37");
-                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, owner, targeted)?.Id == request.Id,
-                    "A targeted receiver's reconstructed id maps to the authenticated canonical Gallery id.");
+                Check((UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, targeted)?.Id == request.Id) ==
+                    (page != FoundationPage.InteractionStates),
+                    "A targeted receiver's reconstructed id maps to the authenticated canonical Gallery id for wire-supported pages.");
+                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, owner, targeted) == null,
+                    "The client-local Gallery is ineligible to publish a remote fixture.");
                 Check(UiGalleryCaptureFixture.Match(owner, true, null, targeted) == null &&
                     UiGalleryCaptureFixture.Match(owner, true, "io.example.other", targeted) == null,
                     "A remote fixture requires the authenticated Gallery owner.");
@@ -27,7 +32,7 @@ namespace TopiaForge.ModManager.Tests
                     "An unrelated local package cannot opt in by copying the fixture.");
                 if (page == FoundationPage.InteractionStates) continue;
                 var hud = FoundationPages.CreateRequest(page, UiSurfaceKind.Hud);
-                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, owner, Reframe(hud, "shared-19"))?.Id == hud.Id,
+                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, Reframe(hud, "shared-19"))?.Id == hud.Id,
                     "A shared HUD receiver's reconstructed id maps to its canonical Gallery fixture.");
             }
 
@@ -39,10 +44,10 @@ namespace TopiaForge.ModManager.Tests
                 original.Id, original.Title, body, original.Kind, original.Width, original.Height, node);
             Check(UiGalleryCaptureFixture.Match(owner, false, null, Replace(original.Body, new UiColumn(content))) == null,
                 "A fixture id does not admit unlisted nested text.");
-            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, owner,
+            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher,
                 Reframe(Replace(original.Body, new UiColumn(content)), "remote-37")) == null,
                 "An authenticated remote Gallery envelope cannot export unlisted nested text.");
-            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, owner, Reframe(original, "remote-0")) == null,
+            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, Reframe(original, "remote-0")) == null,
                 "A remote preview needs a nonzero transport id.");
             Check(UiGalleryCaptureFixture.Match(owner, false, null, Replace("Unlisted body", original.Content!)) == null,
                 "A fixture id does not admit unlisted body text.");
@@ -56,10 +61,34 @@ namespace TopiaForge.ModManager.Tests
                 UiGalleryCaptureFixture.SafeDisplayText("FIELD NOTE", "Field note", false) == null,
                 "The native text gate rejects unexpected content and unapproved transformations.");
 
-            static UiSurfaceRequest Reframe(UiSurfaceRequest request, string transportId)
+            var variants = Enumerable.Range(0, GalleryRemotePreview.VariantCount).Select(GalleryRemotePreview.Request).ToArray();
+            Check(variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 8,
+                "The test publisher cycles the complete supported page, surface and theme matrix.");
+            foreach (var request in variants)
+            {
+                Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null,
+                    "Connected guests can open the exact same Theme packs and Typography variants in their own Gallery.");
+                const string clock = "gallery-test";
+                var digest = Enumerable.Repeat((byte)0x5A, 32).ToArray();
+                var themeDigest = request.Theme == null ? new byte[32] : digest;
+                var envelope = new UiWireEnvelope(publisher, digest, 1, request.Theme?.Id, themeDigest);
+                var writer = new WorldWireWriter(32 * 1024);
+                Check(UiWireCodec.NeedsEnvelope(request.Content), "Each fixture exercises authenticated ownership framing.");
+                UiWireCodec.Write(writer, request.Content, clock, envelope);
+                var reader = new WorldWireReader();
+                reader.Reset(writer.Segment.ToArray());
+                var decoded = UiWireCodec.ReadWithEnvelope(reader, (_, _) => { }, clock, out var observedEnvelope);
+                UiWireCodec.End(reader);
+                var received = Reframe(request, "remote-118", decoded);
+                Check(decoded != null && observedEnvelope?.OwnerPackageId == publisher &&
+                    UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, received)?.Id == request.Id,
+                    "Each published page keeps its canonical fixture identity after production codec round-trip and receiver ID reconstruction.");
+            }
+
+            static UiSurfaceRequest Reframe(UiSurfaceRequest request, string transportId, UiNode? decoded = null)
             {
                 var converted = new UiSurfaceRequest(transportId, request.Title, request.Body, request.Kind,
-                    request.Width, request.Height, request.Content);
+                    request.Width, request.Height, decoded ?? request.Content);
                 return request.Kind == UiSurfaceKind.Hud
                     ? converted.WithHudAnchor(request.HudAnchor).WithHudVisibility(request.HudVisibility) : converted;
             }

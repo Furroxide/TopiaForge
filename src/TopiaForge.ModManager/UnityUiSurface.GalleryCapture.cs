@@ -74,7 +74,7 @@ namespace TopiaForge.ModManager
                     if (fallback && !permitFallback) return false;
 
                     var recorder = new UiGalleryNativeTree(canvas, nativeTheme, tree.Host.EffectiveAccessibility, fallback);
-                    if (!recorder.TryCapture(fixture, tree.Rect, out var resolved)) return false;
+                    if (!recorder.TryCapture(fixture, view.Rect, tree.Rect, out var resolved)) return false;
                     var who = envelope != null ? "remote-guest" : viewer?.Invoke() switch
                     {
                         NetRealm.ListenHost => "listen-host",

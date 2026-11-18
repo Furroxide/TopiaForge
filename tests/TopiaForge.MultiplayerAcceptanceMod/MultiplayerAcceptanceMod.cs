@@ -15,6 +15,12 @@ namespace TopiaForge.MultiplayerAcceptance
 
         protected override void OnLoad()
         {
+            if (Context.Files.DataFileExists(GalleryRemotePreview.OptInFile))
+            {
+                GalleryRemotePreview.Attach(Context);
+                return;
+            }
+
             var loaded = Context.Config.Load(new ConfigDefinition<AcceptanceConfig>(1,
                 () => new AcceptanceConfig(), AcceptanceConfig.Validate));
             if (!loaded.TryGetValue(out config) || !Context.TryGetMultiplayer(out session) || session == null)

@@ -9,10 +9,11 @@ namespace TopiaForge.ModManager
     internal static class UiGalleryCaptureFixture
     {
         internal const string Owner = "io.github.furroxide.topiaforge.uigallery";
+        internal const string RemoteFixtureOwner = "dev.topiaforge.multiplayer-acceptance";
         private static readonly FoundationPage[] Pages = (FoundationPage[])Enum.GetValues(typeof(FoundationPage));
 
         internal static bool MatchesOwner(string owner, bool remote, string? authenticatedOwner) =>
-            remote ? authenticatedOwner == Owner : owner == Owner;
+            remote ? authenticatedOwner == RemoteFixtureOwner : owner == Owner || owner == RemoteFixtureOwner;
 
         internal static string? SafeDisplayText(string? nativeText, string authored, bool uppercase)
         {
@@ -32,7 +33,8 @@ namespace TopiaForge.ModManager
 
             foreach (var page in Pages)
             {
-                if (page == FoundationPage.InteractionStates && request.Kind == UiSurfaceKind.Hud) continue;
+                if (page == FoundationPage.InteractionStates && (request.Kind == UiSurfaceKind.Hud || remote ||
+                    owner == RemoteFixtureOwner)) continue;
                 var expected = FoundationPages.CreateRequest(page, request.Kind);
                 if ((!remote && expected.Id != request.Id) || request.Title != expected.Title || request.Body != expected.Body ||
                     request.Width != expected.Width || request.Height != expected.Height || request.HudAnchor != expected.HudAnchor ||

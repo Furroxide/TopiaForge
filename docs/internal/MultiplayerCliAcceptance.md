@@ -166,6 +166,25 @@ reviewed hashes. Source-only tests exercise synthetic peers and cannot prove
 the multiplayer transport. Internet, real input, rendered
 state and microphone checks still need a live run.
 
+### Manual Gallery visual gate
+
+Use the same freshly packed `dev.topiaforge.multiplayer-acceptance` archive on both isolated peers. On the
+host profile, create the empty file
+`BepInEx/TopiaForge/data/dev.topiaforge.multiplayer-acceptance/gallery-remote-preview.enabled` before loading
+the package. The marker selects the Gallery preview in place of that process's acceptance checklist and
+automated evidence. Keep the marker outside profiles used for the acceptance runner.
+
+Once the normal session reports a ready host and exactly one connected guest, press F7 on the host.
+Each press opens the same authored fixture on the host and sends it to that guest through `IPlayer.Ui`.
+The sequence runs Theme packs, then Typography. Each page cycles kit Paper, kit HUD, Survival Paper, and
+Survival HUD. Set resolution, accessibility, and UI scale on each profile before collecting a case. The guest
+uses its own admitted copy of the sample theme and its own preferences. Capture and label the viewer and
+delivery route in the visual manifest.
+
+Use the ordinary Gallery on the listen host and on the connected guest for the complete Interaction states
+page. Label the guest case `guest-local`. The current wire contract excludes the graph canvas in that fixture.
+The Theme packs and Typography pair provides separate authenticated delivery evidence.
+
 ## Joining
 
 `topiaforge join <code|link|host:port>` uses the same join reducer, verified descriptor planner, exact-archive

@@ -8,6 +8,7 @@
     <TopiaForgeSafeProject>true</TopiaForgeSafeProject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationPages.cs" Link="Gallery/FoundationPages.cs" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj" Private="false" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
