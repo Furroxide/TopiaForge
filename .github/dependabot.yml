@@ -23,6 +23,15 @@ updates:
     groups:
       dotnet:
         patterns: ["*"]
+    ignore:
+      # Roslyn analyzer and source-generator packages are locked to the compiler
+      # shipped by the pinned .NET SDK, not to the newest release. An assembly
+      # built against a newer Microsoft.CodeAnalysis than the running compiler is
+      # refused with CS9057, which silently disables the analyzer and makes every
+      # generated member vanish. Dependabot cannot see that constraint, so hold
+      # these at the major version the pinned SDK's compiler accepts.
+      - dependency-name: Microsoft.CodeAnalysis.CSharp
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /tools/ugc-automerge-sidecar
@@ -47,6 +56,14 @@ updates:
     groups:
       website:
         patterns: ["*"]
+    ignore:
+      # @astrojs/check declares `peer typescript@"^5.0.0 || ^6.0.0"` and has no
+      # release that accepts 7.x, whose native port ships as a different package
+      # set entirely. Taking the major makes `npm ci` fail ERESOLVE, which stops
+      # the docs build and the repository hygiene job before either runs. Hold
+      # the major until @astrojs/check ships a release that peers on it.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pub
     directory: /packages/launcher_domain
