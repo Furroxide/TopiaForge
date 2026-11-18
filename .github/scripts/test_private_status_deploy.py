@@ -140,21 +140,31 @@ class PrivateStatusDeployTests(unittest.TestCase):
         self.assertIsNotNone(bash)
         valid_sha = "a" * 40
         cases = [
-            ("status", valid_sha, "refs/heads/main", "control-plane-production", "", True),
-            ("control-plane-staging", valid_sha, "refs/heads/main", "control-plane-staging", "staging", True),
-            ("control-plane-production", valid_sha, "refs/heads/main", "control-plane-production", "production", True),
-            ("status", valid_sha, "refs/heads/dev", "", "", False),
-            ("status", "a" * 39, "refs/heads/main", "", "", False),
-            ("status", "A" * 40, "refs/heads/main", "", "", False),
-            ("unknown", valid_sha, "refs/heads/main", "", "", False),
+            ("status", valid_sha, "refs/heads/main", False, True, "control-plane-production", "", True),
+            ("control-plane-staging", valid_sha, "refs/heads/main", False, True,
+             "control-plane-staging", "staging", True),
+            ("control-plane-production", valid_sha, "refs/heads/main", False, False,
+             "control-plane-production", "production", True),
+            ("control-plane-production", valid_sha, "refs/heads/main", True, True,
+             "control-plane-production", "production", True),
+            ("control-plane-production", valid_sha, "refs/heads/main", True, False, "", "", False),
+            ("control-plane-staging", valid_sha, "refs/heads/main", True, True, "", "", False),
+            ("status", valid_sha, "refs/heads/main", True, True, "", "", False),
+            ("status", valid_sha, "refs/heads/dev", False, True, "", "", False),
+            ("status", "a" * 39, "refs/heads/main", False, True, "", "", False),
+            ("status", "A" * 40, "refs/heads/main", False, True, "", "", False),
+            ("unknown", valid_sha, "refs/heads/main", False, True, "", "", False),
         ]
-        for target, sha, ref, environment, wrangler, accepted in cases:
-            with self.subTest(target=target, sha=sha, ref=ref), tempfile.TemporaryDirectory() as folder:
+        for target, sha, ref, open_expected, verify, environment, wrangler, accepted in cases:
+            with self.subTest(target=target, sha=sha, ref=ref, open_expected=open_expected, verify=verify), \
+                    tempfile.TemporaryDirectory() as folder:
                 output = Path(folder) / "output"
                 output.touch()
                 variables = {
                     "TARGET": target, "SOURCE_SHA": sha, "GITHUB_REF": ref,
                     "GITHUB_OUTPUT": str(output),
+                    "EXPECT_OPEN_PRODUCTION": str(open_expected).lower(),
+                    "VERIFY_PUBLIC_ROUTES": str(verify).lower(),
                 }
                 if os.name == "nt":
                     variables["SystemRoot"] = os.environ["SystemRoot"]
@@ -402,28 +412,71 @@ npx() {
                 )
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
-    def test_production_public_smoke_rejects_enabled_features(self):
+    def test_open_production_smoke_requires_explicit_reviewed_source_opt_in(self):
+        deploy = jobs()["deploy"]
+        step = deploy.split(
+            "      - name: Require smoke checks for a production Worker that admits player routes\n", 1
+        )[1]
+        step = step.split("\n      - name:", 1)[0]
+        self.assertIn("if: inputs.target == 'control-plane-production'", step)
+        run = textwrap.dedent(
+            step.split("          python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        )
+        for deployment_env, setting, verify, open_expected, accepted in [
+            ("production", '"true"', True, True, True),
+            ("production", '"true"', True, False, True),
+            ("production", '"true"', False, False, False),
+            ("production", '"false"', True, True, False),
+            ("production", "true", True, True, False),
+            ("production", None, True, True, False),
+            ("production", None, False, False, True),
+            ("staging", '"true"', True, False, False),
+            (None, None, False, False, False),
+        ]:
+            with self.subTest(deployment=deployment_env, setting=setting, verify=verify, open_expected=open_expected), \
+                    tempfile.TemporaryDirectory() as folder:
+                config = Path(folder) / "wrangler.toml"
+                values = ["[env.production.vars]"]
+                if deployment_env:
+                    values.append(f'ENVIRONMENT = "{deployment_env}"')
+                if setting:
+                    values.append(f"PRODUCTION_PLAYER_ROUTES_ENABLED = {setting}")
+                config.write_text("\n".join(values) + "\n", encoding="utf-8")
+                environment = dict(os.environ, VERIFY_PUBLIC_ROUTES=str(verify).lower(),
+                                   EXPECT_OPEN_PRODUCTION=str(open_expected).lower())
+                result = subprocess.run([sys.executable, "-c", run], cwd=folder, env=environment, capture_output=True,
+                                        text=True, timeout=10, check=False)
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+
+    def test_production_public_smoke_matches_the_expected_features(self):
         smoke = jobs()["deploy"].split("      - name: Smoke-test public routes after domain cutover\n", 1)[1]
-        base = re.search(r"predicate='([^']+)'", smoke)
-        production = re.search(r'predicate="\$predicate and ([^"]+)"', smoke)
-        self.assertIsNotNone(base)
-        self.assertIsNotNone(production)
+        run = smoke.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+        script = 'curl() { printf "%s\\n" "$SMOKE_RESPONSE"; }\n' + textwrap.dedent(run)
+        bash = git_bash()
+        self.assertIsNotNone(bash)
         jq = shutil.which("jq")
         if jq is None:
-            self.skipTest("jq is required to execute the public smoke predicate")
-        predicate = f"{base.group(1)} and {production.group(1)}"
+            self.skipTest("jq is required to execute the public smoke test")
         disabled = {name: False for name in ("hosting", "invites", "signaling", "relay")}
-        for features, accepted in (
-            (disabled, True),
-            (dict(disabled, relay=True), False),
-            (dict(disabled, hosting=True), False),
-            ({"hosting": False, "invites": False, "signaling": False}, False),
+        enabled = dict.fromkeys(disabled, True)
+        for open_expected, features, kill_switch, accepted in (
+            (False, disabled, True, True),
+            (False, dict(disabled, relay=True), False, False),
+            (False, enabled, False, False),
+            (False, {"hosting": False, "invites": False, "signaling": False}, False, False),
+            (True, enabled, False, True),
+            (True, enabled, True, False),
+            (True, dict(enabled, relay=False), False, False),
+            (True, enabled, None, False),
         ):
-            with self.subTest(features=features):
+            with self.subTest(open_expected=open_expected, features=features, kill_switch=kill_switch):
                 response = {"schema": "topiaforge.control-plane-status/1", "api": 1,
-                            "features": features}
+                            "features": features, "killSwitch": kill_switch}
+                environment = dict(os.environ, TARGET="control-plane-production",
+                                   EXPECT_OPEN_PRODUCTION=str(open_expected).lower(),
+                                   SMOKE_RESPONSE=json.dumps(response))
                 result = subprocess.run(
-                    [jq, "-e", predicate], input=json.dumps(response),
+                    [bash, "--noprofile", "--norc", "-c", script], env=environment,
                     capture_output=True, text=True, timeout=10, check=False,
                 )
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)
