@@ -37,8 +37,9 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets the primary pressed color.</summary>
         public TopiaForgeRgba PrimaryPressed { get; init; }
         /// <summary>
-        /// Gets the color of a label on Primary, as a filled button draws it: dark, since white reads at only 2.6:1 on the
-        /// brand orange. It reads at WCAG AA, or AAA in high contrast, while the button is hovered or pressed too.
+        /// Gets the color of a label on <see cref="Primary"/>, as a filled button draws it: dark, since white reads at only
+        /// 2.6:1 on the brand orange. It reads at WCAG AA, or AAA in high contrast, and keeps reading while the button is
+        /// hovered, selected or pressed, because those states never tint the fill toward it.
         /// </summary>
         public TopiaForgeRgba OnPrimary { get; init; }
         /// <summary>Gets the accent color.</summary>
@@ -58,10 +59,11 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets the danger color.</summary>
         public TopiaForgeRgba Danger { get; init; }
         /// <summary>
-        /// Gets the color of a label on the danger fill, as a danger button draws it: white on Paper's dark red and dark on
-        /// the HUD's bright one. The kit resolves what it draws on each status fill against that fill.
+        /// Gets the color of a label on <see cref="Danger"/>, as a danger button draws it: white on Paper's dark red and dark
+        /// on the HUD's bright one. It reads at WCAG AA, or AAA in high contrast, in every state the button is drawn in. The
+        /// kit resolves what it draws on the other status fills against each fill.
         /// </summary>
-        public TopiaForgeRgba OnStatus { get; init; }
+        public TopiaForgeRgba OnDanger { get; init; }
         /// <summary>Gets the shadow color.</summary>
         public TopiaForgeRgba Shadow { get; init; }
         /// <summary>Gets the shadow strong color.</summary>

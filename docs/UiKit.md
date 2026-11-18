@@ -295,11 +295,19 @@ font fallback, motion, high contrast, and UI scale.
 Enabled filled and danger button labels meet 4.5:1 (WCAG AA) at rest and while hovered, selected or
 pressed. Enabled switch thumbs and checkbox checks, and stepper marks, meet 3:1 on their fills.
 Both thresholds include 8-bit color rounding. High contrast raises them to 7:1 and 4.5:1. On brand
-orange (`#FF7A11`), Paper uses `#2D3748` and HUD uses `#10141B`. Paper darkens the orange less on
-press to keep that pairing readable. High contrast can darken the ink further. The HUD's bright
-status fills also use dark ink. An off switch's grey thumb is lightened or darkened
-until it reads on the tint. A fill keeps the brand's color unless nothing reads on it: Paper's
-danger button is a shade darker, because white read at only 4.47:1 on its red while hovered. A
+orange (`#FF7A11`), Paper uses `#2D3748` and HUD uses `#10141B`; high contrast can darken the ink
+further. The HUD's bright status fills also use dark ink. An off switch's grey thumb is lightened
+or darkened until it reads on the tint.
+
+What is drawn on a fill is chosen against the fill at rest. Each interaction state then keeps the
+kit's usual tint (lighter on hover, darker on press) only while the label or mark still reads on
+the tinted fill. Where it would not, the state takes the mirror tint, which moves the fill away
+from what is drawn on it, so every state reads at least as well as rest. Paper's orange therefore
+lightens when pressed rather than darkening toward its dark label, and Paper's danger red darkens
+when hovered rather than lightening toward its white label. When hover and press land on the same
+side of rest, press goes twice as far, so a pressed button looks different from a hovered one even
+with reduced motion, which turns off its sink into its shadow. Fills keep the brand's colors in
+every state. A
 slider's handle is the accent on Paper, where a white one vanished on the light track, and stays
 white on the HUD.
 

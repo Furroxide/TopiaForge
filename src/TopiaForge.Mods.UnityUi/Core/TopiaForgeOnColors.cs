@@ -24,13 +24,19 @@ namespace TopiaForge.Mods.UnityUi
         StepFailed,
     }
 
-    /// <summary>A fill and the color drawn on it, resolved by <see cref="TopiaForgeOnColors.Resolve"/>.</summary>
+    /// <summary>
+    /// A fill, the color drawn on it, and the tints uGUI gives the fill while it is hovered, selected or pressed, resolved by
+    /// <see cref="TopiaForgeOnColors.Resolve"/>.
+    /// </summary>
     internal readonly struct TopiaForgeFillColors
     {
-        internal TopiaForgeFillColors(TopiaForgeRgba fill, TopiaForgeRgba content)
+        internal TopiaForgeFillColors(TopiaForgeRgba fill, TopiaForgeRgba content, float hovered, float selected, float pressed)
         {
             Fill = fill;
             Content = content;
+            Hovered = hovered;
+            Selected = selected;
+            Pressed = pressed;
         }
 
         /// <summary>Gets the fill: the brand's own color, unless nothing reads on it.</summary>
@@ -38,41 +44,49 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Gets the color of the label, icon, thumb or check drawn on the fill.</summary>
         internal TopiaForgeRgba Content { get; }
+
+        /// <summary>Gets the tint uGUI multiplies the fill by while the pointer is over it.</summary>
+        internal float Hovered { get; }
+
+        /// <summary>Gets the tint uGUI multiplies the fill by while the control is selected.</summary>
+        internal float Selected { get; }
+
+        /// <summary>Gets the tint uGUI multiplies the fill by while the control is pressed.</summary>
+        internal float Pressed { get; }
     }
 
     /// <summary>
     /// Resolves what the kit draws on a fill against that fill: a button's label or icon, a switch's thumb, a checkbox's
-    /// check and a stepper's marks. A label keeps WCAG AA (4.5:1), and a mark the 3:1 a control's parts need, in every
-    /// state uGUI tints the fill to; high contrast raises them to 7:1 and 4.5:1. The brand's white stays wherever it reads.
-    /// On the brand orange, where white read at 2.6:1, and on the HUD's bright status fills, the content is dark. Pure and
-    /// unit-tested; the resolved theme caches the result per theme version.
+    /// check and a stepper's marks. A label keeps WCAG AA (4.5:1), and a mark the 3:1 a control's parts need; high contrast
+    /// raises them to 7:1 and 4.5:1. The brand's white stays wherever it reads. On the brand orange, where white read at
+    /// 2.6:1, and on the HUD's bright status fills, the content is dark.
+    /// <para>
+    /// One rule keeps every interaction state readable: the content is resolved against the fill at rest, and each state
+    /// keeps the kit's usual tint only while the content still reads on the tinted fill. Where it would not, the state takes
+    /// the mirror tint instead, which moves the fill away from the content, so the pair reads at least as well as at rest.
+    /// The brand's fills therefore keep their colors in every state, and every state still looks different from rest. Pure
+    /// and unit-tested; the resolved theme caches the result per theme version.
+    /// </para>
     /// </summary>
     internal static class TopiaForgeOnColors
     {
-        /// <summary>The tint uGUI multiplies a kit button's fill by while the pointer is over it, the lightest it goes.</summary>
+        /// <summary>The tint uGUI multiplies a kit button's fill by while the pointer is over it, unless that stops its label reading.</summary>
         internal const float ButtonHoveredTint = 1.06f;
 
-        /// <summary>The tint uGUI multiplies a kit button's fill by while the button is selected.</summary>
+        /// <summary>The tint uGUI multiplies a kit button's fill by while the button is selected, unless that stops its label reading.</summary>
         internal const float ButtonSelectedTint = 1.04f;
 
-        /// <summary>The tint uGUI multiplies a kit button's fill by while it is pressed, the darkest it goes.</summary>
+        /// <summary>The tint uGUI multiplies a kit button's fill by while it is pressed, unless that stops its label reading.</summary>
         internal const float ButtonPressedTint = TopiaForgeSchemes.PressedTint;
 
-        /// <summary>
-        /// The pressed tint in uGUI's default color block. Other enabled states are lighter.
-        /// </summary>
+        /// <summary>The hovered and selected tint in uGUI's default color block, which kit switches and checkboxes start from.</summary>
+        internal const float ControlHighlightedTint = 245f / 255f;
+
+        /// <summary>The pressed tint in uGUI's default color block, which kit switches and checkboxes start from.</summary>
         internal const float ControlPressedTint = 200f / 255f;
 
         /// <summary>The dark content the kit draws where white does not read: the HUD's backdrop, as on a HUD badge.</summary>
         internal static readonly TopiaForgeRgba DarkContent = TopiaForgePalette.HudBackdrop;
-
-        // Orange has little contrast to spare against Paper ink. Keep the pressed tints inside the
-        // required contrast for the label and mark respectively, including after byte rounding.
-        internal static float FilledButtonPressedTint(TopiaForgeScheme scheme, bool highContrast) =>
-            scheme == TopiaForgeScheme.Paper && !highContrast ? 0.995f : ButtonPressedTint;
-
-        internal static float ControlOnPressedTint(TopiaForgeScheme scheme, bool highContrast) =>
-            scheme == TopiaForgeScheme.Paper && !highContrast ? 0.8f : ControlPressedTint;
 
         private const int Steps = 48;
         private const float DarkenStep = 0.92f;
@@ -97,19 +111,19 @@ namespace TopiaForge.Mods.UnityUi
             return all;
         }
 
-        /// <summary>Gets a fill role's fill, and the color drawn on it, in a scheme.</summary>
+        /// <summary>Gets a fill role's fill, the color drawn on it and its state tints, in a scheme.</summary>
         internal static TopiaForgeFillColors Resolve(TopiaForgeFillRole role, TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             var white = TopiaForgePalette.White;
             var onOrange = scheme == TopiaForgeScheme.Paper ? TopiaForgePalette.Ink : DarkContent;
             return role switch
             {
-                TopiaForgeFillRole.FilledButton => OnFill(colors.Primary, onOrange, LabelRatio(highContrast), FilledButtonPressedTint(scheme, highContrast), ButtonHoveredTint),
-                TopiaForgeFillRole.DangerButton => OnFill(colors.Danger, white, LabelRatio(highContrast), ButtonPressedTint, ButtonHoveredTint),
-                TopiaForgeFillRole.ControlOn => OnFill(colors.Primary, onOrange, MarkRatio(highContrast), ControlOnPressedTint(scheme, highContrast), 1f),
-                TopiaForgeFillRole.SwitchOff => OnFill(colors.Tint, colors.TextFaint, MarkRatio(highContrast), ControlPressedTint, 1f),
-                TopiaForgeFillRole.StepDone => OnFill(colors.Success, white, MarkRatio(highContrast), 1f, 1f),
-                TopiaForgeFillRole.StepFailed => OnFill(colors.Danger, white, MarkRatio(highContrast), 1f, 1f),
+                TopiaForgeFillRole.FilledButton => Button(colors.Primary, onOrange, LabelRatio(highContrast)),
+                TopiaForgeFillRole.DangerButton => Button(colors.Danger, white, LabelRatio(highContrast)),
+                TopiaForgeFillRole.ControlOn => Control(colors.Primary, onOrange, MarkRatio(highContrast)),
+                TopiaForgeFillRole.SwitchOff => Control(colors.Tint, colors.TextFaint, MarkRatio(highContrast)),
+                TopiaForgeFillRole.StepDone => Still(colors.Success, white, MarkRatio(highContrast)),
+                TopiaForgeFillRole.StepFailed => Still(colors.Danger, white, MarkRatio(highContrast)),
                 _ => throw new ArgumentOutOfRangeException(nameof(role), role, "Unknown fill role."),
             };
         }
@@ -124,80 +138,133 @@ namespace TopiaForge.Mods.UnityUi
         internal static TopiaForgeRgba SliderHandle(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             return scheme == TopiaForgeScheme.Paper
-                ? MoveUntilReads(colors.Accent.WithAlpha(1f), lighter: false, TopiaForgeSchemes.DarkestTextSurface, MarkRatio(highContrast), 1f, 1f)
+                ? MoveUntilReads(colors.Accent.WithAlpha(1f), lighter: false, TopiaForgeSchemes.DarkestTextSurface, MarkRatio(highContrast))
                 : TopiaForgePalette.White;
         }
 
         /// <summary>
-        /// Gets the content for a fill, and the fill, so that the content reads on the fill in every state from the darkest
-        /// tint uGUI gives it to the lightest. The preferred content is moved away from the fill until it reads: lighter on
-        /// a darker fill, darker on a lighter one. Content that cannot move far enough, such as white on the brand orange,
-        /// gives way to the other side: the kit's dark content, darkened if it must be, or white. A mid-tone fill that
-        /// neither reads on, such as Paper's danger red while hovered, moves away from whichever comes closer until it
-        /// reads. A gamma project multiplies the stored values by the tint and a linear one multiplies linear light, which
-        /// lands between the fill and the stored-value result, so checking the stored-value extremes covers both.
+        /// Gets the content for a fill at rest, and the fill. The preferred content is moved away from the fill until it
+        /// reads: lighter on a darker fill, darker on a lighter one. Content that cannot move far enough, such as white on the
+        /// brand orange, gives way to the other side: the kit's dark content, darkened if it must be, or white. A mid-tone
+        /// fill that neither reads on moves away from whichever comes closer until it reads. Interaction states are made
+        /// readable by <see cref="ReadableTint"/>, not by changing the pair.
         /// </summary>
-        internal static TopiaForgeFillColors OnFill(TopiaForgeRgba fill, TopiaForgeRgba preferred, float minimumRatio, float darkestTint, float lightestTint)
+        internal static TopiaForgeFillColors OnFill(TopiaForgeRgba fill, TopiaForgeRgba preferred, float minimumRatio)
         {
             var lighter = TopiaForgeContrast.Luminance(preferred) > TopiaForgeContrast.Luminance(fill);
-            var content = MoveUntilReads(preferred, lighter, fill, minimumRatio, darkestTint, lightestTint);
-            if (Worst(content, fill, darkestTint, lightestTint) >= minimumRatio)
+            var content = MoveUntilReads(preferred, lighter, fill, minimumRatio);
+            if (RatioAsDrawn(content, fill, 1f) >= minimumRatio)
             {
-                return new TopiaForgeFillColors(fill, content);
+                return AtRest(fill, content);
             }
 
-            var other = MoveUntilReads(lighter ? DarkContent : TopiaForgePalette.White, !lighter, fill, minimumRatio, darkestTint, lightestTint);
-            if (Worst(other, fill, darkestTint, lightestTint) >= minimumRatio)
+            var other = MoveUntilReads(lighter ? DarkContent : TopiaForgePalette.White, !lighter, fill, minimumRatio);
+            if (RatioAsDrawn(other, fill, 1f) >= minimumRatio)
             {
-                return new TopiaForgeFillColors(fill, other);
+                return AtRest(fill, other);
             }
 
-            var keepContent = Worst(content, fill, darkestTint, lightestTint) >= Worst(other, fill, darkestTint, lightestTint);
+            var keepContent = RatioAsDrawn(content, fill, 1f) >= RatioAsDrawn(other, fill, 1f);
             var label = keepContent ? content : other;
             var labelIsLighter = keepContent == lighter;
-            for (var step = 0; step < Steps && Worst(label, fill, darkestTint, lightestTint) < minimumRatio; step++)
+            for (var step = 0; step < Steps && RatioAsDrawn(label, fill, 1f) < minimumRatio; step++)
             {
                 fill = labelIsLighter ? fill.Scale(DarkenStep) : Lighten(fill);
             }
 
-            return new TopiaForgeFillColors(fill, label);
+            return AtRest(fill, label);
         }
 
         /// <summary>
-        /// Gets the lowest contrast between content and its fill over the fill's states. A ratio against one color falls
-        /// and then rises as the other's luminance climbs, so over a range of tints it is lowest at one end of the range.
-        /// The exception is content whose luminance lies inside the range, and over a range as narrow as the kit's tints
-        /// one end then reads below 3:1 as well, so the content still fails.
+        /// Gets the tint a state gives a fill: the kit's usual <paramref name="tint"/> while the content still reads on the
+        /// tinted fill, or else its mirror (<c>2 - tint</c>), which moves the fill away from the content. Contrast only
+        /// falls as a fill nears its content's luminance, so the mirror reads at least as well as the fill at rest. A gamma
+        /// project multiplies the stored values by the tint and a linear one multiplies linear light, which lands between the
+        /// fill and the stored-value result, so checking the stored values covers both. If even the mirror fell short, which
+        /// only a pair that does not read at rest could do, the state keeps the fill as it is at rest.
         /// </summary>
-        internal static float Worst(TopiaForgeRgba content, TopiaForgeRgba fill, float darkestTint, float lightestTint)
+        internal static float ReadableTint(TopiaForgeRgba fill, TopiaForgeRgba content, float minimumRatio, float tint)
         {
-            return Math.Min(RatioAtTint(content, fill, darkestTint), RatioAtTint(content, fill, lightestTint));
+            if (RatioAsDrawn(content, fill, tint) >= minimumRatio)
+            {
+                return tint;
+            }
+
+            var mirror = 2f - tint;
+            return RatioAsDrawn(content, fill, mirror) >= minimumRatio ? mirror : 1f;
         }
 
-        private static float RatioAtTint(TopiaForgeRgba content, TopiaForgeRgba fill, float tint)
+        /// <summary>Gets the contrast between content and its fill tinted by a state, as computed and as drawn in 256 steps a channel.</summary>
+        internal static float RatioAsDrawn(TopiaForgeRgba content, TopiaForgeRgba fill, float tint)
         {
-            var tinted = fill.Scale(tint);
+            var tinted = Clamp(fill.Scale(tint));
             var drawnContent = TopiaForgeContrast.Quantize(content);
-            var drawnFill = TopiaForgeContrast.Quantize(TopiaForgeContrast.Quantize(fill).Scale(tint));
+            var drawnFill = TopiaForgeContrast.Quantize(Clamp(TopiaForgeContrast.Quantize(fill).Scale(tint)));
             return Math.Min(TopiaForgeContrast.Ratio(content, tinted), TopiaForgeContrast.Ratio(drawnContent, drawnFill));
         }
 
-        // Moves content toward white or black until it reads. The steps only approach the end, so content that still
-        // falls short takes white or black itself.
-        private static TopiaForgeRgba MoveUntilReads(TopiaForgeRgba content, bool lighter, TopiaForgeRgba fill, float minimumRatio, float darkestTint, float lightestTint)
+        private static TopiaForgeFillColors Button(TopiaForgeRgba fill, TopiaForgeRgba preferred, float minimumRatio)
         {
-            for (var step = 0; step < Steps && Worst(content, fill, darkestTint, lightestTint) < minimumRatio; step++)
+            var pair = OnFill(fill, preferred, minimumRatio);
+            return WithTints(pair, minimumRatio, ButtonHoveredTint, ButtonSelectedTint, ButtonPressedTint);
+        }
+
+        private static TopiaForgeFillColors Control(TopiaForgeRgba fill, TopiaForgeRgba preferred, float minimumRatio)
+        {
+            var pair = OnFill(fill, preferred, minimumRatio);
+            return WithTints(pair, minimumRatio, ControlHighlightedTint, ControlHighlightedTint, ControlPressedTint);
+        }
+
+        private static TopiaForgeFillColors Still(TopiaForgeRgba fill, TopiaForgeRgba preferred, float minimumRatio) =>
+            OnFill(fill, preferred, minimumRatio);
+
+        private static TopiaForgeFillColors WithTints(TopiaForgeFillColors pair, float minimumRatio, float hovered, float selected, float pressed)
+        {
+            var hover = ReadableTint(pair.Fill, pair.Content, minimumRatio, hovered);
+            var press = ReadableTint(pair.Fill, pair.Content, minimumRatio, pressed);
+
+            // Selection is hover's quieter sibling, so it moves the same way: mirrored with hover, if that still reads.
+            var select = ReadableTint(pair.Fill, pair.Content, minimumRatio, hover == hovered ? selected : 2f - selected);
+            return new TopiaForgeFillColors(pair.Fill, pair.Content, hover, select, Beyond(pair, minimumRatio, hover, press));
+        }
+
+        // A pressed fill must look different from a hovered one even when reduced motion turns off the press's sink into its
+        // shadow. When both tints land on the same side of rest, the press goes twice as far as the hover, if that reads.
+        private static float Beyond(TopiaForgeFillColors pair, float minimumRatio, float hover, float press)
+        {
+            var sameSide = (hover - 1f) * (press - 1f) > 0f;
+            if (!sameSide || Math.Abs(press - 1f) > Math.Abs(hover - 1f))
+            {
+                return press;
+            }
+
+            var further = 1f + (2f * (hover - 1f));
+            return RatioAsDrawn(pair.Content, pair.Fill, further) >= minimumRatio ? further : press;
+        }
+
+        private static TopiaForgeFillColors AtRest(TopiaForgeRgba fill, TopiaForgeRgba content) =>
+            new TopiaForgeFillColors(fill, content, 1f, 1f, 1f);
+
+        // Moves content toward white or black until it reads at rest. The steps only approach the end, so content that still
+        // falls short takes white or black itself.
+        private static TopiaForgeRgba MoveUntilReads(TopiaForgeRgba content, bool lighter, TopiaForgeRgba fill, float minimumRatio)
+        {
+            for (var step = 0; step < Steps && RatioAsDrawn(content, fill, 1f) < minimumRatio; step++)
             {
                 content = lighter ? Lighten(content) : content.Scale(DarkenStep);
             }
 
-            if (Worst(content, fill, darkestTint, lightestTint) >= minimumRatio)
+            if (RatioAsDrawn(content, fill, 1f) >= minimumRatio)
             {
                 return content;
             }
 
             return lighter ? TopiaForgePalette.White.WithAlpha(content.A) : new TopiaForgeRgba(0f, 0f, 0f, content.A);
         }
+
+        // uGUI stores vertex colors in 8 bits a channel, so a tint above one saturates at white.
+        private static TopiaForgeRgba Clamp(TopiaForgeRgba color) =>
+            new TopiaForgeRgba(Math.Min(1f, color.R), Math.Min(1f, color.G), Math.Min(1f, color.B), color.A);
 
         private static TopiaForgeRgba Lighten(TopiaForgeRgba color)
         {

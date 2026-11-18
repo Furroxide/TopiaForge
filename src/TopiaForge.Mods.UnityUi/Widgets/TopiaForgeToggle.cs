@@ -144,42 +144,48 @@ namespace TopiaForge.Mods.UnityUi
         private void Repaint()
         {
             var theme = Theme;
-            // Resolve the press tint with the same rule as the check or thumb on its track.
-            var colors = toggle.colors;
-            var pressedTint = value
-                ? TopiaForgeOnColors.ControlOnPressedTint(theme.Scheme, theme.HighContrast)
-                : TopiaForgeOnColors.ControlPressedTint;
-            colors.pressedColor = new Color(pressedTint, pressedTint, pressedTint, 1f);
-            toggle.colors = colors;
-
             if (checkbox)
             {
-                theme.FillColors(TopiaForgeFillRole.ControlOn, out var onFill, out var onCheck);
-                track.color = value ? onFill : theme.SurfaceSunken;
+                // An unticked box draws nothing on its sunken fill, so it keeps uGUI's default tints.
+                var on = theme.Fill(TopiaForgeFillRole.ControlOn);
+                toggle.colors = value ? on.Tinted(toggle.colors) : DefaultTints(toggle.colors);
+                track.color = value ? on.Fill : theme.SurfaceSunken;
                 if (boxRing != null)
                 {
-                    boxRing.color = value ? onFill : theme.Outline;
+                    boxRing.color = value ? on.Fill : theme.Outline;
                 }
 
                 if (check != null)
                 {
-                    check.color = onCheck;
+                    check.color = on.Content;
                     check.enabled = value;
                 }
             }
             else
             {
-                theme.FillColors(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff, out var trackFill, out var thumbColor);
-                track.color = trackFill;
+                // The thumb reads on the track in every state, because the track's tints never move it toward the thumb.
+                var paint = theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff);
+                toggle.colors = paint.Tinted(toggle.colors);
+                track.color = paint.Fill;
                 if (thumb != null && thumbRect != null)
                 {
-                    thumb.color = thumbColor;
+                    thumb.color = paint.Content;
                     var x = value ? TrackWidth - (ThumbSize / 2f) - 3f : (ThumbSize / 2f) + 3f;
                     thumbRect.anchoredPosition = new Vector2(x, 0f);
                 }
             }
 
             label.color = theme.Text;
+        }
+
+        private static ColorBlock DefaultTints(ColorBlock block)
+        {
+            var highlighted = TopiaForgeOnColors.ControlHighlightedTint;
+            var pressed = TopiaForgeOnColors.ControlPressedTint;
+            block.highlightedColor = new Color(highlighted, highlighted, highlighted, 1f);
+            block.selectedColor = new Color(highlighted, highlighted, highlighted, 1f);
+            block.pressedColor = new Color(pressed, pressed, pressed, 1f);
+            return block;
         }
 
         private TMPro.TextMeshProUGUI CreateLabel(string text)

@@ -223,15 +223,15 @@ namespace TopiaForge.Mods.UnityUi
         }
 
         /// <summary>
-        /// Sets the colors drawn on Primary and on the danger fill to the ones that read on them, as a filled and a danger
-        /// button draw them: white reads at only 2.6:1 on the brand orange and 3.0:1 on the HUD's danger fill.
+        /// Sets the colors drawn on Primary and on Danger to the ones that read on them, as a filled and a danger button draw
+        /// them: white reads at only 2.6:1 on the brand orange and 3.0:1 on the HUD's danger fill.
         /// </summary>
         private static TopiaForgeSchemeColors WithOnColors(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             return colors with
             {
                 OnPrimary = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.FilledButton, scheme, colors, highContrast).Content,
-                OnStatus = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.DangerButton, scheme, colors, highContrast).Content,
+                OnDanger = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.DangerButton, scheme, colors, highContrast).Content,
             };
         }
     }

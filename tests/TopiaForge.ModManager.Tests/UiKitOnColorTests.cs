@@ -9,7 +9,9 @@ namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
     /// What the kit draws on a fill reads on that fill in both schemes, in every state uGUI tints the fill to, with any
-    /// accent a mod picks: a label at WCAG AA and a mark at 3:1, or 7:1 and 4.5:1 in high contrast. Before, all of it was
+    /// accent a mod picks: a label at WCAG AA and a mark at 3:1, or 7:1 and 4.5:1 in high contrast. Each state keeps the
+    /// kit's usual tint while the content still reads, and otherwise takes the mirror tint, away from the content, so the
+    /// brand's fills keep their colors and a pressed fill still differs from a hovered one. Before, all of it was
     /// white: 2.61:1 on the brand orange under a filled button's label, a switch's thumb and a checkbox's check, 3.00:1 on
     /// the HUD's danger button and 2.34:1 under a HUD stepper's check, lower still in high contrast, which lightens the
     /// HUD's status fills. A slider's white handle read at 1.02:1 on Paper's surface, and an off switch's grey thumb at
@@ -28,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
             ContentReadsOnEveryFillInEveryState();
             WhiteStaysWhereItReadsAndDarkTakesOver();
             BrandFillsKeepTheirColors();
+            StatesKeepTheUsualTintWhereItReads();
             OffSwitchThumbStaysFaint();
             PublicOnRolesReadOnTheirFills();
             AnyFillResolvesToContentThatReads();
@@ -38,8 +41,9 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ContentReadsOnEveryFillInEveryState()
         {
-            Assert(TopiaForgeOnColors.ControlPressedTint == DefaultPressedTint, "controls are resolved at uGUI's default pressed tint");
-            Assert(Roles(TopiaForgeScheme.Paper, false).Length == Enum.GetValues(typeof(TopiaForgeFillRole)).Length, "every fill role is tested in every state it is drawn in");
+            Assert(TopiaForgeOnColors.ControlPressedTint == DefaultPressedTint && TopiaForgeOnColors.ControlHighlightedTint == DefaultHighlightedTint,
+                "switches and checkboxes start from uGUI's default color block");
+            Assert(Roles().Length == Enum.GetValues(typeof(TopiaForgeFillRole)).Length, "every fill role is tested in every state it is drawn in");
             foreach (var scheme in new[] { TopiaForgeScheme.Paper, TopiaForgeScheme.Hud })
             {
                 foreach (var highContrast in new[] { false, true })
@@ -49,14 +53,16 @@ namespace TopiaForge.ModManager.Tests
                         var colors = TopiaForgeSchemes.Resolve(scheme, accent, highContrast);
                         var all = TopiaForgeOnColors.ResolveAll(scheme, colors, highContrast);
                         var context = scheme + (highContrast ? " high contrast" : string.Empty) + (accent.HasValue ? " with accent " + accent.Value : string.Empty);
-                        foreach (var (role, label, tints) in Roles(scheme, highContrast))
+                        foreach (var (role, label, _) in Roles())
                         {
                             var pair = all[(int)role];
                             var single = TopiaForgeOnColors.Resolve(role, scheme, colors, highContrast);
-                            Assert(pair.Fill == single.Fill && pair.Content == single.Content, context + ": " + role + " resolves the same alone and with the rest");
+                            Assert(pair.Fill == single.Fill && pair.Content == single.Content && pair.Hovered == single.Hovered &&
+                                   pair.Selected == single.Selected && pair.Pressed == single.Pressed,
+                                context + ": " + role + " resolves the same alone and with the rest");
                             Assert(pair.Fill.A == 1f && pair.Content.A == 1f, context + ": " + role + " draws opaque colors");
                             var minimum = highContrast ? (label ? 7f : 4.5f) : (label ? 4.5f : 3f);
-                            foreach (var tint in tints)
+                            foreach (var tint in new[] { 1f, pair.Hovered, pair.Selected, pair.Pressed })
                             {
                                 foreach (var linear in new[] { false, true })
                                 {
@@ -95,9 +101,15 @@ namespace TopiaForge.ModManager.Tests
             Assert(Content(TopiaForgeFillRole.DangerButton, TopiaForgeScheme.Paper, paper, false) == white && Content(TopiaForgeFillRole.StepDone, TopiaForgeScheme.Paper, paper, false) == white &&
                    Content(TopiaForgeFillRole.StepFailed, TopiaForgeScheme.Paper, paper, false) == white, "white stays on Paper's darker status fills, where it reads");
 
+            // In high contrast Paper's ink is darkened until it reads at 7:1 on the orange; the orange then lightens, never
+            // darkens, in every state.
             var contrast = TopiaForgeSchemes.ResolvePaper(null, true);
-            Assert(TopiaForgeContrast.Luminance(Content(TopiaForgeFillRole.FilledButton, TopiaForgeScheme.Paper, contrast, true)) < TopiaForgeContrast.Luminance(dark),
-                "in high contrast the dark label is darkened until it reads at 7:1 on the orange while pressed");
+            var highContrastFilled = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.FilledButton, TopiaForgeScheme.Paper, contrast, true);
+            Assert(TopiaForgeContrast.Luminance(highContrastFilled.Content) < TopiaForgeContrast.Luminance(TopiaForgePalette.Ink) &&
+                   TopiaForgeContrast.Ratio(highContrastFilled.Content, highContrastFilled.Fill) >= 7f,
+                "in high contrast the filled button's label is Paper's ink, darkened until it reads at 7:1 on the orange");
+            Assert(highContrastFilled.Hovered >= 1f && highContrastFilled.Selected >= 1f && highContrastFilled.Pressed > 1f,
+                "in high contrast the orange only lightens under its dark label");
         }
 
         private static void BrandFillsKeepTheirColors()
@@ -118,14 +130,64 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(Fill(TopiaForgeFillRole.DangerButton, TopiaForgeScheme.Hud, TopiaForgeSchemes.ResolveHud(null, false), false) == TopiaForgePalette.HudDanger, "the HUD's danger button keeps its red");
 
-            // White reads at 4.94:1 on Paper's danger red, but at only 4.47:1 while the button is hovered, and nothing dark
-            // reads on it, so the button's red is one step darker.
+            // White reads at 4.94:1 on Paper's danger red at rest. Hovering darkens it instead of lightening it toward white,
+            // so the button keeps the brand's red in every state.
             var paper = TopiaForgeSchemes.ResolvePaper(null, false);
-            var hovered = paper.Danger.Scale(TopiaForgeOnColors.ButtonHoveredTint);
-            Assert(TopiaForgeContrast.Ratio(TopiaForgePalette.White, hovered) < 4.5f && TopiaForgeContrast.Ratio(Black, paper.Danger.Scale(TopiaForgeOnColors.ButtonPressedTint)) < 4.5f,
-                "neither white nor black reads on Paper's danger button in every state");
-            Assert(Fill(TopiaForgeFillRole.DangerButton, TopiaForgeScheme.Paper, paper, false) == paper.Danger.Scale(0.92f), "Paper's danger button is one step darker, as far as it must be");
+            Assert(Fill(TopiaForgeFillRole.DangerButton, TopiaForgeScheme.Paper, paper, false) == TopiaForgePalette.Danger, "Paper's danger button keeps the brand's red");
             Assert(paper.Danger == TopiaForgePalette.Danger, "the danger role itself keeps the brand's red");
+        }
+
+        private static void StatesKeepTheUsualTintWhereItReads()
+        {
+            foreach (var scheme in new[] { TopiaForgeScheme.Paper, TopiaForgeScheme.Hud })
+            {
+                foreach (var highContrast in new[] { false, true })
+                {
+                    foreach (var accent in Accents())
+                    {
+                        var colors = TopiaForgeSchemes.Resolve(scheme, accent, highContrast);
+                        var context = scheme + (highContrast ? " high contrast" : string.Empty) + (accent.HasValue ? " with accent " + accent.Value : string.Empty);
+                        foreach (var (role, label, usual) in Roles())
+                        {
+                            var pair = TopiaForgeOnColors.Resolve(role, scheme, colors, highContrast);
+                            var minimum = highContrast ? (label ? 7f : 4.5f) : (label ? 4.5f : 3f);
+                            if (usual.Length == 0)
+                            {
+                                Assert(pair.Hovered == 1f && pair.Selected == 1f && pair.Pressed == 1f, context + ": " + role + " has no interaction states to tint");
+                                continue;
+                            }
+
+                            var hoverMirrored = pair.Hovered != usual[0];
+                            var states = new[] { ("hovered", pair.Hovered, usual[0]), ("selected", pair.Selected, usual[1]) };
+                            foreach (var (name, tint, expected) in states)
+                            {
+                                Assert(tint == expected || Math.Abs(tint - (2f - expected)) < 1e-6f, context + ": " + role + " " + name + " uses the usual tint or its mirror");
+                                if (tint != expected)
+                                {
+                                    var followsHover = name == "selected" && hoverMirrored;
+                                    Assert(followsHover || Lowest(pair.Content, pair.Fill, expected) < minimum,
+                                        context + ": " + role + " " + name + " is mirrored only where the usual tint would not read, or to follow hover");
+                                }
+                            }
+
+                            Assert((pair.Selected - 1f) * (pair.Hovered - 1f) >= 0f, context + ": " + role + " moves the same way selected as hovered");
+
+                            Assert(pair.Pressed != pair.Hovered, context + ": " + role + " looks different pressed and hovered, with or without the press's motion");
+                            Assert(Lowest(pair.Content, pair.Fill, pair.Pressed) >= minimum, context + ": " + role + " reads while pressed");
+                        }
+                    }
+                }
+            }
+
+            // Paper's orange lightens while pressed, away from its dark label, and its danger red darkens while hovered, away
+            // from its white one; pressing then darkens the red further than hovering does.
+            var paper = TopiaForgeSchemes.ResolvePaper(null, false);
+            var filled = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.FilledButton, TopiaForgeScheme.Paper, paper, false);
+            Assert(filled.Hovered > 1f && filled.Pressed > filled.Hovered, "Paper's filled button lightens when hovered and further when pressed");
+            var danger = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.DangerButton, TopiaForgeScheme.Paper, paper, false);
+            Assert(danger.Hovered < 1f && danger.Pressed < danger.Hovered, "Paper's danger button darkens when hovered and further when pressed");
+            Assert(TopiaForgeContrast.Ratio(TopiaForgePalette.White, paper.Danger.Scale(TopiaForgeOnColors.ButtonHoveredTint)) < 4.5f,
+                "white read at only 4.47:1 on Paper's danger red lightened for hover, which is why hover darkens it instead");
         }
 
         private static void OffSwitchThumbStaysFaint()
@@ -134,7 +196,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 var paper = TopiaForgeSchemes.ResolvePaper(null, highContrast);
                 var paperThumb = Content(TopiaForgeFillRole.SwitchOff, TopiaForgeScheme.Paper, paper, highContrast);
-                Assert(Lum(paperThumb) < Lum(paper.TextFaint) && Lum(paperThumb) > Lum(paper.Text), "Paper's off thumb stays a faint grey, darkened until it reads while pressed");
+                Assert(Lum(paperThumb) <= Lum(paper.TextFaint) && Lum(paperThumb) > Lum(paper.Text), "Paper's off thumb stays a faint grey, darkened only as far as it must be to read");
 
                 var hud = TopiaForgeSchemes.ResolveHud(null, highContrast);
                 var hudThumb = Content(TopiaForgeFillRole.SwitchOff, TopiaForgeScheme.Hud, hud, highContrast);
@@ -150,15 +212,18 @@ namespace TopiaForge.ModManager.Tests
                 {
                     var colors = TopiaForgeSchemes.Resolve(scheme, null, highContrast);
                     Assert(colors.OnPrimary == Content(TopiaForgeFillRole.FilledButton, scheme, colors, highContrast), scheme + ": OnPrimary is a filled button's label");
-                    Assert(colors.OnStatus == Content(TopiaForgeFillRole.DangerButton, scheme, colors, highContrast), scheme + ": OnStatus is a danger button's label");
+                    Assert(colors.OnDanger == Content(TopiaForgeFillRole.DangerButton, scheme, colors, highContrast), scheme + ": OnDanger is a danger button's label");
                     Assert(TopiaForgeContrast.Ratio(colors.OnPrimary, colors.Primary) >= TopiaForgeOnColors.LabelRatio(highContrast), scheme + ": OnPrimary reads on Primary");
+                    var danger = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.DangerButton, scheme, colors, highContrast);
+                    Assert(TopiaForgeContrast.Ratio(colors.OnDanger, danger.Fill) >= TopiaForgeOnColors.LabelRatio(highContrast), scheme + ": OnDanger reads on the danger button's fill");
+                    Assert(highContrast || danger.Fill == colors.Danger, scheme + ": the danger button's fill is Danger itself outside high contrast");
                 }
             }
         }
 
         private static void AnyFillResolvesToContentThatReads()
         {
-            var ranges = new[] { (TopiaForgeOnColors.ButtonPressedTint, TopiaForgeOnColors.ButtonHoveredTint), (DefaultPressedTint, 1f), (1f, 1f) };
+            var tints = new[] { TopiaForgeOnColors.ButtonHoveredTint, TopiaForgeOnColors.ButtonSelectedTint, TopiaForgeOnColors.ButtonPressedTint, DefaultHighlightedTint, DefaultPressedTint };
             var preferences = new[] { TopiaForgePalette.White, TopiaForgeOnColors.DarkContent, TopiaForgeRgba.Hex(0x808080), TopiaForgePalette.FaintText };
             for (uint red = 0; red <= 0xFF; red += 0x33)
             {
@@ -171,20 +236,35 @@ namespace TopiaForge.ModManager.Tests
                         {
                             foreach (var minimum in new[] { 3f, 4.5f, 7f })
                             {
-                                foreach (var (darkest, lightest) in ranges)
+                                var pair = TopiaForgeOnColors.OnFill(fill, preferred, minimum);
+                                var context = preferred + " on " + fill + " at " + minimum.ToString(CultureInfo.InvariantCulture) + ":1";
+                                var ratio = Lowest(pair.Content, pair.Fill, 1f);
+                                Assert(ratio >= minimum, context + " resolves to content that reads (" + Format(ratio) + ")");
+                                if (Lowest(preferred, fill, 1f) >= minimum)
                                 {
-                                    var pair = TopiaForgeOnColors.OnFill(fill, preferred, minimum, darkest, lightest);
-                                    var context = preferred + " on " + fill + " at " + minimum.ToString(CultureInfo.InvariantCulture) + ":1";
-                                    var ratio = Lowest(pair.Content, pair.Fill, darkest, lightest);
-                                    Assert(ratio >= minimum, context + " resolves to content that reads (" + Format(ratio) + ")");
-                                    if (Lowest(preferred, fill, darkest, lightest) >= minimum)
-                                    {
-                                        Assert(pair.Content == preferred && pair.Fill == fill, context + ": content that already reads is left as it is");
-                                    }
+                                    Assert(pair.Content == preferred && pair.Fill == fill, context + ": content that already reads is left as it is");
+                                }
 
-                                    if (Lowest(TopiaForgePalette.White, fill, darkest, lightest) >= minimum + 0.01f || Lowest(Black, fill, darkest, lightest) >= minimum + 0.01f)
+                                if (Lowest(TopiaForgePalette.White, fill, 1f) >= minimum + 0.01f || Lowest(Black, fill, 1f) >= minimum + 0.01f)
+                                {
+                                    Assert(pair.Fill == fill, context + ": the fill keeps its color while white or black reads on it");
+                                }
+
+                                foreach (var usual in tints)
+                                {
+                                    var tint = TopiaForgeOnColors.ReadableTint(pair.Fill, pair.Content, minimum, usual);
+                                    var tinted = Lowest(pair.Content, pair.Fill, tint);
+                                    var at = context + " at tint " + usual.ToString("0.###", CultureInfo.InvariantCulture);
+                                    Assert(tinted >= minimum, at + " keeps reading (" + Format(tinted) + ")");
+                                    // Within 0.01 of the threshold either answer is right, since rounding decides it.
+                                    var usualRatio = Lowest(pair.Content, pair.Fill, usual);
+                                    if (usualRatio >= minimum + 0.01f)
                                     {
-                                        Assert(pair.Fill == fill, context + ": the fill keeps its color while white or black reads on it");
+                                        Assert(tint == usual, at + ": the usual tint is kept while the content reads on it");
+                                    }
+                                    else if (usualRatio < minimum - 0.01f && tint != 1f)
+                                    {
+                                        Assert(Math.Abs(tint - (2f - usual)) < 1e-6f, at + ": a state that would stop the content reading takes the mirror tint");
                                     }
                                 }
                             }
@@ -239,45 +319,44 @@ namespace TopiaForge.ModManager.Tests
             string Read(params string[] parts) => File.ReadAllText(Path.Combine(kit, Path.Combine(parts)));
 
             var button = Read("Widgets", "TopiaForgeButton.cs");
-            Require(button, "TopiaForgeFillRole.FilledButton", "TopiaForgeFillRole.DangerButton", "Tint(TopiaForgeOnColors.ButtonHoveredTint)",
-                "TopiaForgeOnColors.FilledButtonPressedTint(theme.Scheme, theme.HighContrast)", "colors.pressedColor = Tint(pressedTint)",
-                "Tint(TopiaForgeOnColors.ButtonSelectedTint)", "SetContentColor(onPrimary);", "SetContentColor(onDanger);");
-            Forbid(button, "Buttons draw the resolved label and tint by the tints it is resolved at", @"theme\.OnPrimary", @"theme\.OnStatus", @"\b1\.06f", @"\b0\.94f", @"\b1\.04f");
+            Require(button, "PaintFill(theme.Fill(TopiaForgeFillRole.FilledButton));", "PaintFill(theme.Fill(TopiaForgeFillRole.DangerButton));",
+                "button.colors = paint.Tinted(button.colors);", "SetContentColor(paint.Content);", "fill.color = paint.Fill;");
+            Forbid(button, "Buttons draw the resolved label and state tints", @"theme\.OnPrimary", @"theme\.OnDanger", @"\b1\.06f", @"\b0\.94f", @"\b1\.04f");
 
             var toggle = Read("Widgets", "TopiaForgeToggle.cs");
-            Require(toggle, "TopiaForgeFillRole.ControlOn", "TopiaForgeFillRole.SwitchOff", "TopiaForgeOnColors.ControlOnPressedTint(theme.Scheme, theme.HighContrast)",
-                "colors.pressedColor = new Color(pressedTint, pressedTint, pressedTint, 1f)", "thumb.color = thumbColor;", "check.color = onCheck;");
-            Forbid(toggle, "A switch's thumb and a checkbox's check take the resolved colors", @"theme\.OnPrimary", @"theme\.TextFaint");
+            Require(toggle, "theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff)", "toggle.colors = paint.Tinted(toggle.colors);",
+                "on.Tinted(toggle.colors)", "thumb.color = paint.Content;", "check.color = on.Content;");
+            Forbid(toggle, "A switch's thumb and a checkbox's check take the resolved colors and state tints", @"theme\.OnPrimary", @"theme\.TextFaint", @"PressedTint\(theme");
 
             var slider = Read("Widgets", "TopiaForgeSlider.cs");
             Require(slider, "handle.color = theme.SliderHandle;");
             Forbid(slider, "A slider's handle takes the resolved color, on uGUI's default color block", @"theme\.OnPrimary", @"\.colors\b");
 
             var stepper = Read("Widgets", "TopiaForgePhaseStepper.Layout.cs");
-            Require(stepper, "TopiaForgeFillRole.StepDone", "TopiaForgeFillRole.StepFailed", "SetIcon(view, doneSprite!, doneMark);",
-                "SetIcon(view, failedSprite!, failedMark);");
-            Forbid(stepper, "A stepper's marks take the resolved colors", @"theme\.OnStatus");
+            Require(stepper, "theme.Fill(TopiaForgeFillRole.StepDone)", "theme.Fill(TopiaForgeFillRole.StepFailed)", "SetIcon(view, doneSprite!, done.Content);",
+                "SetIcon(view, failedSprite!, failed.Content);");
+            Forbid(stepper, "A stepper's marks take the resolved colors", @"theme\.OnDanger");
 
             var theme = Read("Theme", "TopiaForgeResolvedTheme.cs");
-            Require(theme, "TopiaForgeOnColors.ResolveAll(scheme, colors, HighContrast)", "TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast)");
+            Require(theme, "TopiaForgeOnColors.ResolveAll(scheme, colors, HighContrast)", "TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast)",
+                "StateTint(resolved.Hovered)", "StateTint(resolved.Selected)", "StateTint(resolved.Pressed)", "block.pressedColor = Pressed;");
 
             foreach (var file in Directory.EnumerateFiles(Path.Combine(kit, "Widgets"), "*.cs"))
             {
-                Forbid(File.ReadAllText(file), Path.GetFileName(file) + " draws a resolved color, not white, on a fill", @"theme\.OnPrimary", @"theme\.OnStatus");
+                Forbid(File.ReadAllText(file), Path.GetFileName(file) + " draws a resolved color, not white, on a fill", @"theme\.OnPrimary", @"theme\.OnDanger");
             }
         }
 
-        private static (TopiaForgeFillRole Role, bool Label, float[] Tints)[] Roles(TopiaForgeScheme scheme, bool highContrast)
+        // Each role, whether it is a label, and the usual hovered, selected and pressed tints of the control it sits on.
+        private static (TopiaForgeFillRole Role, bool Label, float[] Usual)[] Roles()
         {
-            var button = new[] { 1f, TopiaForgeOnColors.ButtonHoveredTint, TopiaForgeOnColors.ButtonSelectedTint, TopiaForgeOnColors.ButtonPressedTint };
-            var filled = new[] { 1f, TopiaForgeOnColors.ButtonHoveredTint, TopiaForgeOnColors.ButtonSelectedTint, TopiaForgeOnColors.FilledButtonPressedTint(scheme, highContrast) };
-            var control = new[] { 1f, DefaultHighlightedTint, DefaultPressedTint };
-            var controlOn = new[] { 1f, DefaultHighlightedTint, TopiaForgeOnColors.ControlOnPressedTint(scheme, highContrast) };
-            var still = new[] { 1f };
+            var button = new[] { TopiaForgeOnColors.ButtonHoveredTint, TopiaForgeOnColors.ButtonSelectedTint, TopiaForgeOnColors.ButtonPressedTint };
+            var control = new[] { DefaultHighlightedTint, DefaultHighlightedTint, DefaultPressedTint };
+            var still = new float[0];
             return new[]
             {
-                (TopiaForgeFillRole.FilledButton, true, filled), (TopiaForgeFillRole.DangerButton, true, button),
-                (TopiaForgeFillRole.ControlOn, false, controlOn), (TopiaForgeFillRole.SwitchOff, false, control),
+                (TopiaForgeFillRole.FilledButton, true, button), (TopiaForgeFillRole.DangerButton, true, button),
+                (TopiaForgeFillRole.ControlOn, false, control), (TopiaForgeFillRole.SwitchOff, false, control),
                 (TopiaForgeFillRole.StepDone, false, still), (TopiaForgeFillRole.StepFailed, false, still),
             };
         }
@@ -308,18 +387,17 @@ namespace TopiaForge.ModManager.Tests
 
         private static float Lum(TopiaForgeRgba color) => TopiaForgeContrast.Luminance(color);
 
-        // The lowest ratio over a fill's states, measured here rather than through the code under test.
-        private static float Lowest(TopiaForgeRgba content, TopiaForgeRgba fill, float darkest, float lightest)
+        // The ratio at one tint, as computed and as drawn, measured here rather than through the code under test. uGUI stores
+        // vertex colors in 8 bits a channel, so a tint above one saturates at white.
+        private static float Lowest(TopiaForgeRgba content, TopiaForgeRgba fill, float tint)
         {
-            var lowest = float.MaxValue;
-            foreach (var tint in new[] { darkest, lightest, 1f, (darkest + lightest) / 2f })
-            {
-                lowest = Math.Min(lowest, TopiaForgeContrast.Ratio(content, fill.Scale(tint)));
-                lowest = Math.Min(lowest, DrawnRatio(content, TopiaForgeContrast.Quantize(fill).Scale(tint)));
-            }
-
-            return lowest;
+            var computed = TopiaForgeContrast.Ratio(content, Saturate(fill.Scale(tint)));
+            var drawn = DrawnRatio(content, TopiaForgeContrast.Quantize(fill).Scale(tint));
+            return Math.Min(computed, drawn);
         }
+
+        private static TopiaForgeRgba Saturate(TopiaForgeRgba color) =>
+            new TopiaForgeRgba(Math.Min(1f, color.R), Math.Min(1f, color.G), Math.Min(1f, color.B), color.A);
 
         private static float DrawnRatio(TopiaForgeRgba content, TopiaForgeRgba fill) =>
             TopiaForgeContrast.Ratio(TopiaForgeContrast.Quantize(content), TopiaForgeContrast.Quantize(fill));
