@@ -2,7 +2,9 @@
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import unittest
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("check_main_governance_scope.py")
@@ -15,10 +17,11 @@ SPEC.loader.exec_module(SCOPE)
 class MainGovernanceScopeTests(unittest.TestCase):
     def errors(self, *, base="main", head="maintenance/main-governance",
                base_repo="Furroxide/TopiaForge", head_repo="Furroxide/TopiaForge",
-               paths=None):
+               paths=None, sidecar_blobs=None):
         return SCOPE.failures(
             base, head, base_repo, head_repo,
             [".github/workflows/release-dry-run.yml"] if paths is None else paths,
+            sidecar_blobs,
         )
 
     def test_exact_same_repository_branch_and_allowed_file_pass(self):
@@ -33,6 +36,34 @@ class MainGovernanceScopeTests(unittest.TestCase):
     def test_other_branch_and_empty_diff_are_rejected(self):
         self.assertTrue(self.errors(head="maintenance/other"))
         self.assertTrue(self.errors(paths=[]))
+
+    def test_exact_sidecar_backport_preserves_the_rest_of_the_scope(self):
+        blobs = SCOPE.SIDECAR_BACKPORT
+        paths = list(blobs)
+        self.assertEqual([], self.errors(paths=paths, sidecar_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths[:1], sidecar_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths + ["tools/ugc-automerge-sidecar/index.mjs"],
+                                    sidecar_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths, sidecar_blobs=blobs, head_repo="fork/TopiaForge"))
+
+    def test_sidecar_backport_rejects_other_base_or_head_content(self):
+        path = "tools/ugc-automerge-sidecar/package-lock.json"
+        blobs = SCOPE.SIDECAR_BACKPORT
+        old, new = blobs[path]
+        for pair in (("other", new), (old, "other"), (new, "other"), (old, "")):
+            with self.subTest(pair=pair):
+                modified = {**blobs, path: pair}
+                self.assertTrue(self.errors(paths=list(blobs), sidecar_blobs=modified))
+
+    def test_backport_requires_a_regular_non_executable_file(self):
+        path = "tools/ugc-automerge-sidecar/package.json"
+        old, _ = SCOPE.SIDECAR_BACKPORT[path]
+        for metadata, expected in (("100644 blob", old), ("100755 blob", ""),
+                                   ("120000 blob", ""), ("040000 tree", "")):
+            with self.subTest(metadata=metadata):
+                entry = subprocess.CompletedProcess([], 0, f"{metadata} {old}\t{path}\n", "")
+                with patch.object(SCOPE.subprocess, "run", return_value=entry):
+                    self.assertEqual(expected, SCOPE.blob_at("HEAD", path))
 
     def test_workflow_runs_this_check(self):
         policy = (SCRIPT.parents[1] / "workflows" / "pr-policy.yml").read_text(

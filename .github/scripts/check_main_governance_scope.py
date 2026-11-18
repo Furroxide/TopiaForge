@@ -26,6 +26,19 @@ ALLOWED_PATHS = frozenset(
     }
 )
 
+# One-time sidecar security backport. Both tracked files must move from the
+# exact legacy blobs to the reviewed blobs in the same pull request.
+SIDECAR_BACKPORT = {
+    "tools/ugc-automerge-sidecar/package.json": (
+        "963db162dcb0fc6db3039d327c2ba14666098fe5",
+        "890532dc2d21cef02ae9c66af90299be7a08f436",
+    ),
+    "tools/ugc-automerge-sidecar/package-lock.json": (
+        "2fd5daa4edfe104eeeaf22c692ed8beb09908c51",
+        "45daa6ad87887d89be29a801b4a3115d2bf6ead4",
+    ),
+}
+
 
 def failures(
     base_ref: str,
@@ -33,6 +46,7 @@ def failures(
     base_repository: str,
     head_repository: str,
     changed_paths: list[str],
+    sidecar_blobs: dict[str, tuple[str, str]] | None = None,
 ) -> list[str]:
     errors: list[str] = []
     if base_ref != "main" or head_ref != BRANCH:
@@ -42,9 +56,26 @@ def failures(
     if not changed_paths:
         errors.append("Governance maintenance requires at least one changed file.")
     for path in changed_paths:
-        if path not in ALLOWED_PATHS:
+        if path not in ALLOWED_PATHS and path not in SIDECAR_BACKPORT:
             errors.append(f"Out-of-scope governance file: {path}")
+    sidecar_paths = SIDECAR_BACKPORT.keys() & set(changed_paths)
+    if sidecar_paths and (sidecar_paths != SIDECAR_BACKPORT.keys() or sidecar_blobs != SIDECAR_BACKPORT):
+        errors.append("The sidecar backport requires both exact reviewed dependency changes.")
     return errors
+
+
+def blob_at(ref: str, path: str) -> str:
+    result = subprocess.run(
+        ["git", "ls-tree", ref, "--", path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    metadata, _, entry_path = result.stdout.rstrip("\n").partition("\t")
+    prefix = "100644 blob "
+    if result.returncode == 0 and entry_path == path and metadata.startswith(prefix):
+        return metadata.removeprefix(prefix)
+    return ""
 
 
 def main() -> int:
@@ -65,12 +96,17 @@ def main() -> int:
         for path in result.stdout.split(b"\0")
         if path
     ]
+    sidecar_blobs = {
+        path: (blob_at(args.base_sha, path), blob_at("HEAD", path))
+        for path in SIDECAR_BACKPORT.keys() & set(changed)
+    }
     errors = failures(
         args.base_ref,
         args.head_ref,
         args.base_repository,
         args.head_repository,
         changed,
+        sidecar_blobs,
     )
     for error in errors:
         print(f"::error::{error}", file=sys.stderr)
