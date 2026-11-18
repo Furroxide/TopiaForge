@@ -112,7 +112,7 @@ namespace TopiaForge.ModManager
                     slider.Maximum,
                     slider.Value,
                     callbacks.Wrap(slider.Changed, "slider '" + slider.Id + "'"));
-                native.SetEnabled(slider.Enabled);
+                native.UseDeclarativePaint(slider.Enabled);
                 TopiaForgeControlFocus.Install(native);
                 return;
             }
@@ -163,8 +163,9 @@ namespace TopiaForge.ModManager
 
             if (node is UiVirtualList list)
             {
-                var native = parent.ListView<UiListItem>()
-                    .FixedHeight(list.VisibleRows * (TopiaForgeTokens.ListRowHeight + 4f));
+                var native = parent.ListView<UiListItem>(TopiaForgeTokens.ControlHeight)
+                    .FixedHeight(TopiaForgeListView<UiListItem>.DeclarativeHeight(list.VisibleRows));
+                native.UseDeclarativeRows();
                 native.Bind((row, item, _) =>
                 {
                     row.Title.SetText(item.Title);

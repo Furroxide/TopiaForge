@@ -33,6 +33,7 @@ namespace TopiaForge.ModManager.Tests
             AssetsCommitTogetherAndEnrichTheDescriptor();
             PaintAndTypeRemainReadable();
             AuthoredBackplatesAndControlTargetsAreChecked();
+            NativeControlsUseTheirResolvedRoles();
             TargetedBudgetsIncludeFramingWithoutEarlyClockBinding();
             UnchangedReapplicationAllocatesNothing();
             VerifyGoldenManifest();

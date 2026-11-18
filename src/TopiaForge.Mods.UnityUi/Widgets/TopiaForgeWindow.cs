@@ -293,6 +293,7 @@ namespace TopiaForge.Mods.UnityUi
             shadow.color = theme.ShadowStrong;
             titleBarFill.color = theme.SurfaceAlt;
             titleLabel.color = theme.ForegroundOn(UiPaintRole.Raised);
+            TopiaForgeTypography.ApplyControlText(titleLabel, theme, TopiaForgeTextStyle.Heading, Host.EffectiveUiScale);
         }
 
         /// <summary>Runs the clamp that Show deferred; true once no clamp is left to run.</summary>

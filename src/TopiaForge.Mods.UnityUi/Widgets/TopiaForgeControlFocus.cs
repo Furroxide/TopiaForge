@@ -1,3 +1,4 @@
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -9,10 +10,12 @@ namespace TopiaForge.Mods.UnityUi
     {
         private const float Gap = 2f;
         private readonly TopiaForgeRoundedImage image;
+        private readonly UiPaintRole backdrop;
 
-        private TopiaForgeControlFocus(TopiaForgeWidget widget, Selectable control)
+        private TopiaForgeControlFocus(TopiaForgeWidget widget, Selectable control, UiPaintRole backdrop)
             : base(widget.Host, widget.Scheme, CreateRing(control.transform))
         {
+            this.backdrop = backdrop;
             image = Go.AddComponent<TopiaForgeRoundedImage>();
             image.raycastTarget = false;
             image.type = Image.Type.Sliced;
@@ -25,10 +28,13 @@ namespace TopiaForge.Mods.UnityUi
         internal static void Install(TopiaForgeWidget widget)
         {
             foreach (var control in widget.Go.GetComponentsInChildren<Selectable>(includeInactive: true))
-            {
-                if (control.GetComponent<TopiaForgeControlFocusEvents>() == null)
-                    _ = new TopiaForgeControlFocus(widget, control);
-            }
+                Install(widget, control);
+        }
+
+        internal static void Install(TopiaForgeWidget widget, Selectable control, UiPaintRole backdrop = UiPaintRole.Surface)
+        {
+            if (control.GetComponent<TopiaForgeControlFocusEvents>() == null)
+                _ = new TopiaForgeControlFocus(widget, control, backdrop);
         }
 
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
@@ -38,7 +44,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeAnchors.Stretch(Rect, -outset, -outset, -outset, -outset);
             image.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Control, stroke);
             image.SetShape(theme.Descriptor?.Shape.Control + outset, stroke);
-            image.color = theme.FocusRing;
+            image.color = theme.FocusOn(backdrop);
         }
 
         private static GameObject CreateRing(Transform parent)

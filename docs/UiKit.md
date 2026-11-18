@@ -390,7 +390,7 @@ menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay H
 ### Native Gallery capture
 
 The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` on the native verification process.
-Opening a first-party Gallery fixture records its settled geometry and paint. Press F10 to record
+Opening a first-party Gallery fixture records its settled geometry and paint. Press F11 to record
 another observation of the current fixture. Hold the intended state until two frames have settled.
 The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts
 the authored fixture and omits participant identifiers and player-entered text.

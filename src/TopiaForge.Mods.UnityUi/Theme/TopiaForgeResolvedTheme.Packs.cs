@@ -11,6 +11,12 @@ namespace TopiaForge.Mods.UnityUi
 
         internal Color DisabledInk => ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
 
+        internal Color BoundaryOn(UiPaintRole role) => packScheme is { } scheme
+            ? ToColor(Rgba(scheme.ResolveBoundary(role))) : OutlineStrong;
+
+        internal Color FocusOn(UiPaintRole role) => packScheme is { } scheme
+            ? ToColor(Rgba(scheme.ResolveFocus(role))) : FocusRing;
+
         internal Color ForegroundOn(UiPaintRole role, UiTone tone = UiTone.Neutral) => packScheme is { } scheme
             ? ToColor(Rgba(scheme.ResolveForeground(tone, role)))
             : TextToneColor(tone switch
@@ -27,6 +33,17 @@ namespace TopiaForge.Mods.UnityUi
         internal TopiaForgeFillPaint? FieldPaint(UiPaintRole role, UiTone tone, bool enabled) => packScheme is { } scheme
             ? StatefulLabelPaint(scheme, role, enabled ? tone : UiTone.Muted, enabled)
             : null;
+
+        internal (TopiaForgeFillPaint Track, Color Fill)? SliderPaint(bool hud, bool enabled)
+        {
+            if (packScheme is not { } scheme) return null;
+            var minimum = TopiaForgeOnColors.MarkRatio(HighContrast);
+            var track = UiControlPaint.SliderTrack(scheme, hud, enabled, minimum);
+            var paint = enabled ? Mark(track, minimum) : Paint(track, new UiThemeStateTints(1f, 1f, 1f));
+            // The painted value stops at the thumb's center. Hide the active segment when disabled
+            // so the whole rail uses Sunken while the thumb still shows where the value sits.
+            return (paint, enabled ? ToColor(Rgba(UiControlPaint.SliderFill(scheme, track.Fill, minimum))) : Color.clear);
+        }
 
         private TopiaForgeFillPaint StatefulLabelPaint(UiThemeScheme scheme, UiPaintRole role, UiTone tone, bool enabled)
         {

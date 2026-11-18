@@ -304,6 +304,14 @@ namespace TopiaForge.Mods.UnityUi
             block.pressedColor = Pressed;
             return block;
         }
+
+        internal ColorBlock ResolvedStates(ColorBlock block)
+        {
+            block.normalColor = Color.white;
+            block.disabledColor = Color.white;
+            block.colorMultiplier = 1f;
+            return Tinted(block);
+        }
     }
 
     /// <summary>Semantic color tones widgets accept instead of raw colors.</summary>

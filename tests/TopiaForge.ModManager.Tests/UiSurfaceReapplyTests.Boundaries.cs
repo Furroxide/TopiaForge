@@ -71,7 +71,7 @@ namespace TopiaForge.ModManager.Tests
                 public enum TopiaForgeTone { Neutral, Success, Warning, Danger, Muted, Primary, Accent }
                 public enum TopiaForgeButtonStyle { Filled, Outline, Ghost, Danger }
                 public enum TopiaForgeTextStyle { Body, Heading, Caption, Banner, Display, Title, Label, Numeral, Mono }
-                public static class TopiaForgeTokens { public const float ListRowHeight = 40f; }
+                public static class TopiaForgeTokens { public const float ControlHeight = 40f; }
                 public sealed class TopiaForgeResolvedTheme { }
 
                 public sealed class UiHost
@@ -151,7 +151,7 @@ namespace TopiaForge.ModManager.Tests
                     public BoundaryControl Slider(string label, float min, float max, float value, Action<float> action) => new(Host);
                     public BoundaryControl Input(string hint, string value, Action<string> action) => new(Host);
                     public BoundaryControl Dropdown(string[] labels, int selected, Action<int> action) => new(Host);
-                    public BoundaryList<T> ListView<T>() => new();
+                    public TopiaForgeListView<T> ListView<T>(float rowHeight) => new();
                     public BoundaryProgress ProgressBar() => new();
                 }
 
@@ -198,6 +198,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public BoundaryControl(UiHost host) : base(host) { }
                     public void SetEnabled(bool enabled) { }
+                    public void UseDeclarativePaint(bool enabled) { }
                     public void SetCharacterLimit(int limit) { }
                 }
                 internal static class TopiaForgeControlFocus
@@ -209,9 +210,11 @@ namespace TopiaForge.ModManager.Tests
                     public BoundaryProgress Tone(TopiaForgeTone tone) => this;
                     public void SetFraction(float fraction) { }
                 }
-                public sealed class BoundaryList<T>
+                public sealed class TopiaForgeListView<T>
                 {
-                    public BoundaryList<T> FixedHeight(float height) => this;
+                    public static float DeclarativeHeight(int rows) => 44f * rows;
+                    public TopiaForgeListView<T> FixedHeight(float height) => this;
+                    public void UseDeclarativeRows() { }
                     public void Bind(Action<BoundaryRow, T, int> bind) { }
                     public void OnSelected(Action<int> action) { }
                     public void SetItems(IReadOnlyList<T> items) { }

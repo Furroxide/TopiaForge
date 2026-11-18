@@ -144,6 +144,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
             Repaint();
         }
 

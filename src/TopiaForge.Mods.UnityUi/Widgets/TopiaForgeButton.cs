@@ -60,6 +60,11 @@ namespace TopiaForge.Mods.UnityUi
             style = buttonStyle;
             lastText = text ?? string.Empty;
 
+            // The painted body moves on press. The raycast surface stays inside its layout slot.
+            var hitArea = Go.AddComponent<Image>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
+
             // Shadow sits outside the body so the body can press down onto it.
             if (HasShadow)
             {
@@ -75,7 +80,6 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeAnchors.Stretch(body);
 
             fill = CreateStretched(body, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
-            fill.raycastTarget = true;
 
             if (style == TopiaForgeButtonStyle.Outline)
             {
@@ -207,6 +211,11 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            if (label != null)
+            {
+                TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Label, Host.EffectiveUiScale);
+                FitLabelWidth();
+            }
             // Every opaque button uses the state tints calculated for the actual fill and label pair.
             var radius = theme.Descriptor?.Shape.Control;
             fill.SetShape(radius);

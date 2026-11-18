@@ -192,6 +192,8 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            TopiaForgeTypography.ApplyControlText(caption, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
+            TopiaForgeTypography.ApplyControlText(itemLabel, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
             var enabled = dropdown.interactable;
             var field = theme.FieldPaint(UiPaintRole.Sunken, UiTone.Neutral, enabled);
             var item = theme.FieldPaint(UiPaintRole.Selected, UiTone.Neutral, enabled: true);

@@ -44,18 +44,19 @@ namespace TopiaForge.Mods.UnityUi
                 TopiaForgeRadius.Control,
                 TopiaForgeTokens.BorderStandard));
 
-            title = CreateLabel(go.transform, "Title", TopiaForgeTextStyle.Heading, TextAlignmentOptions.TopLeft);
+            title = CreateLabel(go.transform, "Title", TopiaForgeTextStyle.Label, TextAlignmentOptions.TopLeft);
             SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(-20f, 24f));
             title.margin = new Vector4(10f, 0f, 10f, 0f);
 
             subtitle = CreateLabel(go.transform, "Subtitle", TopiaForgeTextStyle.Caption, TextAlignmentOptions.TopLeft);
             SetRect(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0.5f, 1f), new Vector2(0f, -32f), new Vector2(-20f, 20f));
+                new Vector2(0.5f, 1f), new Vector2(0f, -32f), new Vector2(-20f, 26f));
             subtitle.margin = new Vector4(10f, 0f, 10f, 0f);
 
             drag = go.AddComponent<TopiaForgeGraphNodeDrag>();
             drag.Bind(owner, string.Empty);
+            TopiaForgeControlFocus.Install(owner, button, UiPaintRole.Sunken);
         }
 
         public RectTransform Rect { get; }
@@ -107,13 +108,28 @@ namespace TopiaForge.Mods.UnityUi
             if (!Active || node == null) return;
             var interactive = canvasEnabled && node.Enabled;
             button.interactable = interactive;
-            fill.color = interactive ? theme.Surface : theme.Tint;
-            ring.color = selected ? theme.FocusRing : owner.ToneColor(theme, node.Tone);
+            var role = UiControlPaint.GraphNodeBackground(interactive, selected);
+            TopiaForgeTypography.ApplyControlText(title, theme, TopiaForgeTextStyle.Label, owner.Host.EffectiveUiScale);
+            TopiaForgeTypography.ApplyControlText(subtitle, theme, TopiaForgeTextStyle.Caption, owner.Host.EffectiveUiScale);
+            if (theme.FieldPaint(role, node.Tone, interactive) is { } paint)
+            {
+                button.colors = paint.ResolvedStates(button.colors);
+                fill.color = paint.Fill;
+                title.color = paint.Content;
+                subtitle.color = paint.Content;
+                ring.color = selected ? theme.FocusRing : theme.BoundaryOn(UiPaintRole.Sunken);
+            }
+            else
+            {
+                fill.color = interactive ? theme.Surface : theme.Tint;
+                title.color = interactive ? theme.Text : theme.TextFaint;
+                subtitle.color = interactive ? theme.TextMuted : theme.TextFaint;
+                ring.color = selected ? theme.FocusRing : owner.ToneColor(theme, node.Tone);
+            }
+
             var border = theme.HighContrast ? 3 : TopiaForgeTokens.BorderStandard;
             if (selected) border++;
             ring.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Control, border);
-            title.color = interactive ? theme.Text : theme.TextFaint;
-            subtitle.color = interactive ? theme.TextMuted : theme.TextFaint;
             foreach (var port in portViews)
             {
                 port.ApplyTheme(theme, interactive, pendingNode && string.Equals(port.PortId, pendingPortId, StringComparison.Ordinal));

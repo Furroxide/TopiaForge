@@ -339,6 +339,9 @@ namespace TopiaForge.ModManager.Tests
             applyTheme = applyTheme.Substring(0, applyTheme.IndexOf("private static Color Tint(", StringComparison.Ordinal));
             Assert(Regex.Matches(applyTheme, @"button\.colors\s*=").Count == 1, "a button writes its color block once per theme application, so one fade runs");
             Forbid(button, "Buttons draw the resolved label and state tints", @"theme\.OnPrimary", @"theme\.OnDanger", @"\b1\.06f", @"\b0\.94f", @"\b1\.04f");
+            Require(button, "var hitArea = Go.AddComponent<Image>();", "hitArea.raycastTarget = true;",
+                "ApplyControlText(label, theme, TopiaForgeTextStyle.Label, Host.EffectiveUiScale)");
+            Forbid(button, "The moving button graphics stay outside the input route", @"fill\.raycastTarget\s*=\s*true");
 
             var toggle = Read("Widgets", "TopiaForgeToggle.cs");
             Require(toggle, "theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff)", "toggle.colors = paint.Tinted(colors);",
@@ -347,8 +350,17 @@ namespace TopiaForge.ModManager.Tests
             Forbid(toggle, "A switch's thumb and a checkbox's check take the resolved colors and state tints", @"theme\.OnPrimary", @"theme\.TextFaint", @"PressedTint\(theme");
 
             var slider = Read("Widgets", "TopiaForgeSlider.cs");
-            Require(slider, "handle.color = theme.SliderHandle;");
-            Forbid(slider, "A slider's handle takes the resolved color, on uGUI's default color block", @"theme\.OnPrimary", @"\.colors\b");
+            Require(slider, "handle.color = theme.SliderHandle;", "slider.targetGraphic = track;",
+                "handle.color = resolved.Track.Content;", "slider.colors = resolved.Track.ResolvedStates(slider.colors);");
+            Forbid(slider, "The slider draws the resolved palettes and tints the rail", @"theme\.OnPrimary");
+
+            var row = Read("Widgets", "TopiaForgeRows.cs");
+            Require(row, "UiControlPaint.ListRowBackground(button.interactable, selected)",
+                "button.colors = paint.ResolvedStates(button.colors);",
+                "Title.SetResolvedInk(paint.Content);", "Subtitle.SetResolvedInk(paint.Content);");
+            var graph = Read("Widgets", "TopiaForgeGraphCanvasRuntime.cs");
+            Require(graph, "UiControlPaint.GraphNodeBackground(interactive, selected)",
+                "theme.FieldPaint(role, node.Tone, interactive)", "subtitle.color = paint.Content;");
 
             var stepper = Read("Widgets", "TopiaForgePhaseStepper.Layout.cs");
             Require(stepper, "theme.Fill(TopiaForgeFillRole.StepDone)", "theme.Fill(TopiaForgeFillRole.StepFailed)", "SetIcon(view, doneSprite!, done.Content);",
@@ -357,7 +369,7 @@ namespace TopiaForge.ModManager.Tests
 
             var theme = Read("Theme", "TopiaForgeResolvedTheme.cs");
             Require(theme, "TopiaForgeOnColors.ResolveAll(scheme, colors, highContrast)", "TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast)",
-                "PackFills(authoredScheme, HighContrast)", "block.pressedColor = Pressed;");
+                "PackFills(authoredScheme, HighContrast)", "block.pressedColor = Pressed;", "block.disabledColor = Color.white;");
             var pack = Read("Theme", "TopiaForgeResolvedTheme.Packs.cs");
             Require(pack, "Button(primary, labelRatio)", "Button(danger, labelRatio)", "UiThemeColors.ResolveTints(pair, ratio",
                 "StateTint(tints.Hovered)", "StateTint(tints.Selected)", "StateTint(tints.Pressed)");

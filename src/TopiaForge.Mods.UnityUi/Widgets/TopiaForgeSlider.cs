@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -16,9 +17,11 @@ namespace TopiaForge.Mods.UnityUi
         private readonly UImage track;
         private readonly UImage fill;
         private readonly UImage handle;
+        private readonly RectTransform fillArea;
         private readonly TMPro.TextMeshProUGUI label;
         private readonly TMPro.TextMeshProUGUI valueLabel;
         private float lastShownValue = float.NaN;
+        private bool declarative;
 
         internal TopiaForgeSlider(TopiaForgeContainer parent, string text, float min, float max, float initial, Action<float> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Slider"))
@@ -55,7 +58,7 @@ namespace TopiaForge.Mods.UnityUi
 
             var fillAreaGo = new GameObject("FillArea", typeof(RectTransform));
             fillAreaGo.transform.SetParent(sliderGo.transform, false);
-            var fillArea = (RectTransform)fillAreaGo.transform;
+            fillArea = (RectTransform)fillAreaGo.transform;
             fillArea.anchorMin = new Vector2(0f, 0.5f);
             fillArea.anchorMax = new Vector2(1f, 0.5f);
             fillArea.offsetMin = new Vector2(6f, -4f);
@@ -133,11 +136,35 @@ namespace TopiaForge.Mods.UnityUi
         public void SetEnabled(bool enabled)
         {
             slider.interactable = enabled;
+            if (declarative) ApplyTheme(Theme);
+        }
+
+        internal void UseDeclarativePaint(bool enabled)
+        {
+            declarative = true;
+            slider.targetGraphic = track;
+            handle.raycastTarget = false;
+            fillArea.offsetMin = new Vector2(0f, -4f);
+            fillArea.offsetMax = new Vector2(-16f, 4f);
+            SetEnabled(enabled);
         }
 
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
+            TopiaForgeTypography.ApplyControlText(valueLabel, theme, TopiaForgeTextStyle.Caption, Host.EffectiveUiScale);
+            if (declarative && theme.SliderPaint(Scheme == TopiaForgeScheme.Hud, slider.interactable) is { } resolved)
+            {
+                slider.colors = resolved.Track.ResolvedStates(slider.colors);
+                track.color = resolved.Track.Fill;
+                fill.color = resolved.Fill;
+                handle.color = resolved.Track.Content;
+                label.color = theme.ForegroundOn(UiPaintRole.Surface, slider.interactable ? UiTone.Neutral : UiTone.Muted);
+                valueLabel.color = theme.ForegroundOn(UiPaintRole.Surface, UiTone.Muted);
+                return;
+            }
+
             track.color = theme.SurfaceSunken;
             fill.color = theme.Accent;
             handle.color = theme.SliderHandle;

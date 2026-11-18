@@ -104,6 +104,7 @@ namespace TopiaForge.ModManager
         {
             if (label == null || label.font == null) return false;
             var text = UiGalleryCaptureFixture.SafeDisplayText(label.text, authored, Descriptor.GetText(style).IsUppercase);
+            if (text != null && (label.fontStyle & FontStyles.UpperCase) != 0) text = text.ToUpperInvariant();
             if (text == null)
             {
                 Add(path, id, kind, label.rectTransform,

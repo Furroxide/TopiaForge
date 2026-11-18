@@ -134,15 +134,23 @@ namespace TopiaForge.Mods.Testing
             var track = new UiCaptureRect(bounds.X + labelSize, bounds.Y + bounds.Height / 2f - (4f * layoutScale),
                 Math.Max(0, bounds.Width - labelSize - valueSize), 8f * layoutScale);
             var fraction = (value - slider.Minimum) / (slider.Maximum - slider.Minimum);
-            PaintTrack(path, track, clip, fraction, slider.Enabled ? UiPaintRole.Accent : UiPaintRole.Selected);
-            var size = Math.Min(track.Width, 18f * layoutScale);
+            var pair = UiControlPaint.SliderTrack(scheme, useHudScheme, slider.Enabled, MarkMinimum);
+            var background = StatefulFill(pair, state, MarkMinimum, switchControl: true);
+            Add(path + "/track", null, "Track", track, clip, EmptyContent,
+                new UiCaptureNodePaint(null, background, track.Height / 2f, 0f, 0f, 0f));
+            var size = Math.Min(track.Width, 16f * layoutScale);
             var thumb = new UiCaptureRect(track.X + fraction * (track.Width - size), track.Y + (track.Height - size) / 2f, size, size);
-            var background = scheme.GetPair(UiPaintRole.Sunken).Fill;
-            var color = slider.Enabled ? (useHudScheme ? new UiThemeColor(255, 255, 255) : scheme.GetPair(UiPaintRole.Accent).Fill) : scheme.Muted;
-            color = UiThemeColors.RepairForeground(color, background, MarkMinimum);
+            if (slider.Enabled)
+            {
+                var fill = new UiCaptureRect(track.X, track.Y, thumb.X - track.X, track.Height);
+                var fillColor = UiControlPaint.SliderFill(scheme, pair.Fill, MarkMinimum);
+                Add(path + "/fill", null, "TrackFill", fill, clip, EmptyContent,
+                    new UiCaptureNodePaint(null, fillColor, track.Height / 2f, 0f, 0f, 0f));
+            }
+
             Add(path + "/thumb", null, "SliderThumb", thumb, clip,
                 new UiCaptureNodeContent(string.Empty, slider.Label, 0, 0, flags | UiCaptureNodeFlags.SemanticMark),
-                new UiCaptureNodePaint(color, background, size / 2f, 0f, 0f, 0f));
+                new UiCaptureNodePaint(pair.On, background, size / 2f, 0f, 0f, 0f));
             PaintFocus(path, state, bounds, clip, UiPaintRole.Surface);
         }
 

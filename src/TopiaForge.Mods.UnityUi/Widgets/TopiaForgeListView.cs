@@ -27,6 +27,8 @@ namespace TopiaForge.Mods.UnityUi
         private int selectedIndex = -1;
         private int lastFirst = -1;
         private int lastCount = -1;
+        private bool declarativeRows;
+        private bool enabledState = true;
 
         internal TopiaForgeListView(TopiaForgeContainer parent, float itemHeight)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("ListView"))
@@ -129,10 +131,17 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Sets whether list rows accept pointer, keyboard, or controller input.</summary>
         public void SetEnabled(bool enabled)
         {
+            enabledState = enabled;
             var group = EnsureCanvasGroup();
             group.interactable = enabled;
             group.blocksRaycasts = enabled;
+            if (declarativeRows)
+                foreach (var row in pool) row.SetDeclarativeEnabled(enabled);
         }
+
+        internal void UseDeclarativeRows() => declarativeRows = true;
+
+        internal static float DeclarativeHeight(int rows) => rows * (TopiaForgeTokens.ControlHeight + Spacing);
 
         private void SetSelection(int index, bool notify)
         {
@@ -230,6 +239,7 @@ namespace TopiaForge.Mods.UnityUi
                 row.Rect.anchorMax = new Vector2(1f, 1f);
                 row.Rect.pivot = new Vector2(0.5f, 1f);
                 row.Rect.sizeDelta = new Vector2(0f, rowHeight);
+                if (declarativeRows) row.UseDeclarativePaint(enabledState);
                 row.OnClick(() =>
                 {
                     var bound = poolBinding[poolIndex];

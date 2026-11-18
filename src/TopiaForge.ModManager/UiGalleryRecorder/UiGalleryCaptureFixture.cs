@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using TopiaForge.Mods;
 using TopiaForge.UiGallery.Pages;
 
@@ -8,6 +9,7 @@ namespace TopiaForge.ModManager
     internal static class UiGalleryCaptureFixture
     {
         internal const string Owner = "io.github.furroxide.topiaforge.uigallery";
+        private static readonly FoundationPage[] Pages = (FoundationPage[])Enum.GetValues(typeof(FoundationPage));
 
         internal static bool MatchesOwner(string owner, bool remote, string? authenticatedOwner) =>
             remote ? authenticatedOwner == Owner : owner == Owner;
@@ -23,21 +25,25 @@ namespace TopiaForge.ModManager
         internal static UiSurfaceRequest? Match(string owner, bool remote, string? authenticatedOwner, UiSurfaceRequest request)
         {
             if (!MatchesOwner(owner, remote, authenticatedOwner)) return null;
-            var page = request.Id switch
-            {
-                "gallery-theme-packs" => FoundationPage.ThemePacks,
-                "gallery-typography" => FoundationPage.Typography,
-                "gallery-interaction-states" => FoundationPage.InteractionStates,
-                _ => (FoundationPage?)null,
-            };
-            if (!page.HasValue || request.Theme != null && request.Theme.Id != FoundationPages.SurvivalTheme.Id) return null;
+            if (request.Kind != UiSurfaceKind.Window && request.Kind != UiSurfaceKind.Hud) return null;
+            if (request.Theme != null && request.Theme.Id != FoundationPages.SurvivalTheme.Id) return null;
+            if (remote && !IsTransportId(request.Id, "remote-") &&
+                (request.Kind != UiSurfaceKind.Hud || !IsTransportId(request.Id, "shared-"))) return null;
 
-            var expected = FoundationPages.CreateRequest(page.Value, request.Kind);
-            return request.Title == expected.Title && request.Body == expected.Body &&
-                request.Width == expected.Width && request.Height == expected.Height &&
-                request.HudAnchor == expected.HudAnchor && request.HudVisibility == expected.HudVisibility &&
-                SameNode(request.Content, expected.Content) ? expected : null;
+            foreach (var page in Pages)
+            {
+                if (page == FoundationPage.InteractionStates && request.Kind == UiSurfaceKind.Hud) continue;
+                var expected = FoundationPages.CreateRequest(page, request.Kind);
+                if ((!remote && expected.Id != request.Id) || request.Title != expected.Title || request.Body != expected.Body ||
+                    request.Width != expected.Width || request.Height != expected.Height || request.HudAnchor != expected.HudAnchor ||
+                    request.HudVisibility != expected.HudVisibility || !SameNode(request.Content, expected.Content)) continue;
+                return expected;
+            }
+            return null;
         }
+
+        private static bool IsTransportId(string id, string prefix) => id.StartsWith(prefix, StringComparison.Ordinal) &&
+            ulong.TryParse(id.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var token) && token != 0;
 
         private static bool SameNode(UiNode? actual, UiNode? expected)
         {

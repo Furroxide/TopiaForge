@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager
         {
             this.capture = capture;
             this.warn = warn;
-            hotkey = TopiaForgeHotkeys.Register(UiGalleryCaptureFixture.Owner, TopiaForgeKey.F10, Request);
+            hotkey = TopiaForgeHotkeys.Register(UiGalleryCaptureFixture.Owner, TopiaForgeKey.F11, Request);
             Request();
         }
 

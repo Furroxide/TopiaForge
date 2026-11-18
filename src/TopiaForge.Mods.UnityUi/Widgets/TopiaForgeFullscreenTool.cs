@@ -157,6 +157,7 @@ namespace TopiaForge.Mods.UnityUi
             ring.color = theme.OutlineStrong;
             titleBarFill.color = theme.SurfaceAlt;
             titleLabel.color = theme.ForegroundOn(UiPaintRole.Raised);
+            TopiaForgeTypography.ApplyControlText(titleLabel, theme, TopiaForgeTextStyle.Heading, Host.EffectiveUiScale);
         }
 
         internal GameObject CanvasRoot => canvasRoot;

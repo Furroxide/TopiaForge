@@ -251,6 +251,12 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        internal void SetResolvedInk(Color color)
+        {
+            hasCustomColor = true;
+            if (text.color != color) text.color = color;
+        }
+
         /// <summary>Grows the rect to the wrapped text height (absolute-placement labels).</summary>
         public void FitHeight()
         {
@@ -279,38 +285,10 @@ namespace TopiaForge.Mods.UnityUi
 
         private void ApplyTypeface(TopiaForgeResolvedTheme theme)
         {
-            var descriptor = theme.Descriptor;
-            if (descriptor == null) return;
-
-            var role = descriptor.GetText(style switch
+            var expected = TopiaForgeTypography.Apply(text, theme, style, Host.EffectiveUiScale);
+            if (uppercase != expected)
             {
-                TopiaForgeTextStyle.Banner => UiTextStyle.Banner,
-                TopiaForgeTextStyle.Display => UiTextStyle.Display,
-                TopiaForgeTextStyle.Title => UiTextStyle.Title,
-                TopiaForgeTextStyle.Heading => UiTextStyle.Heading,
-                TopiaForgeTextStyle.Label => UiTextStyle.Label,
-                TopiaForgeTextStyle.Caption => UiTextStyle.Caption,
-                TopiaForgeTextStyle.Numeral => UiTextStyle.Numeral,
-                TopiaForgeTextStyle.Mono => UiTextStyle.Mono,
-                _ => UiTextStyle.Body
-            });
-            var font = TopiaForgeFonts.ForThemeRole(role.Font, style);
-            if (font != null)
-            {
-                text.font = font;
-                var metrics = font.faceInfo;
-                var height = (metrics.ascentLine - metrics.descentLine) * metrics.scale;
-                var uiScale = Host.EffectiveUiScale;
-                var reference = role.ReferenceSize * (Math.Max(1f, uiScale) / uiScale);
-                text.fontSize = height > 0 && metrics.pointSize > 0
-                    ? reference * metrics.pointSize / height
-                    : reference;
-            }
-
-            text.characterSpacing = role.TrackingEm * 100f;
-            if (uppercase != role.IsUppercase)
-            {
-                uppercase = role.IsUppercase;
+                uppercase = expected;
                 WriteText(lastText);
             }
         }

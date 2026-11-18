@@ -267,6 +267,7 @@
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Core\*.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Runtime\TopiaForgeStateFileCodec.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Rendering\TopiaForgeIconRaster.cs" />
+    <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Text\TopiaForgeTypographyMetrics.cs" />
   </ItemGroup>
 
   <!-- Unity editor tooling keeps filesystem primitives in Unity-free helpers so adversarial reads and
