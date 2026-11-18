@@ -117,6 +117,10 @@ namespace TopiaForge.ModManager
             Replication = replication ?? throw new ArgumentNullException(nameof(replication));
             if (inner is IUiClockReceiver owner) owner.FollowClock(
                 () => replication.Services.Runtime.UiClockTime, () => replication.Services.Runtime.UiClockEpoch);
+#if TOPIAFORGE_NATIVE_CAPTURE
+            if (inner is OwnerUiService gallery && gallery.CanRecordLocalGallery)
+                gallery.FollowGalleryViewer(() => replication.Services.Runtime.Realm);
+#endif
             if (inner is IUiPresentationThemeSource { PresentationThemeScope: { } scope } &&
                 replication.Services.Players is { } players)
                 scope.PrepareSelection = players.PrepareThemeSelection;

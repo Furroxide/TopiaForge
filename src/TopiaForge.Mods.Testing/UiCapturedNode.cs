@@ -1,10 +1,20 @@
 using System;
+#if TOPIAFORGE_NATIVE_CAPTURE
+using TopiaForge.Mods;
 
+namespace TopiaForge.ModManager
+#else
 namespace TopiaForge.Mods.Testing
+#endif
 {
     /// <summary>Captures one semantic or paint group in a resolved UI tree.</summary>
+#if TOPIAFORGE_NATIVE_CAPTURE
+    internal
+#else
     [RequiresTopiaForge(UiKitRelease.K1)]
-    public sealed partial class UiCapturedNode
+    public
+#endif
+    sealed partial class UiCapturedNode
     {
         internal UiCapturedNode(string path, string? id, string kind, UiCaptureRect bounds,
             UiCaptureNodeContent content, UiCaptureNodePaint paint, string themeId, bool usedFallback,

@@ -11,6 +11,9 @@ namespace TopiaForge.Mods.UnityUi
         private float radius = -1f;
         private float border;
 
+        internal float? ResolvedCornerRadius => radius < 0f ? null : radius;
+        internal float ResolvedBorderWidth => border;
+
         public override Texture mainTexture => radius >= 0f ? Texture2D.whiteTexture : base.mainTexture;
 
         internal void SetShape(float? cornerRadius, float borderWidth = 0f)

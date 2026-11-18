@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
 
         internal static void Run()
         {
+            GalleryNativeCaptureOnlyAdmitsAuthoredFixtures();
             CatalogueIsAtomicAndUsesExactBytes();
             CascadeRefreshKeepsControlState();
             SiblingPreloadsAndDrainAreIndependent();

@@ -387,6 +387,18 @@ while a gameplay scene is active and no scene load is pending. `FakeModContext` 
 menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay HUD on screen.
 `IsShown` says whether the mod shows the surface, whatever TopiaForge does with it.
 
+### Native Gallery capture
+
+The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` on the native verification process.
+Opening a first-party Gallery fixture records its settled geometry and paint. Press F10 to record
+another observation of the current fixture. Hold the intended state until two frames have settled.
+The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts
+the authored fixture and omits participant identifiers and player-entered text.
+
+The JSON uses the same accessibility checks as `FakeUiService` and records actual TMP measurements
+for the native fixture. Collect the separate raster captures and host and remote guest evidence at
+the phase visual gate.
+
 ## Provider implementation contributors
 
 The internal renderer lives in `src/TopiaForge.Mods.UnityUi` and the F8 UI Gallery remains its manual

@@ -37,6 +37,7 @@ namespace TopiaForge.ModManager
             this.logger = logger;
             this.gameplay = gameplay ?? throw new ArgumentNullException(nameof(gameplay));
             this.hudPlacement = hudPlacement ?? throw new ArgumentNullException(nameof(hudPlacement));
+            galleryCaptureDirectory = dataPath;
             host = TopiaForgeUi.Create(new TopiaForgeUiOptions
             {
                 OwnerId = ownerModId,
@@ -188,6 +189,7 @@ namespace TopiaForge.ModManager
                 surface.AttachLifetimeLease(lifetime.Track(surface));
                 surfaces.Add(surface);
                 surface.Present();
+                ObserveGalleryFixture(surface, request, remoteTheme, theme);
                 return OperationResult<IUiSurface>.Success(surface);
             }
             catch (Exception exception)

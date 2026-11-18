@@ -1,11 +1,20 @@
 using System;
 using System.Collections.Generic;
 
+#if TOPIAFORGE_NATIVE_CAPTURE
+namespace TopiaForge.ModManager
+#else
 namespace TopiaForge.Mods.Testing
+#endif
 {
     /// <summary>Identifies a failed accessibility check on a captured UI tree.</summary>
+#if TOPIAFORGE_NATIVE_CAPTURE
+    internal
+#else
     [RequiresTopiaForge(UiKitRelease.K1)]
-    public enum UiAccessibilityIssueKind
+    public
+#endif
+    enum UiAccessibilityIssueKind
     {
         /// <summary>Ink and fill do not provide enough contrast.</summary>
         Contrast = 0,
@@ -28,8 +37,13 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Describes an accessibility issue at a stable capture path.</summary>
+#if TOPIAFORGE_NATIVE_CAPTURE
+    internal
+#else
     [RequiresTopiaForge(UiKitRelease.K1)]
-    public sealed class UiAccessibilityIssue
+    public
+#endif
+    sealed class UiAccessibilityIssue
     {
         internal UiAccessibilityIssue(UiAccessibilityIssueKind kind, string path, string message)
         {
@@ -47,8 +61,13 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Provides an immutable snapshot and its accessibility checks.</summary>
+#if TOPIAFORGE_NATIVE_CAPTURE
+    internal
+#else
     [RequiresTopiaForge(UiKitRelease.K1)]
-    public sealed class UiTreeCapture
+    public
+#endif
+    sealed class UiTreeCapture
     {
         private readonly IReadOnlyList<UiAccessibilityIssue> issues;
 

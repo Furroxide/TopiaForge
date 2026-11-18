@@ -1,5 +1,9 @@
 using System;
 
+#if TOPIAFORGE_NATIVE_CAPTURE
+namespace TopiaForge.ModManager
+{
+#else
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Defines the screen dimensions for a deterministic UI capture.</summary>
@@ -21,6 +25,7 @@ namespace TopiaForge.Mods.Testing
         // CanvasScaler gives equal weight to log(width / 1920) and log(height / 1080).
         internal float ScreenScale => (float)Math.Sqrt((Width / 1920d) * (Height / 1080d));
     }
+#endif
 
     internal readonly struct UiCaptureRect
     {
