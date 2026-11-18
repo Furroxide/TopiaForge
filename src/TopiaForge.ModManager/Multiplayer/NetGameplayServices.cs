@@ -117,6 +117,9 @@ namespace TopiaForge.ModManager
             Replication = replication ?? throw new ArgumentNullException(nameof(replication));
             if (inner is IUiClockReceiver owner) owner.FollowClock(
                 () => replication.Services.Runtime.UiClockTime, () => replication.Services.Runtime.UiClockEpoch);
+            if (inner is IUiPresentationThemeSource { PresentationThemeScope: { } scope } &&
+                replication.Services.Players is { } players)
+                scope.PrepareSelection = players.PrepareThemeSelection;
         }
 
         /// <summary>Gets the service the gameplay host made.</summary>
@@ -127,6 +130,7 @@ namespace TopiaForge.ModManager
 
         public UiAccessibilityPreferences Accessibility => inner.Accessibility;
         public IUiWorldLabels Labels => inner.Labels;
+        public IUiThemeService Themes => inner.Themes;
         public double ClockTime { get { UnityMainThreadGuard.AssertCurrent(); return Replication.Services.Runtime.UiClockTime; } }
 
         public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences) =>

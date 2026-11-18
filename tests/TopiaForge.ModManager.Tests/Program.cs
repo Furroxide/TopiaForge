@@ -145,6 +145,13 @@ namespace TopiaForge.ModManager.Tests
                 try { InSessionHudLayoutTests.Run(); return 0; }
                 catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
             }
+            if (args.Length == 2 && args[0] == "--write-ui-kit-goldens")
+            {
+                UiKitCaptureTests.WriteGoldenManifest(args[1]);
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--ui-theme-wire") { UiThemeWireTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k1-delivery") { PresentationRuntimeTests.RunK1Delivery(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit")
             {
                 UiKitCoreTests.Run(); UiKitWindowMathTests.Run(); UiKitMultiplayerCoreTests.Run();

@@ -8,7 +8,8 @@ namespace TopiaForge.ModManager
     {
         private readonly MultiplayerPresentation owner;
         internal readonly RuntimeReplication Context;
-        private readonly UiSurfaceRequest request;
+        internal readonly UiSurfaceRequest Request;
+        internal readonly IUiPresentationThemeSource? ThemeSource;
         private readonly ulong token;
         private IUiSurface inner = null!;
         private string body;
@@ -16,40 +17,51 @@ namespace TopiaForge.ModManager
         private bool shown = true, disposed;
         private ulong revision;
         internal EncodedHud? Encoded;
+        internal UiThemeDescriptor? Theme;
         internal byte[]? Payload => Encoded?.Bytes;
         internal string? InvalidComposition;
         internal IDisposable? Tracking;
         internal int Bytes => (Payload?.Length ?? 0) + 4;
 
-        internal MirroredHudPresenter(MultiplayerPresentation owner, RuntimeReplication context, UiSurfaceRequest request, ulong token)
-        { this.owner = owner; Context = context; this.request = request; this.token = token; body = request.Body; content = request.Content; }
+        internal MirroredHudPresenter(MultiplayerPresentation owner, RuntimeReplication context, UiSurfaceRequest request, ulong token,
+            IUiPresentationThemeSource? themeSource = null, UiThemeDescriptor? theme = null)
+        {
+            this.owner = owner; Context = context; Request = request; this.token = token;
+            body = request.Body; content = request.Content; ThemeSource = themeSource; Theme = theme;
+        }
         internal void Attach(IUiSurface surface) => inner = surface;
-        internal bool Prepare(string text, UiNode? node, bool visible)
-        { Encoded = Encode(text, node, visible, owner.UiClockEpoch); return Encoded.HasValue; }
+        internal UiNode? Content => content;
+        internal bool Prepare(string text, UiNode? node, bool visible, UiWireEnvelope? envelope = null)
+        { Encoded = Encode(text, node, visible, owner.UiClockEpoch, envelope: envelope, needsTheme: Theme != null); return Encoded.HasValue; }
+
+        internal EncodedHud? StageRetained(UiWireEnvelope? envelope, UiThemeDescriptor? theme) =>
+            Encode(body, content, shown, owner.UiClockEpoch, retained: true, envelope: envelope, needsTheme: theme != null);
         internal void RefreshClockBinding(string epoch)
         {
             if (Encoded?.ClockEpoch is not string previous || previous == epoch) return;
-            if (owner.Change(this, Encode(body, content, shown, epoch, retained: true))) return;
+            if (owner.Change(this, Encode(body, content, shown, epoch, retained: true, envelope: Encoded?.Envelope, needsTheme: Theme != null))) return;
             // Keep the host handle usable even if a changed wire encoding cannot fit the shared budget.
             owner.Remove(this); Encoded = null;
         }
-        private EncodedHud? Encode(string text, UiNode? node, bool visible, string epoch, bool retained = false)
+        private EncodedHud? Encode(string text, UiNode? node, bool visible, string epoch, bool retained = false,
+            UiWireEnvelope? envelope = null, bool needsTheme = false)
         {
             InvalidComposition = null;
             try
             {
                 UiWireValidation.Validate(node);
-                if (!MultiplayerPlayers.Finite(request.Width) || !MultiplayerPlayers.Finite(request.Height) ||
-                    request.Width < 80 || request.Width > 1920 || request.Height < 80 || request.Height > 1440 ||
+                if (envelope == null && needsTheme) return null;
+                if (!MultiplayerPlayers.Finite(Request.Width) || !MultiplayerPlayers.Finite(Request.Height) ||
+                    Request.Width < 80 || Request.Width > 1920 || Request.Height < 80 || Request.Height > 1440 ||
                     UiComposition.ContainsInteractive(node))
                     throw new ArgumentException("Shared HUDs need a finite 80-1920 by 80-1440 size and read-only content.");
                 var w = new WorldWireWriter(MultiplayerPresentation.MaximumBytes);
-                w.Begin(0); w.WriteVarUInt(token); UiNodeWireCodec.Text(w, request.Title);
-                UiNodeWireCodec.Text(w, text); w.WriteSingle(request.Width); w.WriteSingle(request.Height);
-                w.WriteByte((byte)request.HudAnchor); w.WriteByte((byte)request.HudVisibility);
+                w.Begin(0); w.WriteVarUInt(token); UiNodeWireCodec.Text(w, Request.Title);
+                UiNodeWireCodec.Text(w, text); w.WriteSingle(Request.Width); w.WriteSingle(Request.Height);
+                w.WriteByte((byte)Request.HudAnchor); w.WriteByte((byte)Request.HudVisibility);
                 w.WriteByte(visible ? (byte)1 : (byte)0);
-                var timed = retained ? UiNodeWireCodec.WriteRetained(w, node, epoch) : UiNodeWireCodec.Write(w, node, epoch);
-                return new EncodedHud(MultiplayerPresentation.Copy(w), timed ? epoch : null);
+                var timed = UiWireCodec.Prepare(w, node, epoch, retained, envelope);
+                return new EncodedHud(MultiplayerPresentation.Copy(w), timed ? epoch : null, envelope);
             }
             catch (ArgumentException exception) { InvalidComposition = exception.Message; return null; }
             catch (InvalidOperationException) { return null; }
@@ -92,7 +104,7 @@ namespace TopiaForge.ModManager
         {
             RequireActive();
             if (shown == visible || Lost()) { shown = visible; if (visible) inner.Show(); else inner.Hide(); return; }
-            var payload = Encode(body, content, visible, owner.UiClockEpoch, retained: true);
+            var payload = Encode(body, content, visible, owner.UiClockEpoch, retained: true, envelope: Encoded?.Envelope, needsTheme: Theme != null);
             // A solo HUD outside the shared bounds still owns a fully usable local surface.
             if (!owner.ChangeVisibility(this, payload, false)) throw TooLarge();
             var previous = shown;
@@ -112,7 +124,7 @@ namespace TopiaForge.ModManager
             RequireActive(); value ??= string.Empty;
             if (body == value) return;
             if (Lost()) { inner.SetBody(value); body = value; return; }
-            var payload = Encode(value, content, shown, owner.UiClockEpoch, retained: true);
+            var payload = Encode(value, content, shown, owner.UiClockEpoch, retained: true, envelope: Encoded?.Envelope, needsTheme: Theme != null);
             if (!owner.Change(this, payload, false)) throw TooLarge();
             inner.SetBody(value);
             if (!disposed) { body = value; revision++; owner.Change(this, payload); }
@@ -121,10 +133,16 @@ namespace TopiaForge.ModManager
         {
             RequireActive();
             if (Lost()) return inner.SetContent(value);
-            if (ReferenceEquals(content, value)) return OperationResult<bool>.Success(true);
+            if (ReferenceEquals(content, value))
+            {
+                RefreshClockBinding(owner.UiClockEpoch);
+                return inner.SetContent(value);
+            }
             if (UiComposition.ContainsInteractive(value)) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
                 "HUD surfaces are read-only; put controls in a window or a player's targeted UI.");
-            var payload = Encode(body, value, shown, owner.UiClockEpoch);
+            var staged = owner.StageEnvelope(this, Theme, value, out var envelope);
+            if (!staged.Succeeded) return staged;
+            var payload = Encode(body, value, shown, owner.UiClockEpoch, envelope: envelope, needsTheme: Theme != null);
             if (owner.Hosting && InvalidComposition != null) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, InvalidComposition);
             if (owner.Hosting && payload == null) return MultiplayerPresentation.Limit<bool>();
             if (!owner.Change(this, payload, false)) return MultiplayerPresentation.Limit<bool>();
@@ -136,7 +154,7 @@ namespace TopiaForge.ModManager
         {
             UnityMainThreadGuard.AssertCurrent();
             if (disposed) return;
-            disposed = true; owner.Remove(this); inner.Dispose(); Tracking?.Dispose(); Tracking = null;
+            disposed = true; owner.Release(this); inner.Dispose(); Tracking?.Dispose(); Tracking = null;
         }
         private static InvalidOperationException TooLarge() => new InvalidOperationException(
             "The shared HUD is too large; shorten its content before updating it.");
@@ -145,7 +163,9 @@ namespace TopiaForge.ModManager
         {
             internal readonly byte[] Bytes;
             internal readonly string? ClockEpoch;
-            internal EncodedHud(byte[] bytes, string? clockEpoch) { Bytes = bytes; ClockEpoch = clockEpoch; }
+            internal readonly UiWireEnvelope? Envelope;
+            internal EncodedHud(byte[] bytes, string? clockEpoch, UiWireEnvelope? envelope = null)
+            { Bytes = bytes; ClockEpoch = clockEpoch; Envelope = envelope; }
         }
     }
 }

@@ -109,6 +109,9 @@ namespace TopiaForge.Mods.UnityUi
             button.interactable = interactive;
             fill.color = interactive ? theme.Surface : theme.Tint;
             ring.color = selected ? theme.FocusRing : owner.ToneColor(theme, node.Tone);
+            var border = theme.HighContrast ? 3 : TopiaForgeTokens.BorderStandard;
+            if (selected) border++;
+            ring.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Control, border);
             title.color = interactive ? theme.Text : theme.TextFaint;
             subtitle.color = interactive ? theme.TextMuted : theme.TextFaint;
             foreach (var port in portViews)

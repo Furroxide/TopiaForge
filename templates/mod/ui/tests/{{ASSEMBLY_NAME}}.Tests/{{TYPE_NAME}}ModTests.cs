@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Linq;
+using System.Text;
 using NUnit.Framework;
 using TopiaForge.Mods.Testing;
 
@@ -6,6 +9,56 @@ namespace {{ASSEMBLY_NAME}}.Tests
 {
     public sealed class {{TYPE_NAME}}ModTests
     {
+        [Test]
+        public void ManifestThemeStylesWindowAndPreviewUsesItsLocalOverride()
+        {
+            static string ReadPackageFile(string path) =>
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                    .GetString(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, path)));
+
+            using var context = new FakeModContext();
+            var catalogue = context.Ui.AddThemeCatalogue(ReadPackageFile("topiaforge.mod.json"), ReadPackageFile);
+            Assert.That(catalogue.Succeeded, Is.True, catalogue.ErrorMessage);
+            using var runner = ModLifecycleRunner.Create<{{TYPE_NAME}}Mod>(context);
+            runner.Load();
+            PressToggle(context);
+
+            Assert.That(context.Ui.Themes.SelectedTheme, Is.Null);
+            var surface = context.Ui.Surfaces.Single();
+            context.Ui.CompletePendingThemeRegistrations();
+            AssertPalette("#27614D", "survival");
+
+            Assert.That(surface.ChangeText({{TYPE_NAME}}Mod.GreetingInputId, "Trail marked").Succeeded, Is.True);
+            var content = surface.Content;
+            Assert.That(surface.ChangeToggle({{TYPE_NAME}}Mod.ThemePreviewToggleId, true).Succeeded, Is.True);
+            context.Ui.CompletePendingThemeRegistrations();
+            Assert.That(context.Ui.Themes.SelectedTheme?.Id, Is.EqualTo("controls-preview"));
+            AssertPalette("#51428D", "controls-preview");
+            Assert.That(surface.Content, Is.SameAs(content));
+            Assert.That(surface.TryGetTextValue({{TYPE_NAME}}Mod.GreetingInputId, out var greeting), Is.True);
+            Assert.That(greeting, Is.EqualTo("Trail marked"));
+
+            Assert.That(surface.ChangeToggle({{TYPE_NAME}}Mod.ThemePreviewToggleId, false).Succeeded, Is.True);
+            context.Ui.CompletePendingThemeRegistrations();
+            Assert.That(context.Ui.Themes.SelectedTheme, Is.Null);
+            AssertPalette("#27614D", "survival");
+
+            runner.Unload();
+            context.AssertNoLeaks();
+
+            void AssertPalette(string expectedInk, string expectedTheme)
+            {
+                var capture = surface.Capture(new UiCaptureViewport(1920, 1080));
+                var heading = capture.Nodes.Single(node => node.Id == {{TYPE_NAME}}Mod.PaletteHeadingId);
+                Assert.Multiple(() =>
+                {
+                    Assert.That(heading.ThemeId, Is.EqualTo(expectedTheme));
+                    Assert.That(heading.InkColor, Is.EqualTo(expectedInk));
+                    Assert.That(capture.CheckAccessibility(), Is.Empty);
+                });
+            }
+        }
+
         [Test]
         public void ToggleAction_CreatesShowsAndHidesSafeUiSurface()
         {

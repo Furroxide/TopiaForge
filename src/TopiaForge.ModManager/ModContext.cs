@@ -97,6 +97,8 @@ namespace TopiaForge.ModManager
                         Logger,
                         NetProfile)
                     ?? GameplayContextServices.Unavailable(Lifetime);
+                if (gameplay.Ui is IUiThemeScopeHost themeHost)
+                    themeHost.ConfigureThemeScope(manifest.AdmittedUi, null);
                 Input = new NetInputService(gameplay.Input, inputActivity, Lifetime);
                 Time = gameplay.Time;
                 Scheduler = new NetScheduler(gameplay.Scheduler, replication);

@@ -209,20 +209,20 @@ namespace TopiaForge.Mods.UnityUi
 
             if (!enabledState)
             {
-                fill.color = theme.Tint;
+                fill.color = theme.Descriptor == null ? theme.Tint : theme.SurfaceSunken;
                 if (ring != null)
                 {
-                    ring.color = theme.Tint;
+                    ring.color = theme.Descriptor == null ? theme.Tint : theme.OutlineStrong;
                 }
 
                 if (label != null)
                 {
-                    label.color = theme.TextFaint;
+                    label.color = theme.DisabledInk;
                 }
 
                 if (iconImage != null)
                 {
-                    iconImage.color = theme.TextFaint;
+                    iconImage.color = theme.DisabledInk;
                 }
 
                 if (shadow != null)

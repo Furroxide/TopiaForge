@@ -159,6 +159,9 @@ namespace TopiaForge.Multiplayer
                 }
             }
 
+            var sharedUi = runtime?.PrepareSharedUiForHosting();
+            if (sharedUi is { Succeeded: false }) return sharedUi;
+
             // Public and invite-only sessions are found through the TopiaForge service; without one, only the LAN can find them.
             if (LacksService(settings.Visibility)) return Fail(ModErrorCode.Unavailable, NoService);
             HostSettings host;

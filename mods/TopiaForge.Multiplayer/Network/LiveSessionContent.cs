@@ -23,11 +23,17 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         IReadOnlyList<DescriptorPackage>? HostPackages();
 
+        /// <summary>Checks whether retained presentation can be published before the host endpoint opens.</summary>
+        bool CanPromoteSharedUi() => true;
+
         /// <summary>Reports an unavailable host archive on the main thread, without a path or an exception.</summary>
         void ReportPackageWarning(string message);
 
         /// <summary>Gets what a joining player presents for admission, as opaque bytes the host's runtime reads.</summary>
         byte[] ClientContent();
+
+        /// <summary>Gets the offer appropriate to the verified host's protocol.</summary>
+        byte[] ClientContent(ServerDescriptor host) => ClientContent();
 
         /// <summary>
         /// Decides, on the host, whether a player presenting <paramref name="clientContent"/> may join. A refusal lists
@@ -51,16 +57,21 @@ namespace TopiaForge.Multiplayer.Network
     /// </summary>
     internal sealed class ContentAdmission
     {
-        internal static readonly ContentAdmission Admitted = new ContentAdmission(true, AdmissionCode.Other, Array.Empty<string>());
+        internal static readonly ContentAdmission Admitted = new ContentAdmission(true, AdmissionCode.Other, Array.Empty<string>(), 1);
 
-        private ContentAdmission(bool admitted, AdmissionCode code, IReadOnlyList<string> problems)
+        private ContentAdmission(bool admitted, AdmissionCode code, IReadOnlyList<string> problems, int uiContractVersion)
         {
             IsAdmitted = admitted;
             Code = code;
             Problems = problems;
+            UiContractVersion = uiContractVersion;
         }
 
         internal bool IsAdmitted { get; }
+        internal int UiContractVersion { get; }
+
+        internal static ContentAdmission AdmitUiContract(int version) => version == 1 ? Admitted
+            : new ContentAdmission(true, AdmissionCode.Other, Array.Empty<string>(), version);
 
         /// <summary>
         /// Gets why the content was refused: <see cref="AdmissionCode.Content"/>, <see cref="AdmissionCode.Protocol"/> or
@@ -81,7 +92,7 @@ namespace TopiaForge.Multiplayer.Network
                     "Content refuses a join for its packages, its protocol or a runtime not ready yet; the host decides every other refusal.");
             }
 
-            return new ContentAdmission(false, code, new List<string>(problems).AsReadOnly());
+            return new ContentAdmission(false, code, new List<string>(problems).AsReadOnly(), 1);
         }
     }
 

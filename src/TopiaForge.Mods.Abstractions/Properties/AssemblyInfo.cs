@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("TopiaForge.ModManager")]
+[assembly: InternalsVisibleTo("TopiaForge.ModManager.Core")]
+[assembly: InternalsVisibleTo("TopiaForge.Mods.UnityUi")]
 [assembly: InternalsVisibleTo("TopiaForge.ModManager.Tests")]
 [assembly: InternalsVisibleTo("TopiaForge.ModRuntime.Tests")]
 [assembly: InternalsVisibleTo("TopiaForge.Mods.Testing")]

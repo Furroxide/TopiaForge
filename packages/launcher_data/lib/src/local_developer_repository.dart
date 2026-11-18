@@ -15,6 +15,7 @@ import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
 import 'linear_text_scan.dart';
+import 'managed_package_validator.dart';
 import 'nuget_lock_check.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
@@ -31,6 +32,7 @@ part 'local_developer_repository/data_root_repository.dart';
 part 'local_developer_repository/pack_helpers.dart';
 part 'local_developer_repository/pack_metadata.dart';
 part 'local_developer_repository/map_pack_helpers.dart';
+part 'local_developer_repository/ui_pack_helpers.dart';
 part 'local_developer_repository/multiplayer_contract_lock.dart';
 part 'local_developer_repository/mod_scaffolding.dart';
 part 'local_developer_repository/mod_scaffold_plan.dart';
@@ -62,6 +64,8 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     UnityEditorVersionProbe? unityEditorVersionProbe,
     UnityEditorLauncher? unityEditorLauncher,
     RepositoryDotnetSdkResolver? dotnetSdkResolver,
+    Future<List<String>> Function(Directory packageRoot)?
+    uiThemePackageValidator,
     ExecutableLocator? executableLocator,
     Duration unityEditorProbeTimeout = const Duration(seconds: 5),
   }) : _repositoryRoot = Directory(
@@ -72,6 +76,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
        _unityEditorVersionProbe = unityEditorVersionProbe,
        _unityEditorLauncher = unityEditorLauncher,
        _dotnetSdkResolver = dotnetSdkResolver ?? resolveRepositoryDotnetSdk,
+       _uiThemePackageValidator = uiThemePackageValidator,
        _executableLocator = executableLocator,
        _unityEditorProbeTimeout = unityEditorProbeTimeout,
        super(Directory(dataRoot ?? resolveTopiaForgeDataRoot()));
@@ -83,6 +88,8 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
   final UnityEditorVersionProbe? _unityEditorVersionProbe;
   final UnityEditorLauncher? _unityEditorLauncher;
   final RepositoryDotnetSdkResolver _dotnetSdkResolver;
+  final Future<List<String>> Function(Directory packageRoot)?
+  _uiThemePackageValidator;
   final ExecutableLocator? _executableLocator;
   final Duration _unityEditorProbeTimeout;
 
@@ -212,8 +219,11 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     // Accept both a packed .topiaforgemod archive and an unpacked mod directory (e.g. a fresh scaffold), so
     // authors can validate before ever packing.
     final ModManifest manifest;
+    Directory? source;
+    SafeZipArchive? archive;
     if (FileSystemEntity.isDirectorySync(packagePath)) {
-      final file = File(p.join(packagePath, 'topiaforge.mod.json'));
+      source = Directory(packagePath);
+      final file = File(p.join(source.path, 'topiaforge.mod.json'));
       if (!file.existsSync()) {
         throw StateError('topiaforge.mod.json was not found in $packagePath.');
       }
@@ -227,7 +237,9 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
         ),
       );
     } else {
-      manifest = (await _readPackage(packagePath, expectedSha256: '')).manifest;
+      final packaged = await _readPackage(packagePath, expectedSha256: '');
+      manifest = packaged.manifest;
+      archive = packaged.archive;
     }
     final issues = [
       ...manifest.validate(),
@@ -236,6 +248,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     if (issues.any((issue) => issue.isBlocking)) {
       throw StateError(issues.map((issue) => issue.message).join(' '));
     }
+    await _prepareUiThemes(manifest, source: source, archive: archive);
     return manifest;
   }
 

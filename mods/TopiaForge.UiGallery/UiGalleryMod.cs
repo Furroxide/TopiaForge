@@ -43,7 +43,7 @@ namespace TopiaForge.UiGallery
 
                 if (gallery == null)
                 {
-                    gallery = new GalleryWindow(ui, Context.LocalPlayer);
+                    gallery = new GalleryWindow(ui, Context);
                     galleryLifetime = Context.Lifetime.Track(gallery);
                 }
 

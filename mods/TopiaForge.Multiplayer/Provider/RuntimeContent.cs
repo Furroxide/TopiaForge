@@ -146,7 +146,15 @@ namespace TopiaForge.Multiplayer
         /// </summary>
         public byte[] ClientContent() => EncodedOffer() ?? Array.Empty<byte>();
 
+        public byte[] ClientContent(ServerDescriptor host) => EncodedOffer(UiVersionFor(host)) ?? Array.Empty<byte>();
+
+        private int UiVersionFor(ServerDescriptor host) => InternalUiPresentationContract.SupportsExtendedOffer(host.ProtocolVersion)
+            ? (runtime?.UiContractVersion ?? InternalUiPresentationContract.LegacyVersion)
+            : InternalUiPresentationContract.LegacyVersion;
+
         public void ReportPackageWarning(string message) => Warn("content.archive-unavailable", message);
+
+        public bool CanPromoteSharedUi() => runtime?.PrepareSharedUiForHosting().Succeeded ?? true;
 
         /// <summary>
         /// Decides with the runtime's planner whether a player presenting <paramref name="clientContent"/> may join. The
@@ -179,7 +187,7 @@ namespace TopiaForge.Multiplayer
                 return ContentAdmission.Refused(new[] { HostNotReady }, AdmissionCode.NotReady);
             }
 
-            return verdict.IsAdmitted ? ContentAdmission.Admitted : ContentAdmission.Refused(verdict.Problems);
+            return verdict.IsAdmitted ? ContentAdmission.AdmitUiContract(offer!.UiContractVersion) : ContentAdmission.Refused(verdict.Problems);
         }
 
         public ContentCheck Check(ServerDescriptor descriptor)
@@ -212,7 +220,7 @@ namespace TopiaForge.Multiplayer
             }
 
             if (!verdict.IsAdmitted) return new ContentCheck(verdict.Problems);
-            return EncodedOffer(local) == null
+            return EncodedOffer(local, UiVersionFor(descriptor)) == null
                 ? new ContentCheck(new[] { "Too many mods are enabled to join a session; at most " + InternalContentLimits.MaximumPackages + " fit." })
                 : ContentCheck.Ready;
         }
@@ -256,22 +264,26 @@ namespace TopiaForge.Multiplayer
         }
 
         /// <summary>Gets the offer for this player's content, null when it cannot be read or presented.</summary>
-        private byte[]? EncodedOffer()
+        private byte[]? EncodedOffer(int uiContractVersion = InternalUiPresentationContract.LegacyVersion)
         {
             var current = runtime;
             if (current == null) return null;
             var content = ReadLocalContent(current);
-            return content == null ? null : EncodedOffer(content);
+            return content == null ? null : EncodedOffer(content, uiContractVersion);
         }
 
         /// <summary>
         /// Gets the offer for <paramref name="content"/>, null when it cannot be presented. It is encoded once for each
         /// content list the runtime returns, and the runtime returns a new list whenever its packages change.
         /// </summary>
-        private byte[]? EncodedOffer(IReadOnlyList<InternalContentDescriptor> content)
+        private int offeredUiContractVersion;
+
+        private byte[]? EncodedOffer(IReadOnlyList<InternalContentDescriptor> content, int uiContractVersion)
         {
-            if (encodedOffer != null && ReferenceEquals(content, offeredContent)) return encodedOffer;
+            if (encodedOffer != null && ReferenceEquals(content, offeredContent) && offeredUiContractVersion == uiContractVersion)
+                return encodedOffer;
             offeredContent = content;
+            offeredUiContractVersion = uiContractVersion;
             encodedOffer = null;
             var mods = new List<InternalContentDescriptor>();
             foreach (var descriptor in content)
@@ -287,7 +299,7 @@ namespace TopiaForge.Multiplayer
             }
 
             if (mods.Count > InternalContentLimits.MaximumPackages) return null;
-            var offer = new InternalContentOffer(GameBuild, MultiplayerModule.ProtocolVersion, MultiplayerModule.PeerVersionRange, mods.AsReadOnly());
+            var offer = new InternalContentOffer(GameBuild, MultiplayerModule.ProtocolVersion, MultiplayerModule.PeerVersionRange, mods.AsReadOnly(), uiContractVersion);
             encodedOffer = ContentOfferCodec.TryEncode(offer);
             return encodedOffer;
         }

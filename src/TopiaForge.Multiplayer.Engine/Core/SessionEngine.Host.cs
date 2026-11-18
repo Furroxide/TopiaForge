@@ -389,17 +389,12 @@ namespace TopiaForge.Multiplayer.Engine
                 if (string.Equals(candidate.Identity, identity, StringComparison.Ordinal)) record = candidate;
             }
 
-            if (record?.Connection != null && !ReferenceEquals(record.Connection, connection))
-            {
-                EndConnection(record.Connection, MultiplayerSessionEndReason.Replaced, "The same player joined from another connection.");
-            }
-
             // The client keeps its listener mutes only when this host kept its record: the ids it muted name the same people.
             var recordKept = record != null;
             var connected = 0;
             foreach (var candidate in participantRecords)
             {
-                if (candidate.IsConnected) connected++;
+                if (candidate.IsConnected && !ReferenceEquals(candidate, record)) connected++;
             }
 
             var decision = (options.JoinPolicy ?? DefaultJoinPolicy.Instance).Evaluate(
@@ -413,6 +408,9 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
+            if (record.Connection != null && !ReferenceEquals(record.Connection, connection))
+                EndConnection(record.Connection, MultiplayerSessionEndReason.Replaced, "The same player joined from another connection.");
+
             // A returning player's streams restart on its new connection: whatever its old one left waiting goes now.
             if (recordKept) DropSystemMessagesFrom(record.Id);
             record.DisplayName = request.DisplayName;
@@ -421,6 +419,7 @@ namespace TopiaForge.Multiplayer.Engine
             record.LifetimeId = options.NewParticipantLifetime();
             record.DepartedAtMicros = 0;
             record.PlayerKey = connection.Link.PlayerKey.IsValid ? connection.Link.PlayerKey.Value : null;
+            record.UiContractVersion = decision.UiContractVersion;
             connection.Participant = record;
             connection.Phase = HostConnectionPhase.Accepted;
             connection.AcknowledgedSequence = record.LastSequence;
@@ -451,6 +450,8 @@ namespace TopiaForge.Multiplayer.Engine
             connection.ClearPendingDeltas();
             MarkParticipantsChanged();
         }
+
+        internal int UiContractVersionOf(ParticipantId peer) => FindParticipant(peer)?.UiContractVersion ?? 1;
 
         /// <summary>
         /// Creates the record for an identity the host has not seen within the grace period, or returns why it cannot.

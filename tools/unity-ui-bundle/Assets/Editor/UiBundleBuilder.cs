@@ -34,6 +34,7 @@ namespace TopiaForge
             BodyAssetPath,
             BodyMediumAssetPath,
             DisplayAssetPath,
+            MonoAssetPath,
             ManifestAssetPath,
         };
 
@@ -46,6 +47,11 @@ namespace TopiaForge
         private const string BodyMediumAssetPath = "Assets/FontAssets/TopiaForge Body Medium SDF.asset";
         private const string BodyMediumFontPath = "Assets/Fonts/TopiaForgeBody-Medium.ttf";
         private const string DisplayAssetPath = "Assets/FontAssets/TopiaForge Display SDF.asset";
+        private const string MonoAssetPath = "Assets/FontAssets/TopiaForge Mono SDF.asset";
+        private const string MonoFontPath = "Assets/Fonts/JetBrainsMonoNL-Regular.ttf";
+        private const string MonoLicensePath = "Assets/Fonts/JetBrainsMono-OFL.txt";
+        private const string MonoFontSha256 = "fb3b2575d7b0657359707993288f12a7360344d39387bb26050e276d61f6bd2a";
+        private const string MonoLicenseSha256 = "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad";
         private const string CharacterSet =
             " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" +
             " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ" +
@@ -156,6 +162,12 @@ namespace TopiaForge
             BakeFontAsset("Assets/Fonts/Quicksand-VariableFont_wght.ttf", BodyAssetPath, "TopiaForge Body SDF", 1024);
             BakeFontAsset(BodyMediumFontPath, BodyMediumAssetPath, "TopiaForge Body Medium SDF", 1024);
             BakeFontAsset("Assets/Fonts/Audiowide-Regular.ttf", DisplayAssetPath, "TopiaForge Display SDF", 512);
+            if (ComputeSha256(MonoFontPath) != MonoFontSha256 || ComputeSha256(MonoLicensePath) != MonoLicenseSha256)
+            {
+                throw new InvalidDataException("The mono font and notice must match the pinned JetBrains Mono release.");
+            }
+
+            BakeFontAsset(MonoFontPath, MonoAssetPath, "TopiaForge Mono SDF", 1024);
             AssetDatabase.SaveAssets();
         }
 

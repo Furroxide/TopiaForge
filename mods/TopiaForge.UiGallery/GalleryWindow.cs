@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
+using TopiaForge.UiGallery.Pages;
 
 namespace TopiaForge.UiGallery
 {
@@ -14,18 +15,25 @@ namespace TopiaForge.UiGallery
     {
         private readonly UiHost ui;
         private readonly ILocalPlayerService player;
+        private readonly IUiService previewUi;
+        private readonly IModLogger logger;
         private readonly TopiaForgeWindow paperWindow;
         private readonly TopiaForgeWindow hudWindow;
         private readonly List<TopiaForgeToggle> highContrastControls = new List<TopiaForgeToggle>();
         private readonly List<TopiaForgeToggle> reducedMotionControls = new List<TopiaForgeToggle>();
         private readonly List<TopiaForgeSlider> uiScaleControls = new List<TopiaForgeSlider>();
+        private readonly List<TopiaForgeToggle> sampleThemeControls = new List<TopiaForgeToggle>();
         private TopiaForgeWindow active;
+        private IUiSurface? preview;
+        private bool sampleTheme;
         private bool disposed;
 
-        public GalleryWindow(UiHost host, ILocalPlayerService localPlayer)
+        public GalleryWindow(UiHost host, IModContext context)
         {
             ui = host;
-            player = localPlayer;
+            player = context.LocalPlayer;
+            previewUi = context.Ui;
+            logger = context.Logger;
             paperWindow = Build(TopiaForgeScheme.Paper);
             hudWindow = Build(TopiaForgeScheme.Hud);
             active = paperWindow;
@@ -37,6 +45,11 @@ namespace TopiaForge.UiGallery
         {
             if (!disposed)
             {
+                if (preview != null && !preview.IsVisible)
+                {
+                    ReturnToGallery();
+                }
+
                 Pages.MultiplayerPage.Tick(deltaTime);
                 Pages.SessionsPage.Tick(deltaTime);
             }
@@ -44,6 +57,12 @@ namespace TopiaForge.UiGallery
 
         public void Toggle()
         {
+            if (preview != null)
+            {
+                ReturnToGallery();
+                return;
+            }
+
             if (active.IsOpen)
             {
                 active.Close();
@@ -63,6 +82,8 @@ namespace TopiaForge.UiGallery
 
             disposed = true;
             ui.AccessibilityProfileChanged -= SyncAccessibilityControls;
+            preview?.Dispose();
+            preview = null;
             Pages.HudPage.Reset();
             Pages.OverlaysPage.Reset();
             Pages.ShopPage.Reset();
@@ -96,7 +117,17 @@ namespace TopiaForge.UiGallery
             reducedMotionControls.Add(controls.Toggle(
                 "Reduced motion", ui.AccessibilityProfile.ReducedMotion, SetReducedMotion));
             uiScaleControls.Add(controls.Slider(
-                "UI scale", 0.75f, 1.5f, ui.AccessibilityProfile.UiScale, SetUiScale));
+                "UI scale", 0.75f, 2f, ui.AccessibilityProfile.UiScale, SetUiScale));
+
+            var foundation = column.Row(TopiaForgeGap.Sm);
+            var previewKind = scheme == TopiaForgeScheme.Paper ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
+            foundation.Button("Theme packs", () => ShowFoundation(FoundationPage.ThemePacks, previewKind));
+            foundation.Button("Typography", () => ShowFoundation(FoundationPage.Typography, previewKind));
+            if (previewKind == UiSurfaceKind.Window)
+            {
+                foundation.Button("Interaction states", () => ShowFoundation(FoundationPage.InteractionStates, previewKind));
+            }
+            sampleThemeControls.Add(foundation.Toggle("Survival sample", sampleTheme, SetSampleTheme));
 
             var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
@@ -128,6 +159,47 @@ namespace TopiaForge.UiGallery
             tabs.OnSelected(ShowPage);
             ShowPage(0);
             return window;
+        }
+
+        private void ShowFoundation(FoundationPage page, UiSurfaceKind kind)
+        {
+            var profile = ui.AccessibilityProfile;
+            var applied = previewUi.ApplyAccessibility(new UiAccessibilityPreferences(
+                profile.HighContrast, profile.UiScale, profile.ReducedMotion, profile.MotionIntensity));
+            if (!applied.Succeeded)
+            {
+                logger.Warn("Gallery preview settings could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
+                return;
+            }
+
+            var request = FoundationPages.CreateRequest(
+                page, kind, sampleTheme ? FoundationPages.SurvivalTheme : null, ReportInteraction);
+            var result = previewUi.CreateSurface(request);
+            if (!result.TryGetValue(out preview) || preview == null)
+            {
+                logger.Warn("Gallery preview could not be opened (" + result.ErrorCode + "): " + result.ErrorMessage);
+                return;
+            }
+
+            active.Close();
+        }
+
+        private void ReturnToGallery()
+        {
+            preview?.Dispose();
+            preview = null;
+            active.Show();
+        }
+
+        private void ReportInteraction(string message) => preview?.SetBody(message);
+
+        private void SetSampleTheme(bool selected)
+        {
+            sampleTheme = selected;
+            foreach (var control in sampleThemeControls)
+            {
+                control.SetValue(selected);
+            }
         }
 
         private void SyncAccessibilityControls()

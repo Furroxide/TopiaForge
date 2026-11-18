@@ -46,6 +46,12 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         MultiplayerSessionSnapshot SessionSnapshot { get; }
 
+        /// <summary>Gets the UI contract advertised by the current authenticated peer. Missing capability means legacy UI.</summary>
+        int UiContractVersionOf(ParticipantId peer) => InternalUiPresentationContract.LegacyVersion;
+
+        /// <summary>Gets the package archive digest from the current authenticated session descriptor.</summary>
+        string? UiPresentationPackageDigest(string packageId) => null;
+
         /// <summary>
         /// Attaches the runtime that drives the frame and supplies content. Returns false, changing nothing, when another
         /// runtime is attached.

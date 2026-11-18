@@ -10,6 +10,16 @@
   "description": "A safe-SDK wave-survival showcase built from Worlds, RobotKit, Chronos, named input, physics, dialogue, audio, and TopiaForgeUi. Fight distinct infected archetypes with headshots and charged piercing fire, build combos, recruit wavering allies through deterministic or explicitly enabled live JACK IN conversations, buy run upgrades, and restart or return to the menu cleanly.",
   "entryAssembly": "TopiaForge.Zombies.dll",
   "entryType": "TopiaForge.Zombies.ZombiesMod",
+  "ui": {
+    "schema": 1,
+    "default": "survival",
+    "themes": [
+      {
+        "id": "survival",
+        "definition": "ui/themes/survival.json"
+      }
+    ]
+  },
   "dependencies": {
     "io.github.furroxide.topiaforge.worlds": ">=0.2.0 <0.3.0",
     "io.github.furroxide.topiaforge.robotkit": ">=0.2.0 <0.3.0",

@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using UnityEngine;
 
 namespace TopiaForge.Mods.UnityUi
@@ -12,6 +13,24 @@ namespace TopiaForge.Mods.UnityUi
     internal sealed class TopiaForgeLayerSlot : MonoBehaviour
     {
         internal GameObject? Root;
+        private UiThemeDescriptor? descriptor;
+        private TopiaForgeResolvedTheme? resolved;
+
+        internal bool SelectTheme(UiThemeDescriptor? value)
+        {
+            if (ReferenceEquals(descriptor, value)) return false;
+            descriptor = value;
+            resolved = null;
+            return true;
+        }
+
+        internal TopiaForgeResolvedTheme? ResolveTheme(TopiaForgeScheme scheme, bool highContrast, int version)
+        {
+            if (descriptor == null) return null;
+            if (resolved == null || resolved.ThemeVersion != version || resolved.Scheme != scheme)
+                resolved = new TopiaForgeResolvedTheme(scheme, null, highContrast, version, descriptor);
+            return resolved;
+        }
 
         /// <summary>Called once, before the slot goes back, when the canvas is destroyed outside the kit.</summary>
         internal Action<GameObject>? Lost;
@@ -22,6 +41,8 @@ namespace TopiaForge.Mods.UnityUi
             var lost = Lost;
             Root = null;
             Lost = null;
+            resolved = null;
+            descriptor = null;
             if (!(root is null))
             {
                 TopiaForgeLayers.ReleaseDestroyed(root, lost);

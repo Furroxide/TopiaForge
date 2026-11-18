@@ -113,6 +113,24 @@ namespace TopiaForge.Multiplayer
 
         public bool IsParticipantReady(ParticipantId participant) => engine.IsParticipantReady(participant);
 
+        public int UiContractVersionOf(ParticipantId peer) => engine.UiContractVersionOf(peer);
+
+        public string? UiPresentationPackageDigest(string packageId)
+        {
+            engine.RequireOwnerThread();
+            var joining = live?.Join;
+            var descriptor = engine.Role == EngineRole.Host ? live?.Host?.Descriptor?.Descriptor
+                : joining?.Phase is JoinPhase.Synchronizing or JoinPhase.InSession or JoinPhase.Reconnecting ? joining.Descriptor : null;
+            if (descriptor == null) return null;
+            for (var index = 0; index < descriptor.Packages.Count; index++)
+            {
+                var package = descriptor.Packages[index];
+                if (string.Equals(package.Id, packageId, StringComparison.Ordinal)) return package.Sha256;
+            }
+
+            return null;
+        }
+
         public OperationResult<bool> ReplaceSession()
         {
             engine.RequireOwnerThread();

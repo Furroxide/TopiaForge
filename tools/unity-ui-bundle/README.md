@@ -45,6 +45,8 @@ names are normalized; delete it only to re-bake the atlas):
 - `TopiaForge Body SDF` — Quicksand Light (300), the variable font's default instance,
   for Quicksand text larger than body text: headings and numerals. Same settings.
 - `TopiaForge Display SDF` — Audiowide, 512×512, same settings (display headings).
+- `TopiaForge Mono SDF` — JetBrains Mono NL Regular v2.304, 1024×1024, for the Mono role.
+  The unmodified font and its SIL OFL 1.1 notice are pinned in `THIRD_PARTY_NOTICES.md`.
 - Bold renders via TMP faux-bold over each style's face; no bold asset ships.
 
 Unity imports only a variable font's default instance, so `TopiaForge Body Medium SDF`

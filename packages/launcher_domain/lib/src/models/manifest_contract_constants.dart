@@ -36,6 +36,7 @@ const _knownManifestJsonKeys = <String>{
   'contributions',
   'apiAssemblies',
   'multiplayer',
+  'ui',
 };
 
 const _unsupportedManifestFields = <String>{

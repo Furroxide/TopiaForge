@@ -353,8 +353,11 @@ namespace TopiaForge.ModManager.Tests
             Forbid(stepper, "A stepper's marks take the resolved colors", @"theme\.OnDanger");
 
             var theme = Read("Theme", "TopiaForgeResolvedTheme.cs");
-            Require(theme, "TopiaForgeOnColors.ResolveAll(scheme, colors, HighContrast)", "TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast)",
-                "StateTint(resolved.Hovered)", "StateTint(resolved.Selected)", "StateTint(resolved.Pressed)", "block.pressedColor = Pressed;");
+            Require(theme, "TopiaForgeOnColors.ResolveAll(scheme, colors, highContrast)", "TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast)",
+                "PackFills(authoredScheme, HighContrast)", "block.pressedColor = Pressed;");
+            var pack = Read("Theme", "TopiaForgeResolvedTheme.Packs.cs");
+            Require(pack, "Button(primary, labelRatio)", "Button(danger, labelRatio)", "UiThemeColors.ResolveTints(pair, ratio",
+                "StateTint(tints.Hovered)", "StateTint(tints.Selected)", "StateTint(tints.Pressed)");
 
             foreach (var file in Directory.EnumerateFiles(Path.Combine(kit, "Widgets"), "*.cs"))
             {

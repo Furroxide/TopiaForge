@@ -7,9 +7,18 @@
   "author": {
     "name": "TopiaForge"
   },
-  "description": "Developer tool: a living catalog of every TopiaForgeUi widget in both brand schemes, with live high-contrast, UI-scale, and motion toggles. Toggle with F8. Not shipped in releases.",
+  "description": "Developer tool for previewing TopiaForgeUi widgets in Paper, HUD, high contrast, and the Survival sample theme. Toggle with F8. Not shipped in releases.",
   "entryAssembly": "TopiaForge.UiGallery.dll",
   "entryType": "TopiaForge.UiGallery.UiGalleryMod",
+  "ui": {
+    "schema": 1,
+    "themes": [
+      {
+        "id": "survival",
+        "definition": "ui/themes/survival.json"
+      }
+    ]
+  },
   "dependencies": {
     "io.github.furroxide.topiaforge.worlds": ">=0.2.0 <0.3.0"
   },

@@ -79,11 +79,23 @@ namespace TopiaForge.Mods
         Warning = 2,
 
         /// <summary>A failed or destructive action.</summary>
-        Danger = 3
+        Danger = 3,
+
+        /// <summary>Secondary content with lower emphasis.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Muted = 4,
+
+        /// <summary>Content that takes the theme's primary foreground.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Primary = 5,
+
+        /// <summary>Content that takes the theme's accent foreground.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Accent = 6
     }
 
     /// <summary>Describes a simple TopiaForgeUi HUD panel or window.</summary>
-    public sealed class UiSurfaceRequest
+    public sealed partial class UiSurfaceRequest
     {
         /// <summary>Creates a UI surface request.</summary>
         public UiSurfaceRequest(
@@ -132,7 +144,8 @@ namespace TopiaForge.Mods
             Content = content;
         }
 
-        private UiSurfaceRequest(UiSurfaceRequest source, UiHudAnchor anchor, UiHudVisibility visibility)
+        private UiSurfaceRequest(
+            UiSurfaceRequest source, UiHudAnchor anchor, UiHudVisibility visibility, UiThemeRef? theme)
         {
             Id = source.Id;
             Title = source.Title;
@@ -143,6 +156,7 @@ namespace TopiaForge.Mods
             Content = source.Content;
             HudAnchor = anchor;
             HudVisibility = visibility;
+            Theme = theme;
         }
 
         /// <summary>Gets the stable id unique inside the current mod.</summary>
@@ -189,7 +203,7 @@ namespace TopiaForge.Mods
                 throw new ArgumentOutOfRangeException(nameof(anchor));
             }
 
-            return new UiSurfaceRequest(this, anchor, HudVisibility);
+            return new UiSurfaceRequest(this, anchor, HudVisibility, Theme);
         }
 
         /// <summary>
@@ -206,7 +220,7 @@ namespace TopiaForge.Mods
                 throw new ArgumentOutOfRangeException(nameof(visibility));
             }
 
-            return new UiSurfaceRequest(this, HudAnchor, visibility);
+            return new UiSurfaceRequest(this, HudAnchor, visibility, Theme);
         }
 
         private void RequireHud(string method, string purpose)
@@ -324,7 +338,7 @@ namespace TopiaForge.Mods
     {
         /// <summary>Creates UI accessibility preferences.</summary>
         /// <param name="highContrast">Whether the host uses its high-contrast semantic palette.</param>
-        /// <param name="uiScale">Host-relative UI scale in the inclusive 0.75-to-1.5 range.</param>
+        /// <param name="uiScale">Host-relative UI scale in the inclusive 0.75-to-2.0 range.</param>
         /// <param name="reducedMotion">Whether transitions, pulses, and punches resolve immediately.</param>
         /// <param name="motionIntensity">Host-relative motion intensity in the inclusive zero-to-two range.</param>
         public UiAccessibilityPreferences(
@@ -333,7 +347,7 @@ namespace TopiaForge.Mods
             bool reducedMotion = false,
             float motionIntensity = 1f)
         {
-            if (uiScale < 0.75f || uiScale > 1.5f || float.IsNaN(uiScale) || float.IsInfinity(uiScale))
+            if (uiScale < 0.75f || uiScale > 2f || float.IsNaN(uiScale) || float.IsInfinity(uiScale))
             {
                 throw new ArgumentOutOfRangeException(nameof(uiScale));
             }
@@ -388,7 +402,7 @@ namespace TopiaForge.Mods
         /// </summary>
         OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed);
 
-        /// <summary>Shows a short TopiaForgeUi toast.</summary>
+        /// <summary>Shows a short toast in the kit's own theme. Accepts tones from Neutral through Danger.</summary>
         OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral);
     }
 }

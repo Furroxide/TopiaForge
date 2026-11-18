@@ -45,6 +45,7 @@ namespace TopiaForge.ModManager
                 LogWarn = logger.Warn,
                 LogError = logger.Error
             });
+            host.PlainText = true;
             lifetime.Track(host);
             host.LayerLost += OnLayerLost;
             lifetime.Track(gameplay.Subscribe(OnGameplayChanged));
@@ -82,7 +83,9 @@ namespace TopiaForge.ModManager
             }
         }
 
-        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)
+        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => CreateSurface(request, null);
+
+        private OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request, UiRemoteThemeSelection? remoteTheme)
         {
             UnityMainThreadGuard.AssertCurrent();
             if (request == null)
@@ -97,7 +100,19 @@ namespace TopiaForge.ModManager
                     "The mod is stopping and cannot create UI surfaces.");
             }
 
-            try { UiClockBinding.Bind(request.Content, clockEpoch()); }
+            UiThemeDescriptor? theme;
+            if (remoteTheme.HasValue)
+            {
+                theme = ResolveRemoteTheme(remoteTheme.Value);
+            }
+            else
+            {
+                var described = DescribePresentationTheme(request, out theme);
+                if (!described.Succeeded)
+                    return OperationResult<IUiSurface>.Failure(described.ErrorCode, described.ErrorMessage);
+            }
+
+            try { UiClockBinding.Check(request.Content, clockEpoch()); }
             catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
 
             if (!surfaceIds.Add(request.Id))
@@ -157,6 +172,7 @@ namespace TopiaForge.ModManager
                 }
 
                 surface.SetClock(clock, clockEpoch);
+                surface.InitializeTheme(request.Theme, remoteTheme.HasValue, theme);
                 if (request.Content != null)
                 {
                     var contentResult = surface.SetContent(request.Content);
@@ -258,7 +274,7 @@ namespace TopiaForge.ModManager
                     "A toast message is required.");
             }
 
-            if (!Enum.IsDefined(typeof(UiTone), tone))
+            if ((uint)tone > (uint)UiTone.Danger)
             {
                 return OperationResult<bool>.Failure(
                     ModErrorCode.InvalidArgument,
@@ -274,7 +290,7 @@ namespace TopiaForge.ModManager
 
             try
             {
-                host.Toast(message, ToNativeTone(tone));
+                TopiaForgeToasts.ShowPlain(message, ToNativeTone(tone));
                 return OperationResult<bool>.Success(true);
             }
             catch (Exception exception)
@@ -295,6 +311,12 @@ namespace TopiaForge.ModManager
                     return TopiaForgeTone.Warning;
                 case UiTone.Danger:
                     return TopiaForgeTone.Danger;
+                case UiTone.Muted:
+                    return TopiaForgeTone.Muted;
+                case UiTone.Primary:
+                    return TopiaForgeTone.Primary;
+                case UiTone.Accent:
+                    return TopiaForgeTone.Accent;
                 default:
                     return TopiaForgeTone.Neutral;
             }

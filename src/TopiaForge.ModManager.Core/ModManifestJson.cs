@@ -7,6 +7,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
+using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager.Core
 {
@@ -27,7 +28,7 @@ namespace TopiaForge.ModManager.Core
             "supportedSdkVersionRange", "category", "tags", "icon", "screenshots", "homepage",
             "source", "license", "licenseFiles", "hashes", "capabilities", "platforms",
             "architectures", "contentTargets", "builtWith", "worldGamemodes", "contributions",
-            "apiAssemblies", "multiplayer",
+            "apiAssemblies", "multiplayer", "ui",
 
             // Retired fields are decoded only so validation can return an actionable migration error.
             "vpmDependencies", "permissions", "id", "title", "gameVersion", "gameVersionRange",
@@ -224,6 +225,12 @@ namespace TopiaForge.ModManager.Core
             if (present.Contains("multiplayer"))
             {
                 ValidateMultiplayerObject(properties);
+            }
+
+            if (present.Contains("ui"))
+            {
+                var ui = UiThemeCatalogueParser.Parse(StrictUtf8.GetBytes(RequireRawProperty(properties, "ui")));
+                if (!ui.Succeeded) throw new InvalidDataException(ui.ErrorMessage);
             }
         }
 

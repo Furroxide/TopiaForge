@@ -471,6 +471,13 @@ namespace TopiaForge.Multiplayer.Network
                 return;
             }
 
+            if (!content.CanPromoteSharedUi())
+            {
+                if (keyTask.Result != null) Array.Clear(keyTask.Result, 0, keyTask.Result.Length);
+                Fail(LiveFailure.ContentMismatch);
+                return;
+            }
+
             var host = new LiveHost(engine, identity!, bans.Record, settings, content, clock, unixSeconds, keyTask.Result, transportOptions, Services, natOptions);
 
             // The host's policy keeps its own copy of the key, so the derived one is wiped at once.

@@ -5,6 +5,80 @@ namespace TopiaForge.Mods.Testing
 {
     public sealed partial class FakeUiSurface
     {
+        private string admittedEpoch = string.Empty;
+        private FakeUiThemeResolution admittedTheme;
+        private UiAccessibilityPreferences admittedAccessibility = UiAccessibilityPreferences.Default;
+
+        private bool PresentationMatches(string epoch, FakeUiThemeResolution theme, UiAccessibilityPreferences preferences) =>
+            admittedEpoch == epoch && ReferenceEquals(admittedTheme.Descriptor, theme.Descriptor) &&
+            admittedTheme.RequestedId == theme.RequestedId &&
+            admittedAccessibility.HighContrast == preferences.HighContrast &&
+            admittedAccessibility.UiScale == preferences.UiScale &&
+            admittedAccessibility.ReducedMotion == preferences.ReducedMotion &&
+            admittedAccessibility.MotionIntensity == preferences.MotionIntensity;
+
+        private void RememberPresentation(string epoch, FakeUiThemeResolution theme, UiAccessibilityPreferences preferences)
+        {
+            admittedEpoch = epoch;
+            admittedTheme = theme;
+            admittedAccessibility = preferences;
+        }
+
+        /// <inheritdoc/>
+        public OperationResult<bool> SetContent(UiNode content)
+        {
+            if (content == null) throw new ArgumentNullException(nameof(content));
+            if (release == null)
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake UI surface is disposed.");
+
+            var retained = ReferenceEquals(content, Content);
+            var epoch = widgetEpoch();
+            var theme = owner.ResolveTheme(Request.Theme);
+            var preferences = owner.Accessibility;
+            if (retained && PresentationMatches(epoch, theme, preferences)) return FakeUiThemePackage.Success;
+
+            if (nextContentErrorCode != ModErrorCode.None)
+            {
+                var errorCode = nextContentErrorCode;
+                var message = nextContentErrorMessage;
+                nextContentErrorCode = ModErrorCode.None;
+                nextContentErrorMessage = string.Empty;
+                return OperationResult<bool>.Failure(errorCode, message);
+            }
+
+            try
+            {
+                if (!retained && Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
+                    return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
+                wireTarget?.Measure(owner, revision + 1, Request, Body, IsVisible, content, epoch, retained);
+                if (!retained) UiClockBinding.Bind(content, epoch);
+            }
+            catch (ArgumentException exception)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
+            }
+            catch (InvalidOperationException) when (WireBounded)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.RateLimited, "The remote UI surface exceeds its packet budget.");
+            }
+
+            RememberPresentation(epoch, theme, preferences);
+            revision++;
+            // Retained trees keep their input values even when a theme, accessibility setting, or clock changes.
+            if (retained) return FakeUiThemePackage.Success;
+
+            Content = content;
+            toggleValues.Clear();
+            sliderValues.Clear();
+            textValues.Clear();
+            dropdownValues.Clear();
+            listSelections.Clear();
+            graphSelections.Clear();
+            graphViewports.Clear();
+            CaptureState(content);
+            return FakeUiThemePackage.Success;
+        }
+
         private void CaptureState(UiNode? node)
         {
             if (node == null) return;

@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,7 +10,7 @@ namespace TopiaForge.Mods.UnityUi
     /// UnityEngine.Color so widgets read plain fields in ApplyTheme with no per-widget
     /// math. Owned and cached by UiHost.
     /// </summary>
-    public sealed class TopiaForgeResolvedTheme
+    public sealed partial class TopiaForgeResolvedTheme
     {
         private readonly TopiaForgeFillPaint[] fills;
         private readonly Color primaryText;
@@ -89,13 +90,18 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeScheme scheme,
             TopiaForgeRgba? accentOverride,
             bool highContrast,
-            int themeVersion)
+            int themeVersion,
+            UiThemeDescriptor? descriptor = null)
         {
             Scheme = scheme;
             ThemeVersion = themeVersion;
             HighContrast = highContrast;
 
+            descriptor ??= accentOverride.HasValue ? null : UiThemePackParser.Default;
+            Descriptor = descriptor;
+            var authoredScheme = descriptor?.SelectScheme(scheme == TopiaForgeScheme.Hud, HighContrast);
             var colors = TopiaForgeSchemes.Resolve(scheme, accentOverride, HighContrast);
+            if (authoredScheme != null) colors = ApplyPack(colors, authoredScheme, HighContrast);
             Backdrop = ToColor(colors.Backdrop);
             Surface = ToColor(colors.Surface);
             SurfaceAlt = ToColor(colors.SurfaceAlt);
@@ -121,18 +127,9 @@ namespace TopiaForge.Mods.UnityUi
             FocusRing = ToColor(colors.FocusRing);
 
             // What the kit draws on a fill is resolved against that fill, and each state's tint keeps it readable.
-            var resolvedFills = TopiaForgeOnColors.ResolveAll(scheme, colors, HighContrast);
-            fills = new TopiaForgeFillPaint[resolvedFills.Length];
-            for (var index = 0; index < resolvedFills.Length; index++)
-            {
-                var resolved = resolvedFills[index];
-                fills[index] = new TopiaForgeFillPaint(
-                    ToColor(resolved.Fill),
-                    ToColor(resolved.Content),
-                    StateTint(resolved.Hovered),
-                    StateTint(resolved.Selected),
-                    StateTint(resolved.Pressed));
-            }
+            fills = authoredScheme == null
+                ? NativeFills(scheme, colors, HighContrast)
+                : PackFills(authoredScheme, HighContrast);
 
             SliderHandle = ToColor(TopiaForgeOnColors.SliderHandle(scheme, colors, HighContrast));
 
@@ -144,6 +141,14 @@ namespace TopiaForge.Mods.UnityUi
             successText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Success, HighContrast)) : Success;
             warningText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Warning, HighContrast)) : Warning;
             dangerText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Danger, HighContrast)) : Danger;
+            if (authoredScheme != null)
+            {
+                primaryText = ToColor(PackInk(authoredScheme, UiTone.Primary));
+                accentText = ToColor(PackInk(authoredScheme, UiTone.Accent));
+                successText = ToColor(PackInk(authoredScheme, UiTone.Success));
+                warningText = ToColor(PackInk(authoredScheme, UiTone.Warning));
+                dangerText = ToColor(PackInk(authoredScheme, UiTone.Danger));
+            }
 
             // A chip's label is drawn on the chip, so it is resolved against the chip's own fill.
             var tones = (TopiaForgeTone[])Enum.GetValues(typeof(TopiaForgeTone));
@@ -243,6 +248,20 @@ namespace TopiaForge.Mods.UnityUi
         private static Color StateTint(float value)
         {
             return new Color(value, value, value, 1f);
+        }
+
+        private static TopiaForgeFillPaint[] NativeFills(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
+        {
+            var resolved = TopiaForgeOnColors.ResolveAll(scheme, colors, highContrast);
+            var result = new TopiaForgeFillPaint[resolved.Length];
+            for (var index = 0; index < resolved.Length; index++)
+            {
+                var state = resolved[index];
+                result[index] = new TopiaForgeFillPaint(ToColor(state.Fill), ToColor(state.Content),
+                    StateTint(state.Hovered), StateTint(state.Selected), StateTint(state.Pressed));
+            }
+
+            return result;
         }
     }
 

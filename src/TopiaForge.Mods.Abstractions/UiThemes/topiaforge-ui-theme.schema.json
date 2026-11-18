@@ -1,0 +1,470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TopiaForge UI theme",
+  "description": "Declare semantic colors, typography, and style defaults in one package-local theme.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/themeId"
+    },
+    "paper": {
+      "$ref": "#/$defs/scheme"
+    },
+    "hud": {
+      "$ref": "#/$defs/scheme"
+    },
+    "typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/textRole"
+        },
+        "heading": {
+          "$ref": "#/$defs/textRole"
+        },
+        "caption": {
+          "$ref": "#/$defs/textRole"
+        },
+        "banner": {
+          "$ref": "#/$defs/textRole"
+        },
+        "display": {
+          "$ref": "#/$defs/textRole"
+        },
+        "title": {
+          "$ref": "#/$defs/textRole"
+        },
+        "label": {
+          "$ref": "#/$defs/textRole"
+        },
+        "numeral": {
+          "$ref": "#/$defs/textRole"
+        },
+        "mono": {
+          "$ref": "#/$defs/textRole"
+        }
+      }
+    },
+    "shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "small": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "medium": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "control": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "card": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 32
+        }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fastMs": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "baseMs": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "slowMs": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "ease": {
+          "enum": [
+            "outCubic",
+            "outBack"
+          ]
+        }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "card": {
+          "$ref": "#/$defs/component"
+        },
+        "box": {
+          "$ref": "#/$defs/component"
+        },
+        "badge": {
+          "$ref": "#/$defs/component"
+        },
+        "pips": {
+          "$ref": "#/$defs/component"
+        }
+      }
+    },
+    "styles": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/namedStyle"
+      }
+    },
+    "images": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/image"
+      }
+    },
+    "fonts": {
+      "type": "array",
+      "maxItems": 9,
+      "items": {
+        "$ref": "#/$defs/font"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "id"
+  ],
+  "$defs": {
+    "assetId": {
+      "type": "string",
+      "pattern": "^(?!topiaforge\\.)[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "themeId": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/assetId"
+        },
+        {
+          "const": "topiaforge.default",
+          "description": "Reserved identifier of the embedded kit defaults. Give a mod pack its own ID."
+        }
+      ]
+    },
+    "relativePath": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^[^/\\\\:<>\"|?*]+(?:/[^/\\\\:<>\"|?*]+)*$",
+      "description": "Slash-relative package path of at most 256 UTF-8 bytes. Traversal and platform device names are refused."
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "paintRole": {
+      "enum": [
+        "surface",
+        "raised",
+        "sunken",
+        "selected",
+        "primary",
+        "accent",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    "pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fill": {
+          "$ref": "#/$defs/color"
+        },
+        "on": {
+          "$ref": "#/$defs/color"
+        }
+      }
+    },
+    "scheme": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "surface": {
+              "$ref": "#/$defs/pair"
+            },
+            "raised": {
+              "$ref": "#/$defs/pair"
+            },
+            "sunken": {
+              "$ref": "#/$defs/pair"
+            },
+            "selected": {
+              "$ref": "#/$defs/pair"
+            },
+            "primary": {
+              "$ref": "#/$defs/pair"
+            },
+            "accent": {
+              "$ref": "#/$defs/pair"
+            },
+            "success": {
+              "$ref": "#/$defs/pair"
+            },
+            "warning": {
+              "$ref": "#/$defs/pair"
+            },
+            "danger": {
+              "$ref": "#/$defs/pair"
+            }
+          }
+        },
+        "muted": {
+          "$ref": "#/$defs/color"
+        },
+        "outline": {
+          "$ref": "#/$defs/color"
+        },
+        "focus": {
+          "$ref": "#/$defs/color"
+        },
+        "inks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primary": {
+              "$ref": "#/$defs/color"
+            },
+            "accent": {
+              "$ref": "#/$defs/color"
+            },
+            "success": {
+              "$ref": "#/$defs/color"
+            },
+            "warning": {
+              "$ref": "#/$defs/color"
+            },
+            "danger": {
+              "$ref": "#/$defs/color"
+            }
+          }
+        }
+      }
+    },
+    "textRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "font": {
+          "anyOf": [
+            {
+              "enum": [
+                "body",
+                "display",
+                "mono"
+              ]
+            },
+            {
+              "$ref": "#/$defs/assetId"
+            }
+          ]
+        },
+        "case": {
+          "enum": [
+            "preserve",
+            "upper"
+          ]
+        },
+        "trackingEm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.12
+        }
+      }
+    },
+    "radius": {
+      "enum": [
+        "none",
+        "small",
+        "medium",
+        "control",
+        "card",
+        "pill"
+      ]
+    },
+    "border": {
+      "enum": [
+        "none",
+        "thin",
+        "standard",
+        "strong"
+      ]
+    },
+    "shadow": {
+      "enum": [
+        "none",
+        "small",
+        "card"
+      ]
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "radius": {
+          "$ref": "#/$defs/radius"
+        },
+        "border": {
+          "$ref": "#/$defs/border"
+        },
+        "shadow": {
+          "$ref": "#/$defs/shadow"
+        }
+      },
+      "required": [
+        "radius",
+        "border",
+        "shadow"
+      ]
+    },
+    "namedStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/assetId"
+        },
+        "target": {
+          "enum": [
+            "card",
+            "box",
+            "badge",
+            "pips"
+          ]
+        },
+        "radius": {
+          "$ref": "#/$defs/radius"
+        },
+        "fill": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/paintRole"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "border": {
+          "$ref": "#/$defs/border"
+        },
+        "shadow": {
+          "$ref": "#/$defs/shadow"
+        }
+      },
+      "required": [
+        "id",
+        "target",
+        "radius"
+      ]
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/assetId"
+        },
+        "bundlePath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "assetName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "licensePath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "pixelWidth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "pixelHeight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "isMask": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "bundlePath",
+        "assetName",
+        "licensePath"
+      ]
+    },
+    "font": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/assetId"
+            },
+            {
+              "not": {
+                "enum": [
+                  "body",
+                  "display",
+                  "mono"
+                ]
+              }
+            }
+          ]
+        },
+        "bundlePath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "assetName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "licensePath": {
+          "$ref": "#/$defs/relativePath"
+        }
+      },
+      "required": [
+        "id",
+        "bundlePath",
+        "assetName",
+        "licensePath"
+      ]
+    }
+  }
+}

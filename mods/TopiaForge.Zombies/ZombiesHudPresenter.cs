@@ -102,7 +102,13 @@ namespace TopiaForge.Zombies
     /// <summary>Allocation-free-at-rest HUD bridge over the safe TopiaForgeUi surface.</summary>
     internal sealed class ZombiesHudPresenter : IDisposable
     {
+        internal const string PhaseNodeId = "zombies-phase";
+        internal const string WaveNodeId = "zombies-wave";
+        internal const string ScoreNodeId = "zombies-score";
+        internal const string DetailsNodeId = "zombies-details";
+
         private readonly IUiSurface surface;
+        private readonly IModLogger logger;
         private bool hasSnapshot;
         private ZombiesHudSnapshot snapshot;
         private InputBindingKind fireKind;
@@ -117,13 +123,14 @@ namespace TopiaForge.Zombies
 
         public ZombiesHudPresenter(IModContext context)
         {
+            logger = context.Logger;
             var result = context.Ui.CreateSurface(new UiSurfaceRequest(
                 "zombies-status",
                 "ZOMBIES // SURVIVAL",
                 string.Empty,
                 UiSurfaceKind.Hud,
-                440f,
-                230f));
+                530f,
+                330f));
             if (!result.TryGetValue(out var created) || created == null)
             {
                 throw new InvalidOperationException(
@@ -157,7 +164,11 @@ namespace TopiaForge.Zombies
 
             snapshot = next;
             hasSnapshot = true;
-            surface.SetBody(BuildBody(next));
+            var updated = surface.SetContent(BuildContent(next));
+            if (!updated.Succeeded)
+            {
+                logger.Warn("The Zombies HUD could not update (" + updated.ErrorCode + "): " + updated.ErrorMessage);
+            }
         }
 
         public void ForceRefresh()
@@ -176,17 +187,33 @@ namespace TopiaForge.Zombies
             surface.Dispose();
         }
 
-        private string BuildBody(in ZombiesHudSnapshot value)
+        private UiNode BuildContent(in ZombiesHudSnapshot value)
         {
-            var text = new StringBuilder(256);
-            text.Append(PhaseLabel(value));
+            var phase = PhaseLabel(value);
             if (value.Seconds > 0)
             {
-                text.Append("  //  ").Append(value.Seconds.ToString(CultureInfo.InvariantCulture)).Append('s');
+                phase += "  //  " + value.Seconds.ToString(CultureInfo.InvariantCulture) + "s";
             }
 
-            text.Append("\nWAVE  ").Append(value.Wave.ToString(CultureInfo.InvariantCulture))
-                .Append("    HOSTILES  ").Append(value.Hostiles.ToString(CultureInfo.InvariantCulture));
+            var score = "SCORE  " + value.Score.ToString(CultureInfo.InvariantCulture);
+            if (value.ComboMultiplier > 1)
+            {
+                score += "  x" + value.ComboMultiplier.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return new UiColumn(
+                new UiText(phase, UiTextStyle.Title, UiTone.Primary, PhaseNodeId),
+                new UiRow(
+                    new UiText("WAVE  " + value.Wave.ToString(CultureInfo.InvariantCulture),
+                        UiTextStyle.Label, id: WaveNodeId),
+                    new UiText(score, UiTextStyle.Numeral, id: ScoreNodeId)),
+                new UiText(BuildDetails(value), id: DetailsNodeId));
+        }
+
+        private string BuildDetails(in ZombiesHudSnapshot value)
+        {
+            var text = new StringBuilder(224);
+            text.Append("HOSTILES  ").Append(value.Hostiles.ToString(CultureInfo.InvariantCulture));
             if (value.Pending > 0)
             {
                 text.Append(" +").Append(value.Pending.ToString(CultureInfo.InvariantCulture));
@@ -198,12 +225,7 @@ namespace TopiaForge.Zombies
             }
 
             text.Append("\nINTEGRITY  ").Append(value.Integrity.ToString(CultureInfo.InvariantCulture))
-                .Append(" / ").Append(value.MaximumIntegrity.ToString(CultureInfo.InvariantCulture))
-                .Append("    SCORE  ").Append(value.Score.ToString(CultureInfo.InvariantCulture));
-            if (value.ComboMultiplier > 1)
-            {
-                text.Append("  x").Append(value.ComboMultiplier.ToString(CultureInfo.InvariantCulture));
-            }
+                .Append(" / ").Append(value.MaximumIntegrity.ToString(CultureInfo.InvariantCulture));
 
             if (value.ShopEnabled)
             {

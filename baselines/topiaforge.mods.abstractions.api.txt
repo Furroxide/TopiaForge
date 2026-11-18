@@ -396,6 +396,7 @@ type public interface TopiaForge.Mods.IUiService
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.UiAccessibilityPreferences> ApplyAccessibility(TopiaForge.Mods.UiAccessibilityPreferences preferences)
   property System.Double ClockTime { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.IUiThemeService Themes { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IUiWorldLabels Labels { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiAccessibilityPreferences Accessibility { get [abstract,virtual,newslot]; }
 
@@ -409,6 +410,11 @@ type public interface TopiaForge.Mods.IUiSurface : System.IDisposable
 
 type public interface TopiaForge.Mods.IUiSurfaceDismissalSource
   event System.Action? Dismissed { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUiThemeService [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> PreloadAsync(TopiaForge.Mods.UiThemeRef theme, System.Threading.CancellationToken cancellationToken = null) [requires-topiaforge="0.2.0"]
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> UseTheme(TopiaForge.Mods.UiThemeRef? theme) [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiThemeRef? SelectedTheme { get [abstract,virtual,newslot] [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public interface TopiaForge.Mods.IUiWorldLabel : System.IDisposable [requires-topiaforge="0.2.0"]
   method [abstract,virtual,newslot] System.Void SetPosition(TopiaForge.Mods.Vec3 position) [requires-topiaforge="0.2.0"]
@@ -879,6 +885,18 @@ type public sealed class TopiaForge.Mods.UiModalRequest : System.Object
 type public abstract class TopiaForge.Mods.UiNode : System.Object
   property System.String? Id { get; }
 
+type public enum TopiaForge.Mods.UiPaintRole : System.Int32 [requires-topiaforge="0.2.0"]
+  field System.Int32 value__ [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Accent = 5 (Accent) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Danger = 8 (Danger) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Primary = 4 (Primary) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Raised = 1 (Raised) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Selected = 3 (Selected) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Success = 6 (Success) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Sunken = 2 (Sunken) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Surface = 0 (Surface) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiPaintRole Warning = 7 (Warning) [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.UiProgress : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
   constructor .ctor(System.Single fraction, System.String label = "", TopiaForge.Mods.UiTone tone = 0 (Neutral), System.String? id = null) [requires-topiaforge="0.2.0"]
   property System.Single Fraction { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
@@ -925,6 +943,7 @@ type public sealed class TopiaForge.Mods.UiSurfaceRequest : System.Object
   constructor .ctor(System.String id, System.String title, System.String body, TopiaForge.Mods.UiSurfaceKind kind = 1 (Window), System.Single width = 460, System.Single height = 320, TopiaForge.Mods.UiNode? content = null)
   method TopiaForge.Mods.UiSurfaceRequest WithHudAnchor(TopiaForge.Mods.UiHudAnchor anchor)
   method TopiaForge.Mods.UiSurfaceRequest WithHudVisibility(TopiaForge.Mods.UiHudVisibility visibility)
+  method TopiaForge.Mods.UiSurfaceRequest WithTheme(TopiaForge.Mods.UiThemeRef? theme) [requires-topiaforge="0.2.0"]
   property System.Single Height { get; }
   property System.Single Width { get; }
   property System.String Body { get; }
@@ -934,9 +953,10 @@ type public sealed class TopiaForge.Mods.UiSurfaceRequest : System.Object
   property TopiaForge.Mods.UiHudVisibility HudVisibility { get; }
   property TopiaForge.Mods.UiNode? Content { get; }
   property TopiaForge.Mods.UiSurfaceKind Kind { get; }
+  property TopiaForge.Mods.UiThemeRef? Theme { get; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.UiText : TopiaForge.Mods.UiNode
-  constructor .ctor(System.String text, TopiaForge.Mods.UiTextStyle style = 0 (Body), TopiaForge.Mods.UiTone tone = 0 (Neutral))
+  constructor .ctor(System.String text, TopiaForge.Mods.UiTextStyle style = 0 (Body), TopiaForge.Mods.UiTone tone = 0 (Neutral), System.String? id = null) [requires-topiaforge="0.2.0"]
   property System.String Text { get; }
   property TopiaForge.Mods.UiTextStyle Style { get; }
   property TopiaForge.Mods.UiTone Tone { get; }
@@ -952,9 +972,22 @@ type public sealed class TopiaForge.Mods.UiTextInput : TopiaForge.Mods.UiNode
 
 type public enum TopiaForge.Mods.UiTextStyle : System.Int32
   field System.Int32 value__
+  field const TopiaForge.Mods.UiTextStyle Banner = 3 (Banner) [requires-topiaforge="0.2.0"]
   field const TopiaForge.Mods.UiTextStyle Body = 0 (Body)
   field const TopiaForge.Mods.UiTextStyle Caption = 2 (Caption)
+  field const TopiaForge.Mods.UiTextStyle Display = 4 (Display) [requires-topiaforge="0.2.0"]
   field const TopiaForge.Mods.UiTextStyle Heading = 1 (Heading)
+  field const TopiaForge.Mods.UiTextStyle Label = 6 (Label) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiTextStyle Mono = 8 (Mono) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiTextStyle Numeral = 7 (Numeral) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.UiTextStyle Title = 5 (Title) [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.UiThemeRef : System.Object, System.IEquatable<TopiaForge.Mods.UiThemeRef> [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String id) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.UiThemeRef? other) [requires-topiaforge="0.2.0"]
+  method [virtual] System.Boolean Equals(System.Object? obj) [requires-topiaforge="0.2.0"]
+  method [virtual] System.Int32 GetHashCode() [requires-topiaforge="0.2.0"]
+  property System.String Id { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.UiToggle : TopiaForge.Mods.UiNode
   constructor .ctor(System.String id, System.String label, System.Boolean value, System.Action<System.Boolean> changed, System.Boolean enabled = true)
@@ -965,8 +998,11 @@ type public sealed class TopiaForge.Mods.UiToggle : TopiaForge.Mods.UiNode
 
 type public enum TopiaForge.Mods.UiTone : System.Int32
   field System.Int32 value__
+  field const TopiaForge.Mods.UiTone Accent = 6 (Accent) [requires-topiaforge="0.2.0"]
   field const TopiaForge.Mods.UiTone Danger = 3 (Danger)
+  field const TopiaForge.Mods.UiTone Muted = 4 (Muted) [requires-topiaforge="0.2.0"]
   field const TopiaForge.Mods.UiTone Neutral = 0 (Neutral)
+  field const TopiaForge.Mods.UiTone Primary = 5 (Primary) [requires-topiaforge="0.2.0"]
   field const TopiaForge.Mods.UiTone Success = 1 (Success)
   field const TopiaForge.Mods.UiTone Warning = 2 (Warning)
 

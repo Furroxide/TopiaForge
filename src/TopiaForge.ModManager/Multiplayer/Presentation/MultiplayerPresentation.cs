@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager
         internal const int MaximumSurfaces = 32;
         private readonly MultiplayerPlayers players;
         private readonly List<MirroredHudPresenter> surfaces = new List<MirroredHudPresenter>();
+        private readonly List<MirroredHudPresenter> authoredHuds = new List<MirroredHudPresenter>();
         private readonly Dictionary<ParticipantId, Delivery> deliveries = new Dictionary<ParticipantId, Delivery>();
         private readonly List<ParticipantId> departed = new List<ParticipantId>();
         private readonly WorldWireWriter writer = new WorldWireWriter(32 * 1024);
@@ -39,6 +40,8 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal IUiService UiReceiver => Receiver.Ui;
+
         internal MultiplayerPresentation(MultiplayerPlayers players, Func<PresentationSink> receiverFactory)
         {
             this.players = players;
@@ -51,20 +54,26 @@ namespace TopiaForge.ModManager
         {
             UnityMainThreadGuard.AssertCurrent();
             if (context.Lifetime.IsStopping) return Stopped<IUiSurface>();
-            var token = Token();
-            var hud = new MirroredHudPresenter(this, context, request, token);
-            var prepared = hud.Prepare(request.Body, request.Content, true);
+            var themed = UiPresentationTheme.Resolve(local, request, out var theme);
+            if (!themed.Succeeded) return OperationResult<IUiSurface>.Failure(themed.ErrorCode, themed.ErrorMessage);
+            var hud = new MirroredHudPresenter(this, context, request, nextToken + 1, local as IUiPresentationThemeSource, theme);
+            var staged = StageEnvelope(hud, theme, request.Content, out var envelope);
+            if (!staged.Succeeded) return OperationResult<IUiSurface>.Failure(staged.ErrorCode, staged.ErrorMessage);
+            var prepared = hud.Prepare(request.Body, request.Content, true, envelope);
             if (Hosting && hud.InvalidComposition != null)
                 return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, hud.InvalidComposition);
             if (Hosting && (!prepared || surfaces.Count >= MaximumSurfaces || surfaceBytes + hud.Bytes > MaximumBytes))
                 return Limit<IUiSurface>();
             var result = local.CreateSurface(request);
             if (!result.TryGetValue(out var surface)) return result;
+            Token();
             hud.Attach(surface);
+            authoredHuds.Add(hud);
             // Solo remains unrestricted. Only wire-sized HUDs are eligible for a later promotion.
             if (prepared && surfaces.Count < MaximumSurfaces && surfaceBytes + hud.Bytes <= MaximumBytes)
             {
                 surfaces.Add(hud); surfaceBytes += hud.Bytes; version++;
+                RememberGeneration(hud.Encoded);
             }
             hud.Tracking = context.Lifetime.Track(hud);
             return OperationResult<IUiSurface>.Success(hud);
@@ -83,6 +92,7 @@ namespace TopiaForge.ModManager
             if (!commit) return true;
             if (!registered) surfaces.Add(hud);
             surfaceBytes = next; hud.Encoded = payload; version++;
+            RememberGeneration(payload);
             return true;
         }
 
@@ -90,6 +100,12 @@ namespace TopiaForge.ModManager
         {
             if (!surfaces.Remove(hud)) return;
             surfaceBytes -= hud.Bytes; version++;
+        }
+
+        internal void Release(MirroredHudPresenter hud)
+        {
+            authoredHuds.Remove(hud);
+            Remove(hud);
         }
 
         internal bool ChangeVisibility(MirroredHudPresenter hud, MirroredHudPresenter.EncodedHud? payload, bool commit = true) =>

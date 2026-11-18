@@ -16,6 +16,12 @@ namespace TopiaForge.Mods.Internal
         /// <summary>Gets the TopiaForge runtime version, a semantic version.</summary>
         string RuntimeVersion { get; }
 
+        /// <summary>Gets the highest UI contract this process can receive.</summary>
+        int UiContractVersion => InternalUiPresentationContract.LegacyVersion;
+
+        /// <summary>Checks retained shared presentation before opening an existing solo session to peers.</summary>
+        OperationResult<bool> PrepareSharedUiForHosting() => OperationResult<bool>.Success(true);
+
         /// <summary>Gets the name this player hosts and joins as: 1 to 24 printable characters.</summary>
         string DisplayName { get; }
 
@@ -267,14 +273,18 @@ namespace TopiaForge.Mods.Internal
     /// <summary>What a joining player presents for admission: its game build, protocol and content.</summary>
     internal sealed class InternalContentOffer
     {
-        internal InternalContentOffer(string gameBuild, string protocolVersion, string peerVersionRange, IReadOnlyList<InternalContentDescriptor> mods)
+        internal InternalContentOffer(string gameBuild, string protocolVersion, string peerVersionRange, IReadOnlyList<InternalContentDescriptor> mods,
+            int uiContractVersion = InternalUiPresentationContract.LegacyVersion)
         {
             GameBuild = gameBuild ?? throw new ArgumentNullException(nameof(gameBuild));
             ProtocolVersion = protocolVersion ?? throw new ArgumentNullException(nameof(protocolVersion));
             PeerVersionRange = peerVersionRange ?? throw new ArgumentNullException(nameof(peerVersionRange));
             if (mods == null) throw new ArgumentNullException(nameof(mods));
             if (mods.Count > InternalContentLimits.MaximumPackages) throw new ArgumentException("An offer lists at most 512 packages.", nameof(mods));
+            if (uiContractVersion < InternalUiPresentationContract.LegacyVersion || uiContractVersion > byte.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(uiContractVersion));
             Mods = mods;
+            UiContractVersion = uiContractVersion;
         }
 
         internal string GameBuild { get; }
@@ -287,6 +297,18 @@ namespace TopiaForge.Mods.Internal
 
         /// <summary>Gets the packages the player runs, sorted by id. Client-local packages are left out: they are nobody else's business.</summary>
         internal IReadOnlyList<InternalContentDescriptor> Mods { get; }
+
+        internal int UiContractVersion { get; }
+    }
+
+    internal static class InternalUiPresentationContract
+    {
+        internal const int LegacyVersion = 1;
+        internal const int FoundationVersion = 2;
+
+        // Only a verified descriptor from this provider protocol line may request an extended content offer.
+        internal static bool SupportsExtendedOffer(string protocolVersion) =>
+            SemanticVersion.TryParse(protocolVersion, out var version) && version.Major == "2" && version.Minor != "0";
     }
 
     /// <summary>What a joining player must do about one package the host runs.</summary>

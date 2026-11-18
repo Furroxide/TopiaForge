@@ -178,6 +178,22 @@ void main() {
             jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
         expect(manifestJson['schemaVersion'], 6, reason: template.id);
         final manifest = ModManifest.fromJson(manifestJson);
+        if (template.id == 'ui') {
+          expect(manifest.ui?.defaultThemeId, 'survival');
+          expect(manifest.ui!.themes.map((theme) => theme.id), [
+            'survival',
+            'controls-preview',
+          ]);
+          for (final theme in manifest.ui!.themes) {
+            final packaged = File(
+              p.join(workspace.projectRoot, theme.definition),
+            );
+            final canonical = File(
+              p.join(repoRoot, 'templates', 'mod', 'ui', theme.definition),
+            );
+            expect(packaged.readAsBytesSync(), canonical.readAsBytesSync());
+          }
+        }
         expect(
           manifest.validate().where((issue) => issue.isBlocking),
           isEmpty,

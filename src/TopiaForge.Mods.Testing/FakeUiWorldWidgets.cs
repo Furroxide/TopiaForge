@@ -65,8 +65,13 @@ namespace TopiaForge.Mods.Testing
     {
         private Func<double> widgetClock = () => 0;
         private Func<string> widgetEpoch = () => "fake";
-        internal bool WireBounded;
-        internal void SetClock(Func<double> value, Func<string> epoch) { widgetClock = value; widgetEpoch = epoch; }
+        internal bool WireBounded => wireTarget.HasValue;
+        internal void SetClock(Func<double> value, Func<string> epoch)
+        {
+            widgetClock = value;
+            widgetEpoch = epoch;
+            RememberPresentation(epoch(), owner.ResolveTheme(Request.Theme), owner.Accessibility);
+        }
         /// <summary>Reads the current countdown without an author update callback or a replacement composition.</summary>
         [RequiresTopiaForge("0.2.0")]
         public bool TryGetCountdownSeconds(string id, out int seconds)

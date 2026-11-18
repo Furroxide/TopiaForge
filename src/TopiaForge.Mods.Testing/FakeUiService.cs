@@ -13,10 +13,14 @@ namespace TopiaForge.Mods.Testing
         private readonly List<FakeUiSurface> surfaces = new List<FakeUiSurface>();
         private readonly List<FakeUiModal> modals = new List<FakeUiModal>();
         private readonly List<FakeToast> toasts = new List<FakeToast>();
+        private readonly IReadOnlyList<FakeUiSurface> surfaceView;
+        private readonly IReadOnlyList<FakeUiModal> modalView;
+        private readonly IReadOnlyList<FakeToast> toastView;
         private readonly Dictionary<string, ContentFailure> pendingContentFailures =
             new Dictionary<string, ContentFailure>(StringComparer.Ordinal);
         private UiAccessibilityPreferences accessibility = UiAccessibilityPreferences.Default;
         private FakeSceneService? scenes;
+        private ulong nextTargetedSurfaceToken = 1;
 
         /// <summary>
         /// Creates a fake UI service. Its gameplay HUDs show whenever they are shown, until <see cref="FakeModContext"/>
@@ -24,20 +28,24 @@ namespace TopiaForge.Mods.Testing
         /// </summary>
         public FakeUiService(FakeModLifetime lifetime) : this(lifetime, default(FakeGameThread)) { }
 
-        internal FakeUiService(FakeModLifetime lifetime, FakeGameThread gameThread)
+        internal FakeUiService(FakeModLifetime lifetime, FakeGameThread gameThread, FakeUiThemeScope? parentThemeScope = null)
         {
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
             this.gameThread = gameThread;
+            themeScope = new FakeUiThemeScope(lifetime, gameThread, parentThemeScope);
+            surfaceView = surfaces.AsReadOnly();
+            modalView = modals.AsReadOnly();
+            toastView = toasts.AsReadOnly();
         }
 
         /// <summary>Gets active fake UI surfaces.</summary>
-        public IReadOnlyList<FakeUiSurface> Surfaces => surfaces.AsReadOnly();
+        public IReadOnlyList<FakeUiSurface> Surfaces => surfaceView;
 
         /// <summary>Gets open fake UI modals.</summary>
-        public IReadOnlyList<FakeUiModal> Modals => modals.AsReadOnly();
+        public IReadOnlyList<FakeUiModal> Modals => modalView;
 
         /// <summary>Gets every captured toast in display order.</summary>
-        public IReadOnlyList<FakeToast> Toasts => toasts.AsReadOnly();
+        public IReadOnlyList<FakeToast> Toasts => toastView;
 
         /// <summary>
         /// Causes the next content update for a surface id to return a stable failure. An existing surface is armed
@@ -90,7 +98,17 @@ namespace TopiaForge.Mods.Testing
         }
 
         /// <inheritdoc/>
-        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)
+        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => CreateSurface(request, null);
+
+        internal OperationResult<IUiSurface> CreateTargetedSurface(UiSurfaceRequest request, string player, ulong generation)
+        {
+            var target = new FakeUiWireTarget(player, generation, nextTargetedSurfaceToken);
+            var created = CreateSurface(request, target);
+            if (created.Succeeded) nextTargetedSurfaceToken++;
+            return created;
+        }
+
+        private OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request, FakeUiWireTarget? wireTarget)
         {
             gameThread.AssertCurrent();
             if (request == null)
@@ -115,13 +133,29 @@ namespace TopiaForge.Mods.Testing
                 }
             }
 
-            try { UiClockBinding.Bind(request.Content, WidgetEpoch()); }
+            var themeCheck = themeScope.Package.ValidateSelection(themeScope, request.Theme);
+            if (!themeCheck.Succeeded)
+                return OperationResult<IUiSurface>.Failure(themeCheck.ErrorCode, themeCheck.ErrorMessage);
+
+            var epoch = WidgetEpoch();
+            try
+            {
+                wireTarget?.Measure(this, 1, request, request.Body, visible: true, request.Content, epoch, retained: false);
+                UiClockBinding.Bind(request.Content, epoch);
+            }
             catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
+            catch (InvalidOperationException) when (wireTarget.HasValue)
+            {
+                return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "The remote UI surface exceeds its packet budget.");
+            }
+
             var scenesNow = scenes;
             var surface = new FakeUiSurface(
                 request,
-                value => surfaces.Remove(value),
-                scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay);
+                this,
+                RemoveSurface,
+                scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay,
+                wireTarget);
             surface.SetClock(() => widgetClock(), () => WidgetEpoch());
             if (pendingContentFailures.TryGetValue(request.Id, out var contentFailure))
             {
@@ -133,6 +167,7 @@ namespace TopiaForge.Mods.Testing
             try
             {
                 surface.AttachLifetimeLease(lifetime.Track(surface));
+                themeScope.Package.AddSurface(themeScope, surface);
                 return OperationResult<IUiSurface>.Success(surface);
             }
             catch (ObjectDisposedException)
@@ -190,7 +225,7 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentException("A toast message is required.", nameof(message));
             }
 
-            if (!Enum.IsDefined(typeof(UiTone), tone))
+            if (tone < UiTone.Neutral || tone > UiTone.Danger)
             {
                 return OperationResult<bool>.Failure(
                     ModErrorCode.InvalidArgument,
@@ -212,6 +247,12 @@ namespace TopiaForge.Mods.Testing
         internal void FollowScenes(FakeSceneService fakeScenes)
         {
             scenes = fakeScenes ?? throw new ArgumentNullException(nameof(fakeScenes));
+        }
+
+        private void RemoveSurface(FakeUiSurface surface)
+        {
+            surfaces.Remove(surface);
+            themeScope.Package.RemoveSurface(themeScope, surface);
         }
 
         private readonly struct ContentFailure

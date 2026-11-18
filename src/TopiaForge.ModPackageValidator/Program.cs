@@ -15,7 +15,8 @@ internal static class Program
             return ValidateReleaseScaffold(args.Skip(1).ToArray());
         }
 
-        if (args.Length != 1 || string.IsNullOrWhiteSpace(args[0]))
+        var uiOnly = args.Length == 2 && string.Equals(args[0], "--ui-themes-only", StringComparison.Ordinal);
+        if ((!uiOnly && args.Length != 1) || string.IsNullOrWhiteSpace(args[args.Length - 1]))
         {
             Console.Error.WriteLine(ErrorCode + ": expected one safely extracted package directory.");
             return 2;
@@ -23,7 +24,7 @@ internal static class Program
 
         try
         {
-            var packageRoot = Path.GetFullPath(args[0]);
+            var packageRoot = Path.GetFullPath(args[args.Length - 1]);
             if (!Directory.Exists(packageRoot))
             {
                 Console.Error.WriteLine(ErrorCode + ": package directory does not exist: " + packageRoot);
@@ -38,6 +39,14 @@ internal static class Program
             }
 
             var manifest = ModManifestJson.LoadFile(manifestPath);
+            if (uiOnly)
+            {
+                var uiErrors = ManifestContentValidator.ValidateUiThemes(packageRoot, manifest);
+                foreach (var error in uiErrors)
+                    Console.Error.WriteLine(ErrorCode + ": " + error);
+                return uiErrors.Count == 0 ? 0 : 1;
+            }
+
             var errors = ManifestValidator.Validate(manifest).ToList();
             if (errors.Count == 0)
             {

@@ -154,6 +154,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool IsConnected { get; set; }
         internal HostConnection? Connection { get; set; }
         internal long DepartedAtMicros { get; set; }
+        internal int UiContractVersion { get; set; } = 1;
         internal ulong LastSequence { get; set; }
         internal long RttMicros { get; set; } = -1;
         internal string? PlayerKey { get; set; }

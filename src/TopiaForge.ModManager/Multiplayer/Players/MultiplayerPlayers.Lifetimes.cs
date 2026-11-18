@@ -22,6 +22,9 @@ namespace TopiaForge.ModManager
             {
                 var id = retiredPlayers[i];
                 playerStreams.Remove(id); inputBudgets.Remove(id); uiReplies.Remove(id); uiSends.Remove(id); scoreDeliveries.Remove(id);
+                if (targetSequences.TryGetValue(id, out var sequence) &&
+                    (!snapshot.TryGetParticipant(id, out _) || sequence.Stream != (Channel?.GetGeneration(id) ?? 0)))
+                    targetSequences.Remove(id);
                 for (var c = 0; c < contexts.Count; c++) contexts[c].Forget(id);
             }
             for (var i = 0; i < snapshot.Participants.Count; i++)

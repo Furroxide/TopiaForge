@@ -40,5 +40,12 @@
     <Compile Remove="TimeControl.cs" />
     <Compile Remove="Worlds.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UiThemes\topiaforge-ui-theme.defaults.json"
+                      LogicalName="TopiaForge.Mods.topiaforge-ui-theme.defaults.json" />
+    <None Update="UiThemes\topiaforge-ui-theme.defaults.json;UiThemes\topiaforge-ui-theme.schema.json"
+          Pack="true" PackagePath="contentFiles\any\any\ui\%(Filename)%(Extension)"
+          PackageCopyToOutput="false" />
+  </ItemGroup>
   <Import Project="..\TopiaForge.Mods.ReferenceOnlyPack.targets" />
 </Project>

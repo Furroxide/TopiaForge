@@ -5,10 +5,8 @@ using System.Text.RegularExpressions;
 namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
-    /// The Unity wiring of SDK surface lifetimes, which no offline test can run, pinned by its shape: persistent canvases
-    /// for every surface and modal, sorting slots released by the allocator's record, canvases destroyed outside the kit
-    /// reported to their owners, the gameplay gate sampled every frame, toasts clear of the level objective, and windows
-    /// that stay shown when shown again during a close fade and that follow their canvas's size.
+    /// Checks persistent canvases, sorting slot recovery, canvas loss notifications, and the gameplay gate wiring.
+    /// The production surface probe exercises retained content reapplication against Unity-boundary doubles.
     /// </summary>
     internal static class UiSurfaceLifetimeConventionTests
     {
@@ -24,7 +22,7 @@ namespace TopiaForge.ModManager.Tests
             TheGateIsSampledEveryFrameBeforeModsUpdate();
             ToastsStackFromTheBottomRight();
             APausedWorldLoadToastsThroughItsProvider();
-            ALocalSurfaceKeepsTheClockOfItsShownTree();
+            UiSurfaceReapplyTests.Run();
             AWindowShownDuringItsCloseFadeStaysShown();
             AWindowFollowsItsCanvasSize();
             Console.WriteLine("UiSurfaceLifetimeConventionTests passed.");
@@ -175,16 +173,6 @@ namespace TopiaForge.ModManager.Tests
             var core = Read("src", "TopiaForge.ModManager", "CoreGameplayServices.cs");
             RequireMatch(core, @"new OwnerWorldRuntimeService\(lifetime, sceneTransitions, worlds, new WorldRuntimeClock\(ownerScheduler\), dispatcher,\s*message => ui\.ShowToast\(message\)\)",
                 "A provider's world runtime must show the paused-load notice as the provider's toast.");
-        }
-
-        // Re-applying the shown tree failed on a local surface once its countdown expired, and succeeded on a shared HUD.
-        private static void ALocalSurfaceKeepsTheClockOfItsShownTree()
-        {
-            var surface = Read("src", "TopiaForge.ModManager", "UnityUiSurface.cs");
-            RequireSource(surface, "if (!ReferenceEquals(content, admitted)) UiClockBinding.Bind(content, callbacks.ClockEpoch());",
-                "A local surface must re-apply its shown tree without binding it to the current clock again.");
-            RequireMatch(surface, @"compositionRoot = next;\s*admitted = content;",
-                "A local surface must remember the tree it shows once that tree is committed.");
         }
 
         // A surface's Hide followed at once by Show left the window hidden, though the surface said it showed.
