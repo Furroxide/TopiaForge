@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -32,6 +33,30 @@ Future<LauncherBloc> _open(_Rig rig) async {
     (s) => s.multiplayer.hosting.phase == HostingPhase.editing,
   );
   return bloc;
+}
+
+/// The block-quoted paragraphs of one section of the approved privacy text,
+/// with each paragraph's wrapped lines joined by single spaces.
+List<String> _approvedQuotes(String heading) {
+  final lines = File(
+    '../../docs/internal/MultiplayerPrivacyText.md',
+  ).readAsLinesSync();
+  final start = lines.indexOf('## $heading');
+  expect(start, isNot(-1), reason: 'the approved text has "$heading"');
+  final quotes = <String>[];
+  var current = <String>[];
+  for (final line in lines.skip(start + 1)) {
+    if (line.startsWith('## ')) break;
+    final quoted = line.startsWith('>') ? line.substring(1).trim() : null;
+    if (quoted != null && quoted.isNotEmpty) {
+      current.add(quoted);
+    } else if (current.isNotEmpty) {
+      quotes.add(current.join(' '));
+      current = [];
+    }
+  }
+  if (current.isNotEmpty) quotes.add(current.join(' '));
+  return quotes;
 }
 
 Future<void> _review(LauncherBloc bloc, _Rig rig) async {
@@ -159,6 +184,48 @@ void main() {
     await pumpEventQueue();
     expect(rig.loads, greaterThan(before));
   });
+  test('the public activity notice is its approved section word for word', () {
+    expect(_approvedQuotes('When a player hosts a public Internet session'), [
+      HostActivityText.publicSessions,
+    ]);
+  });
+  testWidgets('the activity notice shows for a public session only', (
+    tester,
+  ) async {
+    final rig = _Rig();
+    late LauncherBloc bloc;
+    await tester.runAsync(() async {
+      bloc = await _open(rig);
+    });
+    await tester.pumpWidget(
+      BlocProvider.value(
+        value: bloc,
+        child: const MaterialApp(home: Scaffold(body: HostingDialog())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final (label, shown) in [
+      ('Public', true),
+      ('Invite only', false),
+      ('Local network (LAN)', false),
+      ('Public', true),
+    ]) {
+      await tester.tap(find.byType(DropdownButtonFormField<ServerVisibility>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+      expect(
+        find.text(HostActivityText.publicSessions),
+        shown ? findsOneWidget : findsNothing,
+        reason: label,
+      );
+      expect(
+        find.byKey(const Key('hosting-activity-disclosure')),
+        shown ? findsOneWidget : findsNothing,
+        reason: label,
+      );
+    }
+  });
   for (final size in [
     const Size(2560, 1440),
     const Size(1920, 1080),
@@ -190,6 +257,12 @@ void main() {
       await tester.pumpWidget(page(const HostingDialog()));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('hosting-name')), findsOneWidget);
+      final visibility = find.byType(DropdownButtonFormField<ServerVisibility>);
+      await tester.tap(visibility);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Public').last);
+      await tester.pumpAndSettle();
+      expect(find.text(HostActivityText.publicSessions), findsOneWidget);
       expect(find.byType(TextField), findsNWidgets(2)); // no password field
       expect(tester.takeException(), isNull);
       await tester.runAsync(() async {
