@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       migration_sql_sha256:
-        description: SHA-256 of the approved 0003 SQL; required for status only
+        description: SHA-256 of the approved 0003 SQL, required only when that migration is pending
         required: false
         type: string
       verify_public_routes:
@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       retire_legacy_bindings:
-        description: Remove the retired migration secret, and the unused production ingest secret on Status
+        description: Remove retired bindings (for Status, requires production monitoring to be disabled)
         required: true
         type: boolean
         default: false
@@ -147,7 +147,9 @@ jobs:
         run: |
           set -euo pipefail
           approved=514a6f4deef1303f83887a81e38d1c28525e06b5b1ab7d84819b4d24c0f99e51
-          test "$MIGRATION_SQL_SHA256" = "$approved"
+          if [[ -n "$MIGRATION_SQL_SHA256" ]]; then
+            test "$MIGRATION_SQL_SHA256" = "$approved"
+          fi
           test "$(find migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort)" = \
             "$(printf '%s\n' 0001_status.sql 0002_claim_owners.sql 0003_public_activity.sql)"
           test "$(sha256sum migrations/0003_public_activity.sql | cut -d' ' -f1)" = "$approved"
@@ -217,6 +219,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STATUS_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STATUS_INGEST_TOKEN_STAGING: ${{ secrets.STATUS_INGEST_TOKEN_STAGING }}
+          STATUS_INGEST_TOKEN_PRODUCTION: ${{ secrets.STATUS_INGEST_TOKEN_PRODUCTION }}
+          RETIRE_LEGACY_BINDINGS: ${{ inputs.retire_legacy_bindings }}
+          MIGRATION_SQL_SHA256: ${{ inputs.migration_sql_sha256 }}
           WRANGLER_SEND_METRICS: 'false'
         run: |
           set -euo pipefail
@@ -228,14 +233,32 @@ jobs:
           import json
           import os
           import sys
+          from pathlib import Path
 
-          token = os.environ.get('STATUS_INGEST_TOKEN_STAGING', '')
-          if len(token) < 32 or any(ord(char) <= 32 for char in token):
-              raise SystemExit('STATUS_INGEST_TOKEN_STAGING is missing or invalid')
+          def ingest_token(name):
+              value = os.environ.get(name, '')
+              if len(value) < 32 or any(ord(char) <= 32 for char in value):
+                  raise SystemExit(f'{name} is missing or invalid')
+              return value
+
+          config = json.loads(Path('config/environments.json').read_text(encoding='utf-8'))
+          production = config['production']
+          monitor_enabled = production.get('monitorEnabled', production['launched'])
+          if type(monitor_enabled) is not bool:
+              raise SystemExit('Production monitoring configuration must be a boolean')
+          staging_token = ingest_token('STATUS_INGEST_TOKEN_STAGING')
+          tokens = {'INGEST_TOKEN_STAGING': staging_token}
+          if monitor_enabled:
+              if os.environ['RETIRE_LEGACY_BINDINGS'] == 'true':
+                  raise SystemExit('Cannot retire the ingest binding while production monitoring is enabled')
+              production_token = ingest_token('STATUS_INGEST_TOKEN_PRODUCTION')
+              if production_token == staging_token:
+                  raise SystemExit('Staging and production ingest credentials must be distinct')
+              tokens['INGEST_TOKEN_PRODUCTION'] = production_token
           try:
               fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
               with os.fdopen(fd, 'w', encoding='utf-8') as output:
-                  json.dump({'INGEST_TOKEN_STAGING': token}, output)
+                  json.dump(tokens, output)
           except OSError:
               raise SystemExit('Could not create temporary status secrets file') from None
           PY
@@ -247,7 +270,13 @@ jobs:
             ((.[0].results | map(.name)) == ["0001_status.sql", "0002_claim_owners.sql"] or
              (.[0].results | map(.name)) == ["0001_status.sql", "0002_claim_owners.sql", "0003_public_activity.sql"])
           ' <<<"$migration_rows" >/dev/null
-          npx --no-install wrangler d1 migrations apply DB --remote --config wrangler.deploy.toml
+          migration_count=$(jq -r '.[0].results | length' <<<"$migration_rows")
+          if [[ "$migration_count" == 2 ]]; then
+            test -n "$MIGRATION_SQL_SHA256"
+            migration_sha=$(sha256sum migrations/0003_public_activity.sql | cut -d' ' -f1)
+            test "$MIGRATION_SQL_SHA256" = "$migration_sha"
+            npx --no-install wrangler d1 migrations apply DB --remote --config wrangler.deploy.toml
+          fi
           npx --no-install wrangler deploy --config wrangler.deploy.toml --secrets-file "$secrets_file"
 
       - name: Deploy the control plane
@@ -375,9 +404,13 @@ jobs:
           set -euo pipefail
           case "$TARGET" in
             status)
+              expected_flags=$(jq -c '.production | {launched, stableClientPublished}' source/config/environments.json)
               curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 \
                 --connect-timeout 10 --max-time 20 https://status.topiaforge.dev/api/status \
-                | jq -e '.schema == "topiaforge.public-status/1" and (.environments.production.launched | type == "boolean")'
+                | jq -e --argjson flags "$expected_flags" '
+                    .schema == "topiaforge.public-status/1" and
+                    (.environments.production | {launched, stableClientPublished} |
+                      all(.[]; type == "boolean") and . == $flags)'
               curl --fail --silent --show-error --max-time 20 \
                 'https://status.topiaforge.dev/api/history?environment=staging&range=24h' \
                 | jq -e '.environment == "staging" and (.components | length == 5)'
