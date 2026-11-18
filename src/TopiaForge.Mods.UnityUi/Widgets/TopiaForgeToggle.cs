@@ -143,9 +143,15 @@ namespace TopiaForge.Mods.UnityUi
 
         private void Repaint()
         {
-            // The toggle keeps uGUI's default color block, which darkens the track while pressed; the thumb and the check
-            // are resolved against the track at that tint too.
             var theme = Theme;
+            // Resolve the press tint with the same rule as the check or thumb on its track.
+            var colors = toggle.colors;
+            var pressedTint = value
+                ? TopiaForgeOnColors.ControlOnPressedTint(theme.Scheme, theme.HighContrast)
+                : TopiaForgeOnColors.ControlPressedTint;
+            colors.pressedColor = new Color(pressedTint, pressedTint, pressedTint, 1f);
+            toggle.colors = colors;
+
             if (checkbox)
             {
                 theme.FillColors(TopiaForgeFillRole.ControlOn, out var onFill, out var onCheck);

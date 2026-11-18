@@ -292,11 +292,12 @@ gameplay overlays. Safe consumers specify semantic tone (`Neutral`, `Success`, `
 `Danger`) rather than color literals. The provider owns layer bands, focus order, cursor state,
 font fallback, motion, high contrast, and UI scale.
 
-Labels and marks drawn on a fill read on that fill in both schemes, while the fill is hovered,
-selected or pressed too: a label at 4.5:1 (WCAG AA), and a switch's thumb, a checkbox's check or a
-stepper's mark at the 3:1 a control's parts need. High contrast raises them to 7:1 and 4.5:1. White
-stays wherever it reads. On the brand orange, where it read at 2.6:1, and on the HUD's bright status
-fills, labels and marks are dark instead, and an off switch's grey thumb is lightened or darkened
+Enabled filled and danger button labels meet 4.5:1 (WCAG AA) at rest and while hovered, selected or
+pressed. Enabled switch thumbs and checkbox checks, and stepper marks, meet 3:1 on their fills.
+Both thresholds include 8-bit color rounding. High contrast raises them to 7:1 and 4.5:1. On brand
+orange (`#FF7A11`), Paper uses `#2D3748` and HUD uses `#10141B`. Paper darkens the orange less on
+press to keep that pairing readable. High contrast can darken the ink further. The HUD's bright
+status fills also use dark ink. An off switch's grey thumb is lightened or darkened
 until it reads on the tint. A fill keeps the brand's color unless nothing reads on it: Paper's
 danger button is a shade darker, because white read at only 4.47:1 on its red while hovered. A
 slider's handle is the accent on Paper, where a white one vanished on the light track, and stays

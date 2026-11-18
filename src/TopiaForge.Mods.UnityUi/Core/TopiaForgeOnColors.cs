@@ -59,13 +59,20 @@ namespace TopiaForge.Mods.UnityUi
         internal const float ButtonPressedTint = TopiaForgeSchemes.PressedTint;
 
         /// <summary>
-        /// The tint uGUI's default color block multiplies a control's target by while it is pressed, the darkest it goes.
-        /// A switch's track, a checkbox's box and a slider's handle keep that block, whose other states are lighter.
+        /// The pressed tint in uGUI's default color block. Other enabled states are lighter.
         /// </summary>
         internal const float ControlPressedTint = 200f / 255f;
 
         /// <summary>The dark content the kit draws where white does not read: the HUD's backdrop, as on a HUD badge.</summary>
         internal static readonly TopiaForgeRgba DarkContent = TopiaForgePalette.HudBackdrop;
+
+        // Orange has little contrast to spare against Paper ink. Keep the pressed tints inside the
+        // required contrast for the label and mark respectively, including after byte rounding.
+        internal static float FilledButtonPressedTint(TopiaForgeScheme scheme, bool highContrast) =>
+            scheme == TopiaForgeScheme.Paper && !highContrast ? 0.995f : ButtonPressedTint;
+
+        internal static float ControlOnPressedTint(TopiaForgeScheme scheme, bool highContrast) =>
+            scheme == TopiaForgeScheme.Paper && !highContrast ? 0.8f : ControlPressedTint;
 
         private const int Steps = 48;
         private const float DarkenStep = 0.92f;
@@ -78,27 +85,28 @@ namespace TopiaForge.Mods.UnityUi
         internal static float MarkRatio(bool highContrast) => highContrast ? 4.5f : 3f;
 
         /// <summary>Gets every fill role's colors in a scheme, indexed by role.</summary>
-        internal static TopiaForgeFillColors[] ResolveAll(TopiaForgeSchemeColors colors, bool highContrast)
+        internal static TopiaForgeFillColors[] ResolveAll(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             var roles = (TopiaForgeFillRole[])Enum.GetValues(typeof(TopiaForgeFillRole));
             var all = new TopiaForgeFillColors[roles.Length];
             foreach (var role in roles)
             {
-                all[(int)role] = Resolve(role, colors, highContrast);
+                all[(int)role] = Resolve(role, scheme, colors, highContrast);
             }
 
             return all;
         }
 
         /// <summary>Gets a fill role's fill, and the color drawn on it, in a scheme.</summary>
-        internal static TopiaForgeFillColors Resolve(TopiaForgeFillRole role, TopiaForgeSchemeColors colors, bool highContrast)
+        internal static TopiaForgeFillColors Resolve(TopiaForgeFillRole role, TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             var white = TopiaForgePalette.White;
+            var onOrange = scheme == TopiaForgeScheme.Paper ? TopiaForgePalette.Ink : DarkContent;
             return role switch
             {
-                TopiaForgeFillRole.FilledButton => OnFill(colors.Primary, white, LabelRatio(highContrast), ButtonPressedTint, ButtonHoveredTint),
+                TopiaForgeFillRole.FilledButton => OnFill(colors.Primary, onOrange, LabelRatio(highContrast), FilledButtonPressedTint(scheme, highContrast), ButtonHoveredTint),
                 TopiaForgeFillRole.DangerButton => OnFill(colors.Danger, white, LabelRatio(highContrast), ButtonPressedTint, ButtonHoveredTint),
-                TopiaForgeFillRole.ControlOn => OnFill(colors.Primary, white, MarkRatio(highContrast), ControlPressedTint, 1f),
+                TopiaForgeFillRole.ControlOn => OnFill(colors.Primary, onOrange, MarkRatio(highContrast), ControlOnPressedTint(scheme, highContrast), 1f),
                 TopiaForgeFillRole.SwitchOff => OnFill(colors.Tint, colors.TextFaint, MarkRatio(highContrast), ControlPressedTint, 1f),
                 TopiaForgeFillRole.StepDone => OnFill(colors.Success, white, MarkRatio(highContrast), 1f, 1f),
                 TopiaForgeFillRole.StepFailed => OnFill(colors.Danger, white, MarkRatio(highContrast), 1f, 1f),
@@ -116,7 +124,7 @@ namespace TopiaForge.Mods.UnityUi
         internal static TopiaForgeRgba SliderHandle(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             return scheme == TopiaForgeScheme.Paper
-                ? TopiaForgeContrast.DarkenForPaper(colors.Accent.WithAlpha(1f), TopiaForgeSchemes.DarkestTextSurface, MarkRatio(highContrast))
+                ? MoveUntilReads(colors.Accent.WithAlpha(1f), lighter: false, TopiaForgeSchemes.DarkestTextSurface, MarkRatio(highContrast), 1f, 1f)
                 : TopiaForgePalette.White;
         }
 
@@ -163,9 +171,15 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         internal static float Worst(TopiaForgeRgba content, TopiaForgeRgba fill, float darkestTint, float lightestTint)
         {
-            return Math.Min(
-                TopiaForgeContrast.Ratio(content, fill.Scale(darkestTint)),
-                TopiaForgeContrast.Ratio(content, fill.Scale(lightestTint)));
+            return Math.Min(RatioAtTint(content, fill, darkestTint), RatioAtTint(content, fill, lightestTint));
+        }
+
+        private static float RatioAtTint(TopiaForgeRgba content, TopiaForgeRgba fill, float tint)
+        {
+            var tinted = fill.Scale(tint);
+            var drawnContent = TopiaForgeContrast.Quantize(content);
+            var drawnFill = TopiaForgeContrast.Quantize(TopiaForgeContrast.Quantize(fill).Scale(tint));
+            return Math.Min(TopiaForgeContrast.Ratio(content, tinted), TopiaForgeContrast.Ratio(drawnContent, drawnFill));
         }
 
         // Moves content toward white or black until it reads. The steps only approach the end, so content that still

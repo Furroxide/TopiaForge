@@ -127,7 +127,6 @@ namespace TopiaForge.Mods.UnityUi
             var colors = button.colors;
             colors.normalColor = Color.white;
             colors.highlightedColor = Tint(TopiaForgeOnColors.ButtonHoveredTint);
-            colors.pressedColor = Tint(TopiaForgeOnColors.ButtonPressedTint);
             colors.selectedColor = Tint(TopiaForgeOnColors.ButtonSelectedTint);
             colors.disabledColor = Color.white; // disabled visuals are theme-driven, not multiplied
             button.colors = colors;
@@ -200,6 +199,13 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            var colors = button.colors;
+            var pressedTint = style == TopiaForgeButtonStyle.Filled
+                ? TopiaForgeOnColors.FilledButtonPressedTint(theme.Scheme, theme.HighContrast)
+                : TopiaForgeOnColors.ButtonPressedTint;
+            colors.pressedColor = Tint(pressedTint);
+            button.colors = colors;
+
             if (!enabledState)
             {
                 fill.color = theme.Tint;

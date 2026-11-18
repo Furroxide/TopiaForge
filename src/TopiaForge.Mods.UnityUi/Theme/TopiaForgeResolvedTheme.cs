@@ -63,7 +63,7 @@ namespace TopiaForge.Mods.UnityUi
         public Color Warning { get; }
         /// <summary>Gets the danger color.</summary>
         public Color Danger { get; }
-        /// <summary>Gets the on status color.</summary>
+        /// <summary>Gets the ink for a danger button's resolved fill, which can differ from <see cref="Danger"/>.</summary>
         public Color OnStatus { get; }
         /// <summary>Gets the shadow color.</summary>
         public Color Shadow { get; }
@@ -120,7 +120,7 @@ namespace TopiaForge.Mods.UnityUi
             FocusRing = ToColor(colors.FocusRing);
 
             // What the kit draws on a fill is resolved against that fill, so it reads in every state the fill is drawn in.
-            var resolvedFills = TopiaForgeOnColors.ResolveAll(colors, HighContrast);
+            var resolvedFills = TopiaForgeOnColors.ResolveAll(scheme, colors, HighContrast);
             fills = new (Color Fill, Color Content)[resolvedFills.Length];
             for (var index = 0; index < resolvedFills.Length; index++)
             {

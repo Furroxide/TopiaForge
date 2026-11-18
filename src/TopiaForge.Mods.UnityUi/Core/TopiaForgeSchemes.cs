@@ -168,7 +168,7 @@ namespace TopiaForge.Mods.UnityUi
                 };
             }
 
-            return WithOnColors(colors, highContrast);
+            return WithOnColors(TopiaForgeScheme.Paper, colors, highContrast);
         }
 
         /// <summary>Resolves colors for the gameplay HUD scheme.</summary>
@@ -219,19 +219,19 @@ namespace TopiaForge.Mods.UnityUi
                 };
             }
 
-            return WithOnColors(colors, highContrast);
+            return WithOnColors(TopiaForgeScheme.Hud, colors, highContrast);
         }
 
         /// <summary>
         /// Sets the colors drawn on Primary and on the danger fill to the ones that read on them, as a filled and a danger
         /// button draw them: white reads at only 2.6:1 on the brand orange and 3.0:1 on the HUD's danger fill.
         /// </summary>
-        private static TopiaForgeSchemeColors WithOnColors(TopiaForgeSchemeColors colors, bool highContrast)
+        private static TopiaForgeSchemeColors WithOnColors(TopiaForgeScheme scheme, TopiaForgeSchemeColors colors, bool highContrast)
         {
             return colors with
             {
-                OnPrimary = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.FilledButton, colors, highContrast).Content,
-                OnStatus = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.DangerButton, colors, highContrast).Content,
+                OnPrimary = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.FilledButton, scheme, colors, highContrast).Content,
+                OnStatus = TopiaForgeOnColors.Resolve(TopiaForgeFillRole.DangerButton, scheme, colors, highContrast).Content,
             };
         }
     }
