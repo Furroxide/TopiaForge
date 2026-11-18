@@ -300,14 +300,16 @@ further. The HUD's bright status fills also use dark ink. An off switch's grey t
 or darkened until it reads on the tint.
 
 What is drawn on a fill is chosen against the fill at rest. Each interaction state then keeps the
-kit's usual tint (lighter on hover, darker on press) only while the label or mark still reads on
-the tinted fill. Where it would not, the state takes the mirror tint, which moves the fill away
-from what is drawn on it, so every state reads at least as well as rest. Paper's orange therefore
-lightens when pressed rather than darkening toward its dark label, and Paper's danger red darkens
-when hovered rather than lightening toward its white label. When hover and press land on the same
-side of rest, press goes twice as far, so a pressed button looks different from a hovered one even
-with reduced motion, which turns off its sink into its shadow. Fills keep the brand's colors in
-every state. A
+kit's usual tint (a button lightens on hover and darkens on press; a switch or checkbox darkens on
+both, as uGUI's default does) only while the label or mark still reads on the tinted fill. Where it
+would not, the state takes the mirror tint, which moves the fill away from what is drawn on it, so
+that state reads at least as well as rest. Paper's orange therefore lightens when pressed rather
+than darkening toward its dark label, and Paper's danger red darkens when hovered rather than
+lightening toward its white label. Selection moves the same way as hover. When hover and press
+land on the same side of rest, press goes twice as far, so a pressed button looks different from a
+hovered one even with reduced motion, which turns off its sink into its shadow. Fills keep the
+brand's colors, except where nothing would read on them: high contrast darkens Paper's danger red
+so its white label reaches 7:1. A
 slider's handle is the accent on Paper, where a white one vanished on the light track, and stays
 white on the HUD.
 

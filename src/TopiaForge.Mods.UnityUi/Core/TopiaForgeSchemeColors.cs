@@ -39,7 +39,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>
         /// Gets the color of a label on <see cref="Primary"/>, as a filled button draws it: dark, since white reads at only
         /// 2.6:1 on the brand orange. It reads at WCAG AA, or AAA in high contrast, and keeps reading while the button is
-        /// hovered, selected or pressed, because those states never tint the fill toward it.
+        /// hovered, selected or pressed, because those states never tint the fill toward it far enough to stop it reading.
         /// </summary>
         public TopiaForgeRgba OnPrimary { get; init; }
         /// <summary>Gets the accent color.</summary>

@@ -163,7 +163,7 @@ namespace TopiaForge.Mods.UnityUi
             }
             else
             {
-                // The thumb reads on the track in every state, because the track's tints never move it toward the thumb.
+                // The thumb reads on the track in every state: the track's tints never move it toward the thumb far enough to stop it reading.
                 var paint = theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff);
                 toggle.colors = paint.Tinted(toggle.colors);
                 track.color = paint.Fill;

@@ -190,9 +190,15 @@ namespace TopiaForge.Mods.UnityUi
                 return tint;
             }
 
-            var mirror = 2f - tint;
+            var mirror = Mirror(tint);
             return RatioAsDrawn(content, fill, mirror) >= minimumRatio ? mirror : 1f;
         }
+
+        /// <summary>
+        /// Gets <c>2 - tint</c>, rounded in double precision to four decimals so the mirror of a kit tint is exactly the
+        /// other kit tint (the mirror of 1.06 is 0.94) on every runtime, whatever precision it keeps float locals in.
+        /// </summary>
+        internal static float Mirror(float tint) => (float)Math.Round(2.0 - tint, 4, MidpointRounding.ToEven);
 
         /// <summary>Gets the contrast between content and its fill tinted by a state, as computed and as drawn in 256 steps a channel.</summary>
         internal static float RatioAsDrawn(TopiaForgeRgba content, TopiaForgeRgba fill, float tint)
@@ -224,21 +230,23 @@ namespace TopiaForge.Mods.UnityUi
             var press = ReadableTint(pair.Fill, pair.Content, minimumRatio, pressed);
 
             // Selection is hover's quieter sibling, so it moves the same way: mirrored with hover, if that still reads.
-            var select = ReadableTint(pair.Fill, pair.Content, minimumRatio, hover == hovered ? selected : 2f - selected);
+            var select = ReadableTint(pair.Fill, pair.Content, minimumRatio, hover == hovered ? selected : Mirror(selected));
             return new TopiaForgeFillColors(pair.Fill, pair.Content, hover, select, Beyond(pair, minimumRatio, hover, press));
         }
 
         // A pressed fill must look different from a hovered one even when reduced motion turns off the press's sink into its
-        // shadow. When both tints land on the same side of rest, the press goes twice as far as the hover, if that reads.
+        // shadow. When both tints land on the same side of rest and press goes no further than hover, it goes twice as far
+        // as hover, if that reads. Distances are compared with a tolerance, so a one-ulp difference never counts as further.
         private static float Beyond(TopiaForgeFillColors pair, float minimumRatio, float hover, float press)
         {
+            const float Tolerance = 1e-4f;
             var sameSide = (hover - 1f) * (press - 1f) > 0f;
-            if (!sameSide || Math.Abs(press - 1f) > Math.Abs(hover - 1f))
+            if (!sameSide || Math.Abs(press - 1f) > Math.Abs(hover - 1f) + Tolerance)
             {
                 return press;
             }
 
-            var further = 1f + (2f * (hover - 1f));
+            var further = (float)Math.Round(1.0 + (2.0 * (hover - 1.0)), 4, MidpointRounding.ToEven);
             return RatioAsDrawn(pair.Content, pair.Fill, further) >= minimumRatio ? further : press;
         }
 
