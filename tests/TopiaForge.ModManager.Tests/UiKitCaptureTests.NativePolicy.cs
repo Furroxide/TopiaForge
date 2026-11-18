@@ -17,12 +17,18 @@ namespace TopiaForge.ModManager.Tests
                 var request = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.SurvivalTheme);
                 Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null,
                     "The native recorder admits each authored Gallery fixture.");
-                var targeted = Reframe(request, "remote-37");
-                Check((UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, targeted)?.Id == request.Id) ==
+                var transport = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.TransportTheme);
+                var targeted = Reframe(transport, "remote-37");
+                Check((UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, targeted,
+                        FoundationPages.TransportTheme.Id)?.Id == request.Id) ==
                     (page != FoundationPage.InteractionStates),
                     "A targeted receiver's reconstructed id maps to the authenticated canonical Gallery id for wire-supported pages.");
                 Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, owner, targeted) == null,
                     "The client-local Gallery is ineligible to publish a remote fixture.");
+                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, targeted,
+                        FoundationPages.SurvivalTheme.Id) == null &&
+                    UiGalleryCaptureFixture.Match(owner, false, null, transport) == null,
+                    "The transport and public Gallery themes are scoped to their separate packages.");
                 Check(UiGalleryCaptureFixture.Match(owner, true, null, targeted) == null &&
                     UiGalleryCaptureFixture.Match(owner, true, "io.example.other", targeted) == null,
                     "A remote fixture requires the authenticated Gallery owner.");
@@ -66,8 +72,11 @@ namespace TopiaForge.ModManager.Tests
                 "The test publisher cycles the complete supported page, surface and theme matrix.");
             foreach (var request in variants)
             {
-                Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null,
-                    "Connected guests can open the exact same Theme packs and Typography variants in their own Gallery.");
+                var local = request.WithTheme(request.Theme == null ? null : FoundationPages.SurvivalTheme);
+                Check(UiGalleryCaptureFixture.Match(owner, false, null, local) != null,
+                    "Connected guests can open the same Theme packs and Typography pages with Survival in their own Gallery.");
+                Check(UiGalleryCaptureFixture.Match(publisher, false, null, request) != null,
+                    "The opt-in host may also record its own transport fixture.");
                 const string clock = "gallery-test";
                 var digest = Enumerable.Repeat((byte)0x5A, 32).ToArray();
                 var themeDigest = request.Theme == null ? new byte[32] : digest;
@@ -81,7 +90,7 @@ namespace TopiaForge.ModManager.Tests
                 UiWireCodec.End(reader);
                 var received = Reframe(request, "remote-118", decoded);
                 Check(decoded != null && observedEnvelope?.OwnerPackageId == publisher &&
-                    UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, received)?.Id == request.Id,
+                    UiGalleryCaptureFixture.Match("topiaforge.presentation", true, publisher, received, observedEnvelope.ThemeId)?.Id == request.Id,
                     "Each published page keeps its canonical fixture identity after production codec round-trip and receiver ID reconstruction.");
             }
 

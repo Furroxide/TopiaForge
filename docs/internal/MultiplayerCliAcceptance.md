@@ -176,8 +176,9 @@ automated evidence. Keep the marker outside profiles used for the acceptance run
 
 Once the normal session reports a ready host and exactly one connected guest, press F7 on the host.
 Each press opens the same authored fixture on the host and sends it to that guest through `IPlayer.Ui`.
-The sequence runs Theme packs, then Typography. Each page cycles kit Paper, kit HUD, Survival Paper, and
-Survival HUD. Set resolution, accessibility, and UI scale on each profile before collecting a case. The guest
+The sequence runs Theme packs, then Typography. Each page cycles kit Paper, kit HUD, and the acceptance
+package's own Paper and HUD theme preview. Capture the canonical Survival pack in the ordinary Gallery
+on both connected profiles. Set resolution, accessibility, and UI scale on each profile before collecting a case. The guest
 uses its own admitted copy of the sample theme and its own preferences. Capture and label the viewer and
 delivery route in the visual manifest.
 

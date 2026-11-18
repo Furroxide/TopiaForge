@@ -15,6 +15,7 @@ namespace TopiaForge.UiGallery.Pages
     internal static class FoundationPages
     {
         internal static readonly UiThemeRef SurvivalTheme = new UiThemeRef("survival");
+        internal static readonly UiThemeRef TransportTheme = new UiThemeRef("transport-preview");
 
         internal static UiSurfaceRequest CreateRequest(
             FoundationPage page,

@@ -26,8 +26,8 @@ namespace TopiaForge.ModManager
             try
             {
                 var envelope = remote?.Envelope;
-                if (envelope?.ThemeId is { } id && id != "survival") return;
-                var fixture = UiGalleryCaptureFixture.Match(host.OwnerId, remote.HasValue, envelope?.OwnerPackageId, request);
+                var fixture = UiGalleryCaptureFixture.Match(host.OwnerId, remote.HasValue, envelope?.OwnerPackageId,
+                    request, envelope?.ThemeId);
                 if (fixture == null) return;
                 surface.ObserveGalleryFixture(fixture, request.Content!, galleryCaptureDirectory, declared, envelope,
                     galleryViewer, logger);

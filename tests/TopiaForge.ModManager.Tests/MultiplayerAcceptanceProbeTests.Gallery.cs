@@ -7,6 +7,7 @@ using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using TopiaForge.MultiplayerAcceptance;
+using TopiaForge.UiGallery.Pages;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -17,17 +18,19 @@ namespace TopiaForge.ModManager.Tests
             var root = Program.FindRepoRoot();
             var package = Path.Combine(root, "tests", "TopiaForge.MultiplayerAcceptanceMod");
             var manifest = ModManifestJson.Deserialize(File.ReadAllText(Path.Combine(package, "topiaforge.mod.json")));
-            const string definition = "ui/themes/survival.json";
-            var fixture = File.ReadAllBytes(Path.Combine(package, "ui", "themes", "survival.json"));
+            const string definition = "ui/themes/transport-preview.json";
+            var fixture = File.ReadAllBytes(Path.Combine(package, "ui", "themes", "transport-preview.json"));
             var gallery = Path.Combine(root, "mods", "TopiaForge.UiGallery");
-            var canonical = File.ReadAllBytes(Path.Combine(gallery, "ui", "themes", "survival.json"));
             var galleryManifest = ModManifestJson.Deserialize(File.ReadAllText(Path.Combine(gallery, "topiaforge.mod.json")));
             var catalogue = UiThemeCatalogueParser.ParseManifest(File.ReadAllBytes(Path.Combine(package, "topiaforge.mod.json")));
+            var descriptor = UiThemePackParser.Parse(fixture, expectedId: FoundationPages.TransportTheme.Id);
             Check(manifest.Id == UiGalleryCaptureFixture.RemoteFixtureOwner &&
                 manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.Session &&
                 catalogue.TryGetValue(out var themes) && themes.Default == null &&
-                themes.Themes.Count == 1 && themes.Themes[0].Definition == definition && fixture.SequenceEqual(canonical),
-                "The shared test publisher owns the exact sample file and keeps its normal theme cascade.");
+                themes.Themes.Count == 1 && themes.Themes[0].Definition == definition && descriptor.Succeeded &&
+                themes.Themes[0].Id == FoundationPages.TransportTheme.Id &&
+                !File.Exists(Path.Combine(package, "ui", "themes", "survival.json")),
+                "The shared test publisher owns a distinct fixture palette and keeps its normal theme cascade.");
             var localProfile = new ModNetProfile(ModNetworkClasses.Classify(galleryManifest), ModExecutionContext.Process);
             var publisherProfile = new ModNetProfile(ModNetworkClasses.Classify(manifest), ModExecutionContext.Process);
             Check(PresentationRoutingPolicy.Route(NetRealm.Client, localProfile, PresentationKind.HudSurface) == PresentationRoute.Local &&
@@ -69,14 +72,14 @@ namespace TopiaForge.ModManager.Tests
                 target.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud,
                 "F7 can advance a visible preview and retires the previous pair.");
             var theme = System.Text.Encoding.UTF8.GetString(fixture);
-            Check(context.Ui.AddThemeFixture(theme).Succeeded, "Install the test host's sample definition.");
+            Check(context.Ui.AddThemeFixture(theme).Succeeded, "Install the test host's fixture definition.");
             Press();
             Check(context.Ui.Surfaces.Count == 0 && target.Surfaces.Count == 0,
                 "If the target refuses its fixture, the newly opened local surface is retired.");
-            Check(target.AddThemeFixture(theme).Succeeded, "Install the test guest's sample definition.");
+            Check(target.AddThemeFixture(theme).Succeeded, "Install the test guest's fixture definition.");
             Press();
-            Check(context.Ui.Surfaces.Single().Request.Theme?.Id == "survival" &&
-                target.Surfaces.Single().Request.Theme?.Id == "survival" &&
+            Check(context.Ui.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id &&
+                target.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id &&
                 target.Surfaces[0].Request.Kind == UiSurfaceKind.Window,
                 "After a refusal the next press retries the same paired variant.");
             var second = rig.AddRemoteClient("second-guest");

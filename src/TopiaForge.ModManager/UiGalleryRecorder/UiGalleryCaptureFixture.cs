@@ -23,11 +23,15 @@ namespace TopiaForge.ModManager
             return nativeText == upper ? upper : null;
         }
 
-        internal static UiSurfaceRequest? Match(string owner, bool remote, string? authenticatedOwner, UiSurfaceRequest request)
+        internal static UiSurfaceRequest? Match(string owner, bool remote, string? authenticatedOwner, UiSurfaceRequest request,
+            string? authenticatedThemeId = null)
         {
             if (!MatchesOwner(owner, remote, authenticatedOwner)) return null;
             if (request.Kind != UiSurfaceKind.Window && request.Kind != UiSurfaceKind.Hud) return null;
-            if (request.Theme != null && request.Theme.Id != FoundationPages.SurvivalTheme.Id) return null;
+            var requestedThemeId = remote ? authenticatedThemeId : request.Theme?.Id;
+            var allowedTheme = remote || owner == RemoteFixtureOwner ? FoundationPages.TransportTheme : FoundationPages.SurvivalTheme;
+            if (requestedThemeId != null && requestedThemeId != allowedTheme.Id) return null;
+            var theme = requestedThemeId == null ? null : allowedTheme;
             if (remote && !IsTransportId(request.Id, "remote-") &&
                 (request.Kind != UiSurfaceKind.Hud || !IsTransportId(request.Id, "shared-"))) return null;
 
@@ -35,7 +39,7 @@ namespace TopiaForge.ModManager
             {
                 if (page == FoundationPage.InteractionStates && (request.Kind == UiSurfaceKind.Hud || remote ||
                     owner == RemoteFixtureOwner)) continue;
-                var expected = FoundationPages.CreateRequest(page, request.Kind);
+                var expected = FoundationPages.CreateRequest(page, request.Kind, theme);
                 if ((!remote && expected.Id != request.Id) || request.Title != expected.Title || request.Body != expected.Body ||
                     request.Width != expected.Width || request.Height != expected.Height || request.HudAnchor != expected.HudAnchor ||
                     request.HudVisibility != expected.HudVisibility || !SameNode(request.Content, expected.Content)) continue;

@@ -106,7 +106,7 @@ namespace TopiaForge.MultiplayerAcceptance
             if ((uint)variant >= VariantCount) throw new ArgumentOutOfRangeException(nameof(variant));
             var page = variant < 4 ? FoundationPage.ThemePacks : FoundationPage.Typography;
             var kind = (variant & 1) == 0 ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
-            var theme = (variant & 2) == 0 ? null : FoundationPages.SurvivalTheme;
+            var theme = (variant & 2) == 0 ? null : FoundationPages.TransportTheme;
             return FoundationPages.CreateRequest(page, kind, theme);
         }
 
