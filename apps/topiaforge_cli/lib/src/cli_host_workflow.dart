@@ -172,6 +172,9 @@ Future<int> runCliHost({
     final voice = defaults.voice && settings.voiceActive;
     write(voice ? CliMultiplayerText.voiceOn : CliMultiplayerText.voiceOff);
     write('Host visibility: ${visibility.wireName}.');
+    if (HostActivityText.noticeFor(visibility) case final notice?) {
+      write(notice);
+    }
     if (!await consent('Start hosting [y/N]')) {
       return refuse('Hosting cancelled. Run host again when ready.', 130);
     }

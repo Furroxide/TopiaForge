@@ -5,8 +5,8 @@ Status: Approved · Date: 2026-10-14 · Owner: maintainer
 The live-multiplayer plan makes the player-facing wording on address exposure and microphone use a release gate,
 approved by the maintainer as owner (hard constraint 5). This page holds that wording, approved as written on
 2026-10-14. The game's screens, the launcher and the player guides use these strings word for word. Any change to
-their meaning needs a fresh approval before it ships. The last section, the consent sheet's developer-mode section, was
-approved as written on 2026-10-26.
+their meaning needs a fresh approval before it ships. The consent sheet's developer-mode section was approved as
+written on 2026-10-26, and the last section, for public Internet sessions, on 2026-11-13.
 
 The rules behind the wording are in `PrivacyAndCapabilities.md` ("Peer address exposure in player-hosted sessions"),
 and the mechanics are in `MultiplayerLiveSessions.md` (sections 17 to 22).
@@ -78,3 +78,12 @@ itself. Join stays off until the box is ticked, and only a ticked box lets the l
 **Checkbox:** Download these mods from the host
 
 **Until it is ticked:** Join stays off until you tick the box.
+
+## When a player hosts a public Internet session
+
+Shown in the launcher, the CLI and the in-game host screen whenever a session's visibility is Public, before it
+starts. Not shown for invite-only or local network sessions.
+
+> Public sessions count toward rough activity numbers on the TopiaForge status page. The numbers move in steps of
+> 5 sessions and 10 players, appear only once those minimums are reached, and are shown at least 15 minutes late.
+> Invite-only and local network sessions are never counted. The numbers are kept for 90 days.

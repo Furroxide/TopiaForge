@@ -24,7 +24,8 @@ namespace TopiaForge.ModManager.Sessions
         internal const string EndBody = "Every player leaves the session. You keep playing on your own.";
         internal const string EndConfirm = "END SESSION";
         internal const string LanNote = "Players on your local network can find this session and join it.";
-        internal const string PublicNote = "Players find this session in the TopiaForge server list and join it through the service.";
+        internal const string PublicListing = "Players find this session in the TopiaForge server list and join it through the service.";
+        internal const string PublicNote = PublicListing + " " + MultiplayerPrivacyText.PublicActivity;
         internal const string InviteNote = "Players join with the invite code SESSION shows, through the TopiaForge service.";
         internal const string Registering = "Registering this session with the TopiaForge service...";
         internal const string Listed = "Listed. Players can find this session in the TopiaForge server list.";

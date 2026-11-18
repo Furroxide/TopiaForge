@@ -1,7 +1,7 @@
 namespace TopiaForge.ModManager.Sessions
 {
     /// <summary>
-    /// The approved player-facing wording on address exposure and microphone use, word for word from
+    /// The approved player-facing wording on address exposure, microphone use and public activity, word for word from
     /// docs/internal/MultiplayerPrivacyText.md, approved by the maintainer on 2026-10-14 as a release gate. Every in-game
     /// screen takes these strings from here and nowhere else; MultiplayerPrivacyTextTests fails when any of them differs
     /// from the document. Changing their meaning needs a fresh approval before it ships.
@@ -55,6 +55,15 @@ namespace TopiaForge.ModManager.Sessions
         internal const string VoiceAcceptButton = "Turn on voice chat";
 
         internal const string VoiceDeclineButton = "Not now";
+
+        /// <summary>
+        /// HOST's note for a Public session, shown before it starts or opens to players; approved on 2026-11-13. Invite-only
+        /// and local network sessions do not show it, because they are never counted.
+        /// </summary>
+        internal const string PublicActivity =
+            "Public sessions count toward rough activity numbers on the TopiaForge status page. The numbers move in steps of "
+            + "5 sessions and 10 players, appear only once those minimums are reached, and are shown at least 15 minutes late. "
+            + "Invite-only and local network sessions are never counted. The numbers are kept for 90 days.";
 
         /// <summary>Gets the disclosure's paragraphs, in order.</summary>
         internal static string[] DisclosureParagraphs() => new[] { DisclosureExposure, DisclosureHidden, DisclosureChoice };

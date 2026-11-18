@@ -186,10 +186,22 @@ namespace TopiaForge.ModManager.Tests
             That(host.CanHost && host.VisibilityNote == HostPresenter.LanNote, "LAN hosting needs no service");
 
             var relayed = new SessionsRig(service: true);
+            ReadyHost(relayed);
+            var relayedHost = relayed.Presenter.Host;
+            relayedHost.SetVisibility(2);
+            That(relayedHost.VisibilityNote == "Players on your local network can find this session and join it.",
+                "with the service configured, LAN still has only its local-network note");
+            relayedHost.SetVisibility(0);
+            // The listing sentence, then the approved activity notice word for word (MultiplayerPrivacyTextTests pins that
+            // constant to the approved document).
+            const string publicNote = "Players find this session in the TopiaForge server list and join it through the service. " +
+                MultiplayerPrivacyText.PublicActivity;
+            That(relayedHost.ChoosesTarget && relayedHost.CanHost && relayedHost.VisibilityNote == publicNote,
+                "START AND HOST shows the activity notice before starting a Public game");
             relayed.Environment.Phase = SessionPhase.Running;
-            relayed.Presenter.Host.SetVisibility(0);
-            That(relayed.Presenter.Host.CanHost && relayed.Presenter.Host.VisibilityNote == HostPresenter.PublicNote, "with the service, Public hosting is offered");
-            relayed.Presenter.Host.Host();
+            That(relayedHost.HostLabel == "OPEN TO PLAYERS" && relayedHost.CanHost && relayedHost.VisibilityNote == publicNote,
+                "OPEN TO PLAYERS shows the same Public activity notice before promotion");
+            relayedHost.Host();
             relayed.Frame();
             That(relayed.Prompt == null && relayed.Control.LastHost!.Visibility == InternalSessionVisibility.Public && !relayed.Control.LastHost.AllowDirect,
                 "and goes through the relay with no per-session prompt while Hide my IP is on");
@@ -199,7 +211,8 @@ namespace TopiaForge.ModManager.Tests
             open.Presenter.SetHideMyIp(false);
             open.Answer(ScreenPromptKind.Disclosure, true);
             open.Presenter.Host.SetVisibility(1);
-            That(open.Presenter.Host.VisibilityNote == HostPresenter.InviteNote, "Invite hosting says players join with its code");
+            That(open.Presenter.Host.VisibilityNote == "Players join with the invite code SESSION shows, through the TopiaForge service.",
+                "Invite hosting has only its invite-code note");
             open.Presenter.Host.Host();
             open.Frame();
             That(open.Prompt == null && open.Control.LastHost!.Visibility == InternalSessionVisibility.Invite && open.Control.LastHost.AllowDirect,

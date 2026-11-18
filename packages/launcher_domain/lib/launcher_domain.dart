@@ -21,6 +21,7 @@ export 'src/multiplayer_gateway.dart';
 export 'src/multiplayer_join_gateway.dart';
 export 'src/multiplayer_hosting_gateway.dart';
 export 'src/hosting_receipt.dart';
+export 'src/host_activity_text.dart';
 export 'src/session_link_handling.dart';
 export 'src/cancellation.dart';
 export 'src/join_host_packages.dart';
