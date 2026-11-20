@@ -12,9 +12,21 @@ namespace {{ASSEMBLY_NAME}}.Tests
         [Test]
         public void ManifestThemeStylesWindowAndPreviewUsesItsLocalOverride()
         {
-            static string ReadPackageFile(string path) =>
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
-                    .GetString(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, path)));
+            static string ReadPackageFile(string path)
+            {
+                const int maximumFixtureBytes = 1024 * 1024;
+                using var fixture = File.OpenRead(Path.Combine(AppContext.BaseDirectory, path));
+                var length = fixture.Length;
+                if (length > maximumFixtureBytes)
+                    throw new InvalidDataException("The package fixture exceeds its 1 MiB read limit.");
+
+                var bytes = new byte[(int)length];
+                fixture.ReadExactly(bytes);
+                if (fixture.ReadByte() != -1)
+                    throw new IOException("The package fixture grew while it was read.");
+
+                return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+            }
 
             using var context = new FakeModContext();
             var catalogue = context.Ui.AddThemeCatalogue(ReadPackageFile("topiaforge.mod.json"), ReadPackageFile);
