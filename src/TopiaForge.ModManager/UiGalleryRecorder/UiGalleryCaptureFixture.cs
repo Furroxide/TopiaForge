@@ -33,15 +33,25 @@ namespace TopiaForge.ModManager
                 ? authored : null;
         }
 
-        internal static UiSurfaceRequest? Match(string owner, bool remote, string? authenticatedOwner, UiSurfaceRequest request,
-            string? authenticatedThemeId = null)
+        internal static UiSurfaceRequest? Match(string owner, bool remote, UiWireEnvelope? envelope, UiSurfaceRequest request,
+            UiThemeDescriptor? declared = null)
         {
-            if (!MatchesOwner(owner, remote, authenticatedOwner)) return null;
+            if (!MatchesOwner(owner, remote, envelope?.OwnerPackageId)) return null;
             if (request.Kind != UiSurfaceKind.Window && request.Kind != UiSurfaceKind.Hud) return null;
-            var requestedThemeId = remote ? authenticatedThemeId : request.Theme?.Id;
-            var allowedTheme = remote || owner == RemoteFixtureOwner ? FoundationPages.TransportTheme : FoundationPages.SurvivalTheme;
-            if (requestedThemeId != null && requestedThemeId != allowedTheme.Id) return null;
-            var theme = requestedThemeId == null ? null : allowedTheme;
+            var requestedThemeId = remote ? envelope?.ThemeId : request.Theme?.Id ?? declared?.Id;
+            var acceptance = remote || owner == RemoteFixtureOwner;
+            UiThemeRef? theme = null;
+            if (requestedThemeId == FoundationPages.SurvivalTheme.Id)
+            {
+                if ((acceptance && !UiGallerySurvivalTheme.Matches(declared)) ||
+                    (remote && !UiGallerySurvivalTheme.MatchesDigest(envelope!.DescriptorDigest.Span))) return null;
+                theme = FoundationPages.SurvivalTheme;
+            }
+            else if (acceptance && requestedThemeId == FoundationPages.TransportTheme.Id)
+            {
+                theme = FoundationPages.TransportTheme;
+            }
+            else if (requestedThemeId != null) return null;
             if (remote && !IsTransportId(request.Id, "remote-") &&
                 (request.Kind != UiSurfaceKind.Hud || !IsTransportId(request.Id, "shared-"))) return null;
 

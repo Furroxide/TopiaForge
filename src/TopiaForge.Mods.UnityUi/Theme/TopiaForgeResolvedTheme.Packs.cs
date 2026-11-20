@@ -11,6 +11,20 @@ namespace TopiaForge.Mods.UnityUi
 
         internal Color DisabledInk => ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
 
+        internal Color Backplate(UiPaintRole role) => packScheme is { } scheme ? ToColor(Rgba(scheme.GetPair(role).Fill))
+            : role switch
+            {
+                UiPaintRole.Raised => SurfaceAlt,
+                UiPaintRole.Sunken => SurfaceSunken,
+                UiPaintRole.Selected => SelectedTint,
+                UiPaintRole.Primary => Primary,
+                UiPaintRole.Accent => Accent,
+                UiPaintRole.Success => Success,
+                UiPaintRole.Warning => Warning,
+                UiPaintRole.Danger => Danger,
+                _ => Surface,
+            };
+
         internal Color BoundaryOn(UiPaintRole role) => packScheme is { } scheme
             ? ToColor(Rgba(scheme.ResolveBoundary(role))) : OutlineStrong;
 

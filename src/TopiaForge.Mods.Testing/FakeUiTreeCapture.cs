@@ -211,5 +211,5 @@ namespace TopiaForge.Mods.Testing
             string.Empty, string.Empty, 0f, 0f, UiCaptureNodeFlags.None);
     }
 
-    internal enum UiCaptureControlState { Rest, Hovered, Focused, Selected, Pressed }
+    internal enum UiCaptureControlState { Rest, Hovered, Focused, Selected, Pressed, SelectedPressed }
 }

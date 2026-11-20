@@ -88,7 +88,7 @@ namespace TopiaForge.ModManager.Tests
                     var viewport = new UiCaptureViewport(size.Width, size.Height);
                     Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reducedMotion)).Succeeded,
                         "Apply viewer-local capture preferences.");
-                    var states = interactive ? new[] { "Rest", "Hovered", "Focused", "Selected", "Pressed" } : new[] { "Rest" };
+                    var states = interactive ? new[] { "Rest", "Hovered", "Focused", "Selected", "Pressed", "SelectedPressed" } : new[] { "Rest" };
                     foreach (var state in states)
                     {
                         var contrast = highContrast ? "high" : "standard";

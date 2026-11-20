@@ -35,16 +35,16 @@ namespace TopiaForge.ModManager.Tests
             using var galleryManifest = ReadJson(gallery, "topiaforge.mod.json");
             using var zombiesManifest = ReadJson(zombies, "topiaforge.mod.json");
             using var templateDefaults = ReadJson(template, "template.json");
-            CheckDeclaration(galleryManifest.RootElement, false);
-            CheckDeclaration(zombiesManifest.RootElement, true);
-            CheckDeclaration(templateDefaults.RootElement.GetProperty("manifestDefaults"), true);
+            CheckDeclaration(galleryManifest.RootElement);
+            CheckDeclaration(zombiesManifest.RootElement);
+            CheckDeclaration(templateDefaults.RootElement.GetProperty("manifestDefaults"));
 
             static byte[] Hash(string directory) => SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, SurvivalPath)));
 
             static JsonDocument ReadJson(string directory, string name) =>
                 JsonDocument.Parse(File.ReadAllBytes(Path.Combine(directory, name)));
 
-            static void CheckDeclaration(JsonElement manifest, bool shouldDefault)
+            static void CheckDeclaration(JsonElement manifest)
             {
                 var ui = manifest.GetProperty("ui");
                 Require(ui.GetProperty("schema").GetInt32() == 1, "Each consumer uses the schema 1 UI catalogue.");
@@ -52,9 +52,8 @@ namespace TopiaForge.ModManager.Tests
                     theme.GetProperty("id").GetString() == "survival"
                     && theme.GetProperty("definition").GetString() == SurvivalPath),
                     "The Survival pack must be declared by its own consumer.");
-                var hasDefault = ui.TryGetProperty("default", out var defaultTheme);
-                Require(hasDefault == shouldDefault && (!hasDefault || defaultTheme.GetString() == "survival"),
-                    "The adopters default to Survival and the Gallery can preview both kit defaults.");
+                Require(ui.TryGetProperty("default", out var defaultTheme) && defaultTheme.GetString() == "survival",
+                    "Gallery, Zombies and the UI template inherit the Survival default.");
             }
         }
 

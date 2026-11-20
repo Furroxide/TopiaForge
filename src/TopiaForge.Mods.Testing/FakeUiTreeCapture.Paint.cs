@@ -67,12 +67,18 @@ namespace TopiaForge.Mods.Testing
                 _ => UiPaintRole.Surface,
             };
             var original = PairFor(role, button.Enabled ? button.Style == UiButtonStyle.Ghost ? UiTone.Primary : UiTone.Neutral : UiTone.Muted);
-            var fill = button.Style == UiButtonStyle.Ghost && button.Enabled
-                ? original.Fill : StatefulFill(original, state, TextMinimum, switchControl: false);
+            var ghost = button.Style == UiButtonStyle.Ghost && button.Enabled;
+            var tints = ghost ? new UiThemeStateTints(1f, 1f, 1f)
+                : UiThemeColors.ResolveTints(original, TextMinimum, UiThemeColors.ButtonHovered, UiThemeColors.ButtonSelected,
+                    UiThemeColors.ButtonPressed);
+            var fill = StateFill(original.Fill, state, tints);
+            var selected = state is UiCaptureControlState.Selected or UiCaptureControlState.SelectedPressed;
+            var pressed = state is UiCaptureControlState.Pressed or UiCaptureControlState.SelectedPressed;
+            if (selected) flags |= UiCaptureNodeFlags.Selected;
             var hasShadow = button.Enabled && button.Style != UiButtonStyle.Ghost && !preferences.HighContrast;
             var shadowX = hasShadow ? -3f * layoutScale : 0f;
             var shadowY = hasShadow ? 4f * layoutScale : 0f;
-            if (hasShadow && state == UiCaptureControlState.Pressed && !preferences.ReducedMotion && preferences.MotionIntensity > 0f)
+            if (hasShadow && pressed && !preferences.ReducedMotion && preferences.MotionIntensity > 0f)
             {
                 var strength = Math.Min(1f, preferences.MotionIntensity);
                 bounds = new UiCaptureRect(bounds.X + shadowX * strength, bounds.Y + shadowY * strength, bounds.Width, bounds.Height);
@@ -84,6 +90,26 @@ namespace TopiaForge.Mods.Testing
             var paint = new UiCaptureNodePaint(original.On, fill, theme.Descriptor.Shape.Control * layoutScale, border, shadowX, shadowY);
             Add(path, button.Id, nameof(UiButton), bounds, clip,
                 TextContent(button.Label, UiTextStyle.Label, flags), paint);
+            var cues = UiControlPaint.ButtonCues(original.Fill, tints);
+            var mark = new UiCaptureNodeContent(string.Empty, button.Label, 0f, 0f,
+                UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.HasNonColorCue |
+                (selected ? UiCaptureNodeFlags.Selected : UiCaptureNodeFlags.None));
+            if (selected && (cues & UiButtonCue.Selection) != 0)
+            {
+                var top = UiControlPaint.ButtonSelectionTop * layoutScale;
+                var leading = new UiCaptureRect(bounds.X + UiControlPaint.ButtonSelectionLeft * layoutScale,
+                    bounds.Y + top, UiControlPaint.ButtonSelectionWidth * layoutScale, bounds.Height - 2f * top);
+                Add(path + "/selection", null, "ButtonSelectionBar", leading, clip, mark,
+                    new UiCaptureNodePaint(original.On, fill));
+            }
+            if (pressed && (cues & UiButtonCue.Press) != 0)
+            {
+                var inset = UiControlPaint.ButtonPressInset * layoutScale;
+                var outline = bounds.Inset(inset, inset, inset, inset);
+                Add(path + "/press", null, "ButtonPressOutline", outline, clip, mark,
+                    new UiCaptureNodePaint(original.On, fill, Math.Max(0f, theme.Descriptor.Shape.Control * layoutScale - inset),
+                        UiControlPaint.ButtonPressStroke(preferences.HighContrast) * layoutScale));
+            }
             PaintFocus(path, state, bounds, clip, UiPaintRole.Surface);
         }
 
@@ -223,14 +249,19 @@ namespace TopiaForge.Mods.Testing
                     UiThemeColors.ControlPressed)
                 : UiThemeColors.ResolveTints(pair, minimum, UiThemeColors.ButtonHovered, UiThemeColors.ButtonSelected,
                     UiThemeColors.ButtonPressed);
+            return StateFill(pair.Fill, state, tints);
+        }
+
+        private static UiThemeColor StateFill(UiThemeColor fill, UiCaptureControlState state, UiThemeStateTints tints)
+        {
             var tint = state switch
             {
                 UiCaptureControlState.Hovered => tints.Hovered,
                 UiCaptureControlState.Selected => tints.Selected,
-                UiCaptureControlState.Pressed => tints.Pressed,
+                UiCaptureControlState.Pressed or UiCaptureControlState.SelectedPressed => tints.Pressed,
                 _ => 1f,
             };
-            return pair.Fill.Tinted(tint);
+            return fill.Tinted(tint);
         }
 
         private UiThemePair PairFor(UiPaintRole role, UiTone tone) =>

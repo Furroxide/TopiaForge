@@ -393,7 +393,16 @@ menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay H
 
 ### Native Gallery capture
 
-The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` on the native verification process.
+When two button fills round to the same drawn color, the kit can show a separate
+selection or press mark. Selection uses a three-unit leading bar when its fill
+matches rest. Press uses an inset outline when its fill matches hover or rest.
+The marks stay visible with reduced motion, and the focus ring and hit area
+retain their own geometry.
+
+The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` at startup on the
+native verification process. In that process, F3 cycles the loader's fixed
+Interaction states Window through kit Paper, kit HUD, Survival Paper and
+Survival HUD. The ordinary F8 Gallery uses Survival as its package default.
 Opening a first-party Gallery fixture records its settled geometry and paint. Press F11 to record
 another observation of the current fixture. Hold the intended state until two frames have settled.
 The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts

@@ -9,7 +9,7 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class OwnerUiService
     {
-        private static readonly bool GalleryCaptureEnabled =
+        internal static bool GalleryCaptureEnabled { get; } =
             string.Equals(Environment.GetEnvironmentVariable("TOPIAFORGE_UI_GALLERY_CAPTURE"), "1", StringComparison.Ordinal);
         private readonly string galleryCaptureDirectory;
         private Func<NetRealm>? galleryViewer;
@@ -20,14 +20,15 @@ namespace TopiaForge.ModManager
         internal void FollowGalleryViewer(Func<NetRealm> view) => galleryViewer = view;
 
         private void ObserveGalleryFixture(UnityUiSurface surface, UiSurfaceRequest request, UiRemoteThemeSelection? remote,
-            UiThemeDescriptor? declared)
+            UiThemeDescriptor? declared, GalleryPreviewPalette? preview)
         {
             if (!GalleryCaptureEnabled) return;
             try
             {
                 var envelope = remote?.Envelope;
-                var fixture = UiGalleryCaptureFixture.Match(host.OwnerId, remote.HasValue, envelope?.OwnerPackageId,
-                    request, envelope?.ThemeId);
+                // The private preview stage is fed only a source-owned fixture. Other callers must pass the matcher.
+                var fixture = preview.HasValue ? request :
+                    UiGalleryCaptureFixture.Match(host.OwnerId, remote.HasValue, envelope, request, declared);
                 if (fixture == null) return;
                 surface.ObserveGalleryFixture(fixture, request.Content!, galleryCaptureDirectory, declared, envelope,
                     galleryViewer, logger);

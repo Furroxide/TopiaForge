@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager
         private ManagerFileLogger managerLogger = null!;
         private ModRuntime runtime = null!;
         private ManagerOverlay overlay = null!;
+        private IDisposable? galleryInteractionPreview;
         private MenuButtonInjector menuButtonInjector = null!;
         private ProfileLaunchConfigurationV4? launchProfile;
         private ManifestValidationContext validationContext = ManifestValidationContext.Current;
@@ -71,6 +72,7 @@ namespace TopiaForge.ModManager
 
         private void Awake()
         {
+            var enableGalleryPreview = OwnerUiService.GalleryCaptureEnabled;
             startupStartedAtUtc = DateTime.UtcNow.ToString("O");
             startupStopwatch.Restart();
             paths = new ManagerPaths(BepInEx.Paths.BepInExRootPath);
@@ -178,7 +180,11 @@ namespace TopiaForge.ModManager
                     launchProfile?.RequestId ?? rejectedCorrelation?.RequestId,
                     error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."),
                     session: LaunchSessionIdentityForPublication(), sessionRefusal: launchSessionRefusal);
-                initializationLifetime.InitializeUi(() => runtime.Load(selection.Packages));
+                initializationLifetime.InitializeUi(() =>
+                {
+                    if (enableGalleryPreview) galleryInteractionPreview = runtime.StartGalleryInteractionPreview();
+                    runtime.Load(selection.Packages);
+                });
                 // The provider published its control as it loaded, and ModRuntime attached to it: the provider takes the session now.
                 TakeLaunchSession();
                 PublishRuntimeObservations();
@@ -319,6 +325,16 @@ namespace TopiaForge.ModManager
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+            try
+            {
+                galleryInteractionPreview?.Dispose();
+                galleryInteractionPreview = null;
+            }
+            catch (Exception ex)
+            {
+                LogCleanupFailure(ex, "Gallery interaction preview teardown failed.");
+            }
+
             try
             {
                 overlay?.Dispose();

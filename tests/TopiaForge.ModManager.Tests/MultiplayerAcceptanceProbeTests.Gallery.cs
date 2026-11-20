@@ -17,7 +17,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var root = Program.FindRepoRoot();
             var package = Path.Combine(root, "tests", "TopiaForge.MultiplayerAcceptanceMod");
-            var manifest = ModManifestJson.Deserialize(File.ReadAllText(Path.Combine(package, "topiaforge.mod.json")));
+            var declaration = File.ReadAllText(Path.Combine(package, "topiaforge.mod.json"));
+            var manifest = ModManifestJson.Deserialize(declaration);
             const string definition = "ui/themes/transport-preview.json";
             var fixture = File.ReadAllBytes(Path.Combine(package, "ui", "themes", "transport-preview.json"));
             var gallery = Path.Combine(root, "mods", "TopiaForge.UiGallery");
@@ -27,10 +28,18 @@ namespace TopiaForge.ModManager.Tests
             Check(manifest.Id == UiGalleryCaptureFixture.RemoteFixtureOwner &&
                 manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.Session &&
                 catalogue.TryGetValue(out var themes) && themes.Default == null &&
-                themes.Themes.Count == 1 && themes.Themes[0].Definition == definition && descriptor.Succeeded &&
+                themes.Themes.Count == 2 && themes.Themes[0].Definition == definition && descriptor.Succeeded &&
                 themes.Themes[0].Id == FoundationPages.TransportTheme.Id &&
+                themes.Themes[1].Definition == "ui/themes/survival.json" && themes.Themes[1].Id == FoundationPages.SurvivalTheme.Id &&
                 !File.Exists(Path.Combine(package, "ui", "themes", "survival.json")),
-                "The shared test publisher owns a distinct fixture palette and keeps its normal theme cascade.");
+                "The shared test publisher owns two non-default fixture palettes. Survival is staged only when packing.");
+            var survival = File.ReadAllText(Path.Combine(gallery, "ui", "themes", "survival.json"));
+            string StagedDefinition(string path) => path switch
+            {
+                definition => System.Text.Encoding.UTF8.GetString(fixture),
+                "ui/themes/survival.json" => survival,
+                _ => throw new FileNotFoundException(path),
+            };
             var localProfile = new ModNetProfile(ModNetworkClasses.Classify(galleryManifest), ModExecutionContext.Process);
             var publisherProfile = new ModNetProfile(ModNetworkClasses.Classify(manifest), ModExecutionContext.Process);
             Check(PresentationRoutingPolicy.Route(NetRealm.Client, localProfile, PresentationKind.HudSurface) == PresentationRoute.Local &&
@@ -71,17 +80,29 @@ namespace TopiaForge.ModManager.Tests
             Check(context.Ui.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud &&
                 target.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud,
                 "F7 can advance a visible preview and retires the previous pair.");
-            var theme = System.Text.Encoding.UTF8.GetString(fixture);
-            Check(context.Ui.AddThemeFixture(theme).Succeeded, "Install the test host's fixture definition.");
+            Check(context.Ui.AddThemeCatalogue(declaration, StagedDefinition).Succeeded, "Admit the host's complete staged catalogue.");
             Press();
             Check(context.Ui.Surfaces.Count == 0 && target.Surfaces.Count == 0,
                 "If the target refuses its fixture, the newly opened local surface is retired.");
-            Check(target.AddThemeFixture(theme).Succeeded, "Install the test guest's fixture definition.");
+            Check(target.AddThemeCatalogue(declaration, StagedDefinition).Succeeded, "Admit the guest's independent staged catalogue.");
             Press();
             Check(context.Ui.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id &&
                 target.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id &&
                 target.Surfaces[0].Request.Kind == UiSurfaceKind.Window,
                 "After a refusal the next press retries the same paired variant.");
+            Press();
+            Check(target.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud &&
+                target.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id,
+                "The separately scoped transport fixture gets both shells.");
+            Press();
+            Check(context.Ui.Surfaces.Single().Request.Theme?.Id == FoundationPages.SurvivalTheme.Id &&
+                target.Surfaces.Single().Request.Theme?.Id == FoundationPages.SurvivalTheme.Id &&
+                target.Surfaces.Single().Request.Kind == UiSurfaceKind.Window,
+                "F7 sends the Survival Window through each public owner scope.");
+            Press();
+            Check(target.Surfaces.Single().Request.Theme?.Id == FoundationPages.SurvivalTheme.Id &&
+                target.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud,
+                "F7 sends the Survival HUD through the authenticated guest route.");
             var second = rig.AddRemoteClient("second-guest");
             rig.Advance(8);
             Check(second.ParticipantId.HasValue && GalleryRemotePreview.FindGuest(source.Snapshot) == null &&

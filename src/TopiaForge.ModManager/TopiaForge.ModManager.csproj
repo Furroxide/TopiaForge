@@ -14,6 +14,7 @@
   <ItemGroup>
     <Compile Include="..\..\mods\Shared\NativePlayerTeleport.cs" Link="Shared\NativePlayerTeleport.cs" />
     <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationPages.cs" Link="UiGalleryRecorder\FoundationPages.cs" />
+    <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiCapturedNode.cs" Link="UiGalleryRecorder\UiCapturedNode.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiCaptureViewport.cs" Link="UiGalleryRecorder\UiCaptureViewport.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiTreeCapture.cs" Link="UiGalleryRecorder\UiTreeCapture.cs" />

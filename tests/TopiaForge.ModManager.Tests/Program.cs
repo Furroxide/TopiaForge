@@ -151,6 +151,7 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--ui-theme-wire") { UiThemeWireTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k1-button-cues") { UiKitCaptureTests.VerifyButtonCues(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-k1-delivery") { PresentationRuntimeTests.RunK1Delivery(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit")
             {

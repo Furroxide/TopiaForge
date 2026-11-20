@@ -9,7 +9,8 @@ namespace TopiaForge.MultiplayerAcceptance
     {
         internal const string OptInFile = "gallery-remote-preview.enabled";
         internal const string InputAction = "gallery-remote-preview";
-        internal const int VariantCount = 8;
+        private const int VariantsPerPage = 6;
+        internal const int VariantCount = 2 * VariantsPerPage;
         private readonly IModContext context;
         private readonly IMultiplayerSession session;
         private readonly IDisposable update;
@@ -104,9 +105,14 @@ namespace TopiaForge.MultiplayerAcceptance
         internal static UiSurfaceRequest Request(int variant)
         {
             if ((uint)variant >= VariantCount) throw new ArgumentOutOfRangeException(nameof(variant));
-            var page = variant < 4 ? FoundationPage.ThemePacks : FoundationPage.Typography;
+            var page = variant < VariantsPerPage ? FoundationPage.ThemePacks : FoundationPage.Typography;
             var kind = (variant & 1) == 0 ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
-            var theme = (variant & 2) == 0 ? null : FoundationPages.TransportTheme;
+            var theme = (variant % VariantsPerPage / 2) switch
+            {
+                1 => FoundationPages.TransportTheme,
+                2 => FoundationPages.SurvivalTheme,
+                _ => null,
+            };
             return FoundationPages.CreateRequest(page, kind, theme);
         }
 

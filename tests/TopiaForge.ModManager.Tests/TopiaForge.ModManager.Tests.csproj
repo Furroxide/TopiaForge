@@ -11,6 +11,8 @@
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs" Link="RobotKit/RobotAvatarAccessorySlots.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationPages.cs" Link="UiGallery/FoundationPages.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.cs" Link="UiGallery/UiGalleryCaptureFixture.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGallerySurvivalTheme.cs" Link="UiGallery/UiGallerySurvivalTheme.cs" />
+    <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/AcceptanceConfig.cs" Link="MultiplayerAcceptance/AcceptanceConfig.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/GalleryRemotePreview.cs" Link="MultiplayerAcceptance/GalleryRemotePreview.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/MultiplayerAcceptanceMod.cs" Link="MultiplayerAcceptance/MultiplayerAcceptanceMod.cs" />

@@ -12,6 +12,7 @@
   "entryType": "TopiaForge.UiGallery.UiGalleryMod",
   "ui": {
     "schema": 1,
+    "default": "survival",
     "themes": [
       {
         "id": "survival",

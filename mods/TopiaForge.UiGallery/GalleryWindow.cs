@@ -22,10 +22,8 @@ namespace TopiaForge.UiGallery
         private readonly List<TopiaForgeToggle> highContrastControls = new List<TopiaForgeToggle>();
         private readonly List<TopiaForgeToggle> reducedMotionControls = new List<TopiaForgeToggle>();
         private readonly List<TopiaForgeSlider> uiScaleControls = new List<TopiaForgeSlider>();
-        private readonly List<TopiaForgeToggle> sampleThemeControls = new List<TopiaForgeToggle>();
         private TopiaForgeWindow active;
         private IUiSurface? preview;
-        private bool sampleTheme;
         private bool disposed;
 
         public GalleryWindow(UiHost host, IModContext context)
@@ -127,7 +125,8 @@ namespace TopiaForge.UiGallery
             {
                 foundation.Button("Interaction states", () => ShowFoundation(FoundationPage.InteractionStates, previewKind));
             }
-            sampleThemeControls.Add(foundation.Toggle("Survival sample", sampleTheme, SetSampleTheme));
+            column.Label("Foundation theme: Survival. With Gallery capture enabled at startup, press F3 to compare Kit and Survival.",
+                TopiaForgeTextStyle.Caption);
 
             var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
@@ -172,8 +171,7 @@ namespace TopiaForge.UiGallery
                 return;
             }
 
-            var request = FoundationPages.CreateRequest(
-                page, kind, sampleTheme ? FoundationPages.SurvivalTheme : null, ReportInteraction);
+            var request = FoundationPages.CreateRequest(page, kind, report: ReportInteraction);
             var result = previewUi.CreateSurface(request);
             if (!result.TryGetValue(out preview) || preview == null)
             {
@@ -192,15 +190,6 @@ namespace TopiaForge.UiGallery
         }
 
         private void ReportInteraction(string message) => preview?.SetBody(message);
-
-        private void SetSampleTheme(bool selected)
-        {
-            sampleTheme = selected;
-            foreach (var control in sampleThemeControls)
-            {
-                control.SetValue(selected);
-            }
-        }
 
         private void SyncAccessibilityControls()
         {

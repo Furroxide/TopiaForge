@@ -32,6 +32,7 @@ namespace TopiaForge.ModManager.Tests
             SiblingPreloadsAndDrainAreIndependent();
             AssetsCommitTogetherAndEnrichTheDescriptor();
             PaintAndTypeRemainReadable();
+            VerifyButtonCues();
             AuthoredBackplatesAndControlTargetsAreChecked();
             NativeControlsUseTheirResolvedRoles();
             GraphPortsHaveIndependentTargetsAndPaint();

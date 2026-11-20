@@ -10,7 +10,10 @@
   "entryType": "TopiaForge.MultiplayerAcceptance.MultiplayerAcceptanceMod",
   "ui": {
     "schema": 1,
-    "themes": [{ "id": "transport-preview", "definition": "ui/themes/transport-preview.json" }]
+    "themes": [
+      { "id": "transport-preview", "definition": "ui/themes/transport-preview.json" },
+      { "id": "survival", "definition": "ui/themes/survival.json" }
+    ]
   },
   "dependencies": {
     "io.github.furroxide.topiaforge.multiplayer": "0.2.0",

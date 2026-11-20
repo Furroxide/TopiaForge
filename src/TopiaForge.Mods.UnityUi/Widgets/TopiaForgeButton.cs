@@ -13,27 +13,27 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Brand-orange primary action.</summary>
         Filled,
 
-        /// <summary>Surface with strong border — secondary action.</summary>
+        /// <summary>Surface with strong border â€” secondary action.</summary>
         Outline,
 
-        /// <summary>No chrome until hover — tertiary/inline action.</summary>
+        /// <summary>No chrome until hover â€” tertiary/inline action.</summary>
         Ghost,
 
-        /// <summary>Filled with the danger role — destructive action.</summary>
+        /// <summary>Filled with the danger role â€” destructive action.</summary>
         Danger,
     }
 
     /// <summary>
     /// Brand button. The press micro-interaction pushes the body down-left onto its
-    /// hard shadow (the "press the sticker" motion) — shadow shrink and body offset,
+    /// hard shadow (the "press the sticker" motion) â€” shadow shrink and body offset,
     /// no color flash needed. Hover/pressed tinting rides uGUI's ColorBlock multiplier.
     /// </summary>
-    public sealed class TopiaForgeButton : TopiaForgeWidget, ITopiaForgeThemeAware
+    public sealed partial class TopiaForgeButton : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private const float LabelInsetX = 14f;
 
         private readonly TopiaForgeButtonStyle style;
-        private readonly Button button;
+        private readonly TopiaForgeCueButton button;
         private readonly TopiaForgeRoundedImage? shadow;
         private readonly TopiaForgeRoundedImage fill;
         private readonly TopiaForgeRoundedImage? ring;
@@ -124,7 +124,8 @@ namespace TopiaForge.Mods.UnityUi
                 FitLabelWidth();
             }
 
-            button = Go.AddComponent<Button>();
+            button = Go.AddComponent<TopiaForgeCueButton>();
+            button.ObserveCues(ShowCues);
             button.targetGraphic = fill;
             button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "Button click"));
 
@@ -234,6 +235,7 @@ namespace TopiaForge.Mods.UnityUi
 
             if (!enabledState)
             {
+                button.ConfigureCues(UiButtonCue.None);
                 fill.color = theme.Descriptor == null ? theme.Tint : theme.SurfaceSunken;
                 if (ring != null)
                 {
@@ -289,6 +291,8 @@ namespace TopiaForge.Mods.UnityUi
             {
                 shadow.color = theme.Shadow;
             }
+
+            ConfigureCues(theme, radius);
         }
 
         private static Color Tint(float value)

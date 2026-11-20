@@ -86,7 +86,8 @@ namespace TopiaForge.ModManager
 
         public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => CreateSurface(request, null);
 
-        private OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request, UiRemoteThemeSelection? remoteTheme)
+        private OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request, UiRemoteThemeSelection? remoteTheme,
+            GalleryPreviewPalette? preview = null)
         {
             UnityMainThreadGuard.AssertCurrent();
             if (request == null)
@@ -102,7 +103,11 @@ namespace TopiaForge.ModManager
             }
 
             UiThemeDescriptor? theme;
-            if (remoteTheme.HasValue)
+            if (preview.HasValue)
+            {
+                theme = preview.Value.Descriptor;
+            }
+            else if (remoteTheme.HasValue)
             {
                 theme = ResolveRemoteTheme(remoteTheme.Value);
             }
@@ -135,7 +140,7 @@ namespace TopiaForge.ModManager
                         request.Title,
                         request.Width,
                         request.Height,
-                        TopiaForgeScheme.Paper,
+                        preview?.Scheme ?? TopiaForgeScheme.Paper,
                         persistent: true);
                     nativeRoot = window;
                     var scroll = window.Content.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.Md);
@@ -189,7 +194,7 @@ namespace TopiaForge.ModManager
                 surface.AttachLifetimeLease(lifetime.Track(surface));
                 surfaces.Add(surface);
                 surface.Present();
-                ObserveGalleryFixture(surface, request, remoteTheme, theme);
+                ObserveGalleryFixture(surface, request, remoteTheme, theme, preview);
                 return OperationResult<IUiSurface>.Success(surface);
             }
             catch (Exception exception)
