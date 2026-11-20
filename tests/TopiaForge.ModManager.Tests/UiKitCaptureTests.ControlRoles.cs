@@ -49,11 +49,11 @@ namespace TopiaForge.ModManager.Tests
             Check(listHits.Length == 2 && listHits.All(n => n.Height == 40f) && listHits[1].Y - listHits[0].Y == 52f,
                 "Two virtual rows expose 40-unit hit targets with room for both focus rings.");
             Check(paper.Nodes.Single(n => n.Kind == "ListItem" && n.Id == "valley") is
-                    { FillColor: "#000000", InkColor: "#FFFFFF" } &&
+            { FillColor: "#000000", InkColor: "#FFFFFF" } &&
                 paper.Nodes.Single(n => n.Kind == "ListItem" && n.Id == "closed") is
-                    { FillColor: "#000000", ContrastRatio: >= 4.5f } &&
+                { FillColor: "#000000", ContrastRatio: >= 4.5f } &&
                 paper.Nodes.Single(n => n.Kind == "GraphNode" && n.Id == "camp") is
-                    { FillColor: "#000000", ContrastRatio: >= 4.5f },
+                { FillColor: "#000000", ContrastRatio: >= 4.5f },
                 "Rows and disabled selected graph nodes resolve ink against their actual Sunken fill.");
 
             var hud = CaptureForFixture(surface, Viewport, "Hovered", 0f, true);

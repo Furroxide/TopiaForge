@@ -38,8 +38,8 @@ namespace TopiaForge.ModManager.Tests
             Check(ports.Length == 5 && targets.Length == 8 && targets.All(n => n.IsRendered && !n.Clipped &&
                 n.Width >= 40f && n.Height >= 40f), "Each graph header and port exposes a separate stationary hit target.");
             for (var index = 0; index < targets.Length; index++)
-            for (var other = index + 1; other < targets.Length; other++)
-                Check(!Overlaps(targets[index], targets[other]), "Graph fixture hit regions are disjoint.");
+                for (var other = index + 1; other < targets.Length; other++)
+                    Check(!Overlaps(targets[index], targets[other]), "Graph fixture hit regions are disjoint.");
 
             Check(ports[0] is { Text: "RUN *", SemanticLabel: "Run *", FillColor: "#592553", TextHeightPixels: 18f } &&
                 ports[3] is { FillColor: "#224455" } && ports[4] is { FillColor: "#0A1621", Disabled: true },

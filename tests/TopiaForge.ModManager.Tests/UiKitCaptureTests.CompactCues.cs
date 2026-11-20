@@ -31,58 +31,58 @@ namespace TopiaForge.ModManager.Tests
             ui.CompletePendingThemeRegistrations();
 
             foreach (var scale in new[] { 1f, 2f })
-            foreach (var highContrast in new[] { false, true })
-            foreach (var reducedMotion in new[] { false, true })
-            foreach (var hud in new[] { false, true })
-            {
-                Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reducedMotion)).Succeeded,
-                    "Apply the viewer's scale, contrast and motion preferences.");
-                var rest = Capture("Rest", hud);
-                var hover = Capture("Hovered", hud);
-                var focus = Capture("Focused", hud);
-                var selected = Capture("Selected", hud);
-                var pressed = Capture("Pressed", hud);
-                var both = Capture("SelectedPressed", hud);
-                foreach (var id in new[] { "tracking", "range" })
-                {
-                    Check(HasPart(both, id, "selection") && HasPart(both, id, "press"),
-                        "Each compact control shows both cues when the two active states collapse.");
-                    var hit = Part(rest, id, "hit");
-                    var track = Part(rest, id, "track");
-                    var label = Find(rest, id);
-                    var bar = Part(both, id, "selection");
-                    var outline = Part(both, id, "press");
-                    var ring = Part(focus, id, "focus");
-                    var stroke = scale * (highContrast ? 3f : 2f);
-                    var minimum = highContrast ? 4.5f : 3f;
-                    Check(track.FillColor == (hud ? "#010101" : "#000000") && Part(hover, id, "track").FillColor == track.FillColor &&
-                        Part(both, id, "track").FillColor == track.FillColor, "The authored rail has collapsed quantized tints.");
-                    Check(!HasPart(rest, id, "selection") && !HasPart(rest, id, "press") &&
-                        HasPart(selected, id, "selection") && !HasPart(selected, id, "press") &&
-                        !HasPart(pressed, id, "selection") && HasPart(pressed, id, "press"),
-                        "Compact controls show selection and press independently and clear both at rest.");
-                    Check(bar is { Kind: "ControlSelectionBar", IsRendered: true, Clipped: false } && bar.Width == 3f * scale &&
-                        outline is { Kind: "ControlPressOutline", IsRendered: true, Clipped: false } && outline.BorderWidthPixels == stroke &&
-                        bar.ContrastRatio >= minimum && outline.ContrastRatio >= minimum &&
-                        bar.FillColor == label.FillColor && outline.FillColor == label.FillColor,
-                        "Both compact cues remain visible and contrast against the actual Surface backplate.");
-                    Check(track.X == hit.X + 12f * scale &&
-                        outline.X + outline.Width <= track.X &&
-                        bar.X > outline.X + stroke && bar.X + bar.Width < outline.X + outline.Width - stroke,
-                        "The gutter reserves room for two separate cues without covering the track.");
-                    Check(Geometry(hit) == Geometry(Part(both, id, "hit")) && Geometry(track) == Geometry(Part(both, id, "track")) &&
-                        hit.Width >= 40f * scale && hit.Height >= 40f * scale && ring.X + (2f * scale + stroke) == hit.X &&
-                        Geometry(Part(rest, id, "thumb")) == Geometry(Part(both, id, "thumb")),
-                        "The cue leaves the hit target, focus origin, rail and real value thumb stable.");
-                }
-                foreach (var id in new[] { "locked-tracking", "locked-range" })
-                {
-                    Check(!HasPart(both, id, "selection") && !HasPart(both, id, "press") &&
-                        Part(both, id, "thumb") is { Disabled: true } disabled && disabled.ContrastRatio >= (highContrast ? 7f : 4.5f),
-                        "Disabled controls resolve their muted thumb at the disabled content threshold and show no input cues.");
-                }
-                Check(both.CheckAccessibility().Count == 0, "Combined compact cue captures pass the accessibility checks.");
-            }
+                foreach (var highContrast in new[] { false, true })
+                    foreach (var reducedMotion in new[] { false, true })
+                        foreach (var hud in new[] { false, true })
+                        {
+                            Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reducedMotion)).Succeeded,
+                                "Apply the viewer's scale, contrast and motion preferences.");
+                            var rest = Capture("Rest", hud);
+                            var hover = Capture("Hovered", hud);
+                            var focus = Capture("Focused", hud);
+                            var selected = Capture("Selected", hud);
+                            var pressed = Capture("Pressed", hud);
+                            var both = Capture("SelectedPressed", hud);
+                            foreach (var id in new[] { "tracking", "range" })
+                            {
+                                Check(HasPart(both, id, "selection") && HasPart(both, id, "press"),
+                                    "Each compact control shows both cues when the two active states collapse.");
+                                var hit = Part(rest, id, "hit");
+                                var track = Part(rest, id, "track");
+                                var label = Find(rest, id);
+                                var bar = Part(both, id, "selection");
+                                var outline = Part(both, id, "press");
+                                var ring = Part(focus, id, "focus");
+                                var stroke = scale * (highContrast ? 3f : 2f);
+                                var minimum = highContrast ? 4.5f : 3f;
+                                Check(track.FillColor == (hud ? "#010101" : "#000000") && Part(hover, id, "track").FillColor == track.FillColor &&
+                                    Part(both, id, "track").FillColor == track.FillColor, "The authored rail has collapsed quantized tints.");
+                                Check(!HasPart(rest, id, "selection") && !HasPart(rest, id, "press") &&
+                                    HasPart(selected, id, "selection") && !HasPart(selected, id, "press") &&
+                                    !HasPart(pressed, id, "selection") && HasPart(pressed, id, "press"),
+                                    "Compact controls show selection and press independently and clear both at rest.");
+                                Check(bar is { Kind: "ControlSelectionBar", IsRendered: true, Clipped: false } && bar.Width == 3f * scale &&
+                                    outline is { Kind: "ControlPressOutline", IsRendered: true, Clipped: false } && outline.BorderWidthPixels == stroke &&
+                                    bar.ContrastRatio >= minimum && outline.ContrastRatio >= minimum &&
+                                    bar.FillColor == label.FillColor && outline.FillColor == label.FillColor,
+                                    "Both compact cues remain visible and contrast against the actual Surface backplate.");
+                                Check(track.X == hit.X + 12f * scale &&
+                                    outline.X + outline.Width <= track.X &&
+                                    bar.X > outline.X + stroke && bar.X + bar.Width < outline.X + outline.Width - stroke,
+                                    "The gutter reserves room for two separate cues without covering the track.");
+                                Check(Geometry(hit) == Geometry(Part(both, id, "hit")) && Geometry(track) == Geometry(Part(both, id, "track")) &&
+                                    hit.Width >= 40f * scale && hit.Height >= 40f * scale && ring.X + (2f * scale + stroke) == hit.X &&
+                                    Geometry(Part(rest, id, "thumb")) == Geometry(Part(both, id, "thumb")),
+                                    "The cue leaves the hit target, focus origin, rail and real value thumb stable.");
+                            }
+                            foreach (var id in new[] { "locked-tracking", "locked-range" })
+                            {
+                                Check(!HasPart(both, id, "selection") && !HasPart(both, id, "press") &&
+                                    Part(both, id, "thumb") is { Disabled: true } disabled && disabled.ContrastRatio >= (highContrast ? 7f : 4.5f),
+                                    "Disabled controls resolve their muted thumb at the disabled content threshold and show no input cues.");
+                            }
+                            Check(both.CheckAccessibility().Count == 0, "Combined compact cue captures pass the accessibility checks.");
+                        }
 
             var on = Part(Capture("Rest", hud: false), "tracking", "thumb");
             Check(surface.ChangeToggle("tracking", false).Succeeded && toggleChanges == 1, "The switch still accepts its normal value callback.");
