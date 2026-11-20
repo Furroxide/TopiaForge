@@ -49,26 +49,30 @@ namespace TopiaForge.ModManager.Tests
                 .WithWireMetadata(1f, 1f, AssetDigest);
             Check(RoundTrip<UiImage>(decorativeImage,
                 ImagePayload(id: "", label: "", width: 1f, height: 1f, fit: 0, tintPresent: 0, decorative: 1)) is
-                { Id: null, SemanticLabel: "", Width: 1f, Height: 1f, Tint: null, Decorative: true },
+            { Id: null, SemanticLabel: "", Width: 1f, Height: 1f, Tint: null, Decorative: true },
                 "The image's optional tint flag keeps a decorative one-unit box.");
 
             var badge = new UiBadge("Warning", UiPaintRole.Warning, UiBadgeStyle.Outlined, UiGlyph.Warning,
                 new UiStyleRef("status.edge"), id: "badge");
             Check(RoundTrip<UiBadge>(badge, BadgePayload()) is
-                { Id: "badge", Text: "Warning", Role: UiPaintRole.Warning, Presentation: UiBadgeStyle.Outlined,
-                    Icon: UiGlyph.Warning, Style.Id: "status.edge" }, "Badge role, glyph and style are preserved.");
+            {
+                Id: "badge", Text: "Warning", Role: UiPaintRole.Warning, Presentation: UiBadgeStyle.Outlined,
+                Icon: UiGlyph.Warning, Style.Id: "status.edge"
+            }, "Badge role, glyph and style are preserved.");
             Check(RoundTrip<UiBadge>(new UiBadge("Warning"), BadgePayload(id: "", role: 0, presentation: 0, iconPresent: 0, style: "")) is
-                { Id: null, Icon: null, Style: null }, "Optional badge fields stay absent.");
+            { Id: null, Icon: null, Style: null }, "Optional badge fields stay absent.");
 
             var pips = new UiPips(32, 9, "Cells", 0.5f, UiPipStyle.Segments, UiPaintRole.Accent,
                 new UiStyleRef("charge.track"), id: "pips");
             Check(RoundTrip<UiPips>(pips, PipsPayload()) is
-                { Id: "pips", Total: 32, Filled: 9, Label: "Cells", Fraction: 0.5f, Presentation: UiPipStyle.Segments,
-                    Role: UiPaintRole.Accent, Style.Id: "charge.track", DisplayLabel: "Cells: 9 / 32 (50% refilling)" },
+            {
+                Id: "pips", Total: 32, Filled: 9, Label: "Cells", Fraction: 0.5f, Presentation: UiPipStyle.Segments,
+                Role: UiPaintRole.Accent, Style.Id: "charge.track", DisplayLabel: "Cells: 9 / 32 (50% refilling)"
+            },
                 "Pips keep their static fill and accessible count.");
             Check(RoundTrip<UiPips>(new UiPips(1, 1, "Cells"),
                 PipsPayload(id: "", total: 1, filled: 1, fraction: 0f, presentation: 0, style: "")) is
-                { Total: 1, Filled: 1, Fraction: 0f, Style: null }, "A full pip track uses zero fraction.");
+            { Total: 1, Filled: 1, Fraction: 0f, Style: null }, "A full pip track uses zero fraction.");
         }
 
         private static void AuthoredAndWireImageAreDistinct()

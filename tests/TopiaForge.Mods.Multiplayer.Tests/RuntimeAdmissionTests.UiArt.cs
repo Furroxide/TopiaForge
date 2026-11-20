@@ -203,7 +203,10 @@ internal static partial class RuntimeAdmissionTests
         var larger = Panel("panel-long", "success");
         return new AdmittedUiCatalogue(null, new Dictionary<string, UiThemeDescriptor>
         {
-            [images.Id] = images, [selected.Id] = selected, [incompatible.Id] = incompatible, [larger.Id] = larger,
+            [images.Id] = images,
+            [selected.Id] = selected,
+            [incompatible.Id] = incompatible,
+            [larger.Id] = larger,
         });
 
         static UiThemeDescriptor Panel(string id, string role) => Parse($$"""

@@ -60,54 +60,54 @@ namespace TopiaForge.ModManager.Tests
             var cases = new SortedDictionary<string, GoldenCase>(StringComparer.Ordinal);
             UiThemeDescriptor? survival = null;
             foreach (var page in Enum.GetValues<FoundationPage>().Where(page => !FoundationArtPages.IsArt(page)))
-            foreach (var sample in new[] { false, true })
-            foreach (var useHud in new[] { false, true })
-            foreach (var guest in new[] { false, true })
-            {
-                var graphConnections = page == FoundationPage.GraphConnections;
-                var interactive = page == FoundationPage.InteractionStates || graphConnections;
-                var kind = useHud && !interactive ? UiSurfaceKind.Hud : UiSurfaceKind.Window;
-                using var lifetime = new FakeModLifetime();
-                using var players = guest ? new FakePlayerDirectory() : null;
-                var recipient = players?.Add(new ParticipantId("gallery-guest"), "Sam");
-                var ui = recipient == null ? new FakeUiService(lifetime) : players!.State(recipient.Id).Ui;
-                if (sample)
-                    Check(ui.AddThemeCatalogue(declaration, ReadFixture).Succeeded, "The Gallery's real theme catalogue validates.");
-
-                var request = FoundationPages.CreateRequest(page, kind, sample ? FoundationPages.SurvivalTheme : null);
-                using var surface = recipient != null && !interactive ? Make(recipient.Ui.CreateSurface(request)) : Make(ui, request);
-                ui.CompletePendingThemeRegistrations();
-                if (sample) survival = ThemeForWire(ui, FoundationPages.SurvivalTheme);
-                var route = guest ? interactive ? "guest-local" : "guest-targeted" : "host-local";
-                var scheme = useHud ? "hud" : "paper";
-                var theme = sample ? "survival" : "kit";
-
-                foreach (var size in dimensions)
-                foreach (var scale in new[] { 1, 2 })
-                foreach (var highContrast in new[] { false, true })
-                foreach (var reducedMotion in new[] { false, true })
-                {
-                    var viewport = new UiCaptureViewport(size.Width, size.Height);
-                    Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reducedMotion)).Succeeded,
-                        "Apply viewer-local capture preferences.");
-                    var states = graphConnections ? new[] { "Rest", "Focused" }
-                        : interactive ? new[] { "Rest", "Hovered", "Focused", "Selected", "Pressed", "SelectedPressed" } : new[] { "Rest" };
-                    foreach (var state in states)
-                    {
-                        if (graphConnections)
+                foreach (var sample in new[] { false, true })
+                    foreach (var useHud in new[] { false, true })
+                        foreach (var guest in new[] { false, true })
                         {
-                            if (state == "Rest") CloseGraphConnections(surface);
-                            else Check(OpenGraphConnections(surface, viewport), "The Graph Connections fixture opens its measured list.");
+                            var graphConnections = page == FoundationPage.GraphConnections;
+                            var interactive = page == FoundationPage.InteractionStates || graphConnections;
+                            var kind = useHud && !interactive ? UiSurfaceKind.Hud : UiSurfaceKind.Window;
+                            using var lifetime = new FakeModLifetime();
+                            using var players = guest ? new FakePlayerDirectory() : null;
+                            var recipient = players?.Add(new ParticipantId("gallery-guest"), "Sam");
+                            var ui = recipient == null ? new FakeUiService(lifetime) : players!.State(recipient.Id).Ui;
+                            if (sample)
+                                Check(ui.AddThemeCatalogue(declaration, ReadFixture).Succeeded, "The Gallery's real theme catalogue validates.");
+
+                            var request = FoundationPages.CreateRequest(page, kind, sample ? FoundationPages.SurvivalTheme : null);
+                            using var surface = recipient != null && !interactive ? Make(recipient.Ui.CreateSurface(request)) : Make(ui, request);
+                            ui.CompletePendingThemeRegistrations();
+                            if (sample) survival = ThemeForWire(ui, FoundationPages.SurvivalTheme);
+                            var route = guest ? interactive ? "guest-local" : "guest-targeted" : "host-local";
+                            var scheme = useHud ? "hud" : "paper";
+                            var theme = sample ? "survival" : "kit";
+
+                            foreach (var size in dimensions)
+                                foreach (var scale in new[] { 1, 2 })
+                                    foreach (var highContrast in new[] { false, true })
+                                        foreach (var reducedMotion in new[] { false, true })
+                                        {
+                                            var viewport = new UiCaptureViewport(size.Width, size.Height);
+                                            Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reducedMotion)).Succeeded,
+                                                "Apply viewer-local capture preferences.");
+                                            var states = graphConnections ? new[] { "Rest", "Focused" }
+                                                : interactive ? new[] { "Rest", "Hovered", "Focused", "Selected", "Pressed", "SelectedPressed" } : new[] { "Rest" };
+                                            foreach (var state in states)
+                                            {
+                                                if (graphConnections)
+                                                {
+                                                    if (state == "Rest") CloseGraphConnections(surface);
+                                                    else Check(OpenGraphConnections(surface, viewport), "The Graph Connections fixture opens its measured list.");
+                                                }
+                                                var contrast = highContrast ? "high" : "standard";
+                                                var motion = reducedMotion ? "reduced" : "full";
+                                                var id = FormattableString.Invariant($"{page}/{theme}/{scheme}/{contrast}/{size.Width}x{size.Height}/{scale}/{route}/{motion}/{state}");
+                                                var hudOverride = interactive && useHud ? true : (bool?)null;
+                                                var screenScale = (float)Math.Sqrt((size.Width / 1920d) * (size.Height / 1080d));
+                                                cases.Add(id, CaptureCase(id, surface, viewport, state, hudOverride, screenScale * scale));
+                                            }
+                                        }
                         }
-                        var contrast = highContrast ? "high" : "standard";
-                        var motion = reducedMotion ? "reduced" : "full";
-                        var id = FormattableString.Invariant($"{page}/{theme}/{scheme}/{contrast}/{size.Width}x{size.Height}/{scale}/{route}/{motion}/{state}");
-                        var hudOverride = interactive && useHud ? true : (bool?)null;
-                        var screenScale = (float)Math.Sqrt((size.Width / 1920d) * (size.Height / 1080d));
-                        cases.Add(id, CaptureCase(id, surface, viewport, state, hudOverride, screenScale * scale));
-                    }
-                }
-            }
 
             AddLayoutNoticeCases(cases, dimensions, declaration, ReadFixture);
             Check(survival != null && survival.Id == "survival", "The sample theme must be resolved from the real Gallery fixture.");
@@ -189,14 +189,32 @@ namespace TopiaForge.ModManager.Tests
         {
             var row = new
             {
-                node.Path, node.Id, node.Kind, node.Text, node.SemanticLabel,
-                node.Decorative, node.Disabled, node.Selected,
-                x = Math.Round(node.X, 3), y = Math.Round(node.Y, 3), width = Math.Round(node.Width, 3), height = Math.Round(node.Height, 3),
-                size = Math.Round(node.TextHeightPixels, 3), contrast = Math.Round(node.ContrastRatio, 5),
-                node.ThemeId, node.StyleId, node.InkColor, node.FillColor,
-                radius = Round(node.CornerRadiusPixels), border = Round(node.BorderWidthPixels),
-                shadowX = Round(node.ShadowOffsetXPixels), shadowY = Round(node.ShadowOffsetYPixels),
-                node.UsedFallback, node.IsRendered, node.Clipped, node.Occluded,
+                node.Path,
+                node.Id,
+                node.Kind,
+                node.Text,
+                node.SemanticLabel,
+                node.Decorative,
+                node.Disabled,
+                node.Selected,
+                x = Math.Round(node.X, 3),
+                y = Math.Round(node.Y, 3),
+                width = Math.Round(node.Width, 3),
+                height = Math.Round(node.Height, 3),
+                size = Math.Round(node.TextHeightPixels, 3),
+                contrast = Math.Round(node.ContrastRatio, 5),
+                node.ThemeId,
+                node.StyleId,
+                node.InkColor,
+                node.FillColor,
+                radius = Round(node.CornerRadiusPixels),
+                border = Round(node.BorderWidthPixels),
+                shadowX = Round(node.ShadowOffsetXPixels),
+                shadowY = Round(node.ShadowOffsetYPixels),
+                node.UsedFallback,
+                node.IsRendered,
+                node.Clipped,
+                node.Occluded,
             };
 
             if (node.RequestedPaintRole is not { } requested || node.EffectivePaintRole is not { } effective) return row;

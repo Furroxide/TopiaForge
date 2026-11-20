@@ -158,10 +158,14 @@ namespace TopiaForge.ModManager.Tests
                     Name = "Example",
                     Version = "1.0.0",
                     SupportedLoaderVersionRange = ">=" + UiKitRelease.K1,
-                    Ui = new ModUiCatalogue { Schema = 1, Themes = new List<ModUiCatalogueEntry>
+                    Ui = new ModUiCatalogue
+                    {
+                        Schema = 1,
+                        Themes = new List<ModUiCatalogueEntry>
                     {
                         new ModUiCatalogueEntry { Id = "survival", Definition = Definition },
-                    } },
+                    }
+                    },
                 };
                 Write("topiaforge.mod.json", JsonUtil.Serialize(Manifest));
                 Write(Definition, DefinitionSource);

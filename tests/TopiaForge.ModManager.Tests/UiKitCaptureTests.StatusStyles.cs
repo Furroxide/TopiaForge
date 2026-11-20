@@ -52,16 +52,16 @@ namespace TopiaForge.ModManager.Tests
             static void CheckStatusCapture(UiTreeCapture capture, bool resolved)
             {
                 Check(Row(capture, "water") is
-                    { RequestedStyleId: "warning.outline", RequestedPaintRole: UiPaintRole.Warning, EffectivePaintRole: UiPaintRole.Warning } badge &&
+                { RequestedStyleId: "warning.outline", RequestedPaintRole: UiPaintRole.Warning, EffectivePaintRole: UiPaintRole.Warning } badge &&
                     badge.StyleId == (resolved ? "warning.outline" : null) && badge.UsedFallback != resolved,
                     "The badge retains the requested style and role, with an effective style only when resolved.");
                 var pips = Row(capture, "power");
                 Check(pips is
-                    { RequestedStyleId: "power.track", RequestedPaintRole: UiPaintRole.Accent, EffectivePaintRole: UiPaintRole.Accent } &&
+                { RequestedStyleId: "power.track", RequestedPaintRole: UiPaintRole.Accent, EffectivePaintRole: UiPaintRole.Accent } &&
                     pips.StyleId == (resolved ? "power.track" : null) && pips.UsedFallback != resolved,
                     "The pips retain the requested style and role, with an effective style only when resolved.");
                 Check(Row(capture, "unstyled") is
-                    { RequestedStyleId: null, StyleId: null, RequestedPaintRole: UiPaintRole.Success, EffectivePaintRole: UiPaintRole.Success },
+                { RequestedStyleId: null, StyleId: null, RequestedPaintRole: UiPaintRole.Success, EffectivePaintRole: UiPaintRole.Success },
                     "An unstyled badge still reports its role in both role fields.");
                 Check(capture.Nodes.Where(node => !IsStatus(node)).All(node =>
                     node.RequestedStyleId == null && node.RequestedPaintRole == null && node.EffectivePaintRole == null),

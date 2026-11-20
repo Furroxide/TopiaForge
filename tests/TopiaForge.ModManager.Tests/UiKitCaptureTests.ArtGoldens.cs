@@ -51,44 +51,44 @@ namespace TopiaForge.ModManager.Tests
             var sizes = new[] { (Width: 1920, Height: 1080), (Width: 2560, Height: 1440) };
             var cases = new SortedDictionary<string, GoldenCase>(StringComparer.Ordinal);
             foreach (var page in Enum.GetValues<FoundationPage>().Where(FoundationArtPages.IsArt))
-            foreach (var sample in new[] { false, true })
-            foreach (var kind in new[] { UiSurfaceKind.Window, UiSurfaceKind.Hud })
-            foreach (var guest in new[] { false, true })
-            {
-                using var authorLife = new FakeModLifetime();
-                using var guestLife = guest ? new FakeModLifetime() : null;
-                var owner = new FakeUiService(authorLife);
-                fixture.Install(owner);
-                var viewer = guestLife == null ? owner : new FakeUiService(guestLife);
-                if (guest) fixture.Install(viewer);
-                var request = FoundationPages.CreateRequest(page, kind, sample ? FoundationPages.SurvivalTheme : null);
-                using var surface = guest ? OpenArtReceiver(viewer, owner, request) : Make(owner, request);
-                viewer.CompletePendingThemeRegistrations();
+                foreach (var sample in new[] { false, true })
+                    foreach (var kind in new[] { UiSurfaceKind.Window, UiSurfaceKind.Hud })
+                        foreach (var guest in new[] { false, true })
+                        {
+                            using var authorLife = new FakeModLifetime();
+                            using var guestLife = guest ? new FakeModLifetime() : null;
+                            var owner = new FakeUiService(authorLife);
+                            fixture.Install(owner);
+                            var viewer = guestLife == null ? owner : new FakeUiService(guestLife);
+                            if (guest) fixture.Install(viewer);
+                            var request = FoundationPages.CreateRequest(page, kind, sample ? FoundationPages.SurvivalTheme : null);
+                            using var surface = guest ? OpenArtReceiver(viewer, owner, request) : Make(owner, request);
+                            viewer.CompletePendingThemeRegistrations();
 
-                foreach (var size in sizes)
-                foreach (var scale in new[] { 1, 2 })
-                foreach (var highContrast in new[] { false, true })
-                {
-                    string? normalMotionHash = null;
-                    foreach (var reduce in new[] { false, true })
-                    {
-                        var viewport = new UiCaptureViewport(size.Width, size.Height);
-                        Check(viewer.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reduce)).Succeeded,
-                            "Use viewer-local art capture preferences.");
-                        var theme = sample ? "survival" : "kit";
-                        var scheme = kind == UiSurfaceKind.Window ? "paper" : "hud";
-                        var contrast = highContrast ? "high" : "standard";
-                        var route = guest ? "guest-received" : "host-local";
-                        var motion = reduce ? "reduced" : "full";
-                        var caseId = FormattableString.Invariant($"{page}/{theme}/{scheme}/{contrast}/{size.Width}x{size.Height}/{scale}/{route}/{motion}");
-                        var screenScale = (float)Math.Sqrt(size.Width / 1920d * (size.Height / 1080d));
-                        var captured = CaptureCase(caseId, surface, viewport, "Rest", null, screenScale * scale);
-                        cases.Add(caseId, captured);
-                        if (!reduce) normalMotionHash = captured.TreeSha256;
-                        else Check(normalMotionHash == captured.TreeSha256, caseId + " static art changes with motion preferences.");
-                    }
-                }
-            }
+                            foreach (var size in sizes)
+                                foreach (var scale in new[] { 1, 2 })
+                                    foreach (var highContrast in new[] { false, true })
+                                    {
+                                        string? normalMotionHash = null;
+                                        foreach (var reduce in new[] { false, true })
+                                        {
+                                            var viewport = new UiCaptureViewport(size.Width, size.Height);
+                                            Check(viewer.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reduce)).Succeeded,
+                                                "Use viewer-local art capture preferences.");
+                                            var theme = sample ? "survival" : "kit";
+                                            var scheme = kind == UiSurfaceKind.Window ? "paper" : "hud";
+                                            var contrast = highContrast ? "high" : "standard";
+                                            var route = guest ? "guest-received" : "host-local";
+                                            var motion = reduce ? "reduced" : "full";
+                                            var caseId = FormattableString.Invariant($"{page}/{theme}/{scheme}/{contrast}/{size.Width}x{size.Height}/{scale}/{route}/{motion}");
+                                            var screenScale = (float)Math.Sqrt(size.Width / 1920d * (size.Height / 1080d));
+                                            var captured = CaptureCase(caseId, surface, viewport, "Rest", null, screenScale * scale);
+                                            cases.Add(caseId, captured);
+                                            if (!reduce) normalMotionHash = captured.TreeSha256;
+                                            else Check(normalMotionHash == captured.TreeSha256, caseId + " static art changes with motion preferences.");
+                                        }
+                                    }
+                        }
 
             return JsonSerializer.Serialize(new
             {
