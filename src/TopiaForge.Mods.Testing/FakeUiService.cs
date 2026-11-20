@@ -97,7 +97,11 @@ namespace TopiaForge.Mods.Testing
 
             var geometryChanged = preferences.UiScale != accessibility.UiScale || preferences.HighContrast != accessibility.HighContrast;
             accessibility = preferences;
-            if (geometryChanged) RefreshHudLayoutNotices();
+            if (geometryChanged)
+            {
+                foreach (var surface in surfaces) surface.RevalidateGraphConnections();
+                RefreshHudLayoutNotices();
+            }
             return OperationResult<UiAccessibilityPreferences>.Success(accessibility);
         }
 

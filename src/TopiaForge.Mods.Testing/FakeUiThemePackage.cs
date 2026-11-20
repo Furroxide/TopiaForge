@@ -45,11 +45,20 @@ namespace TopiaForge.Mods.Testing
             {
                 var admitted = ValidateSelection(scope, theme);
                 if (!admitted.Succeeded) return admitted;
-                if (!Equals(scope.Selection, theme) && !StylesCanInherit(scope, theme)) return StyleMismatch;
+                var changed = !Equals(scope.Selection, theme);
+                if (changed && !StylesCanInherit(scope, theme)) return StyleMismatch;
                 scope.Selection = theme;
                 Reconcile(theme?.Id);
+                if (changed) RevalidateOpenGraphs();
                 return Success;
             }
+        }
+
+        private void RevalidateOpenGraphs()
+        {
+            foreach (var scope in scopes)
+                foreach (var surface in scope.Surfaces)
+                    surface.RevalidateGraphConnections();
         }
 
         private bool StylesCanInherit(FakeUiThemeScope changed, UiThemeRef? proposed)
@@ -150,6 +159,7 @@ namespace TopiaForge.Mods.Testing
         {
             lock (gate)
             {
+                var completed = false;
                 foreach (var registration in registrations.Values)
                 {
                     if (registration.State == FakeUiThemeLoadState.Draining)
@@ -159,6 +169,7 @@ namespace TopiaForge.Mods.Testing
                     }
 
                     if (registration.State != FakeUiThemeLoadState.Loading) continue;
+                    completed = true;
                     var result = Acquire(registration.Definition);
                     registration.Loaded = result.Value;
                     registration.State = result.Succeeded ? FakeUiThemeLoadState.Ready : FakeUiThemeLoadState.Failed;
@@ -169,6 +180,7 @@ namespace TopiaForge.Mods.Testing
 
                 // Reconcile only after the whole batch. An attempt made eligible by a drain does not complete this step.
                 Reconcile();
+                if (completed) RevalidateOpenGraphs();
             }
         }
 

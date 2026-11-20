@@ -220,6 +220,7 @@ namespace TopiaForge.ModManager.Tests
                     public string text = string.Empty;
                     public TextOverflowModes overflowMode = TextOverflowModes.Ellipsis;
                     public int color;
+                    public float CharacterAdvance = 8f;
                     public RectTransform rectTransform => (RectTransform)transform;
                     public Vector2 GetPreferredValues() => GetPreferredValues(text, float.PositiveInfinity, 0f);
                     public Vector2 GetPreferredValues(string display, float availableWidth, float availableHeight)
@@ -227,7 +228,7 @@ namespace TopiaForge.ModManager.Tests
                         var lines = display.Split('\n');
                         var length = 0;
                         foreach (var line in lines) length = Math.Max(length, line.Length);
-                        return new Vector2(length * 8f, lines.Length * 18f);
+                        return new Vector2(length * CharacterAdvance, lines.Length * 18f);
                     }
                 }
             }

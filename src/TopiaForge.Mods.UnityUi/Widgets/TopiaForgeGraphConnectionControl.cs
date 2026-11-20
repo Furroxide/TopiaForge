@@ -32,6 +32,7 @@ namespace TopiaForge.Mods.UnityUi
             label = TopiaForgeGraphNodeView.CreateLabel(go.transform, "Label", TopiaForgeTextStyle.Label, TextAlignmentOptions.Left);
             label.richText = false;
             label.parseCtrlCharacters = false;
+            label.overflowMode = TextOverflowModes.Overflow;
             TopiaForgeAnchors.Stretch(label.rectTransform, LabelInset, 0f, LabelInset, 0f);
             focus = TopiaForgeControlFocus.Install(owner, Button);
             cues = TopiaForgeControlCues.Install(Button, Rect);
@@ -42,7 +43,6 @@ namespace TopiaForge.Mods.UnityUi
         internal TextMeshProUGUI Label => label;
         internal string DisplayLabel => label.text;
         internal string SemanticLabel { get; private set; } = string.Empty;
-        internal float PreferredWidth => label.GetPreferredValues().x + 2 * LabelInset;
         internal int LabelPages => labelPages.Count;
 
         internal void InvalidateLabel() => labelSource = null;
@@ -65,13 +65,11 @@ namespace TopiaForge.Mods.UnityUi
 
         internal void SetRemoveText(string semantic, UiLayoutRect box)
         {
-            label.overflowMode = TextOverflowModes.Overflow;
             SetText(UiGraphConnectionLabelPages.RemoveCaption(semantic, box, MeasureText), semantic);
         }
 
         internal void ShowLabelPage(int page)
         {
-            label.overflowMode = TextOverflowModes.Overflow;
             SetText(labelPages.Display(page), SemanticLabel);
         }
 

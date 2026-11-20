@@ -41,6 +41,7 @@ namespace TopiaForge.ModManager.Tests
             GraphConnectionsAreLocalPooledAndLabelled();
             GraphConnectionLabelsRevealBothEndpoints();
             GraphConnectionsPaintIndependentCues();
+            GraphConnectionsLauncherFitsTheLabel();
             GraphConnectionsYieldToAnUnreachableLayout();
             NativeGraphConnectionsUseTheActualControls();
             ListSelectionRevealsPaddedRows();

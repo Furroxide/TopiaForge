@@ -36,7 +36,9 @@ namespace TopiaForge.ModManager
         internal void SetPanelPaintShown(int handle, bool shown)
         {
             var panel = Find(handle);
-            if (panel != null && panel.Rect.gameObject.activeSelf != shown) panel.Rect.gameObject.SetActive(shown);
+            if (panel == null || panel.Rect.gameObject.activeSelf == shown) return;
+            panel.Rect.gameObject.SetActive(shown);
+            occupancyVersion++;
         }
 
         internal void ApplyContentViewport(int handle)
@@ -53,7 +55,8 @@ namespace TopiaForge.ModManager
             occupied.Clear();
             foreach (var peer in panels)
             {
-                if (ReferenceEquals(panel, peer) || !dock.TryGetPosition(peer.Handle, out _, out _)) continue;
+                if (ReferenceEquals(panel, peer) || !dock.TryGetPosition(peer.Handle, out _, out _) ||
+                    !peer.Rect.gameObject.activeInHierarchy) continue;
                 if (!TryProject(peer.Rect, out var region))
                 {
                     RestoreDock(panel, viewport);

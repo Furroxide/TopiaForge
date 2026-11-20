@@ -140,11 +140,18 @@ namespace TopiaForge.Mods
 
         internal int Rows { get; }
 
-        internal static double LauncherWidth(double titleWidth, double preferredControlWidth)
+        internal static (string Caption, double SlotWidth) MeasureLauncher(double titleWidth,
+            Func<string, (double Width, double Height)> measure)
         {
             const float reserved = UiGraphConnections.TargetHeight * 2 + 16f;
             var available = titleWidth - reserved;
-            return available >= RowSlot ? Math.Min(available, Math.Max(RowSlot, preferredControlWidth + 2 * UiGraphConnections.Gutter)) : 0d;
+            if (available < RowSlot) return (string.Empty, 0d);
+            var target = Control(0d, 0d, available);
+            var caption = UiGraphConnectionLabelPages.LauncherCaption(target, measure);
+            if (caption.Length == 0) return (string.Empty, 0d);
+            var required = measure(caption).Width +
+                2 * (UiGraphConnections.Gutter + UiGraphConnectionLabelPages.HorizontalInset);
+            return (caption, Math.Max(RowSlot, required));
         }
 
         internal UiLayoutRect Row(int index) =>

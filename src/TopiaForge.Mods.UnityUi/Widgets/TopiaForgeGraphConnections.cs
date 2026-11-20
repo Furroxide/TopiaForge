@@ -30,7 +30,6 @@ namespace TopiaForge.Mods.UnityUi
         private UiGraphConnectionsViewport viewport;
         private Vector2 lastAperture;
         private float lastTitleWidth = float.NaN;
-        private float launcherTextWidth;
         private bool launcherShown;
         private bool layoutSuspended;
         private float suspendedTitleHeight;
@@ -55,7 +54,6 @@ namespace TopiaForge.Mods.UnityUi
             titleBarSize = titleBar.EnsureLayoutElement();
             originalTitleHeight = titleBarSize.preferredHeight;
             launcher = new TopiaForgeGraphConnectionControl(this, launcherSlot.transform, "Connections", Toggle, MoveLauncher);
-            launcher.SetText(UiGraphConnections.LauncherLabel);
             TopiaForgeAnchors.Stretch(launcher.Rect, UiGraphConnections.Gutter, UiGraphConnections.Gutter,
                 UiGraphConnections.Gutter, UiGraphConnections.Gutter);
 
@@ -70,6 +68,7 @@ namespace TopiaForge.Mods.UnityUi
         void ITopiaForgeDismissable.Dismiss() => Close(restoreFocus: true);
 
         internal TopiaForgeGraphConnectionControl Launcher => launcher;
+        internal bool LauncherNeedsRoom => launcherShown && !launcherSlot.activeSelf;
         internal TopiaForgeGraphConnectionControl RemoveControl => remove;
         internal IReadOnlyList<TopiaForgeGraphConnectionControl> Rows => rows;
         internal bool IsOpen => activeGraph != null;
@@ -144,7 +143,6 @@ namespace TopiaForge.Mods.UnityUi
         {
             paper.color = theme.Surface;
             PaintLauncher(theme);
-            launcherTextWidth = launcher.PreferredWidth;
             lastTitleWidth = float.NaN;
             foreach (var row in rows) row.InvalidateLabel();
             RenderRows();
@@ -177,19 +175,23 @@ namespace TopiaForge.Mods.UnityUi
             var width = titleBar.Rect.rect.width;
             lastTitleWidth = width;
             var height = UiGraphConnectionsViewport.RowSlot;
-            var preferred = (float)UiGraphConnectionsViewport.LauncherWidth(width, launcherTextWidth);
-            var shown = launcherShown && preferred > 0f;
+            var measurement = launcherShown
+                ? UiGraphConnectionsViewport.MeasureLauncher(width, launcher.MeasureText)
+                : (Caption: string.Empty, SlotWidth: 0d);
+            var shown = measurement.SlotWidth > 0d;
             // Keep the reserved title height until the underlying viewport genuinely recovers.
             var barHeight = layoutSuspended ? suspendedTitleHeight :
                 shown ? Math.Max(originalTitleHeight, height) : originalTitleHeight;
             titleBarSize.minHeight = titleBarSize.preferredHeight = barHeight;
             if (shown)
             {
-                launcherSize.minWidth = launcherSize.preferredWidth = preferred;
+                launcher.SetText(measurement.Caption, UiGraphConnections.LauncherLabel);
+                launcherSize.minWidth = launcherSize.preferredWidth = (float)measurement.SlotWidth;
                 launcherSize.minHeight = launcherSize.preferredHeight = height;
             }
 
             if (launcherSlot.activeSelf != shown) launcherSlot.SetActive(shown);
+            if (!shown && IsOpen) Close(restoreFocus: true);
         }
 
         private void Toggle()
@@ -203,7 +205,7 @@ namespace TopiaForge.Mods.UnityUi
 
             var next = focusedGraph ?? FindFirstGraph();
             if (next == null || !next.HasActionableConnections) return;
-            if (viewport.Rows == 0) return;
+            if (!launcherSlot.activeInHierarchy || viewport.Rows == 0) return;
 
             activeGraph = next;
             selection.Bind(next.Graph);

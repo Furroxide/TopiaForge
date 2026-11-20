@@ -57,17 +57,18 @@ namespace TopiaForge.Mods.Testing
                 var peer = surfaces[index];
                 if (peer.Request.Kind != UiSurfaceKind.Hud || !peer.IsVisible) continue;
                 var probe = new FakeUiTreeCapture(service, peer, viewport, UiCaptureControlState.Rest, null);
-                (placements ??= new List<HudPlacement>()).Add(new HudPlacement(probe, probe.HudBounds(peer)));
+                var authored = probe.HudBounds(peer);
+                (placements ??= new List<HudPlacement>()).Add(new HudPlacement(probe, authored, !probe.FitsHudContent(authored)));
             }
 
             if (placements == null) return null;
             List<UiLayoutRect>? occupied = null;
-            // Keep authored dock reservations for stacking. Solve paint in creation order so that each notice
-            // avoids the rectangles already assigned to earlier peers and the authored slots of the other peers.
+            // Dock stacking still uses every authored height. Only fitting content and placed notices
+            // can occupy the screen, so a peer waiting for its own notice cannot block an earlier one.
             for (var index = 0; index < placements.Count; index++)
             {
                 var entry = placements[index];
-                if (entry.Probe.FitsHudContent(entry.Authored)) continue;
+                if (!entry.Unfit) continue;
                 (occupied ??= new List<UiLayoutRect>(placements.Count - 1)).Clear();
                 for (var peer = 0; peer < placements.Count; peer++)
                 {
@@ -124,7 +125,7 @@ namespace TopiaForge.Mods.Testing
             internal UiLayoutRect Authored { get; }
             internal bool Unfit { get; }
             internal UiLayoutRect? Notice { get; }
-            internal UiLayoutRect PaintedOrAuthored => Notice ?? Authored;
+            internal UiLayoutRect PaintedOrAuthored => Notice ?? (Unfit ? default : Authored);
         }
 
         private void PaintHudLayoutNotice()

@@ -66,6 +66,10 @@ namespace TopiaForge.Mods
             return new UiGraphConnectionLabelPages(together);
         }
 
+        internal static string LauncherCaption(UiLayoutRect box, Func<string, (double Width, double Height)> measure) =>
+            Fits(UiGraphConnections.LauncherLabel, box, measure) ? UiGraphConnections.LauncherLabel :
+            Fits("Links", box, measure) ? "Links" : string.Empty;
+
         internal static string RemoveCaption(string full, UiLayoutRect box, Func<string, (double Width, double Height)> measure) =>
             Fits(full, box, measure) ? full : Fits("Remove", box, measure) ? "Remove" : string.Empty;
 
