@@ -25,6 +25,10 @@ namespace TopiaForge.Mods.Testing
                 {
                     if (registrations.ContainsKey(definition.Descriptor.Id))
                         return OperationResult<bool>.Failure(ModErrorCode.Conflict, "This theme is already declared in the fake package.");
+                    foreach (var image in definition.Descriptor.Images)
+                        if (assets.TryGetValue((image.BundlePath, image.AssetName), out var fixture) && !MatchesImage(image, fixture))
+                            return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
+                                "$.images: Declared image metadata differs from the fixture receipt.");
                 }
 
                 foreach (var definition in definitions)
@@ -44,6 +48,10 @@ namespace TopiaForge.Mods.Testing
                 if (fixturesFrozen) throw new InvalidOperationException("Theme fixtures are frozen after first use.");
                 if (bundleHashes.TryGetValue(asset.BundlePath, out var hash) && !hash.AsSpan().SequenceEqual(asset.ContentSha256))
                     throw new ArgumentException("A fixture bundle has one content digest.", nameof(asset));
+                foreach (var registration in registrations.Values)
+                    foreach (var image in registration.Definition.Descriptor.Images)
+                        if (image.BundlePath == asset.BundlePath && image.AssetName == asset.AssetName && !MatchesImage(image, asset))
+                            throw new ArgumentException("The fixture receipt disagrees with declared image metadata.", nameof(asset));
                 if (!assets.TryAdd((asset.BundlePath, asset.AssetName), asset))
                     throw new ArgumentException("The fake bundle asset is already declared.", nameof(asset));
                 bundleHashes[asset.BundlePath] = asset.ContentSha256;
@@ -65,13 +73,36 @@ namespace TopiaForge.Mods.Testing
             return new FakeUiTextMetrics(0.8f, -0.2f);
         }
 
-        private OperationResult<UiThemeDescriptor> Acquire(FakeUiThemeDefinition definition)
+        private static bool MatchesImage(UiThemeImage image, FakeUiAssetMetadata asset) =>
+            (!image.PixelWidth.HasValue || image.PixelWidth == asset.Width) &&
+            (!image.PixelHeight.HasValue || image.PixelHeight == asset.Height) &&
+            (!image.IsMask.HasValue || image.IsMask == asset.IsMask);
+
+        private OperationResult<UiThemeDescriptor> VerifyDefinition(FakeUiThemeRegistration registration)
         {
+            if (registration.Verified != null) return registration.Verified;
+            var definition = registration.Definition;
             var descriptor = definition.Descriptor;
+            foreach (var font in descriptor.Fonts)
+                if (!assets.ContainsKey((font.BundlePath, font.AssetName))) return AssetFailure(ModErrorCode.NotFound, "fonts");
+            var verified = descriptor.Images.Count == 0 && descriptor.Fonts.Count == 0
+                ? OperationResult<UiThemeDescriptor>.Success(descriptor)
+                : UiThemePackParser.Parse(definition.Bytes, expectedId: descriptor.Id,
+                    fileHash: path => bundleHashes.TryGetValue(path, out var digest) ? digest : null,
+                    imageMetadata: image => assets.TryGetValue((image.BundlePath, image.AssetName), out var receipt)
+                        ? new UiThemeImageMetadata(receipt.Width, receipt.Height, receipt.IsMask) : (UiThemeImageMetadata?)null);
+            if (verified.Succeeded) registration.Verified = verified;
+            return verified;
+        }
+
+        private OperationResult<UiThemeDescriptor> Acquire(FakeUiThemeRegistration registration)
+        {
+            var verified = VerifyDefinition(registration);
+            if (!verified.TryGetValue(out var descriptor)) return verified;
             var budget = new FakeUiThemeResourceBudget();
-            foreach (var registration in registrations.Values)
+            foreach (var resident in registrations.Values)
             {
-                if (registration.Loaded != null) AddResident(registration.Loaded, budget);
+                if (resident.Loaded != null) AddResident(resident.Loaded, budget);
             }
 
             foreach (var image in descriptor.Images)
@@ -93,16 +124,7 @@ namespace TopiaForge.Mods.Testing
             if (budget.Exceeds(MaximumDecodedBytes))
                 return OperationResult<UiThemeDescriptor>.Failure(ModErrorCode.RateLimited, "The fake package exceeds its resident UI asset budget.");
 
-            if (descriptor.Images.Count == 0 && descriptor.Fonts.Count == 0)
-                return OperationResult<UiThemeDescriptor>.Success(descriptor);
-
-            return UiThemePackParser.Parse(definition.Bytes, expectedId: descriptor.Id,
-                fileHash: path => bundleHashes.TryGetValue(path, out var digest) ? digest : null,
-                imageMetadata: image =>
-                {
-                    var metadata = assets[(image.BundlePath, image.AssetName)];
-                    return new UiThemeImageMetadata(metadata.Width, metadata.Height, metadata.IsMask);
-                });
+            return verified;
         }
 
         private void AddResident(UiThemeDescriptor descriptor, FakeUiThemeResourceBudget budget)

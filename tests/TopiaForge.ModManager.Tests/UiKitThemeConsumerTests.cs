@@ -79,7 +79,15 @@ namespace TopiaForge.ModManager.Tests
             Require(context.Ui.Themes.SelectedTheme == null, "Zombies inherits its manifest selection.");
             AssertRole(ZombiesHudPresenter.PhaseNodeId, "HORDE ACTIVE", UiTextStyle.Title);
             AssertRole(ZombiesHudPresenter.WaveNodeId, "WAVE  3", UiTextStyle.Label);
-            AssertRole(ZombiesHudPresenter.ScoreNodeId, "SCORE  420  x2", UiTextStyle.Numeral);
+            AssertRole(ZombiesHudPresenter.ScoreNodeId, "SCORE  420", UiTextStyle.Numeral);
+            Require(surface.TryFindNode(ZombiesHudPresenter.ComboNodeId, out var combo) &&
+                combo is UiBadge { Text: "Combo ×2", Icon: UiGlyph.Star }, "The real score multiplier supplies the combo badge.");
+            Require(surface.TryFindNode(ZombiesHudPresenter.UplinkNodeId, out var uplink) &&
+                uplink is UiPips { Filled: 2, Total: 3, Presentation: UiPipStyle.Segments },
+                "The uplink track shows the exact available and maximum charge snapshot.");
+            AssertGlyph(ZombiesHudPresenter.PhaseIconId, UiGlyph.Flag);
+            AssertGlyph(ZombiesHudPresenter.IntegrityIconId, UiGlyph.Health);
+            AssertGlyph(ZombiesHudPresenter.CreditsIconId, UiGlyph.Notes);
 
             var capture = surface.Capture(new UiCaptureViewport(1920, 1080));
             var phase = capture.Nodes.Single(node => node.Id == ZombiesHudPresenter.PhaseNodeId);
@@ -90,6 +98,16 @@ namespace TopiaForge.ModManager.Tests
             Require(phase is { IsRendered: true, ThemeId: "survival", InkColor: "#BEE487", FillColor: "#141D21" },
                 "The published HUD must render the Survival pack's authored ink on its opaque background.");
             Require(capture.CheckAccessibility().Count == 0, "The captured Zombies status must pass the UI guarantees.");
+            Require(context.Ui.ApplyAccessibility(new UiAccessibilityPreferences(highContrast: true, uiScale: 2f)).Succeeded,
+                "The fake accepts the largest readable scale and high-contrast palette.");
+            foreach (var viewport in new[] { new UiCaptureViewport(1920, 1080), new UiCaptureViewport(2560, 1440) })
+            {
+                var scaled = surface.Capture(viewport);
+                Require(scaled.Nodes.Any(node => node.Id == ZombiesHudPresenter.ComboNodeId && node.IsRendered)
+                    && scaled.Nodes.Any(node => node.Id == ZombiesHudPresenter.UplinkNodeId && node.IsRendered)
+                    && scaled.CheckAccessibility().Count == 0,
+                    "Both Zombies status controls remain visible and accessible at scale 2 in high contrast.");
+            }
 
             var admitted = surface.Content;
             var allocated = AllocationProbe.Measure(
@@ -98,13 +116,26 @@ namespace TopiaForge.ModManager.Tests
                 frames: 1024, warmups: 32);
             Require(allocated == 0 && ReferenceEquals(admitted, surface.Content),
                 "A settled Zombies HUD must reuse its content without allocating.");
+            Console.WriteLine("Zombies HUD: 0 B over 1,024 unchanged status updates.");
+
+            var largeCapacity = new ZombiesHudSnapshot(
+                ZombiesPhase.InterWave, 3, 0, 1, 0, 84, 100, 420, 25, 1, 33, 34, 0, 0, true, false);
+            presenter.Update(largeCapacity, fire, null, null, null);
+            AssertRole(ZombiesHudPresenter.UplinkNodeId, "Uplink: 33 / 34", UiTextStyle.Label);
+            Require(!surface.TryFindNode(ZombiesHudPresenter.ComboNodeId, out _) &&
+                !surface.TryFindNode(ZombiesHudPresenter.CreditsIconId, out _),
+                "An inactive combo and disabled credits have no status decoration.");
 
             void AssertRole(string id, string label, UiTextStyle style)
             {
                 Require(surface.TryFindNode(id, out var node)
                     && node is UiText text && text.Text == label && text.Style == style,
-                    "The Zombies HUD must publish the phase, wave and score with their distinct type roles.");
+                    "The Zombies HUD must publish " + id + " with its expected text and type role.");
             }
+
+            void AssertGlyph(string id, UiGlyph glyph) => Require(surface.TryFindNode(id, out var node) &&
+                node is UiIcon { Decorative: true, SemanticLabel: "" } icon && icon.Glyph == glyph,
+                "A redundant Zombies glyph follows its adjacent visible label.");
         }
 
         private static void Require(bool condition, string message)

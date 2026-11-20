@@ -1002,6 +1002,8 @@ type public sealed class TopiaForge.Mods.Testing.UiCapturedNode : System.Object 
   property System.Nullable<System.Single> CornerRadiusPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Nullable<System.Single> ShadowOffsetXPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Nullable<System.Single> ShadowOffsetYPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.UiPaintRole> EffectivePaintRole { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.UiPaintRole> RequestedPaintRole { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Single ContrastRatio { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Single Height { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Single TextHeightPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
@@ -1016,6 +1018,7 @@ type public sealed class TopiaForge.Mods.Testing.UiCapturedNode : System.Object 
   property System.String? FillColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? Id { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? InkColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? RequestedStyleId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? StyleId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.Testing.UiTreeCapture : System.Object [requires-topiaforge="0.2.0"]

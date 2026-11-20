@@ -110,6 +110,14 @@ namespace TopiaForge.ModManager
                     left.Fill == right.Fill && left.Style?.Id == right.Style?.Id,
                 (UiDivider left, UiDivider right) => left.LineStyle == right.LineStyle &&
                     left.Before == right.Before && left.After == right.After,
+                (UiIcon left, UiIcon right) => left.Glyph == right.Glyph && left.Size == right.Size && left.Tone == right.Tone &&
+                    left.Decorative == right.Decorative && left.SemanticLabel == right.SemanticLabel,
+                (UiImage left, UiImage right) => SameImage(left, right),
+                (UiBadge left, UiBadge right) => left.Text == right.Text && left.Role == right.Role &&
+                    left.Presentation == right.Presentation && left.Icon == right.Icon && left.Style?.Id == right.Style?.Id,
+                (UiPips left, UiPips right) => left.Total == right.Total && left.Filled == right.Filled &&
+                    left.Fraction == right.Fraction && left.Label == right.Label && left.Presentation == right.Presentation &&
+                    left.Role == right.Role && left.Style?.Id == right.Style?.Id,
                 (UiScroll left, UiScroll right) => left.Height == right.Height && SameNode(left.Content, right.Content),
                 (UiSplitPane left, UiSplitPane right) => left.Orientation == right.Orientation &&
                     left.PrimaryFraction == right.PrimaryFraction && SameNode(left.Primary, right.Primary) &&
@@ -146,6 +154,18 @@ namespace TopiaForge.ModManager
         private static bool SameFlex(UiFlexLayout left, UiFlexLayout right) =>
             left.Spacing == right.Spacing && left.Padding.Equals(right.Padding) &&
             left.MainAxisAlignment == right.MainAxisAlignment && left.CrossAxisAlignment == right.CrossAxisAlignment;
+
+        private static bool SameImage(UiImage actual, UiImage expected)
+        {
+            if (!actual.Image.Equals(expected.Image) || actual.SemanticLabel != expected.SemanticLabel ||
+                actual.Tint != expected.Tint || actual.Fit != expected.Fit || actual.Decorative != expected.Decorative) return false;
+            if (actual.Width == expected.Width && actual.Height == expected.Height) return true;
+            if (actual.PackDescriptorDigest.Length != 32) return false;
+            // The fixture's checked-in bundle receipt supplies the natural dimensions used by the sender.
+            var card = expected.Image.Equals(FoundationArtPages.Card);
+            var frame = UiImageFrame.Resolve(expected, card ? 96 : 32, card ? 48 : 32, isMask: !card);
+            return actual.Width == frame.Width && actual.Height == frame.Height;
+        }
 
         private static bool SameGraphNode(UiGraphNode first, UiGraphNode second) => first.Id == second.Id && first.Type == second.Type &&
             first.Title == second.Title && first.Subtitle == second.Subtitle &&

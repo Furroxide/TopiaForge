@@ -149,6 +149,7 @@ namespace TopiaForge.ModManager.Tests
 
             namespace TMPro
             {
+                public sealed class TMP_FontAsset { }
                 public sealed class TMP_Text
                 {
                     public TMP_Text(string text, float height) { this.text = text; Height = height; }
@@ -190,7 +191,10 @@ namespace TopiaForge.ModManager.Tests
                     public TopiaForgeFullscreenTool FullscreenTool(string id, string title, TopiaForgeScheme scheme,
                         bool persistent) => throw new NotSupportedException();
                 }
-                public sealed class TopiaForgeLayerSlot { internal void SelectTheme(UiThemeDescriptor descriptor) { } }
+                public sealed class TopiaForgeLayerSlot
+                {
+                    internal void SelectTheme(UiThemeDescriptor descriptor, Func<UiTextStyle, TMPro.TMP_FontAsset?>? fonts) { }
+                }
                 public sealed class ProbeTheme { public int Surface => 0; }
                 public class TopiaForgeWidget
                 {
@@ -265,12 +269,14 @@ namespace TopiaForge.ModManager.Tests
                 internal readonly record struct GalleryPreviewPalette(UiThemeDescriptor Descriptor, TopiaForgeScheme Scheme);
                 internal readonly record struct UiRemoteThemeSelection(object Envelope, ProbePackage? Package);
                 internal readonly record struct ProbePackage(ProbeManifest Manifest);
-                internal readonly record struct ProbeManifest(string Name);
+                internal readonly record struct ProbeManifest(string Name, object? AdmittedUi = null);
                 internal static class UiThemeScope { internal static UiThemeDescriptor? Ready(UiThemeDescriptor? value) => value; }
                 internal sealed partial class OwnerUiService
                 {
                     private readonly UiHost host;
                     private readonly UnityUiHudPlacement hudPlacement;
+                    private readonly object? themeScope = null;
+                    private readonly object themePackages = new object();
                     private readonly ProbeLifetime lifetime = new ProbeLifetime();
                     private readonly ProbeLogger logger = new ProbeLogger();
                     private readonly UiGameplayGate gameplay = new UiGameplayGate();
@@ -362,7 +368,12 @@ namespace TopiaForge.ModManager.Tests
                         TwoQueuedNativeHudRectsDoNotOccupyPaint();
                         DockMarginsFollowTheAssignedUnits();
                         LayoutNoticeUsesAnAvailableWiderSlot();
-                        Console.WriteLine("Native HUD viewport boundary passed for body-only creation, SetBody and scale recovery, 300-unit notice placement, 24-unit margins and 4,096 settled frames at 0 B.");
+                        HudArtReadinessRestoresPlacement();
+                        ClampedHudRetainsItsPendingArtworkNotice();
+                        NativeArtworkUsesTheNarrowOpening();
+                        NativeArtworkUsesTheWideOpening();
+                        NativeArtworkKeepsOneUnfitEpisode();
+                        Console.WriteLine("Native HUD viewport boundary passed for retained HUD placement, 300- and 260-unit notice openings, wide artwork recovery, safe overflow episodes, 24-unit margins and 4,096 settled frames at 0 B.");
                     }
 
                     private static void BodyOnlySurfaceUsesMeasuredChrome()
@@ -529,6 +540,145 @@ namespace TopiaForge.ModManager.Tests
                             "Two unfit native HUDs paint disjoint notices beside the existing peer once their authored paint is gone.");
                     }
 
+                    private static void ClampedHudRetainsItsPendingArtworkNotice()
+                    {
+                        using var placement = new UnityUiHudPlacement();
+                        var canvas = new Canvas();
+                        var host = new UiHost();
+                        var peer = new UnityUiSurface(placement, host, canvas, 180, 384, new UiText("Ready"));
+                        var surface = new UnityUiSurface(placement, host, canvas, 140, 150, new UiText("Retained artwork"));
+                        Check(surface.ShowOriginal(), "The artwork surface has a fitting original viewport.");
+                        surface.SetImageUnavailable("/0");
+                        Check(surface.NoticeMessage == UiImageNotice.Text, "Pending artwork has a specific readable notice.");
+                        Check(peer.ShowOriginal(), "The peer shows before the scale change.");
+                        SetScale(host, canvas, placement, 2f);
+                        peer.Refresh();
+                        surface.Refresh();
+                        Check(surface.NoticeMessage == UiImageNotice.Text && surface.NoticeShown &&
+                            !surface.Bounds.Intersects(peer.Bounds),
+                            "A clamped retained HUD keeps its pending artwork notice in a measured alternative slot.");
+
+                        surface.SetImageUnavailable(null);
+                        Check(surface.NoticeMessage == UiHudLayoutNotice.Text && surface.LayoutFailure != null,
+                            "Ready artwork leaves the layout-only diagnosis while the physical aperture is still too small.");
+                        peer.SetDockShown(false);
+                        surface.Refresh();
+                        Check(surface.OriginalShown && !surface.NoticeShown, "Recovering the viewport restores the retained content.");
+                    }
+
+                    private static void NativeArtworkUsesTheNarrowOpening()
+                    {
+                        TopiaForgeToasts.Plain.Clear();
+                        using var dock = new UnityUiHudPlacement();
+                        var host = new UiHost();
+                        var canvas = new Canvas();
+                        SetScale(host, canvas, dock, 2f);
+                        var left = new UnityUiSurface(dock, host, canvas, 400, 430, new UiText("Left"));
+                        var right = new UnityUiSurface(dock, host, canvas, 252, 430, new UiText("Right"),
+                            corner: TopiaForgeCorner.TopRight);
+                        var subject = new UnityUiSurface(dock, host, canvas, 80, 80, new UiText("Ready"),
+                            title: new string('W', 20), corner: TopiaForgeCorner.Top, remote: true);
+                        subject.SetHudNoticeSource("Example Pack", UiHudAnchor.Top, UiHudVisibility.Always);
+                        Check(left.ShowOriginal() && right.ShowOriginal() && subject.ShowOriginal(),
+                            "Both peers and the compact authored HUD initially paint at scale 2.");
+                        var leftBounds = left.Bounds;
+                        var rightBounds = right.Bounds;
+                        subject.SetImageUnavailable("/0");
+                        Check(subject.NoticeShown && subject.NoticeMessage == UiImageNotice.Text &&
+                            !subject.NoticeQueued && subject.Bounds.Width == 520d && subject.Bounds.Height == 152d &&
+                            subject.Bounds.X == leftBounds.Right && subject.Bounds.Right == rightBounds.X &&
+                            left.Bounds.Equals(leftBounds) && right.Bounds.Equals(rightBounds) && TopiaForgeToasts.Plain.Count == 0,
+                            "The native image notice remeasures its height at 260 units and paints between unchanged peers.");
+                    }
+
+                    private static void NativeArtworkUsesTheWideOpening()
+                    {
+                        TopiaForgeToasts.Plain.Clear();
+                        using var dock = new UnityUiHudPlacement();
+                        var host = new UiHost();
+                        var canvas = new Canvas();
+                        var stack = new UiStack(new UiNode[]
+                        {
+                            new UiPositioned(new UiText("Retained body"), left: 920, top: 0, width: 64),
+                        }, width: 1000, height: 20);
+                        var subject = new UnityUiSurface(dock, host, canvas, 1080, 95, stack,
+                            title: new string('F', 114), corner: TopiaForgeCorner.TopRight, remote: true);
+                        subject.SetHudNoticeSource("Example Pack", UiHudAnchor.TopRight, UiHudVisibility.Always);
+                        var peer = new UnityUiSurface(dock, host, canvas, 912, 396, new UiText("Reserved"),
+                            corner: TopiaForgeCorner.TopRight);
+                        Check(subject.ShowOriginal() && peer.ShowOriginal(), "The authored HUDs initially fit.");
+                        subject.SetImageUnavailable("/0");
+                        Check(subject.NoticeShown && TopiaForgeToasts.Plain.Count == 0,
+                            "The original aperture paints the pending notice.");
+
+                        SetScale(host, canvas, dock, 2f);
+                        peer.Refresh();
+                        var occupied = peer.Bounds;
+                        subject.Refresh();
+                        var safe = UiHudViewport.SafeArea(new UiLayoutRect(0, 0, Screen.width, Screen.height), 2d);
+                        Check(occupied.Y - safe.Y == 206d && subject.NoticeShown && !subject.NoticeQueued &&
+                            subject.NoticeMessage == UiImageNotice.Text && subject.Bounds.Width > 2 * UiImageNotice.RemoteHudWidth &&
+                            subject.Bounds.Height == 200d && safe.Contains(subject.Bounds) &&
+                            !subject.Bounds.Intersects(occupied) && peer.Bounds.Equals(occupied) && TopiaForgeToasts.Plain.Count == 0,
+                            "A 103-unit band paints the measured wide native artwork notice beside its unchanged peer.");
+
+                        var calls = subject.LayoutCalls;
+                        for (var index = 0; index < 64; index++) subject.Refresh();
+                        var start = GC.GetAllocatedBytesForCurrentThread();
+                        for (var index = 0; index < 4096; index++) subject.Refresh();
+                        Check(subject.LayoutCalls == calls && GC.GetAllocatedBytesForCurrentThread() == start &&
+                            TopiaForgeToasts.Plain.Count == 0, "A settled wide native artwork notice allocates zero bytes.");
+                    }
+
+                    private static void NativeArtworkKeepsOneUnfitEpisode()
+                    {
+                        TopiaForgeToasts.Plain.Clear();
+                        using var dock = new UnityUiHudPlacement();
+                        var host = new UiHost();
+                        var canvas = new Canvas();
+                        var stack = new UiStack(new UiNode[]
+                        {
+                            new UiPositioned(new UiText("Private body"), left: 920, top: 0, width: 64),
+                        }, width: 1000, height: 20);
+                        var subject = new UnityUiSurface(dock, host, canvas, 1080, 90, stack,
+                            title: new string('F', 114), corner: TopiaForgeCorner.TopRight, remote: true);
+                        subject.SetHudNoticeSource("Example Pack", UiHudAnchor.TopRight, UiHudVisibility.Always);
+                        var peer = new UnityUiSurface(dock, host, canvas, 912, 396, new UiText("Reserved"),
+                            corner: TopiaForgeCorner.TopRight);
+                        Check(subject.ShowOriginal() && peer.ShowOriginal(), "The authored layout initially fits.");
+                        subject.SetImageUnavailable("/0");
+                        Check(subject.NoticeShown && subject.NoticeMessage == UiImageNotice.Text &&
+                            TopiaForgeToasts.Plain.Count == 0, "The original aperture paints the pending notice.");
+
+                        SetScale(host, canvas, dock, 2f);
+                        peer.Refresh();
+                        subject.Refresh();
+                        var occupied = peer.Bounds;
+                        const string safe = "Example Pack · HUD at top right";
+                        var aperture = UiHudViewport.SafeArea(new UiLayoutRect(0, 0, Screen.width, Screen.height), 2d);
+                        Check(occupied.Y - aperture.Y == 196d && subject.NoticeQueued && !subject.PanelShown &&
+                            subject.NoticeMessage == UiImageNotice.Text &&
+                            TopiaForgeToasts.Plain.Count == 1 && TopiaForgeToasts.Plain[0] == safe,
+                            "A 98-unit band queues one safe native artwork notice when the measured notice needs 100 units.");
+                        subject.SetImageUnavailable(null);
+                        Check(subject.NoticeQueued && !subject.PanelShown && subject.NoticeMessage == UiHudLayoutNotice.Text &&
+                            peer.Bounds.Equals(occupied) && TopiaForgeToasts.Plain.Count == 1,
+                            "Artwork readiness changes the diagnosis in the same unfit episode.");
+                        subject.SetImageUnavailable("/0");
+                        Check(subject.NoticeQueued && subject.NoticeMessage == UiImageNotice.Text && TopiaForgeToasts.Plain.Count == 1,
+                            "A return to the image diagnosis keeps the same queued notice.");
+
+                        SetScale(host, canvas, dock, 1f);
+                        subject.SetImageUnavailable(null);
+                        Check(subject.OriginalShown && subject.PanelShown && !subject.NoticeQueued,
+                            "Fitting authored content ends the unfit episode.");
+                        SetScale(host, canvas, dock, 2f);
+                        peer.Refresh();
+                        subject.Refresh();
+                        Check(subject.NoticeQueued && TopiaForgeToasts.Plain.Count == 2 && TopiaForgeToasts.Plain[1] == safe,
+                            "A later unfit episode queues one new safe notice.");
+                    }
+
                     private static void LayoutNoticeUsesAnAvailableWiderSlot()
                     {
                         TopiaForgeToasts.Plain.Clear();
@@ -606,6 +756,32 @@ namespace TopiaForge.ModManager.Tests
                             "The bottom-right stack keeps its original pivot against the physical subtitle reserve.");
                     }
 
+                    private static void HudArtReadinessRestoresPlacement()
+                    {
+                        foreach (var remote in new[] { false, true })
+                        using (var placement = new UnityUiHudPlacement())
+                        {
+                            var surface = new UnityUiSurface(placement, new UiHost(), new Canvas(), 120, 80, new UiText("OK"), remote: remote);
+                            Check(surface.ShowOriginal(), "The retained HUD begins with its original composition.");
+                            var original = surface.Bounds;
+                            surface.SetImageUnavailable("/0:card");
+                            Check(surface.NoticeShown && !surface.OriginalShown && surface.LayoutFailure == null &&
+                                surface.NoticeCaption == "Readiness" && surface.NoticeMessage == UiImageNotice.Text &&
+                                surface.Bounds.Width == UiImageNotice.RemoteHudWidth &&
+                                surface.Bounds.Height == UiImageNotice.RemoteHudHeight,
+                                "Image readiness invalidation uses the shared alternate HUD slot and keeps the artwork diagnostic distinct.");
+                            var calls = surface.LayoutCalls;
+                            for (var i = 0; i < 100; i++) surface.Refresh();
+                            var start = GC.GetAllocatedBytesForCurrentThread();
+                            for (var i = 0; i < 4096; i++) surface.Refresh();
+                            Check(surface.LayoutCalls == calls && GC.GetAllocatedBytesForCurrentThread() == start,
+                                "A settled image notice reuses its measurements without allocating.");
+                            surface.SetImageUnavailable(null);
+                            Check(surface.OriginalShown && !surface.NoticeShown && surface.Bounds.Equals(original),
+                                "Art readiness restores the original dock and content exactly.");
+                        }
+                    }
+
                     private static void SetScale(UiHost host, Canvas canvas, UnityUiHudPlacement placement, float scale)
                     {
                         host.EffectiveUiScale = scale;
@@ -644,6 +820,8 @@ namespace TopiaForge.ModManager.Tests
                     {
                         private readonly UiNode source;
                         public int Calls;
+                        internal string? UnavailableImagePath { get; set; }
+                        internal bool HasRetainedImageNotice => UnavailableImagePath != null;
                         internal ProbeLayoutRenderer(UiNode source) => this.source = source;
                         internal void Rearrange(UiLayoutConstraints box, UiThemeDescriptor? theme)
                         {
@@ -673,6 +851,7 @@ namespace TopiaForge.ModManager.Tests
                         private readonly bool remoteComposition;
                         private int bodyVersion;
                         private string? sentBody;
+                        private int artworkVersion;
                         private TopiaForgeContainer? layoutFallback;
                         private ContentStamp committedStamp;
                         public string Id { get; } = "hud";
@@ -684,8 +863,9 @@ namespace TopiaForge.ModManager.Tests
                         private void RememberOuterScrollOffset() { }
                         private void RestoreOuterScrollOffset() { }
                         internal UnityUiSurface(UnityUiHudPlacement placement, UiHost host, Canvas canvas, float width, float height,
-                            UiNode source, string title = "Readiness", string bodyText = "", TopiaForgeCorner corner = TopiaForgeCorner.TopLeft)
+                            UiNode source, string title = "Readiness", string bodyText = "", TopiaForgeCorner corner = TopiaForgeCorner.TopLeft, bool remote = false)
                         {
+                            remoteComposition = remote;
                             compositionRoot = new TopiaForgeContainer();
                             layoutRenderer = new ProbeLayoutRenderer(source);
                             this.placement = placement;
@@ -717,7 +897,8 @@ namespace TopiaForge.ModManager.Tests
                             TopiaForgeContainer parent, ProbeLifetime lifetime, ProbeLogger logger, Action<UnityUiSurface> release) =>
                             throw new NotSupportedException();
                         internal void AttachLifetimeLease(IDisposable lease) { }
-                        internal void InitializeTheme(UiThemeRef? theme, bool remote, UiThemeDescriptor? descriptor) { }
+                        internal void InitializeTheme(UiThemeRef? theme, bool remote, UiThemeDescriptor? descriptor,
+                            object? scope, object packages, object? catalogue) { }
                         internal void SetClock(Func<double> clock, Func<string> epoch) { }
                         public OperationResult<bool> SetContent(UiNode content) => throw new NotSupportedException();
                         public void Show() => ShowNativeView();
@@ -747,6 +928,12 @@ namespace TopiaForge.ModManager.Tests
                             return OriginalShown;
                         }
                         internal void Refresh() => RefreshChangedLayout();
+                        internal void SetImageUnavailable(string? path)
+                        {
+                            layoutRenderer.UnavailableImagePath = path;
+                            artworkVersion++;
+                            Refresh();
+                        }
                         private void RefreshRetainedComposition(TopiaForgeContainer root, string clockEpoch) => UpdateRetainedLayout(root);
                         private void SuspendGraphConnections() { }
                         private void SyncGraphConnections() { }
@@ -765,7 +952,7 @@ namespace TopiaForge.ModManager.Tests
                         internal bool OriginalShown => compositionRoot?.Go.activeSelf == true;
                         internal int LayoutCalls => layoutRenderer?.Calls ?? 0;
                         private readonly record struct ContentStamp(TopiaForgeWidget View, string ClockEpoch, int BodyVersion,
-                            int DockVersion, Rect OuterScrollViewport)
+                            int ArtworkVersion, int DockVersion, Rect OuterScrollViewport)
                         {
                             internal bool Matches(in ContentStamp other) => this == other;
                         }

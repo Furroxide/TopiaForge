@@ -293,7 +293,8 @@ namespace TopiaForge.ModManager
 
             // An enabled Selectable supplies focus and callbacks. A Graphic is what actually receives pointer input.
             observations.Add(new Observation(path, null, "HitTarget", default, default,
-                State(flags | UiCaptureNodeFlags.InvalidLayout, label), default, rendered: false, clipped: false));
+                State(flags | UiCaptureNodeFlags.InvalidLayout, label), default, rendered: false, clipped: false,
+                localFallback: false, kitPaint: false));
         }
 
         private bool CanReceivePointer(Graphic graphic, UiCaptureRect bounds) =>

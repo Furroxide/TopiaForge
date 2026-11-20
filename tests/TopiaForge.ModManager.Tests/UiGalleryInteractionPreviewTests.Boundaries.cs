@@ -7,6 +7,7 @@ namespace TopiaForge.ModManager.Tests
             using System.Collections.Generic;
             using System.Linq;
             using System.Reflection;
+            using TMPro;
             using TopiaForge.ModManager.Core;
             using TopiaForge.Mods;
             using TopiaForge.Mods.UnityUi;
@@ -135,7 +136,8 @@ namespace TopiaForge.ModManager.Tests
                     public TopiaForgeModals Modal { get; } = new();
                     public event Action<GameObject>? LayerLost;
                     public void SetAccessibilityProfile(TopiaForgeAccessibilityProfile profile) => accessibility = profile;
-                    internal void SetSurfaceTheme(GameObject canvas, UiThemeDescriptor? descriptor) => themes[canvas] = descriptor;
+                    internal void SetSurfaceTheme(GameObject canvas, UiThemeDescriptor? descriptor,
+                        Func<UiTextStyle, TMP_FontAsset?>? fonts = null) => themes[canvas] = descriptor;
                     internal UiThemeDescriptor? Theme(GameObject canvas) => themes.GetValueOrDefault(canvas);
                     public object Hotkey(TopiaForgeKey key, Action callback)
                     {
@@ -259,8 +261,8 @@ namespace TopiaForge.ModManager.Tests
                     }
                     internal TopiaForgeResolvedTheme Theme { get; }
                     internal TopiaForgeAccessibilityProfile Accessibility { get; }
-                    internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform tree, out object? result,
-                        TopiaForgeGraphConnections? connections = null)
+                    internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform tree, RectTransform? imageNotice,
+                        out object? result, TopiaForgeGraphConnections? connections = null, string? queuedNotice = null)
                     {
                         result = fixture.Content;
                         return result != null;
@@ -288,7 +290,7 @@ namespace TopiaForge.ModManager.Tests
                     {
                         var view = new TopiaForgeWidget(host, TopiaForgeScheme.Hud);
                         return new UnityUiSurface(request.Id, view,
-                            new TopiaForgeContainer(host, view.Scheme, view.Go), new TopiaForgeLabel(request.Body), ReleaseSurface);
+                            new TopiaForgeContainer(host, view.Scheme, view.Go), new TopiaForgeLabel(request.Body), lifetime, logger, ReleaseSurface);
                     }
 
                     private sealed class UnityUiModal : IUiModal
@@ -325,18 +327,18 @@ namespace TopiaForge.ModManager.Tests
                         private readonly TopiaForgeContainer parent;
 
                         internal UnityUiSurface(string id, TopiaForgeWidget widget, TopiaForgeContainer parent,
-                            TopiaForgeLabel body, Action<UnityUiSurface> release)
+                            TopiaForgeLabel body, IModLifetime lifetime, IModLogger logger, Action<UnityUiSurface> release)
                         {
                             Id = id; this.widget = widget; this.parent = parent; this.body = body;
-                            CanvasRoot = widget.Go; this.release = release;
+                            CanvasRoot = widget.Go; this.release = release; this.lifetime = lifetime; this.logger = logger;
                             if (widget is TopiaForgeWindow window) window.Body = body;
                         }
                         internal static UnityUiSurface ForWindow(string id, TopiaForgeWindow window, TopiaForgeLabel body,
                             TopiaForgeContainer parent, IModLifetime lifetime, IModLogger logger, Action<UnityUiSurface> release) =>
-                            new(id, window, parent, body, release);
+                            new(id, window, parent, body, lifetime, logger, release);
                         internal static UnityUiSurface ForFullscreen(string id, TopiaForgeFullscreenTool window, TopiaForgeLabel body,
                             TopiaForgeContainer parent, IModLifetime lifetime, IModLogger logger, Action<UnityUiSurface> release) =>
-                            new(id, window, parent, body, release);
+                            new(id, window, parent, body, lifetime, logger, release);
 
                         public string Id { get; }
                         public bool IsVisible => presence.IsVisible;
@@ -354,12 +356,18 @@ namespace TopiaForge.ModManager.Tests
                         public void Hide() => presence.Hide();
                         public void SetBody(string value) => body.Value = value;
                         public OperationResult<bool> SetContent(UiNode content) =>
-                            SetComposition(content, declaredTheme, remoteComposition, changingTheme: false);
+                            SetComposition(content, declaredTheme, remoteComposition);
                         private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor,
-                            bool remote, bool changingTheme)
+                            bool remote, Action<TopiaForgeContainer>? prepareTheme = null,
+                            Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null)
                         {
                             if (widget?.Scheme == TopiaForgeScheme.Hud && widget is not TopiaForgeWindow && UiComposition.ContainsInteractive(content))
                                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD is presentation-only");
+                            var staged = prepareArtwork == null ? PrepareArtwork(content) : prepareArtwork(content);
+                            ReleaseArtwork();
+                            artwork = staged;
+                            prepareTheme?.Invoke(parent);
+                            declaredTheme = descriptor;
                             admitted = content;
                             compositionRoot = parent;
                             if (widget is TopiaForgeWindow window)
@@ -374,6 +382,8 @@ namespace TopiaForge.ModManager.Tests
                             if (disposed) return;
                             disposed = true;
                             presence.Dispose();
+                            ReleaseArtwork();
+                            ReleaseThemeResources();
                             widget?.Destroy();
                             widget = null;
                             release(this);

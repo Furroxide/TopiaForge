@@ -15,7 +15,8 @@ namespace TopiaForge.ModManager
                 for (var index = 0; index < authoredHuds.Count; index++)
                 {
                     var hud = authoredHuds[index];
-                    if (hud.IsAlive && !hud.Context.Lifetime.IsStopping && (hud.Theme != null || UiWireCodec.NeedsEnvelope(hud.Content)))
+                    if (hud.IsAlive && !hud.Context.Lifetime.IsStopping &&
+                        (hud.Theme != null || UiWireCodec.NeedsEnvelope(hud.PresentationContent)))
                         return true;
                 }
 
@@ -102,7 +103,7 @@ namespace TopiaForge.ModManager
                 var theme = hud.Theme;
                 if (preparingHost)
                 {
-                    if (theme == null && !UiWireCodec.NeedsEnvelope(hud.Content)) continue;
+                    if (theme == null && !UiWireCodec.NeedsEnvelope(hud.PresentationContent)) continue;
                 }
                 else
                 {
@@ -112,7 +113,9 @@ namespace TopiaForge.ModManager
                     if (ReferenceEquals(theme, hud.Theme)) continue;
                 }
 
-                var stage = StageEnvelope(hud, theme, hud.Content, preparingHost, generations, ref position, out var envelope);
+                var validation = UiPresentationTheme.StylesValid(hud.PresentationContent, theme);
+                if (!validation.Succeeded) return validation;
+                var stage = StageEnvelope(hud, theme, hud.PresentationContent, preparingHost, generations, ref position, out var envelope);
                 if (!stage.Succeeded) return stage;
                 var payload = hud.StageRetained(envelope, theme);
                 if (payload == null && (Hosting || preparingHost)) return Limit<bool>();

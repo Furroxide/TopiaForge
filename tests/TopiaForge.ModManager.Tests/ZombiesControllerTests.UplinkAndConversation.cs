@@ -108,11 +108,21 @@ namespace TopiaForge.ModManager.Tests
             harness.Advance(config.OverrideChargeRegenSeconds * 3f);
             Assert(harness.Controller.TestingUplinkCharges == spent,
                 "uplink charge must not regenerate while the world is frozen");
+            AssertUplinkPips(spent);
 
             frozen.Value!.Dispose();
             harness.Advance(config.OverrideChargeRegenSeconds + 0.05f);
             Assert(harness.Controller.TestingUplinkCharges > spent,
                 "uplink charge regenerates once the world is running again");
+            AssertUplinkPips(harness.Controller.TestingUplinkCharges);
+
+            void AssertUplinkPips(int available)
+            {
+                var hud = FindSurface(harness.Context, "zombies-status");
+                Assert(hud.TryFindNode(ZombiesHudPresenter.UplinkNodeId, out var status) &&
+                    status is UiPips pips && pips.Filled == available && pips.Total == config.OverrideCharges,
+                    "the Zombies HUD shows the real charge count before and after world-clock regeneration");
+            }
         }
 
         private static void AllyCrossfireIsNotReportedAsPlayerFire()

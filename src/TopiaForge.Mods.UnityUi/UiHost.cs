@@ -80,11 +80,12 @@ namespace TopiaForge.Mods.UnityUi
         internal TopiaForgeResolvedTheme ThemeFor(TopiaForgeWidget widget) =>
             widget.ThemeSlot?.ResolveTheme(widget.Scheme, EffectiveHighContrast, themeRevision) ?? Theme(widget.Scheme);
 
-        internal void SetSurfaceTheme(GameObject canvas, UiThemeDescriptor? descriptor)
+        internal void SetSurfaceTheme(GameObject canvas, UiThemeDescriptor? descriptor,
+            Func<UiTextStyle, TMPro.TMP_FontAsset?>? registeredFonts = null)
         {
             ThrowIfDisposed();
             var slot = canvas.GetComponent<TopiaForgeLayerSlot>();
-            if (slot != null && slot.SelectTheme(descriptor)) WalkThemeAware(slot);
+            if (slot != null && slot.SelectTheme(descriptor, registeredFonts)) WalkThemeAware(slot);
         }
 
         /// <summary>Sets this host's accent override and re-tints its live widgets.</summary>

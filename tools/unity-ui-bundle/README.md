@@ -93,6 +93,29 @@ assets are labeled `topiaforge-ui`, builds LZ4 for StandaloneWindows64, and copi
 result to `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle` (+ a SHA256
 provenance json). Rebuild the .NET solution afterwards so the embedded resource updates.
 
+## Package-local images and fonts
+
+Declare each resource in the mod's theme definition with its bundle path, exact
+asset address and licence notice path. The [sample recipe](UiResourceSamples.recipe.json)
+maps those addresses to Unity source files and records their licence identifiers.
+For a baked font, set `sourcePath` to the original licensed font file so the receipt
+records its source hash.
+
+Run the following with the pinned editor and a package directory containing
+`topiaforge.mod.json` and the declared theme and notice files.
+
+```sh
+Unity -batchmode -buildTarget win64 -projectPath tools/unity-ui-bundle \
+  -executeMethod TopiaForge.UiResourceBundleBuilder.Build \
+  -topiaforgeUiPackage "<mod-directory>" -topiaforgeUiRecipe "<recipe.json>"
+```
+
+The builder imports a sprite declared with `isMask: true` as Alpha8. It opens
+the cooked bundle to record each Sprite rectangle and backing texture. It writes
+the bundle to the recipe path and the hash-bound receipt under `ui/receipts/`.
+Keep both files with the licence notices. Packing fills missing image facts and exact
+definition hashes in the archive. Authored definitions stay editable.
+
 ## Lifecycle smoke
 
 After the Release runtime/UI assemblies exist, run

@@ -6,36 +6,79 @@ namespace TopiaForge.Mods.Testing
     internal sealed partial class FakeUiTreeCapture
     {
         private static readonly UiCaptureViewport ReferenceViewport = new UiCaptureViewport(1920, 1080);
-        internal static void VerifyComposition(FakeUiService service, FakeUiSurface surface, UiNode? content)
+        internal static bool VerifyComposition(FakeUiService service, FakeUiSurface surface, UiNode? content, FakeUiImages images)
         {
-            if (content == null) return;
-            new FakeUiTreeCapture(service, surface, ReferenceViewport, UiCaptureControlState.Rest, null).VerifyComposition(content);
+            if (content == null) return true;
+            return new FakeUiTreeCapture(service, surface, ReferenceViewport, UiCaptureControlState.Rest, null, images)
+                .VerifyComposition(content, admitting: true);
         }
 
-        private void VerifyComposition(UiNode content)
+        private bool VerifyComposition(UiNode content, bool admitting = false)
         {
-            var bounds = SurfaceBounds();
+            var (body, bodyClip, origin) = CompositionArea(SurfaceBounds());
+            var (layout, placeholderOverlap) = ArrangePresentation(content, body, origin);
+            if (!placeholderOverlap && !HasUnfittingImage(layout, body.X, origin)) return true;
+            if (admitting && surface.Receiver == null && !ImageNoticeFits(body, bodyClip))
+                throw new UiLayoutException(UiLayoutFailure.ClippedContent, "/fallback", "The image fallback notice cannot fit.");
+            return false;
+        }
+
+        private (UiCaptureRect Body, UiCaptureRect Clip, float Origin) CompositionArea(UiCaptureRect bounds)
+        {
             var padding = 12f * layoutScale;
             var interior = bounds.Inset(padding, padding, 2f * padding, padding);
-            var bodyClip = interior.Inset(0f, TextSize(UiTextStyle.Heading) + gap, 0f, 0f);
-            var body = bodyClip.Inset(gap, 0f, gap, 0f);
+            var clip = interior.Inset(0f, TextSize(UiTextStyle.Heading) + gap, 0f, 0f);
+            var body = clip.Inset(gap, 0f, gap, 0f);
             var origin = body.Y;
             if (surface.Body.Length != 0) origin += MeasureText(surface.Body, UiTextStyle.Body, body.Width).Height + gap;
-            _ = Arrange(content, body, origin);
+            return (body, clip, origin);
         }
 
-        private UiLayoutResult Arrange(UiNode content, UiCaptureRect body, float top)
+        private bool TryArrangeClampedHudArtwork(UiNode content, out UiLayoutResult layout, out UiCaptureRect body, out float origin)
+        {
+            layout = null!;
+            body = default;
+            origin = 0f;
+            if (surface.Request.Kind != UiSurfaceKind.Hud || !images.HasUnreadyLabels()) return false;
+            var physical = SurfaceBounds();
+            var width = surface.Request.Width * layoutScale;
+            var height = surface.Request.Height * layoutScale;
+            if (physical.Width >= width && physical.Height >= height) return false;
+
+            // The authored placement supplies hidden image geometry when only the retained HUD aperture shrinks.
+            (body, _, origin) = CompositionArea(new UiCaptureRect(physical.X, physical.Y, width, height));
+            try
+            {
+                (layout, var placeholderOverlap) = ArrangePresentation(content, body, origin);
+                return placeholderOverlap || HasUnfittingImage(layout, body.X, origin);
+            }
+            catch (UiLayoutException) { return false; }
+        }
+
+        private (UiLayoutResult Layout, bool PlaceholderOverlap) ArrangePresentation(UiNode content, UiCaptureRect body, float top)
+        {
+            try { return (Arrange(content, body, top, MeasurePlacement), false); }
+            catch (UiLayoutException failure) when (failure.Failure == UiLayoutFailure.OccludedContent && images.HasUnreadyLabels())
+            {
+                try { return (Arrange(content, body, top, MeasureWithoutPlaceholderLabels), true); }
+                catch (UiLayoutException) { }
+                throw;
+            }
+        }
+
+        private UiLayoutResult Arrange(UiNode content, UiCaptureRect body, float top, UiLayoutMeasureLeaf measure)
         {
             var width = body.Width / (double)layoutScale;
             var limits = surface.Request.Kind is UiSurfaceKind.Window or UiSurfaceKind.FullscreenTool
                 ? UiLayoutConstraints.ForVerticalScroll(width, body.Height / (double)layoutScale,
                     Math.Max(0d, (top - body.Y) / (double)layoutScale))
                 : new UiLayoutConstraints(width, width, 0d, Math.Max(0, (body.Bottom - top) / (double)layoutScale));
-            return UiLayoutEngine.Arrange(content, limits, MeasurePlacement, layoutScale, preferences.HighContrast);
+            return UiLayoutEngine.Arrange(content, limits, measure, layoutScale, preferences.HighContrast);
         }
 
         private UiLayoutLeafMeasurement MeasurePlacement(UiNode node, UiLayoutConstraints limits, bool disabled)
         {
+            if (node is UiIcon or UiImage or UiBadge or UiPips) return MeasureArt(node, limits);
             if (node is UiCard || node is UiBox)
             {
                 var extent = new UiLayoutExtent(limits.MinWidth, limits.MinHeight);
@@ -54,6 +97,9 @@ namespace TopiaForge.Mods.Testing
                 scrollLineHeight: node is UiText text ? TextSize(text.Style) / (double)layoutScale : null);
         }
 
+        private UiLayoutLeafMeasurement MeasureWithoutPlaceholderLabels(UiNode node, UiLayoutConstraints limits, bool disabled) =>
+            node is UiImage image ? MeasureImage(image, protectLabel: false) : MeasurePlacement(node, limits, disabled);
+
         private double ToReferenceUnits(float pixels, double limit)
         {
             var units = pixels / (double)layoutScale;
@@ -65,10 +111,19 @@ namespace TopiaForge.Mods.Testing
             var unscrolled = top + scrollOffset * layoutScale;
             var origin = surface.Request.Kind == UiSurfaceKind.Hud ? unscrolled : top;
             UiLayoutResult layout;
-            try { layout = Arrange(content, body, unscrolled); }
+            bool placeholderOverlap;
+            try { (layout, placeholderOverlap) = ArrangePresentation(content, body, unscrolled); }
             catch (UiLayoutException failure)
             {
-                PaintLayoutFailure(body, clip, failure);
+                if (TryArrangeClampedHudArtwork(content, out var retained, out var authoredBody, out var authoredOrigin))
+                    PaintImageFallback(retained, authoredBody, clip, authoredOrigin);
+                else PaintLayoutFailure(body, clip, failure);
+                return;
+            }
+
+            if (placeholderOverlap || HasUnfittingImage(layout, body.X, origin))
+            {
+                PaintImageFallback(layout, body, clip, origin);
                 return;
             }
 
@@ -86,6 +141,17 @@ namespace TopiaForge.Mods.Testing
                 {
                     if (ancestor.Node is UiScroll or UiStack)
                         boundsClip = boundsClip.Intersect(ScreenRect(ancestor.Bounds, body.X, origin));
+                }
+                if (node is UiImage image)
+                {
+                    var art = images[image];
+                    bounds = ScreenRect(UiImageProjection.FixedBox(placement.Bounds, art.Width, art.Height), body.X, origin);
+                }
+                if (images.HasImages && placement.RequiresBackplate && node is UiText or UiCountdown)
+                {
+                    Add(path + "/backplate", null, "TextBackplate", bounds, boundsClip,
+                        new UiCaptureNodeContent(string.Empty, string.Empty, 0f, 0f, UiCaptureNodeFlags.Decorative),
+                        new UiCaptureNodePaint(null, scheme.GetPair(backdrop).Fill));
                 }
                 switch (node)
                 {

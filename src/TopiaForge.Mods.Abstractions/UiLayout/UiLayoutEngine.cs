@@ -74,13 +74,14 @@ namespace TopiaForge.Mods
                 slot.PaintKind = metrics.PaintKind;
 
             var fitted = constraints.Fit(metrics.Size);
-            if (slot.PaintKind == UiLayoutPaintKind.Protected &&
+            if ((slot.PaintKind == UiLayoutPaintKind.Protected || slot.Node is UiImage) &&
                 (metrics.Size.Width > constraints.MaxWidth || metrics.Size.Height > constraints.MaxHeight ||
                 metrics.Size.Width <= 0 || metrics.Size.Height <= 0 || fitted.Width <= 0 || fitted.Height <= 0))
                 throw Clipped(slot);
             slot.Size = fitted;
             slot.PaintOutsets = metrics.PaintOutsets;
             slot.FocusOutsets = metrics.FocusOutsets;
+            slot.LocalPaintBounds = metrics.LocalPaintBounds;
             slot.ScrollLineHeight = slot.Node is UiText ? metrics.ScrollLineHeight : null;
         }
 

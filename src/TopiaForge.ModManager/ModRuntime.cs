@@ -153,7 +153,7 @@ namespace TopiaForge.ModManager
             {
                 return OwnerUiService.StartGalleryInteractionPreview(Path.Combine(paths.Root, "ui-gallery-preview"),
                     logger.ForMod(OwnerUiService.GalleryInteractionOwner), gameplay.UiGameplay, gameplay.HudPlacement,
-                    () => multiplayer.Realm);
+                    gameplay.UiThemePackages, () => multiplayer.Realm);
             }
             catch (Exception error)
             {

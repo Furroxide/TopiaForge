@@ -58,7 +58,8 @@ namespace TopiaForge.Mods.Testing
                 if (peer.Request.Kind != UiSurfaceKind.Hud || !peer.IsVisible) continue;
                 var probe = new FakeUiTreeCapture(service, peer, viewport, UiCaptureControlState.Rest, null);
                 var authored = probe.HudBounds(peer);
-                (placements ??= new List<HudPlacement>()).Add(new HudPlacement(probe, authored, !probe.FitsHudContent(authored)));
+                var kind = probe.SelectHudNotice(authored);
+                (placements ??= new List<HudPlacement>()).Add(new HudPlacement(probe, authored, kind));
             }
 
             if (placements == null) return null;
@@ -76,8 +77,8 @@ namespace TopiaForge.Mods.Testing
                     var region = placements[peer].PaintedOrAuthored;
                     if (region.HasArea) occupied.Add(region);
                 }
-                var hasNotice = entry.Probe.TryMeasureHudLayoutNotice(entry.Authored, occupied, out var notice);
-                placements[index] = new HudPlacement(entry.Probe, entry.Authored, unfit: true,
+                var hasNotice = entry.Probe.TryMeasureHudNotice(entry.Kind, entry.Authored, occupied, out var notice);
+                placements[index] = new HudPlacement(entry.Probe, entry.Authored, entry.Kind,
                     notice: hasNotice ? notice : null);
             }
             return placements;
@@ -107,23 +108,25 @@ namespace TopiaForge.Mods.Testing
                 foreach (var entry in placements)
                     if (entry.PaintedOrAuthored.HasArea) occupied.Add(entry.PaintedOrAuthored);
             }
-            return TryMeasureHudLayoutNotice(HudBounds(surface), occupied, out var panel) ? panel : null;
+            var authored = HudBounds(surface);
+            return TryMeasureHudNotice(SelectHudNotice(authored), authored, occupied, out var panel) ? panel : null;
         }
 
         private readonly struct HudPlacement
         {
-            internal HudPlacement(FakeUiTreeCapture probe, UiLayoutRect authored, bool unfit = false,
+            internal HudPlacement(FakeUiTreeCapture probe, UiLayoutRect authored, HudNoticeKind kind,
                 UiLayoutRect? notice = null)
             {
                 Probe = probe;
                 Authored = authored;
-                Unfit = unfit;
+                Kind = kind;
                 Notice = notice;
             }
 
             internal FakeUiTreeCapture Probe { get; }
             internal UiLayoutRect Authored { get; }
-            internal bool Unfit { get; }
+            internal HudNoticeKind Kind { get; }
+            internal bool Unfit => Kind != HudNoticeKind.None;
             internal UiLayoutRect? Notice { get; }
             internal UiLayoutRect PaintedOrAuthored => Notice ?? (Unfit ? default : Authored);
         }
@@ -135,9 +138,7 @@ namespace TopiaForge.Mods.Testing
             var padding = 12f * layoutScale;
             if (HudNoticeBounds() is not { } notice)
             {
-                nodes.Add(new UiCapturedNode("/fallback", null, UiHudOverflowNotice.CaptureKind, default,
-                    new UiCaptureNodeContent(string.Empty, surface.HudOverflowText!, 0f, 0f, UiCaptureNodeFlags.LayoutDiagnostic),
-                    default, kit.Id, usedFallback: true, isRendered: false, clipped: false, occluded: false));
+                PaintQueuedHudNotice();
                 return;
             }
 
@@ -158,35 +159,59 @@ namespace TopiaForge.Mods.Testing
         private bool TryMeasureHudLayoutNotice(UiLayoutRect authored, IReadOnlyList<UiLayoutRect> occupied,
             out UiLayoutRect panel)
         {
-            var kit = UiThemePackParser.Default;
-            var padding = 12f * layoutScale;
             var safe = HudSafeArea();
             return UiHudNoticePlacement.TryPlaceMeasured(safe, authored, HudDockOrigin(surface, safe),
                 UiHudLayoutNotice.PreferredWidth * layoutScale, occupied, UiHudViewport.SlotGap * layoutScale,
-                HeightAt, out panel, out _);
-
-            double HeightAt(double outerWidth)
-            {
-                var innerWidth = (float)(outerWidth - 2f * padding);
-                if (innerWidth <= 0f) return double.PositiveInfinity;
-                var title = MeasureText(surface.Request.Title, UiTextStyle.Heading, innerWidth, descriptor: kit);
-                var message = MeasureText(UiHudLayoutNotice.Text, UiTextStyle.Body, innerWidth, descriptor: kit);
-                return Math.Max(title.Width, message.Width) > innerWidth ? double.PositiveInfinity : 2f * padding + title.Height + gap + message.Height;
-            }
+                width => MeasureHudNoticeHeight(UiHudLayoutNotice.Text, width), out panel, out _);
         }
 
-        private bool FitsHudContent(UiLayoutRect authored)
+        private double MeasureHudNoticeHeight(string message, double outerWidth)
+        {
+            var padding = 12f * layoutScale;
+            var innerWidth = (float)(outerWidth - 2f * padding);
+            if (innerWidth <= 0f) return double.PositiveInfinity;
+            var kit = UiThemePackParser.Default;
+            var title = MeasureText(surface.Request.Title, UiTextStyle.Heading, innerWidth, descriptor: kit);
+            var text = MeasureText(message, UiTextStyle.Body, innerWidth, descriptor: kit);
+            return Math.Max(title.Width, text.Width) > innerWidth
+                ? double.PositiveInfinity : 2f * padding + title.Height + gap + text.Height;
+        }
+
+        private void PaintQueuedHudNotice()
+        {
+            nodes.Add(new UiCapturedNode("/fallback", null, UiHudOverflowNotice.CaptureKind, default,
+                new UiCaptureNodeContent(string.Empty, surface.HudOverflowText!, 0f, 0f, UiCaptureNodeFlags.LayoutDiagnostic),
+                default, UiThemePackParser.Default.Id, usedFallback: true, isRendered: false, clipped: false, occluded: false));
+        }
+
+        private enum HudNoticeKind { None, Layout, Image }
+
+        private HudNoticeKind SelectHudNotice(UiLayoutRect authored)
         {
             try
             {
-                if (surface.Content is { } content) VerifyComposition(content);
-                else MeasureBodyOnlyHud(CaptureRect(authored), out _, out _);
-                return true;
+                if (surface.Content is { } content)
+                    return VerifyComposition(content) ? HudNoticeKind.None : HudNoticeKind.Image;
+                MeasureBodyOnlyHud(CaptureRect(authored), out _, out _);
+                return HudNoticeKind.None;
             }
             catch (UiLayoutException)
             {
-                return false;
+                return surface.Content is { } content && TryArrangeClampedHudArtwork(content, out _, out _, out _)
+                    ? HudNoticeKind.Image : HudNoticeKind.Layout;
             }
+        }
+
+        private bool TryMeasureHudNotice(HudNoticeKind kind, UiLayoutRect authored,
+            IReadOnlyList<UiLayoutRect> occupied, out UiLayoutRect panel)
+        {
+            panel = default;
+            return kind switch
+            {
+                HudNoticeKind.Image => TryMeasureHudImageNotice(authored, occupied, out panel),
+                HudNoticeKind.Layout => TryMeasureHudLayoutNotice(authored, occupied, out panel),
+                _ => false,
+            };
         }
 
         private void PaintBodyOnlyHud(UiCaptureRect panel, UiCaptureRect clip, UiThemePair surfacePair)

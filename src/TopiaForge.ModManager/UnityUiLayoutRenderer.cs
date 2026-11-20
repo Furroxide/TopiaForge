@@ -15,24 +15,31 @@ namespace TopiaForge.ModManager
         {
             private readonly UiNode content;
             private readonly TopiaForgeContainer stage;
+            private readonly UiSurfaceArtwork? artwork;
             private readonly Dictionary<UiNode, NativeLeaf> leaves = new Dictionary<UiNode, NativeLeaf>(NodeIdentity.Instance);
+            private readonly Dictionary<UiNode, NativeArtLeaf> art = new Dictionary<UiNode, NativeArtLeaf>(NodeIdentity.Instance);
             private readonly NativeNode root;
+            private NativeArtLeaf? unavailableImage;
+            internal string? UnavailableImagePath { get; private set; }
+            internal bool HasRetainedImageNotice => unavailableImage?.IsMissingSemanticImage == true;
 
             private UnityUiLayoutRenderer(UiNode content, TopiaForgeContainer stage, UiThemeDescriptor? declared,
-                UiCallbackGate callbacks, UiGraphRetentionTransaction graphs)
+                UiCallbackGate callbacks, UiGraphRetentionTransaction graphs, UiSurfaceArtwork? artwork)
             {
                 this.content = content;
                 this.stage = stage;
+                this.artwork = artwork;
                 root = Create(content, stage, declared, UiPaintRole.Surface, false, callbacks, graphs);
                 root.Container.EnsureLayoutElement().ignoreLayout = true;
             }
 
             /// <summary>Builds and verifies a replacement in the caller's hidden staging container.</summary>
             internal static UnityUiLayoutRenderer Stage(UiNode content, TopiaForgeContainer stage, UiLayoutConstraints limits,
-                UiThemeDescriptor? declared, UiCallbackGate callbacks, UiGraphRetentionTransaction graphs)
+                UiThemeDescriptor? declared, UiCallbackGate callbacks, UiGraphRetentionTransaction graphs,
+                UiSurfaceArtwork? artwork = null)
             {
                 UiLayoutTree.Validate(content);
-                var renderer = new UnityUiLayoutRenderer(content, stage, declared, callbacks, graphs);
+                var renderer = new UnityUiLayoutRenderer(content, stage, declared, callbacks, graphs, artwork);
                 renderer.Rearrange(limits, declared);
                 return renderer;
             }
@@ -44,10 +51,29 @@ namespace TopiaForge.ModManager
                 var effective = theme.Descriptor ?? UiThemePackParser.Default;
                 var canvas = stage.Go.GetComponentInParent<Canvas>(includeInactive: true);
                 var pixelsPerUnit = canvas != null && canvas.scaleFactor > 0 ? canvas.scaleFactor : 1f;
-                var result = UiLayoutEngine.Arrange(content, limits, Measure, pixelsPerUnit, theme.HighContrast);
+                var protectImageLabels = true;
+                var measuredMissingImage = false;
+                UiLayoutResult result;
+                try { result = UiLayoutEngine.Arrange(content, limits, Measure, pixelsPerUnit, theme.HighContrast); }
+                catch (UiLayoutException error) when (measuredMissingImage && error.Failure == UiLayoutFailure.OccludedContent)
+                {
+                    // If valid image paint alone fits, only the temporary label needs the kit notice.
+                    protectImageLabels = false;
+                    result = UiLayoutEngine.Arrange(content, limits, Measure, pixelsPerUnit, theme.HighContrast);
+                }
                 var positions = PreparePositions(result, effective, declared, theme.HighContrast);
                 var scheme = effective.SelectScheme(theme.Scheme == TopiaForgeScheme.Hud, theme.HighContrast);
-                foreach (var position in positions) ApplyPosition(position, scheme, theme);
+                UnavailableImagePath = null;
+                unavailableImage = null;
+                foreach (var position in positions)
+                {
+                    if (position.View.Art is not { } leaf ||
+                        (protectImageLabels ? !leaf.NeedsImageNotice(position.Bounds) : !leaf.IsMissingSemanticImage)) continue;
+                    UnavailableImagePath = position.Placement.Path;
+                    unavailableImage = leaf;
+                    break;
+                }
+                foreach (var position in positions) ApplyPosition(position, scheme, theme, effective, declared);
                 stage.Fixed((float)result.Size.Width, (float)result.Size.Height);
 
                 UiLayoutLeafMeasurement Measure(UiNode node, UiLayoutConstraints constraints, bool disabled)
@@ -59,7 +85,9 @@ namespace TopiaForge.ModManager
                         return new UiLayoutLeafMeasurement(bounds, UiLayoutPaintKind.Painter, decoration.ShadowOutsets);
                     }
 
-                    return leaves[node].Measure(node, constraints, disabled);
+                    if (!art.TryGetValue(node, out var artLeaf)) return leaves[node].Measure(node, constraints, disabled);
+                    measuredMissingImage |= artLeaf.IsMissingSemanticImage;
+                    return artLeaf.Measure(constraints, effective, declared, theme.HighContrast, protectImageLabels);
                 }
             }
 
@@ -94,6 +122,14 @@ namespace TopiaForge.ModManager
                         break;
                     case UiLayoutNode or UiPadding or UiSizedBox or UiExpanded or UiSpacer or UiPositioned or UiSplitPane:
                         break;
+                    case UiIcon or UiBadge or UiPips or UiImage:
+                        view.Backplate = AddGraphic<Image>(view.Container, "Art backing");
+                        view.Backplate.enabled = false;
+                        var artHost = view.Container.CreateChild("Artwork");
+                        TopiaForgeAnchors.Stretch(artHost.Rect);
+                        view.Art = new NativeArtLeaf(artHost, node, artwork);
+                        art.TryAdd(node, view.Art);
+                        return view;
                     default:
                         view.Backplate = AddGraphic<Image>(view.Container, "Text backing");
                         view.Backplate.enabled = false;
@@ -142,7 +178,8 @@ namespace TopiaForge.ModManager
                 return positions;
             }
 
-            private static void ApplyPosition(NativePlacement position, UiThemeScheme scheme, TopiaForgeResolvedTheme theme)
+            private static void ApplyPosition(NativePlacement position, UiThemeScheme scheme, TopiaForgeResolvedTheme theme,
+                UiThemeDescriptor effective, UiThemeDescriptor? declared)
             {
                 var view = position.View;
                 var bounds = position.Bounds;
@@ -165,20 +202,28 @@ namespace TopiaForge.ModManager
                         var offset = Math.Clamp(contentRect.anchoredPosition.y, 0, canvasHeight - bounds.Height);
                         Place(contentRect, new UiLayoutRect(0, -offset, bounds.Width, canvasHeight));
                         break;
+                    case UiIcon or UiBadge or UiPips or UiImage:
+                        PaintLeafBacking(view, position, scheme);
+                        view.Art!.Apply(bounds, position.Backdrop, scheme, theme, effective, declared);
+                        break;
                     default:
-                        if (view.Backplate is { } backing)
+                        if (view.Backplate != null)
                         {
                             position.Leaf?.Apply();
-                            backing.enabled = position.Placement.RequiresBackplate;
-                            if (backing.enabled)
-                            {
-                                TopiaForgeAnchors.Stretch(backing.rectTransform);
-                                backing.color = ColorOf(scheme.GetPair(position.Backdrop).Fill);
-                            }
+                            PaintLeafBacking(view, position, scheme);
                             view.Leaf?.ApplyBackdrop(position.Backdrop, theme);
                         }
                         break;
                 }
+            }
+
+            private static void PaintLeafBacking(NativeNode view, NativePlacement position, UiThemeScheme scheme)
+            {
+                var backing = view.Backplate!;
+                backing.enabled = position.Placement.RequiresBackplate;
+                if (!backing.enabled) return;
+                TopiaForgeAnchors.Stretch(backing.rectTransform);
+                backing.color = ColorOf(scheme.GetPair(position.Backdrop).Fill);
             }
 
             private static void PaintDecoration(NativePlacement position, UiThemeScheme scheme, TopiaForgeResolvedTheme theme)
@@ -289,6 +334,7 @@ namespace TopiaForge.ModManager
                 internal ScrollRect? Scroll { get; set; }
                 internal UnityUiLayoutDivider? Divider { get; set; }
                 internal NativeLeaf? Leaf { get; set; }
+                internal NativeArtLeaf? Art { get; set; }
             }
 
             private struct NativePlacement

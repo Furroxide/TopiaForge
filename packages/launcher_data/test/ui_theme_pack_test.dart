@@ -108,6 +108,84 @@ void main() {
   );
 
   test(
+    'pack includes the referenced bundle, receipt and notice bytes',
+    () async {
+      const bundle = 'ui/art/card.bundle';
+      const notice = 'LICENSES/card.txt';
+      final receipt = 'ui/receipts/${sha256.convert(utf8.encode(bundle))}.json';
+      final resources = {
+        bundle: [3, 1, 4],
+        receipt: utf8.encode('fixture receipt'),
+        notice: utf8.encode('fixture notice'),
+      };
+      for (final entry in resources.entries) {
+        File(p.join(project.path, entry.key))
+          ..createSync(recursive: true)
+          ..writeAsBytesSync(entry.value);
+      }
+      final image = {
+        'id': 'card',
+        'assetName': 'card',
+        'bundlePath': bundle,
+        'licensePath': notice,
+      };
+      List<int> definition(Map<String, Object?> image) => utf8.encode(
+        jsonEncode({
+          'schema': 1,
+          'id': 'survival',
+          'images': [image],
+        }),
+      );
+      final authored = definition(image);
+      final enriched = definition({
+        ...image,
+        'pixelWidth': 96,
+        'pixelHeight': 48,
+        'isMask': false,
+      });
+      _writeDefinition(project, authored);
+      _writeManifest(project);
+      final repository = LocalDeveloperRepository(
+        repositoryRoot: root.path,
+        dataRoot: p.join(root.path, 'data'),
+        uiThemePackageValidator: (staged) async {
+          for (final entry in resources.entries) {
+            expect(
+              File(p.join(staged.path, entry.key)).readAsBytesSync(),
+              entry.value,
+            );
+          }
+          final manifest = _readManifest(staged);
+          if (_stagedTheme(manifest)['sha256'] == null) {
+            _writeDefinition(staged, enriched);
+            _stagedTheme(manifest)['sha256'] = sha256
+                .convert(enriched)
+                .toString();
+            File(
+              p.join(staged.path, 'topiaforge.mod.json'),
+            ).writeAsStringSync(jsonEncode(manifest));
+          }
+          return [];
+        },
+      );
+      final path = await repository.packModDirectory(project.path);
+      final archive = ZipDecoder().decodeBytes(File(path).readAsBytesSync());
+      for (final entry in resources.entries) {
+        expect(archive.findFile(entry.key)!.content, entry.value);
+      }
+      expect(archive.findFile(_definition)!.content, enriched);
+      expect(
+        File(p.join(project.path, _definition)).readAsBytesSync(),
+        authored,
+      );
+      expect(
+        (await repository.checkPackage(path)).ui?.themes.single.sha256,
+        sha256.convert(enriched).toString(),
+      );
+    },
+  );
+
+  test(
     'pack refuses an oversized definition before staging validation',
     () async {
       _writeDefinition(project, List.filled(64 * 1024 + 1, 32));

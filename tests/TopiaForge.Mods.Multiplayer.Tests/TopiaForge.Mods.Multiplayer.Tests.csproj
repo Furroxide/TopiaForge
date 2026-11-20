@@ -30,6 +30,12 @@
   <ItemGroup>
     <Compile Include="../Shared/AllocationProbe.cs" Link="TestSupport/AllocationProbe.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiThemeScope.cs" Link="Runtime/UiThemeScope.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeScope.Preload.cs" Link="Runtime/UiThemeScope.Preload.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeAcquisitions.cs" Link="Runtime/UiThemeAcquisitions.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeRegistration.cs" Link="Runtime/UiThemeRegistration.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/IHostDispatcher.cs" Link="Runtime/IHostDispatcher.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerModLifetime.cs" Link="Runtime/OwnerModLifetime.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeWorkTracker.cs" Link="Runtime/AssetNativeWorkTracker.cs" />
     <Compile Include="../../mods/Shared/DiagnosticPathRedactor.cs" />
     <!-- The game's binder, which the testing kit's lifecycle runner must match, failures included. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\GeneratedMultiplayerBinder.cs" Link="Runtime\GeneratedMultiplayerBinder.cs" />

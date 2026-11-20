@@ -13,7 +13,10 @@ namespace TopiaForge.UiGallery.Pages
         WrapAndGrid,
         StackAndBounds,
         CardsAndDividers,
-        GraphConnections
+        GraphConnections,
+        Icons,
+        Images,
+        BadgesAndPips
     }
 
     /// <summary>Safe composition requests shared by the Gallery and the headless capture harness.</summary>
@@ -73,6 +76,21 @@ namespace TopiaForge.UiGallery.Pages
                     title = "Graph connections";
                     content = FoundationGraphPages.Connections(report ?? IgnoreReport);
                     break;
+                case FoundationPage.Icons:
+                    id = "gallery-icons";
+                    title = "Icons";
+                    content = FoundationArtPages.Icons();
+                    break;
+                case FoundationPage.Images:
+                    id = "gallery-images";
+                    title = "Images";
+                    content = FoundationArtPages.Images();
+                    break;
+                case FoundationPage.BadgesAndPips:
+                    id = "gallery-badges-and-pips";
+                    title = "Badges and pips";
+                    content = FoundationArtPages.BadgesAndPips(theme?.Id == SurvivalTheme.Id);
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(page));
             }
@@ -80,7 +98,12 @@ namespace TopiaForge.UiGallery.Pages
             var body = page == FoundationPage.InteractionStates
                 ? "Hover, focus, select or press a control. Changes appear here."
                 : string.Empty;
-            var width = page == FoundationPage.WrapAndGrid ? 1000f : 840f;
+            var width = page switch
+            {
+                FoundationPage.WrapAndGrid => 1000f,
+                FoundationPage.Icons => 900f,
+                _ => 840f,
+            };
             var request = new UiSurfaceRequest(id, title, body, kind, width, 460f, content);
             if (kind == UiSurfaceKind.Hud)
             {

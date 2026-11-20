@@ -17,6 +17,10 @@
       {
         "id": "survival",
         "definition": "ui/themes/survival.json"
+      },
+      {
+        "id": "preview-art",
+        "definition": "ui/themes/preview-art.json"
       }
     ]
   },

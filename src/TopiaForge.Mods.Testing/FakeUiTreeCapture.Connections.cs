@@ -14,9 +14,8 @@ namespace TopiaForge.Mods.Testing
         private bool GraphContentFits()
         {
             if (surface.Content is not { } content) return false;
-            try { VerifyComposition(content); }
+            try { return VerifyComposition(content); }
             catch (UiLayoutException) { return false; }
-            return true;
         }
 
         internal static int SelectedConnectionLabelPages(FakeUiService service, FakeUiSurface surface, UiCaptureViewport viewport)

@@ -137,6 +137,11 @@ namespace TopiaForge.UiGallery
             if (previewKind == UiSurfaceKind.Hud)
                 layoutPages.Button("Layout fit", () => ShowFoundation(FoundationLayoutPages.LayoutNotice()));
 
+            var artPages = column.Row(TopiaForgeGap.Sm);
+            artPages.Button("Icons", () => ShowFoundation(FoundationPage.Icons, previewKind));
+            artPages.Button("Images", () => ShowFoundation(FoundationPage.Images, previewKind));
+            artPages.Button("Badges and pips", () => ShowFoundation(FoundationPage.BadgesAndPips, previewKind));
+
             var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
             pageHost.Flex(1f, 1f);

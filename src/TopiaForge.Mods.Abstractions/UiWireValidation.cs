@@ -5,10 +5,10 @@ namespace TopiaForge.Mods
     /// <summary>The bounded composition contract shared by player UI, mirrored HUDs and testing hosts.</summary>
     internal static class UiWireValidation
     {
-        internal static void Validate(UiNode? node)
+        internal static void Validate(UiNode? node, bool requireImageWireMetadata = false)
         {
             UiComposition.Validate(node);
-            Visit(node);
+            Visit(node, requireImageWireMetadata);
         }
 
         private static void Text(string? value, int maximum = 4096)
@@ -17,7 +17,7 @@ namespace TopiaForge.Mods
                 throw new ArgumentException("Remote UI text exceeds its " + maximum + " character limit.");
         }
 
-        private static void Visit(UiNode? node)
+        private static void Visit(UiNode? node, bool requireImageWireMetadata)
         {
             if (node == null) return;
             if (node.Id != null) Text(node.Id, 128);
@@ -29,6 +29,15 @@ namespace TopiaForge.Mods
                     break;
                 case UiProgress n: Text(n.Label, 256); break;
                 case UiCountdown n: Text(n.Label, 256); break;
+                case UiIcon n: Text(n.SemanticLabel, 256); break;
+                case UiImage n:
+                    Text(n.SemanticLabel, 256);
+                    if (requireImageWireMetadata &&
+                        (!n.Width.HasValue || !n.Height.HasValue || n.PackDescriptorDigest.Length != 32))
+                        throw new ArgumentException("Resolve the image box and its package-local descriptor before encoding remote UI.");
+                    break;
+                case UiBadge n: Text(n.Text, 256); break;
+                case UiPips n: Text(n.Label, 256); break;
                 case UiButton n: Text(n.Label); break;
                 case UiToggle n: Text(n.Label); break;
                 case UiSlider n: Text(n.Label); break;
@@ -48,7 +57,7 @@ namespace TopiaForge.Mods
             }
 
             var children = UiNodeChildren.Of(node);
-            for (var index = 0; index < children.Count; index++) Visit(children[index]);
+            for (var index = 0; index < children.Count; index++) Visit(children[index], requireImageWireMetadata);
         }
     }
 }

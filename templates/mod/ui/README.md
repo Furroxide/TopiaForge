@@ -12,6 +12,11 @@ The manifest applies the Survival sample theme when the window opens. Turn on **
 palette** to try the second theme declared in the same package, then turn it off to restore the
 manifest default. The preview changes the palette while keeping the window and its control values.
 
+The notification preview shows the same packaged card in two boxes. **Contain** shows the whole
+card and **Cover** crops it to fill the box. The small mark takes its tint from the active palette,
+and the badge follows the notification toggle. The sample bundle and its receipt are included in
+the project. Its artwork is distributed under CC0 1.0, with the notice in [LICENSES/ui-art.txt](LICENSES/ui-art.txt).
+
 ## Quick start
 
 1. Restore the pinned SDK: `topiaforge restore`

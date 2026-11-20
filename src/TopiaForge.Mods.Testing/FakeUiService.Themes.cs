@@ -106,9 +106,18 @@ namespace TopiaForge.Mods.Testing
             return new FakeUiService(childLifetime, gameThread, themeScope, HudPackageDisplayName);
         }
 
-        internal FakeUiThemeResolution ResolveTheme(UiThemeRef? theme) => themeScope.Package.Resolve(themeScope, theme);
+        internal FakeUiThemeResolution ResolveTheme(UiThemeRef? theme, UiWireEnvelope? receiver = null) =>
+            themeScope.Package.Resolve(themeScope, theme, receiver);
 
         internal UiThemeDescriptor? ThemeForWire(UiThemeRef? theme) => themeScope.Package.DescriptorForWire(themeScope, theme);
+
+        internal UiThemeDescriptor? DeclaredTheme(UiThemeRef? theme, UiWireEnvelope? receiver) =>
+            themeScope.Package.DescriptorForWire(themeScope, theme, receiver);
+
+        internal OperationResult<FakeUiImages> PrepareImages(UiNode? content, bool received) =>
+            themeScope.Package.PrepareImages(themeScope, content, received);
+
+        internal void ImagesChanged() => themeScope.Package.ImagesChanged();
 
         private static OperationResult<FakeUiThemeDefinition> ReadThemeDefinition(string json, UiThemeCatalogueEntry? entry)
         {

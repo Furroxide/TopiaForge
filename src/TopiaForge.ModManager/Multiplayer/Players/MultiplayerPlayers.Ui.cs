@@ -42,10 +42,10 @@ namespace TopiaForge.ModManager
                 return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, "Use a short surface id and a window between 80 and 1920 units wide and 80 and 1440 units high.");
             var themed = UiPresentationTheme.Resolve(context.UiService, request, out var theme);
             if (!themed.Succeeded) return OperationResult<IUiSurface>.Failure(themed.ErrorCode, themed.ErrorMessage);
-            try { UiWireValidation.Validate(request.Content); UiClockBinding.Check(request.Content, UiClockEpoch); }
-            catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
+            var validation = PrepareTargetedContent(context, request, request.Content, theme, out var presentation);
+            if (!validation.Succeeded) return OperationResult<IUiSurface>.Failure(validation.ErrorCode, validation.ErrorMessage);
             if (UiFull(player)) return Limit<IUiSurface>();
-            var surface = new RemoteUiSurface(this, context, Target(context, player), nextUiToken + 1, request, theme);
+            var surface = new RemoteUiSurface(this, context, Target(context, player), nextUiToken + 1, request, presentation, theme);
             var sent = SendSurface(surface);
             if (!sent.Succeeded) return OperationResult<IUiSurface>.Failure(sent.ErrorCode, sent.ErrorMessage);
             nextUiToken++;
@@ -107,17 +107,24 @@ namespace TopiaForge.ModManager
                 var content = replacement ?? surface.Content;
                 if (replacement != null && retained && !surface.Dirty && surface.Stream == stream && surface.SentClockEpoch == epoch)
                     return UiPresentationTheme.Allowed;
-                var staged = StageTargetEnvelope(surface.Context, target, stream, surface.Theme, content, null, out var envelope);
+
+                var presentation = surface.PresentationContent;
+                var replacing = replacement != null && !retained;
+                if (replacing)
+                {
+                    var prepared = PrepareTargetedContent(surface.Context, request, replacement, surface.Theme, out presentation);
+                    if (!prepared.Succeeded) return prepared;
+                }
+                var staged = StageTargetEnvelope(surface.Context, target, stream, surface.Theme, presentation, null, out var envelope);
                 if (!staged.Succeeded) return staged;
-                var updated = surface.SentClockEpoch != null && (surface.SentClockEpoch != epoch
-                    || !UiPresentationTheme.SameEnvelope(surface.Envelope, envelope) || (replacement != null && !retained));
-                var revision = surface.Revision + (updated ? 1UL : 0UL);
+                var revision = TargetRevision(surface, epoch, envelope, replacing);
                 BeginUi(10, surface.Context, target, surface.Token, revision);
-                UiWireCodec.WriteTargetedSurfaceBody(Writer, request, surface.Body, surface.Visible, content, epoch, retained, envelope);
+                UiWireCodec.WriteTargetedSurfaceBody(Writer, request, surface.Body, surface.Visible, presentation, epoch, retained, envelope);
                 var result = SendUi(target);
                 if (!result.Succeeded) return result;
                 if (!retained) UiClockBinding.Commit(content, epoch);
                 surface.Content = content;
+                surface.PresentationContent = presentation;
                 surface.Revision = revision;
                 surface.Dirty = false;
                 surface.Stream = stream;
@@ -128,6 +135,23 @@ namespace TopiaForge.ModManager
             }
             catch (ArgumentException exception) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
             catch (InvalidOperationException) { return Limit<bool>(); }
+        }
+
+        private static OperationResult<bool> PrepareTargetedContent(PlayerContext context, UiSurfaceRequest request,
+            UiNode? content, UiThemeDescriptor? theme, out UiNode? presentation)
+        {
+            var scope = (context.UiService as IUiPresentationThemeSource)?.PresentationThemeScope;
+            var result = UiPresentationImages.Prepare(content, scope, theme, out presentation);
+            if (result.Succeeded && request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(presentation))
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Put interactive controls in a window.");
+            return result;
+        }
+
+        private static ulong TargetRevision(RemoteUiSurface surface, string epoch, UiWireEnvelope? envelope, bool replacing)
+        {
+            var updated = surface.SentClockEpoch != null && (surface.SentClockEpoch != epoch ||
+                !UiPresentationTheme.SameEnvelope(surface.Envelope, envelope) || replacing);
+            return surface.Revision + (updated ? 1UL : 0UL);
         }
         private void BeginUi(byte kind, PlayerContext context, ParticipantId player, ulong token, ulong revision)
         {

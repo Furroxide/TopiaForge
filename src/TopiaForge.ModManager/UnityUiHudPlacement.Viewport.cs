@@ -48,7 +48,8 @@ namespace TopiaForge.ModManager
             RestoreDock(panel, viewport);
         }
 
-        internal bool SetNoticeRoom(int handle, double preferredWidth, Func<double, double> heightAt)
+        internal bool SetNoticeRoom(int handle, double preferredWidth, Func<double, double> heightAt,
+            bool useContentViewport = true, double preferredHeight = 0d)
         {
             var panel = Find(handle);
             if (panel == null || !TryProjectDock(panel, out var viewport)) return false;
@@ -66,11 +67,13 @@ namespace TopiaForge.ModManager
             }
             if (protectedNoticeArea != null && TryProject(protectedNoticeArea, out var blocked)) occupied.Add(blocked);
 
-            var origin = (viewport.DockX, viewport.DockY, (double)panel.AuthoredPivot.x, 1d - panel.AuthoredPivot.y);
+            var origin = (X: viewport.DockX, Y: viewport.DockY, PivotX: (double)panel.AuthoredPivot.x, PivotY: 1d - panel.AuthoredPivot.y);
             var scale = viewport.Scale;
-            if (!UiHudNoticePlacement.TryPlaceMeasured(viewport.Safe, viewport.Content, origin, preferredWidth * scale,
+            var current = useContentViewport ? viewport.Content : default;
+            var fits = UiHudNoticePlacement.TryPlaceMeasured(viewport.Safe, current, origin, preferredWidth * scale,
                 occupied, UiHudViewport.SlotGap * scale, width => heightAt(width / scale) * scale,
-                out var chosen, out var usesCurrent))
+                out var chosen, out var usesCurrent, preferredHeight * scale);
+            if (!fits)
             {
                 RestoreDock(panel, viewport);
                 return false;

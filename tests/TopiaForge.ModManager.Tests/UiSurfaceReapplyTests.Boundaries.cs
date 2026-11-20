@@ -5,11 +5,17 @@ namespace TopiaForge.ModManager.Tests
         private const string Boundaries = """
             using System;
             using System.Collections.Generic;
+            using TopiaForge.ModManager.Core;
             using TopiaForge.Mods;
             using TopiaForge.Mods.Testing;
             using TopiaForge.Mods.UnityUi;
             using UnityEngine;
             using UnityEngine.UI;
+
+            namespace UnityEngine
+            {
+                public sealed class Sprite { }
+            }
 
             namespace TopiaForge.Mods.UnityUi
             {
@@ -262,8 +268,25 @@ namespace TopiaForge.ModManager.Tests
                     {
                         private TopiaForgeLabel? hudTitle;
                         private string? hudTitleText;
-                        private static void PrepareStagedTheme(TopiaForgeContainer stage, UiThemeDescriptor? descriptor) { }
                         private void RefreshChangedLayout() { }
+                        private UiThemeScope? localThemeScope;
+                        private AdmittedUiCatalogue? remoteCatalogue;
+                        private UiThemeAcquisitions? remoteAcquisitions;
+
+                        internal void ConfigureArtwork(UiThemeScope scope, AdmittedUiCatalogue catalogue,
+                            UiThemeAcquisitions acquisitions, bool remote)
+                        {
+                            localThemeScope = remote ? null : scope;
+                            remoteCatalogue = remote ? catalogue : null;
+                            remoteAcquisitions = remote ? acquisitions : null;
+                            remoteComposition = remote;
+                        }
+
+                        private void ReleaseThemeResources() { }
+                        private bool CanShowImageNotice(TopiaForgeContainer stage, UiLayoutConstraints limits) => true;
+                        private void ShowLayoutNotice(TopiaForgeContainer parent, TopiaForgeContainer root, string message,
+                            string path, bool preferContentViewport, bool canMoveImageNotice) =>
+                            throw new InvalidOperationException("The scroll fixture has no unavailable artwork.");
                         private void ObserveLayout() { }
                         private void RemoveLayoutFallback()
                         {
@@ -281,7 +304,8 @@ namespace TopiaForge.ModManager.Tests
                         private UiLayoutConstraints MeasureContentArea(TopiaForgeContainer parent, TopiaForgeWidget view) =>
                             outerScroll == null ? UiLayoutConstraints.Loose(view.Rect.rect.width, view.Rect.rect.height)
                                 : MeasureNativeContentArea(parent, view);
-                        private UiLayoutConstraints MeasureHudContent(UiLayoutExtent frame, int x, int y, float gap, bool includesComposition) =>
+                        private UiLayoutConstraints MeasureHudContent(UiLayoutExtent frame, int x, int y, float gap,
+                            bool includesComposition) =>
                             throw new InvalidOperationException("The scroll fixture has no HUD viewport.");
                         private void ShowLayoutFallback(TopiaForgeContainer parent, TopiaForgeContainer root, UiLayoutException error)
                         {
@@ -290,6 +314,34 @@ namespace TopiaForge.ModManager.Tests
                         }
                     }
 
+                    private sealed partial class UnityUiLayoutRenderer
+                    {
+                        // This probe drives real surface admission and artwork acquisition without Unity drawing.
+                        private sealed class NativeArtLeaf
+                        {
+                            private readonly UiImage image;
+                            private readonly UiSurfaceArtwork artwork;
+
+                            internal NativeArtLeaf(TopiaForgeContainer host, UiNode node, UiSurfaceArtwork? artwork)
+                            {
+                                image = (UiImage)node;
+                                this.artwork = artwork!;
+                            }
+
+                            internal bool IsMissingSemanticImage => !image.Decorative && artwork.Resolve(image).Sprite == null;
+                            internal bool NeedsImageNotice(UiLayoutRect bounds) => false;
+
+                            internal UiLayoutLeafMeasurement Measure(UiLayoutConstraints constraints, UiThemeDescriptor effective,
+                                UiThemeDescriptor? declared, bool highContrast, bool protectImageLabels)
+                            {
+                                var frame = artwork.Resolve(image).Frame;
+                                return new UiLayoutLeafMeasurement(new UiLayoutExtent(frame.Width, frame.Height), UiLayoutPaintKind.Image);
+                            }
+
+                            internal void Apply(UiLayoutRect bounds, UiPaintRole backdrop, UiThemeScheme scheme,
+                                TopiaForgeResolvedTheme theme, UiThemeDescriptor effective, UiThemeDescriptor? declared) { }
+                        }
+                    }
                 }
             }
             """;

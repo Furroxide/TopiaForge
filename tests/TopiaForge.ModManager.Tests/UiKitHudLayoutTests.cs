@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 
 namespace TopiaForge.ModManager.Tests
@@ -21,6 +22,7 @@ namespace TopiaForge.ModManager.Tests
             OnePanelRestsAtTheSafeMargin();
             PanelsAtOneCornerStackAndCloseUp();
             EdgeStacksAreCentred();
+            AnImageNoticeFindsSpaceWithoutMovingOtherDocks();
             PanelsOnScaledHostsStackBySizeOnScreen();
             TheCrosshairIsNeverADock();
             TheDockChangesItsVersionOnlyWhenPositionsMayMove();
@@ -29,6 +31,34 @@ namespace TopiaForge.ModManager.Tests
             UiHudRetainedNoticeTests.Run();
             Console.WriteLine("UiKitHudLayoutTests passed.");
         }
+
+        private static void AnImageNoticeFindsSpaceWithoutMovingOtherDocks()
+        {
+            var safe = new UiLayoutRect(36, 36, 1848, 878);
+            var notice = new UiLayoutRect(36, 36, 576, 208);
+            var peer = new UiLayoutRect(36, 204, 526, 710);
+            var protectedRegion = new UiLayoutRect(1308, 36, 576, 224);
+            CheckNotice(new[] { peer, protectedRegion });
+            Assert(UiHudNoticePlacement.TryPlace(safe, notice, Array.Empty<UiLayoutRect>(), 8, out var original) &&
+                original.X == notice.X && original.Y == notice.Y, "the authored position wins when it can hold the readable panel");
+            Assert(!UiHudNoticePlacement.TryPlace(safe, notice, new[] { safe }, 8, out _),
+                "an occupied viewport leaves no legal alternate position");
+            var viewport = new UiLayoutRect(0, 0, 400, 400);
+            var corner = new UiLayoutRect(0, 0, 120, 80);
+            var interiorOnly = new[] { new UiLayoutRect(0, 0, 400, 160), new UiLayoutRect(0, 240, 400, 160),
+                new UiLayoutRect(0, 160, 140, 80), new UiLayoutRect(260, 160, 140, 80) };
+            Assert(UiHudNoticePlacement.TryPlace(viewport, corner, interiorOnly, 8, out var interior) &&
+                interior.X == 140d && interior.Y == 160d,
+                "an interior slot exactly large enough remains legal when the edge docks occupy every rail");
+
+            void CheckNotice(UiLayoutRect[] obstacles)
+            {
+                Assert(UiHudNoticePlacement.TryPlace(safe, notice, obstacles, 8, out var found) && safe.Contains(found) &&
+                    !found.Intersects(peer) && !found.Intersects(protectedRegion) && found.X > notice.X && found.Y >= protectedRegion.Bottom,
+                    "the readable panel relocates around another dock and a protected region without displacing either");
+            }
+        }
+
 
         private static void TheTextColumnFillsThePanelInsideItsPadding()
         {

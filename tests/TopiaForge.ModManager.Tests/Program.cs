@@ -156,8 +156,20 @@ namespace TopiaForge.ModManager.Tests
                 UiKitCaptureTests.WriteGoldenManifest(args[1]);
                 return 0;
             }
+            if (args.Length == 2 && args[0] == "--write-ui-kit-art-goldens")
+            {
+                UiKitCaptureTests.WriteArtGoldenManifest(args[1]);
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--ui-theme-wire") { UiThemeWireTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-k1-button-cues") { UiKitCaptureTests.VerifyButtonCues(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-kit-adopters") { UiKitThemeConsumerTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-theme-assets")
+            {
+                UiArtContractTests.Run(); UiArtWireTests.Run(); UiBundleReceiptTests.Run(); UiThemeAssetLifetimeTests.Run();
+                UiGlyphRasterTests.Run();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--ui-k1-delivery") { PresentationRuntimeTests.RunK1Delivery(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit")
             {
@@ -166,6 +178,8 @@ namespace TopiaForge.ModManager.Tests
                 UiKitSourceConventionTests.Run(); UiKitMultiplayerConventionTests.Run();
                 UiKitLayerLedgerTests.Run(); UiKitHudLayoutTests.Run(); UiSurfaceLifetimeTests.Run();
                 UiSurfaceLifetimeConventionTests.Run(); UiKitEventSystemTests.Run(); OverlayRefreshTests.Run();
+                UiArtContractTests.Run(); UiArtWireTests.Run(); UiBundleReceiptTests.Run(); UiThemeAssetLifetimeTests.Run();
+                UiGlyphRasterTests.Run();
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--overlay-refresh") { OverlayRefreshTests.Run(); return 0; }

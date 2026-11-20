@@ -18,6 +18,10 @@
         {
           "id": "controls-preview",
           "definition": "ui/themes/controls-preview.json"
+        },
+        {
+          "id": "preview-art",
+          "definition": "ui/themes/preview-art.json"
         }
       ]
     }

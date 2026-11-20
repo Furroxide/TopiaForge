@@ -11,13 +11,13 @@ namespace TopiaForge.ModManager
         internal const string GalleryInteractionOwner = "TopiaForge.GalleryInteractionPreview";
 
         internal static IDisposable? StartGalleryInteractionPreview(string dataDirectory, IModLogger logger,
-            UiGameplayGate gameplay, UnityUiHudPlacement hudPlacement, Func<NetRealm> view)
+            UiGameplayGate gameplay, UnityUiHudPlacement hudPlacement, UnityUiThemePackages themePackages, Func<NetRealm> view)
         {
             if (!GalleryCaptureEnabled) return null;
             var lifetime = new OwnerModLifetime();
             try
             {
-                var ui = new OwnerUiService(GalleryInteractionOwner, dataDirectory, lifetime, logger, gameplay, hudPlacement);
+                var ui = new OwnerUiService(GalleryInteractionOwner, dataDirectory, lifetime, logger, gameplay, hudPlacement, themePackages);
                 ui.FollowGalleryViewer(view);
                 var preview = new GalleryInteractionPreview(ui);
                 ui.host.Hotkey(TopiaForgeKey.F3, preview.Advance);
