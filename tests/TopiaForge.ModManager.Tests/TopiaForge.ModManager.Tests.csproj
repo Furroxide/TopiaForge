@@ -7,8 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeScope.cs" Link="Runtime/UiThemeScope.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs" Link="RobotKit/RobotAvatarAccessorySlots.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationPages.cs" Link="UiGallery/FoundationPages.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.cs" Link="UiGallery/UiGalleryCaptureFixture.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGallerySurvivalTheme.cs" Link="UiGallery/UiGallerySurvivalTheme.cs" />
+    <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/AcceptanceConfig.cs" Link="MultiplayerAcceptance/AcceptanceConfig.cs" />
+    <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/GalleryRemotePreview.cs" Link="MultiplayerAcceptance/GalleryRemotePreview.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/MultiplayerAcceptanceMod.cs" Link="MultiplayerAcceptance/MultiplayerAcceptanceMod.cs" />
     <Compile Remove="TestingKitFocusedProgram.cs" />
     <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
@@ -264,6 +270,7 @@
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Core\*.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Runtime\TopiaForgeStateFileCodec.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Rendering\TopiaForgeIconRaster.cs" />
+    <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Text\TopiaForgeTypographyMetrics.cs" />
   </ItemGroup>
 
   <!-- Unity editor tooling keeps filesystem primitives in Unity-free helpers so adversarial reads and

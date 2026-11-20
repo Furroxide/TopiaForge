@@ -5,6 +5,80 @@ namespace TopiaForge.Mods.Testing
 {
     public sealed partial class FakeUiSurface
     {
+        private string admittedEpoch = string.Empty;
+        private FakeUiThemeResolution admittedTheme;
+        private UiAccessibilityPreferences admittedAccessibility = UiAccessibilityPreferences.Default;
+
+        private bool PresentationMatches(string epoch, FakeUiThemeResolution theme, UiAccessibilityPreferences preferences) =>
+            admittedEpoch == epoch && ReferenceEquals(admittedTheme.Descriptor, theme.Descriptor) &&
+            admittedTheme.RequestedId == theme.RequestedId &&
+            admittedAccessibility.HighContrast == preferences.HighContrast &&
+            admittedAccessibility.UiScale == preferences.UiScale &&
+            admittedAccessibility.ReducedMotion == preferences.ReducedMotion &&
+            admittedAccessibility.MotionIntensity == preferences.MotionIntensity;
+
+        private void RememberPresentation(string epoch, FakeUiThemeResolution theme, UiAccessibilityPreferences preferences)
+        {
+            admittedEpoch = epoch;
+            admittedTheme = theme;
+            admittedAccessibility = preferences;
+        }
+
+        /// <inheritdoc/>
+        public OperationResult<bool> SetContent(UiNode content)
+        {
+            if (content == null) throw new ArgumentNullException(nameof(content));
+            if (release == null)
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake UI surface is disposed.");
+
+            var retained = ReferenceEquals(content, Content);
+            var epoch = widgetEpoch();
+            var theme = owner.ResolveTheme(Request.Theme);
+            var preferences = owner.Accessibility;
+            if (retained && PresentationMatches(epoch, theme, preferences)) return FakeUiThemePackage.Success;
+
+            if (nextContentErrorCode != ModErrorCode.None)
+            {
+                var errorCode = nextContentErrorCode;
+                var message = nextContentErrorMessage;
+                nextContentErrorCode = ModErrorCode.None;
+                nextContentErrorMessage = string.Empty;
+                return OperationResult<bool>.Failure(errorCode, message);
+            }
+
+            try
+            {
+                if (!retained && Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
+                    return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
+                wireTarget?.Measure(owner, revision + 1, Request, Body, IsVisible, content, epoch, retained);
+                if (!retained) UiClockBinding.Bind(content, epoch);
+            }
+            catch (ArgumentException exception)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
+            }
+            catch (InvalidOperationException) when (WireBounded)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.RateLimited, "The remote UI surface exceeds its packet budget.");
+            }
+
+            RememberPresentation(epoch, theme, preferences);
+            revision++;
+            // Retained trees keep their input values even when a theme, accessibility setting, or clock changes.
+            if (retained) return FakeUiThemePackage.Success;
+
+            Content = content;
+            toggleValues.Clear();
+            sliderValues.Clear();
+            textValues.Clear();
+            dropdownValues.Clear();
+            listViewports.Clear();
+            graphSelections.Clear();
+            graphViewports.Clear();
+            CaptureState(content);
+            return FakeUiThemePackage.Success;
+        }
+
         private void CaptureState(UiNode? node)
         {
             if (node == null) return;
@@ -12,7 +86,7 @@ namespace TopiaForge.Mods.Testing
             else if (node is UiSlider slider) sliderValues[slider.Id!] = slider.Value;
             else if (node is UiTextInput input) textValues[input.Id!] = input.Value;
             else if (node is UiDropdown dropdown) dropdownValues[dropdown.Id!] = dropdown.SelectedValue;
-            else if (node is UiVirtualList list) listSelections[list.Id!] = list.SelectedItemId;
+            else if (node is UiVirtualList list) RememberListViewport(list, list.SelectedItemId, ListIndex(list, list.SelectedItemId));
             else if (node is UiGraphCanvas graph)
             {
                 graphSelections[graph.Id!] = graph.SelectedNodeId;
@@ -32,6 +106,22 @@ namespace TopiaForge.Mods.Testing
                 CaptureState(split.Primary);
                 CaptureState(split.Secondary);
             }
+        }
+
+        private static int ListIndex(UiVirtualList list, string? itemId)
+        {
+            if (itemId == null) return -1;
+            for (var index = 0; index < list.Items.Count; index++)
+                if (string.Equals(list.Items[index].Id, itemId, StringComparison.Ordinal)) return index;
+            return -1;
+        }
+
+        private void RememberListViewport(UiVirtualList list, string? selection, int index)
+        {
+            var offset = GetListViewport(list.Id!).Offset;
+            if (index >= 0)
+                offset = UiVirtualListGeometry.RevealRow(index, offset, UiVirtualListGeometry.Height(list.VisibleRows), list.Items.Count);
+            listViewports[list.Id!] = (selection, offset);
         }
 
         private static bool TryFind(UiNode? current, string id, out UiNode? node)

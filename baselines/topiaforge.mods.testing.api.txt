@@ -692,6 +692,16 @@ type public sealed class TopiaForge.Mods.Testing.FakeToast : System.Object
   property System.String Message { get; }
   property TopiaForge.Mods.UiTone Tone { get; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeUiAssetMetadata : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String bundlePath, System.String assetName, System.String contentSha256, System.Int32 width, System.Int32 height, System.Int64 decodedBytes, System.Single ascender = 0, System.Single descender = 0, TopiaForge.Mods.Testing.FakeUiAssetOutcome outcome = 0 (Available), System.Boolean isMask = false) [requires-topiaforge="0.2.0"]
+
+type public enum TopiaForge.Mods.Testing.FakeUiAssetOutcome : System.Int32 [requires-topiaforge="0.2.0"]
+  field System.Int32 value__ [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.FakeUiAssetOutcome Available = 0 (Available) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.FakeUiAssetOutcome Invalid = 2 (Invalid) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.FakeUiAssetOutcome LoadFailure = 3 (LoadFailure) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.FakeUiAssetOutcome Missing = 1 (Missing) [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.Testing.FakeUiModal : System.Object, System.IDisposable, TopiaForge.Mods.IUiModal
   method System.Void Confirm()
   method [virtual,final,newslot] System.Void Close()
@@ -703,7 +713,12 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiModal : System.Object, Sy
 type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, TopiaForge.Mods.IUiClockReceiver, TopiaForge.Mods.IUiService, TopiaForge.Mods.Internal.IInternalMapNoticeUi
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime, TopiaForge.Mods.IGameTime clock) [requires-topiaforge="0.2.0"]
+  method System.Void AddAssetFixture(TopiaForge.Mods.Testing.FakeUiAssetMetadata asset) [requires-topiaforge="0.2.0"]
+  method System.Void CompletePendingThemeRegistrations() [requires-topiaforge="0.2.0"]
   method System.Void FailNextContentUpdate(System.String surfaceId, TopiaForge.Mods.ModErrorCode errorCode = 9 (External), System.String message = "The fake UI content update was rejected.")
+  method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeCatalogue(System.String manifestJson, System.Func<System.String, System.String> readFile) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeFixture(System.String definitionJson) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.Testing.UiTreeCapture Capture(System.String surfaceId, TopiaForge.Mods.Testing.UiCaptureViewport viewport) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowToast(System.String message, TopiaForge.Mods.UiTone tone = 0 (Neutral))
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
@@ -712,6 +727,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, 
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeUiModal> Modals { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeUiSurface> Surfaces { get; }
   property System.Double ClockTime { get [virtual,final,newslot]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.IUiThemeService Themes { get [virtual,final,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.Testing.FakeUiWorldLabels Labels { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiAccessibilityPreferences Accessibility { get [virtual,final,newslot]; }
 
@@ -738,6 +754,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, 
   method TopiaForge.Mods.OperationResult<System.Boolean> RemoveGraphConnection(System.String id, System.String edgeId)
   method TopiaForge.Mods.OperationResult<System.Boolean> SelectGraphNode(System.String id, System.String? nodeId)
   method TopiaForge.Mods.OperationResult<System.Boolean> SelectListItem(System.String id, System.String itemId)
+  method TopiaForge.Mods.Testing.UiTreeCapture Capture(TopiaForge.Mods.Testing.UiCaptureViewport viewport) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Void Dispose()
   method [virtual,final,newslot] System.Void Hide()
   method [virtual,final,newslot] System.Void SetBody(System.String body)
@@ -952,3 +969,55 @@ type public sealed class TopiaForge.Mods.Testing.MultiplayerTestTraffic : System
   property System.Int64 BytesSent { get; }
   property System.Int64 FramesReceived { get; }
   property System.Int64 FramesSent { get; }
+
+type public sealed class TopiaForge.Mods.Testing.UiAccessibilityIssue : System.Object [requires-topiaforge="0.2.0"]
+  property System.String Message { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Path { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Testing.UiAccessibilityIssueKind Kind { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public enum TopiaForge.Mods.Testing.UiAccessibilityIssueKind : System.Int32 [requires-topiaforge="0.2.0"]
+  field System.Int32 value__ [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind ClippedContent = 4 (ClippedContent) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind ColorOnly = 3 (ColorOnly) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind Contrast = 0 (Contrast) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind InvalidLayout = 7 (InvalidLayout) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind MissingAsset = 5 (MissingAsset) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind MissingLabel = 2 (MissingLabel) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind OccludedContent = 8 (OccludedContent) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind TextSize = 1 (TextSize) [requires-topiaforge="0.2.0"]
+  field const TopiaForge.Mods.Testing.UiAccessibilityIssueKind TrustTheme = 6 (TrustTheme) [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.Testing.UiCaptureViewport : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Int32 width, System.Int32 height) [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.Testing.UiCapturedNode : System.Object [requires-topiaforge="0.2.0"]
+  property System.Boolean Clipped { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean Decorative { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean Disabled { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean IsRendered { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean Occluded { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean Selected { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Boolean UsedFallback { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<System.Single> BorderWidthPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<System.Single> CornerRadiusPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<System.Single> ShadowOffsetXPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<System.Single> ShadowOffsetYPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single ContrastRatio { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single Height { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single TextHeightPixels { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single Width { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single X { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Single Y { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Kind { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Path { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String SemanticLabel { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Text { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String ThemeId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? FillColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? Id { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? InkColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? StyleId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.Testing.UiTreeCapture : System.Object [requires-topiaforge="0.2.0"]
+  method System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.UiAccessibilityIssue> CheckAccessibility() [requires-topiaforge="0.2.0"]
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.UiCapturedNode> Nodes { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]

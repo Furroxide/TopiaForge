@@ -6,6 +6,14 @@ import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
 
+const _packageValidatorFiles = [
+  'TopiaForge.ModPackageValidator.dll',
+  'TopiaForge.ModPackageValidator.deps.json',
+  'TopiaForge.ModPackageValidator.runtimeconfig.json',
+  'TopiaForge.ModManager.Core.dll',
+  'TopiaForge.Mods.Abstractions.dll',
+];
+
 /// Builds the versioned, compile-only SDK payload embedded in every release.
 final class ReleaseSdkPayloadWriter {
   const ReleaseSdkPayloadWriter({
@@ -136,18 +144,12 @@ final class ReleaseSdkPayloadWriter {
         'net10.0',
       ),
     );
-    const files = [
-      'TopiaForge.ModPackageValidator.dll',
-      'TopiaForge.ModPackageValidator.deps.json',
-      'TopiaForge.ModPackageValidator.runtimeconfig.json',
-      'TopiaForge.ModManager.Core.dll',
-    ];
     final destination = Directory(
       p.join(destinationRoot, 'tools', 'package-validator'),
     );
     if (destination.existsSync()) destination.deleteSync(recursive: true);
     destination.createSync(recursive: true);
-    for (final name in files) {
+    for (final name in _packageValidatorFiles) {
       final input = File(p.join(source.path, name));
       if (!input.existsSync()) {
         throw StateError(
@@ -368,32 +370,8 @@ final class ReleaseSdkPayloadValidator {
         'Release global.json does not match the SDK toolchain lock.',
       );
     }
-    for (final path in [
-      p.join(
-        payloadRoot,
-        'tools',
-        'package-validator',
-        'TopiaForge.ModPackageValidator.dll',
-      ),
-      p.join(
-        payloadRoot,
-        'tools',
-        'package-validator',
-        'TopiaForge.ModPackageValidator.runtimeconfig.json',
-      ),
-      p.join(
-        payloadRoot,
-        'tools',
-        'package-validator',
-        'TopiaForge.ModPackageValidator.deps.json',
-      ),
-      p.join(
-        payloadRoot,
-        'tools',
-        'package-validator',
-        'TopiaForge.ModManager.Core.dll',
-      ),
-    ]) {
+    for (final name in _packageValidatorFiles) {
+      final path = p.join(payloadRoot, 'tools', 'package-validator', name);
       if (!File(path).existsSync()) {
         throw StateError(
           'Release managed package validator is incomplete: $path',

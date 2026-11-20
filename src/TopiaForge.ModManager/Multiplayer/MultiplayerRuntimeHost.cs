@@ -87,6 +87,14 @@ namespace TopiaForge.ModManager
 
         public string RuntimeVersion { get; }
 
+        public int UiContractVersion => InternalUiPresentationContract.FoundationVersion;
+
+        internal Func<OperationResult<bool>>? ValidateSharedUiHosting { get; set; }
+        internal Func<bool>? RequiresFoundationUi { get; set; }
+
+        public OperationResult<bool> PrepareSharedUiForHosting() =>
+            ValidateSharedUiHosting?.Invoke() ?? OperationResult<bool>.Success(true);
+
         public string DisplayName => displayName;
 
         /// <summary>
@@ -131,8 +139,19 @@ namespace TopiaForge.ModManager
 
         public InternalContentReadiness ContentReadiness => inventory.Readiness;
 
-        public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) =>
-            MultiplayerContentAdmission.Evaluate(GameBuild, inventory.AdmissionMods, offer);
+        public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer)
+        {
+            if (offer == null) throw new ArgumentNullException(nameof(offer));
+            if (offer.UiContractVersion < InternalUiPresentationContract.FoundationVersion && RequiresFoundationUi?.Invoke() == true)
+                return InternalContentVerdict.Refused(new[] { UiPresentationTheme.RequiredRuntime });
+
+            var verdict = MultiplayerContentAdmission.Evaluate(GameBuild, inventory.AdmissionMods, offer);
+            if (!verdict.IsAdmitted) return verdict;
+            var presentation = PrepareSharedUiForHosting();
+            return presentation.Succeeded
+                ? verdict
+                : InternalContentVerdict.Refused(new[] { presentation.ErrorMessage });
+        }
 
         public InternalContentVerdict CheckHostContent(IReadOnlyList<InternalHostPackage> hostPackages) =>
             MultiplayerContentAdmission.CheckHost(inventory.Descriptors, hostPackages);

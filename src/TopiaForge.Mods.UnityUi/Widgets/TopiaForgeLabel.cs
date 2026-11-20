@@ -1,4 +1,6 @@
+using System;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 
 namespace TopiaForge.Mods.UnityUi
@@ -13,6 +15,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TopiaForgeTextStyle style;
         private TopiaForgeTone tone = TopiaForgeTone.Neutral;
         private bool hasCustomColor;
+        private bool uppercase;
         private string lastText;
         private byte cachedComposition;
         private string cachedPrefix = string.Empty;
@@ -129,8 +132,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             cachedComposition = 0;
-            lastText = value;
-            text.text = value;
+            WriteText(value);
         }
 
         /// <summary>
@@ -148,8 +150,7 @@ namespace TopiaForge.Mods.UnityUi
             cachedPrefix = prefix;
             cachedValue = value;
             var composed = prefix + value;
-            lastText = composed;
-            text.text = composed;
+            WriteText(composed);
         }
 
         /// <summary>
@@ -178,8 +179,7 @@ namespace TopiaForge.Mods.UnityUi
             cachedFormat = format;
             cachedValue = value;
             var composed = prefix + value.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
-            lastText = composed;
-            text.text = composed;
+            WriteText(composed);
         }
 
         /// <summary>Two-integer text update that only composes when an input changes.</summary>
@@ -200,8 +200,7 @@ namespace TopiaForge.Mods.UnityUi
             cachedValue = first;
             cachedValue2 = second;
             var composed = prefix + first + middle + second;
-            lastText = composed;
-            text.text = composed;
+            WriteText(composed);
         }
 
         /// <summary>Four-integer text update that only composes when an input changes.</summary>
@@ -238,8 +237,7 @@ namespace TopiaForge.Mods.UnityUi
             cachedValue3 = third;
             cachedValue4 = fourth;
             var composed = prefix + first + secondPrefix + second + thirdPrefix + third + fourthPrefix + fourth;
-            lastText = composed;
-            text.text = composed;
+            WriteText(composed);
         }
 
         /// <summary>Custom color (dirty-checked). High-contrast emphasis is applied by the theme.</summary>
@@ -251,6 +249,12 @@ namespace TopiaForge.Mods.UnityUi
             {
                 text.color = emphasized;
             }
+        }
+
+        internal void SetResolvedInk(Color color)
+        {
+            hasCustomColor = true;
+            if (text.color != color) text.color = color;
         }
 
         /// <summary>Grows the rect to the wrapped text height (absolute-placement labels).</summary>
@@ -266,6 +270,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            ApplyTypeface(theme);
             if (!hasCustomColor)
             {
                 text.color = ToneOn(theme);
@@ -275,6 +280,23 @@ namespace TopiaForge.Mods.UnityUi
         // A display face is large brand type and keeps its tone's own color; every other style is body text, whose status
         // tones the theme darkens until they read on every surface.
         private Color ToneOn(TopiaForgeResolvedTheme theme) =>
-            TopiaForgeTokens.IsDisplay(style) ? theme.ToneColor(tone) : theme.TextToneColor(tone);
+            theme.Descriptor == null && TopiaForgeTokens.IsDisplay(style)
+                ? theme.ToneColor(tone) : theme.TextToneColor(tone);
+
+        private void ApplyTypeface(TopiaForgeResolvedTheme theme)
+        {
+            var expected = TopiaForgeTypography.Apply(text, theme, style, Host.EffectiveUiScale);
+            if (uppercase != expected)
+            {
+                uppercase = expected;
+                WriteText(lastText);
+            }
+        }
+
+        private void WriteText(string value)
+        {
+            lastText = value;
+            text.text = uppercase ? value.ToUpperInvariant() : value;
+        }
     }
 }

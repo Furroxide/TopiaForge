@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
@@ -19,6 +20,7 @@ namespace TopiaForge.Mods.UnityUi
         private static TMP_FontAsset? body;
         private static TMP_FontAsset? heading;
         private static TMP_FontAsset? display;
+        private static TMP_FontAsset? mono;
 
         /// <summary>Gets or sets resolved tier.</summary>
         public static string ResolvedTier { get; private set; } = "unresolved";
@@ -72,9 +74,23 @@ namespace TopiaForge.Mods.UnityUi
                     return display;
                 case TopiaForgeFace.Heading:
                     return heading;
+                case TopiaForgeFace.Mono:
+                    return mono ?? body;
                 default:
                     return body;
             }
+        }
+
+        internal static TMP_FontAsset? ForThemeRole(string name, TopiaForgeTextStyle style)
+        {
+            EnsureResolved();
+            return name switch
+            {
+                "body" => style == TopiaForgeTextStyle.Heading ? heading : body,
+                "display" => display,
+                "mono" => mono ?? body,
+                _ => For(style)
+            };
         }
 
         private static bool EnsureResolved()
@@ -95,6 +111,12 @@ namespace TopiaForge.Mods.UnityUi
                 body = bodyFont;
                 heading = headingFont;
                 display = displayFont;
+                var monoFont = TopiaForgeBrandBundle.MonoFont;
+                if (monoFont != null)
+                {
+                    monoFont.fallbackFontAssetTable = new List<TMP_FontAsset> { bodyFont };
+                    mono = monoFont;
+                }
                 ResolvedTier = "brand-bundle";
                 TopiaForgeLog.Info("Fonts resolved from brand bundle (body: " + bodyFont.name + ", heading: " + headingFont.name + ", display: " + displayFont.name + ").");
                 return true;

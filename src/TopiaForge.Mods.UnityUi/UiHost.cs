@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -74,6 +75,16 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             return hudTheme;
+        }
+
+        internal TopiaForgeResolvedTheme ThemeFor(TopiaForgeWidget widget) =>
+            widget.ThemeSlot?.ResolveTheme(widget.Scheme, EffectiveHighContrast, themeRevision) ?? Theme(widget.Scheme);
+
+        internal void SetSurfaceTheme(GameObject canvas, UiThemeDescriptor? descriptor)
+        {
+            ThrowIfDisposed();
+            var slot = canvas.GetComponent<TopiaForgeLayerSlot>();
+            if (slot != null && slot.SelectTheme(descriptor)) WalkThemeAware(slot);
         }
 
         /// <summary>Sets this host's accent override and re-tints its live widgets.</summary>
@@ -337,7 +348,7 @@ namespace TopiaForge.Mods.UnityUi
             RefreshResolvedTheme(reapplyScalers: true);
         }
 
-        private void WalkThemeAware()
+        private void WalkThemeAware(TopiaForgeLayerSlot? layer = null)
         {
             for (var index = themeAware.Count - 1; index >= 0; index--)
             {
@@ -349,10 +360,11 @@ namespace TopiaForge.Mods.UnityUi
                     continue;
                 }
 
-                var scheme = aware is TopiaForgeWidget widget ? widget.Scheme : TopiaForgeScheme.Paper;
+                var widget = aware as TopiaForgeWidget;
+                if (layer != null && !ReferenceEquals(widget?.ThemeSlot, layer)) continue;
                 try
                 {
-                    aware.ApplyTheme(Theme(scheme));
+                    aware.ApplyTheme(widget == null ? Theme(TopiaForgeScheme.Paper) : ThemeFor(widget));
                 }
                 catch (Exception exception)
                 {

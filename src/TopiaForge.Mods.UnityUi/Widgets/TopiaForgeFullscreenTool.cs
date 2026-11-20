@@ -1,5 +1,6 @@
 using System;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -70,7 +71,8 @@ namespace TopiaForge.Mods.UnityUi
             labelLayout.flexibleWidth = 1f;
             labelLayout.minHeight = TopiaForgeTokens.ControlLgHeight;
 
-            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
+            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost)
+                .Fixed(TopiaForgeTokens.ControlHeight, TopiaForgeTokens.ControlHeight).SetBackdrop(UiPaintRole.Raised);
 
             Content = Column(TopiaForgeGap.Md, TopiaForgeGap.Lg).Flex(1f, 1f);
             focusScope = Go.AddComponent<TopiaForgeFocusScope>();
@@ -154,7 +156,8 @@ namespace TopiaForge.Mods.UnityUi
             fill.color = theme.Surface;
             ring.color = theme.OutlineStrong;
             titleBarFill.color = theme.SurfaceAlt;
-            titleLabel.color = theme.Text;
+            titleLabel.color = theme.ForegroundOn(UiPaintRole.Raised);
+            TopiaForgeTypography.ApplyControlText(titleLabel, theme, TopiaForgeTextStyle.Heading, Host.EffectiveUiScale);
         }
 
         internal GameObject CanvasRoot => canvasRoot;

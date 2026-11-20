@@ -92,6 +92,8 @@ namespace TopiaForge.ModManager
             LocalStorage = new ScopedStorageService(parent.LocalStorage, Lifetime);
             var gameplay = gameplayFactory?.Create(Identity.Id, packagePath, dataPath, Lifetime, Logger, NetProfile, transitionAccess)
                 ?? GameplayContextServices.Unavailable(Lifetime);
+            if (gameplay.Ui is IUiThemeScopeHost themeHost)
+                themeHost.ConfigureThemeScope(null, parent.Ui);
             Input = new NetInputService(gameplay.Input, inputActivity, Lifetime);
             Time = gameplay.Time;
             Scheduler = new NetScheduler(gameplay.Scheduler, replication);

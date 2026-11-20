@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager
         private readonly List<RemoteUiSurface> surfaces = new List<RemoteUiSurface>();
         private readonly List<RemoteUiModal> modals = new List<RemoteUiModal>();
         private readonly Dictionary<ulong, ReceivedUi> receivedUi = new Dictionary<ulong, ReceivedUi>();
+        private readonly UiPresentationGenerations targetedGenerations = new UiPresentationGenerations();
         private readonly Dictionary<ParticipantId, UiReplyBudget> uiReplies = new Dictionary<ParticipantId, UiReplyBudget>();
         private readonly Dictionary<ParticipantId, UiSendBudget> uiSends = new Dictionary<ParticipantId, UiSendBudget>();
         private TokenBucket hostUiBudget = new TokenBucket(65536, 32768, 0);
@@ -39,12 +40,15 @@ namespace TopiaForge.ModManager
             if (!context.Networked) return Unshared<IUiSurface>();
             if (request.Id.Length > 128 || !Finite(request.Width) || !Finite(request.Height) || request.Width < 80 || request.Width > 1920 || request.Height < 80 || request.Height > 1440)
                 return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, "Use a short surface id and a window between 80 and 1920 units wide and 80 and 1440 units high.");
-            try { UiWireValidation.Validate(request.Content); UiClockBinding.Bind(request.Content, UiClockEpoch); }
+            var themed = UiPresentationTheme.Resolve(context.UiService, request, out var theme);
+            if (!themed.Succeeded) return OperationResult<IUiSurface>.Failure(themed.ErrorCode, themed.ErrorMessage);
+            try { UiWireValidation.Validate(request.Content); UiClockBinding.Check(request.Content, UiClockEpoch); }
             catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
             if (UiFull(player)) return Limit<IUiSurface>();
-            var surface = new RemoteUiSurface(this, context, Target(context, player), ++nextUiToken, request);
+            var surface = new RemoteUiSurface(this, context, Target(context, player), nextUiToken + 1, request, theme);
             var sent = SendSurface(surface);
             if (!sent.Succeeded) return OperationResult<IUiSurface>.Failure(sent.ErrorCode, sent.ErrorMessage);
+            nextUiToken++;
             surfaces.Add(surface);
             return OperationResult<IUiSurface>.Success(surface);
         }
@@ -92,20 +96,34 @@ namespace TopiaForge.ModManager
             Writer.WriteString(message); Writer.WriteByte((byte)tone);
             return SendUi(player);
         }
-        internal OperationResult<bool> SendSurface(RemoteUiSurface surface, bool retained = false)
+        internal OperationResult<bool> SendSurface(RemoteUiSurface surface, bool retained = false, UiNode? replacement = null)
         {
             try
             {
                 var request = surface.Request;
-                BeginUi(10, surface.Context, surface.Target.Id, surface.Token, surface.Revision);
-                UiNodeWireCodec.Text(Writer, request.Id); UiNodeWireCodec.Text(Writer, request.Title); UiNodeWireCodec.Text(Writer, surface.Body);
-                Writer.WriteByte((byte)request.Kind); Writer.WriteSingle(request.Width); Writer.WriteSingle(request.Height);
-                Writer.WriteByte((byte)request.HudAnchor); Writer.WriteByte((byte)request.HudVisibility);
-                Writer.WriteByte(surface.Visible ? (byte)1 : (byte)0);
-                if (retained) UiNodeWireCodec.WriteRetained(Writer, surface.Content, UiClockEpoch);
-                else UiNodeWireCodec.Write(Writer, surface.Content, UiClockEpoch);
-                var result = SendUi(surface.Target.Id);
-                if (result.Succeeded) { surface.Dirty = false; surface.Stream = Channel?.GetGeneration(surface.Target.Id) ?? 0; }
+                var target = surface.Target.Id;
+                var stream = Channel?.GetGeneration(target) ?? 0;
+                var epoch = UiClockEpoch;
+                var content = replacement ?? surface.Content;
+                if (replacement != null && retained && !surface.Dirty && surface.Stream == stream && surface.SentClockEpoch == epoch)
+                    return UiPresentationTheme.Allowed;
+                var staged = StageTargetEnvelope(surface.Context, target, stream, surface.Theme, content, null, out var envelope);
+                if (!staged.Succeeded) return staged;
+                var updated = surface.SentClockEpoch != null && (surface.SentClockEpoch != epoch
+                    || !UiPresentationTheme.SameEnvelope(surface.Envelope, envelope) || (replacement != null && !retained));
+                var revision = surface.Revision + (updated ? 1UL : 0UL);
+                BeginUi(10, surface.Context, target, surface.Token, revision);
+                UiWireCodec.WriteTargetedSurfaceBody(Writer, request, surface.Body, surface.Visible, content, epoch, retained, envelope);
+                var result = SendUi(target);
+                if (!result.Succeeded) return result;
+                if (!retained) UiClockBinding.Commit(content, epoch);
+                surface.Content = content;
+                surface.Revision = revision;
+                surface.Dirty = false;
+                surface.Stream = stream;
+                surface.Envelope = envelope;
+                surface.SentClockEpoch = epoch;
+                CommitTargetGeneration(target, stream, envelope);
                 return result;
             }
             catch (ArgumentException exception) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
@@ -159,7 +177,8 @@ namespace TopiaForge.ModManager
                 {
                     if (!Present(s.Target.Id) || CloseRemote(s.Context, s.Target.Id, s.Token)) surfaces.RemoveAt(i);
                 }
-                else if (s.Dirty || s.Stream != (Channel?.GetGeneration(s.Target.Id) ?? 0)) SendSurface(s, retained: true);
+                else if (s.Dirty || s.Stream != (Channel?.GetGeneration(s.Target.Id) ?? 0) || s.SentClockEpoch != UiClockEpoch)
+                    SendSurface(s, retained: true);
             }
             for (var i = modals.Count - 1; i >= 0; i--)
             {
@@ -220,7 +239,7 @@ namespace TopiaForge.ModManager
         {
             List<ulong>? removed = null;
             foreach (var pair in receivedUi)
-                if (context == null ? pair.Value.Context.Lifetime.IsStopping : pair.Value.Context == context)
+                if (!pair.Value.PresentationOwned && (context == null ? pair.Value.Context?.Lifetime.IsStopping == true : pair.Value.Context == context))
                     (removed ??= new List<ulong>()).Add(pair.Key);
             if (removed == null) return;
             for (var i = 0; i < removed.Count; i++)
@@ -231,6 +250,7 @@ namespace TopiaForge.ModManager
                 ui.Modal?.Dispose();
                 ui.Dispose();
                 receivedUi.Remove(removed[i]);
+                targetedGenerations.Commit(removed[i], null);
             }
         }
         private void ResetUi()
@@ -240,19 +260,24 @@ namespace TopiaForge.ModManager
             surfaces.Clear(); modals.Clear();
             foreach (var ui in receivedUi.Values) ui.Dispose();
             receivedUi.Clear(); uiReplies.Clear(); uiSends.Clear();
+            targetedGenerations.Reset();
+            targetSequences.Clear();
             hostUiBudget = new TokenBucket(65536, 32768, Now); hostUiCount = new TokenBucket(32, 20, Now);
             // The session that asked has ended, so every open modal reports a cancellation, once the lists are clear.
             for (var i = 0; i < cancelled.Length; i++) cancelled[i].Cancel();
         }
         private sealed class ReceivedUi : IDisposable
         {
-            internal readonly PlayerContext Context;
-            internal ReceivedUi(PlayerContext context) { Context = context; }
+            internal PlayerContext? Context;
+            internal readonly string Owner;
+            internal ReceivedUi(string owner, PlayerContext? context) { Owner = owner; Context = context; }
             internal IUiSurface? Surface;
             internal IUiModal? Modal;
             internal ulong Revision;
             internal string Body = "";
             internal bool Shown;
+            internal UiWireEnvelope? Envelope;
+            internal bool PresentationOwned;
             internal bool Disposed;
             public void Dispose() { Disposed = true; Surface?.Dispose(); Modal?.Dispose(); }
         }

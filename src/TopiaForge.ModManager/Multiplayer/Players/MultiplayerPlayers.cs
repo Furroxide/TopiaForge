@@ -34,6 +34,8 @@ namespace TopiaForge.ModManager
             var players = new MultiplayerPlayers(runtime, presence);
             runtime.PlayersReceive = players;
             runtime.PlayersSend = new SendStage(players);
+            runtime.Host.ValidateSharedUiHosting = () => players.Presentation?.PrepareHosting() ?? OperationResult<bool>.Success(true);
+            runtime.Host.RequiresFoundationUi = () => players.Presentation?.RequiresFoundationUi == true;
             runtime.AddObserver(players);
             return players;
         }
@@ -125,10 +127,12 @@ namespace TopiaForge.ModManager
                     }
                     if (kind == 20) { if (!ReceiveColumn(null, message.Sender, reader)) Rejected++; continue; }
                     var context = Find(mod);
-                    if (context == null) { Rejected++; continue; }
-                    var accepted = kind == 1 ? ReceiveInput(context, message.Sender, reader)
-                        : kind == 2 ? ReceiveAction(context, message.Sender, reader)
-                        : ReceiveUi(context, message.Sender, kind, reader);
+                    var accepted = kind switch
+                    {
+                        1 => context != null && ReceiveInput(context, message.Sender, reader),
+                        2 => context != null && ReceiveAction(context, message.Sender, reader),
+                        _ => (context != null || kind == 10 || kind == 13) && ReceiveUi(mod, context, message.Sender, kind, reader),
+                    };
                     if (!accepted) Rejected++;
                 }
                 catch (ArgumentException) { Rejected++; }

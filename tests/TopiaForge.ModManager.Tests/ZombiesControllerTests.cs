@@ -30,7 +30,7 @@ namespace TopiaForge.ModManager.Tests
             StaleShopFreezeRecoversAfterChronosReset();
             PauseFailuresAreBackedOffAndReportedOnce();
             StaleSuperhotLeasesReacquireAfterRestart();
-            HudSkipsSteadyStateBodyWrites();
+            HudSkipsSteadyStateContentWrites();
             DisabledShopSkipsCreditsAndRequisitionFeedback();
             UplinkFailuresExplainWithoutSpendingCharge();
             UplinkEconomyRunsOnTheWorldClock();

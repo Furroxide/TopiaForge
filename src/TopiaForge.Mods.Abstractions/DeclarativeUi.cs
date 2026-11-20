@@ -31,7 +31,31 @@ namespace TopiaForge.Mods
         Heading = 1,
 
         /// <summary>Secondary compact copy.</summary>
-        Caption = 2
+        Caption = 2,
+
+        /// <summary>The largest display role for a prominent announcement.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Banner = 3,
+
+        /// <summary>Prominent display text for a major heading.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Display = 4,
+
+        /// <summary>The title of a page or panel.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Title = 5,
+
+        /// <summary>Short content such as a field label.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Label = 6,
+
+        /// <summary>Prominent figures such as a score.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Numeral = 7,
+
+        /// <summary>Monospaced text such as a key or reference number.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
+        Mono = 8
     }
 
     /// <summary>Semantic button presentations supported by safe UI composition.</summary>
@@ -53,12 +77,14 @@ namespace TopiaForge.Mods
     /// <summary>Immutable text content.</summary>
     public sealed class UiText : UiNode
     {
-        /// <summary>Creates a text node.</summary>
+        /// <summary>Creates a plain-text node with a semantic style and an optional stable id.</summary>
+        [RequiresTopiaForge(UiKitRelease.K1)]
         public UiText(
             string text,
             UiTextStyle style = UiTextStyle.Body,
-            UiTone tone = UiTone.Neutral)
-            : base(null)
+            UiTone tone = UiTone.Neutral,
+            string? id = null)
+            : base(id)
         {
             if (!Enum.IsDefined(typeof(UiTextStyle), style)) throw new ArgumentOutOfRangeException(nameof(style));
             if (!Enum.IsDefined(typeof(UiTone), tone)) throw new ArgumentOutOfRangeException(nameof(tone));
@@ -513,7 +539,7 @@ namespace TopiaForge.Mods
             if (root == null) return;
             var ids = new HashSet<string>(StringComparer.Ordinal);
             var count = 0;
-            Visit(root, 0, ids, ref count);
+            Visit(root, 1, ids, ref count);
         }
 
         public static bool ContainsInteractive(UiNode? node)

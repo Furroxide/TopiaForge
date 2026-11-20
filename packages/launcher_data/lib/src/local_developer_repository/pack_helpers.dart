@@ -77,6 +77,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       );
     }
 
+    final uiThemes = await _prepareUiThemes(manifestContract, source: root);
     final archive = Archive();
     final declaredSynchronizedFiles =
         manifestContract.multiplayer?.synchronizedFiles ?? const <String>[];
@@ -150,12 +151,22 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
         label: 'TopiaForge package',
       );
       if (p.posix.basename(name) == '.gitkeep') return;
+      if (uiThemes?.files.containsKey(name) == true &&
+          p.equals(source.absolute.path, p.absolute(root.path, name))) {
+        return;
+      }
       final bytes = _readDeveloperFileBoundedSync(
         source,
         maxBytes: _maxDeveloperArchiveEntryBytes,
         label: name,
       );
       addBytes(name, bytes);
+    }
+
+    if (uiThemes != null) {
+      for (final entry in uiThemes.files.entries) {
+        addBytes(entry.key, entry.value);
+      }
     }
 
     // First-party mods declare licenseFiles: ["LICENSE"] but carry no LICENSE of their own - the one
@@ -255,6 +266,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       manifest,
       generatedHashes: generatedHashes,
       synchronizedFiles: synchronizesContractLock ? synchronizedFiles : null,
+      uiCatalogue: uiThemes?.catalogue,
     );
     final packedManifestIssues = packedManifest
         .validate()

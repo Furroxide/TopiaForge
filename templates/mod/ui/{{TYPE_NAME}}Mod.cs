@@ -12,12 +12,16 @@ namespace {{ASSEMBLY_NAME}}
         internal const string ToneDropdownId = "tone";
         internal const string TopicListId = "topics";
         internal const string NotifyButtonId = "notify";
+        internal const string PaletteHeadingId = "palette-heading";
+        internal const string ThemePreviewToggleId = "theme-preview";
 
+        private static readonly UiThemeRef PreviewTheme = new UiThemeRef("controls-preview");
         private IUiSurface? window;
         private string greeting = "Hello from {{DISPLAY_NAME}}.";
         private string selectedTone = "neutral";
         private string selectedTopic = "getting-started";
         private bool notificationsEnabled = true;
+        private bool themePreview;
 
         protected override void OnLoad()
         {
@@ -87,11 +91,13 @@ namespace {{ASSEMBLY_NAME}}
         private UiNode BuildContent()
         {
             return new UiColumn(
-                new UiText("SAFE UI CONTROLS", UiTextStyle.Heading),
-                new UiText(
-                    "Every control below is engine-free, lifetime-owned, and rendered by TopiaForgeUi.",
-                    UiTextStyle.Caption),
+                new UiText("Window settings", UiTextStyle.Title, UiTone.Primary, PaletteHeadingId),
                 new UiScroll(new UiColumn(
+                    new UiToggle(
+                        ThemePreviewToggleId,
+                        "Preview alternate palette",
+                        themePreview,
+                        ApplyThemePreview),
                     new UiTextInput(
                         GreetingInputId,
                         "Greeting",
@@ -116,7 +122,7 @@ namespace {{ASSEMBLY_NAME}}
                         UiScaleSliderId,
                         "UI scale",
                         0.75f,
-                        1.5f,
+                        2f,
                         Context.Ui.Accessibility.UiScale,
                         ApplyUiScale),
                     new UiDropdown(
@@ -153,6 +159,20 @@ namespace {{ASSEMBLY_NAME}}
                 new UiRow(
                     new UiButton(NotifyButtonId, "Show notification", ShowNotification),
                     new UiButton("hide", "Hide window", () => window?.Hide(), UiButtonStyle.Secondary)));
+        }
+
+        private void ApplyThemePreview(bool enabled)
+        {
+            var applied = Context.Ui.Themes.UseTheme(enabled ? PreviewTheme : null);
+            if (applied.Succeeded)
+            {
+                themePreview = enabled;
+                return;
+            }
+
+            Context.Logger.Warn(
+                "Theme preview could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
+            window?.SetContent(BuildContent());
         }
 
         private void ApplyUiScale(float scale)

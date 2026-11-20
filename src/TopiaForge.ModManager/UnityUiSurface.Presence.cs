@@ -64,6 +64,8 @@ namespace TopiaForge.ModManager
                 }
 
                 var effects = presence.Lose();
+                admitted = null;
+                committedStamp = default;
                 DetachNativeClosed();
                 placement?.Remove(dockHandle);
                 placement = null;
@@ -92,6 +94,8 @@ namespace TopiaForge.ModManager
 
                 presence.Dispose();
                 callbacks.Close();
+                admitted = null;
+                committedStamp = default;
                 compositionRoot = null;
                 compositionParent = null;
                 retainedGraphs = new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);

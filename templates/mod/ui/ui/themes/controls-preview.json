@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "controls-preview",
+  "paper": {
+    "colors": {
+      "primary": { "fill": "#423889", "on": "#FFFFFF" }
+    },
+    "inks": { "primary": "#51428D" }
+  }
+}

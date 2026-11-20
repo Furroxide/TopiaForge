@@ -21,7 +21,12 @@ namespace TopiaForge.ModManager
                 return;
             }
             if (node is UiProgress progress) { RenderProgress(progress, parent); return; }
-            if (node is UiCountdown countdown) { RenderCountdown(countdown, parent, () => countdown.ClockEpoch == callbacks.ClockEpoch() ? callbacks.Clock() : countdown.EndsAt); return; }
+            if (node is UiCountdown countdown)
+            {
+                RenderCountdown(countdown, parent, () => countdown.ClockEpoch == null || countdown.ClockEpoch == callbacks.ClockEpoch()
+                    ? callbacks.Clock() : countdown.EndsAt);
+                return;
+            }
 
             if (node is UiColumn column)
             {
@@ -84,6 +89,7 @@ namespace TopiaForge.ModManager
                     callbacks.Wrap(button.Activated, "button '" + button.Id + "'"),
                     ToNativeButtonStyle(button.Style));
                 native.SetEnabled(button.Enabled);
+                TopiaForgeControlFocus.Install(native);
                 return;
             }
 
@@ -94,6 +100,7 @@ namespace TopiaForge.ModManager
                     toggle.Value,
                     callbacks.Wrap(toggle.Changed, "toggle '" + toggle.Id + "'"));
                 native.SetEnabled(toggle.Enabled);
+                TopiaForgeControlFocus.Install(native);
                 return;
             }
 
@@ -105,7 +112,8 @@ namespace TopiaForge.ModManager
                     slider.Maximum,
                     slider.Value,
                     callbacks.Wrap(slider.Changed, "slider '" + slider.Id + "'"));
-                native.SetEnabled(slider.Enabled);
+                native.UseDeclarativePaint(slider.Enabled);
+                TopiaForgeControlFocus.Install(native);
                 return;
             }
 
@@ -119,6 +127,7 @@ namespace TopiaForge.ModManager
                     callbacks.Wrap(input.Changed, "text input '" + input.Id + "'"));
                 native.SetCharacterLimit(input.MaximumLength);
                 native.SetEnabled(input.Enabled);
+                TopiaForgeControlFocus.Install(native);
                 return;
             }
 
@@ -148,13 +157,15 @@ namespace TopiaForge.ModManager
                     }
                 });
                 native.SetEnabled(dropdown.Enabled);
+                TopiaForgeControlFocus.Install(native);
                 return;
             }
 
             if (node is UiVirtualList list)
             {
-                var native = parent.ListView<UiListItem>()
-                    .FixedHeight(list.VisibleRows * (TopiaForgeTokens.ListRowHeight + 4f));
+                var native = parent.ListView<UiListItem>(UiVirtualListGeometry.RowHeight)
+                    .FixedHeight(UiVirtualListGeometry.Height(list.VisibleRows));
+                native.UseDeclarativeRows(list.VisibleRows);
                 native.Bind((row, item, _) =>
                 {
                     row.Title.SetText(item.Title);
@@ -192,10 +203,22 @@ namespace TopiaForge.ModManager
         {
             switch (style)
             {
+                case UiTextStyle.Banner:
+                    return TopiaForgeTextStyle.Banner;
+                case UiTextStyle.Display:
+                    return TopiaForgeTextStyle.Display;
+                case UiTextStyle.Title:
+                    return TopiaForgeTextStyle.Title;
                 case UiTextStyle.Heading:
                     return TopiaForgeTextStyle.Heading;
+                case UiTextStyle.Label:
+                    return TopiaForgeTextStyle.Label;
                 case UiTextStyle.Caption:
                     return TopiaForgeTextStyle.Caption;
+                case UiTextStyle.Numeral:
+                    return TopiaForgeTextStyle.Numeral;
+                case UiTextStyle.Mono:
+                    return TopiaForgeTextStyle.Mono;
                 default:
                     return TopiaForgeTextStyle.Body;
             }

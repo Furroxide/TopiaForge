@@ -68,7 +68,9 @@ Windows and fullscreen tools show exactly while the mod shows them.
 
 If the game or another mod destroys a surface's canvas anyway, the surface says so: it is never
 visible again, a visible one raises `Dismissed`, its id is free for a new surface, and the mod's log
-names it. Create the surface again to show it. A modal on such a canvas completes as cancelled.
+names it. On the lost handle, `SetContent` returns `InvalidState` and `SetBody`, `Show` and `Hide`
+do nothing. Dispose the handle or let the owning scope release it. Create the surface again to
+show it. A modal on such a canvas completes as cancelled.
 
 ### Shared gamemode presentation
 
@@ -146,8 +148,9 @@ and create a fresh deadline when resuming. A new solo world or replacement sessi
 countdowns. When the surface's scope and recipient remain active, a shared HUD or targeted surface keeps its
 other content and shows the expired timer at zero. Use `SetContent` with a new countdown built from the current
 `ClockTime` to start another timer. A new composition cannot reuse a countdown node bound to an ended epoch, on
-any surface kind. Passing the tree a surface already shows to `SetContent` again succeeds on every kind and keeps its
-expired timer at zero.
+any surface kind. Passing the same tree to `SetContent` again keeps its clock binding. The call returns immediately
+when the clock epoch, effective theme, accessibility and viewport still match the last commit. If one changes,
+the retained tree refreshes against the new presentation state and an expired timer still shows zero.
 
 Remote compositions are validated in full before any surface is created. Unsupported nodes, unknown widget
 versions and invalid shapes are refused; authored shape failures return `InvalidArgument` with the cause.
@@ -197,7 +200,11 @@ isolated, so later subscribers still run. Callbacks stop when the surface or mod
 
 Graph connections are accepted only from an output port to a same-type input port. A canvas accepts
 at most 512 nodes, 1,024 edges, and 32 ports per node; its callbacks report requested changes, so
-the mod remains responsible for validating and publishing the next immutable tree.
+the mod remains responsible for validating and publishing the next immutable tree. A node's header
+selects the node, and each typed port has its own hit target and focus ring. Dragging the card moves
+the node when the canvas supports editing.
+
+A virtual list scrolls its selected row into view when needed and leaves room for the row's focus ring.
 
 The compiled `ui` template demonstrates the standard form/list controls, accessibility changes,
 result handling, and a configurable nonreserved input action. The
@@ -287,6 +294,43 @@ supported scale.
 
 ## Themes and layout
 
+### Package themes
+
+Declare theme files in your `topiaforge.mod.json`. The packager validates the definitions and adds their SHA-256
+hashes to the packaged manifest.
+
+```json
+{
+  "ui": {
+    "schema": 1,
+    "default": "survival",
+    "themes": [
+      { "id": "survival", "definition": "ui/themes/survival.json" }
+    ]
+  }
+}
+```
+
+Start with the SDK's `topiaforge-ui-theme.schema.json` and `topiaforge-ui-theme.defaults.json` or the UiGallery's
+sample at `mods/TopiaForge.UiGallery/ui/themes/survival.json`. Each file declares one theme id. Supply the Paper,
+HUD, typography or token entries that differ from the kit defaults. The theme uses package-relative resources.
+
+A surface uses its `WithTheme` override first, then the nearest scope's `Context.Ui.Themes.UseTheme` selection,
+then the manifest default, then the kit default. Use the manifest for ordinary surfaces. Pass `null` to
+`UseTheme` to clear the current scope's selection. `PreloadAsync` lets a scope load a declared theme before use
+and observe a registration failure. Confirmation modals, system toasts and manager prompts use the kit theme.
+
+Use semantic roles for text. At 1080p and scale 1.0, the reference heights are Banner 56, Display 40, Title 30,
+Heading 24, Body 20, Label 18, Caption 18, Numeral 32 and Mono 18. The Mono role uses JetBrains Mono NL. The
+renderer keeps text at a readable reference size below scale 1.0 and scales it up with the UI through 2.0.
+High contrast derives from each scheme. Text targets 4.5:1 in normal themes and 7:1 in high contrast. Reduced
+motion skips transitions and pulses.
+
+Guests resolve themes against the same admitted package on their own machines. The version 2 UI envelope carries
+the originating package and digest, its presentation generation, and the theme id and descriptor digest. Legacy
+trees with the kit default retain version 1 encoding. A new role, explicit text id or package theme requires
+version 2 from each recipient. A refused upgrade leaves the previously admitted presentation in place.
+
 TopiaForgeUi chooses Paper tokens for full-screen tools, windows, and dialogs, and HUD tokens for
 gameplay overlays. Safe consumers specify semantic tone (`Neutral`, `Success`, `Warning`, or
 `Danger`) rather than color literals. The provider owns layer bands, focus order, cursor state,
@@ -346,6 +390,29 @@ callbacks; finish UI tests with `context.AssertNoLeaks()`.
 while a gameplay scene is active and no scene load is pending. `FakeModContext` starts at the main
 menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay HUD on screen.
 `IsShown` says whether the mod shows the surface, whatever TopiaForge does with it.
+
+### Native Gallery capture
+
+When a control's state fills round to the same drawn color, the kit shows a
+separate selection or press mark. Selection uses a three-unit leading bar when
+its fill matches rest. Press uses an inset outline when its fill matches hover
+or rest. Switches and sliders reserve space beside their track for both marks.
+The marks stay visible with reduced motion, and the focus ring and hit area
+retain their own geometry.
+
+The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` at startup on the
+native verification process. In that process, F3 cycles the loader's fixed
+Interaction states Window through kit Paper, kit HUD, Survival Paper and
+Survival HUD. The ordinary F8 Gallery uses Survival as its package default.
+Opening a first-party Gallery fixture records its settled geometry and paint. Press F11 to record
+another observation of the current fixture. Hold the intended state until two frames have settled.
+The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts
+the authored fixture and omits participant identifiers and changed input values. It measures an
+input's authored value while the field still contains that exact value.
+
+The JSON uses the same accessibility checks as `FakeUiService` and records actual TMP measurements
+for the native fixture. Collect the separate raster captures and host and remote guest evidence at
+the phase visual gate.
 
 ## Provider implementation contributors
 

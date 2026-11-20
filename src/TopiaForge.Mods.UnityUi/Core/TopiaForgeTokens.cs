@@ -19,6 +19,8 @@ namespace TopiaForge.Mods.UnityUi
         Numeral,
         /// <summary>Selects the banner option.</summary>
         Banner,
+        /// <summary>Selects the monospaced option.</summary>
+        Mono,
     }
 
     /// <summary>
@@ -39,6 +41,9 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Display, title and banner styles: Audiowide.</summary>
         Display,
+
+        /// <summary>Monospaced labels: JetBrains Mono NL Regular.</summary>
+        Mono,
     }
 
     /// <summary>Spacing steps used for gaps and padding.</summary>
@@ -86,29 +91,31 @@ namespace TopiaForge.Mods.UnityUi
     {
         // Type scale (font size per TopiaForgeTextStyle).
         /// <summary>The display size design-token value.</summary>
-        public const int DisplaySize = 26;
+        public const int DisplaySize = 40;
         /// <summary>The title size design-token value.</summary>
-        public const int TitleSize = 22;
+        public const int TitleSize = 30;
         /// <summary>The heading size design-token value.</summary>
-        public const int HeadingSize = 16;
+        public const int HeadingSize = 24;
         /// <summary>The body size design-token value.</summary>
-        public const int BodySize = 14;
+        public const int BodySize = 20;
         /// <summary>The label size design-token value.</summary>
-        public const int LabelSize = 13;
+        public const int LabelSize = 18;
         /// <summary>The caption size design-token value.</summary>
-        public const int CaptionSize = 12;
+        public const int CaptionSize = 18;
         /// <summary>The numeral size design-token value.</summary>
-        public const int NumeralSize = 28;
+        public const int NumeralSize = 32;
         /// <summary>The banner size design-token value.</summary>
-        public const int BannerSize = 42;
+        public const int BannerSize = 56;
+        /// <summary>The monospaced reference text size.</summary>
+        public const int MonoSize = 18;
 
         // Layout.
         /// <summary>The safe margin design-token value.</summary>
         public const float SafeMargin = 18f;
         /// <summary>The control sm height design-token value.</summary>
-        public const float ControlSmHeight = 30f;
+        public const float ControlSmHeight = 40f;
         /// <summary>The control height design-token value.</summary>
-        public const float ControlHeight = 38f;
+        public const float ControlHeight = 40f;
         /// <summary>The control lg height design-token value.</summary>
         public const float ControlLgHeight = 46f;
         /// <summary>The title bar height design-token value.</summary>
@@ -165,6 +172,7 @@ namespace TopiaForge.Mods.UnityUi
                 TopiaForgeTextStyle.Caption => CaptionSize,
                 TopiaForgeTextStyle.Numeral => NumeralSize,
                 TopiaForgeTextStyle.Banner => BannerSize,
+                TopiaForgeTextStyle.Mono => MonoSize,
                 _ => BodySize,
             };
         }
@@ -182,12 +190,17 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         public static TopiaForgeFace FaceOf(TopiaForgeTextStyle style)
         {
-            if (IsDisplay(style))
+            if (style == TopiaForgeTextStyle.Mono)
+            {
+                return TopiaForgeFace.Mono;
+            }
+
+            if (IsDisplay(style) || style == TopiaForgeTextStyle.Numeral)
             {
                 return TopiaForgeFace.Display;
             }
 
-            return style == TopiaForgeTextStyle.Heading || style == TopiaForgeTextStyle.Numeral
+            return style == TopiaForgeTextStyle.Heading
                 ? TopiaForgeFace.Heading
                 : TopiaForgeFace.Text;
         }

@@ -36,7 +36,7 @@ namespace TopiaForge.ModManager
                 content.Toggle("Show invisible blockers", UnityBlockerPreview.Visible, value => UnityBlockerPreview.Visible = value);
             content.Toggle("High contrast UI", TopiaForgeTheme.HighContrast, value => TopiaForgeTheme.HighContrast = value);
             content.Toggle("Reduced motion", TopiaForgeTheme.ReducedMotion, value => TopiaForgeTheme.ReducedMotion = value);
-            content.Slider("UI scale", 0.75f, 1.5f, TopiaForgeTheme.UiScale, value => TopiaForgeTheme.UiScale = value);
+            content.Slider("UI scale", 0.75f, 2f, TopiaForgeTheme.UiScale, value => TopiaForgeTheme.UiScale = value);
         }
     }
 }

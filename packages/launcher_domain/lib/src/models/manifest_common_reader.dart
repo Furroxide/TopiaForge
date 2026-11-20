@@ -5,6 +5,10 @@ ModManifest _readCommonManifestFields(
   Map<String, Object?> json, {
   required ModContributions? contributions,
 }) {
+  final structuralIssues = [..._manifestStructuralIssues(json)];
+  final ui = json.containsKey('ui')
+      ? _readModUiCatalogue(json['ui'], structuralIssues)
+      : null;
   return ModManifest(
     schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
     schemaUrl: (json[r'$schema'] as String?) ?? '',
@@ -58,7 +62,8 @@ ModManifest _readCommonManifestFields(
     apiAssemblies: _stringList(json['apiAssemblies']),
     multiplayer: ModMultiplayerMetadata.tryFromJson(json['multiplayer']),
     multiplayerIsPresent: json.containsKey('multiplayer'),
-    structuralIssues: _manifestStructuralIssues(json),
+    ui: ui,
+    structuralIssues: structuralIssues,
     extraFields: Map<String, Object?>.unmodifiable(
       Map<String, Object?>.of(json)
         ..removeWhere((key, _) => _knownManifestJsonKeys.contains(key)),

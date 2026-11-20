@@ -7,9 +7,25 @@ namespace TopiaForge.Mods
     internal static partial class UiWireCodec
     {
         internal static UiNode? Read(IUiWireReader reader, Action<string, string> reply, string clockEpoch = "")
+            => ReadRoot(reader, reply, clockEpoch, allowEnvelope: false, out _);
+
+        // The caller authenticates a returned envelope before committing any decoded content.
+        internal static UiNode? ReadWithEnvelope(IUiWireReader reader, Action<string, string> reply, string clockEpoch, out UiWireEnvelope? envelope)
+            => ReadRoot(reader, reply, clockEpoch, allowEnvelope: true, out envelope);
+
+        private static UiNode? ReadRoot(IUiWireReader reader, Action<string, string> reply, string clockEpoch,
+            bool allowEnvelope, out UiWireEnvelope? envelope)
         {
-            var decoder = new Decoder(reader, reply, clockEpoch);
-            var root = decoder.Node(0);
+            var type = Byte(reader);
+            envelope = null;
+            if (allowEnvelope && type == EnvelopeTag)
+            {
+                envelope = ReadEnvelope(reader);
+                type = Byte(reader);
+            }
+
+            var decoder = new Decoder(reader, reply, clockEpoch, envelope != null);
+            var root = decoder.Node(1, type);
             UiWireValidation.Validate(root);
             UiClockBinding.Bind(root, clockEpoch);
             return root;
@@ -43,16 +59,25 @@ namespace TopiaForge.Mods
             private readonly Action<string, string> reply;
             private int count;
             private readonly string clockEpoch;
-            internal Decoder(IUiWireReader reader, Action<string, string> reply, string clockEpoch) { r = reader; this.reply = reply; this.clockEpoch = clockEpoch; }
+            private readonly bool enhanced;
+
+            internal Decoder(IUiWireReader reader, Action<string, string> reply, string clockEpoch, bool enhanced)
+            {
+                r = reader;
+                this.reply = reply;
+                this.clockEpoch = clockEpoch;
+                this.enhanced = enhanced;
+            }
             private int Count(int max)
             {
                 if (!r.TryReadInt32(max, out var value)) throw Bad();
                 return value;
             }
-            internal UiNode? Node(int depth)
+            internal UiNode? Node(int depth, byte? rootType = null)
             {
                 if (depth > 32 || ++count > 4096) throw Bad();
-                var type = Byte(r, 13);
+                var type = rootType ?? Byte(r);
+                if (type > 13) return EnhancedNode(type);
                 if (type == 0) return null;
                 if (type == 1) return new UiText(Text(r), (UiTextStyle)Byte(r, 2), (UiTone)Byte(r, 3));
                 if (type == 2 || type == 3)
@@ -100,6 +125,24 @@ namespace TopiaForge.Mods
                 var choices = new UiChoice[Count(256)];
                 for (var i = 0; i < choices.Length; i++) choices[i] = new UiChoice(Text(r), Text(r));
                 return new UiDropdown(id, label, choices, selectedValue, value => reply(id, value), active);
+            }
+
+            private UiNode EnhancedNode(byte type)
+            {
+                if (!enhanced) throw Bad();
+                if (type != EnhancedTextTag && type != EnhancedProgressTag && type != EnhancedCountdownTag) throw Bad();
+                var id = Text(r, 128);
+                var optionalId = id.Length == 0 ? null : id;
+                if (type == EnhancedTextTag)
+                    return new UiText(Text(r), (UiTextStyle)Byte(r, (byte)UiTextStyle.Mono), (UiTone)Byte(r, (byte)UiTone.Accent), optionalId);
+                if (type == EnhancedProgressTag)
+                    return new UiProgress(Number(r), Text(r, 256), (UiTone)Byte(r, (byte)UiTone.Accent), optionalId);
+                if (!r.TryReadUInt64(out var bits)) throw Bad();
+                var deadline = BitConverter.Int64BitsToDouble((long)bits);
+                var label = Text(r, 256);
+                var tone = (UiTone)Byte(r, (byte)UiTone.Accent);
+                if (Text(r, 256) != clockEpoch) throw new ArgumentException("UiCountdown clock epoch is stale; request the current composition.");
+                return new UiCountdown(deadline, label, tone, optionalId);
             }
         }
     }

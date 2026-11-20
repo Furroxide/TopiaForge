@@ -146,6 +146,22 @@ namespace TopiaForge.ModManager
         internal HostDispatcher NativeDispatcher => nativeDispatcher;
         internal MultiplayerRuntime Multiplayer => multiplayer;
 
+        internal IDisposable? StartGalleryInteractionPreview()
+        {
+            if (coreGameplayServices is not CoreGameplayServices gameplay) return null;
+            try
+            {
+                return OwnerUiService.StartGalleryInteractionPreview(Path.Combine(paths.Root, "ui-gallery-preview"),
+                    logger.ForMod(OwnerUiService.GalleryInteractionOwner), gameplay.UiGameplay, gameplay.HudPlacement,
+                    () => multiplayer.Realm);
+            }
+            catch (Exception error)
+            {
+                logger.Warn("The Gallery interaction preview could not start (" + error.GetType().Name + ").");
+                return null;
+            }
+        }
+
         /// <summary>Why a mod in the load order did not come up (skip reason or exception), or null.</summary>
         public string? GetLoadFailure(string id)
         {

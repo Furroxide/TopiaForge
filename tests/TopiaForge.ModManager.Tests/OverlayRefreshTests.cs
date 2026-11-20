@@ -96,7 +96,11 @@ namespace TopiaForge.ModManager.Tests
             var initialize = list.DescendantNodes().OfType<InvocationExpressionSyntax>().SingleOrDefault(call =>
                 call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "Initialize" &&
                 member.Expression.ToString().Contains("TopiaForgeListViewRuntime", StringComparison.Ordinal));
-            Check(initialize != null && PluginSourceSyntax.Calls(initialize, "Refresh"), "each list wires viewport changes to its real refresh");
+            var resized = list.DescendantNodes().OfType<MethodDeclarationSyntax>().SingleOrDefault(method =>
+                method.Identifier.ValueText == "ViewportResized");
+            Check(initialize?.ArgumentList.Arguments[1].Expression is IdentifierNameSyntax { Identifier.ValueText: "ViewportResized" }
+                && resized != null && PluginSourceSyntax.Calls(resized, "Refresh") && PluginSourceSyntax.Calls(resized, "RevealRow"),
+                "a viewport resize reveals the selected declarative row and refreshes the visible rows");
             Check(initialize!.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax { Identifier.ValueText: "viewportRect" }
                 && list.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(assignment =>
                     assignment.Left.ToString() == "scrollRect.viewport" && assignment.Right.ToString() == "viewportRect"),

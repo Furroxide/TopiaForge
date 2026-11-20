@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
+using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager.Core
 {
@@ -26,6 +28,7 @@ namespace TopiaForge.ModManager.Core
             }
 
             var errors = new List<string>();
+            manifest.AdmittedUi = null;
             var synchronizedFiles = manifest.Multiplayer?.SynchronizedFiles ?? new List<string>();
             if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion)) return errors;
             var requiredFiles = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -98,8 +101,102 @@ namespace TopiaForge.ModManager.Core
                 }
             }
 
+            if (manifest.Ui != null)
+            {
+                var ui = ReadUiCatalogue(packageRoot, manifest);
+                if (!ui.TryGetValue(out var catalogue)) errors.Add(ui.ErrorMessage);
+                else if (errors.Count == 0) manifest.AdmittedUi = catalogue;
+            }
+
             return errors;
         }
+
+        /// <summary>Checks packaged UI definitions without inspecting the mod's managed assembly.</summary>
+        public static IReadOnlyList<string> ValidateUiThemes(string packageRoot, ModManifest manifest)
+        {
+            if (manifest.Ui == null) return Array.Empty<string>();
+            var result = ReadUiCatalogue(packageRoot, manifest);
+            return result.Succeeded ? Array.Empty<string>() : new[] { result.ErrorMessage };
+        }
+
+        private static OperationResult<AdmittedUiCatalogue> ReadUiCatalogue(string packageRoot, ModManifest manifest)
+        {
+            if (!VersionUtil.TryGetMinimum(manifest.SupportedLoaderVersionRange, out var minimum, out _) ||
+                minimum == null || !VersionUtil.IsAtLeast(minimum, UiKitRelease.K1))
+                return OperationResult<AdmittedUiCatalogue>.Failure(
+                    ModErrorCode.InvalidArgument, "ui needs TopiaForge " + UiKitRelease.K1 + " or newer. Raise supportedLoaderVersionRange.");
+
+            var catalogue = UiThemeCatalogueParser.Parse(
+                Encoding.UTF8.GetBytes(JsonUtil.Serialize(manifest.Ui!)), packaged: true);
+            if (!catalogue.TryGetValue(out var declaration))
+                return OperationResult<AdmittedUiCatalogue>.Failure(catalogue.ErrorCode, catalogue.ErrorMessage);
+
+            var definitions = new Dictionary<string, UiThemeDescriptor>(StringComparer.Ordinal);
+            var resourceHashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            long resourceBytes = 0;
+            byte[]? HashResource(string path)
+            {
+                if (resourceHashes.TryGetValue(path, out var cached)) return cached;
+                if (!TryResolveOrdinaryFile(packageRoot, path, out var file, out _)) return null;
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
+                var length = stream.Length;
+                if (length > 32L * 1024 * 1024 || length > 64L * 1024 * 1024 - resourceBytes)
+                    return null;
+                using var sha = SHA256.Create();
+                var digest = sha.ComputeHash(stream);
+                resourceBytes += length;
+                resourceHashes.Add(path, digest);
+                return digest;
+            }
+
+            for (var index = 0; index < declaration.Themes.Count; index++)
+            {
+                var entry = declaration.Themes[index];
+                try
+                {
+                    if (!TryResolveOrdinaryFile(packageRoot, entry.Definition, out var path, out _))
+                        return UiDefinitionFailure(ModErrorCode.Io, index, "cannot read the declared package file.");
+
+                    var bytes = ReadThemeDefinition(path);
+                    if (bytes == null) return UiDefinitionFailure(ModErrorCode.RateLimited, index, "exceeds 64 KiB.");
+                    if (!entry.Matches(bytes))
+                        return UiDefinitionFailure(ModErrorCode.InvalidArgument, index, "does not match its packaged SHA-256.");
+
+                    var parsed = UiThemePackParser.Parse(bytes, packaged: true, expectedId: entry.Id, fileHash: HashResource);
+                    if (!parsed.TryGetValue(out var descriptor))
+                        return UiDefinitionFailure(parsed.ErrorCode, index, parsed.ErrorMessage);
+                    definitions.Add(entry.Id, descriptor);
+                }
+                catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                {
+                    return UiDefinitionFailure(ModErrorCode.Io, index, "cannot read the declared package file.");
+                }
+            }
+
+            return OperationResult<AdmittedUiCatalogue>.Success(new AdmittedUiCatalogue(declaration.Default, definitions));
+        }
+
+        private static byte[]? ReadThemeDefinition(string path)
+        {
+            const int Limit = 64 * 1024;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (stream.Length > Limit) return null;
+
+            var bytes = new byte[checked((int)stream.Length)];
+            var length = 0;
+            while (length < bytes.Length)
+            {
+                var read = stream.Read(bytes, length, bytes.Length - length);
+                if (read == 0) throw new EndOfStreamException();
+                length += read;
+            }
+
+            if (stream.ReadByte() != -1) throw new InvalidDataException("A UI theme definition changed while being read.");
+            return bytes;
+        }
+
+        private static OperationResult<AdmittedUiCatalogue> UiDefinitionFailure(ModErrorCode code, int index, string detail) =>
+            OperationResult<AdmittedUiCatalogue>.Failure(code, "ui.themes[" + index + "].definition " + detail);
 
         private static bool TryResolveOrdinaryFile(
             string packageRoot,
@@ -111,40 +208,12 @@ namespace TopiaForge.ModManager.Core
             error = string.Empty;
             try
             {
-                var root = Path.GetFullPath(packageRoot);
-                var rootAttributes = File.GetAttributes(root);
-                if ((rootAttributes & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Device)) !=
-                    FileAttributes.Directory)
-                {
-                    error = "package root is not an ordinary directory";
-                    return false;
-                }
-
-                var current = root;
-                var segments = portablePath.Split('/');
-                for (var index = 0; index < segments.Length; index++)
-                {
-                    current = PathSafety.CombineRelativeChild(current, segments[index]);
-                    var attributes = File.GetAttributes(current);
-                    if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Device)) != 0)
-                    {
-                        error = "path contains a link or special entry";
-                        return false;
-                    }
-
-                    var isLast = index == segments.Length - 1;
-                    if (isLast == ((attributes & FileAttributes.Directory) != 0))
-                    {
-                        error = isLast ? "path names a directory" : "parent path is not a directory";
-                        return false;
-                    }
-                }
-
-                fullPath = current;
+                fullPath = PathSafety.RequireOrdinaryPackageFile(packageRoot, portablePath);
                 return true;
             }
             catch (Exception exception) when (
                 exception is IOException ||
+                exception is InvalidDataException ||
                 exception is UnauthorizedAccessException ||
                 exception is ArgumentException ||
                 exception is InvalidOperationException ||

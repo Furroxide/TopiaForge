@@ -25,18 +25,15 @@ namespace TopiaForge.ModManager.Tests
             var open = OverlayMethod(root, "Open").ToString();
             That(open.Contains("scroll.Content.VerticalPhaseStepper(ToArray(screen.StepLabels))", StringComparison.Ordinal),
                 "seven full step names and progress details use full-width rows, not narrow columns");
-            That(open.Contains("scroll.FixedHeight(ScrollHeight)", StringComparison.Ordinal)
+            That(open.Contains("scroll.FixedHeight(PreferredScrollHeight)", StringComparison.Ordinal)
                 && open.Contains("body = scroll.Content.Column", StringComparison.Ordinal)
                 && open.Contains("actions = opened.Content.Row", StringComparison.Ordinal),
                 "long progress and failures scroll within a bounded view while cancellation stays outside it");
         }
 
         /// <summary>
-        /// By the kit's own sizes, the seven rail rows take 304 units, so a 360-unit scroll view left the status line at its
-        /// edge and a failure's advice, and most of the password field, below it. The view holds the rail, the status line
-        /// and either the password row or a failure's heading with two lines of advice, each line of text counted at one and
-        /// a half times its size, which no face of the kit needs; and the whole dialog still fits a 3440x1440 screen at the
-        /// largest UI scale, inside the kit's safe margins.
+        /// Holds the rail, status and password or failure advice at the preferred body height when the canvas has room.
+        /// On a shorter canvas the modal keeps its non-scroll children, which include the actions, within the safe margins.
         /// </summary>
         private static void TheOverlayShowsItsWordsWithoutScrolling(string root)
         {
@@ -53,20 +50,28 @@ namespace TopiaForge.ModManager.Tests
 
             static float Line(int size) => size * 1.5f;
             const float Gap = (float)TopiaForgeGap.Sm;
-            var height = Read(overlay, @"const float ScrollHeight = ([0-9.]+)f;");
+            var preferred = Read(overlay, @"const float PreferredScrollHeight = ([0-9.]+)f;");
             var rows = ConnectingSteps.Count * Read(rail, @"RowHeight = ([0-9.]+)f;") + (ConnectingSteps.Count - 1) * Read(rail, @"RowSpacing = ([0-9.]+)f;");
             var failure = Line(TopiaForgeTokens.HeadingSize) + Gap + 2 * Line(TopiaForgeTokens.BodySize);
             var password = TopiaForgeTokens.ControlHeight + (float)TopiaForgeGap.Xs + Line(TopiaForgeTokens.CaptionSize);
             var needed = rows + Gap + Line(TopiaForgeTokens.BodySize) + Gap + Math.Max(failure, password);
-            That(height >= needed,
-                "the rail, the status line and a failure's advice or the password field show without scrolling (" + needed + " of " + height + ")");
+            That(preferred >= needed,
+                "the full-height body shows the rail, status line and failure advice or password field (" + needed + " of " + preferred + ")");
 
             var largest = Read(profile, @"ClampFinite\(uiScale, [0-9.]+f, ([0-9.]+)f");
-            var screen = (float)(Math.Sqrt(1440.0 / 3440.0) * Math.Sqrt(TopiaForgeTokens.ReferenceWidth * TopiaForgeTokens.ReferenceHeight) / largest);
-            var dialog = 2 * (float)TopiaForgeGap.Xl + Line(TopiaForgeTokens.TitleSize) + 2 * (float)TopiaForgeGap.Md + height
-                + TopiaForgeTokens.ControlHeight;
-            That(dialog + 2 * TopiaForgeTokens.SafeMargin <= screen,
-                "and the dialog fits an ultrawide screen at UI scale " + largest + " (" + dialog + " of " + screen + ")");
+            var chrome = 2 * (float)TopiaForgeGap.Xl + Line(TopiaForgeTokens.TitleSize) +
+                2 * (float)TopiaForgeGap.Md + TopiaForgeTokens.ControlHeight;
+            foreach (var (width, height) in new[] { (1920f, 1080f), (2560f, 1440f), (3440f, 1440f) })
+            {
+                var viewport = (float)Math.Sqrt(height / width * TopiaForgeTokens.ReferenceWidth * TopiaForgeTokens.ReferenceHeight);
+                var full = TopiaForgeModalSize.LimitScrollBody(preferred, viewport, chrome);
+                That(full == preferred, "a roomy canvas keeps the authored body height");
+                var scaled = viewport / largest;
+                var shorter = TopiaForgeModalSize.LimitScrollBody(preferred, scaled, chrome);
+                That(shorter > 0f && shorter < preferred &&
+                    Math.Abs(shorter + chrome + 2 * TopiaForgeTokens.SafeMargin - scaled) < 0.001f,
+                    "at the largest UI scale the body still scrolls and the dialog's title and actions fit the safe area");
+            }
         }
 
         /// <summary>

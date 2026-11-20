@@ -82,6 +82,7 @@ Directory _writeFixtureRepo(Directory temp) {
     'TopiaForge.ModPackageValidator.deps.json',
     'TopiaForge.ModPackageValidator.runtimeconfig.json',
     'TopiaForge.ModManager.Core.dll',
+    'TopiaForge.Mods.Abstractions.dll',
   ]) {
     _writeFile(repo, [
       'src',
@@ -339,6 +340,7 @@ void _addSdkPayload(Archive archive, {String prefix = ''}) {
       'TopiaForge.ModPackageValidator.deps.json',
       'TopiaForge.ModPackageValidator.runtimeconfig.json',
       'TopiaForge.ModManager.Core.dll',
+      'TopiaForge.Mods.Abstractions.dll',
     ]) {
       archive.addFile(
         ArchiveFile.string(

@@ -130,17 +130,14 @@ namespace TopiaForge.Mods.Testing
             public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)
             {
                 if (!owner.Allowed(id)) return Refused<IUiSurface>();
+                var ui = owner.State(id).Ui;
                 if (id.Value != "local")
                 {
-                    try { UiWireCodec.Measure(request.Content, owner.State(id).Ui.WidgetEpoch(), 32 * 1024); }
-                    catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
-                    catch (InvalidOperationException) { return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "The remote UI composition is too large; shorten its content."); }
-                    if (owner.State(id).Ui.Surfaces.Count + owner.State(id).Ui.Modals.Count >= 64)
+                    if (ui.Surfaces.Count + ui.Modals.Count >= 64)
                         return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "This player's UI is full; close a surface.");
+                    return ui.CreateTargetedSurface(request, id.Value, checked(owner.generation + 1));
                 }
-                var result = owner.State(id).Ui.CreateSurface(request);
-                if (result.TryGetValue(out var surface) && surface is FakeUiSurface fake) fake.WireBounded = id.Value != "local";
-                return result;
+                return ui.CreateSurface(request);
             }
         }
     }

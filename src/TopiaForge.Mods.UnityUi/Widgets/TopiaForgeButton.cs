@@ -1,5 +1,6 @@
 using System;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -12,35 +13,36 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Brand-orange primary action.</summary>
         Filled,
 
-        /// <summary>Surface with strong border — secondary action.</summary>
+        /// <summary>Surface with strong border â€” secondary action.</summary>
         Outline,
 
-        /// <summary>No chrome until hover — tertiary/inline action.</summary>
+        /// <summary>No chrome until hover â€” tertiary/inline action.</summary>
         Ghost,
 
-        /// <summary>Filled with the danger role — destructive action.</summary>
+        /// <summary>Filled with the danger role â€” destructive action.</summary>
         Danger,
     }
 
     /// <summary>
     /// Brand button. The press micro-interaction pushes the body down-left onto its
-    /// hard shadow (the "press the sticker" motion) — shadow shrink and body offset,
+    /// hard shadow (the "press the sticker" motion) â€” shadow shrink and body offset,
     /// no color flash needed. Hover/pressed tinting rides uGUI's ColorBlock multiplier.
     /// </summary>
-    public sealed class TopiaForgeButton : TopiaForgeWidget, ITopiaForgeThemeAware
+    public sealed partial class TopiaForgeButton : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private const float LabelInsetX = 14f;
 
         private readonly TopiaForgeButtonStyle style;
-        private readonly Button button;
-        private readonly Image? shadow;
-        private readonly Image fill;
-        private readonly Image? ring;
+        private readonly TopiaForgeCueButton button;
+        private readonly TopiaForgeRoundedImage? shadow;
+        private readonly TopiaForgeRoundedImage fill;
+        private readonly TopiaForgeRoundedImage? ring;
         private readonly TextMeshProUGUI? label;
         private readonly Image? iconImage;
         private readonly RectTransform body;
         private bool enabledState = true;
         private string lastText;
+        private UiPaintRole backdrop = UiPaintRole.Surface;
 
         internal TopiaForgeButton(TopiaForgeContainer parent, string text, Action onClick, TopiaForgeButtonStyle buttonStyle)
             : this(parent, text, null, onClick, buttonStyle)
@@ -58,6 +60,11 @@ namespace TopiaForge.Mods.UnityUi
             style = buttonStyle;
             lastText = text ?? string.Empty;
 
+            // The painted body moves on press. The raycast surface stays inside its layout slot.
+            var hitArea = Go.AddComponent<Image>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
+
             // Shadow sits outside the body so the body can press down onto it.
             if (HasShadow)
             {
@@ -73,7 +80,6 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeAnchors.Stretch(body);
 
             fill = CreateStretched(body, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
-            fill.raycastTarget = true;
 
             if (style == TopiaForgeButtonStyle.Outline)
             {
@@ -118,7 +124,8 @@ namespace TopiaForge.Mods.UnityUi
                 FitLabelWidth();
             }
 
-            button = Go.AddComponent<Button>();
+            button = Go.AddComponent<TopiaForgeCueButton>();
+            button.ObserveCues(ShowCues);
             button.targetGraphic = fill;
             button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "Button click"));
 
@@ -128,13 +135,22 @@ namespace TopiaForge.Mods.UnityUi
             colors.disabledColor = Color.white; // disabled visuals are theme-driven, not multiplied
             button.colors = colors;
 
-            var press = Go.AddComponent<TopiaForgePressEffect>();
-            press.Initialize(Host, body, shadow);
+            if (shadow != null)
+            {
+                var press = Go.AddComponent<TopiaForgePressEffect>();
+                press.Initialize(Host, button, body, shadow);
+            }
 
             ApplyTheme(Theme);
         }
 
         private bool HasShadow => style == TopiaForgeButtonStyle.Filled || style == TopiaForgeButtonStyle.Danger || style == TopiaForgeButtonStyle.Outline;
+
+        internal void SetBackdrop(UiPaintRole role)
+        {
+            backdrop = role;
+            ApplyTheme(Theme);
+        }
 
         /// <summary>Gets button.</summary>
         public Button Button => button;
@@ -196,10 +212,20 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
-            // Filled and danger buttons take their role's readable tints. Outline and ghost labels sit on a surface with
-            // contrast to spare, so they keep the kit's usual tints. The block is written once, so one fade runs.
+            if (label != null)
+            {
+                TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Label, Host.EffectiveUiScale);
+                FitLabelWidth();
+            }
+            // Every opaque button uses the state tints calculated for the actual fill and label pair.
+            var radius = theme.Descriptor?.Shape.Control;
+            fill.SetShape(radius);
+            shadow?.SetShape(radius);
+            ring?.SetShape(radius, theme.HighContrast ? TopiaForgeTokens.BorderStrong : TopiaForgeTokens.BorderStandard);
             var paint = enabledState && style == TopiaForgeButtonStyle.Filled ? theme.Fill(TopiaForgeFillRole.FilledButton)
                 : enabledState && style == TopiaForgeButtonStyle.Danger ? theme.Fill(TopiaForgeFillRole.DangerButton)
+                : enabledState && style == TopiaForgeButtonStyle.Outline
+                    ? theme.FieldPaint(UiPaintRole.Surface, UiTone.Neutral, enabled: true)
                 : (TopiaForgeFillPaint?)null;
             var colors = button.colors;
             colors.highlightedColor = Tint(TopiaForgeOnColors.ButtonHoveredTint);
@@ -209,20 +235,21 @@ namespace TopiaForge.Mods.UnityUi
 
             if (!enabledState)
             {
-                fill.color = theme.Tint;
+                button.ConfigureCues(UiButtonCue.None);
+                fill.color = theme.Descriptor == null ? theme.Tint : theme.SurfaceSunken;
                 if (ring != null)
                 {
-                    ring.color = theme.Tint;
+                    ring.color = theme.Descriptor == null ? theme.Tint : theme.OutlineStrong;
                 }
 
                 if (label != null)
                 {
-                    label.color = theme.TextFaint;
+                    label.color = theme.DisabledInk;
                 }
 
                 if (iconImage != null)
                 {
-                    iconImage.color = theme.TextFaint;
+                    iconImage.color = theme.DisabledInk;
                 }
 
                 if (shadow != null)
@@ -250,13 +277,13 @@ namespace TopiaForge.Mods.UnityUi
                         ring.color = theme.OutlineStrong;
                     }
 
-                    SetContentColor(theme.Text);
+                    SetContentColor(paint?.Content ?? theme.Text);
                     break;
                 default:
                     // No fill: the label sits on the surface itself, so it takes the Primary tone's readable text color. On
                     // Paper the brand orange reads at only 2.0 to 2.6:1, and labels in that tone are darkened the same way.
                     fill.color = Color.clear;
-                    SetContentColor(theme.TextToneColor(TopiaForgeTone.Primary));
+                    SetContentColor(theme.ForegroundOn(backdrop, UiTone.Primary));
                     break;
             }
 
@@ -264,6 +291,8 @@ namespace TopiaForge.Mods.UnityUi
             {
                 shadow.color = theme.Shadow;
             }
+
+            ConfigureCues(theme, radius);
         }
 
         private static Color Tint(float value)
@@ -284,11 +313,11 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        private static Image CreateStretched(Transform parent, string name, Sprite sprite)
+        private static TopiaForgeRoundedImage CreateStretched(Transform parent, string name, Sprite sprite)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            var image = go.AddComponent<Image>();
+            var image = go.AddComponent<TopiaForgeRoundedImage>();
             image.sprite = sprite;
             image.type = Image.Type.Sliced;
             image.raycastTarget = false;
@@ -305,31 +334,33 @@ namespace TopiaForge.Mods.UnityUi
     {
         private RectTransform? body;
         private UiHost? host;
+        private Button? button;
         private Image? shadow;
         private Color shadowColor;
         private bool pressed;
 
-        public void Initialize(UiHost owner, RectTransform bodyRect, Image? shadowImage)
+        public void Initialize(UiHost owner, Button selectable, RectTransform bodyRect, Image shadowImage)
         {
             host = owner;
+            button = selectable;
             body = bodyRect;
             shadow = shadowImage;
         }
 
         public void OnPointerDown(PointerEventData eventData)
         {
-            if (host?.EffectiveReducedMotion != false || body == null || pressed)
+            if (host == null || host.EffectiveReducedMotion || host.EffectiveMotion <= 0f ||
+                button == null || !button.IsInteractable() || shadow == null || shadow.color.a == 0f ||
+                body == null || pressed || eventData.button != PointerEventData.InputButton.Left)
             {
                 return;
             }
 
             pressed = true;
-            body.anchoredPosition = new Vector2(TopiaForgeTokens.ShadowSmallX * 0.75f, TopiaForgeTokens.ShadowSmallY * 0.75f);
-            if (shadow != null)
-            {
-                shadowColor = shadow.color;
-                shadow.color = new Color(shadowColor.r, shadowColor.g, shadowColor.b, shadowColor.a * 0.25f);
-            }
+            var strength = Mathf.Min(1f, host.EffectiveMotion);
+            body.anchoredPosition = new Vector2(TopiaForgeTokens.ShadowSmallX * strength, TopiaForgeTokens.ShadowSmallY * strength);
+            shadowColor = shadow.color;
+            shadow.color = Color.clear;
         }
 
         public void OnPointerUp(PointerEventData eventData)
@@ -341,6 +372,8 @@ namespace TopiaForge.Mods.UnityUi
         {
             ReleasePress();
         }
+
+        private void OnDisable() => ReleasePress();
 
         private void ReleasePress()
         {

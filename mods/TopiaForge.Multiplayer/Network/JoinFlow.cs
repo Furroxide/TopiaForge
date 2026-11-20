@@ -452,7 +452,7 @@ namespace TopiaForge.Multiplayer.Network
             link = attempt.Link!;
             attempt = null;
             var proof = passwordKey == null ? null : PasswordProof.Prove(passwordKey, link.ChannelBinding);
-            var joinContent = JoinContent.Encode(proof, content.ClientContent());
+            var joinContent = JoinContent.Encode(proof, content.ClientContent(resolved!.Descriptor!.Descriptor));
             if (!engineJoined)
             {
                 // The link is up and pinned: only now does the solo session give way to the host's.

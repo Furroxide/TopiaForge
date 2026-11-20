@@ -58,9 +58,11 @@ namespace TopiaForge.ModManager
         {
             this.node = node; this.clock = clock; this.label = label;
             prefix = node.Label.Length == 0 ? string.Empty : node.Label + " ";
-            Update();
+            Refresh();
         }
-        private void Update()
+        private void Update() => Refresh();
+
+        internal void Refresh()
         {
             if (node == null || clock == null || label == null) return;
             var remaining = node.RemainingSeconds(clock());

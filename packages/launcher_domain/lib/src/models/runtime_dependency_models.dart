@@ -8,7 +8,7 @@ class TopiaForgeRuntimeVersions {
   /// The live-multiplayer protocol the bundled runtime speaks, and the peer
   /// versions it accepts: the game's `MultiplayerModule.ProtocolVersion` and
   /// `PeerVersionRange`. A join plan predicts admission with them.
-  static const multiplayerProtocolVersion = '2.0.0';
+  static const multiplayerProtocolVersion = '2.1.0';
   static const multiplayerPeerVersionRange = '>=2.0.0 <3.0.0';
 }
 

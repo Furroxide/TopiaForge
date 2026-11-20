@@ -25,7 +25,9 @@ namespace TopiaForge.ModManager.Tests
             Assert(harness.Controller.TestingScore == 100
                 && harness.Controller.TestingCredits == 0
                 && harness.Controller.TestingPhase == ZombiesPhase.InterWave
-                && hud.Body.IndexOf("CREDITS", StringComparison.Ordinal) < 0
+                && hud.TryFindNode(ZombiesHudPresenter.DetailsNodeId, out var detail)
+                && detail is UiText status
+                && status.Text.IndexOf("CREDITS", StringComparison.Ordinal) < 0
                 && string.Equals(LastToast(harness.Context), "Wave clear.", StringComparison.Ordinal),
                 "disabling requisitions should remove its economy, HUD line, and wave-clear prompt without affecting score");
         }

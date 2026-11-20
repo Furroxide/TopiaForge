@@ -7,39 +7,47 @@ namespace TopiaForge.Mods
     /// <summary>Bounded declarative UI, with callback identities instead of executable content.</summary>
     internal static partial class UiWireCodec
     {
-        internal static bool Write(IUiWireWriter w, UiNode? node, string clockEpoch = "")
+        internal static bool Write(IUiWireWriter w, UiNode? node, string clockEpoch = "", UiWireEnvelope? envelope = null)
         {
-            UiWireValidation.Validate(node);
-            UiClockBinding.Bind(node, clockEpoch);
-            return WriteComposition(w, node, clockEpoch);
-        }
-
-        // An admitted composition keeps its authored clock identity. Only its wire presentation expires.
-        internal static bool WriteRetained(IUiWireWriter w, UiNode? node, string clockEpoch)
-        {
-            UiWireValidation.Validate(node);
-            return WriteComposition(w, node, clockEpoch);
-        }
-
-        private static bool WriteComposition(IUiWireWriter w, UiNode? node, string clockEpoch)
-        {
-            var hasCountdown = false;
-            WriteNode(w, node, clockEpoch, ref hasCountdown);
+            var hasCountdown = WriteComposition(w, node, clockEpoch, retained: false, envelope);
+            UiClockBinding.Commit(node, clockEpoch);
             return hasCountdown;
         }
 
-        private static void WriteNode(IUiWireWriter w, UiNode? node, string clockEpoch, ref bool hasCountdown)
+        // An admitted composition keeps its authored clock identity. Only its wire presentation expires.
+        internal static bool WriteRetained(IUiWireWriter w, UiNode? node, string clockEpoch, UiWireEnvelope? envelope = null) =>
+            WriteComposition(w, node, clockEpoch, retained: true, envelope);
+
+        internal static bool Prepare(IUiWireWriter writer, UiNode? node, string clockEpoch, bool retained, UiWireEnvelope? envelope = null) =>
+            WriteComposition(writer, node, clockEpoch, retained, envelope);
+
+        private static bool WriteComposition(IUiWireWriter w, UiNode? node, string clockEpoch, bool retained, UiWireEnvelope? envelope)
+        {
+            UiWireValidation.Validate(node);
+            if (!retained) UiClockBinding.Check(node, clockEpoch);
+            if (envelope != null) WriteEnvelope(w, envelope);
+            else if (HasEnhancedNode(node)) throw new ArgumentException("The composition requires a version 2 UI envelope.");
+
+            var hasCountdown = false;
+            WriteNode(w, node, clockEpoch, retained, ref hasCountdown);
+            return hasCountdown;
+        }
+
+        private static void WriteNode(IUiWireWriter w, UiNode? node, string clockEpoch, bool retained, ref bool hasCountdown)
         {
             switch (node)
             {
                 case null: w.WriteByte(0); break;
-                case UiText n: WriteText(w, n.Text, n.Style, n.Tone); break;
-                case UiColumn n: w.WriteByte(2); Children(w, n, clockEpoch, ref hasCountdown); break;
-                case UiRow n: w.WriteByte(3); Children(w, n, clockEpoch, ref hasCountdown); break;
-                case UiScroll n: w.WriteByte(4); w.WriteSingle(n.Height); WriteNode(w, n.Content, clockEpoch, ref hasCountdown); break;
+                case UiText n: WriteText(w, n.Text, n.Style, n.Tone, n.Id); break;
+                case UiColumn n: w.WriteByte(2); Children(w, n, clockEpoch, retained, ref hasCountdown); break;
+                case UiRow n: w.WriteByte(3); Children(w, n, clockEpoch, retained, ref hasCountdown); break;
+                case UiScroll n:
+                    w.WriteByte(4); w.WriteSingle(n.Height);
+                    WriteNode(w, n.Content, clockEpoch, retained, ref hasCountdown); break;
                 case UiSplitPane n:
                     w.WriteByte(5); w.WriteByte((byte)n.Orientation); w.WriteSingle(n.PrimaryFraction);
-                    WriteNode(w, n.Primary, clockEpoch, ref hasCountdown); WriteNode(w, n.Secondary, clockEpoch, ref hasCountdown); break;
+                    WriteNode(w, n.Primary, clockEpoch, retained, ref hasCountdown);
+                    WriteNode(w, n.Secondary, clockEpoch, retained, ref hasCountdown); break;
                 case UiButton n:
                     w.WriteByte(6); Text(w, n.Id!); Text(w, n.Label); w.WriteByte((byte)n.Style); Flag(w, n.Enabled); break;
                 case UiToggle n:
@@ -57,23 +65,56 @@ namespace TopiaForge.Mods
                     for (var i = 0; i < n.Items.Count; i++) { var row = n.Items[i]; Text(w, row.Id); Text(w, row.Title); Text(w, row.Subtitle); Text(w, row.Badge); }
                     break;
                 case UiProgress n:
-                    w.WriteByte(12); w.WriteByte(1); Text(w, n.Id ?? ""); w.WriteSingle(n.Fraction); Text(w, n.Label); w.WriteByte((byte)n.Tone); break;
-                case UiCountdown n when n.ClockEpoch != clockEpoch:
+                    WriteProgress(w, n); break;
+                case UiCountdown n when retained && n.ClockEpoch != clockEpoch:
                     // Match the zero display without carrying a stale epoch or growing the admitted wire payload.
-                    WriteText(w, n.Label.Length == 0 ? "0" : n.Label + " 0", UiTextStyle.Body, n.Tone); break;
+                    WriteText(w, n.Label.Length == 0 ? "0" : n.Label + " 0", UiTextStyle.Body, n.Tone,
+                        EnhancedTone(n.Tone) ? n.Id : null); break;
                 case UiCountdown n:
-                    w.WriteByte(13); w.WriteByte(1); Text(w, n.Id ?? ""); w.WriteUInt64((ulong)BitConverter.DoubleToInt64Bits(n.EndsAt));
-                    Text(w, clockEpoch); Text(w, n.Label); w.WriteByte((byte)n.Tone); hasCountdown = true; break;
+                    WriteCountdown(w, n, clockEpoch); hasCountdown = true; break;
                 default: throw new ArgumentException(node.GetType().Name + " cannot be sent to a player. Use supported declarative UI nodes.");
             }
         }
-        private static void Children(IUiWireWriter w, UiLayoutNode node, string clockEpoch, ref bool hasCountdown)
+        private static void Children(IUiWireWriter w, UiLayoutNode node, string clockEpoch, bool retained, ref bool hasCountdown)
         {
             w.WriteVarUInt((ulong)node.Children.Count);
-            for (var i = 0; i < node.Children.Count; i++) WriteNode(w, node.Children[i], clockEpoch, ref hasCountdown);
+            for (var i = 0; i < node.Children.Count; i++) WriteNode(w, node.Children[i], clockEpoch, retained, ref hasCountdown);
         }
-        private static void WriteText(IUiWireWriter w, string text, UiTextStyle style, UiTone tone)
-        { w.WriteByte(1); Text(w, text); w.WriteByte((byte)style); w.WriteByte((byte)tone); }
+
+        private static void WriteText(IUiWireWriter w, string text, UiTextStyle style, UiTone tone, string? id)
+        {
+            var enhanced = EnhancedText(style, tone, id);
+            w.WriteByte(enhanced ? EnhancedTextTag : (byte)1);
+            if (enhanced) Text(w, id ?? string.Empty);
+            Text(w, text);
+            w.WriteByte((byte)style);
+            w.WriteByte((byte)tone);
+        }
+
+        private static void WriteProgress(IUiWireWriter w, UiProgress progress)
+        {
+            var enhanced = EnhancedTone(progress.Tone);
+            w.WriteByte(enhanced ? EnhancedProgressTag : (byte)12);
+            if (!enhanced) w.WriteByte(1);
+            Text(w, progress.Id ?? string.Empty);
+            w.WriteSingle(progress.Fraction);
+            Text(w, progress.Label);
+            w.WriteByte((byte)progress.Tone);
+        }
+
+        private static void WriteCountdown(IUiWireWriter w, UiCountdown countdown, string clockEpoch)
+        {
+            var enhanced = EnhancedTone(countdown.Tone);
+            w.WriteByte(enhanced ? EnhancedCountdownTag : (byte)13);
+            if (!enhanced) w.WriteByte(1);
+            Text(w, countdown.Id ?? string.Empty);
+            w.WriteUInt64((ulong)BitConverter.DoubleToInt64Bits(countdown.EndsAt));
+            if (!enhanced) Text(w, clockEpoch);
+            Text(w, countdown.Label);
+            w.WriteByte((byte)countdown.Tone);
+            if (enhanced) Text(w, clockEpoch);
+        }
+
         internal static void Text(IUiWireWriter w, string text)
         {
             if (text.Length > 4096) throw new ArgumentException("Remote UI text is limited to 4096 characters.");

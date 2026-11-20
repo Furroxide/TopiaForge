@@ -15,6 +15,16 @@ internal static class Program
             }
             if (args.Length == 1 && args[0] == "--ui-session-clock") { UiSessionClockTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-epoch-lifetimes") { UiEpochLifetimeTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k1-delivery")
+            {
+                RuntimeAdmissionTests.UiCapabilityNegotiatesAndBlocksLegacyOnlyWhenRequired();
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--signaling-tls")
+            {
+                SignalingUpgradeTests.TheUpgradeKeepsTheClientsCertificateCheck();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--presence-activity") { PresenceActivityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--presence-host-identity") { PresenceHostIdentityTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--private-commit") { PerPlayerStateTests.CommitRegressions(); return 0; }
@@ -696,6 +706,7 @@ internal static class Program
             RuntimeAdmissionTests.TheHostAdmitsThroughTheRuntimesPlanner();
             RuntimeAdmissionTests.JoiningPlayersCheckTheHostsPackagesBeforeConnecting();
             RuntimeAdmissionTests.SessionModsAtCompatibleVersionsJoin();
+            RuntimeAdmissionTests.UiCapabilityNegotiatesAndBlocksLegacyOnlyWhenRequired();
             RuntimeAdmissionTests.ContentOffersRoundTripAndRefuseMalformedBytes();
             RuntimeAdmissionTests.TheContentSeamRefusesWithoutARuntime();
             RuntimeAdmissionTests.TheOfferFollowsTheLoadedPackages();

@@ -15,7 +15,8 @@ internal static class Program
             return ValidateReleaseScaffold(args.Skip(1).ToArray());
         }
 
-        if (args.Length != 1 || string.IsNullOrWhiteSpace(args[0]))
+        var uiOnly = args.Length == 2 && string.Equals(args[0], "--ui-themes-only", StringComparison.Ordinal);
+        if ((!uiOnly && args.Length != 1) || string.IsNullOrWhiteSpace(args[args.Length - 1]))
         {
             Console.Error.WriteLine(ErrorCode + ": expected one safely extracted package directory.");
             return 2;
@@ -23,21 +24,37 @@ internal static class Program
 
         try
         {
-            var packageRoot = Path.GetFullPath(args[0]);
-            if (!Directory.Exists(packageRoot))
+            var packageRoot = Path.GetFullPath(args[args.Length - 1]);
+            try
+            {
+                packageRoot = PathSafety.RequireOrdinaryDirectory(packageRoot);
+            }
+            catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
             {
                 Console.Error.WriteLine(ErrorCode + ": package directory does not exist: " + packageRoot);
                 return 2;
             }
 
-            var manifestPath = Path.Combine(packageRoot, "topiaforge.mod.json");
-            if (!File.Exists(manifestPath))
+            string manifestPath;
+            try
+            {
+                manifestPath = PathSafety.RequireOrdinaryPackageFile(packageRoot, "topiaforge.mod.json");
+            }
+            catch (FileNotFoundException)
             {
                 Console.Error.WriteLine(ErrorCode + ": package manifest does not exist.");
                 return 1;
             }
 
             var manifest = ModManifestJson.LoadFile(manifestPath);
+            if (uiOnly)
+            {
+                var uiErrors = ManifestContentValidator.ValidateUiThemes(packageRoot, manifest);
+                foreach (var error in uiErrors)
+                    Console.Error.WriteLine(ErrorCode + ": " + error);
+                return uiErrors.Count == 0 ? 0 : 1;
+            }
+
             var errors = ManifestValidator.Validate(manifest).ToList();
             if (errors.Count == 0)
             {

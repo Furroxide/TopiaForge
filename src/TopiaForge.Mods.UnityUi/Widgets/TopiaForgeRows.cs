@@ -1,7 +1,7 @@
 using System;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
-using UImage = UnityEngine.UI.Image;
 
 namespace TopiaForge.Mods.UnityUi
 {
@@ -64,23 +64,26 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeListRow : TopiaForgeWidget, ITopiaForgeThemeAware
     {
-        private readonly UImage fill;
-        private readonly UImage ring;
+        private readonly TopiaForgeRoundedImage fill;
+        private readonly TopiaForgeRoundedImage ring;
+        private readonly Button button;
+        private TopiaForgeControlCues? cues;
         private Action? onClick;
         private bool selected;
+        private bool declarative;
 
         internal TopiaForgeListRow(TopiaForgeContainer parent)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("ListRow"))
         {
-            fill = Go.AddComponent<UImage>();
+            fill = Go.AddComponent<TopiaForgeRoundedImage>();
             fill.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Chip);
-            fill.type = UImage.Type.Sliced;
+            fill.type = Image.Type.Sliced;
 
             var ringGo = new GameObject("Ring", typeof(RectTransform));
             ringGo.transform.SetParent(Go.transform, false);
-            ring = ringGo.AddComponent<UImage>();
+            ring = ringGo.AddComponent<TopiaForgeRoundedImage>();
             ring.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Chip, TopiaForgeTokens.BorderStandard);
-            ring.type = UImage.Type.Sliced;
+            ring.type = Image.Type.Sliced;
             ring.raycastTarget = false;
             TopiaForgeAnchors.Stretch((RectTransform)ringGo.transform);
             var ringLayout = ringGo.AddComponent<LayoutElement>();
@@ -95,7 +98,7 @@ namespace TopiaForge.Mods.UnityUi
             Subtitle = content.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
             Badge = content.Badge(string.Empty, TopiaForgeTone.Neutral);
 
-            var button = Go.AddComponent<Button>();
+            button = Go.AddComponent<Button>();
             button.targetGraphic = fill;
             button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "List row click"));
 
@@ -133,9 +136,45 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        internal void UseDeclarativePaint(bool enabled)
+        {
+            declarative = true;
+            Title.Go.name = "RowTitle";
+            Subtitle.Go.name = "RowSubtitle";
+            var layout = Go.GetComponent<HorizontalLayoutGroup>();
+            var padding = layout.padding;
+            layout.padding = new RectOffset(14, padding.right, 4, 4);
+            cues ??= TopiaForgeControlCues.Install(button, Rect);
+            button.interactable = enabled;
+            TopiaForgeControlFocus.Install(this);
+            ApplyTheme(Theme);
+        }
+
+        internal void SetDeclarativeEnabled(bool enabled)
+        {
+            button.interactable = enabled;
+            ApplyTheme(Theme);
+        }
+
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            var role = UiControlPaint.ListRowBackground(button.interactable, selected);
+            if (declarative && theme.FieldPaint(role, UiTone.Neutral, button.interactable) is { } paint)
+            {
+                fill.SetShape(theme.Descriptor?.Shape.Small);
+                ring.SetShape(theme.Descriptor?.Shape.Small,
+                    theme.HighContrast ? TopiaForgeTokens.BorderStrong : TopiaForgeTokens.BorderStandard);
+                button.colors = paint.ResolvedStates(button.colors);
+                fill.color = paint.Fill;
+                ring.color = selected ? theme.BoundaryOn(role) : Color.clear;
+                Title.SetResolvedInk(paint.Content);
+                Subtitle.SetResolvedInk(paint.Content);
+                cues?.Apply(fill.color, paint.Content,
+                    theme.Descriptor?.Shape.Small ?? UiThemePackParser.Default.Shape.Small, theme.HighContrast);
+                return;
+            }
+
             fill.color = selected ? theme.SelectedTint : theme.SurfaceSunken;
             ring.color = selected ? theme.OutlineStrong : Color.clear;
         }
