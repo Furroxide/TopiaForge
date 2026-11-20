@@ -92,6 +92,10 @@ namespace {{ASSEMBLY_NAME}}.Tests
                 Assert.That(surface.IsVisible, Is.True);
                 Assert.That(surface.Content, Is.Not.Null);
                 Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.NotifyButtonId, out _), Is.True);
+                Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.SettingsGridId, out var grid), Is.True);
+                Assert.That(grid, Is.TypeOf<TopiaForge.Mods.UiGrid>());
+                Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.SettingsSummaryId, out var summary), Is.True);
+                Assert.That(((TopiaForge.Mods.UiText)summary!).Style, Is.EqualTo(TopiaForge.Mods.UiTextStyle.Mono));
             });
 
             Assert.That(surface.ChangeText({{TYPE_NAME}}Mod.GreetingInputId, "Hello, Robotopia!" ).Succeeded, Is.True);

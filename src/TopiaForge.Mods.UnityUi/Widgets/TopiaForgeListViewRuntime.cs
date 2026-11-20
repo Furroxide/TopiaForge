@@ -8,6 +8,8 @@ namespace TopiaForge.Mods.UnityUi
     {
         private RectTransform? viewport;
         private Action? refresh;
+        private Func<double, double>? measureRows;
+        private Action<double>? placeRows;
         private float lastHeight = float.NaN;
 
         internal void Initialize(RectTransform rect, Action onResize)
@@ -15,6 +17,16 @@ namespace TopiaForge.Mods.UnityUi
             viewport = rect;
             refresh = onResize;
         }
+
+        internal void UseDeclarativeLayout(Func<double, double> measure, Action<double> place)
+        {
+            measureRows = measure;
+            placeRows = place;
+        }
+
+        internal double RequireRowsFit(double width) => measureRows?.Invoke(width) ?? 0d;
+
+        internal void PlaceRows(double width) => placeRows?.Invoke(width);
 
         private void OnEnable() => lastHeight = float.NaN;
 
@@ -30,6 +42,8 @@ namespace TopiaForge.Mods.UnityUi
         private void OnDestroy()
         {
             refresh = null;
+            measureRows = null;
+            placeRows = null;
             viewport = null;
         }
     }

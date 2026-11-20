@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager
         private readonly UiCaptureRect screen;
         private readonly Vector3[] corners = new Vector3[4];
         private readonly List<Observation> observations = new List<Observation>();
-        private readonly List<UiCaptureRect> groups = new List<UiCaptureRect>();
+        private readonly List<(UiCaptureRect Bounds, bool Protected)> groups = new List<(UiCaptureRect, bool)>();
         private readonly List<UiGalleryFontFact> fonts = new List<UiGalleryFontFact>();
 
         internal UiGalleryNativeTree(Canvas canvas, TopiaForgeResolvedTheme theme, TopiaForgeEffectiveAccessibility accessibility, bool fallback)
@@ -41,7 +41,8 @@ namespace TopiaForge.ModManager
         internal IReadOnlyList<UiGalleryFontFact> Fonts => fonts;
         internal float? SurfaceAlpha { get; private set; }
 
-        internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform composition, out UiTreeCapture? result)
+        internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform composition, out UiTreeCapture? result,
+            TopiaForgeGraphConnections? connections = null)
         {
             result = null;
             if (!surface.IsChildOf(canvas.transform) || !composition.IsChildOf(surface) || fixture.Content == null ||
@@ -49,18 +50,28 @@ namespace TopiaForge.ModManager
             var fill = AncestorFill(composition);
             Add("/", fixture.Id, fixture.Kind.ToString(), composition, EmptyContent, new UiCaptureNodePaint(null, fill));
             if (fixture.Kind == UiSurfaceKind.Window && !WindowTitle(fixture, surface, fill)) return false;
-            if (!Visit(fixture.Content, native!, "/0", fill)) return false;
+            if (connections != null && !GraphConnectionsLauncher(connections)) return false;
+            if (connections?.IsOpen == true)
+            {
+                if (!GraphConnectionsList(fixture.Content, connections, fill)) return false;
+            }
+            else if (!Visit(fixture.Content, native!, "/0", fill)) return false;
+            result = CompleteCapture();
+            return true;
+        }
+
+        private UiTreeCapture CompleteCapture()
+        {
             var covered = new bool[groups.Count];
             for (var later = 1; later < groups.Count; later++)
                 for (var earlier = 0; earlier < later; earlier++)
-                    covered[earlier] |= groups[later].Overlaps(groups[earlier]);
+                    covered[earlier] |= groups[earlier].Protected && groups[later].Bounds.Overlaps(groups[earlier].Bounds);
 
             var nodes = new List<UiCapturedNode>(observations.Count);
             foreach (var item in observations)
                 nodes.Add(new UiCapturedNode(item.Path, item.Id, item.Kind, item.Bounds, item.Content, item.Paint,
-                    Descriptor.Id, fallback, item.Rendered, item.Clipped, item.Group >= 0 && covered[item.Group]));
-            result = new UiTreeCapture(nodes, theme.HighContrast, 40f * PixelsPerUnit);
-            return true;
+                    Descriptor.Id, fallback, item.Rendered, item.Clipped, item.Occluded || (item.Group >= 0 && covered[item.Group])));
+            return new UiTreeCapture(nodes, theme.HighContrast, 40f * PixelsPerUnit);
         }
 
         private bool WindowTitle(UiSurfaceRequest fixture, RectTransform surface, UiThemeColor? background)
@@ -71,46 +82,20 @@ namespace TopiaForge.ModManager
                 Over(bar, background));
         }
 
-        private bool Visit(UiNode fixture, RectTransform native, string path, UiThemeColor? backdrop)
+        private bool VisitLeaf(UiNode fixture, RectTransform native, string path, UiThemeColor? backdrop)
         {
-            path = NodePath(path, fixture.Id);
-            switch (fixture)
-            {
-                case UiLayoutNode linear:
-                    Add(path, fixture.Id, fixture.GetType().Name, native, EmptyContent, default);
-                    if (native.childCount != linear.Children.Count) return false;
-                    for (var index = 0; index < linear.Children.Count; index++)
-                        if (native.GetChild(index) is not RectTransform child ||
-                            !Visit(linear.Children[index], child, ChildPath(path, index), backdrop)) return false;
-                    return true;
-                case UiScroll scroll:
-                    Add(path, fixture.Id, nameof(UiScroll), native, EmptyContent, default);
-                    var viewportContent = native.GetComponent<ScrollRect>()?.content;
-                    return viewportContent != null && viewportContent.IsChildOf(native) &&
-                        SingleChild(viewportContent, out var inner) && Visit(scroll.Content, inner!, ChildPath(path, 0), backdrop);
-                case UiSplitPane split:
-                    Add(path, fixture.Id, nameof(UiSplitPane), native, EmptyContent, default);
-                    return native.childCount == 2 && SingleChild(native.GetChild(0), out var primary) &&
-                        SingleChild(native.GetChild(1), out var secondary) &&
-                        Visit(split.Primary, primary!, ChildPath(path, 0), backdrop) &&
-                        Visit(split.Secondary, secondary!, ChildPath(path, 1), backdrop);
-                case UiText text:
-                    var labelStart = observations.Count;
-                    if (!Text(path, fixture.Id, nameof(UiText), native.GetComponent<TMP_Text>(), text.Text, text.Style, backdrop))
-                        return false;
-                    RegisterGroup(labelStart);
-                    return true;
-                default:
-                    var controlStart = observations.Count;
-                    if (!Control(fixture, native, path, backdrop)) return false;
-                    RegisterGroup(controlStart);
-                    return true;
-            }
+            var start = observations.Count;
+            var captured = fixture is UiText text
+                ? Text(path, fixture.Id, nameof(UiText), native.GetComponent<TMP_Text>(), text.Text, text.Style, backdrop)
+                : Control(fixture, native, path, backdrop);
+            if (!captured) return false;
+            RegisterGroup(start);
+            return true;
         }
 
         private bool Text(string path, string? id, string kind, TMP_Text? label, string authored, UiTextStyle style,
             UiThemeColor? fill, UiCaptureNodeFlags flags = UiCaptureNodeFlags.None, UiCaptureNodePaint paint = default,
-            string? nativeInputValue = null)
+            string? nativeInputValue = null, string? semanticLabel = null)
         {
             if (label == null || label.font == null) return false;
             var text = nativeInputValue != null
@@ -120,7 +105,7 @@ namespace TopiaForge.ModManager
             if (text == null)
             {
                 Add(path, id, kind, label.rectTransform,
-                    new UiCaptureNodeContent(string.Empty, authored, 0, 0, flags | UiCaptureNodeFlags.InvalidLayout),
+                    new UiCaptureNodeContent(string.Empty, semanticLabel ?? authored, 0, 0, flags | UiCaptureNodeFlags.InvalidLayout),
                     new UiCaptureNodePaint(null, fill), visible: label.isActiveAndEnabled);
                 return true;
             }
@@ -128,14 +113,16 @@ namespace TopiaForge.ModManager
             var height = 0f;
             var scale = VerticalScale(label.rectTransform);
             var bounds = Bounds(label.rectTransform);
+            var intended = label.isActiveAndEnabled;
             var clipped = false;
-            if (label.isActiveAndEnabled && text.Length != 0)
+            var noCharacters = false;
+            if (intended && text.Length != 0)
             {
                 label.ForceMeshUpdate();
                 var info = label.textInfo;
                 for (var line = 0; line < info.lineCount; line++)
                     height = Mathf.Max(height, (info.lineInfo[line].ascender - info.lineInfo[line].descender) * scale);
-                if (info.characterCount == 0) return false;
+                noCharacters = info.characterCount == 0;
                 for (var index = 0; index < info.characterCount; index++)
                 {
                     var character = info.characterInfo[index];
@@ -152,10 +139,12 @@ namespace TopiaForge.ModManager
 
             var readable = Descriptor.GetText(style).ReferenceSize * PixelsPerUnit *
                 (Mathf.Max(1f, Accessibility.UiScale) / Accessibility.UiScale);
-            var content = new UiCaptureNodeContent(text, authored, height, readable, flags);
-            Add(path, id, kind, label.rectTransform, content, new UiCaptureNodePaint(
+            var clip = Clip(label.rectTransform, bounds, kind == nameof(UiText) ? Mathf.Max(height, readable) : null);
+            if (noCharacters && clip.HasVisibleArea) return false;
+            var content = new UiCaptureNodeContent(text, semanticLabel ?? authored, height, readable, flags);
+            Observe(path, id, kind, bounds, clip, content, new UiCaptureNodePaint(
                 ToRgb(EffectiveColor(label)), fill, paint.CornerRadius, paint.BorderWidth, paint.ShadowX, paint.ShadowY),
-                visible: label.isActiveAndEnabled && !label.canvasRenderer.cull, contentClipped: clipped);
+                visible: intended && !label.canvasRenderer.cull, intended: intended, contentClipped: clipped);
             return true;
         }
 
@@ -163,17 +152,22 @@ namespace TopiaForge.ModManager
             UiCaptureNodePaint paint, bool visible = true, bool contentClipped = false)
         {
             var bounds = Bounds(rect);
-            var (clip, scrollable) = Clip(rect);
-            if (scrollable && (content.Flags & UiCaptureNodeFlags.FocusIndicator) == 0 &&
-                bounds.X >= clip.X - 0.01f && bounds.Right <= clip.Right + 0.01f && !contentClipped)
-                content = new UiCaptureNodeContent(content.Text, content.SemanticLabel, content.TextHeight,
-                    content.ExpectedTextHeight, content.Flags | UiCaptureNodeFlags.ScrollableClip);
-            var rendered = visible && rect.gameObject.activeInHierarchy && bounds.Overlaps(clip);
-            observations.Add(new Observation(path, id, kind, bounds, bounds.Intersect(clip), content, paint, rendered,
-                rendered && (!ClipContains(clip, bounds) || contentClipped)));
+            Observe(path, id, kind, bounds, Clip(rect, bounds), content, paint, visible,
+                rect.gameObject.activeInHierarchy && visible, contentClipped);
         }
 
-        private void RegisterGroup(int start)
+        private void Observe(string path, string? id, string kind, UiCaptureRect bounds, UiGalleryCaptureClip clip,
+            UiCaptureNodeContent content, UiCaptureNodePaint paint, bool visible, bool intended, bool contentClipped = false)
+        {
+            if (clip.ScrollClipped && !clip.FixedClipped && !contentClipped && (content.Flags & UiCaptureNodeFlags.FocusIndicator) == 0)
+                content = new UiCaptureNodeContent(content.Text, content.SemanticLabel, content.TextHeight,
+                    content.ExpectedTextHeight, content.Flags | UiCaptureNodeFlags.ScrollableClip);
+            var rendered = visible && intended && clip.HasVisibleArea;
+            observations.Add(new Observation(path, id, kind, bounds, clip.Visible, content, paint, rendered,
+                intended && (clip.AnyClipping || contentClipped)));
+        }
+
+        private void RegisterGroup(int start, bool protect = true)
         {
             var footprint = default(UiCaptureRect);
             for (var index = start; index < observations.Count; index++)
@@ -183,7 +177,7 @@ namespace TopiaForge.ModManager
                 observations[index] = sample;
                 if (sample.Rendered) footprint = Union(footprint, sample.VisibleBounds);
             }
-            groups.Add(footprint);
+            groups.Add((footprint, protect));
         }
 
         private static UiCaptureRect Union(UiCaptureRect first, UiCaptureRect second)
@@ -195,18 +189,34 @@ namespace TopiaForge.ModManager
             return new UiCaptureRect(x, y, Mathf.Max(first.Right, second.Right) - x, Mathf.Max(first.Bottom, second.Bottom) - y);
         }
 
-        private (UiCaptureRect Bounds, bool Scrollable) Clip(RectTransform item)
+        private UiGalleryCaptureClip Clip(RectTransform item, UiCaptureRect bounds, float? scrollLineHeight = null)
         {
-            var clip = screen;
-            var scrollable = false;
+            var clip = new UiGalleryCaptureClip(bounds, scrollLineHeight);
             for (var ancestor = item.parent; ancestor != null && ancestor != canvas.transform; ancestor = ancestor.parent)
             {
                 if (ancestor is not RectTransform rect || !rect.TryGetComponent<RectMask2D>(out var mask) || !mask.isActiveAndEnabled) continue;
-                clip = clip.Intersect(Bounds(rect));
+                var viewport = Bounds(rect);
                 var scroll = rect.parent != null ? rect.parent.GetComponent<ScrollRect>() : null;
-                scrollable |= scroll != null && scroll.vertical && scroll.viewport == rect;
+                UiCaptureRect? scrollContent = null;
+                if (scroll != null && scroll.isActiveAndEnabled && scroll.vertical && scroll.viewport == rect &&
+                    scroll.content != null && item.IsChildOf(scroll.content))
+                {
+                    scrollContent = Bounds(scroll.content);
+                }
+                var padding = mask.padding;
+                var aperture = padding == Vector4.zero ? viewport : PaddedMaskBounds(rect, padding);
+                clip.Apply(aperture, viewport, scrollContent);
             }
-            return (clip, scrollable);
+            clip.Apply(screen);
+            return clip;
+        }
+
+        private UiCaptureRect PaddedMaskBounds(RectTransform rect, Vector4 padding)
+        {
+            var local = rect.rect;
+            var lower = ScreenPoint(rect.TransformPoint(new Vector3(local.xMin + padding.x, local.yMin + padding.y)));
+            var upper = ScreenPoint(rect.TransformPoint(new Vector3(local.xMax - padding.z, local.yMax - padding.w)));
+            return new UiCaptureRect(lower.x, upper.y, Mathf.Max(0, upper.x - lower.x), Mathf.Max(0, lower.y - upper.y));
         }
 
         private UiThemeColor? AncestorFill(RectTransform composition)
@@ -304,7 +314,7 @@ namespace TopiaForge.ModManager
         private struct Observation
         {
             internal Observation(string path, string? id, string kind, UiCaptureRect bounds, UiCaptureRect visibleBounds,
-                UiCaptureNodeContent content, UiCaptureNodePaint paint, bool rendered, bool clipped)
+                UiCaptureNodeContent content, UiCaptureNodePaint paint, bool rendered, bool clipped, bool occluded = false)
             {
                 Path = path;
                 Id = id;
@@ -315,6 +325,7 @@ namespace TopiaForge.ModManager
                 Paint = paint;
                 Rendered = rendered;
                 Clipped = clipped;
+                Occluded = occluded;
                 Group = -1;
             }
 
@@ -327,6 +338,7 @@ namespace TopiaForge.ModManager
             internal UiCaptureNodePaint Paint { get; }
             internal bool Rendered { get; }
             internal bool Clipped { get; }
+            internal bool Occluded { get; }
             internal int Group { get; set; }
         }
     }

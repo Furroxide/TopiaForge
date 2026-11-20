@@ -80,6 +80,8 @@ namespace TopiaForge.ModManager.Tests
 
             namespace TopiaForge.Mods.UnityUi
             {
+                internal sealed class TopiaForgeLayerSlot : MonoBehaviour { }
+                internal sealed class TopiaForgeGraphConnections { }
                 public enum TopiaForgeScheme { Paper, Hud }
                 public enum TopiaForgeKey { F3, F6, F11 }
                 public enum TopiaForgeGap { None, Sm, Md }
@@ -257,11 +259,15 @@ namespace TopiaForge.ModManager.Tests
                     }
                     internal TopiaForgeResolvedTheme Theme { get; }
                     internal TopiaForgeAccessibilityProfile Accessibility { get; }
-                    internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform tree, out object? result)
+                    internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform tree, out object? result,
+                        TopiaForgeGraphConnections? connections = null)
                     {
                         result = fixture.Content;
                         return result != null;
                     }
+                    internal bool TryCaptureLayoutNotice(UiSurfaceRequest fixture, RectTransform surface, RectTransform notice,
+                        UiLayoutException failure, out object? result, string? queuedNotice = null) =>
+                        throw new InvalidOperationException("The interaction fixture should fit without a layout notice.");
                 }
                 internal static class UiGalleryCaptureJson
                 {
@@ -278,7 +284,7 @@ namespace TopiaForge.ModManager.Tests
                     private readonly Func<double> clock = () => 0;
                     private readonly Func<string> clockEpoch = () => "preview";
 
-                    private UnityUiSurface CreateHud(UiSurfaceRequest request, ref TopiaForgeWidget? nativeRoot)
+                    private UnityUiSurface CreateHud(UiSurfaceRequest request, string? packageDisplayName, ref TopiaForgeWidget? nativeRoot)
                     {
                         var view = new TopiaForgeWidget(host, TopiaForgeScheme.Hud);
                         return new UnityUiSurface(request.Id, view,
@@ -304,6 +310,13 @@ namespace TopiaForge.ModManager.Tests
                         private TopiaForgeWidget? widget;
                         private TopiaForgeContainer? compositionRoot;
                         private UiNode? admitted;
+                        private TopiaForgeContainer? layoutFallback;
+                        private TopiaForgeGraphConnections? graphConnections;
+                        private UiLayoutException? layoutProblem;
+                        private bool hudNoticeOverflowing;
+                        private string? overflowToast;
+                        private UiThemeDescriptor? declaredTheme;
+                        private bool remoteComposition;
                         private readonly UiSurfacePresence presence = new(false, true);
                         private readonly Action<UnityUiSurface> release;
                         private readonly TopiaForgeLabel body;
@@ -340,7 +353,10 @@ namespace TopiaForge.ModManager.Tests
                         public void Show() => presence.Show();
                         public void Hide() => presence.Hide();
                         public void SetBody(string value) => body.Value = value;
-                        public OperationResult<bool> SetContent(UiNode content)
+                        public OperationResult<bool> SetContent(UiNode content) =>
+                            SetComposition(content, declaredTheme, remoteComposition, changingTheme: false);
+                        private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor,
+                            bool remote, bool changingTheme)
                         {
                             if (widget?.Scheme == TopiaForgeScheme.Hud && widget is not TopiaForgeWindow && UiComposition.ContainsInteractive(content))
                                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD is presentation-only");

@@ -30,10 +30,10 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiText(
                     enabled ? "Name, tint, and uniform scale apply only to tool-owned RobotKit robots." : "Select a tool-owned RobotKit robot for reversible session appearance controls.",
                     UiTextStyle.Caption),
-                new UiRow(
+                Fields(
                     new UiTextInput("robot-name", "Name", robotNameText, value => robotNameText = value, maximumLength: 64, enabled: enabled),
                     new UiDropdown("robot-tint", "Tint", colors, robotTintText, value => robotTintText = value, enabled)),
-                new UiRow(
+                Actions(
                     new UiTextInput("robot-scale", "Uniform scale", robotScaleText, value => robotScaleText = value, maximumLength: 16, enabled: enabled),
                     new UiButton("apply-robot-appearance", "Apply appearance", () => Execute(ApplyRobotAppearance), UiButtonStyle.Secondary, enabled)));
         }

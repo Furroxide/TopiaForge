@@ -60,6 +60,8 @@ namespace TopiaForge.ModManager
             }
             if (Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Put interactive controls in a window.");
+            var styleCheck = UiPresentationTheme.StylesValid(content, Theme);
+            if (!styleCheck.Succeeded) return styleCheck;
             // A new tree binds strictly. An unchanged retained publication spends no send budget.
             return Runtime.SendSurface(this, replacement: content);
         }

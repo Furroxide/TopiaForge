@@ -52,40 +52,40 @@ namespace TopiaForge.CreatorTools.Shared
                     UiTextStyle.Caption,
                     contentProblems.Length == 0 ? UiTone.Success : UiTone.Danger),
                 new UiToggle("project-spawn-on-start", "Spawn selected content when the event starts", projectEntitySpawnOnStart, value => projectEntitySpawnOnStart = value),
-                new UiRow(
+                Actions(
                     new UiButton("project-add-content", "Add catalog selection", () => Execute(AddSelectedCatalogToProject), UiButtonStyle.Secondary, FindCatalog(selectedCatalogId) != null),
                     new UiTextInput("project-persona-id", "Persona id", personaId, value => personaId = value, maximumLength: 64),
                     new UiButton("project-save-persona", "Save personality draft", () => Execute(SavePersonaToProject), UiButtonStyle.Secondary)),
-                new UiRow(
+                Actions(
                     new UiTextInput("project-native-radius", "Native radius", nativeSearchRadius, value => nativeSearchRadius = value, maximumLength: 16),
                     new UiButton("project-capture-native", "Capture native recipe", () => Execute(CaptureSelectedNativeBinding), UiButtonStyle.Secondary,
                         SelectedRoster()?.NativeTarget != null || SelectedRoster()?.RobotTarget?.IsNativeSceneObject == true)),
                 new UiTextInput("project-persona-reply", "Persona reply guidance", personaReplyGuidance, value => personaReplyGuidance = value, maximumLength: 2000),
                 new UiText("GRAPH NODE PALETTE", UiTextStyle.Heading),
-                new UiRow(
+                Actions(
                     new UiDropdown("graph-kind", "Node kind", kinds, graphNodeKind, value => graphNodeKind = value),
                     new UiButton("graph-add-kind", "Add node", () => Execute(AddSelectedNodeKind), UiButtonStyle.Secondary)),
-                new UiRow(
+                Actions(
                     new UiButton("graph-fire-manual", "Fire selected", () => Execute(FireSelectedManual), enabled: node?.Kind == CreatorGraphNodeKind.ManualTrigger),
                     new UiButton("graph-remove-selected", "Remove node", () => Execute(RemoveSelectedNode), UiButtonStyle.Danger, node != null)),
                 new UiText(node == null ? "Select a node to edit its bounded parameters." : "SELECTED: " + GraphTitle(node.Kind), UiTextStyle.Caption),
-                new UiRow(
+                Fields(
                     new UiTextInput("graph-entity", "Entity id", graphEntityId, value => graphEntityId = value, maximumLength: 64, enabled: node != null),
                     new UiTextInput("graph-native", "Native binding id", graphNativeBindingId, value => graphNativeBindingId = value, maximumLength: 64, enabled: node != null),
                     new UiTextInput("graph-persona", "Persona id", graphPersonaId, value => graphPersonaId = value, maximumLength: 64, enabled: node != null)),
-                new UiRow(
+                Fields(
                     new UiTextInput("graph-value", "Value / emote", graphValue, value => graphValue = value, maximumLength: 1024, enabled: node != null),
                     new UiTextInput("graph-text", "Text / prompt", graphText, value => graphText = value, maximumLength: 1024, enabled: node != null)),
-                new UiRow(
+                Fields(
                     new UiTextInput("graph-seconds", "Seconds", graphSeconds, value => graphSeconds = value, maximumLength: 16, enabled: node != null),
                     new UiTextInput("graph-radius", "Radius", graphRadius, value => graphRadius = value, maximumLength: 16, enabled: node != null)),
-                new UiRow(
+                Fields(
                     new UiTextInput("graph-objective", "Objective", graphObjective, value => graphObjective = value, maximumLength: 128, enabled: node != null),
                     new UiTextInput("graph-cue", "Audio cue id", graphCueId, value => graphCueId = value, maximumLength: 128, enabled: node != null)),
-                new UiRow(
+                Fields(
                     new UiTextInput("graph-robot-name", "Robot name", graphRobotName, value => graphRobotName = value, maximumLength: 64, enabled: node != null),
                     new UiTextInput("graph-robot-tint", "Robot tint", graphRobotTint, value => graphRobotTint = value, maximumLength: 16, enabled: node != null)),
-                new UiRow(
+                Fields(
                     new UiTextInput("graph-robot-scale", "Robot scale", graphRobotScale, value => graphRobotScale = value, maximumLength: 16, enabled: node != null),
                     new UiTextInput("graph-robot-brain", "Robot brain", graphRobotBrain, value => graphRobotBrain = value, maximumLength: 16, enabled: node != null),
                     new UiButton("graph-apply-parameters", "Apply parameters", () => Execute(ApplySelectedNodeParameters), enabled: node != null)));

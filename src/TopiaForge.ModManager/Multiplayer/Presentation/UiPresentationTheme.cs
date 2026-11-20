@@ -72,10 +72,35 @@ namespace TopiaForge.ModManager
 
         internal static OperationResult<bool> Resolve(IUiService source, UiSurfaceRequest request, out UiThemeDescriptor? theme)
         {
-            if (source is IUiPresentationThemeSource themed) return themed.DescribePresentationTheme(request, out theme);
+            if (source is IUiPresentationThemeSource themed)
+            {
+                var described = themed.DescribePresentationTheme(request, out theme);
+                if (!described.Succeeded) return described;
+                return StylesValid(request.Content, theme);
+            }
             theme = null;
-            return request.Theme == null ? OperationResult<bool>.Success(true)
+            return request.Theme == null ? StylesValid(request.Content, null)
                 : OperationResult<bool>.Failure(ModErrorCode.Unavailable, "This UI context cannot resolve a theme pack.");
+        }
+
+        internal static OperationResult<bool> StylesValid(UiNode? content, UiThemeDescriptor? theme) =>
+            UiLayoutDecoration.AdmitsNamedStyles(content, theme ?? UiThemePackParser.Default) ? Allowed
+                : OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "A named layout style must be declared for its component.");
+
+        internal static UiThemeDescriptor? ViewerTheme(UiRemoteThemeSelection selection)
+        {
+            var envelope = selection.Envelope;
+            var id = envelope?.ThemeId;
+            var catalogue = selection.Package?.Manifest.AdmittedUi;
+            if (id == null || catalogue == null || !catalogue.TryGet(id, out var descriptor)) return null;
+            return descriptor.Digest.Span.SequenceEqual(envelope!.DescriptorDigest.Span) ? descriptor : null;
+        }
+
+        internal static bool ViewerAdmitsStyles(UiNode? content, UiRemoteThemeSelection selection)
+        {
+            if (selection.Envelope?.ThemeId == null) return UiLayoutDecoration.AdmitsNamedStyles(content, UiThemePackParser.Default);
+            var descriptor = ViewerTheme(selection);
+            return descriptor == null || UiLayoutDecoration.AdmitsNamedStyles(content, descriptor);
         }
 
         internal static OperationResult<IUiSurface> CreateRemote(IUiService service, UiSurfaceRequest request, UiRemoteThemeSelection selection)

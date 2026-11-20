@@ -1,6 +1,7 @@
 using System;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
+using TopiaForge.Mods.UnityUi;
 
 namespace TopiaForge.ModManager
 {
@@ -10,18 +11,21 @@ namespace TopiaForge.ModManager
         private static readonly OperationResult<bool> ThemeMissing =
             OperationResult<bool>.Failure(ModErrorCode.NotFound, "This package does not declare the requested UI theme.");
         private UiThemeScope? themeScope;
+        private string? hudNoticePackageName;
 
         public IUiThemeService Themes => (IUiThemeService?)themeScope ?? UnavailableUiThemes.Instance;
 
         UiThemeScope? IUiPresentationThemeSource.PresentationThemeScope => themeScope;
 
-        void IUiThemeScopeHost.ConfigureThemeScope(AdmittedUiCatalogue? catalogue, IUiService? parent)
+        void IUiThemeScopeHost.ConfigureThemeScope(AdmittedUiCatalogue? catalogue, IUiService? parent, string packageDisplayName)
         {
             if (themeScope != null) throw new InvalidOperationException("The UI scope is already configured.");
             var scope = new UiThemeScope(lifetime, catalogue, parent?.Themes as UiThemeScope);
             lifetime.Track(scope);
             scope.Changed += RefreshScopeThemes;
+            scope.ValidateLocalSelection = ValidateScopeThemes;
             themeScope = scope;
+            hudNoticePackageName = packageDisplayName;
         }
 
         public OperationResult<bool> DescribePresentationTheme(UiSurfaceRequest request, out UiThemeDescriptor? theme)
@@ -40,14 +44,19 @@ namespace TopiaForge.ModManager
                 surfaces[index].RefreshTheme(scope);
         }
 
-        private static UiThemeDescriptor? ResolveRemoteTheme(UiRemoteThemeSelection selection)
+        private OperationResult<bool> ValidateScopeThemes(UiThemeScope changed, UiThemeRef? proposed)
         {
-            var envelope = selection.Envelope;
-            var id = envelope?.ThemeId;
-            var catalogue = selection.Package?.Manifest.AdmittedUi;
-            if (id == null || catalogue == null || !catalogue.TryGet(id, out var descriptor)) return null;
-            return descriptor.Digest.Span.SequenceEqual(envelope!.DescriptorDigest.Span) ? descriptor : null;
+            var scope = themeScope!;
+            foreach (var surface in surfaces)
+            {
+                var result = surface.ValidateThemeSelection(scope, changed, proposed);
+                if (!result.Succeeded) return result;
+            }
+            return ThemeResolved;
         }
+
+        private static UiThemeDescriptor? ResolveRemoteTheme(UiRemoteThemeSelection selection)
+            => UiPresentationTheme.ViewerTheme(selection);
 
         private sealed partial class UnityUiSurface : IRemoteThemedSurface
         {
@@ -59,22 +68,36 @@ namespace TopiaForge.ModManager
             {
                 themeOverride = theme;
                 usesRemoteTheme = remote;
+                remoteComposition = remote;
+                declaredTheme = descriptor;
                 ApplySurfaceTheme(descriptor);
             }
 
             internal void RefreshTheme(UiThemeScope scope)
             {
                 if (!usesRemoteTheme && scope.TryDescribe(themeOverride, out var descriptor))
+                {
+                    declaredTheme = descriptor;
                     ApplySurfaceTheme(descriptor);
+                }
+            }
+
+            internal OperationResult<bool> ValidateThemeSelection(UiThemeScope scope, UiThemeScope changed, UiThemeRef? proposed)
+            {
+                if (usesRemoteTheme || themeOverride != null || admitted == null) return ThemeResolved;
+                if (!scope.TryDescribe(null, out var candidate, changed, proposed)) return ThemeMissing;
+                return ReferenceEquals(candidate, declaredTheme) ? ThemeResolved : UiPresentationTheme.StylesValid(admitted, candidate);
             }
 
             OperationResult<bool> IRemoteThemedSurface.SetRemotePresentation(UiNode? content, UiRemoteThemeSelection theme)
             {
-                var result = SetContent(content ?? EmptyContent);
+                var descriptor = ResolveRemoteTheme(theme);
+                var result = SetComposition(content ?? EmptyContent, descriptor, remote: true,
+                    changingTheme: !ReferenceEquals(descriptor, declaredTheme));
                 if (result.Succeeded)
                 {
                     usesRemoteTheme = true;
-                    ApplySurfaceTheme(ResolveRemoteTheme(theme));
+                    ApplySurfaceTheme(descriptor);
                 }
 
                 return result;
@@ -83,7 +106,10 @@ namespace TopiaForge.ModManager
             private void ApplySurfaceTheme(UiThemeDescriptor? descriptor)
             {
                 if (widget == null || CanvasRoot == null || !presence.IsLive) return;
-                widget.Host.SetSurfaceTheme(CanvasRoot, UiThemeScope.Ready(descriptor));
+                var effective = UiThemeScope.Ready(descriptor);
+                widget.Host.SetSurfaceTheme(CanvasRoot, effective);
+                if (compositionRoot != null && compositionRoot.Go.GetComponent<TopiaForgeLayerSlot>() != null)
+                    widget.Host.SetSurfaceTheme(compositionRoot.Go, effective ?? UiThemePackParser.Default);
             }
         }
     }

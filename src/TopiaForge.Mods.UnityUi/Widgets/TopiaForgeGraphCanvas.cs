@@ -119,6 +119,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             emptyLabel.gameObject.SetActive(value.Nodes.Count == 0);
+            UpdateConnectionNavigation();
             RenderGeometry();
             ApplyTheme(Theme);
         }
@@ -215,6 +216,7 @@ namespace TopiaForge.Mods.UnityUi
         internal void HandleEdgeSelected(string edgeId)
         {
             if (!enabledState || graph.ConnectionRemoved == null) return;
+            if (connectionList?.IsOpen != true) ReportConnectionFocus(null);
             TopiaForgeCallbacks.Player(Host.OwnerId, graph.ConnectionRemoved, edgeId, "Graph connection removal");
         }
 
@@ -280,7 +282,9 @@ namespace TopiaForge.Mods.UnityUi
 
         internal void HandleCanvasSelected()
         {
-            if (!enabledState || selectedNodeId == null) return;
+            if (!enabledState) return;
+            ReportConnectionFocus(null);
+            if (selectedNodeId == null) return;
             selectedNodeId = null;
             pendingSourceNodeId = null;
             pendingSourcePortId = null;

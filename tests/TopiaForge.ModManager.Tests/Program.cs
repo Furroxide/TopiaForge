@@ -120,6 +120,12 @@ namespace TopiaForge.ModManager.Tests
             { TestingKitTests.RunWorldWidgets(); WorldWidgetAdapterTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--world-widget-adapter")
             { WorldWidgetAdapterTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k1-outer-scroll")
+            {
+                UiOuterScrollTests.Run();
+                UiSurfaceReapplyTests.Run();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--ui-widget-regressions")
             {
                 UiKitCoreTests.Run(); UiKitWindowMathTests.Run(); UiKitMultiplayerCoreTests.Run();
@@ -155,6 +161,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && args[0] == "--ui-k1-delivery") { PresentationRuntimeTests.RunK1Delivery(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit")
             {
+                UiKitLayoutTests.Run(); UiKitLayoutWireTests.Run(); UiKitLayoutCaptureTests.Run();
                 UiKitCoreTests.Run(); UiKitWindowMathTests.Run(); UiKitMultiplayerCoreTests.Run();
                 UiKitSourceConventionTests.Run(); UiKitMultiplayerConventionTests.Run();
                 UiKitLayerLedgerTests.Run(); UiKitHudLayoutTests.Run(); UiSurfaceLifetimeTests.Run();

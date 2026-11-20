@@ -53,7 +53,7 @@ namespace TopiaForge.Mods
         internal static void End(IUiWireReader r) { if (!r.AtEnd) throw Bad(); }
         private static ArgumentException Bad() => new ArgumentException("The remote UI message is invalid.");
 
-        private sealed class Decoder
+        private sealed partial class Decoder
         {
             private readonly IUiWireReader r;
             private readonly Action<string, string> reply;
@@ -75,15 +75,14 @@ namespace TopiaForge.Mods
             }
             internal UiNode? Node(int depth, byte? rootType = null)
             {
-                if (depth > 32 || ++count > 4096) throw Bad();
+                if (depth > UiLayoutTree.MaximumDepth || ++count > UiLayoutTree.MaximumNodes) throw Bad();
                 var type = rootType ?? Byte(r);
-                if (type > 13) return EnhancedNode(type);
+                if (type > 13) return EnhancedNode(type, depth);
                 if (type == 0) return null;
                 if (type == 1) return new UiText(Text(r), (UiTextStyle)Byte(r, 2), (UiTone)Byte(r, 3));
                 if (type == 2 || type == 3)
                 {
-                    var children = new UiNode[Count(256)];
-                    for (var i = 0; i < children.Length; i++) children[i] = Node(depth + 1) ?? throw Bad();
+                    var children = LayoutChildren(depth);
                     return type == 2 ? (UiNode)new UiColumn(children) : new UiRow(children);
                 }
                 if (type == 4) { var height = Number(r); return new UiScroll(Node(depth + 1) ?? throw Bad(), height); }
@@ -127,12 +126,12 @@ namespace TopiaForge.Mods
                 return new UiDropdown(id, label, choices, selectedValue, value => reply(id, value), active);
             }
 
-            private UiNode EnhancedNode(byte type)
+            private UiNode EnhancedNode(byte type, int depth)
             {
                 if (!enhanced) throw Bad();
-                if (type != EnhancedTextTag && type != EnhancedProgressTag && type != EnhancedCountdownTag) throw Bad();
-                var id = Text(r, 128);
-                var optionalId = id.Length == 0 ? null : id;
+                if (type != EnhancedTextTag && type != EnhancedProgressTag && type != EnhancedCountdownTag)
+                    return LayoutNode(type, depth);
+                var optionalId = LayoutId();
                 if (type == EnhancedTextTag)
                     return new UiText(Text(r), (UiTextStyle)Byte(r, (byte)UiTextStyle.Mono), (UiTone)Byte(r, (byte)UiTone.Accent), optionalId);
                 if (type == EnhancedProgressTag)

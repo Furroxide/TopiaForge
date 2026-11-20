@@ -25,6 +25,8 @@ namespace TopiaForge.ModManager.Tests
             TheCrosshairIsNeverADock();
             TheDockChangesItsVersionOnlyWhenPositionsMayMove();
             InSessionHudLayoutTests.Run();
+            UiHudViewportBoundaryTests.Run();
+            UiHudRetainedNoticeTests.Run();
             Console.WriteLine("UiKitHudLayoutTests passed.");
         }
 

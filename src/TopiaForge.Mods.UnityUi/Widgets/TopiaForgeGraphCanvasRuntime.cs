@@ -51,6 +51,7 @@ namespace TopiaForge.Mods.UnityUi
             button = header.AddComponent<Button>();
             button.targetGraphic = headerFill;
             button.onClick.AddListener(Select);
+            header.AddComponent<TopiaForgeGraphFocusRelay>().Attach(owner);
 
             title = CreateLabel(header.transform, "Title", TopiaForgeTextStyle.Label, TextAlignmentOptions.TopLeft);
             SetHeaderLabel(title.rectTransform, UiGraphControlGeometry.TitleTop, UiGraphControlGeometry.TitleHeight);
@@ -63,6 +64,7 @@ namespace TopiaForge.Mods.UnityUi
         }
 
         public RectTransform Rect { get; }
+        internal Selectable FocusControl => button;
         public string NodeId => node != null ? node.Id : string.Empty;
         public bool Enabled => node != null && node.Enabled;
         public bool Active => go.activeSelf;
@@ -244,6 +246,15 @@ namespace TopiaForge.Mods.UnityUi
 
         public void Bind(UiGraphEdge value) => edge = value;
         public void SetActive(bool value) => go.SetActive(value);
+
+        internal void SetDirectPickingOnly(bool pointerOnly)
+        {
+            var navigation = button.navigation;
+            var mode = pointerOnly ? Navigation.Mode.None : Navigation.Mode.Automatic;
+            if (navigation.mode == mode) return;
+            navigation.mode = mode;
+            button.navigation = navigation;
+        }
 
         public void SetGeometry(Vector2 start, Vector2 end)
         {

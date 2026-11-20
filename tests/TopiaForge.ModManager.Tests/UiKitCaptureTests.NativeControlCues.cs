@@ -216,6 +216,14 @@ namespace TopiaForge.ModManager.Tests
                         Require(press.Active, "Keyboard or controller submit exposes otherwise collapsed press paint.");
                         native.FinishSubmit();
                         Require(!press.Active, "The submit mark clears after its reading interval.");
+                        native.Apply(new Color(0f, 0f, 0f, 1f), white, 10f, highContrast: true, authoredSelectionCue: true);
+                        native.OnDeselect(input);
+                        Require(selection.Active && !press.Active, "A retained authored cue stays visible after focus moves.");
+                        native.OnPointerDown(pointer);
+                        Require(selection.Active && press.Active, "An authored selection keeps its press outline independent.");
+                        native.OnPointerUp(pointer);
+                        native.Apply(new Color(0f, 0f, 0f, 1f), white, 10f, highContrast: true);
+                        Require(!selection.Active && !press.Active, "Rebinding the retained control clears its old selection mark.");
                         selectable.Interactable = false;
                         native.OnSelect(input);
                         native.OnPointerDown(pointer);

@@ -79,9 +79,20 @@ namespace TopiaForge.ModManager.Tests
                 "late and original recipients agree on the shared timeline");
             created.Value!.SetBody("Updated"); rig.Frames(15);
             Assert(late.ReceivedUi.Surfaces[0].TryFindNode("timer", out node) && ((UiCountdown)node!).EndsAt == deadline, "shared updates do not re-anchor");
-            var invalid = rig.Host.Ui.CreateSurface(Hud("invalid", "", new UiText(new string('x', 4097))));
+            var oversized = new UiText(new string('x', 4097));
+            try
+            {
+                _ = Hud("invalid", "", oversized);
+                throw new InvalidOperationException("The surface request accepted text beyond its local tree limit.");
+            }
+            catch (ArgumentException error)
+            {
+                Assert(error.Message.Contains("4096"), "The local text limit reports the admitted size.");
+            }
+            var invalid = created.Value.SetContent(oversized);
             Assert(invalid.ErrorCode == ModErrorCode.InvalidArgument && invalid.ErrorMessage.Contains("4096"), "shared invalid shape returns actionable InvalidArgument");
-            Assert(rig.Host.LocalUi.Surfaces.Count == 1, "invalid whole composition creates no local surface");
+            Assert(rig.Host.LocalUi.Surfaces.Count == 1 && surface.TryFindNode("timer", out _),
+                "Invalid whole compositions preserve the admitted surface.");
         }
     }
 }

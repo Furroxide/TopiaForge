@@ -14,6 +14,7 @@ namespace TopiaForge.Mods.UnityUi
         private RectTransform area = null!;
         private bool compact;
         private bool held;
+        private bool authoredSelectionCue;
         private Coroutine? submit;
         private bool submitted;
         private UiButtonCue available;
@@ -36,8 +37,9 @@ namespace TopiaForge.Mods.UnityUi
             return driver;
         }
 
-        internal void Apply(Color stateFill, Color markInk, float radius, bool highContrast)
+        internal void Apply(Color stateFill, Color markInk, float radius, bool highContrast, bool authoredSelectionCue = false)
         {
+            this.authoredSelectionCue = authoredSelectionCue;
             Color32 fill = stateFill;
             var colors = selectable.colors;
             var tints = new UiThemeStateTints(colors.highlightedColor.r, colors.selectedColor.r, colors.pressedColor.r);
@@ -99,6 +101,7 @@ namespace TopiaForge.Mods.UnityUi
             submit = null;
             held = false;
             submitted = false;
+            authoredSelectionCue = false;
             IsSelected = false;
             Refresh();
         }
@@ -111,6 +114,7 @@ namespace TopiaForge.Mods.UnityUi
                 if (IsSelected) cues |= UiButtonCue.Selection;
                 if (held || submitted) cues |= UiButtonCue.Press;
                 cues &= available;
+                if (authoredSelectionCue) cues |= UiButtonCue.Selection;
             }
 
             if (cues == ActiveCues) return;

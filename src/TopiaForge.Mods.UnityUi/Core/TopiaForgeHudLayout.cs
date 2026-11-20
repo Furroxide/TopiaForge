@@ -87,7 +87,9 @@ namespace TopiaForge.Mods.UnityUi
         public int Count => entries.Count;
 
         /// <summary>Adds a panel, hidden, after every panel already added, and returns its handle.</summary>
-        public int Add(TopiaForgeCorner corner, float height, float uiScale)
+        public int Add(TopiaForgeCorner corner, float height, float uiScale) => Add(corner, height, uiScale, referenceMargin: null);
+
+        internal int Add(TopiaForgeCorner corner, float height, float uiScale, float? referenceMargin)
         {
             if (corner == TopiaForgeCorner.Center)
             {
@@ -100,7 +102,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             lastHandle = lastHandle == int.MaxValue ? 1 : lastHandle + 1;
-            entries.Add(new Entry(lastHandle, corner, height, Scale(uiScale)));
+            entries.Add(new Entry(lastHandle, corner, height, Scale(uiScale), referenceMargin));
             Version++;
             return lastHandle;
         }
@@ -150,55 +152,58 @@ namespace TopiaForge.Mods.UnityUi
         /// the safe margin in from its side (zero for a centred edge); y runs into the screen from its edge, past the
         /// shown panels before it at the same corner.
         /// </summary>
-        public bool TryGetPosition(int handle, out float x, out float y)
+        public bool TryGetPosition(int handle, out float x, out float y) =>
+            TryGetPosition(handle, includeTarget: false, out x, out y);
+
+        internal bool TryGetProspectivePosition(int handle, out float x, out float y) =>
+            TryGetPosition(handle, includeTarget: true, out x, out y);
+
+        private bool TryGetPosition(int handle, bool includeTarget, out float x, out float y)
         {
             x = 0f;
             y = 0f;
             var index = IndexOf(handle);
-            if (index < 0 || !entries[index].Shown)
+            if (index < 0 || !(entries[index].Shown || includeTarget))
             {
                 return false;
             }
 
             var entry = entries[index];
-            var before = 0f;
-            var total = 0f;
-            var shownAtCorner = 0;
+            var offset = 0f;
+            var end = 0f;
+            var gap = 0f;
+            var centered = entry.Corner is TopiaForgeCorner.Left or TopiaForgeCorner.Right;
             for (var other = 0; other < entries.Count; other++)
             {
                 var candidate = entries[other];
-                if (!candidate.Shown || candidate.Corner != entry.Corner)
+                if ((!candidate.Shown && !(includeTarget && other == index)) || candidate.Corner != entry.Corner)
                 {
                     continue;
                 }
 
-                var extent = candidate.Height * candidate.UiScale;
-                if (other < index)
-                {
-                    before += extent + Gap;
-                }
-
-                total += extent + (shownAtCorner > 0 ? Gap : 0f);
-                shownAtCorner++;
+                var start = end + gap;
+                if (!centered) start = Math.Max(start, candidate.PhysicalMargin);
+                if (other == index) offset = start;
+                end = start + candidate.Height * candidate.UiScale;
+                gap = candidate.PhysicalGap;
             }
 
-            var margin = TopiaForgeTokens.SafeMargin;
-            x = HorizontalSign(entry.Corner) * margin / entry.UiScale;
+            x = HorizontalSign(entry.Corner) * entry.PhysicalMargin / entry.UiScale;
             switch (entry.Corner)
             {
                 case TopiaForgeCorner.TopLeft:
                 case TopiaForgeCorner.Top:
                 case TopiaForgeCorner.TopRight:
-                    y = -(margin + before) / entry.UiScale;
+                    y = -offset / entry.UiScale;
                     break;
                 case TopiaForgeCorner.BottomLeft:
                 case TopiaForgeCorner.Bottom:
                 case TopiaForgeCorner.BottomRight:
-                    y = (margin + before) / entry.UiScale;
+                    y = offset / entry.UiScale;
                     break;
                 default:
                     // Left and right: the stack is centred on the edge's middle, first panel at the top.
-                    y = ((total / 2f) - before - (entry.Height * entry.UiScale / 2f)) / entry.UiScale;
+                    y = ((end / 2f) - offset - (entry.Height * entry.UiScale / 2f)) / entry.UiScale;
                     break;
             }
 
@@ -242,13 +247,19 @@ namespace TopiaForge.Mods.UnityUi
 
         private sealed class Entry
         {
-            internal Entry(int handle, TopiaForgeCorner corner, float height, float uiScale)
+            private readonly float? referenceMargin;
+
+            internal Entry(int handle, TopiaForgeCorner corner, float height, float uiScale, float? referenceMargin)
             {
                 Handle = handle;
                 Corner = corner;
                 Height = height;
                 UiScale = uiScale;
+                this.referenceMargin = referenceMargin;
             }
+
+            internal float PhysicalMargin => referenceMargin is float margin ? margin * UiScale : TopiaForgeTokens.SafeMargin;
+            internal float PhysicalGap => referenceMargin.HasValue ? Gap * UiScale : Gap;
 
             internal int Handle { get; }
 

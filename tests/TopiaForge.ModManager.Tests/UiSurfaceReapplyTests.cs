@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -15,8 +16,13 @@ namespace TopiaForge.ModManager.Tests
             var files = new[]
             {
                 "src/TopiaForge.ModManager/UnityUiSurface.cs",
+                "src/TopiaForge.ModManager/UnityUiSurface.OuterScroll.cs",
                 "src/TopiaForge.ModManager/UnityUiSurface.Presence.cs",
                 "src/TopiaForge.ModManager/UnityUiCompositionRenderer.cs",
+                "src/TopiaForge.ModManager/UnityUiGraphRetention.cs",
+                "src/TopiaForge.ModManager/UnityUiLayoutRenderer.cs",
+                "src/TopiaForge.ModManager/UnityUiLayoutRenderer.Leaves.cs",
+                "src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeGraphCanvas.Retention.cs",
                 "src/TopiaForge.ModManager/UnityUiWorldWidgets.cs",
                 "src/TopiaForge.ModManager/UnityMainThreadGuard.cs",
                 "src/TopiaForge.ModManager/UiSurfacePresence.cs",
@@ -26,7 +32,11 @@ namespace TopiaForge.ModManager.Tests
             // Compile the shipped surface, safe-node renderer, and countdown driver against Unity-boundary doubles.
             var trees = files.Select(relative =>
                 CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, relative)), path: relative))
+                .Append(CSharpSyntaxTree.ParseText(OuterScrollAdapter(root), path: "OuterScrollAdapter.cs"))
                 .Append(CSharpSyntaxTree.ParseText(Boundaries, path: "SurfaceTestBoundaries.cs"))
+                .Append(CSharpSyntaxTree.ParseText(EngineBoundaries, path: "SurfaceTestEngine.cs"))
+                .Append(CSharpSyntaxTree.ParseText(GraphBoundaries, path: "SurfaceTestGraph.cs"))
+                .Append(CSharpSyntaxTree.ParseText(GraphScenarios, path: "SurfaceTestGraphScenarios.cs"))
                 .Append(CSharpSyntaxTree.ParseText(Scenarios, path: "SurfaceTestScenarios.cs"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(path => !Path.GetFileName(path).StartsWith("UnityEngine", StringComparison.Ordinal)
@@ -42,7 +52,23 @@ namespace TopiaForge.ModManager.Tests
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.ModManager.OwnerUiService", throwOnError: true)!;
             ((Action)probe.GetMethod("ProbeReapply", BindingFlags.Public | BindingFlags.Static)!
                 .CreateDelegate(typeof(Action)))();
-            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool and HUD.");
+            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool, HUD and retained graph admission.");
+        }
+
+        private static string OuterScrollAdapter(string root)
+        {
+            var file = Path.Combine(root, "src/TopiaForge.ModManager/UnityUiSurface.Layout.cs");
+            var syntax = CSharpSyntaxTree.ParseText(File.ReadAllText(file)).GetRoot();
+            var methods = syntax.DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+            var measure = methods.Single(method => method.Identifier.ValueText == "MeasureContentArea")
+                .WithIdentifier(SyntaxFactory.Identifier("MeasureNativeContentArea"));
+            var refresh = methods.Single(method => method.Identifier.ValueText == "UpdateRetainedLayout")
+                .WithIdentifier(SyntaxFactory.Identifier("UpdateNativeRetainedLayout"));
+            var preferred = methods.Single(method => method.Identifier.ValueText == "PreferredSize");
+            return "using System; using TMPro; using TopiaForge.Mods; using TopiaForge.Mods.UnityUi; " +
+                "using UnityEngine; using UnityEngine.UI; namespace TopiaForge.ModManager { " +
+                "internal sealed partial class OwnerUiService { private sealed partial class UnityUiSurface { " +
+                measure + "\n" + refresh + "\n" + preferred + " } } }";
         }
 
         private const string Scenarios = """
@@ -64,6 +90,76 @@ namespace TopiaForge.ModManager.Tests
                         UnityMainThreadGuard.CaptureCurrentThread();
                         foreach (var kind in new[] { UiSurfaceKind.Window, UiSurfaceKind.FullscreenTool, UiSurfaceKind.Hud })
                             ProbeSurface(kind);
+                        ProbeGraphAdmission();
+                        ProbeOuterScroll(useFullscreen: false);
+                        ProbeOuterScroll(useFullscreen: true);
+                    }
+
+                    private static void ProbeOuterScroll(bool useFullscreen)
+                    {
+                        var host = new UiHost();
+                        var window = new TopiaForgeWindow(host);
+                        var fullscreen = new TopiaForgeFullscreenTool(host);
+                        var shell = useFullscreen ? (TopiaForgeWidget)fullscreen : window;
+                        shell.Rect.rect = new Rect { width = 500f, height = 260f };
+                        var scrollRoot = new GameObject();
+                        scrollRoot.transform.SetParent(shell.Rect, false);
+                        var viewport = new GameObject();
+                        viewport.transform.SetParent(scrollRoot.transform, false);
+                        viewport.transform.rect = new Rect { width = 458f, height = 156f };
+                        var parent = new TopiaForgeContainer(host);
+                        parent.Rect.SetParent(viewport.transform, false);
+                        parent.Rect.rect = new Rect { width = 458f, height = 1100f };
+                        var group = parent.Go.AddComponent<VerticalLayoutGroup>();
+                        group.padding.top = group.padding.bottom = 16;
+                        group.spacing = 8f;
+                        var scroll = scrollRoot.AddComponent<ScrollRect>();
+                        scroll.content = parent.Rect;
+                        scroll.viewport = viewport.transform;
+                        scroll.vertical = true;
+                        var body = parent.Label(new string('W', 200), TopiaForgeTextStyle.Body);
+                        using var life = new FakeModLifetime();
+                        var logger = new BoundaryLogger();
+                        using var surface = useFullscreen
+                            ? UnityUiSurface.ForFullscreen("outer", fullscreen, body, parent, life, logger, _ => { })
+                            : UnityUiSurface.ForWindow("outer", window, body, parent, life, logger, _ => { });
+                        surface.Present();
+
+                        var invalid = new UiSizedBox(new UiButton("oversized", "Oversized", static () => { }), height: 2000f);
+                        var refused = surface.SetContent(invalid);
+                        Require(refused.ErrorCode == ModErrorCode.InvalidArgument &&
+                            refused.ErrorMessage.Contains("/0/0", StringComparison.Ordinal) && parent.Children.Count == 0,
+                            "The native staged surface rejects its unreachable target before committing or showing a child. Got " +
+                            refused.ErrorCode + " " + refused.ErrorMessage + " with " + parent.Children.Count + " children.");
+
+                        var actions = Enumerable.Range(0, 12).Select(index =>
+                            (UiNode)new UiButton("action-" + index, "Inspect", static () => { }));
+                        var tall = new UiSizedBox(new UiButton("resize", "Restore", static () => { }), height: 130f);
+                        var line = new UiText(string.Join(" ", Enumerable.Repeat("Relay telemetry ready.", 100)), id: "wrapped");
+                        var composition = new UiColumn(actions.Prepend(line).Append(tall));
+                        Require(surface.SetContent(composition).Succeeded, "The scrolled body does not subtract from the native aperture.");
+                        var retained = parent.Children.Single();
+                        Require(retained.Go.activeSelf && surface.SetContent(invalid).ErrorCode == ModErrorCode.InvalidArgument &&
+                            ReferenceEquals(retained, parent.Children.Single()),
+                            "An invalid native replacement keeps the existing shown composition.");
+                        parent.Rect.anchoredPosition = new Vector2(0f, 170f);
+                        var builds = host.ColumnsBuilt;
+                        var layout = LayoutRebuilder.Requests;
+                        var allocated = AllocationProbe.Measure("settled native outer scroll", () =>
+                            Require(surface.SetContent(composition).Succeeded, "Identical scroll content reapplication succeeds."),
+                            frames: 4096, warmups: 32);
+                        Require(allocated == 0 && host.ColumnsBuilt == builds && LayoutRebuilder.Requests == layout,
+                            "The unchanged aperture requires 0 B, no rebuild and no remeasure over 4,096 native reapplications.");
+
+                        viewport.transform.rect.height = 105f;
+                        Require(surface.SetContent(composition).Succeeded && !retained.Go.activeSelf &&
+                            surface.GraphConnectionsSuspended && parent.Children.Count == 2 && parent.Rect.anchoredPosition.y == 0f && scroll.MovementStops == 1,
+                            "An aperture-only resize hides the original controls and resets the notice to the viewport start.");
+                        viewport.transform.rect.height = 185f;
+                        Require(surface.SetContent(composition).Succeeded && retained.Go.activeSelf &&
+                            ReferenceEquals(retained, parent.Children.Single()) && parent.Rect.anchoredPosition.y == 170f &&
+                            !surface.GraphConnectionsSuspended && scroll.MovementStops == 2 && logger.Errors == 0,
+                            "The larger aperture restores the original native tree and its saved scroll offset.");
                     }
 
                     private static void ProbeSurface(UiSurfaceKind kind)
@@ -99,7 +195,7 @@ namespace TopiaForge.ModManager.Tests
                         var countdown = new UiCountdown(70, "Remaining", id: "timer");
                         Require(surface.SetContent(countdown).Succeeded, "Initial countdown should be admitted");
                         var rendered = parent.Children.Single();
-                        var label = rendered.Children.Single().Labels.Single();
+                        var label = rendered.Go.GetComponentsInChildren<TopiaForgeLabel>(includeInactive: true).Single();
                         Require(countdown.ClockEpoch == epoch && label.Seconds == 60,
                             "An admitted countdown binds once and initially renders current seconds");
 

@@ -106,8 +106,19 @@ namespace TopiaForge.ModManager.Tests
                 groups[group] = new UiColumn(children);
             }
             RejectUpdate(new UiColumn(groups), ModErrorCode.InvalidArgument, "more than 4096 nodes");
-            var malformed = target.Ui.CreateSurface(new UiSurfaceRequest("bad", "Bad", "", content: new UiText(new string('x', 4097))));
-            That(malformed.ErrorCode == ModErrorCode.InvalidArgument && malformed.ErrorMessage.Contains("4096"), "invalid shape names its cause instead of UI-full");
+            var oversizedText = new UiText(new string('x', 4097));
+            try
+            {
+                _ = new UiSurfaceRequest("bad", "Bad", "", content: oversizedText);
+                throw new InvalidOperationException("An oversized field must fail request construction.");
+            }
+            catch (ArgumentException exception)
+            {
+                That(exception.Message.Contains("4096", StringComparison.Ordinal) &&
+                    exception.Message.Contains("At /0.", StringComparison.Ordinal),
+                    "Request construction reports the local text limit and its logical position.");
+            }
+            RejectUpdate(oversizedText, ModErrorCode.InvalidArgument, "4096");
             var large = new UiColumn(new UiText(new string('x', 4096)), new UiText(new string('x', 4096)), new UiText(new string('x', 4096)),
                 new UiText(new string('x', 4096)), new UiText(new string('x', 4096)), new UiText(new string('x', 4096)), new UiText(new string('x', 4096)), new UiText(new string('x', 4096)));
             That(target.Ui.CreateSurface(new UiSurfaceRequest("large", "Large", "", content: large)).ErrorCode == ModErrorCode.RateLimited, "actual targeted byte exhaustion remains RateLimited");

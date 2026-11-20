@@ -96,6 +96,15 @@ namespace TopiaForge.Mods.Testing
                     Add(node, UiAccessibilityIssueKind.TrustTheme, "This trust surface must use the kit theme.");
                 if (Has(node, UiCaptureNodeFlags.InvalidLayout) || !ValidBounds(node))
                     Add(node, UiAccessibilityIssueKind.InvalidLayout, "The resolved bounds are invalid.");
+                var diagnostic = Has(node, UiCaptureNodeFlags.LayoutDiagnostic);
+                var meaningful = node.Text.Length > 0 || Has(node, UiCaptureNodeFlags.RequiresLabel);
+                var protectedClip = !node.Decorative && (Has(node, UiCaptureNodeFlags.FocusIndicator) ||
+                    (meaningful && !Has(node, UiCaptureNodeFlags.ScrollableClip)));
+                if (node.Clipped && (diagnostic || protectedClip))
+                    Add(node, UiAccessibilityIssueKind.ClippedContent, diagnostic ? "The retained layout cannot fit its viewport." :
+                        "The viewport clips meaningful content.");
+                if (diagnostic && node.Occluded)
+                    Add(node, UiAccessibilityIssueKind.OccludedContent, "A later paint covers meaningful content.");
                 if (!node.IsRendered || node.Decorative) continue;
 
                 if (Has(node, UiCaptureNodeFlags.HitTarget))
@@ -126,11 +135,7 @@ namespace TopiaForge.Mods.Testing
                     Add(node, UiAccessibilityIssueKind.MissingLabel, "A meaningful group needs a plain-text label.");
                 if (Has(node, UiCaptureNodeFlags.RequiresNonColorCue) && !Has(node, UiCaptureNodeFlags.HasNonColorCue))
                     Add(node, UiAccessibilityIssueKind.ColorOnly, "The state needs a word, symbol, or positional cue.");
-                if (node.Clipped && (Has(node, UiCaptureNodeFlags.FocusIndicator) ||
-                    (!Has(node, UiCaptureNodeFlags.ScrollableClip) &&
-                        (node.Text.Length > 0 || Has(node, UiCaptureNodeFlags.RequiresLabel)))))
-                    Add(node, UiAccessibilityIssueKind.ClippedContent, "The viewport clips meaningful content.");
-                if (node.Occluded)
+                if (!diagnostic && node.Occluded)
                     Add(node, UiAccessibilityIssueKind.OccludedContent, "A later paint covers meaningful content.");
             }
 
