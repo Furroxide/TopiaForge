@@ -99,7 +99,7 @@ void main() {
       Directory(p.join(repositoryRoot.path, 'templates')),
       Directory(p.join(payload.path, 'templates')),
     );
-    const ReleaseSdkPayloadValidator().validate(payload.path);
+    _expectValidatorRuntimeDependency(payload);
     expect(
       pack.packages.map((package) => package.id).toSet(),
       topiaForgeSdkPackageIds,
@@ -186,7 +186,7 @@ void main() {
         'ROBOTOPIA_GAME_DIR': fakeGame.path,
         'NUGET_PACKAGES': p.join(temp.path, 'nuget-packages'),
         'DOTNET_CLI_HOME': p.join(temp.path, 'dotnet-home'),
-      };
+      }..remove('TOPIAFORGE_PACKAGE_VALIDATOR_PATH');
       final runtimePackages = await _packRuntimeTemplateDependencies(
         cli,
         repositoryRoot,
@@ -251,15 +251,7 @@ void main() {
       if (!Platform.isWindows) {
         await Process.run('chmod', ['+x', relocatedCli.path]);
       }
-      File(
-        p.join(payload.path, 'global.json'),
-      ).copySync(p.join(relocatedCliDirectory.path, 'global.json'));
-      const ReleaseFileOps().copyDirectory(
-        Directory(p.join(payload.path, 'tools', 'package-validator')),
-        Directory(
-          p.join(relocatedCliDirectory.path, 'tools', 'package-validator'),
-        ),
-      );
+      _copyRelocatedValidator(payload, relocatedCliDirectory);
       payload.deleteSync(recursive: true);
       await _expectPackagedCliRejectsNonportableScaffold(
         relocatedCli,
@@ -417,8 +409,9 @@ void main() {
       Directory(p.join(payload.path, 'dist')).createSync();
 
       final projects = Directory(p.join(temp.path, 'projects'))..createSync();
+      final dataRoot = p.join(temp.path, 'persistent-user-data');
       final repository = LocalDeveloperRepository(
-        dataRoot: p.join(temp.path, 'persistent-user-data'),
+        dataRoot: dataRoot,
         repositoryRoot: payload.path,
       );
       final workspaces = <DeveloperWorkspace>[];
@@ -437,6 +430,13 @@ void main() {
         );
       }
 
+      final relocated = Directory(p.join(temp.path, 'relocated-tools'))
+        ..createSync();
+      _copyRelocatedValidator(payload, relocated);
+      final relocatedRepository = LocalDeveloperRepository(
+        dataRoot: dataRoot,
+        repositoryRoot: relocated.path,
+      );
       payload.deleteSync(recursive: true);
       for (final workspace in workspaces) {
         final project = Directory(workspace.projectRoot)
@@ -464,11 +464,13 @@ void main() {
               '${build.stdout}\n${build.stderr}',
         );
         if (_hasContractLock(workspace.projectRoot)) {
-          await repository.synchronizeMultiplayerContractLock(
+          await relocatedRepository.synchronizeMultiplayerContractLock(
             workspace.projectRoot,
           );
         }
-        final package = await repository.packProject(workspace.projectRoot);
+        final package = await relocatedRepository.packProject(
+          workspace.projectRoot,
+        );
         expect(File(package).existsSync(), isTrue);
         final archive = ZipDecoder().decodeBytes(
           File(package).readAsBytesSync(),
