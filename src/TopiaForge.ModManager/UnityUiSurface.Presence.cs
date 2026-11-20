@@ -66,6 +66,8 @@ namespace TopiaForge.ModManager
                 var effects = presence.Lose();
                 ResetGraphConnections(retire: true);
                 admitted = null;
+                ReleaseThemeResources();
+                ReleaseArtwork();
                 layoutRenderer = null;
                 ClearLayoutNotice();
                 hudTitle = null;
@@ -125,6 +127,8 @@ namespace TopiaForge.ModManager
                 }
                 finally
                 {
+                    ReleaseThemeResources();
+                    ReleaseArtwork();
                     try
                     {
                         releaseOwner?.Invoke(this);

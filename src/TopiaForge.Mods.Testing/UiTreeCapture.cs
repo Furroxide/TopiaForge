@@ -105,7 +105,10 @@ namespace TopiaForge.Mods.Testing
                         "The viewport clips meaningful content.");
                 if (diagnostic && node.Occluded)
                     Add(node, UiAccessibilityIssueKind.OccludedContent, "A later paint covers meaningful content.");
-                if (!node.IsRendered || node.Decorative) continue;
+                if (!node.IsRendered) continue;
+                if (Has(node, UiCaptureNodeFlags.BoundaryMark)) CheckContrast(node, 3f);
+                if (Has(node, UiCaptureNodeFlags.SemanticMark)) CheckContrast(node, highContrast ? 4.5f : 3f);
+                if (node.Decorative) continue;
 
                 if (Has(node, UiCaptureNodeFlags.HitTarget))
                 {
@@ -126,11 +129,6 @@ namespace TopiaForge.Mods.Testing
                     if (node.TextHeightPixels + 0.0001f < node.ExpectedTextHeight)
                         Add(node, UiAccessibilityIssueKind.TextSize, "Text is below the readable height for its role.");
                 }
-                else if (Has(node, UiCaptureNodeFlags.SemanticMark))
-                {
-                    CheckContrast(node, highContrast ? 4.5f : 3f);
-                }
-
                 if (Has(node, UiCaptureNodeFlags.RequiresLabel) && string.IsNullOrWhiteSpace(node.SemanticLabel))
                     Add(node, UiAccessibilityIssueKind.MissingLabel, "A meaningful group needs a plain-text label.");
                 if (Has(node, UiCaptureNodeFlags.RequiresNonColorCue) && !Has(node, UiCaptureNodeFlags.HasNonColorCue))

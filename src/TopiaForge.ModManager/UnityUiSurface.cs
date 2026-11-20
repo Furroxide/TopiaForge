@@ -25,7 +25,9 @@ namespace TopiaForge.ModManager
             private UiThemeDescriptor? declaredTheme;
             private bool remoteComposition;
             private int bodyVersion;
+            private int artworkVersion;
             private string? sentBody;
+            private UiSurfaceArtwork? artwork;
             private IReadOnlyDictionary<string, TopiaForgeGraphCanvas> retainedGraphs =
                 new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);
             private readonly IModLifetime lifetime;
@@ -168,9 +170,10 @@ namespace TopiaForge.ModManager
             }
 
             public OperationResult<bool> SetContent(UiNode content)
-                => SetComposition(content, declaredTheme, remoteComposition, changingTheme: false);
+                => SetComposition(content, declaredTheme, remoteComposition);
 
-            private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor, bool remote, bool changingTheme)
+            private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor, bool remote,
+                Action<TopiaForgeContainer>? prepareTheme = null, Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null)
             {
                 UnityMainThreadGuard.AssertCurrent();
                 if (content == null) throw new ArgumentNullException(nameof(content));
@@ -198,12 +201,14 @@ namespace TopiaForge.ModManager
                 TopiaForgeContainer? next = null;
                 UiGraphRetentionTransaction? graphTransaction = null;
                 UnityUiLayoutRenderer? nextLayout = null;
+                UiSurfaceArtwork? nextArtwork = null;
+                var needsImageNoticeRoom = false;
                 ContentStamp stamp;
                 try
                 {
-                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
+                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
                     var retained = ReferenceEquals(content, admitted);
-                    if (retained && !changingTheme)
+                    if (retained && prepareTheme == null)
                     {
                         if (!committedStamp.Matches(stamp))
                         {
@@ -217,40 +222,48 @@ namespace TopiaForge.ModManager
                     if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
                         return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                     if (!retained) UiClockBinding.Check(content, stamp.ClockEpoch);
+                    nextArtwork = prepareArtwork == null ? PrepareArtwork(content) : prepareArtwork(content);
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
                     next.SetShown(false);
-                    if (changingTheme) PrepareStagedTheme(next, descriptor);
+                    prepareTheme?.Invoke(next);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
-                    nextLayout = UnityUiLayoutRenderer.Stage(content, next, MeasureContentArea(parent, view),
-                        descriptor ?? (remote ? null : UiThemePackParser.Default), callbacks, graphTransaction);
+                    var area = MeasureContentArea(parent, view);
+                    nextLayout = UnityUiLayoutRenderer.Stage(content, next, area,
+                        descriptor ?? (remote ? null : UiThemePackParser.Default), callbacks, graphTransaction, nextArtwork);
+                    needsImageNoticeRoom = nextLayout.UnavailableImagePath != null && !CanShowImageNotice(next, area);
+                    if (!remote && needsImageNoticeRoom)
+                        throw new ArgumentException("The image unavailable notice cannot fit this surface at " + nextLayout.UnavailableImagePath + ".");
                     graphTransaction.Transfer(next);
                     if (!retained) UiClockBinding.Commit(content, stamp.ClockEpoch);
                 }
                 catch (ArgumentException exception)
                 {
                     var cleanup = RollbackFailedRender(graphTransaction, parent, next);
+                    RetireArtwork(nextArtwork);
                     return OperationResult<bool>.Failure(
-                        ModErrorCode.InvalidArgument,
+                        exception is UiImageNotDeclaredException ? ModErrorCode.NotFound : ModErrorCode.InvalidArgument,
                         exception.Message + cleanup);
                 }
                 catch (Exception exception)
                 {
                     var cleanup = RollbackFailedRender(graphTransaction, parent, next);
+                    RetireArtwork(nextArtwork);
                     return OperationResult<bool>.Failure(
                         ModErrorCode.External,
                         "TopiaForgeUi could not render the composition: " + exception.Message + cleanup);
                 }
 
                 var previous = compositionRoot;
+                var previousArtwork = artwork;
                 compositionRoot = next;
+                artwork = nextArtwork;
                 layoutRenderer = nextLayout;
                 admitted = content;
                 declaredTheme = descriptor;
                 remoteComposition = remote;
                 committedStamp = stamp;
                 retainedGraphs = graphTransaction!.Commit();
-                RemoveLayoutFallback();
-                next!.SetShown(true);
+                ShowCompositionLayout(next!, needsImageNoticeRoom, allowAlternateImageNotice: remote);
                 ObserveLayout();
                 try { SyncGraphConnections(); }
                 catch (Exception exception)
@@ -270,6 +283,7 @@ namespace TopiaForge.ModManager
                     try { logger.Error(exception, "TopiaForgeUi could not destroy a replaced composition."); }
                     catch { }
                 }
+                finally { RetireArtwork(previousArtwork); }
 
                 RestoreOuterScrollOffset();
                 return ContentApplied;
@@ -301,12 +315,14 @@ namespace TopiaForge.ModManager
                 private readonly float height;
                 private readonly int bodyVersion;
                 private readonly int dockVersion;
+                private readonly int artworkVersion;
                 private readonly Rect outerScrollViewport;
 
-                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int dockVersion, Rect outerScrollViewport)
+                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int artworkVersion, int dockVersion, Rect outerScrollViewport)
                 {
                     ClockEpoch = clockEpoch;
                     this.bodyVersion = bodyVersion;
+                    this.artworkVersion = artworkVersion;
                     this.dockVersion = dockVersion;
                     this.outerScrollViewport = outerScrollViewport;
                     theme = view.ResolvedTheme;
@@ -324,7 +340,7 @@ namespace TopiaForge.ModManager
                     && ReferenceEquals(theme, other.theme)
                     && screenWidth == other.screenWidth && screenHeight == other.screenHeight
                     && width.Equals(other.width) && height.Equals(other.height) && bodyVersion == other.bodyVersion
-                    && dockVersion == other.dockVersion
+                    && artworkVersion == other.artworkVersion && dockVersion == other.dockVersion
                     && outerScrollViewport.width.Equals(other.outerScrollViewport.width)
                     && outerScrollViewport.height.Equals(other.outerScrollViewport.height);
             }

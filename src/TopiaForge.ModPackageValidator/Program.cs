@@ -16,7 +16,8 @@ internal static class Program
         }
 
         var uiOnly = args.Length == 2 && string.Equals(args[0], "--ui-themes-only", StringComparison.Ordinal);
-        if ((!uiOnly && args.Length != 1) || string.IsNullOrWhiteSpace(args[args.Length - 1]))
+        var prepareUi = args.Length == 2 && string.Equals(args[0], "--prepare-ui-themes", StringComparison.Ordinal);
+        if ((!uiOnly && !prepareUi && args.Length != 1) || string.IsNullOrWhiteSpace(args[args.Length - 1]))
         {
             Console.Error.WriteLine(ErrorCode + ": expected one safely extracted package directory.");
             return 2;
@@ -47,9 +48,11 @@ internal static class Program
             }
 
             var manifest = ModManifestJson.LoadFile(manifestPath);
-            if (uiOnly)
+            if (uiOnly || prepareUi)
             {
-                var uiErrors = ManifestContentValidator.ValidateUiThemes(packageRoot, manifest);
+                var uiErrors = prepareUi
+                    ? UiThemePackage.Prepare(packageRoot, manifest)
+                    : ManifestContentValidator.ValidateUiThemes(packageRoot, manifest);
                 foreach (var error in uiErrors)
                     Console.Error.WriteLine(ErrorCode + ": " + error);
                 return uiErrors.Count == 0 ? 0 : 1;

@@ -8,9 +8,18 @@ namespace TopiaForge.Mods.Testing
         private string admittedEpoch = string.Empty;
         private FakeUiThemeResolution admittedTheme;
         private UiAccessibilityPreferences admittedAccessibility = UiAccessibilityPreferences.Default;
+        private ulong artRevision;
+        private ulong admittedArtRevision;
+
+        internal FakeUiImages Images { get; private set; }
+        internal UiWireEnvelope? Receiver { get; }
+        internal void AdvanceArtwork() => artRevision++;
+
+        internal void InitializePresentation(string epoch) =>
+            RememberPresentation(epoch, owner.ResolveTheme(Request.Theme, Receiver), owner.Accessibility);
 
         private bool PresentationMatches(string epoch, FakeUiThemeResolution theme, UiAccessibilityPreferences preferences) =>
-            admittedEpoch == epoch && ReferenceEquals(admittedTheme.Descriptor, theme.Descriptor) &&
+            admittedArtRevision == artRevision && admittedEpoch == epoch && ReferenceEquals(admittedTheme.Descriptor, theme.Descriptor) &&
             admittedTheme.RequestedId == theme.RequestedId &&
             admittedAccessibility.HighContrast == preferences.HighContrast &&
             admittedAccessibility.UiScale == preferences.UiScale &&
@@ -20,6 +29,7 @@ namespace TopiaForge.Mods.Testing
         private void RememberPresentation(string epoch, FakeUiThemeResolution theme, UiAccessibilityPreferences preferences)
         {
             admittedEpoch = epoch;
+            admittedArtRevision = artRevision;
             admittedTheme = theme;
             admittedAccessibility = preferences;
         }
@@ -33,7 +43,7 @@ namespace TopiaForge.Mods.Testing
 
             var retained = ReferenceEquals(content, Content);
             var epoch = widgetEpoch();
-            var theme = owner.ResolveTheme(Request.Theme);
+            var theme = owner.ResolveTheme(Request.Theme, Receiver);
             var preferences = owner.Accessibility;
             if (retained && PresentationMatches(epoch, theme, preferences)) return FakeUiThemePackage.Success;
 
@@ -46,16 +56,21 @@ namespace TopiaForge.Mods.Testing
                 return OperationResult<bool>.Failure(errorCode, message);
             }
 
+            var images = Images;
             try
             {
                 if (!retained && Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
                     return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
-                wireTarget?.Measure(owner, revision + 1, Request, Body, IsVisible, content, epoch, retained);
                 if (!retained)
                 {
-                    FakeUiTreeCapture.VerifyComposition(owner, this, content);
-                    UiClockBinding.Bind(content, epoch);
+                    var prepared = owner.PrepareImages(content, Receiver != null);
+                    if (!prepared.TryGetValue(out var staged))
+                        return OperationResult<bool>.Failure(prepared.ErrorCode, prepared.ErrorMessage);
+                    images = staged;
+                    FakeUiTreeCapture.VerifyComposition(owner, this, content, images);
+                    UiClockBinding.Check(content, epoch);
                 }
+                wireTarget?.Measure(owner, revision + 1, Request, Body, IsVisible, images.Presentation, epoch, retained);
             }
             catch (ArgumentException exception)
             {
@@ -71,7 +86,10 @@ namespace TopiaForge.Mods.Testing
             // Retained trees keep their input values even when a theme, accessibility setting, or clock changes.
             if (retained) return FakeUiThemePackage.Success;
 
+            UiClockBinding.Commit(content, epoch);
             Content = content;
+            Images = images;
+            owner.ImagesChanged();
             toggleValues.Clear();
             sliderValues.Clear();
             textValues.Clear();
@@ -122,9 +140,8 @@ namespace TopiaForge.Mods.Testing
         private bool CanInteract(string id)
         {
             if (!UiLayoutTree.TryFind(Content, id, out _, out var disabled) || disabled) return false;
-            try { FakeUiTreeCapture.VerifyComposition(owner, this, Content); }
+            try { return FakeUiTreeCapture.VerifyComposition(owner, this, Content, Images); }
             catch (UiLayoutException) { return false; }
-            return true;
         }
 
         private OperationResult<bool> Invoke(Action callback, string description, bool playerAction = true)

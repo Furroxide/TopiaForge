@@ -106,17 +106,21 @@ namespace TopiaForge.Mods.Testing
         }
 
         /// <inheritdoc/>
-        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => CreateSurface(request, null);
+        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => CreateSurface(request, null, null);
+
+        // Headless receiver fixtures supply an already authenticated presentation envelope.
+        internal OperationResult<IUiSurface> CreateReceivedSurface(UiSurfaceRequest request, UiWireEnvelope envelope) =>
+            CreateSurface(request, null, envelope ?? throw new ArgumentNullException(nameof(envelope)));
 
         internal OperationResult<IUiSurface> CreateTargetedSurface(UiSurfaceRequest request, string player, ulong generation)
         {
             var target = new FakeUiWireTarget(player, generation, nextTargetedSurfaceToken);
-            var created = CreateSurface(request, target);
+            var created = CreateSurface(request, target, null);
             if (created.Succeeded) nextTargetedSurfaceToken++;
             return created;
         }
 
-        private OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request, FakeUiWireTarget? wireTarget)
+        private OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request, FakeUiWireTarget? wireTarget, UiWireEnvelope? receiver)
         {
             gameThread.AssertCurrent();
             if (request == null)
@@ -141,9 +145,12 @@ namespace TopiaForge.Mods.Testing
                 }
             }
 
-            var themeCheck = themeScope.Package.ValidateSelection(themeScope, request.Theme);
+            var themeCheck = themeScope.Package.ValidateSurfaceTheme(themeScope, request.Theme, receiver);
             if (!themeCheck.Succeeded)
                 return OperationResult<IUiSurface>.Failure(themeCheck.ErrorCode, themeCheck.ErrorMessage);
+            var prepared = PrepareImages(request.Content, receiver != null);
+            if (!prepared.TryGetValue(out var images))
+                return OperationResult<IUiSurface>.Failure(prepared.ErrorCode, prepared.ErrorMessage);
 
             var scenesNow = scenes;
             var surface = new FakeUiSurface(
@@ -151,14 +158,14 @@ namespace TopiaForge.Mods.Testing
                 this,
                 RemoveSurface,
                 scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay,
-                wireTarget);
+                wireTarget, images, receiver);
             surface.SetClock(() => widgetClock(), () => WidgetEpoch());
             var epoch = WidgetEpoch();
             try
             {
-                wireTarget?.Measure(this, 1, request, request.Body, visible: true, request.Content, epoch, retained: false);
-                FakeUiTreeCapture.VerifyComposition(this, surface, request.Content);
-                UiClockBinding.Bind(request.Content, epoch);
+                wireTarget?.Measure(this, 1, request, request.Body, visible: true, images.Presentation, epoch, retained: false);
+                FakeUiTreeCapture.VerifyComposition(this, surface, request.Content, images);
+                UiClockBinding.Check(request.Content, epoch);
             }
             catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
             catch (InvalidOperationException) when (wireTarget.HasValue)
@@ -177,6 +184,8 @@ namespace TopiaForge.Mods.Testing
             {
                 surface.AttachLifetimeLease(lifetime.Track(surface));
                 themeScope.Package.AddSurface(themeScope, surface);
+                UiClockBinding.Commit(request.Content, epoch);
+                surface.InitializePresentation(epoch);
                 if (request.Kind == UiSurfaceKind.Hud) RefreshHudLayoutNotices();
                 return OperationResult<IUiSurface>.Success(surface);
             }

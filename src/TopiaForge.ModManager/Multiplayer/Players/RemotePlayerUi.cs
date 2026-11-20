@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager
         internal readonly ulong Token;
         internal readonly UiSurfaceRequest Request;
         internal UiNode? Content;
+        internal UiNode? PresentationContent;
         internal string Body;
         internal ulong Revision = 1;
         internal ulong Stream;
@@ -29,11 +30,11 @@ namespace TopiaForge.ModManager
         internal UiThemeDescriptor? Theme;
         internal UiWireEnvelope? Envelope;
         internal string? SentClockEpoch;
-        internal RemoteUiSurface(MultiplayerPlayers runtime, PlayerContext context, IPlayer target, ulong token, UiSurfaceRequest request,
-            UiThemeDescriptor? theme = null)
+        internal RemoteUiSurface(MultiplayerPlayers runtime, PlayerContext context, IPlayer target, ulong token,
+            UiSurfaceRequest request, UiNode? presentation, UiThemeDescriptor? theme)
         {
             Runtime = runtime; Context = context; Target = target; Token = token; Request = request;
-            Content = request.Content; Body = request.Body; Theme = theme;
+            Content = request.Content; PresentationContent = presentation; Body = request.Body; Theme = theme;
         }
         public string Id => Request.Id;
         public bool IsVisible => !Closed && Target.IsPresent && !Context.Lifetime.IsStopping && Visible;
@@ -45,6 +46,7 @@ namespace TopiaForge.ModManager
             Check();
             if (body == null || body.Length > 4096) throw new ArgumentException("Remote UI text is limited to 4096 characters.", nameof(body));
             if (Closed || Body == body) return;
+            Runtime.CheckTargetedBody(this, body);
             Body = body; Dirty = true;
         }
         public OperationResult<bool> SetContent(UiNode content)
@@ -53,15 +55,6 @@ namespace TopiaForge.ModManager
             if (Closed || !Target.IsPresent) return MultiplayerPlayers.Gone<bool>();
             if (content == null) throw new ArgumentNullException(nameof(content));
             if (ReferenceEquals(content, Content)) return Runtime.SendSurface(this, retained: true, replacement: content);
-            try { UiComposition.Validate(content); UiClockBinding.Check(content, Runtime.UiClockEpoch); }
-            catch (ArgumentException exception)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
-            }
-            if (Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Put interactive controls in a window.");
-            var styleCheck = UiPresentationTheme.StylesValid(content, Theme);
-            if (!styleCheck.Succeeded) return styleCheck;
             // A new tree binds strictly. An unchanged retained publication spends no send budget.
             return Runtime.SendSurface(this, replacement: content);
         }

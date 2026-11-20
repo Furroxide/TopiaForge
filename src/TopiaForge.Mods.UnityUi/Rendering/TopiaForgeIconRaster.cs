@@ -32,7 +32,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeIconRaster
     {
-        private readonly struct Segment
+        internal readonly struct Segment
         {
             public readonly float X1;
             public readonly float Y1;
@@ -84,6 +84,8 @@ namespace TopiaForge.Mods.UnityUi
             new Segment(0.92f, 0.14f, 0.08f, 0.14f),
             new Segment(0.08f, 0.14f, 0.50f, 0.88f),
         };
+
+        private static readonly Segment[] WarningBang = { new Segment(0.50f, 0.66f, 0.50f, 0.40f) };
 
         private static readonly Segment MicrophoneBody = new Segment(0.50f, 0.52f, 0.50f, 0.72f);
 
@@ -141,7 +143,7 @@ namespace TopiaForge.Mods.UnityUi
                 case TopiaForgeIcon.Warning:
                     {
                         var triangle = Strokes(WarningTriangle, x, y, stroke);
-                        var bang = Strokes(new[] { new Segment(0.50f, 0.66f, 0.50f, 0.40f) }, x, y, stroke * 1.1f);
+                        var bang = Strokes(WarningBang, x, y, stroke * 1.1f);
                         var dot = Disc(x, y, 0.50f, 0.28f, 0.045f, stroke);
                         return Math.Max(triangle, Math.Max(bang, dot));
                     }
@@ -194,7 +196,7 @@ namespace TopiaForge.Mods.UnityUi
             return Clamp01((stroke * 0.5f - dist) / (stroke * 0.5f) * 1.5f);
         }
 
-        private static float DistanceToSegment(float px, float py, Segment segment)
+        internal static float DistanceToSegment(float px, float py, Segment segment)
         {
             var vx = segment.X2 - segment.X1;
             var vy = segment.Y2 - segment.Y1;
@@ -205,12 +207,12 @@ namespace TopiaForge.Mods.UnityUi
             return Length(wx - (t * vx), wy - (t * vy));
         }
 
-        private static float Length(float x, float y)
+        internal static float Length(float x, float y)
         {
             return (float)Math.Sqrt((x * x) + (y * y));
         }
 
-        private static float Clamp01(float value)
+        internal static float Clamp01(float value)
         {
             return value < 0f ? 0f : value > 1f ? 1f : value;
         }

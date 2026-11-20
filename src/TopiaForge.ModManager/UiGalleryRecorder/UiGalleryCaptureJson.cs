@@ -75,6 +75,7 @@ namespace TopiaForge.ModManager
                 Field(json, "contrastRatio", node.ContrastRatio);
                 Field(json, "themeId", node.ThemeId);
                 Field(json, "styleId", node.StyleId);
+                StatusStyle(json, node);
                 Field(json, "inkColor", node.InkColor);
                 Field(json, "fillColor", node.FillColor);
                 Field(json, "cornerRadiusPixels", node.CornerRadiusPixels);
@@ -103,6 +104,16 @@ namespace TopiaForge.ModManager
             var captureId = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss.fffffff'Z'", CultureInfo.InvariantCulture);
             var path = Path.Combine(ownerDirectory, "native-captures", fixture + "-" + captureId + "-" + Guid.NewGuid().ToString("N") + ".json");
             JsonUtil.SaveJsonObject(path, json.ToString());
+        }
+
+        private static void StatusStyle(StringBuilder json, UiCapturedNode node)
+        {
+            if (node.RequestedStyleId != null)
+                Field(json, "requestedStyleId", node.RequestedStyleId);
+            if (node.RequestedPaintRole is { } requested)
+                Field(json, "requestedPaintRole", UiThemePackParser.PaintRoles[(int)requested]);
+            if (node.EffectivePaintRole is { } effective)
+                Field(json, "effectivePaintRole", UiThemePackParser.PaintRoles[(int)effective]);
         }
 
         private static string? ReadBrandDigest()

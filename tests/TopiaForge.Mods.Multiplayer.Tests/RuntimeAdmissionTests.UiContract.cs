@@ -62,5 +62,7 @@ internal static partial class RuntimeAdmissionTests
         FoundationEnvelopeReachesBothAuthenticatedRoutes();
         TargetedUpgradeSurvivesGuestScopeTeardown();
         FailedTargetedUpgradeKeepsLegacyState();
+        ArtUsesItsOwnPackOnBothRoutes();
+        ArtUsesTheCompleteRetainedFrameBudget();
     }
 }

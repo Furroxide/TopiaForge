@@ -159,140 +159,148 @@ void main() {
     );
   });
 
-  test(
-    'every template scaffolds a valid manifest with no leftover tokens',
-    () async {
-      for (final template in await repository.listModTemplates()) {
-        final workspace = await repository.createModProject(
-          parentDirectory: p.join(root.path, template.id),
-          id: 'test.${template.id}',
-          name: 'Test ${template.id}',
-          options: ModScaffoldOptions(template: template.id),
-        );
+  test('every template scaffolds a valid manifest with no leftover tokens', () async {
+    for (final template in await repository.listModTemplates()) {
+      final workspace = await repository.createModProject(
+        parentDirectory: p.join(root.path, template.id),
+        id: 'test.${template.id}',
+        name: 'Test ${template.id}',
+        options: ModScaffoldOptions(template: template.id),
+      );
 
-        final manifestFile = File(
-          p.join(workspace.projectRoot, 'topiaforge.mod.json'),
-        );
-        expect(manifestFile.existsSync(), isTrue, reason: template.id);
-        final manifestJson =
-            jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
-        expect(manifestJson['schemaVersion'], 6, reason: template.id);
-        final manifest = ModManifest.fromJson(manifestJson);
-        if (template.id == 'ui') {
-          expect(manifest.ui?.defaultThemeId, 'survival');
-          expect(manifest.ui!.themes.map((theme) => theme.id), [
-            'survival',
-            'controls-preview',
-          ]);
-          for (final theme in manifest.ui!.themes) {
-            final packaged = File(
-              p.join(workspace.projectRoot, theme.definition),
-            );
-            final canonical = File(
-              p.join(repoRoot, 'templates', 'mod', 'ui', theme.definition),
-            );
-            expect(packaged.readAsBytesSync(), canonical.readAsBytesSync());
-          }
-        }
-        expect(
-          manifest.validate().where((issue) => issue.isBlocking),
-          isEmpty,
-          reason:
-              '${template.id}: ${manifest.validate().map((i) => i.message)}',
-        );
-        expect(manifest.id, 'test.${template.id}');
-
-        // No unresolved {{TOKEN}} markers anywhere in the scaffolded text files.
-        for (final entity in Directory(
-          workspace.projectRoot,
-        ).listSync(recursive: true).whereType<File>()) {
-          if (!const {
-            '.cs',
-            '.csproj',
-            '.json',
-            '.md',
-          }.contains(p.extension(entity.path).toLowerCase())) {
-            continue;
-          }
-          expect(
-            entity.readAsStringSync().contains('{{'),
-            isFalse,
-            reason: '${template.id}: ${entity.path} has unresolved tokens',
+      final manifestFile = File(
+        p.join(workspace.projectRoot, 'topiaforge.mod.json'),
+      );
+      expect(manifestFile.existsSync(), isTrue, reason: template.id);
+      final manifestJson =
+          jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
+      expect(manifestJson['schemaVersion'], 6, reason: template.id);
+      final manifest = ModManifest.fromJson(manifestJson);
+      if (template.id == 'ui') {
+        expect(manifest.ui?.defaultThemeId, 'survival');
+        expect(manifest.ui!.themes.map((theme) => theme.id), [
+          'survival',
+          'controls-preview',
+          'preview-art',
+        ]);
+        for (final theme in manifest.ui!.themes) {
+          final packaged = File(
+            p.join(workspace.projectRoot, theme.definition),
           );
-        }
-
-        // The entry source and csproj exist under the substituted names.
-        final assembly = manifest.entryAssembly.replaceAll('.dll', '');
-        final mainProject = File(
-          p.join(workspace.projectRoot, '$assembly.csproj'),
-        );
-        expect(mainProject.existsSync(), isTrue, reason: template.id);
-        final mainProjectText = mainProject.readAsStringSync();
-        expect(
-          mainProjectText,
-          allOf(
-            contains(
-              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.2.0" />',
-            ),
-            contains('<Compile Remove="tests\\**\\*.cs" />'),
-          ),
-          reason: template.id,
-        );
-        if (template.id != 'service') {
-          expect(
-            mainProjectText,
-            isNot(contains('<ProjectReference')),
-            reason: template.id,
+          final canonical = File(
+            p.join(repoRoot, 'templates', 'mod', 'ui', theme.definition),
           );
+          expect(packaged.readAsBytesSync(), canonical.readAsBytesSync());
         }
-
-        final testProject = File(
-          p.join(
-            workspace.projectRoot,
-            'tests',
-            '$assembly.Tests',
-            '$assembly.Tests.csproj',
-          ),
-        );
-        expect(testProject.existsSync(), isTrue, reason: template.id);
-        final testProjectText = testProject.readAsStringSync();
-        expect(
-          testProjectText,
-          allOf(
-            contains('<IsTestProject>true</IsTestProject>'),
-            contains('<TopiaForgeSafeProject>false</TopiaForgeSafeProject>'),
-            contains('<PackageReference Include="NUnit" Version="4.3.2" />'),
-            contains(
-              '<PackageReference Include="TopiaForge.Mods.Testing" Version="0.2.0" />',
-            ),
-          ),
-          reason: template.id,
-        );
-        if (template.id == 'service') {
-          expectServiceTemplateContract(
-            projectRoot: workspace.projectRoot,
-            assembly: assembly,
-            mainProjectText: mainProjectText,
-            testProjectText: testProjectText,
-            apiAssemblies: manifest.apiAssemblies,
+        for (final file in [
+          'ui/art/preview.bundle',
+          'ui/receipts/82f8ce046131ed5f5d419515f40adf4fad10b8e99a462f36fcd82680f628eb2d.json',
+          'LICENSES/ui-art.txt',
+        ]) {
+          final copy = File(p.join(workspace.projectRoot, file));
+          final canonical = File(
+            p.join(repoRoot, 'templates', 'mod', 'ui', file),
           );
-        }
-        if (const {
-          'minimal',
-          'gameplay',
-          'ui',
-          'asset',
-          'world',
-        }.contains(template.id)) {
-          expect(
-            testProjectText,
-            isNot(contains('<ProjectReference')),
-            reason: template.id,
-          );
+          expect(copy.readAsBytesSync(), canonical.readAsBytesSync());
         }
       }
-    },
-  );
+      expect(
+        manifest.validate().where((issue) => issue.isBlocking),
+        isEmpty,
+        reason: '${template.id}: ${manifest.validate().map((i) => i.message)}',
+      );
+      expect(manifest.id, 'test.${template.id}');
+
+      // No unresolved {{TOKEN}} markers anywhere in the scaffolded text files.
+      for (final entity in Directory(
+        workspace.projectRoot,
+      ).listSync(recursive: true).whereType<File>()) {
+        if (!const {
+          '.cs',
+          '.csproj',
+          '.json',
+          '.md',
+        }.contains(p.extension(entity.path).toLowerCase())) {
+          continue;
+        }
+        expect(
+          entity.readAsStringSync().contains('{{'),
+          isFalse,
+          reason: '${template.id}: ${entity.path} has unresolved tokens',
+        );
+      }
+
+      // The entry source and csproj exist under the substituted names.
+      final assembly = manifest.entryAssembly.replaceAll('.dll', '');
+      final mainProject = File(
+        p.join(workspace.projectRoot, '$assembly.csproj'),
+      );
+      expect(mainProject.existsSync(), isTrue, reason: template.id);
+      final mainProjectText = mainProject.readAsStringSync();
+      expect(
+        mainProjectText,
+        allOf(
+          contains(
+            '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.2.0" />',
+          ),
+          contains('<Compile Remove="tests\\**\\*.cs" />'),
+        ),
+        reason: template.id,
+      );
+      if (template.id != 'service') {
+        expect(
+          mainProjectText,
+          isNot(contains('<ProjectReference')),
+          reason: template.id,
+        );
+      }
+
+      final testProject = File(
+        p.join(
+          workspace.projectRoot,
+          'tests',
+          '$assembly.Tests',
+          '$assembly.Tests.csproj',
+        ),
+      );
+      expect(testProject.existsSync(), isTrue, reason: template.id);
+      final testProjectText = testProject.readAsStringSync();
+      expect(
+        testProjectText,
+        allOf(
+          contains('<IsTestProject>true</IsTestProject>'),
+          contains('<TopiaForgeSafeProject>false</TopiaForgeSafeProject>'),
+          contains('<PackageReference Include="NUnit" Version="4.3.2" />'),
+          contains(
+            '<PackageReference Include="TopiaForge.Mods.Testing" Version="0.2.0" />',
+          ),
+        ),
+        reason: template.id,
+      );
+      if (template.id == 'service') {
+        expectServiceTemplateContract(
+          projectRoot: workspace.projectRoot,
+          assembly: assembly,
+          mainProjectText: mainProjectText,
+          testProjectText: testProjectText,
+          apiAssemblies: manifest.apiAssemblies,
+        );
+      }
+      if (const {
+        'minimal',
+        'gameplay',
+        'ui',
+        'asset',
+        'world',
+      }.contains(template.id)) {
+        expect(
+          testProjectText,
+          isNot(contains('<ProjectReference')),
+          reason: template.id,
+        );
+      }
+    }
+  });
 
   test('template defaults land in the manifest (gamemode)', () async {
     final workspace = await repository.createModProject(

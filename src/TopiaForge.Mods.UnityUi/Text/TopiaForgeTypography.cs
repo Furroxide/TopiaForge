@@ -9,8 +9,9 @@ namespace TopiaForge.Mods.UnityUi
         internal static bool Apply(TMP_Text text, TopiaForgeResolvedTheme theme, TopiaForgeTextStyle style, float uiScale)
         {
             if (theme.Descriptor is not { } descriptor) return false;
-            var role = descriptor.GetText(SafeStyle(style));
-            var font = TopiaForgeFonts.ForThemeRole(role.Font, style) ?? text.font;
+            var safeStyle = SafeStyle(style);
+            var role = descriptor.GetText(safeStyle);
+            var font = theme.RegisteredFont?.Invoke(safeStyle) ?? TopiaForgeFonts.ForThemeRole(role.Font, style) ?? text.font;
             var face = font == null ? default : font.faceInfo;
             var metrics = TopiaForgeTypographyMetrics.Resolve(role, uiScale, face.pointSize, face.ascentLine, face.descentLine, face.scale);
             if (font != null && text.font != font) text.font = font;

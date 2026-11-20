@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using TopiaForge.UiGallery.Pages;
@@ -58,7 +59,7 @@ namespace TopiaForge.ModManager.Tests
             var dimensions = new[] { (Width: 1920, Height: 1080), (Width: 2560, Height: 1440) };
             var cases = new SortedDictionary<string, GoldenCase>(StringComparer.Ordinal);
             UiThemeDescriptor? survival = null;
-            foreach (var page in Enum.GetValues<FoundationPage>())
+            foreach (var page in Enum.GetValues<FoundationPage>().Where(page => !FoundationArtPages.IsArt(page)))
                 foreach (var sample in new[] { false, true })
                     foreach (var useHud in new[] { false, true })
                         foreach (var guest in new[] { false, true })
@@ -184,35 +185,45 @@ namespace TopiaForge.ModManager.Tests
             return new GoldenCase(snapshots, rendered.Count, Convert.ToHexString(digest.GetHashAndReset()));
         }
 
-        private static object GoldenNode(UiCapturedNode node) => new
+        private static object GoldenNode(UiCapturedNode node)
         {
-            node.Path,
-            node.Id,
-            node.Kind,
-            node.Text,
-            node.SemanticLabel,
-            node.Decorative,
-            node.Disabled,
-            node.Selected,
-            x = Math.Round(node.X, 3),
-            y = Math.Round(node.Y, 3),
-            width = Math.Round(node.Width, 3),
-            height = Math.Round(node.Height, 3),
-            size = Math.Round(node.TextHeightPixels, 3),
-            contrast = Math.Round(node.ContrastRatio, 5),
-            node.ThemeId,
-            node.StyleId,
-            node.InkColor,
-            node.FillColor,
-            radius = Round(node.CornerRadiusPixels),
-            border = Round(node.BorderWidthPixels),
-            shadowX = Round(node.ShadowOffsetXPixels),
-            shadowY = Round(node.ShadowOffsetYPixels),
-            node.UsedFallback,
-            node.IsRendered,
-            node.Clipped,
-            node.Occluded,
-        };
+            var row = new
+            {
+                node.Path,
+                node.Id,
+                node.Kind,
+                node.Text,
+                node.SemanticLabel,
+                node.Decorative,
+                node.Disabled,
+                node.Selected,
+                x = Math.Round(node.X, 3),
+                y = Math.Round(node.Y, 3),
+                width = Math.Round(node.Width, 3),
+                height = Math.Round(node.Height, 3),
+                size = Math.Round(node.TextHeightPixels, 3),
+                contrast = Math.Round(node.ContrastRatio, 5),
+                node.ThemeId,
+                node.StyleId,
+                node.InkColor,
+                node.FillColor,
+                radius = Round(node.CornerRadiusPixels),
+                border = Round(node.BorderWidthPixels),
+                shadowX = Round(node.ShadowOffsetXPixels),
+                shadowY = Round(node.ShadowOffsetYPixels),
+                node.UsedFallback,
+                node.IsRendered,
+                node.Clipped,
+                node.Occluded,
+            };
+
+            if (node.RequestedPaintRole is not { } requested || node.EffectivePaintRole is not { } effective) return row;
+            var status = JsonSerializer.SerializeToNode(row, CaptureJson)!.AsObject();
+            if (node.RequestedStyleId != null) status["requestedStyleId"] = node.RequestedStyleId;
+            status["requestedPaintRole"] = UiThemePackParser.PaintRoles[(int)requested];
+            status["effectivePaintRole"] = UiThemePackParser.PaintRoles[(int)effective];
+            return status;
+        }
 
         private static double? Round(float? value) => value.HasValue ? Math.Round(value.Value, 3) : null;
 

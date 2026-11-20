@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager.Tests
@@ -15,11 +16,15 @@ namespace TopiaForge.ModManager.Tests
             var root = Program.FindRepoRoot();
             var options = new CSharpParseOptions(preprocessorSymbols: new[] { "TOPIAFORGE_NATIVE_CAPTURE" });
             const string testing = "src/TopiaForge.Mods.Testing/";
+            const string recorder = "src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryNativeTree";
+            var artRecorder = "using TopiaForge.Mods; using TMPro; using UnityEngine; using UnityEngine.UI; " +
+                "namespace TopiaForge.ModManager { internal sealed partial class UiGalleryNativeTree { " +
+                RecorderMethod(recorder + ".cs", "TryCapture") + RecorderMethod(recorder + ".Art.cs", "CaptureImageNotice") + " } }";
             var sources = new[]
             {
                 testing + "UiCaptureViewport.cs", testing + "UiCapturedNode.cs", testing + "UiTreeCapture.cs",
-                "src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryNativeTree.LayoutNotice.cs",
-            }.Select(file => File.ReadAllText(Path.Combine(root, file))).Append(Boundary)
+                recorder + ".LayoutNotice.cs",
+            }.Select(file => File.ReadAllText(Path.Combine(root, file))).Append(artRecorder).Append(Boundary)
                 .Select(source => CSharpSyntaxTree.ParseText(source, options));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Append(typeof(UiNode).Assembly.Location).Distinct(StringComparer.OrdinalIgnoreCase)
@@ -34,6 +39,9 @@ namespace TopiaForge.ModManager.Tests
                     .Where(issue => issue.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.ModManager.UiGalleryNativeTree")!.GetMethod("Probe")!;
             probe.CreateDelegate<Action>()();
+
+            string RecorderMethod(string file, string name) => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file)))
+                .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.Text == name).ToFullString();
         }
 
         private const string Boundary = """
@@ -53,6 +61,7 @@ namespace TopiaForge.ModManager.Tests
                     private readonly (RectTransform transform, bool _) canvas;
                     private readonly List<Observation> observations = new();
                     private static readonly UiCaptureNodeContent EmptyContent = new("", "", 0f, 0f, 0);
+                    private bool onlyUnavailableImages;
                     internal float? SurfaceAlpha { get; private set; }
 
                     private UiGalleryNativeTree()
@@ -62,6 +71,12 @@ namespace TopiaForge.ModManager.Tests
                     }
 
                     public static void Probe()
+                    {
+                        ProbeLayoutNotice();
+                        ProbeArtworkNotice();
+                    }
+
+                    private static void ProbeLayoutNotice()
                     {
                         var native = new UiGalleryNativeTree();
                         var request = new UiSurfaceRequest("panel", "private title", "private body", UiSurfaceKind.Hud, content: new UiText("Readiness"));
@@ -82,24 +97,74 @@ namespace TopiaForge.ModManager.Tests
                             throw new InvalidOperationException("A drawn native notice cannot be certified as queued overflow.");
                     }
 
+                    private static void ProbeArtworkNotice()
+                    {
+                        var native = new UiGalleryNativeTree();
+                        var art = new UiImage(new UiImageRef("preview-art", "card"), "Private artwork", 1f, 1f, id: "card");
+                        var request = new UiSurfaceRequest("art", "Private title", "Private body", UiSurfaceKind.Hud, content: art);
+                        var composition = new RectTransform(native.surface);
+                        composition.Add("Art", new object());
+                        var notice = new RectTransform(native.surface);
+                        notice.Add("Layout fallback background", new Graphic());
+                        var label = new TMP_Text();
+                        notice.Add("Label", label);
+                        const string safe = "Admitted Pack · HUD at top right";
+                        if (!native.TryCapture(request, native.surface, composition, notice, out var captured, queuedNotice: safe) ||
+                            captured?.Nodes.SingleOrDefault(row => row.Kind == UiHudOverflowNotice.CaptureKind) is not
+                                { IsRendered: false, Clipped: false, SemanticLabel: safe, Text: "" } ||
+                            captured.Nodes.SingleOrDefault(row => row.Id == "card") is not
+                                { Width: 1f, Height: 1f, IsRendered: false } ||
+                            captured.Nodes.Any(row => row.IsRendered || row.Kind == "ImageFallback") ||
+                            captured.CheckAccessibility().Single().Kind != UiAccessibilityIssueKind.MissingAsset)
+                            throw new InvalidOperationException("The native artwork recorder keeps a hidden art box and a safe queued diagnostic.");
+                        label.isActiveAndEnabled = true;
+                        if (native.TryCapture(request, native.surface, composition, notice, out _, queuedNotice: safe))
+                            throw new InvalidOperationException("A drawn native image notice cannot be certified as queued overflow.");
+                        label.isActiveAndEnabled = false;
+                        var window = new UiSurfaceRequest("art", "Private title", "Private body", UiSurfaceKind.Window, content: art);
+                        if (native.TryCapture(window, native.surface, composition, notice, out _, queuedNotice: safe))
+                            throw new InvalidOperationException("Only a HUD can be certified as queued overflow.");
+                    }
+
                     private UiTreeCapture CompleteCapture() => new UiTreeCapture(observations.Select(item =>
                         new UiCapturedNode(item.path, item.id, item.kind, item.bounds, item.content, item.paint,
                             UiThemePackParser.Default.Id, true, item.rendered, item.clipped, item.occluded)).ToList(), false);
                     private sealed record Observation(string path, string? id, string kind, UiCaptureRect bounds, UiCaptureRect clip,
-                        UiCaptureNodeContent content, UiCaptureNodePaint paint, bool rendered, bool clipped, bool occluded);
+                        UiCaptureNodeContent content, UiCaptureNodePaint paint, bool rendered, bool clipped,
+                        bool localFallback = false, bool kitPaint = false, bool occluded = false);
+                    private static bool SingleChild(RectTransform parent, out RectTransform? child) =>
+                        (child = parent.Find("Art")) != null;
+                    private static UiThemeColor? AncestorFill(RectTransform child) => null;
+                    private bool WindowTitle(UiSurfaceRequest request, RectTransform root, UiThemeColor? fill) => true;
+                    private bool GraphConnectionsLauncher(TopiaForgeGraphConnections connections) => true;
+                    private bool GraphConnectionsList(UiNode tree, TopiaForgeGraphConnections connections, UiThemeColor? fill) => true;
+                    private bool Visit(UiNode node, RectTransform root, string path, UiThemeColor? fill)
+                    {
+                        if (node is not UiImage image || !onlyUnavailableImages) return false;
+                        var box = new UiCaptureRect(42f, 35f, image.Width!.Value, image.Height!.Value);
+                        var content = new UiCaptureNodeContent("", image.SemanticLabel, 0f, 0f, UiCaptureNodeFlags.MissingAsset);
+                        observations.Add(new Observation(path, image.Id, nameof(UiImage), box, default, content, default,
+                            rendered: false, clipped: false));
+                        return true;
+                    }
                     private static UiThemeColor? Over(Graphic graphic, UiThemeColor? backdrop) => backdrop;
                     private static (float a, bool _) EffectiveColor(Graphic value) => (1f, false);
-                    private void Add(string path, string id, string kind, RectTransform rect, UiCaptureNodeContent content, UiCaptureNodePaint paint) { }
+                    private static UiCaptureRect Bounds(RectTransform rect) => default;
+                    private static (bool AnyClipping, bool _) Clip(RectTransform rect, UiCaptureRect bounds) => (false, false);
+                    private void Add(string path, string id, string kind, RectTransform rect, UiCaptureNodeContent content,
+                        UiCaptureNodePaint paint, bool localFallback = false, bool kitPaint = false) { }
                     private bool Text(string path, string? id, string kind, TMP_Text? label, string authored, UiTextStyle style,
-                        UiThemeColor? fill, UiCaptureNodeFlags flags) => true;
+                        UiThemeColor? fill, UiCaptureNodeFlags flags, bool localFallback = false, bool kitPaint = false) => true;
                 }
+
+                internal sealed class TopiaForgeGraphConnections { internal bool IsOpen => false; }
             }
 
             namespace UnityEngine
             {
                 internal sealed class RectTransform(RectTransform? parent = null, object? component = null)
                 {
-                    private readonly RectTransform? parent = parent;
+                    internal readonly RectTransform? parent = parent;
                     private readonly Dictionary<string, RectTransform> children = new();
                     internal (float width, float height) rect => (300f, 80f);
                     internal bool IsChildOf(RectTransform ancestor) => parent == ancestor || parent?.IsChildOf(ancestor) == true;

@@ -27,7 +27,7 @@ namespace TopiaForge.Mods.Testing
         private ulong revision = 1;
 
         internal FakeUiSurface(UiSurfaceRequest request, FakeUiService owner, Action<FakeUiSurface> release,
-            Func<bool>? gameplay, FakeUiWireTarget? wireTarget)
+            Func<bool>? gameplay, FakeUiWireTarget? wireTarget, FakeUiImages images, UiWireEnvelope? receiver)
         {
             this.owner = owner;
             this.wireTarget = wireTarget;
@@ -37,6 +37,8 @@ namespace TopiaForge.Mods.Testing
                 HudOverflowText = UiHudOverflowNotice.Text(owner.HudPackageDisplayName, request.HudAnchor, request.HudVisibility);
             Body = request.Body;
             Content = request.Content;
+            Images = images;
+            Receiver = receiver;
             CaptureState(Content);
             this.release = release;
             this.gameplay = gameplay;

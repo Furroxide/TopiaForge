@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
@@ -91,7 +92,8 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeRgba? accentOverride,
             bool highContrast,
             int themeVersion,
-            UiThemeDescriptor? descriptor = null)
+            UiThemeDescriptor? descriptor = null,
+            Func<UiTextStyle, TMP_FontAsset?>? fonts = null)
         {
             Scheme = scheme;
             ThemeVersion = themeVersion;
@@ -99,6 +101,7 @@ namespace TopiaForge.Mods.UnityUi
 
             descriptor ??= accentOverride.HasValue ? null : UiThemePackParser.Default;
             Descriptor = descriptor;
+            RegisteredFont = fonts;
             var authoredScheme = descriptor?.SelectScheme(scheme == TopiaForgeScheme.Hud, HighContrast);
             packScheme = authoredScheme;
             var colors = TopiaForgeSchemes.Resolve(scheme, accentOverride, HighContrast);

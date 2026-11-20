@@ -57,7 +57,8 @@ namespace TopiaForge.ModManager
                     if (!ReferenceEquals(original, admitted) || tree == null || view == null || !presence.IsLive)
                         return true;
                     var notice = layoutProblem != null ? layoutFallback : null;
-                    if (!IsVisible || (notice == null && (!tree.Go.activeInHierarchy ||
+                    var imageNotice = notice == null ? layoutFallback?.Rect : null;
+                    if (!IsVisible || (notice == null && imageNotice == null && (!tree.Go.activeInHierarchy ||
                             tree.Rect.rect.width <= 0 || tree.Rect.rect.height <= 0)) || !canvas.isActiveAndEnabled ||
                         Screen.width <= 0 || Screen.height <= 0 || canvas.scaleFactor <= 0 ||
                         !Mathf.Approximately(view.Rect.localScale.x, 1f) || !Mathf.Approximately(view.Rect.localScale.y, 1f))
@@ -73,13 +74,13 @@ namespace TopiaForge.ModManager
                     var requestedDigest = envelope?.DescriptorDigest ?? declared?.Digest;
                     var fallback = notice != null || (requestedId != null && (effective.Id != requestedId || !requestedDigest.HasValue ||
                         !requestedDigest.Value.Span.SequenceEqual(effective.Digest.Span)));
-                    if (fallback && !permitFallback) return false;
+                    if (!permitFallback && (fallback || artwork?.HasPendingDemand() == true)) return false;
 
                     var recorder = new UiGalleryNativeTree(canvas, nativeTheme, tree.Host.EffectiveAccessibility, fallback);
+                    var queuedNotice = hudNoticeOverflowing ? overflowToast : null;
                     var captured = notice != null
-                        ? recorder.TryCaptureLayoutNotice(fixture, view.Rect, notice.Rect, layoutProblem!, out var resolved,
-                            hudNoticeOverflowing ? overflowToast : null)
-                        : recorder.TryCapture(fixture, view.Rect, tree.Rect, out resolved, graphConnections);
+                        ? recorder.TryCaptureLayoutNotice(fixture, view.Rect, notice.Rect, layoutProblem!, out var resolved, queuedNotice)
+                        : recorder.TryCapture(fixture, view.Rect, tree.Rect, imageNotice, out resolved, graphConnections, queuedNotice);
                     if (!captured) return false;
                     var who = envelope != null ? "remote-guest" : viewer?.Invoke() switch
                     {

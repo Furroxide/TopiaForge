@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager.Tests
             CatalogueIsAtomicAndUsesExactBytes();
             CascadeRefreshKeepsControlState();
             CardAndBoxThemeSwitchesAreAtomic();
+            InheritedThemeSwitchPreflightsNamedStyles();
             SiblingPreloadsAndDrainAreIndependent();
             AssetsCommitTogetherAndEnrichTheDescriptor();
             PaintAndTypeRemainReadable();
@@ -50,7 +51,37 @@ namespace TopiaForge.ModManager.Tests
             NativeVirtualListUsesPooledTextMetrics();
             TargetedBudgetsIncludeFramingWithoutEarlyClockBinding();
             UnchangedReapplicationAllocatesNothing();
+            RunArtCaptureTests();
             VerifyGoldenManifest();
+            VerifyArtGoldenManifest();
+        }
+
+        private static void InheritedThemeSwitchPreflightsNamedStyles()
+        {
+            using var parentLife = new FakeModLifetime();
+            var parent = new FakeUiService(parentLife);
+            Check(parent.AddThemeFixture("""{"schema":1,"id":"badges","styles":[{"id":"status","target":"badge","radius":"card"}]}""").Succeeded &&
+                parent.AddThemeFixture("""{"schema":1,"id":"boxes","styles":[{"id":"status","target":"box","radius":"small"}]}""").Succeeded,
+                "The two package styles are independently valid.");
+            var badges = new UiThemeRef("badges");
+            var boxes = new UiThemeRef("boxes");
+            Check(parent.Themes.UseTheme(badges).Succeeded, "The original package style is selected.");
+            using var childLife = new FakeModLifetime();
+            var child = CreateThemeScope(parent, childLife);
+            var badge = new UiBadge("Stocked", style: new UiStyleRef("status"), id: "status-mark");
+            using var inherited = Make(child, new UiSurfaceRequest("inherited", "Status", "", UiSurfaceKind.Window, 420, 300, badge));
+            using var overridden = Make(parent, new UiSurfaceRequest("overridden", "Status", "", UiSurfaceKind.Window, 420, 300, badge)
+                .WithTheme(badges));
+            parent.CompletePendingThemeRegistrations();
+
+            Check(parent.Themes.UseTheme(boxes).ErrorCode == ModErrorCode.InvalidArgument && Equals(parent.Themes.SelectedTheme, badges) &&
+                inherited.Capture(Viewport).Nodes.Any(node => node.Id == "status-mark" && node.StyleId == "status" && node.IsRendered),
+                "A parent's incompatible target leaves its inheriting child's current content and paint live.");
+            Check(child.Themes.UseTheme(badges).Succeeded && parent.Themes.UseTheme(boxes).Succeeded,
+                "An explicitly selected child and an explicit surface override shield their authored references.");
+            Check(child.Themes.UseTheme(null).ErrorCode == ModErrorCode.InvalidArgument && Equals(child.Themes.SelectedTheme, badges) &&
+                overridden.Capture(Viewport).Nodes.Any(node => node.StyleId == "status" && node.IsRendered),
+                "Clearing a child selection also preflights the prospective inherited theme without disrupting a surface override.");
         }
 
         private static void CatalogueIsAtomicAndUsesExactBytes()
