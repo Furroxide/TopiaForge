@@ -21,26 +21,99 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             TestPreparation();
+            TestPreparationChecksManifestBeforeWriting();
             TestRejections();
             TestNativeMetadata();
             TestFontMetadata();
+            TestCallerRootAliases();
         }
 
         private static void TestPreparation()
         {
             using var stage = new Stage();
-            Require(UiThemePackage.Prepare(stage.Root, stage.Manifest).Count == 0, "The verified bundle can be packed.");
-            var final = File.ReadAllBytes(stage.FullPath(Definition));
+            var relativeRoot = Path.GetRelativePath(Environment.CurrentDirectory, stage.Root);
+            Require(UiThemePackage.Prepare(relativeRoot, stage.Manifest).Count == 0, "The verified bundle can be packed from a normalized package root.");
+            var final = stage.ReadBytes(Definition);
             var data = Encoding.UTF8.GetString(final);
             Require(data.Contains("\"pixelWidth\":48", StringComparison.Ordinal) &&
                 data.Contains("\"pixelHeight\":20", StringComparison.Ordinal),
                 "Enrichment uses the Sprite rectangle, not its 128 by 64 atlas.");
             Require(data.Contains("\"isMask\":true", StringComparison.Ordinal), "An Alpha8 texture admits the mask assertion.");
-            var manifest = ModManifestJson.LoadFile(stage.FullPath("topiaforge.mod.json"));
+            var manifest = stage.LoadManifest();
             Require(manifest.Ui!.Themes[0].Sha256 == Hash(final).ToLowerInvariant(), "The catalogue hashes final bytes.");
             var result = UiThemePackage.Read(stage.Root, manifest);
             Require(result.TryGetValue(out var catalogue) && catalogue.TryGet("survival", out var descriptor) &&
                 descriptor.Images[0].PixelWidth == 48, "The emitted package re-admits using the same receipt.");
+        }
+
+        private static void TestPreparationChecksManifestBeforeWriting()
+        {
+            using var stage = new Stage();
+            stage.Delete("topiaforge.mod.json");
+            try
+            {
+                UiThemePackage.Prepare(stage.Root, stage.Manifest);
+                throw new InvalidOperationException("Preparation must require the staged manifest.");
+            }
+            catch (FileNotFoundException)
+            {
+                Require(stage.ReadText(Definition) == DefinitionSource, "A missing manifest leaves the original definition intact.");
+            }
+        }
+
+        private static void TestCallerRootAliases()
+        {
+            using var workspace = new Stage();
+            var callerDirectory = Stage.CreateChildDirectory(workspace.Root, "caller");
+            using var stage = new Stage(Stage.CreateChildDirectory(callerDirectory, "package"));
+            var alias = PathSafety.CombineRelativeChild(workspace.Root, "caller-link");
+            TomatoCakeLauncherFixture.LinkDirectory(alias, callerDirectory);
+            try
+            {
+                var packageRoot = PathSafety.CombineRelativeChild(alias, "package");
+                var separator = Path.DirectorySeparatorChar;
+                Require(PathSafety.RequireOrdinaryDirectory(packageRoot + separator) == packageRoot,
+                    "An ordinary package root under a caller alias normalizes trailing separators.");
+                Require(UiThemePackage.Prepare(packageRoot, stage.Manifest).Count == 0 &&
+                    UiThemePackage.Read(packageRoot, stage.LoadManifest()).Succeeded,
+                    "The prepare and read paths accept a staged package below a caller-owned directory alias.");
+
+                RequireRejectedPath(() => PathSafety.RequireOrdinaryDirectory(alias), "package root is not an ordinary directory");
+                RequireRejectedPath(() => PathSafety.RequireOrdinaryDirectory(alias + separator + separator),
+                    "package root is not an ordinary directory");
+
+                var ordinary = Stage.CreateChildDirectory(stage.Root, "ordinary");
+                var linkedMember = PathSafety.CombineRelativeChild(stage.Root, "linked-member");
+                TomatoCakeLauncherFixture.LinkDirectory(linkedMember, ordinary);
+                try
+                {
+                    RequireRejectedPath(() => PathSafety.RequireOrdinaryPackageFile(packageRoot, "linked-member/entry.txt"),
+                        "path contains a link or special entry");
+                }
+                finally
+                {
+                    Directory.Delete(linkedMember);
+                }
+            }
+            finally
+            {
+                Directory.Delete(alias);
+            }
+        }
+
+        private static void RequireRejectedPath(Action operation, string diagnostic)
+        {
+            try
+            {
+                operation();
+            }
+            catch (InvalidDataException error)
+            {
+                Require(error.Message == diagnostic, "The path rejection keeps its diagnostic.");
+                return;
+            }
+
+            throw new InvalidOperationException("An ordinary package path check should reject " + diagnostic + ".");
         }
 
         private static void TestRejections()
@@ -49,7 +122,7 @@ namespace TopiaForge.ModManager.Tests
             var receipt = UiBundleReceipt.PathFor(BundlePath);
             stage.Write(receipt, stage.Receipt.Replace(stage.BundleSha, new string('0', 64)));
             Require(Reason(stage).Contains("does not match the bundle bytes", StringComparison.Ordinal), "A stale receipt fails.");
-            File.Delete(stage.FullPath(receipt));
+            stage.Delete(receipt);
             Require(Reason(stage).Contains("$.uiReceipt", StringComparison.Ordinal), "A missing receipt fails.");
             stage.Write(receipt, stage.Receipt.Replace("Alpha8", "RGBA32"));
             Require(Reason(stage).Contains("Declared image metadata differs", StringComparison.Ordinal), "RGBA cannot satisfy a mask assertion.");
@@ -59,7 +132,7 @@ namespace TopiaForge.ModManager.Tests
             stage.Write(Definition, DefinitionSource);
             stage.Manifest.Ui!.Themes[0].Sha256 = Hash(Encoding.UTF8.GetBytes(DefinitionSource));
             Require(Reason(stage).Contains("final definition bytes", StringComparison.Ordinal), "A source hash cannot assert an enriched file.");
-            Require(File.ReadAllText(stage.FullPath(Definition)) == DefinitionSource, "Failure leaves the staged input untouched.");
+            Require(stage.ReadText(Definition) == DefinitionSource, "Failure leaves the staged input untouched.");
             stage.Manifest.Ui.Themes[0].Sha256 = null;
             stage.Write(NoticePath, "Different notice");
             Require(Reason(stage).Contains("$.ui.licensePath", StringComparison.Ordinal), "The declared notice must match the recorded notice.");
@@ -73,7 +146,7 @@ namespace TopiaForge.ModManager.Tests
         {
             using var stage = new Stage();
             Require(UiThemePackage.Prepare(stage.Root, stage.Manifest).Count == 0, "Stage the verified fixture.");
-            var manifest = ModManifestJson.LoadFile(stage.FullPath("topiaforge.mod.json"));
+            var manifest = stage.LoadManifest();
             var catalogue = UiThemePackage.Read(stage.Root, manifest).Value ??
                 throw new InvalidOperationException("Expected the packaged catalogue.");
             Require(catalogue.TryGet("survival", out var descriptor), "Resolve the admitted theme.");
@@ -110,7 +183,7 @@ namespace TopiaForge.ModManager.Tests
                 Hash(Encoding.UTF8.GetBytes(Stage.Notice)) + "\"}";
             stage.Write(UiBundleReceipt.PathFor(BundlePath), stage.Receipt.Replace("\"fonts\":[]", "\"fonts\":[" + font + "]"));
             Require(UiThemePackage.Prepare(stage.Root, stage.Manifest).Count == 0, "A font with a static atlas is admitted.");
-            var manifest = ModManifestJson.LoadFile(stage.FullPath("topiaforge.mod.json"));
+            var manifest = stage.LoadManifest();
             var catalogue = UiThemePackage.Read(stage.Root, manifest).Value ??
                 throw new InvalidOperationException("Expected the packaged catalogue.");
             Require(catalogue.TryGet("survival", out var descriptor), "Resolve the admitted font theme.");
@@ -147,9 +220,13 @@ namespace TopiaForge.ModManager.Tests
             internal const string Notice = "CC0-1.0 notice";
             private const string Bundle = "Native fixture data";
 
-            internal Stage()
+            internal Stage(string? root = null)
             {
-                Root = Path.Combine(Path.GetTempPath(), "tf-ui-bundle-" + Guid.NewGuid().ToString("N"));
+                Root = PathSafety.RequireOrdinaryDirectory(root ?? Directory.CreateTempSubdirectory("tf-ui-bundle-").FullName);
+                var ui = CreateChildDirectory(Root, "ui");
+                CreateChildDirectory(ui, "themes");
+                CreateChildDirectory(ui, "receipts");
+                CreateChildDirectory(Root, "licenses");
                 BundleSha = Hash(Encoding.UTF8.GetBytes(Bundle));
                 Manifest = new ModManifest
                 {
@@ -184,14 +261,48 @@ namespace TopiaForge.ModManager.Tests
             internal string Receipt { get; }
             internal ModManifest Manifest { get; }
 
-            internal string FullPath(string relative) => Path.Combine(Root, relative);
+            internal ModManifest LoadManifest() =>
+                ModManifestJson.LoadFile(PathSafety.RequireOrdinaryPackageFile(Root, "topiaforge.mod.json"));
+
+            internal byte[] ReadBytes(string relative)
+            {
+                using var input = PathSafety.OpenOrdinaryPackageFile(Root, relative);
+                using var bytes = new MemoryStream();
+                input.CopyTo(bytes);
+                return bytes.ToArray();
+            }
+
+            internal string ReadText(string relative)
+            {
+                using var input = PathSafety.OpenOrdinaryPackageFile(Root, relative);
+                using var reader = new StreamReader(input, Encoding.UTF8);
+                return reader.ReadToEnd();
+            }
+
+            internal void Delete(string relative) => File.Delete(PathSafety.RequireOrdinaryPackageFile(Root, relative));
+
             internal void Write(string relative, string text)
             {
-                var filename = FullPath(relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(filename)!);
-                File.WriteAllText(filename, text, new UTF8Encoding(false));
+                using var output = PathSafety.OpenOrdinaryPackageFile(Root, relative, FileAccess.Write, create: true);
+                var bytes = Encoding.UTF8.GetBytes(text);
+                output.Write(bytes, 0, bytes.Length);
+                output.SetLength(bytes.Length);
             }
-            public void Dispose() => Directory.Delete(Root, recursive: true);
+
+            internal static string CreateChildDirectory(string parent, string child)
+            {
+                var path = PathSafety.CombineRelativeChild(PathSafety.RequireOrdinaryDirectory(parent), child);
+                try
+                {
+                    return PathSafety.RequireOrdinaryDirectory(path);
+                }
+                catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+                {
+                    return Directory.CreateDirectory(path).FullName;
+                }
+            }
+
+            public void Dispose() => Directory.Delete(PathSafety.RequireOrdinaryDirectory(Root), recursive: true);
         }
     }
 }

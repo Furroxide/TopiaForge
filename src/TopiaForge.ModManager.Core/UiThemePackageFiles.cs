@@ -22,23 +22,23 @@ namespace TopiaForge.ModManager.Core
         private long decodedBytes;
         private int textures;
 
-        internal UiThemePackageFiles(string root) => this.root = root;
+        internal UiThemePackageFiles(string root) => this.root = Path.GetFullPath(root);
 
         internal IReadOnlyDictionary<string, UiAdmittedBundle> Bundles => bundles;
 
-        internal string ResolveDefinition(string path) => Resolve(path, FileKind.Definition, "$.ui.themes.definition");
+        internal FileStream OpenDefinition(string path) => Open(path, FileKind.Definition, "$.ui.themes.definition");
 
         internal byte[] HashBundle(string path)
         {
             if (bundleHashes.TryGetValue(path, out var cached)) return cached;
             const string bundlePath = "$.ui.bundlePath";
-            var fullPath = Resolve(path, FileKind.Bundle, bundlePath);
+            using var bundle = Open(path, FileKind.Bundle, bundlePath);
             var limit = Math.Min(MaxBundleBytes, MaxPackageBundleBytes - encodedBytes);
-            var digest = HashFile(fullPath, limit, bundlePath, out var length);
+            var digest = HashFile(bundle, limit, bundlePath, out var length);
             var sha256 = UiThemeData.Hex(digest);
 
-            var receiptPath = Resolve(UiBundleReceipt.PathFor(path), FileKind.Receipt, "$.uiReceipt");
-            var receipt = UiBundleReceipt.Parse(ReadBounded(receiptPath, UiBundleReceipt.MaxBytes, "$.uiReceipt"), sha256);
+            using var receiptFile = Open(UiBundleReceipt.PathFor(path), FileKind.Receipt, "$.uiReceipt");
+            var receipt = UiBundleReceipt.Parse(ReadBounded(receiptFile, UiBundleReceipt.MaxBytes, "$.uiReceipt"), sha256);
             textures += receipt.Textures.Count;
             if (textures > UiBundleReceipt.MaxTextures)
                 throw UiThemeDataException.Limit("$.uiReceipt.textures", "A package may use at most four backing textures.");
@@ -48,7 +48,7 @@ namespace TopiaForge.ModManager.Core
 
             encodedBytes += length;
             bundleHashes.Add(path, digest);
-            bundles.Add(path, new UiAdmittedBundle(root, path, fullPath, sha256, receipt));
+            bundles.Add(path, new UiAdmittedBundle(root, path, bundle.Name, sha256, receipt));
             return digest;
         }
 
@@ -76,15 +76,15 @@ namespace TopiaForge.ModManager.Core
             const string logical = "$.ui.licensePath";
             if (!licenseHashes.TryGetValue(path, out var digest))
             {
-                var fullPath = Resolve(path, FileKind.License, logical);
-                digest = UiThemeData.Hex(HashFile(fullPath, 1024L * 1024 * 1024, logical, out _));
+                using var file = Open(path, FileKind.License, logical);
+                digest = UiThemeData.Hex(HashFile(file, 1024L * 1024 * 1024, logical, out _));
                 licenseHashes.Add(path, digest);
             }
             if (!string.Equals(digest, expected, StringComparison.Ordinal))
                 throw UiThemeDataException.Invalid(logical, "The notice differs from the bundle receipt.");
         }
 
-        private string Resolve(string path, FileKind kind, string logical)
+        private FileStream Open(string path, FileKind kind, string logical)
         {
             if (!PortablePackagePath.TryValidate(path, out var portable, out var key, out _) ||
                 key == "TOPIAFORGE.MOD.JSON" || key == "TOPIAFORGE.INSTALL.JSON" ||
@@ -98,14 +98,19 @@ namespace TopiaForge.ModManager.Core
             }
             else paths.Add(key, (portable, kind));
 
-            if (!ManifestContentValidator.TryResolveOrdinaryFile(root, portable, out var fullPath, out _))
+            try
+            {
+                return PathSafety.OpenOrdinaryPackageFile(root, portable);
+            }
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or
+                ArgumentException or InvalidOperationException or NotSupportedException)
+            {
                 throw UiThemeDataException.Io(logical, "Cannot read the declared ordinary package file.");
-            return fullPath;
+            }
         }
 
-        internal static byte[] ReadBounded(string path, int maximumBytes, string logical)
+        internal static byte[] ReadBounded(Stream stream, int maximumBytes, string logical)
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (stream.Length > maximumBytes)
                 throw UiThemeDataException.Limit(logical, "The file exceeds its size limit.");
             var bytes = new byte[(int)stream.Length];
@@ -120,9 +125,8 @@ namespace TopiaForge.ModManager.Core
             return bytes;
         }
 
-        internal static byte[] HashFile(string path, long maximumBytes, string logical, out long length)
+        internal static byte[] HashFile(Stream stream, long maximumBytes, string logical, out long length)
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             length = stream.Length;
             if (length == 0) throw UiThemeDataException.Invalid(logical, "The file is empty.");
             if (length > maximumBytes) throw UiThemeDataException.Limit(logical, "The file exceeds its size limit.");

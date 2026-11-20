@@ -136,10 +136,10 @@ namespace TopiaForge.ModManager.Core
             const string logical = "$.ui.bundlePath";
             try
             {
-                if (!ManifestContentValidator.TryResolveOrdinaryFile(packageRoot, BundlePath, out var path, out _) ||
-                    !string.Equals(path, FullPath, StringComparison.Ordinal))
+                using var input = PathSafety.OpenOrdinaryPackageFile(packageRoot, BundlePath);
+                if (!string.Equals(input.Name, FullPath, StringComparison.Ordinal))
                     return OperationResult<byte[]>.Failure(ModErrorCode.Io, logical + ": Could not read the admitted bundle.");
-                var bytes = UiThemePackageFiles.ReadBounded(path, (int)UiThemePackageFiles.MaxBundleBytes, logical);
+                var bytes = UiThemePackageFiles.ReadBounded(input, (int)UiThemePackageFiles.MaxBundleBytes, logical);
                 using var sha = SHA256.Create();
                 return string.Equals(UiThemeData.Hex(sha.ComputeHash(bytes)), Sha256, StringComparison.Ordinal)
                     ? OperationResult<byte[]>.Success(bytes)
@@ -149,7 +149,7 @@ namespace TopiaForge.ModManager.Core
             {
                 return OperationResult<byte[]>.Failure(error.Code, error.Message);
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
             {
                 return OperationResult<byte[]>.Failure(ModErrorCode.Io, logical + ": Could not read the admitted bundle.");
             }
@@ -159,12 +159,12 @@ namespace TopiaForge.ModManager.Core
         {
             try
             {
-                return ManifestContentValidator.TryResolveOrdinaryFile(packageRoot, BundlePath, out var path, out _) &&
-                    string.Equals(path, FullPath, StringComparison.Ordinal) &&
-                    string.Equals(UiThemeData.Hex(UiThemePackageFiles.HashFile(path, UiThemePackageFiles.MaxBundleBytes,
+                using var input = PathSafety.OpenOrdinaryPackageFile(packageRoot, BundlePath);
+                return string.Equals(input.Name, FullPath, StringComparison.Ordinal) &&
+                    string.Equals(UiThemeData.Hex(UiThemePackageFiles.HashFile(input, UiThemePackageFiles.MaxBundleBytes,
                         "$.ui.bundlePath", out _)), Sha256, StringComparison.Ordinal);
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or UiThemeDataException)
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or UiThemeDataException)
             {
                 return false;
             }

@@ -21,19 +21,51 @@ namespace TopiaForge.ModManager.Core
         internal static IReadOnlyList<string> Prepare(string packageRoot, ModManifest manifest)
         {
             if (manifest.Ui == null) return Array.Empty<string>();
+            packageRoot = Path.GetFullPath(packageRoot);
             var catalogue = new ModUiCatalogue { Schema = 1, Default = manifest.Ui.Default };
             var preparation = new Preparation(catalogue);
             var result = Read(packageRoot, manifest, preparation);
             if (!result.Succeeded) return new[] { result.ErrorMessage };
 
-            foreach (var definition in preparation.Definitions)
-                File.WriteAllBytes(definition.Key, definition.Value);
-
-            var manifestFile = Path.Combine(packageRoot, ManifestPath);
-            var manifestJson = JsonUtil.ReadBoundedJsonObject(manifestFile);
+            using var manifestFile = PathSafety.OpenOrdinaryPackageFile(packageRoot, ManifestPath, FileAccess.ReadWrite);
+            var manifestJson = JsonUtil.ReadBoundedJsonObject(manifestFile, manifestFile.Name);
             var replacement = new Dictionary<string, string> { ["ui"] = JsonUtil.Serialize(catalogue) };
-            File.WriteAllText(manifestFile, JsonObjectMerge.Merge(manifestJson, replacement));
+            var finalManifest = Encoding.UTF8.GetBytes(JsonObjectMerge.Merge(manifestJson, replacement));
+            WritePreparation(packageRoot, preparation, manifestFile, finalManifest);
             return Array.Empty<string>();
+        }
+
+        private static void WritePreparation(string root, Preparation preparation, Stream manifest, byte[] manifestBytes)
+        {
+            var outputs = new List<(Stream File, byte[] Bytes)>(preparation.Definitions.Count);
+            try
+            {
+                foreach (var definition in preparation.Definitions)
+                {
+                    outputs.Add((PathSafety.OpenOrdinaryPackageFile(root, definition.Key, FileAccess.Write), definition.Value));
+                }
+
+                foreach (var output in outputs)
+                {
+                    ReplaceBytes(output.File, output.Bytes);
+                }
+
+                ReplaceBytes(manifest, manifestBytes);
+            }
+            finally
+            {
+                foreach (var output in outputs)
+                {
+                    output.File.Dispose();
+                }
+            }
+        }
+
+        private static void ReplaceBytes(Stream stream, byte[] bytes)
+        {
+            stream.Position = 0;
+            stream.Write(bytes, 0, bytes.Length);
+            stream.SetLength(bytes.Length);
         }
 
         private static OperationResult<AdmittedUiCatalogue> Read(string packageRoot, ModManifest manifest, Preparation? preparation)
@@ -57,8 +89,8 @@ namespace TopiaForge.ModManager.Core
                 var entry = declaration.Themes[index];
                 try
                 {
-                    var path = files.ResolveDefinition(entry.Definition);
-                    var bytes = UiThemePackageFiles.ReadBounded(path, UiThemeJson.MaximumBytes, "$");
+                    using var input = files.OpenDefinition(entry.Definition);
+                    var bytes = UiThemePackageFiles.ReadBounded(input, UiThemeJson.MaximumBytes, "$");
                     if (packaged && !entry.Matches(bytes))
                         return Failure(ModErrorCode.InvalidArgument, index, "does not match its packaged SHA-256.");
 
@@ -76,7 +108,7 @@ namespace TopiaForge.ModManager.Core
                         var digest = UiThemeData.Hex(sha.ComputeHash(final));
                         if (entry.Sha256 != null && !string.Equals(entry.Sha256, digest, StringComparison.Ordinal))
                             return Failure(ModErrorCode.InvalidArgument, index, "sha256 does not match the final definition bytes.");
-                        preparation.Add(entry, path, ReferenceEquals(bytes, final) ? null : final, digest.ToLowerInvariant());
+                        preparation.Add(entry, ReferenceEquals(bytes, final) ? null : final, digest.ToLowerInvariant());
                     }
                 }
                 catch (UiThemeDataException error)
@@ -130,9 +162,9 @@ namespace TopiaForge.ModManager.Core
             internal Preparation(ModUiCatalogue catalogue) => this.catalogue = catalogue;
             internal Dictionary<string, byte[]> Definitions { get; } = new Dictionary<string, byte[]>(StringComparer.Ordinal);
 
-            internal void Add(UiThemeCatalogueEntry entry, string path, byte[]? replacement, string digest)
+            internal void Add(UiThemeCatalogueEntry entry, byte[]? replacement, string digest)
             {
-                if (replacement != null) Definitions.Add(path, replacement);
+                if (replacement != null) Definitions.Add(entry.Definition, replacement);
                 catalogue.Themes.Add(new ModUiCatalogueEntry { Id = entry.Id, Definition = entry.Definition, Sha256 = digest });
             }
         }
