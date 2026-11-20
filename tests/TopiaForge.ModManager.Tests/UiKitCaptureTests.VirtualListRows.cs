@@ -59,8 +59,11 @@ namespace TopiaForge.ModManager.Tests
             var title = pressed.Nodes.Single(row => row.Kind == "ListItem");
             var secondary = pressed.Nodes.Single(row => row.Kind == "ListItemSubtitle");
             var badge = pressed.Nodes.SingleOrDefault(row => row.Kind == "ListItemBadge");
-            Check(badge is { Text: "OFFLINE", SemanticLabel: "Offline", FillColor: "#224455",
-                    InkColor: "#FFFFFF", TextHeightPixels: 18f, IsRendered: true, Clipped: false },
+            Check(badge is
+            {
+                Text: "OFFLINE", SemanticLabel: "Offline", FillColor: "#224455",
+                InkColor: "#FFFFFF", TextHeightPixels: 18f, IsRendered: true, Clipped: false
+            },
                 "The actual badge capture records its own Raised fill and readable authored Label paint.");
             var edge = pressed.Nodes.Single(row => row.Kind == "ListItemBadgeBoundary");
             var target = pressed.Nodes.Single(row => row.Kind == "HitTarget");
