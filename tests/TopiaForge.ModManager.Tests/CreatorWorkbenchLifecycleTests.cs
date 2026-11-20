@@ -41,6 +41,12 @@ namespace TopiaForge.ModManager.Tests
                     content, robots.Agents, () => { }, () => { });
                 var opened = workbench.Open();
                 Assert(opened.Succeeded, "the actual workbench fits at scale " + scale + ". " + opened.ErrorMessage);
+                var hud = Surface(context, "connections-adopter-hud");
+                var hudCapture = hud.Capture(viewport);
+                Assert(hud.Content == null && hudCapture.CheckAccessibility().Count == 0 &&
+                    hudCapture.Nodes.Any(node => node.Kind == "SurfaceBody" &&
+                    node.IsRendered && !node.Clipped && node.Text.Contains("F5 HIDE WORKBENCH", StringComparison.Ordinal)),
+                    "the actual body-only Sandbox HUD displays its measured session instructions at scale " + scale);
                 var surface = Surface(context, "connections-adopter-window");
                 Assert(surface.Capture(viewport).Nodes.Any(node => node.Id == "catalog-search" && node.IsRendered && !node.Clipped),
                     "the protected catalog search field stays visible in its split pane");
@@ -57,6 +63,10 @@ namespace TopiaForge.ModManager.Tests
                     surface.TryFindNode("event-graph", out var updated) && updated is UiGraphCanvas { Edges.Count: 0, Nodes.Count: 2 } &&
                     surface.Capture(viewport).Nodes.All(node => node.Kind != "GraphConnectionsList"),
                     "the kit Remove action updates the Sandbox project and retains both event nodes");
+                Assert(workbench.Hide().Succeeded &&
+                    hud.Capture(viewport).Nodes.Any(node => node.Kind == "SurfaceBody" && node.IsRendered && !node.Clipped &&
+                        node.Text.Contains("F5 REOPEN WORKBENCH", StringComparison.Ordinal)),
+                    "normal Workbench Hide updates the visible body-only HUD at scale " + scale);
             }
         }
 

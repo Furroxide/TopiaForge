@@ -45,6 +45,11 @@ namespace TopiaForge.Mods.Testing
             var screen = new UiCaptureRect(0, 0, viewport.Width, viewport.Height);
             var clip = bounds.Intersect(screen);
             var surfacePair = scheme.GetPair(UiPaintRole.Surface);
+            if (surface.Request.Kind == UiSurfaceKind.Hud && surface.Content == null)
+            {
+                PaintBodyOnlyHud(bounds, clip, surfacePair);
+                return new UiTreeCapture(nodes, preferences.HighContrast, ControlHeight);
+            }
             Add("/", surface.Id, surface.Request.Kind.ToString(), bounds, clip, EmptyContent,
                 new UiCaptureNodePaint(null, surfacePair.Fill));
 

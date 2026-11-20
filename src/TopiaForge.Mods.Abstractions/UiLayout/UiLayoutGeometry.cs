@@ -74,6 +74,9 @@ namespace TopiaForge.Mods
     internal readonly struct UiLayoutConstraints
     {
         internal UiLayoutConstraints(double minWidth, double maxWidth, double minHeight, double maxHeight)
+            : this(minWidth, maxWidth, minHeight, maxHeight, null) { }
+
+        private UiLayoutConstraints(double minWidth, double maxWidth, double minHeight, double maxHeight, UiOuterScroll? outerScroll)
         {
             if (!ValidAxis(minWidth, maxWidth)) throw new ArgumentOutOfRangeException(nameof(maxWidth));
             if (!ValidAxis(minHeight, maxHeight)) throw new ArgumentOutOfRangeException(nameof(maxHeight));
@@ -81,12 +84,19 @@ namespace TopiaForge.Mods
             MaxWidth = maxWidth;
             MinHeight = minHeight;
             MaxHeight = maxHeight;
+            OuterScroll = outerScroll;
         }
 
         internal double MinWidth { get; }
         internal double MaxWidth { get; }
         internal double MinHeight { get; }
         internal double MaxHeight { get; }
+        internal UiOuterScroll? OuterScroll { get; }
+
+        internal static UiLayoutConstraints ForVerticalScroll(double width, double apertureHeight,
+            double beforeComposition = 0d, double afterComposition = 0d) =>
+            new UiLayoutConstraints(width, width, 0d, double.PositiveInfinity,
+                new UiOuterScroll(apertureHeight, beforeComposition, afterComposition));
 
         internal static UiLayoutConstraints Loose(double maxWidth, double maxHeight) => new UiLayoutConstraints(0, maxWidth, 0, maxHeight);
 
@@ -100,6 +110,24 @@ namespace TopiaForge.Mods
             Math.Max(0, MinHeight - vertical), Math.Max(0, MaxHeight - vertical));
 
         private static bool ValidAxis(double minimum, double maximum) => double.IsFinite(minimum) && minimum >= 0 && maximum >= minimum;
+    }
+
+    // The outer scroller admits a finite viewport and a separately measured composition canvas.
+    internal readonly struct UiOuterScroll
+    {
+        internal UiOuterScroll(double apertureHeight, double beforeComposition, double afterComposition)
+        {
+            ApertureHeight = RequireExtent(apertureHeight, nameof(apertureHeight));
+            BeforeComposition = RequireExtent(beforeComposition, nameof(beforeComposition));
+            AfterComposition = RequireExtent(afterComposition, nameof(afterComposition));
+        }
+
+        internal double ApertureHeight { get; }
+        internal double BeforeComposition { get; }
+        internal double AfterComposition { get; }
+
+        private static double RequireExtent(double value, string name) => double.IsFinite(value) && value >= 0d
+            ? value : throw new ArgumentOutOfRangeException(name);
     }
 
     internal enum UiLayoutFailure { InvalidLayout, ClippedContent, OccludedContent }

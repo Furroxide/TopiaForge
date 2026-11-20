@@ -21,7 +21,7 @@ namespace TopiaForge.Mods.Testing
 
         internal void RefreshHudLayoutNotice()
         {
-            if (HudOverflowText == null || !IsVisible || Content == null) return;
+            if (HudOverflowText == null || !IsVisible) return;
             if (FakeUiTreeCapture.FitsHudContent(owner, this, out var noticeFits))
                 hudOverflowEpisode.Recover();
             else if (!noticeFits && hudOverflowEpisode.TryQueue())

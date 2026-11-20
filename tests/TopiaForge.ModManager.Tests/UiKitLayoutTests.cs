@@ -9,6 +9,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
+            UiOuterScrollTests.Run();
             PublicTypesValidateAndCopy();
             AxesAndSpacingKeepLegacyDefaults();
             SizedBoxesClampAndPreserveLooseAxes();

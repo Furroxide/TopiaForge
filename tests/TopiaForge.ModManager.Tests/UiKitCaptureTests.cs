@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
             NativeCaptureDetectsFixedClippingAndMissingHits();
             CatalogueIsAtomicAndUsesExactBytes();
             CascadeRefreshKeepsControlState();
+            CardAndBoxThemeSwitchesAreAtomic();
             SiblingPreloadsAndDrainAreIndependent();
             AssetsCommitTogetherAndEnrichTheDescriptor();
             PaintAndTypeRemainReadable();
@@ -38,6 +39,7 @@ namespace TopiaForge.ModManager.Tests
             NativeControlsUseTheirResolvedRoles();
             GraphPortsHaveIndependentTargetsAndPaint();
             GraphConnectionsAreLocalPooledAndLabelled();
+            GraphConnectionsPaintIndependentCues();
             NativeGraphConnectionsUseTheActualControls();
             ListSelectionRevealsPaddedRows();
             VirtualListRowsFitBeforeScrolling();

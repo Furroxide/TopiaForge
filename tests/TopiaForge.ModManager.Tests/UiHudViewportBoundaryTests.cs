@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager.Tests
@@ -16,6 +17,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 "src/TopiaForge.ModManager/UnityUiHudPlacement.cs",
                 "src/TopiaForge.ModManager/UnityUiHudPlacement.Viewport.cs",
+                "src/TopiaForge.ModManager/UnityUiHud.cs",
                 "src/TopiaForge.ModManager/UnityUiSurface.Layout.cs",
                 "src/TopiaForge.ModManager/UiHudAnchors.cs",
                 "src/TopiaForge.Mods.UnityUi/Core/TopiaForgeHudLayout.cs",
@@ -23,8 +25,13 @@ namespace TopiaForge.ModManager.Tests
             };
             // Exercise physical projection, the real box solver and retained refresh through controlled Unity metrics.
             var root = Program.FindRepoRoot();
+            var probeSource = Probe
+                .Replace("/* service creation */", Members("UnityUiService.cs", "OwnerUiService", "CreateSurface"))
+                .Replace("/* surface chrome */", Members("UnityUiSurface.cs", "UnityUiSurface", "AttachDock", "SetBody"))
+                .Replace("/* surface presence */", Members("UnityUiSurface.Presence.cs", "UnityUiSurface",
+                    "Present", "ShowNativeView", "HideNativeView"));
             var trees = sources.Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file)), path: file))
-                .Append(CSharpSyntaxTree.ParseText(Probe, path: "HudViewportBoundary.cs"));
+                .Append(CSharpSyntaxTree.ParseText(probeSource, path: "HudViewportBoundary.cs"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(path => Path.GetFileName(path).StartsWith("System.", StringComparison.Ordinal) ||
                     Path.GetFileName(path) == "netstandard.dll")
@@ -40,11 +47,21 @@ namespace TopiaForge.ModManager.Tests
                     result.Diagnostics.Where(item => item.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.ModManager.OwnerUiService", throwOnError: true)!;
             ((Action)probe.GetMethod("ProbeHudViewport", BindingFlags.Public | BindingFlags.Static)!.CreateDelegate(typeof(Action)))();
+
+            string Members(string file, string type, params string[] names)
+            {
+                var path = Path.Combine(root, "src/TopiaForge.ModManager", file);
+                var syntax = CSharpSyntaxTree.ParseText(File.ReadAllText(path)).GetRoot();
+                return string.Join("\n", syntax.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                    .Single(declaration => declaration.Identifier.Text == type).Members.OfType<MethodDeclarationSyntax>()
+                    .Where(member => names.Contains(member.Identifier.Text)));
+            }
         }
 
         private const string Probe = """
             using System;
             using System.Collections.Generic;
+            using System.Reflection;
             using TopiaForge.Mods;
             using TopiaForge.Mods.UnityUi;
             using UnityEngine;
@@ -80,9 +97,15 @@ namespace TopiaForge.ModManager.Tests
                     public bool activeSelf = true;
                     public string name = "";
                     internal object? Component;
+                    private object? added;
                     public void SetActive(bool shown) => activeSelf = shown;
-                    public T AddComponent<T>() where T : new() => new T();
-                    public T? GetComponent<T>() where T : class => Component as T;
+                    public T AddComponent<T>() where T : new()
+                    {
+                        var value = new T();
+                        added = value;
+                        return value;
+                    }
+                    public T? GetComponent<T>() where T : class => Component as T ?? added as T;
                 }
                 public class RectTransform
                 {
@@ -130,9 +153,11 @@ namespace TopiaForge.ModManager.Tests
                     public TMP_Text(string text, float height) { this.text = text; Height = height; }
                     public string text;
                     public float Height;
+                    public int MeasureCalls;
                     public bool Wrap = true;
                     public Vector2 GetPreferredValues(string value, float width, float height)
                     {
+                        MeasureCalls++;
                         var full = value.Length * 9f;
                         return new Vector2(Math.Min(full, width), (Wrap ? (float)Math.Ceiling(full / width) : 1f) * Height);
                     }
@@ -144,6 +169,8 @@ namespace TopiaForge.ModManager.Tests
                 public enum TopiaForgeCorner { TopLeft, Top, TopRight, Left, Center, Right, BottomLeft, Bottom, BottomRight }
                 public enum TopiaForgeGap { None = 0, Sm = 8, Md = 12 }
                 public enum TopiaForgeTextStyle { Body, Heading }
+                public enum TopiaForgePanelStyle { HudPanel }
+                public enum TopiaForgeScheme { Paper }
                 public static class TopiaForgeTokens { public const float SafeMargin = 18f, ScrollGutter = 12f; }
                 public static class TopiaForgeTheme { public static event Action? Changed; }
                 internal enum TopiaForgeTone { Neutral }
@@ -152,7 +179,16 @@ namespace TopiaForge.ModManager.Tests
                     internal static readonly List<string> Plain = new();
                     internal static void ShowPlain(string text, TopiaForgeTone tone) => Plain.Add(text);
                 }
-                public sealed class UiHost { public float EffectiveUiScale = 1f; }
+                public sealed class UiHost
+                {
+                    public float EffectiveUiScale = 1f;
+                    public Canvas Canvas { get; } = new Canvas();
+                    public TopiaForgeHudLayer HudLayer(string id, bool persistent) => new TopiaForgeHudLayer(this);
+                    public TopiaForgeWindow Window(string id, string title, float width, float height, TopiaForgeScheme scheme,
+                        bool persistent) => throw new NotSupportedException();
+                    public TopiaForgeFullscreenTool FullscreenTool(string id, string title, TopiaForgeScheme scheme,
+                        bool persistent) => throw new NotSupportedException();
+                }
                 public sealed class TopiaForgeLayerSlot { internal void SelectTheme(UiThemeDescriptor descriptor) { } }
                 public sealed class ProbeTheme { public int Surface => 0; }
                 public class TopiaForgeWidget
@@ -168,22 +204,100 @@ namespace TopiaForge.ModManager.Tests
                     { Go.Component = new TMPro.TMP_Text(text, role == TopiaForgeTextStyle.Heading ? 24f : 20f); }
                     public TopiaForgeLabel PlainText() => this;
                     public TopiaForgeLabel Ellipsis() { Go.GetComponent<TMPro.TMP_Text>()!.Wrap = false; return this; }
+                    public void SetText(string text) => Go.GetComponent<TMPro.TMP_Text>()!.text = text;
                 }
-                public sealed class TopiaForgeContainer : TopiaForgeWidget
+                public class TopiaForgeContainer : TopiaForgeWidget
                 {
-                    public TopiaForgeContainer Column(TopiaForgeGap gap, TopiaForgeGap padding) => new TopiaForgeContainer();
+                    public TopiaForgeContainer Column(TopiaForgeGap gap, TopiaForgeGap padding)
+                    {
+                        var child = new TopiaForgeContainer();
+                        child.Rect.Canvas = Rect.Canvas;
+                        child.Rect.sizeDelta = Rect.sizeDelta;
+                        child.Go.Component = new VerticalLayoutGroup();
+                        return child;
+                    }
                     public TopiaForgeContainer FreeImage(string name) => new TopiaForgeContainer();
                     public TopiaForgeLabel Label(string text, TopiaForgeTextStyle role) => new TopiaForgeLabel(text, role);
+                    public TopiaForgeContainer Stretch() => this;
+                    public ProbeScroll Scroll(TopiaForgeGap gap, TopiaForgeGap padding) => throw new NotSupportedException();
                     public void SetColor(int color) { }
                     public void Destroy() => SetShown(false);
+                }
+                public sealed class ProbeScroll
+                {
+                    public TopiaForgeContainer Content => throw new NotSupportedException();
+                    public ProbeScroll Flex(float x, float y) => this;
+                }
+                public sealed class TopiaForgeHudLayer : TopiaForgeContainer
+                {
+                    public TopiaForgeHudLayer(UiHost host) { Rect.Canvas = host.Canvas; }
+                    public ProbePanel? ActivePanel { get; private set; }
+                    public ProbePanel Panel(TopiaForgePanelStyle style) => ActivePanel = new ProbePanel(Rect.Canvas!);
+                }
+                public sealed class ProbePanel : TopiaForgeContainer
+                {
+                    public ProbePanel(Canvas canvas)
+                    {
+                        Rect.Canvas = canvas;
+                        Go.Component = new VerticalLayoutGroup();
+                    }
+                    public ProbePanel Size(float width, float height) { Rect.sizeDelta = new Vector2(width, height); return this; }
+                }
+                public sealed class TopiaForgeWindow : TopiaForgeWidget
+                {
+                    public TopiaForgeContainer Content => throw new NotSupportedException();
+                    public void Show() { }
+                    public void Close() { }
+                }
+                public sealed class TopiaForgeFullscreenTool : TopiaForgeWidget
+                {
+                    public TopiaForgeContainer Content => throw new NotSupportedException();
+                    public void Show() { }
+                    public void Close() { }
                 }
             }
 
             namespace TopiaForge.ModManager
             {
+                internal static class UnityMainThreadGuard { internal static void AssertCurrent() { } }
+                internal sealed class UiGameplayGate { internal bool IsGameplay => true; }
+                internal readonly record struct GalleryPreviewPalette(UiThemeDescriptor Descriptor, TopiaForgeScheme Scheme);
+                internal readonly record struct UiRemoteThemeSelection(object Envelope, ProbePackage? Package);
+                internal readonly record struct ProbePackage(ProbeManifest Manifest);
+                internal readonly record struct ProbeManifest(string Name);
                 internal static class UiThemeScope { internal static UiThemeDescriptor? Ready(UiThemeDescriptor? value) => value; }
                 internal sealed partial class OwnerUiService
                 {
+                    private readonly UiHost host;
+                    private readonly UnityUiHudPlacement hudPlacement;
+                    private readonly ProbeLifetime lifetime = new ProbeLifetime();
+                    private readonly ProbeLogger logger = new ProbeLogger();
+                    private readonly UiGameplayGate gameplay = new UiGameplayGate();
+                    private readonly HashSet<string> surfaceIds = new();
+                    private readonly List<UnityUiSurface> surfaces = new();
+                    private readonly string hudNoticePackageName = "Example Pack";
+                    private readonly Func<double> clock = () => 0d;
+                    private readonly Func<string> clockEpoch = () => "epoch";
+
+                    private OwnerUiService(UiHost host, UnityUiHudPlacement hudPlacement)
+                    {
+                        this.host = host;
+                        this.hudPlacement = hudPlacement;
+                    }
+
+                    private OperationResult<bool> DescribePresentationTheme(UiSurfaceRequest request, out UiThemeDescriptor? theme)
+                    {
+                        theme = null;
+                        return OperationResult<bool>.Success(true);
+                    }
+                    private static UiThemeDescriptor? ResolveRemoteTheme(UiRemoteThemeSelection selection) => null;
+                    private void AbortSurfaceCreation(UnityUiSurface? surface, TopiaForgeWidget? root, string id) => surfaceIds.Remove(id);
+                    private void ReleaseSurface(UnityUiSurface surface) { }
+                    private void ObserveGalleryFixture(UnityUiSurface surface, UiSurfaceRequest request,
+                        UiRemoteThemeSelection? selection, UiThemeDescriptor? theme, GalleryPreviewPalette? preview) { }
+
+                    /* service creation */
+
                     public static void ProbeHudViewport()
                     {
                         using (var placement = new UnityUiHudPlacement())
@@ -241,9 +355,91 @@ namespace TopiaForge.ModManager.Tests
                             Check(surface.OriginalShown && surface.Bounds.Width == 80 && surface.Bounds.Height == 80,
                                 "The alternate notice restores the compact authored slot and its tree.");
                         }
+                        BodyOnlySurfaceUsesMeasuredChrome();
+                        NarrowerHudNoticeUsesActualWidth();
                         FullyOccupiedHudUsesOnePlainToast();
                         DockMarginsFollowTheAssignedUnits();
-                        Console.WriteLine("Native HUD viewport boundary passed for 24-unit SDK margins, retained notices, one plain toast per unfit episode and 4,096 settled frames at 0 B.");
+                        Console.WriteLine("Native HUD viewport boundary passed for body-only creation, SetBody and scale recovery, 300-unit notice placement, 24-unit margins and 4,096 settled frames at 0 B.");
+                    }
+
+                    private static void BodyOnlySurfaceUsesMeasuredChrome()
+                    {
+                        using var dock = new UnityUiHudPlacement();
+                        var host = new UiHost();
+                        var canvas = host.Canvas;
+                        SetScale(host, canvas, dock, 2f);
+                        var pixels = canvas.pixelRect;
+                        canvas.pixelRect = default;
+                        var owner = new OwnerUiService(host, dock);
+                        var request = new UiSurfaceRequest("body-only", "Readiness", new string('P', 212),
+                            UiSurfaceKind.Hud, 1080, 104).WithHudAnchor(UiHudAnchor.TopLeft).WithHudVisibility(UiHudVisibility.Always);
+                        var created = owner.CreateSurface(request);
+                        Check(created.TryGetValue(out var handle) && handle is UnityUiSurface,
+                            "The actual CreateSurface route accepts a legacy body-only HUD.");
+                        using var surface = (UnityUiSurface)handle!;
+                        var tick = surface.LayoutFrame();
+                        Check(!surface.NoticeShown && TopiaForgeToasts.Plain.Count == 0,
+                            "The initial unmeasured canvas defers the body-only check without a false toast.");
+                        canvas.pixelRect = pixels;
+                        tick();
+                        Check(surface.NoticeShown && !surface.BodyShown && surface.Bounds.Width <= 1824d &&
+                            surface.NoticeMessage == UiHudLayoutNotice.Text && TopiaForgeToasts.Plain.Count == 0,
+                            "The body-only frame observer shows readable fallback inside the actual scaled viewport.");
+
+                        surface.SetBody("Ready");
+                        tick();
+                        Check(surface.BodyShown && !surface.NoticeShown && surface.Bounds.Width == 1824d,
+                            "A real SetBody change restores the original HUD chrome in the physical aperture.");
+                        var measurements = surface.BodyMeasureCalls;
+                        for (var index = 0; index < 64; index++) { surface.SetBody("Ready"); tick(); }
+                        var allocated = GC.GetAllocatedBytesForCurrentThread();
+                        for (var index = 0; index < 4096; index++) { surface.SetBody("Ready"); tick(); }
+                        Check(GC.GetAllocatedBytesForCurrentThread() == allocated && surface.BodyMeasureCalls == measurements,
+                            "Unchanged body-only updates and frame observations allocate 0 B and never measure again.");
+
+                        surface.SetBody(request.Body);
+                        tick();
+                        Check(surface.NoticeShown && !surface.BodyShown, "A later overlong body uses the same retained notice.");
+                        SetScale(host, canvas, dock, 1f);
+                        tick();
+                        Check(surface.BodyShown && !surface.NoticeShown && surface.Bounds.Width == 1080d,
+                            "Scale recovery restores full authored geometry and the existing body text.");
+                    }
+
+                    private static void NarrowerHudNoticeUsesActualWidth()
+                    {
+                        using var dock = new UnityUiHudPlacement();
+                        var host = new UiHost();
+                        var canvas = new Canvas();
+                        SetScale(host, canvas, dock, 2f);
+                        var left = new UnityUiSurface(dock, host, canvas, 400, 430, new UiText("Peer"));
+                        var right = new UnityUiSurface(dock, host, canvas, 212, 430, new UiText("Peer"),
+                            corner: TopiaForgeCorner.TopRight);
+                        var subject = new UnityUiSurface(dock, host, canvas, 80, 80, new UiText("Ready"),
+                            corner: TopiaForgeCorner.Top);
+                        Check(left.ShowOriginal() && right.ShowOriginal(), "Both real peers are visible in the scale-2 native dock.");
+                        Check(subject.ShowOriginal(), "The compact composed HUD initially fits between the peers.");
+                        var beforeLeft = left.Bounds;
+                        var beforeRight = right.Bounds;
+                        subject.SetBody(new string('B', 100));
+                        subject.Refresh();
+                        Check(subject.NoticeShown && !subject.NoticeQueued && !subject.OriginalShown &&
+                            subject.Bounds.X == beforeLeft.Right && subject.Bounds.Width == 600d &&
+                            subject.Bounds.Right == beforeRight.X && subject.Bounds.Height == 192d &&
+                            left.Bounds.Equals(beforeLeft) && right.Bounds.Equals(beforeRight) && TopiaForgeToasts.Plain.Count == 0,
+                            "The native notice remeasures the extra body line in the 300-unit opening and leaves both peer bounds intact.");
+                        right.SetDockShown(false);
+                        subject.Refresh();
+                        Check(subject.Bounds.Width == 720d && subject.Bounds.Height == 152d && left.Bounds.Equals(beforeLeft),
+                            "The newly available native slot restores the preferred 360-unit width and single measured line.");
+
+                        left.DropViewport();
+                        left.SetDockShown(false);
+                        left.SetDockShown(true);
+                        subject.Refresh();
+                        Check(subject.NoticeQueued && !subject.PanelShown && subject.Bounds.Width == 160d &&
+                            subject.Bounds.Height == 160d,
+                            "An unavailable peer projection returns the queued HUD to its authored allocation.");
                     }
 
                     private static void FullyOccupiedHudUsesOnePlainToast()
@@ -347,8 +543,17 @@ namespace TopiaForge.ModManager.Tests
                     private static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 
                     private sealed class ProbeViewportCallback { public string ClockEpoch() => "epoch"; }
-                    private sealed class ProbeLifetime { public bool IsStopping => false; }
-                    private sealed class ProbePresence { public bool IsLive => true; }
+                    private sealed class ProbeLifetime
+                    {
+                        public bool IsStopping => false;
+                        public IDisposable Track(IDisposable resource) => resource;
+                    }
+                    private sealed class ProbePresence
+                    {
+                        public bool IsLive => true;
+                        public bool IsLost => false;
+                        public bool IsVisible => true;
+                    }
                     private sealed class ProbeLogger
                     {
                         public void Warn(string message) { }
@@ -367,37 +572,45 @@ namespace TopiaForge.ModManager.Tests
                         }
                     }
 
-                    private sealed partial class UnityUiSurface
+                    private sealed partial class UnityUiSurface : IUiSurface
                     {
-                        private readonly UnityUiHudPlacement placement;
-                        private readonly int dockHandle;
+                        private UnityUiHudPlacement? placement;
+                        private int dockHandle;
                         private readonly TopiaForgeContainer compositionParent = new TopiaForgeContainer();
-                        private readonly TopiaForgeContainer compositionRoot = new TopiaForgeContainer();
+                        private readonly TopiaForgeContainer? compositionRoot;
                         private readonly TopiaForgeWidget widget = new TopiaForgeWidget();
                         private readonly TopiaForgeLabel body = new TopiaForgeLabel("", TopiaForgeTextStyle.Body);
-                        private readonly UiNode admitted;
-                        private readonly ProbeLayoutRenderer layoutRenderer;
-                        private readonly object? window, fullscreen;
+                        private readonly RectTransform panel;
+                        private readonly ProbeLayoutRenderer? layoutRenderer;
+                        private readonly TopiaForgeWindow? window;
+                        private readonly TopiaForgeFullscreenTool? fullscreen;
                         private readonly ProbeLifetime lifetime = new ProbeLifetime();
                         private readonly ProbePresence presence = new ProbePresence();
                         private readonly ProbeLogger logger = new ProbeLogger();
                         private readonly ProbeViewportCallback callbacks = new ProbeViewportCallback();
                         private readonly UiThemeDescriptor? declaredTheme;
                         private readonly bool remoteComposition;
-                        private readonly int bodyVersion;
+                        private int bodyVersion;
+                        private string? sentBody;
                         private TopiaForgeContainer? layoutFallback;
                         private ContentStamp committedStamp;
-                        private string Id => "hud";
-                        private bool IsVisible => true;
+                        public string Id { get; } = "hud";
+                        public bool IsVisible => presence.IsVisible;
                         private GameObject CanvasRoot => widget.Go;
+                        private Rect OuterScrollViewport => default;
+                        private UiLayoutConstraints MeasureScrollingContent(TopiaForgeContainer parent, double width, VerticalLayoutGroup? group) =>
+                            throw new InvalidOperationException("The HUD fixture has no scroll viewport.");
+                        private void RememberOuterScrollOffset() { }
+                        private void RestoreOuterScrollOffset() { }
                         internal UnityUiSurface(UnityUiHudPlacement placement, UiHost host, Canvas canvas, float width, float height,
                             UiNode source, string title = "Readiness", string bodyText = "", TopiaForgeCorner corner = TopiaForgeCorner.TopLeft)
                         {
-                            admitted = source;
+                            compositionRoot = new TopiaForgeContainer();
                             layoutRenderer = new ProbeLayoutRenderer(source);
                             this.placement = placement;
                             widget.Rect.Canvas = canvas;
                             widget.Rect.sizeDelta = new Vector2(width, height);
+                            panel = widget.Rect;
                             compositionParent.Rect = widget.Rect;
                             compositionParent.Go.Component = new VerticalLayoutGroup();
                             dockHandle = placement.Add(host, widget.Rect, corner, height);
@@ -405,30 +618,70 @@ namespace TopiaForge.ModManager.Tests
                             body.Go.GetComponent<TMPro.TMP_Text>()!.text = bodyText;
                             hudTitle = new TopiaForgeLabel(hudTitleText, TopiaForgeTextStyle.Heading).Ellipsis();
                         }
+                        private UnityUiSurface(string id, TopiaForgeHudLayer layer, TopiaForgeLabel body, TopiaForgeContainer parent)
+                        {
+                            Id = id;
+                            widget = layer;
+                            panel = layer.ActivePanel!.Rect;
+                            compositionParent = parent;
+                            this.body = body;
+                        }
+                        internal static UnityUiSurface ForHud(string id, TopiaForgeHudLayer layer, TopiaForgeLabel body,
+                            TopiaForgeContainer parent, bool followsGameplay, bool gameplay, ProbeLifetime lifetime, ProbeLogger logger,
+                            Action<UnityUiSurface> release) => new UnityUiSurface(id, layer, body, parent);
+                        internal static UnityUiSurface ForWindow(string id, TopiaForgeWindow window, TopiaForgeLabel body,
+                            TopiaForgeContainer parent, ProbeLifetime lifetime, ProbeLogger logger, Action<UnityUiSurface> release) =>
+                            throw new NotSupportedException();
+                        internal static UnityUiSurface ForFullscreen(string id, TopiaForgeFullscreenTool window, TopiaForgeLabel body,
+                            TopiaForgeContainer parent, ProbeLifetime lifetime, ProbeLogger logger, Action<UnityUiSurface> release) =>
+                            throw new NotSupportedException();
+                        internal void AttachLifetimeLease(IDisposable lease) { }
+                        internal void InitializeTheme(UiThemeRef? theme, bool remote, UiThemeDescriptor? descriptor) { }
+                        internal void SetClock(Func<double> clock, Func<string> epoch) { }
+                        public OperationResult<bool> SetContent(UiNode content) => throw new NotSupportedException();
+                        public void Show() => ShowNativeView();
+                        public void Hide() => HideNativeView();
+                        public void Dispose() => HideNativeView();
+                        private void ResetGraphConnections(bool retire) { }
+
+                        /* surface chrome */
+                        /* surface presence */
+
+                        internal Action LayoutFrame()
+                        {
+                            var frame = CanvasRoot.GetComponent<UiSurfaceLayoutFrame>();
+                            Check(frame != null, "The actual HUD factory attaches its retained layout observer.");
+                            return (Action)typeof(UiSurfaceLayoutFrame).GetMethod("LateUpdate",
+                                BindingFlags.Instance | BindingFlags.NonPublic)!.CreateDelegate(typeof(Action), frame!);
+                        }
                         internal bool Fits()
                         {
-                            try { layoutRenderer.Rearrange(MeasureContentArea(compositionParent, widget), null); return true; }
+                            try { layoutRenderer!.Rearrange(MeasureContentArea(compositionParent, widget), null); return true; }
                             catch (UiLayoutException) { return false; }
                         }
                         internal bool ShowOriginal()
                         {
-                            placement.SetShown(dockHandle, true);
+                            placement!.SetShown(dockHandle, true);
                             Refresh();
                             return OriginalShown;
                         }
                         internal void Refresh() => RefreshChangedLayout();
                         private void RefreshRetainedComposition(TopiaForgeContainer root, string clockEpoch) => UpdateRetainedLayout(root);
-                        internal UiLayoutRect Bounds => OwnerUiService.Bounds(widget.Rect);
+                        internal UiLayoutRect Bounds => OwnerUiService.Bounds(panel);
                         internal UiLayoutException? LayoutFailure => layoutProblem;
                         internal string? NoticeCaption => fallbackTitle?.Go.GetComponent<TMPro.TMP_Text>()?.text;
                         internal string? NoticeMessage => fallbackMessage?.Go.GetComponent<TMPro.TMP_Text>()?.text;
                         internal bool NoticeShown => layoutFallback?.Go.activeSelf == true;
                         internal bool NoticeQueued => hudNoticeOverflowing;
-                        internal bool PanelShown => widget.Go.activeSelf;
-                        internal void SetDockShown(bool shown) => placement.SetShown(dockHandle, shown);
-                        internal bool OriginalShown => compositionRoot.Go.activeSelf;
-                        internal int LayoutCalls => layoutRenderer.Calls;
-                        private readonly record struct ContentStamp(TopiaForgeWidget View, string ClockEpoch, int BodyVersion, int DockVersion)
+                        internal bool PanelShown => panel.gameObject.activeSelf;
+                        internal bool BodyShown => body.Go.activeSelf;
+                        internal int BodyMeasureCalls => body.Go.GetComponent<TMPro.TMP_Text>()!.MeasureCalls;
+                        internal void DropViewport() => panel.Canvas = null;
+                        internal void SetDockShown(bool shown) => placement!.SetShown(dockHandle, shown);
+                        internal bool OriginalShown => compositionRoot?.Go.activeSelf == true;
+                        internal int LayoutCalls => layoutRenderer?.Calls ?? 0;
+                        private readonly record struct ContentStamp(TopiaForgeWidget View, string ClockEpoch, int BodyVersion,
+                            int DockVersion, Rect OuterScrollViewport)
                         {
                             internal bool Matches(in ContentStamp other) => this == other;
                         }

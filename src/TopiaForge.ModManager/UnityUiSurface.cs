@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager
             private TopiaForgeFullscreenTool? fullscreen;
             private TopiaForgeLabel? body;
             private TopiaForgeContainer? compositionParent;
+            private readonly ScrollRect? outerScroll;
             private TopiaForgeContainer? compositionRoot;
             private UnityUiLayoutRenderer? layoutRenderer;
             private TopiaForgeContainer? layoutFallback;
@@ -60,6 +61,8 @@ namespace TopiaForge.ModManager
                 this.fullscreen = fullscreen;
                 this.body = body;
                 this.compositionParent = compositionParent;
+                outerScroll = window != null || fullscreen != null
+                    ? compositionParent.Go.GetComponentInParent<ScrollRect>(includeInactive: true) : null;
                 this.presence = presence;
                 this.lifetime = lifetime;
                 this.logger = logger;
@@ -144,6 +147,7 @@ namespace TopiaForge.ModManager
                 dockHandle = handle;
                 hudTitle = title;
                 hudTitleText = titleText;
+                ObserveLayout();
             }
 
             public void SetBody(string value)
@@ -197,7 +201,7 @@ namespace TopiaForge.ModManager
                 ContentStamp stamp;
                 try
                 {
-                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, placement?.DockVersion ?? 0);
+                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
                     var retained = ReferenceEquals(content, admitted);
                     if (retained && !changingTheme)
                     {
@@ -267,6 +271,7 @@ namespace TopiaForge.ModManager
                     catch { }
                 }
 
+                RestoreOuterScrollOffset();
                 return ContentApplied;
             }
 
@@ -295,12 +300,14 @@ namespace TopiaForge.ModManager
                 private readonly float height;
                 private readonly int bodyVersion;
                 private readonly int dockVersion;
+                private readonly Rect outerScrollViewport;
 
-                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int dockVersion)
+                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int dockVersion, Rect outerScrollViewport)
                 {
                     ClockEpoch = clockEpoch;
                     this.bodyVersion = bodyVersion;
                     this.dockVersion = dockVersion;
+                    this.outerScrollViewport = outerScrollViewport;
                     theme = view.ResolvedTheme;
                     screenWidth = Screen.width;
                     screenHeight = Screen.height;
@@ -316,7 +323,9 @@ namespace TopiaForge.ModManager
                     && ReferenceEquals(theme, other.theme)
                     && screenWidth == other.screenWidth && screenHeight == other.screenHeight
                     && width.Equals(other.width) && height.Equals(other.height) && bodyVersion == other.bodyVersion
-                    && dockVersion == other.dockVersion;
+                    && dockVersion == other.dockVersion
+                    && outerScrollViewport.width.Equals(other.outerScrollViewport.width)
+                    && outerScrollViewport.height.Equals(other.outerScrollViewport.height);
             }
 
             private static string RollbackFailedRender(

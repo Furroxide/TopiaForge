@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager
             var scope = new UiThemeScope(lifetime, catalogue, parent?.Themes as UiThemeScope);
             lifetime.Track(scope);
             scope.Changed += RefreshScopeThemes;
+            scope.ValidateLocalSelection = ValidateScopeThemes;
             themeScope = scope;
             hudNoticePackageName = packageDisplayName;
         }
@@ -41,6 +42,17 @@ namespace TopiaForge.ModManager
             if (scope == null) return;
             for (var index = 0; index < surfaces.Count; index++)
                 surfaces[index].RefreshTheme(scope);
+        }
+
+        private OperationResult<bool> ValidateScopeThemes(UiThemeScope changed, UiThemeRef? proposed)
+        {
+            var scope = themeScope!;
+            foreach (var surface in surfaces)
+            {
+                var result = surface.ValidateThemeSelection(scope, changed, proposed);
+                if (!result.Succeeded) return result;
+            }
+            return ThemeResolved;
         }
 
         private static UiThemeDescriptor? ResolveRemoteTheme(UiRemoteThemeSelection selection)
@@ -68,6 +80,13 @@ namespace TopiaForge.ModManager
                     declaredTheme = descriptor;
                     ApplySurfaceTheme(descriptor);
                 }
+            }
+
+            internal OperationResult<bool> ValidateThemeSelection(UiThemeScope scope, UiThemeScope changed, UiThemeRef? proposed)
+            {
+                if (usesRemoteTheme || themeOverride != null || admitted == null) return ThemeResolved;
+                if (!scope.TryDescribe(null, out var candidate, changed, proposed)) return ThemeMissing;
+                return ReferenceEquals(candidate, declaredTheme) ? ThemeResolved : UiPresentationTheme.StylesValid(admitted, candidate);
             }
 
             OperationResult<bool> IRemoteThemedSurface.SetRemotePresentation(UiNode? content, UiRemoteThemeSelection theme)

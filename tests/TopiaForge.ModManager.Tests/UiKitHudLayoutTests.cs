@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             TheDockChangesItsVersionOnlyWhenPositionsMayMove();
             InSessionHudLayoutTests.Run();
             UiHudViewportBoundaryTests.Run();
+            UiHudRetainedNoticeTests.Run();
             Console.WriteLine("UiKitHudLayoutTests passed.");
         }
 

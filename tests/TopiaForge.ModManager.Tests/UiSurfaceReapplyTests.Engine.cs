@@ -176,8 +176,13 @@ namespace TopiaForge.ModManager.Tests
 
             namespace UnityEngine.UI
             {
+                public static class LayoutUtility
+                {
+                    public static float GetPreferredHeight(RectTransform rect) => rect.rect.height;
+                }
                 public static class LayoutRebuilder
                 {
+                    public static void ForceRebuildLayoutImmediate(RectTransform rect) { }
                     public static int Requests { get; private set; }
                     public static void MarkLayoutForRebuild(RectTransform _) => Requests++;
                 }
@@ -211,6 +216,8 @@ namespace TopiaForge.ModManager.Tests
                 public sealed class Slider : Selectable { }
                 public sealed class ScrollRect : MonoBehaviour
                 {
+                    public int MovementStops { get; private set; }
+                    public void StopMovement() => MovementStops++;
                     public enum MovementType { Clamped }
                     public RectTransform viewport = null!, content = null!;
                     public bool horizontal, vertical;

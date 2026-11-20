@@ -7,8 +7,21 @@ namespace TopiaForge.Mods
     {
         private readonly List<PaintRecord> paint = new List<PaintRecord>();
 
-        private void Place(Slot root, double x, double y, UiLayoutRect clip) =>
-            Place(root, x, y, new PlacementClips(clip, clip, clip, null));
+        private void Place(Slot root, UiLayoutRect clip, UiOuterScroll? outerScroll)
+        {
+            var clips = new PlacementClips(clip, clip, clip, null);
+            if (outerScroll is { } outer)
+            {
+                var top = -outer.BeforeComposition;
+                var height = Math.Max(outer.ApertureHeight, outer.BeforeComposition + root.Size.Height + outer.AfterComposition);
+                var viewport = new UiLayoutRect(clip.X, top, clip.Width, outer.ApertureHeight);
+                var canvas = new UiLayoutRect(clip.X, top, clip.Width, height);
+                // Admission considers every legal offset. Renderers apply the current crop to the same layout.
+                var projection = new ScrollProjection(null, viewport, height - outer.ApertureHeight);
+                clips = new PlacementClips(clip, clip, canvas, projection);
+            }
+            Place(root, 0, 0, clips);
+        }
 
         private void Place(Slot slot, double x, double y, PlacementClips clips)
         {

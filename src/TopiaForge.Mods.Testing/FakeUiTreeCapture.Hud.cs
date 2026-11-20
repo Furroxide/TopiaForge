@@ -48,7 +48,7 @@ namespace TopiaForge.Mods.Testing
             };
         }
 
-        private bool TryPlaceHudNotice(UiLayoutExtent size, bool preferCurrent, out UiCaptureRect panel)
+        private bool TryPlaceHudNotice(Func<double, double> heightAt, out UiCaptureRect panel)
         {
             var safe = HudSafeArea();
             var occupied = new List<UiLayoutRect>();
@@ -57,15 +57,10 @@ namespace TopiaForge.Mods.Testing
                 if (ReferenceEquals(peer, surface) || !peer.IsVisible || peer.Request.Kind != UiSurfaceKind.Hud) continue;
                 occupied.Add(HudBounds(peer));
             }
-            var (x, y, px, py) = HudDockOrigin(surface, safe);
             var current = HudBounds(surface);
-            if (preferCurrent && current.HasArea && occupied.TrueForAll(peer => !peer.Intersects(current)))
-            {
-                panel = CaptureRect(current);
-                return true;
-            }
-            var preferred = UiHudViewport.AtPivot(x, y, px, py, size);
-            if (UiHudNoticePlacement.TryPlace(safe, preferred, occupied, UiHudViewport.SlotGap * layoutScale, out var chosen))
+            if (UiHudNoticePlacement.TryPlaceMeasured(safe, current, HudDockOrigin(surface, safe),
+                UiHudLayoutNotice.PreferredWidth * layoutScale, occupied, UiHudViewport.SlotGap * layoutScale,
+                heightAt, out var chosen, out _))
             {
                 panel = CaptureRect(chosen);
                 return true;
@@ -104,12 +99,7 @@ namespace TopiaForge.Mods.Testing
         {
             var kit = UiThemePackParser.Default;
             var padding = 12f * layoutScale;
-            var current = HudBounds(surface);
-            var width = Math.Min(UiHudLayoutNotice.PreferredWidth * layoutScale, HudSafeArea().Width);
-            var height = HeightAt(width);
-            panel = default;
-            return double.IsFinite(height) &&
-                TryPlaceHudNotice(new UiLayoutExtent(width, height), HeightAt(current.Width) <= current.Height, out panel);
+            return TryPlaceHudNotice(HeightAt, out panel);
 
             double HeightAt(double outerWidth)
             {
@@ -124,7 +114,11 @@ namespace TopiaForge.Mods.Testing
         internal static bool FitsHudContent(FakeUiService service, FakeUiSurface surface, out bool noticeFits)
         {
             var probe = new FakeUiTreeCapture(service, surface, ReferenceViewport, UiCaptureControlState.Rest, null);
-            try { probe.VerifyComposition(surface.Content!); }
+            try
+            {
+                if (surface.Content is { } content) probe.VerifyComposition(content);
+                else probe.MeasureBodyOnlyHud(probe.SurfaceBounds(), out _, out _);
+            }
             catch (UiLayoutException)
             {
                 noticeFits = probe.TryMeasureHudLayoutNotice(out _);
@@ -132,6 +126,47 @@ namespace TopiaForge.Mods.Testing
             }
             noticeFits = false;
             return true;
+        }
+
+        private void PaintBodyOnlyHud(UiCaptureRect panel, UiCaptureRect clip, UiThemePair surfacePair)
+        {
+            UiCaptureRect title;
+            UiCaptureRect body;
+            try { MeasureBodyOnlyHud(panel, out title, out body); }
+            catch (UiLayoutException failure)
+            {
+                PaintLayoutFailure(panel, clip, failure);
+                return;
+            }
+
+            Add("/", surface.Id, nameof(UiSurfaceKind.Hud), panel, clip, EmptyContent,
+                new UiCaptureNodePaint(null, surfacePair.Fill));
+            Text("/title", null, "SurfaceTitle", title, clip, surface.Request.Title, UiTextStyle.Heading,
+                UiTone.Neutral, UiCaptureNodeFlags.RequiresLabel);
+            if (surface.Body.Length != 0)
+                Text("/body", null, "SurfaceBody", body, clip, surface.Body, UiTextStyle.Body, UiTone.Neutral,
+                    UiCaptureNodeFlags.None);
+        }
+
+        private void MeasureBodyOnlyHud(UiCaptureRect panel, out UiCaptureRect title, out UiCaptureRect body)
+        {
+            var padding = 12f * layoutScale;
+            var inner = panel.Inset(padding, padding, padding, padding);
+            if (inner.Width <= 0f || inner.Height <= 0f)
+                throw new UiLayoutException(UiLayoutFailure.InvalidLayout, "/0", "The HUD has no usable physical content area.");
+            title = new UiCaptureRect(inner.X, inner.Y, inner.Width, TextSize(UiTextStyle.Heading));
+            body = default;
+            var bottom = title.Bottom;
+            if (surface.Body.Length != 0)
+            {
+                var measured = MeasureText(surface.Body, UiTextStyle.Body, inner.Width);
+                if (measured.Width > inner.Width + 0.001d)
+                    throw new UiLayoutException(UiLayoutFailure.ClippedContent, "/body", "The HUD body exceeds its physical viewport.");
+                body = new UiCaptureRect(inner.X, title.Bottom + gap, measured.Width, measured.Height);
+                bottom = body.Bottom;
+            }
+            if (bottom > inner.Bottom + 0.001d)
+                throw new UiLayoutException(UiLayoutFailure.ClippedContent, "/0", "The HUD chrome exceeds its physical viewport.");
         }
 
         private void PaintNoticeText(string path, string kind, string text, UiTextStyle role, UiCaptureRect bounds,

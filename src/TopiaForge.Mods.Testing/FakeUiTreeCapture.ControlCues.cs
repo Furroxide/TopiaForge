@@ -6,12 +6,13 @@ namespace TopiaForge.Mods.Testing
     {
         private void PaintStateCues(string path, string label, UiCaptureControlState state, UiCaptureRect bounds,
             UiCaptureRect clip, UiThemeColor stateFill, UiThemeStateTints tints, UiThemeColor ink, UiThemeColor backdrop,
-            bool compact = false, float? radius = null)
+            bool compact = false, float? radius = null, bool authoredSelectionCue = false)
         {
-            var selected = state is UiCaptureControlState.Selected or UiCaptureControlState.SelectedPressed;
+            var selected = authoredSelectionCue || state is UiCaptureControlState.Selected or UiCaptureControlState.SelectedPressed;
             var pressed = state is UiCaptureControlState.Pressed or UiCaptureControlState.SelectedPressed;
             if (!selected && !pressed) return;
             var cues = UiControlPaint.ButtonCues(stateFill, tints);
+            if (authoredSelectionCue) cues |= UiButtonCue.Selection;
             var flags = UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.HasNonColorCue;
             if (selected) flags |= UiCaptureNodeFlags.Selected;
             var mark = new UiCaptureNodeContent(string.Empty, label, 0f, 0f, flags);

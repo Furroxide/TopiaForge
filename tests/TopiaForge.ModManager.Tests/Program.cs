@@ -120,6 +120,12 @@ namespace TopiaForge.ModManager.Tests
             { TestingKitTests.RunWorldWidgets(); WorldWidgetAdapterTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--world-widget-adapter")
             { WorldWidgetAdapterTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k1-outer-scroll")
+            {
+                UiOuterScrollTests.Run();
+                UiSurfaceReapplyTests.Run();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--ui-widget-regressions")
             {
                 UiKitCoreTests.Run(); UiKitWindowMathTests.Run(); UiKitMultiplayerCoreTests.Run();

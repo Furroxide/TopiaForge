@@ -326,7 +326,8 @@ HUD, typography or token entries that differ from the kit defaults. The theme us
 A surface uses its `WithTheme` override first, then the nearest scope's `Context.Ui.Themes.UseTheme` selection,
 then the manifest default, then the kit default. Use the manifest for ordinary surfaces. Pass `null` to
 `UseTheme` to clear the current scope's selection. `PreloadAsync` lets a scope load a declared theme before use
-and observe a registration failure. Confirmation modals, system toasts and manager prompts use the kit theme.
+and observe a registration failure. A selection that would leave an inheriting Card or Box without its named
+style is refused before any surfaces change. Confirmation modals, system toasts and manager prompts use the kit theme.
 
 Use semantic roles for text. At 1080p and scale 1.0, the reference heights are Banner 56, Display 40, Title 30,
 Heading 24, Body 20, Label 18, Caption 18, Numeral 32 and Mono 18. The Mono role uses JetBrains Mono NL. The
@@ -407,15 +408,22 @@ control state intact. If a retained HUD no longer fits after a viewport or scale
 the surface title and uses another clear position if the current dock cannot hold the text.
 Nearby panels, session chat and caption space keep their positions.
 
+A Window or FullscreenTool checks that each protected control can be revealed in full within its
+outer scroll viewport. Long paragraphs can scroll a readable line at a time. When a resize leaves
+an admitted control unreachable, the layout notice appears and the original layout and scroll
+position return once the controls can fit again.
+
 Composition depth is limited to 32 levels, including the root. The limit is 4,096 node occurrences
 and 256 direct children per container. IDs are unique across the complete tree. Combine redundant
 padding wrappers when a scene needs fewer levels. Stable IDs are also available on layout nodes, so
 the Gallery and tests can inspect their resolved bounds and state.
 
-SDK HUDs keep 24 reference units of safe margin at the viewer’s UI scale. If a retained HUD no
-longer fits, the kit tries a readable notice in its current allocation and then in a safe alternate
-slot. When both are occupied, a system toast gives the manifest display name and HUD dock once per
-unfit episode. The capture marks the overflow as queued, and the authored panel returns when it fits.
+SDK HUDs keep 24 reference units of safe margin at the viewer’s UI scale. The same fit check
+applies to title-and-body HUDs and updates from `SetBody`. When the retained layout exceeds the
+viewport, the kit tries a readable notice in its current allocation and then measures it in an
+available safe slot. If every slot is occupied, a system toast gives the manifest display name and
+HUD dock once per unfit episode. The capture marks the overflow as queued, and the authored panel
+returns when it fits.
 
 ## Testing UI without running Robotopia
 

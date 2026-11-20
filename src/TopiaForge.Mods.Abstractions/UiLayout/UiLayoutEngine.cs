@@ -29,7 +29,7 @@ namespace TopiaForge.Mods
             var engine = new UiLayoutEngine(measureLeaf, pixelsPerUnit, highContrast);
             var measured = engine.Measure(root, constraints, null, 0);
             var clip = new UiLayoutRect(0, 0, constraints.MaxWidth, constraints.MaxHeight);
-            engine.Place(measured, 0, 0, clip);
+            engine.Place(measured, clip, constraints.OuterScroll);
             engine.ValidatePaint();
             return new UiLayoutResult(measured.Size, engine.placements.AsReadOnly());
         }
