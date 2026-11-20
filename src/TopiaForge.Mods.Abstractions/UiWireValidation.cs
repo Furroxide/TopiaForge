@@ -24,10 +24,8 @@ namespace TopiaForge.Mods
             switch (node)
             {
                 case UiText n: Text(n.Text); break;
-                case UiColumn n: Children(n); break;
-                case UiRow n: Children(n); break;
-                case UiScroll n: Visit(n.Content); break;
-                case UiSplitPane n: Visit(n.Primary); Visit(n.Secondary); break;
+                case UiColumn or UiRow or UiScroll or UiSplitPane or UiPadding or UiSizedBox or UiExpanded or UiSpacer or
+                    UiWrap or UiGrid or UiStack or UiPositioned or UiCard or UiDivider or UiBox: break;
                 case UiProgress n: Text(n.Label, 256); break;
                 case UiCountdown n: Text(n.Label, 256); break;
                 case UiButton n: Text(n.Label); break;
@@ -47,12 +45,9 @@ namespace TopiaForge.Mods
                 default:
                     throw new ArgumentException(node.GetType().Name + " cannot be sent to a player. Use supported declarative UI nodes.");
             }
-        }
 
-        private static void Children(UiLayoutNode node)
-        {
-            if (node.Children.Count > 256) throw new ArgumentException("Remote UI layouts support at most 256 direct children.");
-            foreach (var child in node.Children) Visit(child);
+            var children = UiNodeChildren.Of(node);
+            for (var index = 0; index < children.Count; index++) Visit(children[index]);
         }
     }
 }

@@ -27,6 +27,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             GalleryNativeCaptureOnlyAdmitsAuthoredFixtures();
+            NativeCaptureDetectsFixedClippingAndMissingHits();
             CatalogueIsAtomicAndUsesExactBytes();
             CascadeRefreshKeepsControlState();
             SiblingPreloadsAndDrainAreIndependent();
@@ -36,7 +37,12 @@ namespace TopiaForge.ModManager.Tests
             AuthoredBackplatesAndControlTargetsAreChecked();
             NativeControlsUseTheirResolvedRoles();
             GraphPortsHaveIndependentTargetsAndPaint();
+            GraphConnectionsAreLocalPooledAndLabelled();
+            NativeGraphConnectionsUseTheActualControls();
             ListSelectionRevealsPaddedRows();
+            VirtualListRowsFitBeforeScrolling();
+            VirtualListBadgesCaptureTheirResolvedPaint();
+            NativeVirtualListUsesPooledTextMetrics();
             TargetedBudgetsIncludeFramingWithoutEarlyClockBinding();
             UnchangedReapplicationAllocatesNothing();
             VerifyGoldenManifest();
@@ -245,10 +251,9 @@ namespace TopiaForge.ModManager.Tests
                 "Every reserved interactive rectangle clears the 40-unit minimum.");
 
             var narrow = new UiSlider("narrow", "Range", 0f, 10f, 4f, _ => { });
-            using var tooSmall = Make(ui, new UiSurfaceRequest("narrow-track", "R", "", width: 130, content: narrow));
-            Check(tooSmall.Capture(Viewport).CheckAccessibility().Any(issue =>
-                issue.Kind == UiAccessibilityIssueKind.InvalidLayout && issue.Path.EndsWith("/hit", StringComparison.Ordinal)),
-                "A control whose active region is too narrow fails the capture check.");
+            var tooSmall = ui.CreateSurface(new UiSurfaceRequest("narrow-track", "R", "", width: 130, content: narrow));
+            Check(tooSmall.ErrorCode == ModErrorCode.InvalidArgument,
+                "A control whose active region is too narrow fails layout admission.");
         }
 
         private static void UnchangedReapplicationAllocatesNothing()

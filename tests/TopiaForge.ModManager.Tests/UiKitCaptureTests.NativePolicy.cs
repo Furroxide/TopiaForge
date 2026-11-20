@@ -35,6 +35,7 @@ namespace TopiaForge.ModManager.Tests
                 "The recorder can distinguish two packages' separate Survival descriptors.");
             foreach (var page in Enum.GetValues<FoundationPage>())
             {
+                var localOnly = page is FoundationPage.InteractionStates or FoundationPage.GraphConnections;
                 var request = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.SurvivalTheme);
                 Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null,
                     "The native recorder admits each authored Gallery fixture.");
@@ -43,7 +44,7 @@ namespace TopiaForge.ModManager.Tests
                 var transport = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.TransportTheme);
                 var targeted = Reframe(transport, "remote-37");
                 Check((UiGalleryCaptureFixture.Match("topiaforge.presentation", true, transportEnvelope, targeted)?.Id == request.Id) ==
-                    (page != FoundationPage.InteractionStates),
+                    !localOnly,
                     "A targeted receiver's reconstructed id maps to the authenticated canonical Gallery id for wire-supported pages.");
                 Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, foreignSurvival, targeted, survival) == null,
                     "The client-local Gallery is ineligible to publish a remote fixture.");
@@ -59,7 +60,7 @@ namespace TopiaForge.ModManager.Tests
                     "The local capture route requires the original Gallery id.");
                 Check(UiGalleryCaptureFixture.Match("io.example.other", false, null, request) == null,
                     "An unrelated local package cannot opt in by copying the fixture.");
-                if (page == FoundationPage.InteractionStates) continue;
+                if (localOnly) continue;
                 var hud = FoundationPages.CreateRequest(page, UiSurfaceKind.Hud);
                 Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit, Reframe(hud, "shared-19"))?.Id == hud.Id,
                     "A shared HUD receiver's reconstructed id maps to its canonical Gallery fixture.");
@@ -82,6 +83,16 @@ namespace TopiaForge.ModManager.Tests
                 "A fixture id does not admit unlisted body text.");
             Check(UiGalleryCaptureFixture.Match(owner, false, null, original.WithTheme(new UiThemeRef("other"))) == null,
                 "Only a declared Gallery variant qualifies.");
+
+            var stack = FoundationPages.CreateRequest(FoundationPage.StackAndBounds, UiSurfaceKind.Window);
+            var panelChildren = ((UiColumn)stack.Content!).Children.ToArray();
+            var panel = (UiStack)panelChildren[1];
+            panelChildren[1] = new UiStack(panel.Children, panel.Width + 1, panel.Height, panel.Id);
+            var wrongBounds = new UiSurfaceRequest(stack.Id, stack.Title, stack.Body, stack.Kind,
+                stack.Width, stack.Height, new UiColumn(panelChildren));
+            Check(UiGalleryCaptureFixture.Match(owner, false, null, wrongBounds) == null &&
+                UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit, Reframe(wrongBounds, "remote-37")) == null,
+                "A copied Gallery label tree with altered stack geometry cannot reach the native export.");
 
             Check(UiGalleryCaptureFixture.SafeDisplayText("FIELD NOTE", "Field note", true) == "FIELD NOTE" &&
                 UiGalleryCaptureFixture.SafeDisplayText("Field note", "Field note", false) == "Field note",

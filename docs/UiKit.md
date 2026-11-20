@@ -204,7 +204,15 @@ the mod remains responsible for validating and publishing the next immutable tre
 selects the node, and each typed port has its own hit target and focus ring. Dragging the card moves
 the node when the canvas supports editing.
 
+In a local Window or FullscreenTool, use **Connections** to inspect the focused graph's
+edges in their authored order. The list exposes both endpoints and a separate **Remove**
+action for the selected edge. It uses the same removal callback as direct graph picking.
+The kit reuses up to twelve visible rows and restores focus to a remaining row or the graph
+after the author publishes a replacement.
+
 A virtual list scrolls its selected row into view when needed and leaves room for the row's focus ring.
+The kit measures every row's title, subtitle and badge with the effective theme's typography.
+If any row cannot fit, the kit rejects the new presentation and preserves the current one.
 
 The compiled `ui` template demonstrates the standard form/list controls, accessibility changes,
 result handling, and a configurable nonreserved input action. The
@@ -377,6 +385,38 @@ is checked on the colors as uGUI draws them, in 256 steps a channel.
 Toasts reuse a few pooled views. Each toast is placed and brought in afresh, whatever its view
 showed before and under reduced motion too, and shows above every window and dialog, stacked up from
 the bottom-right corner.
+
+### Safe layouts
+
+Use the original `UiRow` and `UiColumn` constructors for the standard spacing and alignment. Pass
+`UiFlexLayout` to set token spacing, padding and axis alignment. `UiExpanded` and `UiSpacer` take
+shares of a row or column's finite remaining space. An expanding child needs a bounded main axis,
+so put flexible controls in a row inside a scrolling window.
+
+`UiPadding` insets one child. `UiSizedBox` bounds a child or reserves an empty gap. `UiWrap` flows
+children across rows, and `UiGrid` computes its column count from the available width and its minimum
+cell width. The local player's UI scale can reduce the number of columns. `UiCard` holds an optional
+header and its content. A disabled Card keeps its text readable and disables controls inside it. A
+selected Card shows a selection mark and ring. `UiDivider` is presentation-only.
+
+Use `UiStack` for a bounded, clipped paint area. `UiPositioned` belongs directly inside a Stack.
+Place background Boxes first, then labels and controls. TopiaForge rejects a later independent
+painter that covers a text or control group. The same validate-and-arrange stage checks local
+composition and `FakeUiService` captures. A rejected `SetContent` leaves the previous content and
+control state intact. If a retained HUD no longer fits after a viewport or scale change, it displays
+“Panel does not fit at this scale” and restores the original tree once it fits. The notice keeps
+the surface title and uses another clear position if the current dock cannot hold the text.
+Nearby panels, session chat and caption space keep their positions.
+
+Composition depth is limited to 32 levels, including the root. The limit is 4,096 node occurrences
+and 256 direct children per container. IDs are unique across the complete tree. Combine redundant
+padding wrappers when a scene needs fewer levels. Stable IDs are also available on layout nodes, so
+the Gallery and tests can inspect their resolved bounds and state.
+
+SDK HUDs keep 24 reference units of safe margin at the viewer’s UI scale. If a retained HUD no
+longer fits, the kit tries a readable notice in its current allocation and then in a safe alternate
+slot. When both are occupied, a system toast gives the manifest display name and HUD dock once per
+unfit episode. The capture marks the overflow as queued, and the authored panel returns when it fits.
 
 ## Testing UI without running Robotopia
 

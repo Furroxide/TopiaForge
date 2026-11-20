@@ -161,7 +161,8 @@ namespace TopiaForge.ModManager
             Add(path, source.Id, nameof(UiVirtualList), rect, EmptyContent, default);
             for (var slot = 0; slot < scroll.content.childCount; slot++)
             {
-                if (scroll.content.GetChild(slot) is not RectTransform row || !row.gameObject.activeInHierarchy) continue;
+                if (scroll.content.GetChild(slot) is not RectTransform row || !row.gameObject.activeInHierarchy ||
+                    (row.GetComponent<CanvasGroup>() is { } visibility && visibility.alpha <= 0.001f)) continue;
                 var index = UiVirtualListGeometry.IndexAtRowTop(-row.anchoredPosition.y);
                 if ((uint)index >= (uint)source.Items.Count || row.GetComponent<Button>() is not { } button) return false;
                 var item = source.Items[index];
@@ -169,13 +170,13 @@ namespace TopiaForge.ModManager
                 var fill = Over(button.targetGraphic, backdrop);
                 var flags = Flags(button) | ControlMarks(itemPath, button, item.Title, fill, backdrop);
                 var ring = row.Find("Ring")?.GetComponent<Image>();
-                if (ring != null && ring.isActiveAndEnabled && EffectiveColor(ring).a > 0.001f)
-                    flags |= UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
+                flags = ObserveListSelection(flags, ring);
                 HitAndFocus(itemPath, button, item.Title, backdrop);
                 if (!Text(itemPath, item.Id, "ListItem", Named<TMP_Text>(row, "RowTitle"), item.Title,
                         UiTextStyle.Body, fill, flags, Decoration(row, button.targetGraphic)) ||
                     (item.Subtitle.Length != 0 && !Text(itemPath + "/subtitle", null, "ListItemSubtitle",
-                        Named<TMP_Text>(row, "RowSubtitle"), item.Subtitle, UiTextStyle.Caption, fill, flags))) return false;
+                        Named<TMP_Text>(row, "RowSubtitle"), item.Subtitle, UiTextStyle.Caption, fill, flags)) ||
+                    (item.Badge.Length != 0 && !ListBadge(itemPath + "/badge", row, item.Badge, fill, flags))) return false;
             }
             return true;
         }
@@ -246,12 +247,20 @@ namespace TopiaForge.ModManager
             return true;
         }
 
+        private static UiCaptureNodeFlags ObserveListSelection(UiCaptureNodeFlags flags, Image? ring)
+        {
+            if (ring == null || !ring.isActiveAndEnabled || ring.canvasRenderer.cull || EffectiveColor(ring).a <= 0.001f)
+                return flags;
+
+            // The authored selection ring cannot satisfy an independently required press or selection mark.
+            if ((flags & UiCaptureNodeFlags.RequiresNonColorCue) == 0) flags |= UiCaptureNodeFlags.HasNonColorCue;
+            return flags | UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue;
+        }
+
         private void HitAndFocus(string path, Selectable selectable, string label, UiThemeColor? backdrop)
         {
             if (selectable.transform is not RectTransform rect) return;
-            var graphic = selectable.GetComponent<Graphic>();
-            var hit = graphic != null && graphic.raycastTarget ? graphic.rectTransform : rect;
-            Add(path + "/hit", null, "HitTarget", hit, State(Flags(selectable) | UiCaptureNodeFlags.HitTarget, label), default);
+            Hit(path + "/hit", selectable, label);
             var focus = Named<TopiaForgeRoundedImage>(rect, "Focus ring");
             if (focus == null || !focus.isActiveAndEnabled) return;
             var scale = VerticalScale(focus.rectTransform);
@@ -262,6 +271,51 @@ namespace TopiaForge.ModManager
                 State(UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.FocusIndicator, label),
                 new UiCaptureNodePaint(ToRgb(EffectiveColor(focus)), backdrop, radius, focus.ResolvedBorderWidth * scale));
         }
+
+        private void Hit(string path, Selectable selectable, string label)
+        {
+            var flags = Flags(selectable) | UiCaptureNodeFlags.HitTarget;
+            var graphic = HitGraphic(selectable);
+            if (graphic != null)
+            {
+                var bounds = Bounds(graphic.rectTransform);
+                var clip = Clip(graphic.rectTransform, bounds);
+                // Disabled controls retain their affordance even if their CanvasGroup deliberately blocks pointer input.
+                var disabled = (flags & UiCaptureNodeFlags.Disabled) != 0;
+                var visible = clip.HasVisibleArea && !graphic.canvasRenderer.cull && graphic.depth >= 0 &&
+                    (disabled || CanReceivePointer(graphic, clip.Visible));
+                if (bounds.Width > 0 && bounds.Height > 0 && (visible || !clip.HasVisibleArea))
+                {
+                    Observe(path, null, "HitTarget", bounds, clip, State(flags, label), default, visible, intended: true);
+                    return;
+                }
+            }
+
+            // An enabled Selectable supplies focus and callbacks. A Graphic is what actually receives pointer input.
+            observations.Add(new Observation(path, null, "HitTarget", default, default,
+                State(flags | UiCaptureNodeFlags.InvalidLayout, label), default, rendered: false, clipped: false));
+        }
+
+        private bool CanReceivePointer(Graphic graphic, UiCaptureRect bounds) =>
+            canvas.GetComponent<GraphicRaycaster>() is { isActiveAndEnabled: true } &&
+            graphic.Raycast(new Vector2(bounds.X + bounds.Width / 2f, Height - bounds.Y - bounds.Height / 2f), camera);
+
+        private Graphic? HitGraphic(Selectable selectable)
+        {
+            if (!selectable.isActiveAndEnabled) return null;
+            // The starter controls have a stationary hit image on the root. targetGraphic can be the moving press body.
+            foreach (var image in selectable.GetComponents<Image>())
+                if (HasRectangularRaycast(image)) return image;
+
+            if (selectable.targetGraphic is not Image target || !HasRectangularRaycast(target) ||
+                !target.transform.IsChildOf(selectable.transform)) return null;
+            for (var parent = target.transform; parent != selectable.transform; parent = parent.parent)
+                if (parent.GetComponent<Selectable>() != null) return null;
+            return target;
+        }
+
+        private bool HasRectangularRaycast(Image image) => image.isActiveAndEnabled && image.raycastTarget &&
+            image.canvas == canvas && image.raycastPadding == Vector4.zero && image.alphaHitTestMinimumThreshold <= 0f;
 
         private UiCaptureNodePaint Decoration(RectTransform rect, Graphic? fill)
         {

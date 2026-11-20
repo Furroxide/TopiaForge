@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using TopiaForge.CreatorTools;
 using TopiaForge.CreatorTools.Shared;
 using TopiaForge.Mods;
@@ -15,8 +16,48 @@ namespace TopiaForge.ModManager.Tests
             TestCreatorSessionFailureRestoresOwnedState();
             TestGlobalIsolationRevocationRestoresOwnedState();
             TestGraphStopLeavesManualSpawn();
+            TestConnectionsEditingAtBothScales();
             TestContentSourceUnloadReconcilesRoster();
             Console.WriteLine("CreatorWorkbenchLifecycleTests passed.");
+        }
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "OpenGraphConnections")]
+        private static extern bool OpenGraphConnections(FakeUiSurface surface, UiCaptureViewport viewport);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "RemoveGraphConnectionSelection")]
+        private static extern OperationResult<bool> RemoveGraphConnectionSelection(FakeUiSurface surface);
+
+        private static void TestConnectionsEditingAtBothScales()
+        {
+            var viewport = new UiCaptureViewport(1920, 1080);
+            foreach (var scale in new[] { 1f, 2f })
+            {
+                using var context = CreateGameplayContext();
+                using var content = new FakeCreatorContentService(context.Lifetime);
+                var robots = new FakeRobotKit(context.Lifetime);
+                Assert(context.Ui.ApplyAccessibility(new UiAccessibilityPreferences(true, scale, true)).Succeeded,
+                    "the local workbench uses the viewer's accessibility profile");
+                using var workbench = new CreatorWorkbench(context, SandboxOptions("connections-adopter"),
+                    content, robots.Agents, () => { }, () => { });
+                var opened = workbench.Open();
+                Assert(opened.Succeeded, "the actual workbench fits at scale " + scale + ". " + opened.ErrorMessage);
+                var surface = Surface(context, "connections-adopter-window");
+                Assert(surface.Capture(viewport).Nodes.Any(node => node.Id == "catalog-search" && node.IsRendered && !node.Clipped),
+                    "the protected catalog search field stays visible in its split pane");
+                Assert(surface.ActivateButton("new-project").Succeeded &&
+                    surface.TryFindNode("event-graph", out var authored) && authored is UiGraphCanvas { Edges.Count: 1 },
+                    "New project publishes the authored start connection");
+                Assert(OpenGraphConnections(surface, viewport), "the actual Sandbox graph opens one connections list");
+                var capture = surface.Capture(viewport);
+                Assert(capture.CheckAccessibility().Count == 0 && capture.Nodes.Count(node => node.Kind == "GraphConnectionsList") == 1 &&
+                    capture.Nodes.Single(node => node.Kind == "GraphConnectionRemove").SemanticLabel
+                        .StartsWith(UiGraphConnections.RemovePrefix, StringComparison.Ordinal),
+                    "the owning Sandbox surface shows an accessible, labelled route for its real event graph");
+                Assert(RemoveGraphConnectionSelection(surface).Succeeded &&
+                    surface.TryFindNode("event-graph", out var updated) && updated is UiGraphCanvas { Edges.Count: 0, Nodes.Count: 2 } &&
+                    surface.Capture(viewport).Nodes.All(node => node.Kind != "GraphConnectionsList"),
+                    "the kit Remove action updates the Sandbox project and retains both event nodes");
+            }
         }
 
         private static void TestHideReopenAndTenLeakFreeCycles()
@@ -38,7 +79,8 @@ namespace TopiaForge.ModManager.Tests
 
             for (var cycle = 0; cycle < 10; cycle++)
             {
-                Assert(workbench.Open().Succeeded, "cycle " + cycle + " should open");
+                var opened = workbench.Open();
+                Assert(opened.Succeeded, "cycle " + cycle + " should open. " + opened.ErrorMessage);
                 Assert(workbench.IsSessionActive && workbench.IsVisible
                     && content.ActiveSessionCount == 1
                     && context.LocalPlayer.ActiveControlLeaseCount == 1,

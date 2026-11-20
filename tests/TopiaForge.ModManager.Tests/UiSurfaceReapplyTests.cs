@@ -17,6 +17,10 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/UnityUiSurface.cs",
                 "src/TopiaForge.ModManager/UnityUiSurface.Presence.cs",
                 "src/TopiaForge.ModManager/UnityUiCompositionRenderer.cs",
+                "src/TopiaForge.ModManager/UnityUiGraphRetention.cs",
+                "src/TopiaForge.ModManager/UnityUiLayoutRenderer.cs",
+                "src/TopiaForge.ModManager/UnityUiLayoutRenderer.Leaves.cs",
+                "src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeGraphCanvas.Retention.cs",
                 "src/TopiaForge.ModManager/UnityUiWorldWidgets.cs",
                 "src/TopiaForge.ModManager/UnityMainThreadGuard.cs",
                 "src/TopiaForge.ModManager/UiSurfacePresence.cs",
@@ -27,6 +31,9 @@ namespace TopiaForge.ModManager.Tests
             var trees = files.Select(relative =>
                 CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, relative)), path: relative))
                 .Append(CSharpSyntaxTree.ParseText(Boundaries, path: "SurfaceTestBoundaries.cs"))
+                .Append(CSharpSyntaxTree.ParseText(EngineBoundaries, path: "SurfaceTestEngine.cs"))
+                .Append(CSharpSyntaxTree.ParseText(GraphBoundaries, path: "SurfaceTestGraph.cs"))
+                .Append(CSharpSyntaxTree.ParseText(GraphScenarios, path: "SurfaceTestGraphScenarios.cs"))
                 .Append(CSharpSyntaxTree.ParseText(Scenarios, path: "SurfaceTestScenarios.cs"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(path => !Path.GetFileName(path).StartsWith("UnityEngine", StringComparison.Ordinal)
@@ -42,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.ModManager.OwnerUiService", throwOnError: true)!;
             ((Action)probe.GetMethod("ProbeReapply", BindingFlags.Public | BindingFlags.Static)!
                 .CreateDelegate(typeof(Action)))();
-            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool and HUD.");
+            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool, HUD and retained graph admission.");
         }
 
         private const string Scenarios = """
@@ -64,6 +71,7 @@ namespace TopiaForge.ModManager.Tests
                         UnityMainThreadGuard.CaptureCurrentThread();
                         foreach (var kind in new[] { UiSurfaceKind.Window, UiSurfaceKind.FullscreenTool, UiSurfaceKind.Hud })
                             ProbeSurface(kind);
+                        ProbeGraphAdmission();
                     }
 
                     private static void ProbeSurface(UiSurfaceKind kind)
@@ -99,7 +107,7 @@ namespace TopiaForge.ModManager.Tests
                         var countdown = new UiCountdown(70, "Remaining", id: "timer");
                         Require(surface.SetContent(countdown).Succeeded, "Initial countdown should be admitted");
                         var rendered = parent.Children.Single();
-                        var label = rendered.Children.Single().Labels.Single();
+                        var label = rendered.Go.GetComponentsInChildren<TopiaForgeLabel>(includeInactive: true).Single();
                         Require(countdown.ClockEpoch == epoch && label.Seconds == 60,
                             "An admitted countdown binds once and initially renders current seconds");
 

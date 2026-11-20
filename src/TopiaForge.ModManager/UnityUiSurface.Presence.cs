@@ -64,7 +64,12 @@ namespace TopiaForge.ModManager
                 }
 
                 var effects = presence.Lose();
+                ResetGraphConnections(retire: true);
                 admitted = null;
+                layoutRenderer = null;
+                ClearLayoutNotice();
+                hudTitle = null;
+                hudTitleText = null;
                 committedStamp = default;
                 DetachNativeClosed();
                 placement?.Remove(dockHandle);
@@ -93,8 +98,13 @@ namespace TopiaForge.ModManager
                 }
 
                 presence.Dispose();
+                ResetGraphConnections(retire: true);
                 callbacks.Close();
                 admitted = null;
+                layoutRenderer = null;
+                ClearLayoutNotice();
+                hudTitle = null;
+                hudTitleText = null;
                 committedStamp = default;
                 compositionRoot = null;
                 compositionParent = null;
@@ -135,6 +145,7 @@ namespace TopiaForge.ModManager
 
                 if ((presence.ClosedByPlayer() & UiPresenceEffects.Dismissed) != 0)
                 {
+                    ResetGraphConnections(retire: false);
                     RaiseDismissed();
                 }
             }
@@ -170,11 +181,13 @@ namespace TopiaForge.ModManager
                 {
                     widget.SetShown(true);
                     placement?.SetShown(dockHandle, true);
+                    RefreshChangedLayout();
                 }
             }
 
             private void HideNativeView()
             {
+                ResetGraphConnections(retire: false);
                 if (window != null)
                 {
                     window.Close();

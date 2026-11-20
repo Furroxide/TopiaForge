@@ -56,6 +56,7 @@ namespace TopiaForge.ModManager
             root?.SetShown(inGame && screen.IsAvailable);
             chatRoot?.SetShown(inGame && screen.IsAvailable);
             if (dock >= 0) gameplay!.HudPlacement.SetShown(dock, inGame && screen.IsAvailable);
+            gameplay?.HudPlacement.SetProtectedNoticeArea(inGame && screen.IsAvailable && chat?.OccupiesHud == true ? chatRoot?.Rect : null);
             if (plugin.Multiplayer != null) plugin.Multiplayer.IsLocalPlayerTyping = screen.IsTyping;
         }
 
@@ -106,6 +107,7 @@ namespace TopiaForge.ModManager
             root = null;
             chatRoot = null;
             if (dock >= 0) gameplay!.HudPlacement.Remove(dock);
+            gameplay?.HudPlacement.SetProtectedNoticeArea(null);
             dock = -1;
             var previous = host;
             host = null;
@@ -121,6 +123,7 @@ namespace TopiaForge.ModManager
             openKey?.Dispose();
             returnKey?.Dispose();
             if (dock >= 0) gameplay!.HudPlacement.Remove(dock);
+            gameplay?.HudPlacement.SetProtectedNoticeArea(null);
             dock = -1;
             if (host != null) { host.LayerLost -= Lost; host.Dispose(); host = null; }
             root = null;

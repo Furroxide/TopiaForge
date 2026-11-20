@@ -53,7 +53,7 @@ namespace TopiaForge.Mods.Testing
             Items = new FakeItemService(Entities);
             Assets = new FakeAssetService(Lifetime);
             Audio = new FakeAudioService(Lifetime);
-            Ui = new FakeUiService(Lifetime, gameThread);
+            Ui = new FakeUiService(Lifetime, gameThread, hudPackageDisplayName: Identity.Name);
             Localization = new FakeLocalizationService(Lifetime);
             Commands = new FakeCommandService(Identity, Lifetime);
             Diagnostics = new FakeDiagnosticsService();

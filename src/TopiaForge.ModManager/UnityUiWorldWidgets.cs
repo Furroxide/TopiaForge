@@ -33,18 +33,20 @@ namespace TopiaForge.ModManager
             internal void SetClock(Func<double> value, Func<string> epoch)
             { callbacks.Clock = value; callbacks.ClockEpoch = epoch; }
         }
-        private static void RenderProgress(UiProgress progress, TopiaForgeContainer parent)
+        private static TopiaForgeLabel? RenderProgress(UiProgress progress, TopiaForgeContainer parent)
         {
             var column = parent.Column(TopiaForgeGap.Xs, TopiaForgeGap.None);
-            if (progress.Label.Length > 0) column.Label(progress.Label).PlainText();
+            var label = progress.Label.Length == 0 ? null : column.Label(progress.Label).PlainText().Tone(ToNativeTone(progress.Tone));
             column.ProgressBar().Tone(ToNativeTone(progress.Tone)).SetFraction(progress.Fraction);
+            return label;
         }
-        private static void RenderCountdown(UiCountdown countdown, TopiaForgeContainer parent, Func<double> clock)
+        private static TopiaForgeLabel RenderCountdown(UiCountdown countdown, TopiaForgeContainer parent, Func<double> clock)
         {
             var column = parent.Column(TopiaForgeGap.None, TopiaForgeGap.None).Dynamic();
             var label = column.Label(string.Empty).PlainText().Tone(ToNativeTone(countdown.Tone));
             var driver = column.Go.AddComponent<UiCountdownDriver>();
             driver.Initialize(countdown, clock, label);
+            return label;
         }
     }
     internal sealed class UiCountdownDriver : MonoBehaviour

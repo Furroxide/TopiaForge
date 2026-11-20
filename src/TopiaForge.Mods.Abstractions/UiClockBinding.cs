@@ -28,14 +28,13 @@ namespace TopiaForge.Mods
 
         internal static bool IsCurrent(UiNode? node, string epoch)
         {
+            if (node == null) return true;
             if (node is UiCountdown countdown) return countdown.ClockEpoch == epoch;
-            if (node is UiLayoutNode layout)
+            var children = UiNodeChildren.Of(node);
+            for (var index = 0; index < children.Count; index++)
             {
-                for (var index = 0; index < layout.Children.Count; index++)
-                    if (!IsCurrent(layout.Children[index], epoch)) return false;
+                if (!IsCurrent(children[index], epoch)) return false;
             }
-            else if (node is UiScroll scroll) return IsCurrent(scroll.Content, epoch);
-            else if (node is UiSplitPane split) return IsCurrent(split.Primary, epoch) && IsCurrent(split.Secondary, epoch);
             return true;
         }
 
@@ -52,16 +51,16 @@ namespace TopiaForge.Mods
 
         private static void Visit(UiNode? node, string epoch, bool commit)
         {
+            if (node == null) return;
             if (node is UiCountdown countdown)
             {
                 if (countdown.ClockEpoch != null && countdown.ClockEpoch != epoch)
                     throw new ArgumentException("UiCountdown belongs to an ended clock epoch. Create a new deadline from IUiService.ClockTime.");
                 if (commit) countdown.ClockIdentity = Identity(epoch);
+                return;
             }
-            else if (node is UiLayoutNode layout)
-                foreach (var child in layout.Children) Visit(child, epoch, commit);
-            else if (node is UiScroll scroll) Visit(scroll.Content, epoch, commit);
-            else if (node is UiSplitPane split) { Visit(split.Primary, epoch, commit); Visit(split.Secondary, epoch, commit); }
+            var children = UiNodeChildren.Of(node);
+            for (var index = 0; index < children.Count; index++) Visit(children[index], epoch, commit);
         }
     }
 }

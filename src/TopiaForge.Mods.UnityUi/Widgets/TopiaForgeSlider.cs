@@ -23,6 +23,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TMPro.TextMeshProUGUI valueLabel;
         private float lastShownValue = float.NaN;
         private bool declarative;
+        private UiPaintRole backdrop = UiPaintRole.Surface;
 
         internal TopiaForgeSlider(TopiaForgeContainer parent, string text, float min, float max, float initial, Action<float> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Slider"))
@@ -138,8 +139,9 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Sets whether the slider accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
+            if (slider.interactable == enabled) return;
             slider.interactable = enabled;
-            if (declarative) ApplyTheme(Theme);
+            ApplyTheme(Theme);
         }
 
         internal void UseDeclarativePaint(bool enabled)
@@ -149,7 +151,15 @@ namespace TopiaForge.Mods.UnityUi
             handle.raycastTarget = false;
             fillArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter, -4f);
             fillArea.offsetMax = new Vector2(-16f, 4f);
-            SetEnabled(enabled);
+            slider.interactable = enabled;
+            ApplyTheme(Theme);
+        }
+
+        internal void SetBackdrop(UiPaintRole role)
+        {
+            if (backdrop == role) return;
+            backdrop = role;
+            ApplyTheme(Theme);
         }
 
         /// <summary>Applies the resolved theme to this UI element.</summary>
@@ -163,16 +173,16 @@ namespace TopiaForge.Mods.UnityUi
                 track.color = resolved.Track.Fill;
                 fill.color = resolved.Fill;
                 handle.color = resolved.Track.Content;
-                label.color = theme.ForegroundOn(UiPaintRole.Surface, slider.interactable ? UiTone.Neutral : UiTone.Muted);
-                valueLabel.color = theme.ForegroundOn(UiPaintRole.Surface, UiTone.Muted);
+                label.color = theme.ForegroundOn(backdrop, slider.interactable ? UiTone.Neutral : UiTone.Muted);
+                valueLabel.color = theme.ForegroundOn(backdrop, UiTone.Muted);
             }
             else
             {
                 track.color = theme.SurfaceSunken;
                 fill.color = theme.Accent;
                 handle.color = theme.SliderHandle;
-                label.color = theme.Text;
-                valueLabel.color = theme.TextMuted;
+                label.color = theme.ForegroundOn(backdrop, slider.interactable ? UiTone.Neutral : UiTone.Muted);
+                valueLabel.color = theme.ForegroundOn(backdrop, UiTone.Muted);
             }
 
             cues.Apply(slider.targetGraphic.color, label.color,

@@ -130,6 +130,7 @@ namespace TopiaForge.ModManager.Tests
                     public static TopiaForgeContainer? Parent;
                     private readonly InSessionPresenter screen;
                     public ChatOverlay(TopiaForgeContainer parent, InSessionPresenter screen) { Parent = parent; this.screen = screen; }
+                    public bool OccupiesHud => screen.IsOpen;
                     public void Tick(bool gameplay) { if (!gameplay || !screen.IsAvailable) Close(); }
                     public void Close() { screen.Close(); }
                     public void Lost() { screen.Close(); }
@@ -147,9 +148,11 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public readonly TopiaForgeHudDock Dock = new TopiaForgeHudDock();
                     public readonly List<(int Handle, ProbeRect Rect)> Entries = new List<(int, ProbeRect)>();
+                    public UnityEngine.RectTransform? ProtectedArea;
                     public int Add(UiHost host, ProbeRect rect, TopiaForgeCorner corner, float height)
                     { var handle = Dock.Add(corner, height, 1); Entries.Add((handle, rect)); return handle; }
                     public void SetShown(int handle, bool shown) { Dock.SetShown(handle, shown); }
+                    public void SetProtectedNoticeArea(UnityEngine.RectTransform? area) { ProtectedArea = area; }
                     public void Remove(int handle) { Dock.Remove(handle); Entries.RemoveAll(e => e.Handle == handle); }
                 }
                 public sealed class ProbeGameplay { public bool IsGameplay = true; }
@@ -213,6 +216,8 @@ namespace TopiaForge.ModManager.Tests
                                 Check(Field(overlay, "root")?.Go.activeInHierarchy == true,
                                     "connection status remains visible with chat open or closed");
                                 var chat = ChatOverlay.Parent!;
+                                Check(ReferenceEquals(placement.ProtectedArea, open ? chat.Rect : null),
+                                    "only occupied chat space blocks fallback panel placement");
                                 Check(chat.Band == TopiaForgeLayerBand.Hud && chat.SortOrder < managerBefore.SortOrder && chat.SortOrder < managerAfter.SortOrder,
                                     "chat must render below manager for either creation order");
                                 Check(chat.Rect.Corner == TopiaForgeCorner.BottomRight && Near(chat.Rect.anchorMin.x, 1) && Near(chat.Rect.anchorMax.x, 1)
@@ -248,7 +253,8 @@ namespace TopiaForge.ModManager.Tests
                             "either lost layer clears typing and its reservation and disposes the host");
                         overlay.Tick(); Check(placement.Entries.Count == 1, "lost layers rebuild exactly one status reservation");
                         overlay.Dispose();
-                        Check(TopiaForgeUi.Last!.Disposed && placement.Entries.Count == 0 && Field(overlay, "root") == null && Field(overlay, "chatRoot") == null,
+                        Check(TopiaForgeUi.Last!.Disposed && placement.Entries.Count == 0 && placement.ProtectedArea == null &&
+                            Field(overlay, "root") == null && Field(overlay, "chatRoot") == null,
                             "dispose retires both roots and the reservation");
                     }
                     if (failures.Count != 0) throw new InvalidOperationException("HUD regression: " + string.Join(" | ", failures));
