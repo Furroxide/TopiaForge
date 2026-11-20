@@ -14,12 +14,15 @@ namespace {{ASSEMBLY_NAME}}
         internal const string NotifyButtonId = "notify";
         internal const string PaletteHeadingId = "palette-heading";
         internal const string ThemePreviewToggleId = "theme-preview";
+        internal const string SettingsGridId = "settings-categories";
+        internal const string SettingsSummaryId = "settings-summary";
 
         private static readonly UiThemeRef PreviewTheme = new UiThemeRef("controls-preview");
         private IUiSurface? window;
         private string greeting = "Hello from {{DISPLAY_NAME}}.";
         private string selectedTone = "neutral";
         private string selectedTopic = "getting-started";
+        private string toggleKeyLabel = string.Empty;
         private bool notificationsEnabled = true;
         private bool themePreview;
 
@@ -33,6 +36,7 @@ namespace {{ASSEMBLY_NAME}}
                 return;
             }
 
+            toggleKeyLabel = config.ToggleKey.ToString();
             var registration = Context.Input.RegisterAction(new InputActionDefinition(
                 ToggleActionName,
                 "Toggle {{DISPLAY_NAME}} window",
@@ -90,75 +94,64 @@ namespace {{ASSEMBLY_NAME}}
 
         private UiNode BuildContent()
         {
+            var appearance = new UiColumn(
+                new UiText("Appearance", UiTextStyle.Heading),
+                new UiToggle(ThemePreviewToggleId, "Preview alternate palette", themePreview, ApplyThemePreview),
+                new UiSlider(UiScaleSliderId, "UI scale", 0.75f, 2f, Context.Ui.Accessibility.UiScale, ApplyUiScale));
+            var notifications = new UiColumn(
+                new UiText("Notifications", UiTextStyle.Heading),
+                new UiTextInput(GreetingInputId, "Greeting", greeting, value =>
+                {
+                    greeting = value;
+                    UpdateStatus();
+                }, placeholder: "Write a greeting", maximumLength: 120),
+                new UiToggle(NotificationsToggleId, "Show notifications", notificationsEnabled, value =>
+                {
+                    notificationsEnabled = value;
+                    UpdateStatus();
+                }),
+                new UiDropdown(ToneDropdownId, "Notification tone", new[]
+                {
+                    new UiChoice("neutral", "Neutral"),
+                    new UiChoice("success", "Success"),
+                    new UiChoice("warning", "Warning"),
+                }, selectedTone, value =>
+                {
+                    selectedTone = value;
+                    UpdateStatus();
+                }));
+            var topics = new UiVirtualList(TopicListId, new[]
+            {
+                new UiListItem("getting-started", "Getting started", "Config, input, and UI", "GUIDE"),
+                new UiListItem("gameplay", "Gameplay", "Player, physics, and entities", "SDK"),
+                new UiListItem("testing", "Testing", "Deterministic fakes", "NUNIT"),
+            }, value =>
+            {
+                selectedTopic = value;
+                UpdateStatus();
+            }, selectedItemId: selectedTopic, visibleRows: 3);
+
+            var preview = new UiStack(new UiNode[]
+            {
+                new UiBox(280f, 72f, UiPaintRole.Raised),
+                new UiPositioned(new UiText("Notification preview", UiTextStyle.Label), left: 12f, top: 22f),
+            }, width: 280f, height: 72f, id: "notification-preview");
+            var actions = new UiRow(new UiNode[]
+            {
+                new UiExpanded(new UiButton(NotifyButtonId, "Show notification", ShowNotification), flex: 2),
+                new UiExpanded(new UiButton("hide", "Hide window", () => window?.Hide(), UiButtonStyle.Secondary)),
+            }, new UiFlexLayout(spacing: UiSpace.Lg), id: "window-actions");
+
             return new UiColumn(
                 new UiText("Window settings", UiTextStyle.Title, UiTone.Primary, PaletteHeadingId),
-                new UiScroll(new UiColumn(
-                    new UiToggle(
-                        ThemePreviewToggleId,
-                        "Preview alternate palette",
-                        themePreview,
-                        ApplyThemePreview),
-                    new UiTextInput(
-                        GreetingInputId,
-                        "Greeting",
-                        greeting,
-                        value =>
-                        {
-                            greeting = value;
-                            UpdateStatus();
-                        },
-                        placeholder: "Write a greeting",
-                        maximumLength: 120),
-                    new UiToggle(
-                        NotificationsToggleId,
-                        "Show notifications",
-                        notificationsEnabled,
-                        value =>
-                        {
-                            notificationsEnabled = value;
-                            UpdateStatus();
-                        }),
-                    new UiSlider(
-                        UiScaleSliderId,
-                        "UI scale",
-                        0.75f,
-                        2f,
-                        Context.Ui.Accessibility.UiScale,
-                        ApplyUiScale),
-                    new UiDropdown(
-                        ToneDropdownId,
-                        "Notification tone",
-                        new[]
-                        {
-                            new UiChoice("neutral", "Neutral"),
-                            new UiChoice("success", "Success"),
-                            new UiChoice("warning", "Warning")
-                        },
-                        selectedTone,
-                        value =>
-                        {
-                            selectedTone = value;
-                            UpdateStatus();
-                        }),
-                    new UiVirtualList(
-                        TopicListId,
-                        new[]
-                        {
-                            new UiListItem("getting-started", "Getting started", "Config, input, and UI", "GUIDE"),
-                            new UiListItem("gameplay", "Gameplay", "Player, physics, and entities", "SDK"),
-                            new UiListItem("testing", "Testing", "Deterministic fakes", "NUNIT")
-                        },
-                        value =>
-                        {
-                            selectedTopic = value;
-                            UpdateStatus();
-                        },
-                        selectedItemId: selectedTopic,
-                        visibleRows: 3)),
-                    height: 340f),
-                new UiRow(
-                    new UiButton(NotifyButtonId, "Show notification", ShowNotification),
-                    new UiButton("hide", "Hide window", () => window?.Hide(), UiButtonStyle.Secondary)));
+                new UiGrid(new UiNode[] { appearance, notifications }, minimumCellWidth: 220f,
+                    maximumColumns: 2, spacing: UiSpace.Lg, id: SettingsGridId),
+                new UiText("Topics", UiTextStyle.Heading),
+                topics,
+                preview,
+                actions,
+                new UiDivider(),
+                new UiText("Window toggle  " + toggleKeyLabel, UiTextStyle.Mono, UiTone.Muted, SettingsSummaryId));
         }
 
         private void ApplyThemePreview(bool enabled)

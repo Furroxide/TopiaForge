@@ -163,7 +163,7 @@ namespace TopiaForge.Zombies
                 var badge = soldOut
                     ? "SOLD OUT"
                     : item.Price.ToString(CultureInfo.InvariantCulture) + " CR";
-                rows[index] = new UiListItem(item.Id, item.Name, item.Description, badge);
+                rows[index] = new UiListItem(item.Id, item.Name, item.Category, badge);
                 if (string.Equals(item.Id, selectedId, StringComparison.Ordinal))
                 {
                     selected = item;

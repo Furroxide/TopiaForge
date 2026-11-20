@@ -8,6 +8,11 @@ namespace TopiaForge.CreatorTools.Shared
 {
     internal sealed partial class CreatorWorkbench
     {
+        private static UiWrap Actions(params UiNode[] actions) => new UiWrap(actions);
+
+        private static UiGrid Fields(params UiNode[] fields) =>
+            new UiGrid(fields, minimumCellWidth: 150f, maximumColumns: fields.Length);
+
         private UiNode BuildContent()
         {
             var selected = SelectedRoster();
@@ -16,7 +21,7 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiText("SCENE ROSTER", UiTextStyle.Heading),
                 new UiText("Owned objects can be duplicated or removed. Native scene targets are temporary, reversible edits only.", UiTextStyle.Caption),
                 BuildRosterList(),
-                new UiRow(
+                Actions(
                     new UiButton("duplicate-selected", "Duplicate", () => Execute(DuplicateSelected), UiButtonStyle.Secondary, selected != null && CanMutate),
                     new UiButton(
                         "remove-selected",
@@ -25,7 +30,7 @@ namespace TopiaForge.CreatorTools.Shared
                         UiButtonStyle.Danger,
                         selected?.Owned == true || selected?.NativeTarget != null
                             && (selected.NativeTarget.Capabilities & CreatorSceneTargetCapabilities.TemporaryVisibility) != 0),
-                    new UiButton("refresh-native", "Discover native targets", () => ExecuteBool(RefreshNativeRoster), UiButtonStyle.Ghost)));
+                    new UiButton("refresh-native", "Discover targets", () => ExecuteBool(RefreshNativeRoster), UiButtonStyle.Ghost)));
             var center = new UiColumn(BuildProjectContent());
             var right = new UiColumn(
                 BuildTransformContent(selected),
@@ -66,20 +71,17 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiChoice("vehicle", "Vehicles")
             };
             var visible = FilteredCatalog().ToArray();
-            var items = visible.Select(entry => new UiListItem(
-                entry.Id,
-                entry.DisplayName,
-                entry.Description,
-                entry.Kind.ToString().ToUpperInvariant()));
-            var selected = visible.Any(entry => entry.Id == selectedCatalogId) ? selectedCatalogId : null;
+            var items = visible.Select(entry => new UiListItem(entry.Id, entry.DisplayName));
+            var selected = visible.FirstOrDefault(entry => entry.Id == selectedCatalogId);
             return new UiColumn(
                 new UiText("SPAWN CATALOG", UiTextStyle.Heading),
                 BuildCatalogSourceStatus(),
-                new UiRow(
+                Fields(
                     new UiDropdown("catalog-kind", "Kind", choices, kindFilter, value => { kindFilter = value; RefreshUi(); }),
                     new UiTextInput("catalog-search", "Search", search, value => { search = value; RefreshUi(); }, "name or description", 128)),
-                new UiVirtualList("catalog-list", items, id => { selectedCatalogId = id; RefreshUi(); }, selected, 6),
-                new UiButton("spawn-selected", "Spawn selected at aim point", () => Execute(SpawnSelected), enabled: selected != null && CanMutate));
+                new UiVirtualList("catalog-list", items, id => { selectedCatalogId = id; RefreshUi(); }, selected?.Id, 6),
+                new UiText(selected == null ? string.Empty : selected.Kind + " · " + selected.Description, UiTextStyle.Caption),
+                new UiButton("spawn-selected", "Spawn at aim", () => Execute(SpawnSelected), enabled: selected != null && CanMutate));
         }
 
         private UiNode BuildCatalogSourceStatus()
@@ -117,7 +119,7 @@ namespace TopiaForge.CreatorTools.Shared
             var items = roster.Select(entry => new UiListItem(
                 entry.Id,
                 entry.DisplayName,
-                entry.Owned ? "Tool-owned" : "Native scene target — changes restore with End Session & Restore",
+                entry.Owned ? "Tool-owned" : "Native target",
                 entry.Kind.ToString().ToUpperInvariant()));
             var selected = roster.Any(entry => entry.Id == selectedRosterId) ? selectedRosterId : null;
             return new UiVirtualList("roster-list", items, SelectRoster, selected, 6);
@@ -128,25 +130,25 @@ namespace TopiaForge.CreatorTools.Shared
             var enabled = entry != null && CanMutate;
             return new UiColumn(
                 new UiText("LOCATION", UiTextStyle.Heading),
-                new UiRow(
+                Fields(
                     new UiTextInput("position-x", "X", xText, value => xText = value, maximumLength: 24, enabled: enabled),
                     new UiTextInput("position-y", "Y", yText, value => yText = value, maximumLength: 24, enabled: enabled),
                     new UiTextInput("position-z", "Z", zText, value => zText = value, maximumLength: 24, enabled: enabled)),
-                new UiRow(
+                Fields(
                     new UiTextInput("rotation-x", "Rot X", qxText, value => qxText = value, maximumLength: 24, enabled: enabled),
                     new UiTextInput("rotation-y", "Rot Y", qyText, value => qyText = value, maximumLength: 24, enabled: enabled)),
-                new UiRow(
+                Fields(
                     new UiTextInput("rotation-z", "Rot Z", qzText, value => qzText = value, maximumLength: 24, enabled: enabled),
                     new UiTextInput("rotation-w", "Rot W", qwText, value => qwText = value, maximumLength: 24, enabled: enabled)),
-                new UiRow(
+                Fields(
                     new UiTextInput("scale-x", "Scale X", sxText, value => sxText = value, maximumLength: 24, enabled: enabled),
                     new UiTextInput("scale-y", "Scale Y", syText, value => syText = value, maximumLength: 24, enabled: enabled),
                     new UiTextInput("scale-z", "Scale Z", szText, value => szText = value, maximumLength: 24, enabled: enabled)),
-                new UiRow(
+                Actions(
                     new UiButton("apply-transform", "Apply transform", () => Execute(ApplyTransform), enabled: enabled),
                     new UiButton("move-to-aim", "Move to aim", () => Execute(MoveToAim), UiButtonStyle.Secondary, enabled),
                     new UiButton("nudge-up", "+1 m up", () => Execute(() => Nudge(new Vec3(0f, 1f, 0f))), UiButtonStyle.Ghost, enabled)),
-                new UiRow(
+                Actions(
                     new UiButton("nudge-forward", "+1 m X", () => Execute(() => Nudge(new Vec3(1f, 0f, 0f))), UiButtonStyle.Ghost, enabled),
                     new UiButton(
                         "toggle-native-hidden",
@@ -164,10 +166,10 @@ namespace TopiaForge.CreatorTools.Shared
             return new UiColumn(
                 new UiText("ROBOT LAB", UiTextStyle.Heading),
                 BuildRobotAppearanceContent(entry),
-                new UiRow(
+                Actions(
                     new UiButton("brain-dormant", "Dormant", () => Execute(() => SetSelectedBrain(RobotBrainMode.Dormant)), UiButtonStyle.Secondary, isRobot),
                     new UiButton("brain-autonomous", "Autonomous", () => Execute(() => SetSelectedBrain(RobotBrainMode.Autonomous)), UiButtonStyle.Secondary, isRobot)),
-                new UiRow(
+                Actions(
                     new UiButton("objective-idle", "Idle", () => Execute(() => SetObjective(RobotObjective.Idle())), UiButtonStyle.Ghost, canProgram),
                     new UiButton("objective-follow", "Follow player", () => Execute(() => SetObjective(RobotObjective.Follow("PLAYER"))), UiButtonStyle.Ghost, canProgram),
                     new UiButton("robot-emote", "Wave", () => Execute(() => SetEmote(":wave:")), UiButtonStyle.Ghost, canProgram)),
@@ -177,7 +179,7 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiText("PROGRAM BY CONVERSATION", UiTextStyle.Heading),
                 new UiText(options.ConversationEnabled ? "Each sent line uses the configured RobotKit brain service." : "Disabled by config; deterministic controls above remain available.", UiTextStyle.Caption),
                 new UiTextInput("program-line", "Tell the robot what to do", chatText, value => chatText = value, maximumLength: 512, enabled: canProgram && options.ConversationEnabled),
-                new UiRow(
+                Actions(
                     new UiButton("start-program-chat", "Start / reset chat", () => Execute(() => BeginConversation()), UiButtonStyle.Secondary, canProgram && options.ConversationEnabled),
                     new UiButton("send-program-line", "Send", () => Execute(SubmitConversation), enabled: canProgram && options.ConversationEnabled && conversationTask == null)),
                 new UiText(chatStatus, UiTextStyle.Caption));
@@ -196,7 +198,7 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiText("EVENT PROJECTS", UiTextStyle.Heading),
                 new UiText("Local projects are validated before save or run. Runtime flow is capped at 64 actions per frame and 10,000 per session.", UiTextStyle.Caption),
                 new UiVirtualList("project-list", projectItems, id => { selectedProjectId = id; RefreshUi(); }, selectedProject, 4),
-                new UiRow(
+                Actions(
                     new UiButton("load-project", "Load", () => Execute(LoadSelectedProject), enabled: selectedProject != null),
                     new UiButton("delete-project", "Delete", ConfirmDeleteSelectedProject, UiButtonStyle.Danger, selectedProject != null && projectDeleteTask == null),
                     new UiButton("new-project", "New project", () => Execute(CreateProject), UiButtonStyle.Secondary),

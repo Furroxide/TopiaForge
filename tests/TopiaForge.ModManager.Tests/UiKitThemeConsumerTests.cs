@@ -83,6 +83,10 @@ namespace TopiaForge.ModManager.Tests
 
             var capture = surface.Capture(new UiCaptureViewport(1920, 1080));
             var phase = capture.Nodes.Single(node => node.Id == ZombiesHudPresenter.PhaseNodeId);
+            Require(capture.Nodes.Any(node => node.Id == "zombies-wave-card" && node.IsRendered)
+                && capture.Nodes.Any(node => node.Id == "zombies-supplies-card" && node.IsRendered)
+                && capture.Nodes.Any(node => node.Id == ZombiesHudPresenter.IntegrityNodeId && node.IsRendered),
+                "Zombies uses visible layout cards and wrapped status through the safe UI service.");
             Require(phase is { IsRendered: true, ThemeId: "survival", InkColor: "#BEE487", FillColor: "#141D21" },
                 "The published HUD must render the Survival pack's authored ink on its opaque background.");
             Require(capture.CheckAccessibility().Count == 0, "The captured Zombies status must pass the UI guarantees.");

@@ -106,8 +106,10 @@ namespace TopiaForge.Mods
     /// <summary>Base type for immutable multi-child layout nodes.</summary>
     public abstract class UiLayoutNode : UiNode
     {
-        internal UiLayoutNode(IEnumerable<UiNode> children)
-            : base(null)
+        internal UiLayoutNode(IEnumerable<UiNode> children) : this(children, null) { }
+
+        internal UiLayoutNode(IEnumerable<UiNode> children, string? id)
+            : base(id)
         {
             if (children == null) throw new ArgumentNullException(nameof(children));
             var copy = new List<UiNode>();
@@ -128,7 +130,7 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>Arranges children vertically.</summary>
-    public sealed class UiColumn : UiLayoutNode
+    public sealed partial class UiColumn : UiLayoutNode
     {
         /// <summary>Creates a vertical layout.</summary>
         public UiColumn(IEnumerable<UiNode> children) : base(children) { }
@@ -138,7 +140,7 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>Arranges children horizontally.</summary>
-    public sealed class UiRow : UiLayoutNode
+    public sealed partial class UiRow : UiLayoutNode
     {
         /// <summary>Creates a horizontal layout.</summary>
         public UiRow(IEnumerable<UiNode> children) : base(children) { }
@@ -534,64 +536,8 @@ namespace TopiaForge.Mods
 
     internal static class UiComposition
     {
-        public static void Validate(UiNode? root)
-        {
-            if (root == null) return;
-            var ids = new HashSet<string>(StringComparer.Ordinal);
-            var count = 0;
-            Visit(root, 1, ids, ref count);
-        }
+        public static void Validate(UiNode? root) => UiLayoutTree.Validate(root);
 
-        public static bool ContainsInteractive(UiNode? node)
-        {
-            if (node == null) return false;
-            if (node is UiButton || node is UiToggle || node is UiSlider || node is UiTextInput ||
-                node is UiDropdown || node is UiVirtualList || node is UiGraphCanvas)
-            {
-                return true;
-            }
-
-            if (node is UiLayoutNode layout)
-            {
-                foreach (var child in layout.Children)
-                {
-                    if (ContainsInteractive(child)) return true;
-                }
-            }
-            else if (node is UiScroll scroll)
-            {
-                return ContainsInteractive(scroll.Content);
-            }
-            else if (node is UiSplitPane split)
-            {
-                return ContainsInteractive(split.Primary) || ContainsInteractive(split.Secondary);
-            }
-
-            return false;
-        }
-
-        private static void Visit(UiNode node, int depth, HashSet<string> ids, ref int count)
-        {
-            if (depth > 32) throw new ArgumentException("A UI composition cannot be deeper than 32 nodes.");
-            if (++count > 4096) throw new ArgumentException("A UI composition cannot contain more than 4096 nodes.");
-            if (node.Id != null && !ids.Add(node.Id))
-            {
-                throw new ArgumentException("A UI composition contains duplicate control id '" + node.Id + "'.");
-            }
-
-            if (node is UiLayoutNode layout)
-            {
-                foreach (var child in layout.Children) Visit(child, depth + 1, ids, ref count);
-            }
-            else if (node is UiScroll scroll)
-            {
-                Visit(scroll.Content, depth + 1, ids, ref count);
-            }
-            else if (node is UiSplitPane split)
-            {
-                Visit(split.Primary, depth + 1, ids, ref count);
-                Visit(split.Secondary, depth + 1, ids, ref count);
-            }
-        }
+        public static bool ContainsInteractive(UiNode? node) => UiLayoutTree.ContainsInteractive(node);
     }
 }

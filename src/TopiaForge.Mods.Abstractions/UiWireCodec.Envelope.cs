@@ -55,6 +55,7 @@ namespace TopiaForge.Mods
 
         private static bool HasEnhancedNode(UiNode? node)
         {
+            if (node == null) return false;
             switch (node)
             {
                 case UiText text:
@@ -63,17 +64,13 @@ namespace TopiaForge.Mods
                     return EnhancedTone(progress.Tone);
                 case UiCountdown countdown:
                     return EnhancedTone(countdown.Tone);
-                case UiLayoutNode layout:
-                    for (var index = 0; index < layout.Children.Count; index++)
-                        if (HasEnhancedNode(layout.Children[index])) return true;
-                    return false;
-                case UiScroll scroll:
-                    return HasEnhancedNode(scroll.Content);
-                case UiSplitPane split:
-                    return HasEnhancedNode(split.Primary) || HasEnhancedNode(split.Secondary);
-                default:
-                    return false;
             }
+
+            if (IsEnhancedLayout(node)) return true;
+            var children = UiNodeChildren.Of(node);
+            for (var index = 0; index < children.Count; index++)
+                if (HasEnhancedNode(children[index])) return true;
+            return false;
         }
 
         private static bool EnhancedText(UiTextStyle style, UiTone tone, string? id) =>

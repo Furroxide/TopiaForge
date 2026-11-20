@@ -29,6 +29,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TMPro.TextMeshProUGUI label;
         private readonly bool checkbox;
         private bool value;
+        private UiPaintRole backdrop = UiPaintRole.Surface;
 
         internal TopiaForgeToggle(TopiaForgeContainer parent, string text, bool initialValue, Action<bool> onChanged, bool asCheckbox)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject(asCheckbox ? "Checkbox" : "Toggle"))
@@ -144,6 +145,13 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        internal void SetBackdrop(UiPaintRole role)
+        {
+            if (backdrop == role) return;
+            backdrop = role;
+            Repaint();
+        }
+
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
@@ -165,7 +173,7 @@ namespace TopiaForge.Mods.UnityUi
                 track.color = value && enabled ? on.Fill : theme.SurfaceSunken;
                 if (boxRing != null)
                 {
-                    boxRing.color = !enabled ? theme.ForegroundOn(UiPaintRole.Surface, UiTone.Muted)
+                    boxRing.color = !enabled ? theme.ForegroundOn(backdrop, UiTone.Muted)
                         : value ? on.Fill : theme.Outline;
                 }
 
@@ -189,7 +197,7 @@ namespace TopiaForge.Mods.UnityUi
                 }
             }
 
-            label.color = theme.ForegroundOn(UiPaintRole.Surface, enabled ? UiTone.Neutral : UiTone.Muted);
+            label.color = theme.ForegroundOn(backdrop, enabled ? UiTone.Neutral : UiTone.Muted);
             cues.Apply(track.color, label.color, theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control,
                 theme.HighContrast);
         }

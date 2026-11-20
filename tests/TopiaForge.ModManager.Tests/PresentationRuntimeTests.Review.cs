@@ -26,7 +26,8 @@ namespace TopiaForge.ModManager.Tests
         private static UiNode WideLayout(int count)
         {
             var children = new UiNode[count];
-            for (var i = 0; i < count; i++) children[i] = new UiText("row");
+            // Exercise the wire child limit independently of the bounded visual height of a HUD.
+            for (var i = 0; i < count; i++) children[i] = new UiText(string.Empty);
             return new UiColumn(children);
         }
 

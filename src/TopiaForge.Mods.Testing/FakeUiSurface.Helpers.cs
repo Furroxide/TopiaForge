@@ -51,7 +51,11 @@ namespace TopiaForge.Mods.Testing
                 if (!retained && Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
                     return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                 wireTarget?.Measure(owner, revision + 1, Request, Body, IsVisible, content, epoch, retained);
-                if (!retained) UiClockBinding.Bind(content, epoch);
+                if (!retained)
+                {
+                    FakeUiTreeCapture.VerifyComposition(owner, this, content);
+                    UiClockBinding.Bind(content, epoch);
+                }
             }
             catch (ArgumentException exception)
             {
@@ -76,6 +80,8 @@ namespace TopiaForge.Mods.Testing
             graphSelections.Clear();
             graphViewports.Clear();
             CaptureState(content);
+            RefreshGraphConnections();
+            if (HudOverflowText != null) RefreshHudLayoutNotice();
             return FakeUiThemePackage.Success;
         }
 
@@ -93,19 +99,8 @@ namespace TopiaForge.Mods.Testing
                 graphViewports[graph.Id!] = graph.Viewport;
             }
 
-            if (node is UiLayoutNode layout)
-            {
-                foreach (var child in layout.Children) CaptureState(child);
-            }
-            else if (node is UiScroll scroll)
-            {
-                CaptureState(scroll.Content);
-            }
-            else if (node is UiSplitPane split)
-            {
-                CaptureState(split.Primary);
-                CaptureState(split.Secondary);
-            }
+            var children = UiNodeChildren.Of(node);
+            for (var index = 0; index < children.Count; index++) CaptureState(children[index]);
         }
 
         private static int ListIndex(UiVirtualList list, string? itemId)
@@ -124,34 +119,12 @@ namespace TopiaForge.Mods.Testing
             listViewports[list.Id!] = (selection, offset);
         }
 
-        private static bool TryFind(UiNode? current, string id, out UiNode? node)
+        private bool CanInteract(string id)
         {
-            node = null;
-            if (current == null || string.IsNullOrWhiteSpace(id)) return false;
-            if (string.Equals(current.Id, id, StringComparison.Ordinal))
-            {
-                node = current;
-                return true;
-            }
-
-            if (current is UiLayoutNode layout)
-            {
-                foreach (var child in layout.Children)
-                {
-                    if (TryFind(child, id, out node)) return true;
-                }
-            }
-            else if (current is UiScroll scroll && TryFind(scroll.Content, id, out node))
-            {
-                return true;
-            }
-            else if (current is UiSplitPane split &&
-                     (TryFind(split.Primary, id, out node) || TryFind(split.Secondary, id, out node)))
-            {
-                return true;
-            }
-
-            return false;
+            if (!UiLayoutTree.TryFind(Content, id, out _, out var disabled) || disabled) return false;
+            try { FakeUiTreeCapture.VerifyComposition(owner, this, Content); }
+            catch (UiLayoutException) { return false; }
+            return true;
         }
 
         private OperationResult<bool> Invoke(Action callback, string description, bool playerAction = true)

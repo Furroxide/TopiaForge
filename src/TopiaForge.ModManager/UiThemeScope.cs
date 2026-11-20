@@ -8,7 +8,7 @@ namespace TopiaForge.ModManager
 {
     internal interface IUiThemeScopeHost
     {
-        void ConfigureThemeScope(AdmittedUiCatalogue? catalogue, IUiService? parent);
+        void ConfigureThemeScope(AdmittedUiCatalogue? catalogue, IUiService? parent, string packageDisplayName);
     }
 
     internal delegate OperationResult<bool> PrepareUiThemeSelection(

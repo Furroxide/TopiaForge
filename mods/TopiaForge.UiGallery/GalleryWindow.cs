@@ -127,6 +127,15 @@ namespace TopiaForge.UiGallery
             }
             column.Label("Foundation theme: Survival. With Gallery capture enabled at startup, press F3 to compare Kit and Survival.",
                 TopiaForgeTextStyle.Caption);
+            var layoutPages = column.Row(TopiaForgeGap.Sm);
+            layoutPages.Button("Flex and padding", () => ShowFoundation(FoundationPage.FlexAndPadding, previewKind));
+            layoutPages.Button("Wrap and grid", () => ShowFoundation(FoundationPage.WrapAndGrid, previewKind));
+            layoutPages.Button("Stack and bounds", () => ShowFoundation(FoundationPage.StackAndBounds, previewKind));
+            layoutPages.Button("Cards and dividers", () => ShowFoundation(FoundationPage.CardsAndDividers, previewKind));
+            if (previewKind == UiSurfaceKind.Window)
+                layoutPages.Button("Graph connections", () => ShowFoundation(FoundationPage.GraphConnections, previewKind));
+            if (previewKind == UiSurfaceKind.Hud)
+                layoutPages.Button("Layout fit", () => ShowFoundation(FoundationLayoutPages.LayoutNotice()));
 
             var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
@@ -160,7 +169,10 @@ namespace TopiaForge.UiGallery
             return window;
         }
 
-        private void ShowFoundation(FoundationPage page, UiSurfaceKind kind)
+        private void ShowFoundation(FoundationPage page, UiSurfaceKind kind) =>
+            ShowFoundation(FoundationPages.CreateRequest(page, kind, report: ReportInteraction));
+
+        private void ShowFoundation(UiSurfaceRequest request)
         {
             var profile = ui.AccessibilityProfile;
             var applied = previewUi.ApplyAccessibility(new UiAccessibilityPreferences(
@@ -171,7 +183,6 @@ namespace TopiaForge.UiGallery
                 return;
             }
 
-            var request = FoundationPages.CreateRequest(page, kind, report: ReportInteraction);
             var result = previewUi.CreateSurface(request);
             if (!result.TryGetValue(out preview) || preview == null)
             {

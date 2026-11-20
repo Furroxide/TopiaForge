@@ -27,6 +27,7 @@ namespace TopiaForge.Mods.UnityUi
             button = go.AddComponent<Button>();
             button.targetGraphic = fill;
             button.onClick.AddListener(Select);
+            go.AddComponent<TopiaForgeGraphFocusRelay>().Attach(owner);
 
             var indicatorGo = new GameObject("Indicator", typeof(RectTransform));
             indicatorGo.transform.SetParent(go.transform, false);

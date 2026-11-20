@@ -62,13 +62,14 @@ namespace TopiaForge.Mods.UnityUi
     /// visuals (SelectedTint fill + strong ring). The pooled unit for TopiaForgeListView and
     /// usable standalone in static lists.
     /// </summary>
-    public sealed class TopiaForgeListRow : TopiaForgeWidget, ITopiaForgeThemeAware
+    public sealed partial class TopiaForgeListRow : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private readonly TopiaForgeRoundedImage fill;
         private readonly TopiaForgeRoundedImage ring;
         private readonly Button button;
         private TopiaForgeControlCues? cues;
         private Action? onClick;
+        private Action<UiPaintRole>? setFocusBackdrop;
         private bool selected;
         private bool declarative;
 
@@ -136,19 +137,19 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
-        internal void UseDeclarativePaint(bool enabled)
+        internal void UseDeclarativePaint(bool enabled, UiPaintRole backdrop)
         {
             declarative = true;
             Title.Go.name = "RowTitle";
             Subtitle.Go.name = "RowSubtitle";
-            var layout = Go.GetComponent<HorizontalLayoutGroup>();
-            var padding = layout.padding;
-            layout.padding = new RectOffset(14, padding.right, 4, 4);
+            ConfigureDeclarativeText();
             cues ??= TopiaForgeControlCues.Install(button, Rect);
             button.interactable = enabled;
-            TopiaForgeControlFocus.Install(this);
+            setFocusBackdrop = TopiaForgeControlFocus.Install(this, button, backdrop);
             ApplyTheme(Theme);
         }
+
+        internal void SetDeclarativeBackdrop(UiPaintRole role) => setFocusBackdrop?.Invoke(role);
 
         internal void SetDeclarativeEnabled(bool enabled)
         {
@@ -170,6 +171,7 @@ namespace TopiaForge.Mods.UnityUi
                 ring.color = selected ? theme.BoundaryOn(role) : Color.clear;
                 Title.SetResolvedInk(paint.Content);
                 Subtitle.SetResolvedInk(paint.Content);
+                Badge.SetRowBoundary(paint.Content);
                 cues?.Apply(fill.color, paint.Content,
                     theme.Descriptor?.Shape.Small ?? UiThemePackParser.Default.Shape.Small, theme.HighContrast);
                 return;

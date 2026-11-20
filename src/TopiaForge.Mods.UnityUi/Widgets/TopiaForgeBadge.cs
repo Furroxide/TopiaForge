@@ -9,10 +9,10 @@ namespace TopiaForge.Mods.UnityUi
     /// a matching ring, on the HUD solid in its tone, with a label that reads on it in every tone;
     /// Set() dirty-checks both text and tone.
     /// </summary>
-    public sealed class TopiaForgeBadge : TopiaForgeWidget, ITopiaForgeThemeAware
+    public sealed partial class TopiaForgeBadge : TopiaForgeWidget, ITopiaForgeThemeAware
     {
-        private readonly UImage fill;
-        private readonly UImage ring;
+        private readonly TopiaForgeRoundedImage fill;
+        private readonly TopiaForgeRoundedImage ring;
         private readonly TextMeshProUGUI label;
         private string lastText;
         private TopiaForgeTone tone;
@@ -21,14 +21,14 @@ namespace TopiaForge.Mods.UnityUi
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Badge"))
         {
             tone = initialTone;
-            fill = Go.AddComponent<UImage>();
+            fill = Go.AddComponent<TopiaForgeRoundedImage>();
             fill.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Chip);
             fill.type = UImage.Type.Sliced;
             fill.raycastTarget = false;
 
             var ringGo = new GameObject("Ring", typeof(RectTransform));
             ringGo.transform.SetParent(Go.transform, false);
-            ring = ringGo.AddComponent<UImage>();
+            ring = ringGo.AddComponent<TopiaForgeRoundedImage>();
             ring.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Chip, TopiaForgeTokens.BorderStandard);
             ring.type = UImage.Type.Sliced;
             ring.raycastTarget = false;
@@ -79,8 +79,11 @@ namespace TopiaForge.Mods.UnityUi
             if (!string.Equals(lastText, text, System.StringComparison.Ordinal))
             {
                 lastText = text;
-                label.text = text;
-                FitWidth();
+                if (!declarativeRow)
+                {
+                    label.text = text;
+                    FitWidth();
+                }
                 changed = true;
             }
 
@@ -99,6 +102,12 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            if (declarativeRow)
+            {
+                ApplyDeclarativeRowTheme(theme);
+                return;
+            }
+
             theme.ChipColors(tone, overPicture: false, out var background, out var outline, out var text);
             fill.color = background;
             ring.color = outline;

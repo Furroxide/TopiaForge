@@ -148,6 +148,7 @@ namespace TopiaForge.Mods.UnityUi
 
         internal void SetBackdrop(UiPaintRole role)
         {
+            if (backdrop == role) return;
             backdrop = role;
             ApplyTheme(Theme);
         }
@@ -239,7 +240,7 @@ namespace TopiaForge.Mods.UnityUi
                 fill.color = theme.Descriptor == null ? theme.Tint : theme.SurfaceSunken;
                 if (ring != null)
                 {
-                    ring.color = theme.Descriptor == null ? theme.Tint : theme.OutlineStrong;
+                    ring.color = theme.Descriptor == null ? theme.Tint : theme.BoundaryOn(backdrop);
                 }
 
                 if (label != null)
@@ -274,7 +275,7 @@ namespace TopiaForge.Mods.UnityUi
                     fill.color = theme.Surface;
                     if (ring != null)
                     {
-                        ring.color = theme.OutlineStrong;
+                        ring.color = theme.BoundaryOn(backdrop);
                     }
 
                     SetContentColor(paint?.Content ?? theme.Text);

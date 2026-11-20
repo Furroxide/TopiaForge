@@ -33,6 +33,8 @@ namespace TopiaForge.Mods.Testing
             this.wireTarget = wireTarget;
             callbackErrorView = callbackErrors.AsReadOnly();
             Request = request;
+            if (request.Kind == UiSurfaceKind.Hud)
+                HudOverflowText = UiHudOverflowNotice.Text(owner.HudPackageDisplayName, request.HudAnchor, request.HudVisibility);
             Body = request.Body;
             Content = request.Content;
             CaptureState(Content);
@@ -86,7 +88,9 @@ namespace TopiaForge.Mods.Testing
         public void Show()
         {
             EnsureActive();
+            if (shown) return;
             shown = true;
+            if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
         }
 
         /// <inheritdoc/>
@@ -95,6 +99,8 @@ namespace TopiaForge.Mods.Testing
             EnsureActive();
             var wasVisible = IsVisible;
             shown = false;
+            CloseGraphConnections();
+            if (wasVisible && HudOverflowText != null) owner.RefreshHudLayoutNotices();
             if (wasVisible) InvokeDismissed();
         }
 
@@ -111,21 +117,24 @@ namespace TopiaForge.Mods.Testing
             EnsureActive();
             if (WireBounded && (body == null || body.Length > 4096))
                 throw new ArgumentException("Remote UI text is limited to 4096 characters.", nameof(body));
-            Body = body ?? string.Empty;
+            var next = body ?? string.Empty;
+            if (string.Equals(Body, next, StringComparison.Ordinal)) return;
+            Body = next;
+            if (HudOverflowText != null) RefreshHudLayoutNotice();
         }
 
         /// <summary>Finds a captured node by stable control id.</summary>
         public bool TryFindNode(string id, out UiNode? node)
         {
             node = null;
-            return release != null && TryFind(Content, id, out node);
+            return release != null && UiLayoutTree.TryFind(Content, id, out node, out _);
         }
 
         /// <summary>Invokes one enabled button by id while isolating all callback subscribers.</summary>
         public OperationResult<bool> ActivateButton(string id)
         {
             if (!TryFindNode(id, out var node) || !(node is UiButton button)) return NotFound(id, "button");
-            if (!button.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             return Invoke(button.Activated, "button '" + id + "'");
         }
 
@@ -133,7 +142,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeToggle(string id, bool value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiToggle toggle)) return NotFound(id, "toggle");
-            if (!toggle.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             toggleValues[id] = value;
             return Invoke(toggle.Changed, value, "toggle '" + id + "'");
         }
@@ -142,7 +151,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeSlider(string id, float value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiSlider slider)) return NotFound(id, "slider");
-            if (!slider.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (float.IsNaN(value) || float.IsInfinity(value) || value < slider.Minimum || value > slider.Maximum)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "The fake slider value is outside its range.");
@@ -156,7 +165,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeText(string id, string value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiTextInput input)) return NotFound(id, "text input");
-            if (!input.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             var bounded = UiTextInput.Truncate(value ?? string.Empty, input.MaximumLength);
             textValues[id] = bounded;
             return Invoke(input.Changed, bounded, "text input '" + id + "'");
@@ -166,7 +175,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeDropdown(string id, string value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiDropdown dropdown)) return NotFound(id, "dropdown");
-            if (!dropdown.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             var found = false;
             foreach (var choice in dropdown.Choices)
             {
@@ -186,7 +195,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> SelectListItem(string id, string itemId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiVirtualList list)) return NotFound(id, "virtual list");
-            if (!list.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             var index = ListIndex(list, itemId);
             if (index < 0) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake list item was not found.");
             RememberListViewport(list, itemId, index);
@@ -197,12 +206,13 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> SelectGraphNode(string id, string? nodeId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (nodeId != null && FindGraphNode(graph, nodeId) == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake graph node was not found.");
             }
 
+            focusedConnectionGraphId = id;
             graphSelections[id] = nodeId;
             return Invoke(graph.SelectionChanged, nodeId, "graph canvas '" + id + "' selection");
         }
@@ -211,7 +221,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> MoveGraphNode(string id, string nodeId, Vec2 position)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             var graphNode = FindGraphNode(graph, nodeId);
             if (graphNode == null) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake graph node was not found.");
             if (!graphNode.Enabled) return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake graph node is disabled.");
@@ -239,7 +249,7 @@ namespace TopiaForge.Mods.Testing
             string targetPortId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (graph.ConnectionRequested == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept new connections.");
@@ -270,7 +280,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> RemoveGraphConnection(string id, string edgeId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (graph.ConnectionRemoved == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept connection removal.");
@@ -294,7 +304,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeGraphViewport(string id, UiGraphViewport viewport)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (graph.ViewportChanged == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept viewport changes.");
@@ -336,6 +346,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public void Dispose()
         {
+            CloseGraphConnections();
             shown = false;
             Dismissed = null;
             var callback = release;

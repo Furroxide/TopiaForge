@@ -78,6 +78,7 @@ namespace TopiaForge.ModManager
             var theme = default(UiRemoteThemeSelection);
             if (envelope == null && context == null && !ui.PresentationOwned) return false;
             if (envelope != null && (!AuthenticateUiTheme(envelope, owner, out theme) || !targetedGenerations.Allows(token, envelope))) return false;
+            if (!UiPresentationTheme.ViewerAdmitsStyles(content, theme)) return false;
             var surfaceRequest = new UiSurfaceRequest("remote-" + token, title, body, surfaceKind, width, height, content);
             if (surfaceKind == UiSurfaceKind.Hud) surfaceRequest = surfaceRequest.WithHudAnchor(anchor).WithHudVisibility(visibility);
             if (ui.Modal != null || revision < ui.Revision ||

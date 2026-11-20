@@ -66,9 +66,10 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public static TopiaForgeChatLog? Last;
                     public TopiaForgeChatLog() { Last = this; }
+                    public bool HasVisibleLines { get; private set; }
                     public TopiaForgeChatLog ClosedLines(int value) => this;
                     public void Push(string author, string text, TopiaForgeChatLineKind kind) { }
-                    public void SetOpen(bool value) { }
+                    public void SetOpen(bool value) { HasVisibleLines = value; }
                     public void Clear() { }
                 }
                 public partial class TopiaForgeInputField : Widget

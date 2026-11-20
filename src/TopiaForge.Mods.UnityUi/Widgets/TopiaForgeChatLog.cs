@@ -46,6 +46,7 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Gets the number of retained lines.</summary>
         public int Count => model.Count;
+        internal bool HasVisibleLines => open || driver.enabled;
 
         /// <summary>Gets whether the log is open (full history, scrollback).</summary>
         public bool IsOpen => open;

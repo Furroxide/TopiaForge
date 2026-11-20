@@ -55,17 +55,25 @@ namespace TopiaForge.ModManager
             if (remote && !IsTransportId(request.Id, "remote-") &&
                 (request.Kind != UiSurfaceKind.Hud || !IsTransportId(request.Id, "shared-"))) return null;
 
+            if (request.Kind == UiSurfaceKind.Hud)
+            {
+                var notice = FoundationLayoutPages.LayoutNotice(theme);
+                if (Matches(notice)) return notice;
+            }
+
             foreach (var page in Pages)
             {
-                if (page == FoundationPage.InteractionStates && (request.Kind == UiSurfaceKind.Hud || remote ||
+                if (page is FoundationPage.InteractionStates or FoundationPage.GraphConnections && (request.Kind == UiSurfaceKind.Hud || remote ||
                     owner == RemoteFixtureOwner)) continue;
                 var expected = FoundationPages.CreateRequest(page, request.Kind, theme);
-                if ((!remote && expected.Id != request.Id) || request.Title != expected.Title || request.Body != expected.Body ||
-                    request.Width != expected.Width || request.Height != expected.Height || request.HudAnchor != expected.HudAnchor ||
-                    request.HudVisibility != expected.HudVisibility || !SameNode(request.Content, expected.Content)) continue;
-                return expected;
+                if (Matches(expected)) return expected;
             }
             return null;
+
+            bool Matches(UiSurfaceRequest expected) => (remote || expected.Id == request.Id) &&
+                request.Title == expected.Title && request.Body == expected.Body && request.Width == expected.Width &&
+                request.Height == expected.Height && request.HudAnchor == expected.HudAnchor &&
+                request.HudVisibility == expected.HudVisibility && SameNode(request.Content, expected.Content);
         }
 
         private static bool IsTransportId(string id, string prefix) => id.StartsWith(prefix, StringComparison.Ordinal) &&
@@ -77,7 +85,31 @@ namespace TopiaForge.ModManager
             return (actual, expected) switch
             {
                 (UiText left, UiText right) => left.Text == right.Text && left.Style == right.Style && left.Tone == right.Tone,
-                (UiLayoutNode left, UiLayoutNode right) => SameEntries(left.Children, right.Children, SameNode),
+                (UiRow left, UiRow right) => SameFlex(left.Layout, right.Layout) && SameEntries(left.Children, right.Children, SameNode),
+                (UiColumn left, UiColumn right) => SameFlex(left.Layout, right.Layout) && SameEntries(left.Children, right.Children, SameNode),
+                (UiWrap left, UiWrap right) => left.Spacing == right.Spacing && left.RunSpacing == right.RunSpacing &&
+                    left.Padding.Equals(right.Padding) && left.Alignment == right.Alignment &&
+                    SameEntries(left.Children, right.Children, SameNode),
+                (UiGrid left, UiGrid right) => left.MinimumCellWidth == right.MinimumCellWidth &&
+                    left.MaximumColumns == right.MaximumColumns && left.Spacing == right.Spacing &&
+                    left.RunSpacing == right.RunSpacing && left.Padding.Equals(right.Padding) &&
+                    SameEntries(left.Children, right.Children, SameNode),
+                (UiStack left, UiStack right) => left.Width == right.Width && left.Height == right.Height &&
+                    SameEntries(left.Children, right.Children, SameNode),
+                (UiPadding left, UiPadding right) => left.Padding.Equals(right.Padding) && SameNode(left.Child, right.Child),
+                (UiSizedBox left, UiSizedBox right) => left.Width == right.Width && left.Height == right.Height &&
+                    SameOptionalNode(left.Child, right.Child),
+                (UiExpanded left, UiExpanded right) => left.Flex == right.Flex && SameNode(left.Child, right.Child),
+                (UiSpacer left, UiSpacer right) => left.Flex == right.Flex,
+                (UiPositioned left, UiPositioned right) => left.Left == right.Left && left.Top == right.Top &&
+                    left.Width == right.Width && left.Height == right.Height && SameNode(left.Child, right.Child),
+                (UiCard left, UiCard right) => left.Selected == right.Selected && left.Disabled == right.Disabled &&
+                    left.Style?.Id == right.Style?.Id && Equals(left.Padding, right.Padding) &&
+                    SameOptionalNode(left.Header, right.Header) && SameNode(left.Child, right.Child),
+                (UiBox left, UiBox right) => left.Width == right.Width && left.Height == right.Height &&
+                    left.Fill == right.Fill && left.Style?.Id == right.Style?.Id,
+                (UiDivider left, UiDivider right) => left.LineStyle == right.LineStyle &&
+                    left.Before == right.Before && left.After == right.After,
                 (UiScroll left, UiScroll right) => left.Height == right.Height && SameNode(left.Content, right.Content),
                 (UiSplitPane left, UiSplitPane right) => left.Orientation == right.Orientation &&
                     left.PrimaryFraction == right.PrimaryFraction && SameNode(left.Primary, right.Primary) &&
@@ -98,12 +130,22 @@ namespace TopiaForge.ModManager
                     left.SelectedItemId == right.SelectedItemId && left.Enabled == right.Enabled &&
                     SameEntries(left.Items, right.Items, (first, second) => first.Id == second.Id && first.Title == second.Title &&
                         first.Subtitle == second.Subtitle && first.Badge == second.Badge),
-                (UiGraphCanvas left, UiGraphCanvas right) => left.Edges.Count == 0 && right.Edges.Count == 0 &&
+                (UiGraphCanvas left, UiGraphCanvas right) => SameEntries(left.Edges, right.Edges,
+                    (first, second) => first.Id == second.Id && first.SourceNodeId == second.SourceNodeId &&
+                        first.SourcePortId == second.SourcePortId && first.TargetNodeId == second.TargetNodeId &&
+                        first.TargetPortId == second.TargetPortId && first.Tone == second.Tone) &&
                     left.Viewport.Equals(right.Viewport) && left.Height == right.Height && left.Enabled == right.Enabled &&
                     left.SelectedNodeId == right.SelectedNodeId && SameEntries(left.Nodes, right.Nodes, SameGraphNode),
                 _ => false,
             };
         }
+
+        private static bool SameOptionalNode(UiNode? actual, UiNode? expected) =>
+            expected == null ? actual == null : SameNode(actual, expected);
+
+        private static bool SameFlex(UiFlexLayout left, UiFlexLayout right) =>
+            left.Spacing == right.Spacing && left.Padding.Equals(right.Padding) &&
+            left.MainAxisAlignment == right.MainAxisAlignment && left.CrossAxisAlignment == right.CrossAxisAlignment;
 
         private static bool SameGraphNode(UiGraphNode first, UiGraphNode second) => first.Id == second.Id && first.Type == second.Type &&
             first.Title == second.Title && first.Subtitle == second.Subtitle &&

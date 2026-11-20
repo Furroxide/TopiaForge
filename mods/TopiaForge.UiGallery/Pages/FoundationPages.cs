@@ -8,7 +8,12 @@ namespace TopiaForge.UiGallery.Pages
     {
         ThemePacks,
         Typography,
-        InteractionStates
+        InteractionStates,
+        FlexAndPadding,
+        WrapAndGrid,
+        StackAndBounds,
+        CardsAndDividers,
+        GraphConnections
     }
 
     /// <summary>Safe composition requests shared by the Gallery and the headless capture harness.</summary>
@@ -36,12 +41,37 @@ namespace TopiaForge.UiGallery.Pages
                 case FoundationPage.Typography:
                     id = "gallery-typography";
                     title = "Typography";
-                    content = Typography();
+                    content = Typography(kind);
                     break;
                 case FoundationPage.InteractionStates:
                     id = "gallery-interaction-states";
                     title = "Interaction states";
                     content = InteractionStates(report ?? IgnoreReport);
+                    break;
+                case FoundationPage.FlexAndPadding:
+                    id = "gallery-flex-and-padding";
+                    title = "Flex and padding";
+                    content = FoundationLayoutPages.FlexAndPadding();
+                    break;
+                case FoundationPage.WrapAndGrid:
+                    id = "gallery-wrap-and-grid";
+                    title = "Wrap and grid";
+                    content = FoundationLayoutPages.WrapAndGrid();
+                    break;
+                case FoundationPage.StackAndBounds:
+                    id = "gallery-stack-and-bounds";
+                    title = "Stack and bounds";
+                    content = FoundationLayoutPages.StackAndBounds();
+                    break;
+                case FoundationPage.CardsAndDividers:
+                    id = "gallery-cards-and-dividers";
+                    title = "Cards and dividers";
+                    content = FoundationLayoutPages.CardsAndDividers(theme?.Id == SurvivalTheme.Id);
+                    break;
+                case FoundationPage.GraphConnections:
+                    id = "gallery-graph-connections";
+                    title = "Graph connections";
+                    content = FoundationGraphPages.Connections(report ?? IgnoreReport);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(page));
@@ -50,7 +80,8 @@ namespace TopiaForge.UiGallery.Pages
             var body = page == FoundationPage.InteractionStates
                 ? "Hover, focus, select or press a control. Changes appear here."
                 : string.Empty;
-            var request = new UiSurfaceRequest(id, title, body, kind, 840f, 460f, content);
+            var width = page == FoundationPage.WrapAndGrid ? 1000f : 840f;
+            var request = new UiSurfaceRequest(id, title, body, kind, width, 460f, content);
             if (kind == UiSurfaceKind.Hud)
             {
                 request = request.WithHudAnchor(UiHudAnchor.Left).WithHudVisibility(UiHudVisibility.Always);
@@ -69,8 +100,10 @@ namespace TopiaForge.UiGallery.Pages
                 new UiText("Warning · Water low", UiTextStyle.Body, UiTone.Warning, "theme-warning"),
                 new UiText("Danger · Bridge closed", UiTextStyle.Body, UiTone.Danger, "theme-danger"));
 
-        private static UiNode Typography() =>
-            new UiColumn(
+        private static UiNode Typography(UiSurfaceKind kind)
+        {
+            var specimens = new UiNode[]
+            {
                 new UiText("Trail open", UiTextStyle.Banner, id: "type-banner"),
                 new UiText("Field station", UiTextStyle.Display, id: "type-display"),
                 new UiText("Supply ledger", UiTextStyle.Title, id: "type-title"),
@@ -79,7 +112,10 @@ namespace TopiaForge.UiGallery.Pages
                 new UiText("Storage bay", UiTextStyle.Label, id: "type-label"),
                 new UiText("Last checked at noon", UiTextStyle.Caption, UiTone.Muted, "type-caption"),
                 new UiText("0123456789", UiTextStyle.Numeral, id: "type-numeral"),
-                new UiText("Rack <B-07> · 12:05", UiTextStyle.Mono, id: "type-mono"));
+                new UiText("Rack <B-07> · 12:05", UiTextStyle.Mono, id: "type-mono"),
+            };
+            return kind == UiSurfaceKind.Hud ? new UiColumn(specimens, new UiFlexLayout(UiSpace.Xs)) : new UiColumn(specimens);
+        }
 
         private static UiNode InteractionStates(Action<string> report)
         {
@@ -87,7 +123,7 @@ namespace TopiaForge.UiGallery.Pages
             var listItems = new[]
             {
                 new UiListItem("shelter", "Shelter", "Supplies"),
-                new UiListItem("lookout", "Lookout", "Signal"),
+                new UiListItem("lookout", "Lookout", "Signal", "Offline"),
             };
             return new UiColumn(
                 new UiSplitPane(

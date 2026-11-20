@@ -90,7 +90,7 @@ namespace TopiaForge.ModManager.Tests
                         var service = new OwnerUiService(UiGalleryCaptureFixture.Owner, "gallery", galleryLifetime, logger, gameplay, placement);
                         var survival = UiGallerySurvivalTheme.Descriptor;
                         ((IUiThemeScopeHost)service).ConfigureThemeScope(new AdmittedUiCatalogue(survival.Id,
-                            new Dictionary<string, UiThemeDescriptor> { [survival.Id] = survival }), null);
+                            new Dictionary<string, UiThemeDescriptor> { [survival.Id] = survival }), null, "UI Gallery");
                         var ordinaryRequest = FoundationPages.CreateRequest(FoundationPage.InteractionStates, UiSurfaceKind.Window);
                         using var ordinary = Get(service.CreateSurface(ordinaryRequest));
                         var window = TopiaForgeWindow.Active.Single(view => view.Id == ordinaryRequest.Id);

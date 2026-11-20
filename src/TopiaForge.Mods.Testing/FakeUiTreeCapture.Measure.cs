@@ -9,17 +9,17 @@ namespace TopiaForge.Mods.Testing
         private float LabelGap => 4f * layoutScale;
         private float ToggleLabelInset => (48f + UiControlPaint.CompactCueGutter) * layoutScale;
 
-        private Size Measure(UiNode node, float width, bool wrap = true)
+        private Size MeasureLeaf(UiNode node, float width)
         {
             switch (node)
             {
                 case UiText text:
-                    return MeasureText(text.Text, text.Style, width, wrap);
+                    return MeasureText(text.Text, text.Style, width);
                 case UiCountdown countdown:
-                    return MeasureText(CountdownText(countdown), UiTextStyle.Body, width, wrap);
+                    return MeasureText(CountdownText(countdown), UiTextStyle.Body, width);
                 case UiProgress progress:
-                    var label = MeasureText(progress.Label, UiTextStyle.Body, width, wrap);
-                    return new Size(width, label.Height + (progress.Label.Length == 0 ? 14f * layoutScale : 18f * layoutScale));
+                    var label = MeasureText(progress.Label, UiTextStyle.Body, width);
+                    return new Size(Math.Max(width, label.Width), label.Height + (progress.Label.Length == 0 ? 14f * layoutScale : 18f * layoutScale));
                 case UiButton button:
                     var buttonLabel = MeasureText(button.Label, UiTextStyle.Label, width, wrap: false);
                     return new Size(Math.Max(ControlHeight, buttonLabel.Width + (28f * layoutScale)),
@@ -29,21 +29,14 @@ namespace TopiaForge.Mods.Testing
                 case UiDropdown dropdown:
                     return MeasureLabeledControl(dropdown.Label, width);
                 case UiToggle toggle:
-                    var toggleLabel = MeasureText(toggle.Label, UiTextStyle.Body, Math.Max(0f, width - ToggleLabelInset));
-                    return new Size(width, Math.Max(ControlHeight, toggleLabel.Height));
+                    var toggleLabel = MeasureText(toggle.Label, UiTextStyle.Body, Math.Max(0, width - ToggleLabelInset));
+                    return new Size(Math.Max(width, toggleLabel.Width + ToggleLabelInset), Math.Max(ControlHeight, toggleLabel.Height));
                 case UiSlider slider:
                     var sliderLabel = MeasureText(slider.Label, UiTextStyle.Body, width * 0.42f);
-                    return new Size(width, Math.Max(ControlHeight, sliderLabel.Height));
+                    return new Size(Math.Max(Math.Max(width, sliderLabel.Width / 0.42f), ControlHeight / 0.42f),
+                        Math.Max(ControlHeight, sliderLabel.Height));
                 case UiVirtualList list:
-                    return new Size(width, UiVirtualListGeometry.Height(list.VisibleRows) * layoutScale);
-                case UiGraphCanvas graph:
-                    return new Size(width, graph.Height * layoutScale);
-                case UiLayoutNode layout:
-                    return MeasureLinear(layout, width);
-                case UiSplitPane split:
-                    return MeasureSplit(split, width);
-                case UiScroll scroll:
-                    return new Size(width, scroll.Height * layoutScale);
+                    return MeasureVirtualList(list, width);
                 default:
                     return new Size(width, 0);
             }
@@ -52,47 +45,15 @@ namespace TopiaForge.Mods.Testing
         private Size MeasureLabeledControl(string label, float width)
         {
             var caption = MeasureText(label, UiTextStyle.Caption, width);
-            return new Size(width, caption.Height + LabelGap + ControlHeight);
+            return new Size(Math.Max(ControlHeight, Math.Max(width, caption.Width)), caption.Height + LabelGap + ControlHeight);
         }
 
-        private Size MeasureLinear(UiLayoutNode layout, float width)
-        {
-            var row = layout is UiRow;
-            var measuredWidth = 0f;
-            var measuredHeight = 0f;
-            var spacing = Math.Max(0, layout.Children.Count - 1) * gap;
-            foreach (var child in layout.Children)
-            {
-                var size = Measure(child, width, wrap: !row);
-                measuredWidth = row ? measuredWidth + size.Width : Math.Max(measuredWidth, size.Width);
-                measuredHeight = row ? Math.Max(measuredHeight, size.Height) : measuredHeight + size.Height;
-            }
-
-            return new Size(measuredWidth + (row ? spacing : 0), measuredHeight + (row ? 0 : spacing));
-        }
-
-        private Size MeasureSplit(UiSplitPane split, float width)
-        {
-            var splitGap = 12f * layoutScale;
-            if (split.Orientation == UiSplitOrientation.Horizontal)
-            {
-                var usableWidth = Math.Max(0, width - splitGap);
-                var firstWidth = usableWidth * split.PrimaryFraction;
-                return new Size(width, Math.Max(Measure(split.Primary, firstWidth).Height,
-                    Measure(split.Secondary, usableWidth - firstWidth).Height));
-            }
-
-            var first = Measure(split.Primary, width).Height;
-            var second = Measure(split.Secondary, width).Height;
-            var height = Math.Max(first / split.PrimaryFraction, second / (1f - split.PrimaryFraction));
-            return new Size(width, height + splitGap);
-        }
-
-        private Size MeasureText(string text, UiTextStyle style, float availableWidth, bool wrap = true)
+        private Size MeasureText(string text, UiTextStyle style, float availableWidth, bool wrap = true,
+            UiThemeDescriptor? descriptor = null)
         {
             if (text.Length == 0) return default;
-            var typography = theme.Descriptor.GetText(style);
-            var height = TextSize(style);
+            var typography = (descriptor ?? theme.Descriptor).GetText(style);
+            var height = typography.ReferenceSize * readableScale;
             var visual = typography.IsUppercase ? text.ToUpperInvariant() : text;
             var width = 0f;
             var line = 0f;

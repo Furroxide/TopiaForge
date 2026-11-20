@@ -139,7 +139,7 @@ namespace TopiaForge.ModManager.Tests
         private static void LowerHudAnchorsReserveScreenSpaceWithoutMovingTheirPivot()
         {
             var placement = Read("src", "TopiaForge.ModManager", "UnityUiHudPlacement.cs");
-            RequireMatch(placement, @"TopiaForgeAnchors\.Dock\(rect, corner, TopiaForgeTokens\.SafeMargin\);[\s\S]*?UiHudAnchors\.SubtitleReserve\(corner\)",
+            RequireMatch(placement, @"TopiaForgeAnchors\.Dock\(rect, corner, UiHudViewport\.SafeMargin\);[\s\S]*?UiHudAnchors\.SubtitleReserve\(corner\)",
                 "Every bottom stack must use the shared subtitle reserve after setting its original pivot.");
             RequireSource(placement, "var anchor = new Vector2(rect.anchorMin.x, reserve);", "The reserve must keep the horizontal anchor.");
             RequireSource(placement, "rect.anchorMin = anchor;", "The lower anchor must move by the screen fraction.");

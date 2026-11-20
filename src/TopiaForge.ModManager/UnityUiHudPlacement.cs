@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine;
 
@@ -11,7 +12,7 @@ namespace TopiaForge.ModManager
     /// space. Positions are written only when the stack changes: a panel shown or hidden, added or removed, or a UI scale
     /// change. Main thread only.
     /// </summary>
-    internal sealed class UnityUiHudPlacement : IDisposable
+    internal sealed partial class UnityUiHudPlacement : IDisposable
     {
         private readonly TopiaForgeHudDock dock = new TopiaForgeHudDock();
         private readonly List<Panel> panels = new List<Panel>();
@@ -28,7 +29,7 @@ namespace TopiaForge.ModManager
         {
             if (host == null) throw new ArgumentNullException(nameof(host));
             if (rect == null) throw new ArgumentNullException(nameof(rect));
-            TopiaForgeAnchors.Dock(rect, corner, TopiaForgeTokens.SafeMargin);
+            TopiaForgeAnchors.Dock(rect, corner, UiHudViewport.SafeMargin);
             var reserve = UiHudAnchors.SubtitleReserve(corner);
             if (reserve > 0f)
             {
@@ -37,7 +38,7 @@ namespace TopiaForge.ModManager
                 rect.anchorMin = anchor;
                 rect.anchorMax = anchor;
             }
-            var handle = dock.Add(corner, height, host.EffectiveUiScale);
+            var handle = dock.Add(corner, height, host.EffectiveUiScale, UiHudViewport.SafeMargin);
             panels.Add(new Panel(handle, host, rect));
             return handle;
         }
@@ -102,7 +103,7 @@ namespace TopiaForge.ModManager
             appliedVersion = dock.Version;
             foreach (var panel in panels)
             {
-                if (panel.Rect == null || !dock.TryGetPosition(panel.Handle, out var x, out var y))
+                if (panel.Rect == null || panel.Notice.HasValue || !dock.TryGetPosition(panel.Handle, out var x, out var y))
                 {
                     continue;
                 }
@@ -122,6 +123,9 @@ namespace TopiaForge.ModManager
                 Handle = handle;
                 Host = host;
                 Rect = rect;
+                AuthoredSize = rect.sizeDelta;
+                AuthoredAnchor = rect.anchorMin;
+                AuthoredPivot = rect.pivot;
             }
 
             internal int Handle { get; }
@@ -129,6 +133,10 @@ namespace TopiaForge.ModManager
             internal UiHost Host { get; }
 
             internal RectTransform Rect { get; }
+            internal Vector2 AuthoredSize { get; }
+            internal Vector2 AuthoredAnchor { get; }
+            internal Vector2 AuthoredPivot { get; }
+            internal TopiaForge.Mods.UiLayoutRect? Notice { get; set; }
         }
     }
 }
