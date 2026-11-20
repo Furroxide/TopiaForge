@@ -361,6 +361,7 @@ namespace TopiaForge.ModManager.Tests
                         FullyOccupiedHudUsesOnePlainToast();
                         TwoQueuedNativeHudRectsDoNotOccupyPaint();
                         DockMarginsFollowTheAssignedUnits();
+                        LayoutNoticeUsesAnAvailableWiderSlot();
                         Console.WriteLine("Native HUD viewport boundary passed for body-only creation, SetBody and scale recovery, 300-unit notice placement, 24-unit margins and 4,096 settled frames at 0 B.");
                     }
 
@@ -526,6 +527,53 @@ namespace TopiaForge.ModManager.Tests
                             !first.Bounds.Intersects(second.Bounds) && !first.Bounds.Intersects(peerBounds) &&
                             !second.Bounds.Intersects(peerBounds) && painted.Bounds.Equals(peerBounds),
                             "Two unfit native HUDs paint disjoint notices beside the existing peer once their authored paint is gone.");
+                    }
+
+                    private static void LayoutNoticeUsesAnAvailableWiderSlot()
+                    {
+                        TopiaForgeToasts.Plain.Clear();
+                        using var dock = new UnityUiHudPlacement();
+                        var host = new UiHost();
+                        var canvas = new Canvas();
+                        var title = new string('F', 114);
+                        var source = new UiStack(new UiNode[]
+                        {
+                            new UiPositioned(new UiText("Readiness"), left: 920, top: 0, width: 64),
+                        }, width: 1000, height: 20);
+                        var subject = new UnityUiSurface(dock, host, canvas, 1080, 95, source,
+                            title: title, corner: TopiaForgeCorner.TopRight);
+                        subject.SetHudNoticeSource("Example Pack", UiHudAnchor.TopRight, UiHudVisibility.Always);
+                        var peer = new UnityUiSurface(dock, host, canvas, 912, 396, new UiText("Reserved"),
+                            corner: TopiaForgeCorner.TopRight);
+                        Check(subject.ShowOriginal() && peer.ShowOriginal(), "Both authored HUDs fit at scale 1.");
+                        SetScale(host, canvas, dock, 2f);
+                        peer.Refresh();
+                        var obstacle = peer.Bounds;
+                        var safe = UiHudViewport.SafeArea(new UiLayoutRect(0, 0, Screen.width, Screen.height), 2d);
+                        var caption = new TMPro.TMP_Text(title, 24f);
+                        var label = new TMPro.TMP_Text(UiHudLayoutNotice.Text, 20f);
+                        double Measure(double width) => 24d + 8d +
+                            caption.GetPreferredValues(title, (float)(width - 24d), 0f).y +
+                            label.GetPreferredValues(UiHudLayoutNotice.Text, (float)(width - 24d), 0f).y;
+                        const double widerWidth = 650d;
+                        var measured = new UiLayoutRect(safe.X, safe.Y, widerWidth * 2d, Measure(widerWidth) * 2d);
+                        var openingHeight = (obstacle.Y - safe.Y) * 0.5d;
+                        Check(Measure(UiHudLayoutNotice.PreferredWidth) > openingHeight &&
+                            safe.Contains(measured) && !measured.Intersects(obstacle),
+                            "The shallow opening requires a wider layout notice.");
+
+                        subject.Refresh();
+                        Check(subject.NoticeShown && !subject.NoticeQueued && !subject.OriginalShown &&
+                            subject.NoticeMessage == UiHudLayoutNotice.Text && safe.Contains(subject.Bounds) &&
+                            !subject.Bounds.Intersects(obstacle) && obstacle.Equals(peer.Bounds) && TopiaForgeToasts.Plain.Count == 0,
+                            "A readable layout notice paints when a wider safe opening exists.");
+
+                        for (var index = 0; index < 64; index++) subject.Refresh();
+                        var calls = subject.LayoutCalls;
+                        var before = GC.GetAllocatedBytesForCurrentThread();
+                        for (var index = 0; index < 4096; index++) subject.Refresh();
+                        Check(GC.GetAllocatedBytesForCurrentThread() == before && subject.LayoutCalls == calls,
+                            "A settled wide layout notice allocates 0 B and keeps its measurement.");
                     }
 
                     private static void DockMarginsFollowTheAssignedUnits()
