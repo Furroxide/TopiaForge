@@ -46,7 +46,7 @@ namespace TopiaForge.ModManager
             RestoreDock(panel, viewport);
         }
 
-        internal bool SetNoticeRoom(int handle, UiLayoutExtent size, bool preferContentViewport = false)
+        internal bool SetNoticeRoom(int handle, double preferredWidth, Func<double, double> heightAt)
         {
             var panel = Find(handle);
             if (panel == null || !TryProjectDock(panel, out var viewport)) return false;
@@ -54,32 +54,37 @@ namespace TopiaForge.ModManager
             foreach (var peer in panels)
             {
                 if (ReferenceEquals(panel, peer) || !dock.TryGetPosition(peer.Handle, out _, out _)) continue;
-                if (!TryProject(peer.Rect, out var region)) return false;
+                if (!TryProject(peer.Rect, out var region))
+                {
+                    RestoreDock(panel, viewport);
+                    return false;
+                }
                 if (region.HasArea) occupied.Add(region);
             }
             if (protectedNoticeArea != null && TryProject(protectedNoticeArea, out var blocked)) occupied.Add(blocked);
 
-            if (preferContentViewport && viewport.Content.HasArea && Clear(viewport.Content))
-            {
-                RestoreDock(panel, viewport);
-                return true;
-            }
-
-            var preferred = UiHudViewport.AtPivot(viewport.DockX, viewport.DockY, panel.AuthoredPivot.x, 1f - panel.AuthoredPivot.y,
-                new UiLayoutExtent(size.Width * viewport.Scale, size.Height * viewport.Scale));
-            if (!UiHudNoticePlacement.TryPlace(viewport.Safe, preferred, occupied, UiHudViewport.SlotGap * viewport.Scale, out var chosen))
+            var origin = (viewport.DockX, viewport.DockY, (double)panel.AuthoredPivot.x, 1d - panel.AuthoredPivot.y);
+            var scale = viewport.Scale;
+            if (!UiHudNoticePlacement.TryPlaceMeasured(viewport.Safe, viewport.Content, origin, preferredWidth * scale,
+                occupied, UiHudViewport.SlotGap * scale, width => heightAt(width / scale) * scale,
+                out var chosen, out var usesCurrent))
             {
                 RestoreDock(panel, viewport);
                 return false;
+            }
+            if (usesCurrent)
+            {
+                RestoreDock(panel, viewport);
+                return true;
             }
 
             // Keep the authored height reserved in the dock. Only this panel moves to the alternative slot.
             var corner = new Vector2(0f, 1f);
             var rect = panel.Rect;
             rect.anchorMin = rect.anchorMax = rect.pivot = corner;
-            rect.sizeDelta = new Vector2((float)size.Width, (float)size.Height);
-            rect.anchoredPosition = new Vector2((float)((chosen.X - viewport.Canvas.X) / viewport.Scale),
-                (float)((viewport.Canvas.Y - chosen.Y) / viewport.Scale));
+            rect.sizeDelta = new Vector2((float)(chosen.Width / scale), (float)(chosen.Height / scale));
+            rect.anchoredPosition = new Vector2((float)((chosen.X - viewport.Canvas.X) / scale),
+                (float)((viewport.Canvas.Y - chosen.Y) / scale));
             RecordNotice(panel, chosen);
             return true;
         }
@@ -89,13 +94,6 @@ namespace TopiaForge.ModManager
             foreach (var panel in panels)
                 if (panel.Handle == handle && panel.Rect != null) return panel;
             return null;
-        }
-
-        private bool Clear(UiLayoutRect rect)
-        {
-            foreach (var obstacle in occupied)
-                if (rect.Intersects(obstacle)) return false;
-            return true;
         }
 
         private void RestoreDock(Panel panel, DockViewport viewport)

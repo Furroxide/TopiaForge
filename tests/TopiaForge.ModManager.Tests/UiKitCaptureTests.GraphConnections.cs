@@ -22,6 +22,45 @@ namespace TopiaForge.ModManager.Tests
         [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "RemoveGraphConnectionSelection")]
         private static extern OperationResult<bool> RemoveGraphConnectionSelection(FakeUiSurface surface);
 
+        private static void GraphConnectionsPaintIndependentCues()
+        {
+            using var lifetime = new FakeModLifetime();
+            var ui = new FakeUiService(lifetime);
+            const string palette = """
+                {"schema":1,"id":"graph-cues","paper":{"colors":{
+                  "surface":{"fill":"#000000","on":"#FFFFFF"},"raised":{"fill":"#000000","on":"#FFFFFF"},
+                  "selected":{"fill":"#000000","on":"#FFFFFF"}}}}
+                """;
+            Check(ui.AddThemeFixture(palette).Succeeded, "Admit collapsed graph connection colors.");
+            var request = FoundationPages.CreateRequest(FoundationPage.GraphConnections, UiSurfaceKind.Window, new UiThemeRef("graph-cues"));
+            using var surface = Make(ui, request);
+            ui.CompletePendingThemeRegistrations();
+            foreach (var scale in new[] { 1f, 2f })
+            {
+                Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: scale)).Succeeded, "Set the viewer scale.");
+                CloseGraphConnections(surface);
+                Check(surface.SelectGraphNode("relay-map", "west-high").Succeeded, "Focus a graph before pressing Connections.");
+                var launcher = CaptureForFixture(surface, Viewport, "Pressed", 0, false);
+                Check(launcher.Nodes[0].ThemeId == "graph-cues" && HasMark(launcher, "/graph-connections/press"),
+                    "The closed launcher has a visible pressed outline in the admitted collapsed palette. " +
+                    string.Join(", ", launcher.Nodes.Where(node => node.Path.StartsWith("/graph-connections", StringComparison.Ordinal))
+                        .Select(node => $"{node.Path} fill {node.FillColor} visible {node.IsRendered} clipped {node.Clipped} disabled {node.Disabled}")));
+                Check(OpenGraphConnections(surface, Viewport), "Open the graph list.");
+                var rest = CaptureForFixture(surface, Viewport, "Rest", 0, false);
+                var active = rest.Nodes.Single(node => node.Kind == "GraphConnectionRow" && node.Selected);
+                Check(HasMark(rest, active.Path + "/selection") && HasMark(rest, "/graph-connections/selection"),
+                    "The open action and selected row each retain their semantic cue at rest.");
+                var remove = CaptureForFixture(surface, Viewport, "Pressed", 0, false);
+                Check(HasMark(remove, "/0/remove/press") && HasMark(remove, active.Path + "/selection") &&
+                    !HasMark(remove, active.Path + "/press"), "Remove has independent press paint while the selected row remains marked.");
+                var selectedPressed = CaptureForFixture(surface, Viewport, "SelectedPressed", 0, false);
+                Check(HasMark(selectedPressed, active.Path + "/selection") && HasMark(selectedPressed, active.Path + "/press") &&
+                    selectedPressed.CheckAccessibility().Count == 0, "A selected pressed row has both readable, non-overlapping marks.");
+            }
+
+            static bool HasMark(UiTreeCapture tree, string path) => tree.Nodes.Any(node => node.Path == path && node.IsRendered && !node.Clipped);
+        }
+
         private static void GraphConnectionsAreLocalPooledAndLabelled()
         {
             using var lifetime = new FakeModLifetime();
@@ -82,7 +121,7 @@ namespace TopiaForge.ModManager.Tests
                 "Removing the last row moves selection to the nearest remaining edge.");
             CheckDisjoint(remaining, 40f * UiHudViewport.ScreenScale(2560, 1440));
 
-            using var compact = Make(ui, new UiSurfaceRequest("compact-map", "Map", "", width: 240, height: 120,
+            using var compact = Make(ui, new UiSurfaceRequest("compact-map", "Map", "", width: 240, height: 272,
                 content: Graph()));
             Check(OpenGraphConnections(compact, Viewport), "A compact window measures a row and a separate Remove side by side.");
             var tiny = compact.Capture(Viewport);

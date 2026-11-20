@@ -241,10 +241,12 @@ namespace TopiaForge.ModManager.Tests
                 public sealed class TopiaForgeResolvedTheme
                 {
                     internal UiThemeDescriptor? Descriptor => null;
+                    internal static bool CollapseGraphColors { get; set; }
+                    internal bool HighContrast => false;
                     internal int Surface => 1;
                     internal int SurfaceSunken => 2;
-                    internal int SelectedTint => 3;
-                    internal int SurfaceAlt => 4;
+                    internal int SelectedTint => CollapseGraphColors ? 0 : 3;
+                    internal int SurfaceAlt => CollapseGraphColors ? 0 : 4;
                     internal int Text => 5;
                     internal int TextFaint => 6;
                     internal Field? FieldPaint(UiPaintRole role, UiTone tone, bool enabled) => null;
@@ -334,6 +336,19 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed class TopiaForgeRoundedImage : Image
                 {
                     internal void SetShape(float? shape) { }
+                }
+
+                internal sealed class TopiaForgeControlCues : Component
+                {
+                    internal bool Applied { get; private set; }
+                    internal bool AuthoredSelectionCue { get; private set; }
+                    internal static TopiaForgeControlCues Install(Selectable control, RectTransform area) =>
+                        control.gameObject.AddComponent<TopiaForgeControlCues>();
+                    internal void Apply(int fill, int ink, float radius, bool highContrast, bool authoredSelectionCue = false)
+                    {
+                        Applied = true;
+                        AuthoredSelectionCue = authoredSelectionCue;
+                    }
                 }
 
                 internal sealed class TopiaForgeControlFocus

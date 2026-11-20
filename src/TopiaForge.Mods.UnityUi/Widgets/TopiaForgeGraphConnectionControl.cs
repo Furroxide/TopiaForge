@@ -13,6 +13,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TopiaForgeRoundedImage fill;
         private readonly TextMeshProUGUI label;
         private readonly TopiaForgeControlFocus? focus;
+        private readonly TopiaForgeControlCues cues;
 
         internal TopiaForgeGraphConnectionControl(TopiaForgeWidget owner, Transform parent, string name, Action action,
             Func<MoveDirection, bool> move)
@@ -29,6 +30,7 @@ namespace TopiaForge.Mods.UnityUi
             label.parseCtrlCharacters = false;
             TopiaForgeAnchors.Stretch(label.rectTransform, LabelInset, 0f, LabelInset, 0f);
             focus = TopiaForgeControlFocus.Install(owner, Button);
+            cues = TopiaForgeControlCues.Install(Button, Rect);
         }
 
         internal TopiaForgeGraphConnectionButton Button { get; }
@@ -61,6 +63,15 @@ namespace TopiaForge.Mods.UnityUi
                 fill.color = !enabled ? theme.SurfaceSunken : selected ? theme.SelectedTint : theme.SurfaceAlt;
                 label.color = !enabled ? theme.TextFaint : theme.Text;
             }
+
+            var authoredSelectionCue = false;
+            if (enabled && selected)
+            {
+                var rest = theme.FieldPaint(backdrop, UiTone.Neutral, enabled: true)?.Fill ?? theme.SurfaceAlt;
+                authoredSelectionCue = rest.Equals(fill.color);
+            }
+            cues.Apply(fill.color, label.color, theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control,
+                theme.HighContrast, authoredSelectionCue);
         }
     }
 

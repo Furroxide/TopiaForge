@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
@@ -32,6 +33,7 @@ namespace TopiaForge.ModManager
         private readonly AdmittedUiCatalogue? catalogue;
         private readonly UiThemeScope? parent;
         private readonly IModLifetime lifetime;
+        private readonly List<UiThemeScope> children = new List<UiThemeScope>();
         private bool disposed;
 
         internal UiThemeScope(IModLifetime lifetime, AdmittedUiCatalogue? catalogue, UiThemeScope? parent = null)
@@ -39,13 +41,18 @@ namespace TopiaForge.ModManager
             this.lifetime = lifetime;
             this.catalogue = catalogue ?? parent?.catalogue;
             this.parent = parent;
-            if (parent != null) parent.Changed += InheritedThemeChanged;
+            if (parent != null)
+            {
+                parent.Changed += InheritedThemeChanged;
+                parent.children.Add(this);
+            }
         }
 
         internal event Action? Changed;
 
         // The presentation routes stage all affected revisions before committing the new scope selection.
         internal PrepareUiThemeSelection? PrepareSelection { get; set; }
+        internal Func<UiThemeScope, UiThemeRef?, OperationResult<bool>>? ValidateLocalSelection { get; set; }
 
         public UiThemeRef? SelectedTheme { get; private set; }
 
@@ -55,6 +62,8 @@ namespace TopiaForge.ModManager
             if (disposed || lifetime.IsStopping) return Stopped;
             if (theme != null && (catalogue == null || !catalogue.TryGet(theme.Id, out _))) return Missing;
             if (Equals(SelectedTheme, theme)) return Success;
+            var local = ValidateSelections(this, theme);
+            if (!local.Succeeded) return local;
             Action? commit = null;
             if (PrepareSelection != null)
             {
@@ -65,6 +74,19 @@ namespace TopiaForge.ModManager
             SelectedTheme = theme;
             commit?.Invoke();
             Changed?.Invoke();
+            return Success;
+        }
+
+        private OperationResult<bool> ValidateSelections(UiThemeScope changed, UiThemeRef? proposed)
+        {
+            var validation = ValidateLocalSelection?.Invoke(changed, proposed) ?? Success;
+            if (!validation.Succeeded) return validation;
+            foreach (var child in children)
+            {
+                if (child.disposed || child.lifetime.IsStopping || child.SelectedTheme != null) continue;
+                validation = child.ValidateSelections(changed, proposed);
+                if (!validation.Succeeded) return validation;
+            }
             return Success;
         }
 
@@ -129,9 +151,15 @@ namespace TopiaForge.ModManager
         {
             if (disposed) return;
             disposed = true;
-            if (parent != null) parent.Changed -= InheritedThemeChanged;
+            if (parent != null)
+            {
+                parent.Changed -= InheritedThemeChanged;
+                parent.children.Remove(this);
+            }
             Changed = null;
             PrepareSelection = null;
+            ValidateLocalSelection = null;
+            children.Clear();
             SelectedTheme = null;
         }
     }

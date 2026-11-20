@@ -51,10 +51,12 @@ namespace TopiaForge.ModManager
             string display, string semantic, UiThemeColor? backdrop, bool selected)
         {
             if (control.SemanticLabel != semantic || control.Button.targetGraphic is not { } fill) return false;
-            var flags = Flags(control.Button) | (selected ? UiCaptureNodeFlags.Selected : UiCaptureNodeFlags.None);
             var start = observations.Count;
+            var color = Over(fill, backdrop);
+            var flags = Flags(control.Button) | ControlMarks(path, control.Button, semantic, color, backdrop);
+            if (selected) flags |= UiCaptureNodeFlags.Selected;
             var result = Text(path, id, kind, Named<TMP_Text>(control.Rect, "Label"), display, UiTextStyle.Label,
-                Over(fill, backdrop), flags, Decoration(control.Rect, fill), semanticLabel: semantic);
+                color, flags, Decoration(control.Rect, fill), semanticLabel: semantic);
             if (!result) return false;
             HitAndFocus(path, control.Button, semantic, backdrop);
             RegisterGroup(start);

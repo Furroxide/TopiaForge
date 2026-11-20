@@ -73,6 +73,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public static void ProbeGraphConnections()
                     {
+                        TopiaForgeResolvedTheme.CollapseGraphColors = true;
                         var owner = new UiHost();
                         var window = new TopiaForgeWindow(owner);
                         var map = new Dictionary<string, TopiaForgeGraphCanvas>();
@@ -123,6 +124,9 @@ namespace TopiaForge.ModManager.Tests
                             window.Scroll.GetComponent<CanvasGroup>() is { alpha: 0f, interactable: false, blocksRaycasts: false },
                             "Focus starts on the selected row and authored graph controls cannot receive input underneath.");
                         CheckAperture(chrome, 2f);
+                        Require(chrome.Launcher.Button.GetComponent<TopiaForgeControlCues>() is { Applied: true, AuthoredSelectionCue: true } &&
+                            chrome.RemoveControl.Button.GetComponent<TopiaForgeControlCues>() is { Applied: true, AuthoredSelectionCue: false },
+                            "The open launcher and Remove control configure their individual paint drivers.");
                         first.OnMove(new AxisEventData(MoveDirection.Down));
                         var second = chrome.Rows[1].Button;
                         Require(chrome.SelectedEdgeId == "a" && EventSystem.current.currentSelectedGameObject == second.gameObject,
@@ -130,6 +134,9 @@ namespace TopiaForge.ModManager.Tests
                         second.OnMove(new AxisEventData(MoveDirection.Right));
                         Require(EventSystem.current.currentSelectedGameObject == chrome.RemoveControl.Button.gameObject &&
                             ownerEvents.Count == 0, "A separate move enters Remove without committing an edge action.");
+                        Require(second.GetComponent<TopiaForgeControlCues>() is { Applied: true, AuthoredSelectionCue: true } &&
+                            first.GetComponent<TopiaForgeControlCues>() is { AuthoredSelectionCue: false },
+                            "The authored edge stays marked while focus moves to Remove and the old row is deselected.");
                         chrome.RemoveControl.Button.OnSubmit(new BaseEventData());
                         Require(ownerEvents.SequenceEqual(new[] { "list:a" }) && chrome.SelectedEdgeId == "z" &&
                             EventSystem.current.currentSelectedGameObject == first.gameObject,

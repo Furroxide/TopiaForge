@@ -27,11 +27,11 @@ namespace TopiaForge.Mods.Testing
         private UiLayoutResult Arrange(UiNode content, UiCaptureRect body, float top)
         {
             var width = body.Width / (double)layoutScale;
-            var height = surface.Request.Kind == UiSurfaceKind.Hud
-                ? Math.Max(0, (body.Bottom - top) / (double)layoutScale)
-                : double.PositiveInfinity;
-            return UiLayoutEngine.Arrange(content, new UiLayoutConstraints(width, width, 0d, height),
-                MeasurePlacement, layoutScale, preferences.HighContrast);
+            var limits = surface.Request.Kind is UiSurfaceKind.Window or UiSurfaceKind.FullscreenTool
+                ? UiLayoutConstraints.ForVerticalScroll(width, body.Height / (double)layoutScale,
+                    Math.Max(0d, (top - body.Y) / (double)layoutScale))
+                : new UiLayoutConstraints(width, width, 0d, Math.Max(0, (body.Bottom - top) / (double)layoutScale));
+            return UiLayoutEngine.Arrange(content, limits, MeasurePlacement, layoutScale, preferences.HighContrast);
         }
 
         private UiLayoutLeafMeasurement MeasurePlacement(UiNode node, UiLayoutConstraints limits, bool disabled)
@@ -62,9 +62,10 @@ namespace TopiaForge.Mods.Testing
 
         private void PaintComposition(UiNode content, UiCaptureRect body, UiCaptureRect clip, float top, float scrollOffset)
         {
-            var origin = surface.Request.Kind == UiSurfaceKind.Hud ? top + (scrollOffset * layoutScale) : top;
+            var unscrolled = top + scrollOffset * layoutScale;
+            var origin = surface.Request.Kind == UiSurfaceKind.Hud ? unscrolled : top;
             UiLayoutResult layout;
-            try { layout = Arrange(content, body, origin); }
+            try { layout = Arrange(content, body, unscrolled); }
             catch (UiLayoutException failure)
             {
                 PaintLayoutFailure(body, clip, failure);

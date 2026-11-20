@@ -6,6 +6,25 @@ namespace TopiaForge.Mods
     /// <summary>Places a readable replacement panel inside the safe HUD viewport.</summary>
     internal static class UiHudNoticePlacement
     {
+        internal static bool TryPlaceMeasured(UiLayoutRect viewport, UiLayoutRect current,
+            (double X, double Y, double PivotX, double PivotY) dock, double preferredWidth,
+            IReadOnlyList<UiLayoutRect> occupied, double peerGap, Func<double, double> heightAt,
+            out UiLayoutRect result, out bool usesCurrent)
+        {
+            usesCurrent = current.HasArea && Clear(current, occupied) && heightAt(current.Width) <= current.Height;
+            if (usesCurrent)
+            {
+                result = current;
+                return true;
+            }
+
+            var width = Math.Min(preferredWidth, viewport.Width);
+            var height = heightAt(width);
+            var preferred = UiHudViewport.AtPivot(dock.X, dock.Y, dock.PivotX, dock.PivotY, new UiLayoutExtent(width, height));
+            if (TryPlace(viewport, preferred, occupied, peerGap, out result)) return true;
+            return TryPlaceNarrower(viewport, width, occupied, heightAt, out result);
+        }
+
         internal static bool TryPlace(UiLayoutRect viewport, UiLayoutRect preferred, IReadOnlyList<UiLayoutRect> occupied,
             double peerGap, out UiLayoutRect result)
         {
@@ -48,6 +67,93 @@ namespace TopiaForge.Mods
                 if (Scan(column, size, occupied, gap, vertical: true, farEdge: false, out result)) return true;
             }
             return false;
+        }
+
+        private static bool TryPlaceNarrower(UiLayoutRect viewport, double preferredWidth, IReadOnlyList<UiLayoutRect> occupied,
+            Func<double, double> heightAt, out UiLayoutRect result)
+        {
+            var best = default(UiLayoutRect);
+            var barriers = new List<UiLayoutRect>(occupied.Count);
+            var starts = new List<double>(occupied.Count + 1) { viewport.Y };
+            foreach (var obstacle in occupied)
+            {
+                var barrier = viewport.Intersect(obstacle);
+                if (!barrier.HasArea) continue;
+                barriers.Add(barrier);
+                if (barrier.Bottom < viewport.Bottom) starts.Add(barrier.Bottom);
+            }
+            barriers.Sort((left, right) => left.Y.CompareTo(right.Y));
+            starts.Sort();
+
+            // A free rectangle can slide up until it meets the viewport or a peer's bottom edge.
+            // From each such top edge, scan down and subtract peers from the horizontal openings.
+            var blocked = new List<(double Left, double Right)>();
+            var heights = new Dictionary<double, double>();
+            var previousStart = double.NegativeInfinity;
+            foreach (var top in starts)
+            {
+                if (top == previousStart) continue;
+                previousStart = top;
+                blocked.Clear();
+                var limit = top;
+                foreach (var barrier in barriers)
+                {
+                    if (barrier.Bottom <= top) continue;
+                    if (barrier.Y > limit)
+                    {
+                        CheckOpenings(top, barrier.Y);
+                        limit = barrier.Y;
+                    }
+                    BlockSpan(blocked, barrier.X, barrier.Right);
+                }
+                CheckOpenings(top, viewport.Bottom);
+                if (best.Width == preferredWidth) break;
+            }
+            result = best;
+            return result.HasArea;
+
+            void CheckOpenings(double top, double bottom)
+            {
+                var left = viewport.X;
+                foreach (var span in blocked)
+                {
+                    CheckWidth(left, span.Left, top, bottom);
+                    left = span.Right;
+                }
+                CheckWidth(left, viewport.Right, top, bottom);
+            }
+
+            void CheckWidth(double left, double right, double top, double bottom)
+            {
+                var width = Math.Min(preferredWidth, right - left);
+                if (width <= best.Width) return;
+                if (!heights.TryGetValue(width, out var height))
+                {
+                    height = heightAt(width);
+                    heights.Add(width, height);
+                }
+                if (height > 0d && height <= bottom - top) best = new UiLayoutRect(left, top, width, height);
+            }
+        }
+
+        private static void BlockSpan(List<(double Left, double Right)> blocked, double left, double right)
+        {
+            var first = 0;
+            while (first < blocked.Count && blocked[first].Right < left) first++;
+            var end = first;
+            while (end < blocked.Count && blocked[end].Left <= right)
+            {
+                left = Math.Min(left, blocked[end].Left);
+                right = Math.Max(right, blocked[end].Right);
+                end++;
+            }
+            if (end == first)
+                blocked.Insert(first, (left, right));
+            else
+            {
+                blocked[first] = (left, right);
+                if (end > first + 1) blocked.RemoveRange(first + 1, end - first - 1);
+            }
         }
 
         private static bool Scan(UiLayoutRect edge, UiLayoutExtent size, IReadOnlyList<UiLayoutRect> occupied,

@@ -98,6 +98,34 @@ namespace TopiaForge.ModManager.Tests
                             "Ordinary F8 uses its inherited Survival descriptor in the standard Paper Window.");
                         ordinary.Dispose();
 
+                        var plain = UiThemePackParser.Parse("{\"schema\":1,\"id\":\"plain-style-switch\"}"u8).Value
+                            ?? throw new InvalidOperationException("The plain theme fixture must parse.");
+                        using (var parentLife = new OwnerModLifetime())
+                        using (var childLife = new OwnerModLifetime())
+                        {
+                            var parent = new OwnerUiService("example.style-parent", "parent", parentLife, logger, gameplay, placement);
+                            var child = new OwnerUiService("example.style-child", "child", childLife, logger, gameplay, placement);
+                            ((IUiThemeScopeHost)parent).ConfigureThemeScope(new AdmittedUiCatalogue(null,
+                                new Dictionary<string, UiThemeDescriptor> { [plain.Id] = plain, [survival.Id] = survival }), null, "Style parent");
+                            ((IUiThemeScopeHost)child).ConfigureThemeScope(null, parent, "Style child");
+                            var stylePack = new UiThemeRef(survival.Id);
+                            var plainPack = new UiThemeRef(plain.Id);
+                            Require(parent.Themes.UseTheme(stylePack).Succeeded, "Select the inherited Card styles.");
+                            var styled = new UiSurfaceRequest("styled", "Styled", string.Empty,
+                                content: new UiCard(new UiText("Ready"), style: new UiStyleRef("panel.flat")));
+                            using var inheriting = Get(child.CreateSurface(styled));
+                            var selected = TopiaForgeWindow.Active.Single(view => view.Id == styled.Id);
+                            Require(child.Themes.UseTheme(plainPack).ErrorCode == ModErrorCode.InvalidArgument &&
+                                parent.Themes.UseTheme(plainPack).ErrorCode == ModErrorCode.InvalidArgument &&
+                                parent.Themes.SelectedTheme == stylePack && child.Themes.SelectedTheme == null &&
+                                selected.Theme.Descriptor == survival, "An incompatible direct or inherited theme leaves local paint and selection intact.");
+                            inheriting.Dispose();
+                            using var explicitPalette = Get(child.CreateSurface(styled.WithTheme(stylePack)));
+                            Require(parent.Themes.UseTheme(plainPack).Succeeded &&
+                                TopiaForgeWindow.Active.Single(view => view.Id == styled.Id).Theme.Descriptor == survival,
+                                "An explicitly themed surface does not veto a compatible parent selection.");
+                        }
+
                         // A package reusing the private fixture's id and tree stays on the ordinary Window route.
                         TopiaForgeHotkeys.Press(TopiaForgeKey.F3);
                         GameObject.Tick();

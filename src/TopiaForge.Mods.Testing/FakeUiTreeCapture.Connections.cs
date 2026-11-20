@@ -33,7 +33,7 @@ namespace TopiaForge.Mods.Testing
             var enabled = open || geometry.Rows > 0 && surface.GraphForConnections is { } focused &&
                 UiGraphConnections.IsActionable(focused);
             PaintGraphConnectionControl("/graph-connections", null, "GraphConnectionsAction", label, label,
-                launcher, clip, UiPaintRole.Raised, enabled, open, UiCaptureControlState.Rest);
+                launcher, clip, UiPaintRole.Raised, enabled, open, open ? UiCaptureControlState.Rest : State(enabled));
             if (!open) return false;
 
             var graph = model!.Graph!;
@@ -52,7 +52,7 @@ namespace TopiaForge.Mods.Testing
                 if (selected) selectedLabel = rowLabel;
                 PaintGraphConnectionControl(ChildPath("/0", slot), edge.Id, "GraphConnectionRow", rowLabel, rowLabel,
                     Place(geometry.Row(slot)), paneClip, UiPaintRole.Surface, enabled: true, selected,
-                    selected ? controlState : UiCaptureControlState.Rest);
+                    selected && controlState != UiCaptureControlState.Pressed ? controlState : UiCaptureControlState.Rest);
             }
 
             var removeLabel = UiGraphConnections.RemovePrefix + selectedLabel;
@@ -60,7 +60,8 @@ namespace TopiaForge.Mods.Testing
             var removeTextWidth = MeasureText(removeLabel, UiTextStyle.Label, float.PositiveInfinity, wrap: false).Width;
             var removeText = removeTextWidth + GraphLabelPadding * scale > remove.Width ? "Remove" : removeLabel;
             PaintGraphConnectionControl("/0/remove", model.Selected?.Id, "GraphConnectionRemove", removeText, removeLabel,
-                remove, paneClip, UiPaintRole.Surface, enabled: true, selected: false, UiCaptureControlState.Rest);
+                remove, paneClip, UiPaintRole.Surface, enabled: true, selected: false,
+                controlState == UiCaptureControlState.Pressed ? controlState : UiCaptureControlState.Rest);
             return true;
 
             UiCaptureRect Place(UiLayoutRect rect) =>
@@ -74,10 +75,16 @@ namespace TopiaForge.Mods.Testing
             var role = !enabled ? UiPaintRole.Sunken : selected ? UiPaintRole.Selected : backing;
             var flags = ControlFlags(enabled) | (selected ? UiCaptureNodeFlags.Selected : UiCaptureNodeFlags.None);
             var pair = PairFor(role, UiTone.Neutral);
-            var fill = StatefulFill(pair, state, TextMinimum, switchControl: true);
+            var tints = UiThemeColors.ResolveTints(pair, TextMinimum, UiThemeColors.ControlHighlighted,
+                UiThemeColors.ControlHighlighted, UiThemeColors.ControlPressed);
+            var fill = StateFill(pair.Fill, state, tints);
+            var authoredSelectionCue = enabled && selected && pair.Fill.Equals(PairFor(backing, UiTone.Neutral).Fill);
+            if (authoredSelectionCue) flags |= UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
             Add(path, id, kind, bounds, clip, TextContent(text, UiTextStyle.Label, flags, label),
                 new UiCaptureNodePaint(pair.On, fill, theme.Descriptor.Shape.Control * layoutScale, 0f, 0f, 0f));
             Add(path + "/hit", null, "HitTarget", bounds, clip, StateLabel(flags | UiCaptureNodeFlags.HitTarget, label), default);
+            if (enabled)
+                PaintStateCues(path, label, state, bounds, clip, pair.Fill, tints, pair.On, fill, authoredSelectionCue: authoredSelectionCue);
             PaintFocus(path, state, bounds, clip, backing, label);
         }
 

@@ -42,18 +42,42 @@ namespace TopiaForge.ModManager
             {
                 var view = widget;
                 var root = compositionRoot;
-                if (view == null || root == null || admitted == null || !presence.IsLive || lifetime.IsStopping) return;
-                var stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, placement?.DockVersion ?? 0);
+                if (view == null || (root == null && placement == null) || !presence.IsLive || lifetime.IsStopping) return;
+                var stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
                 var occupancyChanged = layoutFallback != null && placement is { } dock && dock.Version != noticeDockVersion;
                 if (committedStamp.Matches(stamp) && !occupancyChanged) return;
 
-                try { RefreshRetainedComposition(root, stamp.ClockEpoch); }
+                try
+                {
+                    if (root != null) RefreshRetainedComposition(root, stamp.ClockEpoch);
+                    else if (!RefreshHudChrome()) return;
+                }
                 catch (Exception error)
                 {
                     try { logger.Error(error, "The UI surface '" + Id + "' could not refresh its layout."); }
                     catch { }
                 }
                 committedStamp = stamp;
+            }
+
+            private bool RefreshHudChrome()
+            {
+                var parent = compositionParent;
+                if (parent == null || placement is not { } dock || !dock.TryGetViewportSizes(dockHandle, out var frame, out _))
+                    return false; // A new canvas can still be waiting for its first viewport.
+                var group = parent.Go.GetComponent<VerticalLayoutGroup>();
+                try
+                {
+                    MeasureHudContent(frame, group?.padding.horizontal ?? 0, group?.padding.vertical ?? 0,
+                        group?.spacing ?? 0f, includesComposition: false);
+                }
+                catch (UiLayoutException error)
+                {
+                    ShowLayoutFallback(parent, null, error);
+                    return true;
+                }
+                RemoveLayoutFallback();
+                return true;
             }
 
             private UiLayoutConstraints MeasureContentArea(TopiaForgeContainer parent, TopiaForgeWidget view)
@@ -66,11 +90,12 @@ namespace TopiaForge.ModManager
                 {
                     if (!dock.TryGetViewportSizes(dockHandle, out var physical, out _))
                         throw new UiLayoutException(UiLayoutFailure.InvalidLayout, "/0", "The HUD viewport is unavailable.");
-                    return MeasureHudContent(physical, padding?.horizontal ?? 0, padding?.vertical ?? 0, group?.spacing ?? 0f);
+                    return MeasureHudContent(physical, padding?.horizontal ?? 0, padding?.vertical ?? 0,
+                        group?.spacing ?? 0f, includesComposition: true);
                 }
                 var width = Math.Max(0, rect.width - (padding?.horizontal ?? 0));
                 if (window != null || fullscreen != null)
-                    return new UiLayoutConstraints(width, width, 0, double.PositiveInfinity);
+                    return MeasureScrollingContent(parent, width, group);
 
                 var available = rect.height - (padding?.vertical ?? 0);
                 for (var index = 0; index < parent.Rect.childCount; index++)
@@ -82,20 +107,22 @@ namespace TopiaForge.ModManager
                 return new UiLayoutConstraints(width, width, 0, Math.Max(0f, available));
             }
 
-            private UiLayoutConstraints MeasureHudContent(UiLayoutExtent frame, int paddingX, int paddingY, float spacing)
+            private UiLayoutConstraints MeasureHudContent(UiLayoutExtent frame, int paddingX, int paddingY, float spacing,
+                bool includesComposition)
             {
                 var width = frame.Width - paddingX;
                 var available = frame.Height - paddingY;
                 if (width <= 0d || available <= 0d)
                     throw new UiLayoutException(UiLayoutFailure.InvalidLayout, "/0", "The HUD has no usable physical content area.");
-                available -= PreferredSize(hudTitle, width).y + spacing;
+                available -= PreferredSize(hudTitle, width).y;
                 if (body != null && body.Go.GetComponent<TMP_Text>().text.Length != 0)
                 {
                     var bodySize = PreferredSize(body, width);
                     if (bodySize.x > width + 0.001d)
                         throw new UiLayoutException(UiLayoutFailure.ClippedContent, "/body", "The HUD body exceeds its physical viewport.");
-                    available -= bodySize.y + spacing;
+                    available -= spacing + bodySize.y;
                 }
+                if (includesComposition) available -= spacing;
                 if (available < 0d)
                     throw new UiLayoutException(UiLayoutFailure.ClippedContent, "/0", "The HUD chrome exceeds its physical viewport.");
                 return new UiLayoutConstraints(width, width, 0, available);
@@ -120,16 +147,18 @@ namespace TopiaForge.ModManager
                 }
                 catch (UiLayoutException error)
                 {
+                    RememberOuterScrollOffset();
                     ShowLayoutFallback(parent, root, error);
                     return;
                 }
                 RemoveLayoutFallback();
                 root.SetShown(true);
+                RestoreOuterScrollOffset();
             }
 
-            private void ShowLayoutFallback(TopiaForgeContainer parent, TopiaForgeContainer root, UiLayoutException error)
+            private void ShowLayoutFallback(TopiaForgeContainer parent, TopiaForgeContainer? root, UiLayoutException error)
             {
-                root.SetShown(false);
+                root?.SetShown(false);
                 layoutProblem = error;
                 if (layoutFallback == null)
                 {
@@ -157,16 +186,7 @@ namespace TopiaForge.ModManager
                 var group = parent.Go.GetComponent<VerticalLayoutGroup>();
                 var marginX = group?.padding.horizontal ?? 0;
                 var marginY = group?.padding.vertical ?? 0;
-                var fits = false;
-                if (dock.TryGetViewportSizes(dockHandle, out var current, out var safe))
-                {
-                    var width = Math.Min(UiHudLayoutNotice.PreferredWidth, safe.Width);
-                    var height = NoticeHeight(width);
-                    if (height <= safe.Height)
-                        fits = dock.SetNoticeRoom(dockHandle, new UiLayoutExtent(width, height),
-                            preferContentViewport: NoticeHeight(current.Width) <= current.Height);
-                }
-                if (!fits) dock.ApplyContentViewport(dockHandle);
+                var fits = dock.SetNoticeRoom(dockHandle, UiHudLayoutNotice.PreferredWidth, NoticeHeight);
                 layoutFallback.SetShown(fits);
                 dock.SetPanelPaintShown(dockHandle, fits);
                 hudNoticeOverflowing = !fits;

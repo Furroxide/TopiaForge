@@ -9,6 +9,7 @@ namespace TopiaForge.ModManager.Tests
             using TopiaForge.Mods.Testing;
             using TopiaForge.Mods.UnityUi;
             using UnityEngine;
+            using UnityEngine.UI;
 
             namespace TopiaForge.Mods.UnityUi
             {
@@ -120,7 +121,12 @@ namespace TopiaForge.ModManager.Tests
                         Host.Graphs.Add(canvas);
                         return canvas;
                     }
-                    public BoundaryControl Button(string label, Action action, TopiaForgeButtonStyle style) => new(Host);
+                    public BoundaryControl Button(string label, Action action, TopiaForgeButtonStyle style)
+                    {
+                        var control = new BoundaryControl(Host);
+                        control.Rect.SetParent(Rect, false);
+                        return control;
+                    }
                     public BoundaryControl Toggle(string label, bool value, Action<bool> action) => new(Host);
                     public BoundaryControl Slider(string label, float min, float max, float value, Action<float> action) => new(Host);
                     public BoundaryControl Input(string hint, string value, Action<string> action) => new(Host);
@@ -154,6 +160,8 @@ namespace TopiaForge.ModManager.Tests
 
                 public sealed class TopiaForgeLabel : TMPro.TMP_Text
                 {
+                    public GameObject Go => gameObject;
+                    public RectTransform Rect => transform;
                     public int Seconds { get; private set; } = -1;
                     public void SetShown(bool shown) { }
                     public void SetText(string value) => text = value;
@@ -214,6 +222,11 @@ namespace TopiaForge.ModManager.Tests
             {
                 internal sealed class UnityUiHudPlacement
                 {
+                    internal bool TryGetViewportSizes(int handle, out UiLayoutExtent frame, out UiLayoutExtent safe)
+                    {
+                        frame = safe = default;
+                        return false;
+                    }
                     internal int DockVersion => 0;
                     internal void SetShown(int handle, bool shown) { }
                     internal void Remove(int handle) { }
@@ -252,11 +265,26 @@ namespace TopiaForge.ModManager.Tests
                         private static void PrepareStagedTheme(TopiaForgeContainer stage, UiThemeDescriptor? descriptor) { }
                         private void RefreshChangedLayout() { }
                         private void ObserveLayout() { }
-                        private void RemoveLayoutFallback() { }
+                        private void RemoveLayoutFallback()
+                        {
+                            layoutFallback?.Destroy();
+                            ClearLayoutNotice();
+                        }
                         private void ClearLayoutNotice() { layoutFallback = null; }
-                        private void UpdateRetainedLayout(TopiaForgeContainer root) { }
-                        private UiLayoutConstraints MeasureContentArea(TopiaForgeContainer parent, TopiaForgeWidget view)
-                            => UiLayoutConstraints.Loose(view.Rect.rect.width, view.Rect.rect.height);
+                        private void UpdateRetainedLayout(TopiaForgeContainer root)
+                        {
+                            if (outerScroll != null) UpdateNativeRetainedLayout(root);
+                        }
+                        private UiLayoutConstraints MeasureContentArea(TopiaForgeContainer parent, TopiaForgeWidget view) =>
+                            outerScroll == null ? UiLayoutConstraints.Loose(view.Rect.rect.width, view.Rect.rect.height)
+                                : MeasureNativeContentArea(parent, view);
+                        private UiLayoutConstraints MeasureHudContent(UiLayoutExtent frame, int x, int y, float gap, bool includesComposition) =>
+                            throw new InvalidOperationException("The scroll fixture has no HUD viewport.");
+                        private void ShowLayoutFallback(TopiaForgeContainer parent, TopiaForgeContainer root, UiLayoutException error)
+                        {
+                            root.SetShown(false);
+                            layoutFallback ??= parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
+                        }
                     }
 
                 }
