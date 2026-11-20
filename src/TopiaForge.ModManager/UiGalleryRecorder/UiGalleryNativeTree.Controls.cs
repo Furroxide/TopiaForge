@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager
                     var buttonControl = rect.GetComponent<Button>();
                     if (buttonControl == null) return false;
                     var buttonFill = Over(buttonControl.targetGraphic, backdrop);
-                    var buttonFlags = Flags(buttonControl) | ButtonMarks(path, rect, buttonControl, button.Label, buttonFill);
+                    var buttonFlags = Flags(buttonControl) | ControlMarks(path, buttonControl, button.Label, buttonFill, backdrop);
                     HitAndFocus(path, buttonControl, button.Label, backdrop);
                     return Text(path, button.Id, nameof(UiButton), Named<TMP_Text>(rect, "Label"), button.Label, UiTextStyle.Label,
                         buttonFill, buttonFlags, Decoration(rect, buttonControl.targetGraphic));
@@ -39,18 +39,26 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private UiCaptureNodeFlags ButtonMarks(string path, RectTransform rect, Button control, string label, UiThemeColor? fill)
+        private UiCaptureNodeFlags ControlMarks(string path, Selectable control, string label, UiThemeColor? fill, UiThemeColor? backdrop)
         {
-            if (control is not TopiaForgeCueButton button) return UiCaptureNodeFlags.None;
-            var flags = button.IsInteractable() && button.IsSelected ? UiCaptureNodeFlags.Selected : UiCaptureNodeFlags.None;
+            if (control.transform is not RectTransform rect || !control.IsInteractable()) return UiCaptureNodeFlags.None;
+            var button = control as TopiaForgeCueButton;
+            var cues = button == null ? control.GetComponent<TopiaForgeControlCues>() : null;
+            var selected = button?.IsSelected ?? cues?.IsSelected ?? false;
+            var flags = selected ? UiCaptureNodeFlags.Selected : UiCaptureNodeFlags.None;
+            var active = button?.ActiveCues ?? cues?.ActiveCues ?? UiButtonCue.None;
+            if (active == UiButtonCue.None) return flags;
+            var background = cues?.Compact == true ? backdrop : fill;
+            var kind = button != null ? "Button" : "Control";
             var state = State(flags | UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.HasNonColorCue, label);
             var painted = UiButtonCue.None;
             var selection = Named<Image>(rect, TopiaForgeCueButton.SelectionName);
             if (selection != null && selection.isActiveAndEnabled && EffectiveColor(selection).a > 0.001f)
             {
-                Add(path + "/selection", null, "ButtonSelectionBar", selection.rectTransform, state,
-                    new UiCaptureNodePaint(ToRgb(EffectiveColor(selection)), fill), visible: !selection.canvasRenderer.cull);
-                painted |= UiButtonCue.Selection;
+                var visible = !selection.canvasRenderer.cull;
+                Add(path + "/selection", null, kind + "SelectionBar", selection.rectTransform, state,
+                    new UiCaptureNodePaint(ToRgb(EffectiveColor(selection)), background), visible);
+                if (visible) painted |= UiButtonCue.Selection;
             }
             var press = Named<TopiaForgeRoundedImage>(rect, TopiaForgeCueButton.PressName);
             if (press != null && press.isActiveAndEnabled && EffectiveColor(press).a > 0.001f)
@@ -58,14 +66,14 @@ namespace TopiaForge.ModManager
                 var scale = VerticalScale(press.rectTransform);
                 var local = press.rectTransform.rect;
                 var radius = Mathf.Min(press.ResolvedCornerRadius.GetValueOrDefault(), Mathf.Min(local.width, local.height) / 2f);
-                Add(path + "/press", null, "ButtonPressOutline", press.rectTransform, state,
-                    new UiCaptureNodePaint(ToRgb(EffectiveColor(press)), fill, radius * scale, press.ResolvedBorderWidth * scale),
-                    visible: !press.canvasRenderer.cull);
-                painted |= UiButtonCue.Press;
+                var visible = !press.canvasRenderer.cull && press.ResolvedBorderWidth > 0f;
+                Add(path + "/press", null, kind + "PressOutline", press.rectTransform, state,
+                    new UiCaptureNodePaint(ToRgb(EffectiveColor(press)), background, radius * scale, press.ResolvedBorderWidth * scale),
+                    visible);
+                if (visible) painted |= UiButtonCue.Press;
             }
-            if (button.ActiveCues == UiButtonCue.None) return flags;
             flags |= UiCaptureNodeFlags.RequiresNonColorCue;
-            return (painted & button.ActiveCues) == button.ActiveCues ? flags | UiCaptureNodeFlags.HasNonColorCue : flags;
+            return (painted & active) == active ? flags | UiCaptureNodeFlags.HasNonColorCue : flags;
         }
 
         private bool Toggle(UiToggle source, RectTransform rect, string path, UiThemeColor? backdrop)
@@ -86,7 +94,8 @@ namespace TopiaForge.ModManager
                 new UiCaptureNodePaint(ToRgb(EffectiveColor(thumb)), trackFill), thumb.isActiveAndEnabled);
             HitAndFocus(path, selectable, source.Label, backdrop);
             return Text(path, source.Id, nameof(UiToggle), Named<TMP_Text>(rect, "Label"), source.Label, UiTextStyle.Body,
-                backdrop, Flags(selectable) | (state & UiCaptureNodeFlags.Selected));
+                backdrop, Flags(selectable) | (state & UiCaptureNodeFlags.Selected) |
+                   ControlMarks(path, selectable, source.Label, trackFill, backdrop));
         }
 
         private bool Slider(UiSlider source, RectTransform rect, string path, UiThemeColor? backdrop)
@@ -95,12 +104,14 @@ namespace TopiaForge.ModManager
             var track = Named<Image>(rect, "Track");
             var thumb = Named<Image>(rect, "Handle");
             if (selectable == null || track == null || thumb == null) return false;
+            var trackFill = Over(track, backdrop);
             var state = State(UiCaptureNodeFlags.SemanticMark | Flags(selectable), source.Label);
             Add(path + "/thumb", null, "SliderThumb", thumb.rectTransform, state,
-                new UiCaptureNodePaint(ToRgb(EffectiveColor(thumb)), Over(track, backdrop)), thumb.isActiveAndEnabled);
+                new UiCaptureNodePaint(ToRgb(EffectiveColor(thumb)), trackFill), thumb.isActiveAndEnabled);
+            var flags = Flags(selectable) | ControlMarks(path, selectable, source.Label, trackFill, backdrop);
             HitAndFocus(path, selectable, source.Label, backdrop);
             return Text(path, source.Id, nameof(UiSlider), Named<TMP_Text>(rect, "Label"), source.Label, UiTextStyle.Body,
-                       backdrop, Flags(selectable)) &&
+                       backdrop, flags) &&
                 Text(path + "/value", null, "SliderValue", Named<TMP_Text>(rect, "Value"),
                     selectable.value.ToString("0.##", CultureInfo.CurrentCulture), UiTextStyle.Caption, backdrop);
         }
@@ -110,7 +121,7 @@ namespace TopiaForge.ModManager
             var selectable = rect.GetComponentInChildren<TMP_InputField>(includeInactive: true);
             if (selectable == null || selectable.transform is not RectTransform fieldRect) return false;
             var fieldFill = Over(selectable.targetGraphic, backdrop);
-            var flags = Flags(selectable);
+            var flags = Flags(selectable) | ControlMarks(path, selectable, source.Label, fieldFill, backdrop);
             HitAndFocus(path, selectable, source.Label, backdrop);
             var nativeValue = selectable.text;
             if (source.Value.Length != 0 && nativeValue == source.Value)
@@ -135,7 +146,7 @@ namespace TopiaForge.ModManager
         {
             var selectable = rect.GetComponentInChildren<TMP_Dropdown>(includeInactive: true);
             if (selectable == null || (uint)selectable.value >= (uint)source.Choices.Count) return false;
-            var flags = Flags(selectable);
+            var flags = Flags(selectable) | ControlMarks(path, selectable, source.Label, Over(selectable.targetGraphic, backdrop), backdrop);
             HitAndFocus(path, selectable, source.Label, backdrop);
             return Text(path, source.Id, nameof(UiDropdown), Named<TMP_Text>(rect, "Label"), source.Label, UiTextStyle.Caption,
                        backdrop, flags) &&
@@ -156,7 +167,7 @@ namespace TopiaForge.ModManager
                 var item = source.Items[index];
                 var itemPath = NodePath(ChildPath(path, index), item.Id);
                 var fill = Over(button.targetGraphic, backdrop);
-                var flags = Flags(button);
+                var flags = Flags(button) | ControlMarks(itemPath, button, item.Title, fill, backdrop);
                 var ring = row.Find("Ring")?.GetComponent<Image>();
                 if (ring != null && ring.isActiveAndEnabled && EffectiveColor(ring).a > 0.001f)
                     flags |= UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;

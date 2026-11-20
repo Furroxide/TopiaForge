@@ -20,7 +20,9 @@ namespace TopiaForge.Mods.Testing
                 var role = UiControlPaint.ListRowBackground(list.Enabled, selected);
                 var pair = PairFor(role, list.Enabled ? UiTone.Neutral : UiTone.Muted);
                 var rowState = selected || (selection == null && index == first) ? state : UiCaptureControlState.Rest;
-                var fill = StatefulFill(pair, rowState, TextMinimum, switchControl: false);
+                var tints = UiThemeColors.ResolveTints(pair, TextMinimum, UiThemeColors.ButtonHovered,
+                    UiThemeColors.ButtonSelected, UiThemeColors.ButtonPressed);
+                var fill = StateFill(pair.Fill, rowState, tints);
                 var flags = ControlFlags(list.Enabled);
                 if (selected)
                     flags |= UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
@@ -38,6 +40,8 @@ namespace TopiaForge.Mods.Testing
                     Add(itemPath + "/subtitle", null, "ListItemSubtitle", subtitle, background,
                         TextContent(item.Subtitle, UiTextStyle.Caption, flags), new UiCaptureNodePaint(pair.On, fill));
                 }
+                PaintStateCues(itemPath, item.Title, rowState, row, background, pair.Fill, tints, pair.On, fill,
+                    radius: theme.Descriptor.Shape.Small);
                 PaintFocus(itemPath, rowState, row, background, UiPaintRole.Surface, item.Title);
             }
         }

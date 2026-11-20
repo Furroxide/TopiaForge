@@ -14,6 +14,7 @@ namespace TopiaForge.Mods.UnityUi
     public sealed class TopiaForgeSlider : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private readonly Slider slider;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage track;
         private readonly UImage fill;
         private readonly UImage handle;
@@ -54,14 +55,15 @@ namespace TopiaForge.Mods.UnityUi
             var trackRect = (RectTransform)trackGo.transform;
             trackRect.anchorMin = new Vector2(0f, 0.5f);
             trackRect.anchorMax = new Vector2(1f, 0.5f);
-            trackRect.sizeDelta = new Vector2(0f, 8f);
+            trackRect.offsetMin = new Vector2(UiControlPaint.CompactCueGutter, -4f);
+            trackRect.offsetMax = new Vector2(0f, 4f);
 
             var fillAreaGo = new GameObject("FillArea", typeof(RectTransform));
             fillAreaGo.transform.SetParent(sliderGo.transform, false);
             fillArea = (RectTransform)fillAreaGo.transform;
             fillArea.anchorMin = new Vector2(0f, 0.5f);
             fillArea.anchorMax = new Vector2(1f, 0.5f);
-            fillArea.offsetMin = new Vector2(6f, -4f);
+            fillArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter + 6f, -4f);
             fillArea.offsetMax = new Vector2(-6f, 4f);
 
             var fillGo = new GameObject("Fill", typeof(RectTransform));
@@ -83,7 +85,7 @@ namespace TopiaForge.Mods.UnityUi
             var handleArea = (RectTransform)handleAreaGo.transform;
             handleArea.anchorMin = new Vector2(0f, 0.5f);
             handleArea.anchorMax = new Vector2(1f, 0.5f);
-            handleArea.offsetMin = new Vector2(8f, 0f);
+            handleArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter + 8f, 0f);
             handleArea.offsetMax = new Vector2(-8f, 0f);
 
             var handleGo = new GameObject("Handle", typeof(RectTransform));
@@ -101,6 +103,7 @@ namespace TopiaForge.Mods.UnityUi
             slider.minValue = min;
             slider.maxValue = max;
             slider.value = initial;
+            cues = TopiaForgeControlCues.Install(slider, (RectTransform)sliderGo.transform, compact: true);
 
             valueLabel = CreateText("Value", FormatValue(initial), TopiaForgeTokens.CaptionSize);
             var valueLayout = valueLabel.gameObject.AddComponent<LayoutElement>();
@@ -144,7 +147,7 @@ namespace TopiaForge.Mods.UnityUi
             declarative = true;
             slider.targetGraphic = track;
             handle.raycastTarget = false;
-            fillArea.offsetMin = new Vector2(0f, -4f);
+            fillArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter, -4f);
             fillArea.offsetMax = new Vector2(-16f, 4f);
             SetEnabled(enabled);
         }
@@ -162,14 +165,18 @@ namespace TopiaForge.Mods.UnityUi
                 handle.color = resolved.Track.Content;
                 label.color = theme.ForegroundOn(UiPaintRole.Surface, slider.interactable ? UiTone.Neutral : UiTone.Muted);
                 valueLabel.color = theme.ForegroundOn(UiPaintRole.Surface, UiTone.Muted);
-                return;
+            }
+            else
+            {
+                track.color = theme.SurfaceSunken;
+                fill.color = theme.Accent;
+                handle.color = theme.SliderHandle;
+                label.color = theme.Text;
+                valueLabel.color = theme.TextMuted;
             }
 
-            track.color = theme.SurfaceSunken;
-            fill.color = theme.Accent;
-            handle.color = theme.SliderHandle;
-            label.color = theme.Text;
-            valueLabel.color = theme.TextMuted;
+            cues.Apply(slider.targetGraphic.color, label.color,
+                theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control, theme.HighContrast);
         }
 
         private void UpdateValueLabel(float next)

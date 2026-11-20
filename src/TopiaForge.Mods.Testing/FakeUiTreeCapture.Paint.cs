@@ -116,31 +116,36 @@ namespace TopiaForge.Mods.Testing
         private void PaintToggle(UiToggle toggle, string path, UiCaptureRect bounds, UiCaptureRect clip)
         {
             PaintHitTarget(path, bounds, clip, toggle.Enabled);
-            surface.TryGetToggleValue(toggle.Id!, out var enabled);
-            var labelBounds = bounds.Inset(48f * layoutScale, 0, 0, 0);
+            surface.TryGetToggleValue(toggle.Id!, out var value);
+            var labelBounds = bounds.Inset(ToggleLabelInset, 0, 0, 0);
             var controlStateNow = State(toggle.Enabled);
             var flags = ControlFlags(toggle.Enabled);
             Text(path, toggle.Id, nameof(UiToggle), labelBounds, clip, toggle.Label, UiTextStyle.Body,
                 toggle.Enabled ? UiTone.Neutral : UiTone.Muted, flags);
             var trackWidth = 40f * layoutScale;
             var trackHeight = 22f * layoutScale;
-            var track = new UiCaptureRect(bounds.X, bounds.Y + (bounds.Height - trackHeight) / 2f, trackWidth, trackHeight);
-            var role = !toggle.Enabled ? UiPaintRole.Sunken : enabled ? UiPaintRole.Primary : UiPaintRole.Selected;
-            var pair = PairFor(role, toggle.Enabled && enabled ? UiTone.Neutral : UiTone.Muted);
-            var draw = StatefulFill(pair, controlStateNow, MarkMinimum, switchControl: true);
+            var track = new UiCaptureRect(bounds.X + UiControlPaint.CompactCueGutter * layoutScale,
+                bounds.Y + (bounds.Height - trackHeight) / 2f, trackWidth, trackHeight);
+            var role = !toggle.Enabled ? UiPaintRole.Sunken : value ? UiPaintRole.Primary : UiPaintRole.Selected;
+            var pair = PairFor(role, toggle.Enabled && value ? UiTone.Neutral : UiTone.Muted);
+            var tints = MarkTints(pair, toggle.Enabled);
+            var draw = StateFill(pair.Fill, controlStateNow, tints);
             Add(path + "/track", null, "ToggleTrack", track, clip, EmptyContent,
                 new UiCaptureNodePaint(null, draw, track.Height / 2f, 0f, 0f, 0f));
 
             var thumbSize = 16f * layoutScale;
             var inset = (trackHeight - thumbSize) / 2f;
-            var thumb = new UiCaptureRect(enabled ? track.Right - thumbSize - inset : track.X + inset,
+            var thumb = new UiCaptureRect(value ? track.Right - thumbSize - inset : track.X + inset,
                 track.Y + inset, thumbSize, thumbSize);
             var markFlags = flags | UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
-            if (enabled) markFlags |= UiCaptureNodeFlags.Selected;
-            var mark = new UiCaptureNodeContent(string.Empty, enabled ? "On" : "Off", 0, 0, markFlags);
+            if (value) markFlags |= UiCaptureNodeFlags.Selected;
+            var mark = new UiCaptureNodeContent(string.Empty, value ? "On" : "Off", 0, 0, markFlags);
             Add(path + "/thumb", null, "ToggleThumb", thumb, clip, mark, new UiCaptureNodePaint(pair.On, draw,
                 thumbSize / 2f, 0f, 0f, 0f));
-            PaintFocus(path, controlStateNow, track, clip, UiPaintRole.Surface);
+            var backdrop = scheme.GetPair(UiPaintRole.Surface);
+            PaintStateCues(path, toggle.Label, controlStateNow, bounds, clip, pair.Fill, tints, backdrop.On, backdrop.Fill,
+                compact: true);
+            PaintFocus(path, controlStateNow, bounds, clip, UiPaintRole.Surface);
         }
 
         private void PaintSlider(UiSlider slider, string path, UiCaptureRect bounds, UiCaptureRect clip)
@@ -151,17 +156,20 @@ namespace TopiaForge.Mods.Testing
             var labelSize = bounds.Width * 0.42f;
             var valueSize = bounds.Width * 0.16f;
             var text = slider.Enabled ? UiTone.Neutral : UiTone.Muted;
-            PaintHitTarget(path, bounds.Inset(labelSize, 0f, valueSize, 0f), clip, slider.Enabled);
+            var body = bounds.Inset(labelSize, 0f, valueSize, 0f);
+            PaintHitTarget(path, body, clip, slider.Enabled);
             Text(path, slider.Id, nameof(UiSlider), new UiCaptureRect(bounds.X, bounds.Y, labelSize, bounds.Height), clip,
                 slider.Label, UiTextStyle.Body, text, flags);
             Text(path + "/value", null, "SliderValue", new UiCaptureRect(bounds.Right - valueSize, bounds.Y, valueSize, bounds.Height), clip,
                 value.ToString("0.##", CultureInfo.InvariantCulture), UiTextStyle.Caption, UiTone.Muted, flags);
 
-            var track = new UiCaptureRect(bounds.X + labelSize, bounds.Y + bounds.Height / 2f - (4f * layoutScale),
-                Math.Max(0, bounds.Width - labelSize - valueSize), 8f * layoutScale);
+            var gutter = UiControlPaint.CompactCueGutter * layoutScale;
+            var track = new UiCaptureRect(body.X + gutter, body.Y + body.Height / 2f - (4f * layoutScale),
+                Math.Max(0f, body.Width - gutter), 8f * layoutScale);
             var fraction = (value - slider.Minimum) / (slider.Maximum - slider.Minimum);
             var pair = UiControlPaint.SliderTrack(scheme, useHudScheme, slider.Enabled, MarkMinimum);
-            var background = StatefulFill(pair, state, MarkMinimum, switchControl: true);
+            var tints = MarkTints(pair, slider.Enabled);
+            var background = StateFill(pair.Fill, state, tints);
             Add(path + "/track", null, "Track", track, clip, EmptyContent,
                 new UiCaptureNodePaint(null, background, track.Height / 2f, 0f, 0f, 0f));
             var size = Math.Min(track.Width, 16f * layoutScale);
@@ -177,8 +185,15 @@ namespace TopiaForge.Mods.Testing
             Add(path + "/thumb", null, "SliderThumb", thumb, clip,
                 new UiCaptureNodeContent(string.Empty, slider.Label, 0, 0, flags | UiCaptureNodeFlags.SemanticMark),
                 new UiCaptureNodePaint(pair.On, background, size / 2f, 0f, 0f, 0f));
-            PaintFocus(path, state, bounds, clip, UiPaintRole.Surface);
+            var backdrop = scheme.GetPair(UiPaintRole.Surface);
+            PaintStateCues(path, slider.Label, state, body, clip, pair.Fill, tints, backdrop.On, backdrop.Fill, compact: true);
+            PaintFocus(path, state, body, clip, UiPaintRole.Surface);
         }
+
+        private UiThemeStateTints MarkTints(UiThemePair pair, bool enabled) => enabled
+            ? UiThemeColors.ResolveTints(pair, MarkMinimum, UiThemeColors.ControlHighlighted,
+                UiThemeColors.ControlHighlighted, UiThemeColors.ControlPressed)
+            : new UiThemeStateTints(1f, 1f, 1f);
 
         private void PaintField(string path, string? id, string kind, UiCaptureRect bounds, UiCaptureRect clip,
             string label, string value, bool enabled, bool muted)
@@ -191,9 +206,12 @@ namespace TopiaForge.Mods.Testing
             var field = bounds.Inset(0, captionHeight + LabelGap, 0, 0);
             PaintHitTarget(path, field, clip, enabled);
             var pair = PairFor(UiPaintRole.Sunken, muted || !enabled ? UiTone.Muted : UiTone.Neutral);
-            var fill = StatefulFill(pair, state, TextMinimum, switchControl: false);
+            var tints = UiThemeColors.ResolveTints(pair, TextMinimum, UiThemeColors.ButtonHovered,
+                UiThemeColors.ButtonSelected, UiThemeColors.ButtonPressed);
+            var fill = StateFill(pair.Fill, state, tints);
             Add(path + "/value", null, "FieldValue", field, clip, TextContent(value, UiTextStyle.Body, flags, label),
                 new UiCaptureNodePaint(pair.On, fill, theme.Descriptor.Shape.Control * layoutScale, BorderWidth(true), 0f, 0f));
+            PaintStateCues(path, label, state, field, clip, pair.Fill, tints, pair.On, fill);
             PaintFocus(path, state, field, clip, UiPaintRole.Surface);
         }
 

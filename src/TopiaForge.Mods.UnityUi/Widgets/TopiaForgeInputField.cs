@@ -16,6 +16,7 @@ namespace TopiaForge.Mods.UnityUi
     public sealed class TopiaForgeInputField : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private readonly TopiaForgeTextInput input;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage focusRing;
@@ -55,6 +56,7 @@ namespace TopiaForge.Mods.UnityUi
             input = Go.AddComponent<TopiaForgeTextInput>();
             Go.AddComponent<TopiaForgeTextEntry>();
             input.targetGraphic = fill;
+            cues = TopiaForgeControlCues.Install(input, Rect);
             input.textViewport = areaRect;
             input.textComponent = textComponent;
             input.placeholder = placeholderComponent;
@@ -240,6 +242,8 @@ namespace TopiaForge.Mods.UnityUi
             ring.enabled = !focused;
             textComponent.color = theme.ForegroundOn(UiPaintRole.Sunken, enabled ? UiTone.Neutral : UiTone.Muted);
             placeholderComponent.color = theme.ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
+            cues.Apply(fill.color, paint?.Content ?? textComponent.color,
+                theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control, theme.HighContrast);
             if (searchIcon != null)
             {
                 searchIcon.color = theme.ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);

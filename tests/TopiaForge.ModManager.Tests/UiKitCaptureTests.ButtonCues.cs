@@ -11,6 +11,9 @@ namespace TopiaForge.ModManager.Tests
         {
             ButtonCuesSurviveColorQuantization();
             NativeButtonCueTransitionsStayIndependent();
+            FieldsAndRowsUseQuantizedCues();
+            NativeNonButtonCuesUseActualTargets();
+            VerifyCompactCues();
         }
 
         private static void ButtonCuesSurviveColorQuantization()

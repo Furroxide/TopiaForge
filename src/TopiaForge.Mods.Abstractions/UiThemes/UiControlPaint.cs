@@ -16,6 +16,10 @@ namespace TopiaForge.Mods
         internal const float ButtonSelectionLeft = 8f;
         internal const float ButtonSelectionTop = 12f;
         internal const float ButtonPressInset = 3f;
+        internal const float CompactCueGutter = 12f;
+        internal const float CompactCueLeading = 4.5f;
+        internal const float CompactCueSideInset = 1f;
+        internal const float CompactCueRadius = 3f;
 
         internal static float ButtonPressStroke(bool highContrast) => highContrast ? 3f : 2f;
 
@@ -39,8 +43,9 @@ namespace TopiaForge.Mods
         {
             var background = scheme.GetPair(UiPaintRole.Sunken).Fill;
             var accent = scheme.GetPair(UiPaintRole.Accent).Fill;
-            var thumb = enabled ? hud ? new UiThemeColor(255, 255, 255) : accent : scheme.Muted;
-            return new UiThemePair(background, UiThemeColors.RepairForeground(thumb, background, minimum));
+            var thumb = enabled ? UiThemeColors.RepairForeground(hud ? new UiThemeColor(255, 255, 255) : accent, background, minimum)
+                : scheme.ResolveForeground(UiTone.Muted, UiPaintRole.Sunken);
+            return new UiThemePair(background, thumb);
         }
 
         internal static UiThemeColor SliderFill(UiThemeScheme scheme, UiThemeColor track, double minimum) =>

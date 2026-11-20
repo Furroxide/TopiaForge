@@ -393,9 +393,10 @@ menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay H
 
 ### Native Gallery capture
 
-When two button fills round to the same drawn color, the kit can show a separate
-selection or press mark. Selection uses a three-unit leading bar when its fill
-matches rest. Press uses an inset outline when its fill matches hover or rest.
+When a control's state fills round to the same drawn color, the kit shows a
+separate selection or press mark. Selection uses a three-unit leading bar when
+its fill matches rest. Press uses an inset outline when its fill matches hover
+or rest. Switches and sliders reserve space beside their track for both marks.
 The marks stay visible with reduced motion, and the focus ring and hit area
 retain their own geometry.
 

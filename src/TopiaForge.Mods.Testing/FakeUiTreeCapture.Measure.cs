@@ -7,6 +7,7 @@ namespace TopiaForge.Mods.Testing
     {
         private float ControlHeight => 40f * layoutScale;
         private float LabelGap => 4f * layoutScale;
+        private float ToggleLabelInset => (48f + UiControlPaint.CompactCueGutter) * layoutScale;
 
         private Size Measure(UiNode node, float width, bool wrap = true)
         {
@@ -28,7 +29,7 @@ namespace TopiaForge.Mods.Testing
                 case UiDropdown dropdown:
                     return MeasureLabeledControl(dropdown.Label, width);
                 case UiToggle toggle:
-                    var toggleLabel = MeasureText(toggle.Label, UiTextStyle.Body, Math.Max(0, width - 48f * layoutScale));
+                    var toggleLabel = MeasureText(toggle.Label, UiTextStyle.Body, Math.Max(0f, width - ToggleLabelInset));
                     return new Size(width, Math.Max(ControlHeight, toggleLabel.Height));
                 case UiSlider slider:
                     var sliderLabel = MeasureText(slider.Label, UiTextStyle.Body, width * 0.42f);

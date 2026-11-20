@@ -19,6 +19,7 @@ namespace TopiaForge.Mods.UnityUi
         private const float ThumbSize = 16f;
 
         private readonly Toggle toggle;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage track;
         private readonly UImage? thumb;
         private readonly UImage? box;
@@ -35,6 +36,7 @@ namespace TopiaForge.Mods.UnityUi
             checkbox = asCheckbox;
             value = initialValue;
             TopiaForgeLayout.ApplyRow(Go, TopiaForgeGap.Sm, TopiaForgeGap.None);
+            Go.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset((int)UiControlPaint.CompactCueGutter, 0, 0, 0);
             this.FixedHeight(TopiaForgeTokens.ControlSmHeight);
             var hitArea = Go.AddComponent<UImage>();
             hitArea.color = Color.clear;
@@ -102,6 +104,7 @@ namespace TopiaForge.Mods.UnityUi
             toggle = Go.AddComponent<Toggle>();
             toggle.targetGraphic = track;
             toggle.isOn = value;
+            cues = TopiaForgeControlCues.Install(toggle, Rect, compact: true);
             toggle.onValueChanged.AddListener(next =>
             {
                 if (value == next)
@@ -187,6 +190,8 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             label.color = theme.ForegroundOn(UiPaintRole.Surface, enabled ? UiTone.Neutral : UiTone.Muted);
+            cues.Apply(track.color, label.color, theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control,
+                theme.HighContrast);
         }
 
         private static ColorBlock DefaultTints(ColorBlock block)

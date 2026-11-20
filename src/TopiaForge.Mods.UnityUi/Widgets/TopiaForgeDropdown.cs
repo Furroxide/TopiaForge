@@ -15,6 +15,7 @@ namespace TopiaForge.Mods.UnityUi
     public sealed class TopiaForgeDropdown : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private readonly TopiaForgeTmpDropdown dropdown;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage chevron;
@@ -106,13 +107,13 @@ namespace TopiaForge.Mods.UnityUi
             checkRect.anchorMin = new Vector2(0f, 0.5f);
             checkRect.anchorMax = new Vector2(0f, 0.5f);
             checkRect.pivot = new Vector2(0f, 0.5f);
-            checkRect.anchoredPosition = new Vector2(8f, 0f);
+            checkRect.anchoredPosition = new Vector2(16f, 0f);
             checkRect.sizeDelta = new Vector2(14f, 14f);
 
             var itemLabelGo = new GameObject("Item Label", typeof(RectTransform));
             itemLabelGo.transform.SetParent(itemGo.transform, false);
             itemLabel = CreateTmp(itemLabelGo);
-            TopiaForgeAnchors.Stretch((RectTransform)itemLabelGo.transform, 28f, 2f, 8f, 2f);
+            TopiaForgeAnchors.Stretch((RectTransform)itemLabelGo.transform, 36f, 2f, 8f, 2f);
 
             itemToggle.targetGraphic = itemBackground;
             itemToggle.graphic = checkmark;
@@ -130,6 +131,7 @@ namespace TopiaForge.Mods.UnityUi
             dropdown = Go.AddComponent<TopiaForgeTmpDropdown>();
             dropdown.ConfigureSortingOrders(PopupOrders.Blocker, PopupOrders.List);
             dropdown.targetGraphic = fill;
+            cues = TopiaForgeControlCues.Install(dropdown, Rect);
             dropdown.template = templateRect;
             dropdown.captionText = caption;
             dropdown.itemText = itemLabel;
@@ -207,6 +209,9 @@ namespace TopiaForge.Mods.UnityUi
             itemBackground.color = item?.Fill ?? theme.SelectedTint;
             checkmark.color = item?.Content ?? theme.Primary;
             itemLabel.color = item?.Content ?? theme.Text;
+            var shape = (theme.Descriptor ?? UiThemePackParser.Default).Shape;
+            cues.Apply(fill.color, caption.color, shape.Control, theme.HighContrast);
+            dropdown.ConfigureItemCues(shape.Small, theme.HighContrast);
         }
 
         private static ColorBlock WithLabelTints(TopiaForgeFillPaint paint, ColorBlock colors)
@@ -257,6 +262,23 @@ namespace TopiaForge.Mods.UnityUi
             private GameObject? list;
             private int blockerSortingOrder;
             private int listSortingOrder;
+            private float itemRadius;
+            private bool highContrast;
+
+            internal void ConfigureItemCues(float radius, bool contrast)
+            {
+                itemRadius = radius;
+                highContrast = contrast;
+            }
+
+            protected override DropdownItem CreateItem(DropdownItem itemTemplate)
+            {
+                var item = base.CreateItem(itemTemplate);
+                var fill = item.toggle.targetGraphic;
+                var cues = TopiaForgeControlCues.Install(item.toggle, fill.rectTransform);
+                cues.Apply(fill.color, item.text.color, itemRadius, highContrast);
+                return item;
+            }
 
             public void ConfigureSortingOrders(int blockerOrder, int listOrder)
             {
