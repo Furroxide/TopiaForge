@@ -76,7 +76,8 @@ namespace TopiaForge.Mods
             if (depth > MaximumDepth) throw Invalid(path, "A UI composition cannot be deeper than 32 levels.");
             var currentPath = path.Slice(0, depth - 1);
             if (++count > MaximumNodes) throw Invalid(currentPath, "A UI composition cannot contain more than 4096 nodes.");
-            if (node.Id != null && !ids.Add(node.Id)) throw Invalid(currentPath, "A UI composition contains a duplicate node id.");
+            if (node.Id != null && !ids.Add(node.Id))
+                throw Invalid(currentPath, "A UI composition contains duplicate control id '" + node.Id + "'.");
             if ((node is UiExpanded || node is UiSpacer) && parent is not (UiRow or UiColumn))
                 throw Invalid(currentPath, "Expanded and Spacer require an immediate Row or Column parent.");
             if (node is UiPositioned && parent is not UiStack)
