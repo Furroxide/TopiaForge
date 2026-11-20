@@ -22,7 +22,9 @@ namespace TopiaForge.Mods
             var height = heightAt(width);
             var preferred = UiHudViewport.AtPivot(dock.X, dock.Y, dock.PivotX, dock.PivotY, new UiLayoutExtent(width, height));
             if (TryPlace(viewport, preferred, occupied, peerGap, out result)) return true;
-            return TryPlaceNarrower(viewport, width, occupied, heightAt, out result);
+            // A longer title may fit a wide opening with less vertical space.
+            return TryPlaceOpenings(viewport, width, occupied, heightAt, out result) ||
+                (width < viewport.Width && TryPlaceOpenings(viewport, viewport.Width, occupied, heightAt, out result));
         }
 
         internal static bool TryPlace(UiLayoutRect viewport, UiLayoutRect preferred, IReadOnlyList<UiLayoutRect> occupied,
@@ -69,7 +71,7 @@ namespace TopiaForge.Mods
             return false;
         }
 
-        private static bool TryPlaceNarrower(UiLayoutRect viewport, double preferredWidth, IReadOnlyList<UiLayoutRect> occupied,
+        private static bool TryPlaceOpenings(UiLayoutRect viewport, double maximumWidth, IReadOnlyList<UiLayoutRect> occupied,
             Func<double, double> heightAt, out UiLayoutRect result)
         {
             var best = default(UiLayoutRect);
@@ -107,7 +109,7 @@ namespace TopiaForge.Mods
                     BlockSpan(blocked, barrier.X, barrier.Right);
                 }
                 CheckOpenings(top, viewport.Bottom);
-                if (best.Width == preferredWidth) break;
+                if (best.Width == maximumWidth) break;
             }
             result = best;
             return result.HasArea;
@@ -125,7 +127,7 @@ namespace TopiaForge.Mods
 
             void CheckWidth(double left, double right, double top, double bottom)
             {
-                var width = Math.Min(preferredWidth, right - left);
+                var width = Math.Min(maximumWidth, right - left);
                 if (width <= best.Width) return;
                 if (!heights.TryGetValue(width, out var height))
                 {
