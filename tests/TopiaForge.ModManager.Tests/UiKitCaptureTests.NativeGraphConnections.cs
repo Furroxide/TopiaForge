@@ -159,10 +159,11 @@ namespace TopiaForge.ModManager.Tests
                         Require(second.GetComponent<TopiaForgeControlCues>() is { Applied: true, AuthoredSelectionCue: true } &&
                             first.GetComponent<TopiaForgeControlCues>() is { AuthoredSelectionCue: false },
                             "The authored edge stays marked while focus moves to Remove and the old row is deselected.");
+                        TopiaForgeCallbacks.LastOwner = null;
                         chrome.RemoveControl.Button.OnSubmit(new BaseEventData());
-                        Require(ownerEvents.SequenceEqual(new[] { "list:a" }) && chrome.SelectedEdgeId == "z" &&
-                            EventSystem.current.currentSelectedGameObject == first.gameObject,
-                            "Remove routes the exact edge once and restores focus to the surviving row.");
+                        Require(ownerEvents.SequenceEqual(new[] { "list:a" }) && TopiaForgeCallbacks.LastOwner == "example.graphs" &&
+                            chrome.SelectedEdgeId == "z" && EventSystem.current.currentSelectedGameObject == first.gameObject,
+                            "Remove routes the exact edge once under its owner's action and restores focus to the surviving row.");
                         first.OnMove(new AxisEventData(MoveDirection.Right));
                         chrome.RemoveControl.Button.OnSubmit(new BaseEventData());
                         Require(ownerEvents.SequenceEqual(new[] { "list:a", "list:z" }) && !chrome.IsOpen &&
