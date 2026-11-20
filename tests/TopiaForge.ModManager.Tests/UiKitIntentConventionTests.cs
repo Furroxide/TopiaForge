@@ -38,7 +38,9 @@ namespace TopiaForge.ModManager.Tests
             ("TopiaForgeListView.cs", "Refresh(force: false)", "scrolling rebinds rows"),
             ("TopiaForgeKeybindField.cs", "BeginCapture", "the key the player then presses is the action"),
             ("TopiaForgeTableView.Header.cs", "ToggleSort(captured)", "sorting raises no mod callback"),
-            ("TopiaForgeGraphCanvasRuntime.cs", "Select", "the canvas's handlers open the action")
+            ("TopiaForgeGraphCanvasRuntime.cs", "Select", "the canvas's handlers open the action"),
+            ("TopiaForgeGraphPortView.cs", "Select", "the canvas's port handler opens the action"),
+            ("TopiaForgeGraphConnectionControl.cs", "() => action()", "list navigation stays local and Remove forwards to the canvas's edge handler")
         };
 
         public static void Run()
