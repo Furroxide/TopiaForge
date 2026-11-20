@@ -20,9 +20,17 @@ namespace TopiaForge.ModManager
                 return true;
             }
             var bar = launcher.Rect.parent?.parent?.GetComponent<Image>();
-            var caption = UiGraphConnectionLabelPages.LauncherCaption(LocalSize(launcher), launcher.MeasureText);
+            var caption = launcher.DisplayLabel switch
+            {
+                UiGraphConnections.LauncherLabel => UiGraphConnections.LauncherLabel,
+                UiGraphConnections.CompactLauncherLabel => UiGraphConnections.CompactLauncherLabel,
+                _ => string.Empty,
+            };
+            // The layout element and the measured RectTransform store single-precision dimensions.
+            var fits = caption.Length != 0 &&
+                UiGraphConnectionLabelPages.PaintedLauncherCaptionFits(caption, LocalSize(launcher), launcher.MeasureText);
             return bar != null && GraphConnectionControl("/graph-connections", null, "GraphConnectionsAction", launcher,
-                caption, UiGraphConnections.LauncherLabel, ToRgb(EffectiveColor(bar)), connections.IsOpen, labelFits: caption.Length != 0);
+                caption, UiGraphConnections.LauncherLabel, ToRgb(EffectiveColor(bar)), connections.IsOpen, labelFits: fits);
         }
 
         private bool GraphConnectionsList(UiNode fixture, TopiaForgeGraphConnections connections, UiThemeColor? backdrop)

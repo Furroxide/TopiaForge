@@ -68,7 +68,11 @@ namespace TopiaForge.Mods
 
         internal static string LauncherCaption(UiLayoutRect box, Func<string, (double Width, double Height)> measure) =>
             Fits(UiGraphConnections.LauncherLabel, box, measure) ? UiGraphConnections.LauncherLabel :
-            Fits("Links", box, measure) ? "Links" : string.Empty;
+            Fits(UiGraphConnections.CompactLauncherLabel, box, measure) ? UiGraphConnections.CompactLauncherLabel : string.Empty;
+
+        internal static bool PaintedLauncherCaptionFits(string text, UiLayoutRect box,
+            Func<string, (double Width, double Height)> measure) =>
+            Fits(text, box, measure, tolerance: 0.001d);
 
         internal static string RemoveCaption(string full, UiLayoutRect box, Func<string, (double Width, double Height)> measure) =>
             Fits(full, box, measure) ? full : Fits("Remove", box, measure) ? "Remove" : string.Empty;
@@ -146,11 +150,12 @@ namespace TopiaForge.Mods
             return starts.ToArray();
         }
 
-        private static bool Fits(string text, UiLayoutRect box, Func<string, (double Width, double Height)> measure)
+        private static bool Fits(string text, UiLayoutRect box, Func<string, (double Width, double Height)> measure,
+            double tolerance = 0d)
         {
             var size = measure(text);
             return size.Width > 0d && size.Height > 0d &&
-                size.Width <= box.Width - HorizontalInset * 2 && size.Height <= box.Height;
+                size.Width <= box.Width - HorizontalInset * 2 + tolerance && size.Height <= box.Height + tolerance;
         }
     }
 }
