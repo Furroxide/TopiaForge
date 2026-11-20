@@ -25,14 +25,22 @@ internal static class Program
         try
         {
             var packageRoot = Path.GetFullPath(args[args.Length - 1]);
-            if (!Directory.Exists(packageRoot))
+            try
+            {
+                packageRoot = PathSafety.RequireOrdinaryDirectory(packageRoot);
+            }
+            catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
             {
                 Console.Error.WriteLine(ErrorCode + ": package directory does not exist: " + packageRoot);
                 return 2;
             }
 
-            var manifestPath = Path.Combine(packageRoot, "topiaforge.mod.json");
-            if (!File.Exists(manifestPath))
+            string manifestPath;
+            try
+            {
+                manifestPath = PathSafety.RequireOrdinaryPackageFile(packageRoot, "topiaforge.mod.json");
+            }
+            catch (FileNotFoundException)
             {
                 Console.Error.WriteLine(ErrorCode + ": package manifest does not exist.");
                 return 1;

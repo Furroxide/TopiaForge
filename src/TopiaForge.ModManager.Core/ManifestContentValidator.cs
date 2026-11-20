@@ -208,40 +208,12 @@ namespace TopiaForge.ModManager.Core
             error = string.Empty;
             try
             {
-                var root = Path.GetFullPath(packageRoot);
-                var rootAttributes = File.GetAttributes(root);
-                if ((rootAttributes & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Device)) !=
-                    FileAttributes.Directory)
-                {
-                    error = "package root is not an ordinary directory";
-                    return false;
-                }
-
-                var current = root;
-                var segments = portablePath.Split('/');
-                for (var index = 0; index < segments.Length; index++)
-                {
-                    current = PathSafety.CombineRelativeChild(current, segments[index]);
-                    var attributes = File.GetAttributes(current);
-                    if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Device)) != 0)
-                    {
-                        error = "path contains a link or special entry";
-                        return false;
-                    }
-
-                    var isLast = index == segments.Length - 1;
-                    if (isLast == ((attributes & FileAttributes.Directory) != 0))
-                    {
-                        error = isLast ? "path names a directory" : "parent path is not a directory";
-                        return false;
-                    }
-                }
-
-                fullPath = current;
+                fullPath = PathSafety.RequireOrdinaryPackageFile(packageRoot, portablePath);
                 return true;
             }
             catch (Exception exception) when (
                 exception is IOException ||
+                exception is InvalidDataException ||
                 exception is UnauthorizedAccessException ||
                 exception is ArgumentException ||
                 exception is InvalidOperationException ||

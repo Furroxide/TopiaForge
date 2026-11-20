@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("TopiaForge.ModManager.Tests")]
 [assembly: InternalsVisibleTo("TopiaForge.ModManager")]
+[assembly: InternalsVisibleTo("TopiaForge.ModPackageValidator")]
 [assembly: InternalsVisibleTo("TopiaForge.GameCompat.Extractor")]
 
 // The multiplayer realm rules and network profiles (Multiplayer/): the ModRuntime harness implements the gameplay factory
