@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
             var files = new[]
             {
                 widgets + "TopiaForgeGraphConnections.cs",
+                widgets + "TopiaForgeGraphConnections.Rows.cs",
                 widgets + "TopiaForgeGraphConnectionControl.cs",
                 widgets + "TopiaForgeGraphCanvas.Connections.cs",
                 "src/TopiaForge.ModManager/UnityUiSurface.Connections.cs",
@@ -60,9 +61,11 @@ namespace TopiaForge.ModManager.Tests
             using System;
             using System.Collections.Generic;
             using System.Linq;
+            using System.Reflection;
             using TopiaForge.Mods;
             using TopiaForge.Mods.UnityUi;
             using TopiaForge.TestSupport;
+            using TMPro;
             using UnityEngine;
             using UnityEngine.EventSystems;
             using UnityEngine.UI;
@@ -73,6 +76,8 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public static void ProbeGraphConnections()
                     {
+                        CheckLongLabels(1f);
+                        CheckLongLabels(2f);
                         TopiaForgeResolvedTheme.CollapseGraphColors = true;
                         var owner = new UiHost();
                         var window = new TopiaForgeWindow(owner);
@@ -109,7 +114,17 @@ namespace TopiaForge.ModManager.Tests
                         chrome.Launcher.Button.OnSubmit(new BaseEventData());
                         Require(chrome.ActiveGraph?.Id == "second",
                             "The focused second graph wins while the first graph also has actionable edges.");
-                        ((ITopiaForgeDismissable)chrome).Dismiss();
+                        var titleHeight = window.TitleBar.EnsureLayoutElement().preferredHeight;
+                        surface.SuspendForNotice();
+                        surface.Refresh();
+                        chrome.RemoveControl.Button.OnSubmit(new BaseEventData());
+                        Require(!chrome.IsOpen && !chrome.Launcher.Button.gameObject.activeInHierarchy &&
+                            right.ConnectionList == null && left.ConnectionList == null && ownerEvents.Count == 0 &&
+                            window.TitleBar.EnsureLayoutElement().preferredHeight == titleHeight,
+                            "A layout notice retires the Connections chrome and refuses the old Remove action.");
+                        surface.RestoreFromNotice();
+                        Require(ReferenceEquals(chrome, surface.Connections) && chrome.Launcher.Button.gameObject.activeInHierarchy,
+                            "Layout recovery restores the launcher using the same controller.");
 
                         left.Header.Select();
                         chrome.Launcher.Button.Select();
@@ -187,6 +202,70 @@ namespace TopiaForge.ModManager.Tests
 
                     }
 
+                    private static void CheckLongLabels(float scale)
+                    {
+                        var owner = new UiHost { EffectiveUiScale = scale };
+                        var window = new TopiaForgeWindow(owner);
+                        window.Content.Rect.sizeDelta = new Vector2(240f, 220f);
+                        var source = new string('W', 255) + "A";
+                        var port = new string('M', 255) + "B";
+                        var target = new string('X', 255) + "C";
+                        var input = new string('Y', 255) + "D";
+                        var removed = new List<string>();
+                        var view = new TopiaForgeGraphCanvas(window.ScrollContent, new UiGraphCanvas("maximal", new[]
+                        {
+                            new UiGraphNode("s", "relay", source, new Vec2(-90, 30),
+                                new[] { new UiGraphPort("out", port, UiGraphPortDirection.Output) }),
+                            new UiGraphNode("a", "relay", target, new Vec2(90, -30),
+                                new[] { new UiGraphPort("in", input, UiGraphPortDirection.Input) }),
+                            new UiGraphNode("b", "relay", "Beta station", new Vec2(90, 30),
+                                new[] { new UiGraphPort("in", "Input", UiGraphPortDirection.Input) }),
+                        }, new[]
+                        {
+                            new UiGraphEdge("alpha", "s", "out", "a", "in"),
+                            new UiGraphEdge("beta", "s", "out", "b", "in"),
+                        }, _ => { }, height: 176f, connectionRemoved: removed.Add));
+                        var surface = new UnityUiSurface(window, new Dictionary<string, TopiaForgeGraphCanvas> { ["maximal"] = view });
+                        surface.Refresh();
+                        var chrome = surface.Connections!;
+                        var frame = window.TitleBar.Go.GetComponent<TopiaForgeGraphConnectionsFrame>()!;
+                        var tick = (Action)typeof(TopiaForgeGraphConnectionsFrame).GetMethod("LateUpdate",
+                            BindingFlags.Instance | BindingFlags.NonPublic)!.CreateDelegate(typeof(Action), frame);
+                        tick();
+                        chrome.Launcher.Button.Select();
+                        chrome.Launcher.Button.OnSubmit(new BaseEventData());
+                        Require(chrome.IsOpen && chrome.Rows.Count == 2, "Both compact authored rows open.");
+                        CheckAperture(chrome, scale);
+                        Require(chrome.Rows[1].DisplayLabel.Contains("Beta station") &&
+                            chrome.RemoveControl.SemanticLabel == "Remove connection from " + source + " / " + port + " to " + target + " / " + input,
+                            "The native compact rows distinguish the shorter target and retain the full selected name.");
+                        var row = chrome.Rows[0];
+                        var label = row.Label;
+                        var display = label.text;
+                        var suffixes = new[] { "A", "B", "C", "D" };
+                        var revealed = new HashSet<string>();
+                        for (var page = 0; page < row.LabelPages; page++)
+                        {
+                            var size = label.GetPreferredValues(label.text, float.PositiveInfinity, 0f);
+                            Require(label.overflowMode == TextOverflowModes.Overflow &&
+                                size.x <= label.rectTransform.rect.width && size.y <= label.rectTransform.rect.height,
+                                "The native widget shows each page within its actual padded label rectangle without ellipsis.");
+                            foreach (var suffix in suffixes)
+                                if (label.text.Contains(suffix)) revealed.Add(suffix);
+                            row.Button.OnSubmit(new BaseEventData());
+                        }
+                        Require(label.text == display && revealed.Count == suffixes.Length &&
+                            chrome.SelectedEdgeId == "alpha" && removed.Count == 0,
+                            "Submitting the selected row reveals both full endpoints, wraps and never removes.");
+                        var bytes = AllocationProbe.Measure("settled native long labels", tick, 4096, 128);
+                        Require(bytes == 0, "The settled native viewport repeats no label measurements or allocations.");
+                        row.Button.OnMove(new AxisEventData(MoveDirection.Down));
+                        chrome.Rows[1].Button.OnMove(new AxisEventData(MoveDirection.Right));
+                        chrome.RemoveControl.Button.OnSubmit(new BaseEventData());
+                        Require(removed.SequenceEqual(new[] { "beta" }), "Only the separate Remove action sends the intended edge.");
+                        surface.Retire();
+                    }
+
                     private static UiGraphCanvas Graph(string id, string source, string target, string[] edges, Action<string> remove) =>
                         new UiGraphCanvas(id, new[]
                         {
@@ -233,6 +312,7 @@ namespace TopiaForge.ModManager.Tests
                         private readonly TopiaForgeWindow? window;
                         private readonly TopiaForgeFullscreenTool? fullscreen = null;
                         private readonly TopiaForgeContainer? compositionParent;
+                        private TopiaForgeContainer? layoutFallback;
                         private readonly IReadOnlyDictionary<string, TopiaForgeGraphCanvas> retainedGraphs;
 
                         internal UnityUiSurface(TopiaForgeWindow window, IReadOnlyDictionary<string, TopiaForgeGraphCanvas> graphs,
@@ -247,6 +327,17 @@ namespace TopiaForge.ModManager.Tests
                         internal TopiaForgeGraphConnections? Connections => graphConnections;
                         internal void Refresh() => SyncGraphConnections();
                         internal void Retire() => ResetGraphConnections(retire: true);
+                        internal void SuspendForNotice()
+                        {
+                            SuspendGraphConnections();
+                            layoutFallback = compositionParent;
+                        }
+                        internal void RestoreFromNotice()
+                        {
+                            layoutFallback = null;
+                            SyncGraphConnections();
+                        }
+                        partial void SuspendGraphConnections();
                         partial void SyncGraphConnections();
                         partial void ResetGraphConnections(bool retire);
                     }

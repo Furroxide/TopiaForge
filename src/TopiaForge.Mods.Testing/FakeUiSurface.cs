@@ -120,7 +120,7 @@ namespace TopiaForge.Mods.Testing
             var next = body ?? string.Empty;
             if (string.Equals(Body, next, StringComparison.Ordinal)) return;
             Body = next;
-            if (HudOverflowText != null) RefreshHudLayoutNotice();
+            if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
         }
 
         /// <summary>Finds a captured node by stable control id.</summary>

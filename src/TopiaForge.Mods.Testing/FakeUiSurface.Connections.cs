@@ -3,6 +3,7 @@ namespace TopiaForge.Mods.Testing
     public sealed partial class FakeUiSurface
     {
         private UiGraphConnections? graphConnections;
+        private UiCaptureViewport? graphConnectionsViewport;
         private string? focusedConnectionGraphId;
         internal UiGraphConnections? GraphConnections => graphConnections;
 
@@ -24,17 +25,33 @@ namespace TopiaForge.Mods.Testing
             graphConnections ??= new UiGraphConnections();
             graphConnections.Bind(graph);
             graphConnections.Resize(rows);
+            graphConnectionsViewport = viewport;
             return true;
         }
 
-        internal void CloseGraphConnections() => graphConnections?.Bind(null);
+        internal void CloseGraphConnections()
+        {
+            graphConnections?.Bind(null);
+            graphConnectionsViewport = null;
+        }
 
-        internal bool MoveGraphConnection(int step) => graphConnections?.Move(step) == true;
+        internal bool MoveGraphConnection(int step) => CanUseGraphConnections() && graphConnections!.Move(step);
+
+        internal bool AdvanceGraphConnectionLabel(UiCaptureViewport viewport) =>
+            graphConnections?.AdvanceLabel(FakeUiTreeCapture.SelectedConnectionLabelPages(owner, this, viewport)) == true;
 
         internal OperationResult<bool> RemoveGraphConnectionSelection() =>
-            graphConnections?.Graph is { } graph && graphConnections.Selected is { } edge && IsVisible
+            CanUseGraphConnections() && graphConnections!.Graph is { } graph && graphConnections.Selected is { } edge
                 ? RemoveGraphConnection(graph.Id!, edge.Id)
                 : OperationResult<bool>.Failure(ModErrorCode.InvalidState, "No graph connection is selected.");
+
+        private bool CanUseGraphConnections()
+        {
+            if (!IsVisible || graphConnections?.Graph == null || graphConnectionsViewport is not { } viewport) return false;
+            if (FakeUiTreeCapture.MeasureGraphConnections(owner, this, viewport).Rows > 0) return true;
+            CloseGraphConnections();
+            return false;
+        }
 
         private void RefreshGraphConnections()
         {

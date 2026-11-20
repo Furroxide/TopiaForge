@@ -6,8 +6,7 @@ namespace TopiaForge.Mods.Testing
 
         internal void RefreshHudLayoutNotices()
         {
-            if (lifetime.IsStopping) return;
-            foreach (var surface in surfaces) surface.RefreshHudLayoutNotice();
+            if (!lifetime.IsStopping) FakeUiTreeCapture.RefreshHudNotices(this);
         }
 
         internal void RecordHudOverflow(string message) => toasts.Add(new FakeToast(message, UiTone.Neutral));
@@ -19,13 +18,11 @@ namespace TopiaForge.Mods.Testing
 
         internal string? HudOverflowText { get; }
 
-        internal void RefreshHudLayoutNotice()
+        internal void ApplyHudNoticeFit(bool unfit, bool noticeFits)
         {
-            if (HudOverflowText == null || !IsVisible) return;
-            if (FakeUiTreeCapture.FitsHudContent(owner, this, out var noticeFits))
-                hudOverflowEpisode.Recover();
+            if (!unfit) hudOverflowEpisode.Recover();
             else if (!noticeFits && hudOverflowEpisode.TryQueue())
-                owner.RecordHudOverflow(HudOverflowText);
+                owner.RecordHudOverflow(HudOverflowText!);
         }
     }
 }

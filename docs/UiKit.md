@@ -207,8 +207,9 @@ the node when the canvas supports editing.
 In a local Window or FullscreenTool, use **Connections** to inspect the focused graph's
 edges in their authored order. The list exposes both endpoints and a separate **Remove**
 action for the selected edge. It uses the same removal callback as direct graph picking.
-The kit reuses up to twelve visible rows and restores focus to a remaining row or the graph
-after the author publishes a replacement.
+When a connection label needs more room, activate its row to read the next part of the
+endpoint names. The kit reuses up to twelve visible rows and restores focus to a remaining
+row or the graph after the author publishes a replacement.
 
 A virtual list scrolls its selected row into view when needed and leaves room for the row's focus ring.
 The kit measures every row's title, subtitle and badge with the effective theme's typography.

@@ -48,25 +48,83 @@ namespace TopiaForge.Mods.Testing
             };
         }
 
-        private bool TryPlaceHudNotice(Func<double, double> heightAt, out UiCaptureRect panel)
+        private static List<HudPlacement>? PlanHudNotices(FakeUiService service, UiCaptureViewport viewport)
         {
-            var safe = HudSafeArea();
+            List<HudPlacement>? placements = null;
+            var surfaces = service.Surfaces;
+            for (var index = 0; index < surfaces.Count; index++)
+            {
+                var peer = surfaces[index];
+                if (peer.Request.Kind != UiSurfaceKind.Hud || !peer.IsVisible) continue;
+                var probe = new FakeUiTreeCapture(service, peer, viewport, UiCaptureControlState.Rest, null);
+                (placements ??= new List<HudPlacement>()).Add(new HudPlacement(probe, probe.HudBounds(peer)));
+            }
+
+            if (placements == null) return null;
+            List<UiLayoutRect>? occupied = null;
+            // Keep authored dock reservations for stacking. Solve paint in creation order so that each notice
+            // avoids the rectangles already assigned to earlier peers and the authored slots of the other peers.
+            for (var index = 0; index < placements.Count; index++)
+            {
+                var entry = placements[index];
+                if (entry.Probe.FitsHudContent(entry.Authored)) continue;
+                (occupied ??= new List<UiLayoutRect>(placements.Count - 1)).Clear();
+                for (var peer = 0; peer < placements.Count; peer++)
+                {
+                    if (peer == index) continue;
+                    var region = placements[peer].PaintedOrAuthored;
+                    if (region.HasArea) occupied.Add(region);
+                }
+                var hasNotice = entry.Probe.TryMeasureHudLayoutNotice(entry.Authored, occupied, out var notice);
+                placements[index] = new HudPlacement(entry.Probe, entry.Authored, unfit: true,
+                    notice: hasNotice ? notice : null);
+            }
+            return placements;
+        }
+
+        internal static void RefreshHudNotices(FakeUiService service)
+        {
+            var placements = PlanHudNotices(service, ReferenceViewport);
+            if (placements == null) return;
+            foreach (var entry in placements)
+                entry.Probe.surface.ApplyHudNoticeFit(entry.Unfit, entry.Notice.HasValue);
+        }
+
+        private UiLayoutRect? HudNoticeBounds()
+        {
+            var placements = PlanHudNotices(service, viewport);
+            if (surface.IsVisible && placements != null)
+            {
+                foreach (var entry in placements)
+                    if (ReferenceEquals(entry.Probe.surface, surface)) return entry.Notice;
+            }
+
+            // A hidden surface can still be inspected, but only visible peers reserve screen space.
             var occupied = new List<UiLayoutRect>();
-            foreach (var peer in service.Surfaces)
+            if (placements != null)
             {
-                if (ReferenceEquals(peer, surface) || !peer.IsVisible || peer.Request.Kind != UiSurfaceKind.Hud) continue;
-                occupied.Add(HudBounds(peer));
+                foreach (var entry in placements)
+                    if (entry.PaintedOrAuthored.HasArea) occupied.Add(entry.PaintedOrAuthored);
             }
-            var current = HudBounds(surface);
-            if (UiHudNoticePlacement.TryPlaceMeasured(safe, current, HudDockOrigin(surface, safe),
-                UiHudLayoutNotice.PreferredWidth * layoutScale, occupied, UiHudViewport.SlotGap * layoutScale,
-                heightAt, out var chosen, out _))
+            return TryMeasureHudLayoutNotice(HudBounds(surface), occupied, out var panel) ? panel : null;
+        }
+
+        private readonly struct HudPlacement
+        {
+            internal HudPlacement(FakeUiTreeCapture probe, UiLayoutRect authored, bool unfit = false,
+                UiLayoutRect? notice = null)
             {
-                panel = CaptureRect(chosen);
-                return true;
+                Probe = probe;
+                Authored = authored;
+                Unfit = unfit;
+                Notice = notice;
             }
-            panel = default;
-            return false;
+
+            internal FakeUiTreeCapture Probe { get; }
+            internal UiLayoutRect Authored { get; }
+            internal bool Unfit { get; }
+            internal UiLayoutRect? Notice { get; }
+            internal UiLayoutRect PaintedOrAuthored => Notice ?? Authored;
         }
 
         private void PaintHudLayoutNotice()
@@ -74,7 +132,7 @@ namespace TopiaForge.Mods.Testing
             var kit = UiThemePackParser.Default;
             var pair = kit.SelectScheme(useHudScheme, preferences.HighContrast).GetPair(UiPaintRole.Surface);
             var padding = 12f * layoutScale;
-            if (!TryMeasureHudLayoutNotice(out var panel))
+            if (HudNoticeBounds() is not { } notice)
             {
                 nodes.Add(new UiCapturedNode("/fallback", null, UiHudOverflowNotice.CaptureKind, default,
                     new UiCaptureNodeContent(string.Empty, surface.HudOverflowText!, 0f, 0f, UiCaptureNodeFlags.LayoutDiagnostic),
@@ -82,6 +140,7 @@ namespace TopiaForge.Mods.Testing
                 return;
             }
 
+            var panel = CaptureRect(notice);
             nodes.Insert(0, new UiCapturedNode("/", surface.Id, nameof(UiSurfaceKind.Hud), panel, EmptyContent,
                 new UiCaptureNodePaint(null, pair.Fill), kit.Id, usedFallback: true, isRendered: surface.IsVisible,
                 clipped: false, occluded: false));
@@ -95,11 +154,15 @@ namespace TopiaForge.Mods.Testing
                 new UiCaptureRect(inner.X, inner.Y + titleSize.Height + gap, text.Width, text.Height), pair, fits: true, clipped: false);
         }
 
-        private bool TryMeasureHudLayoutNotice(out UiCaptureRect panel)
+        private bool TryMeasureHudLayoutNotice(UiLayoutRect authored, IReadOnlyList<UiLayoutRect> occupied,
+            out UiLayoutRect panel)
         {
             var kit = UiThemePackParser.Default;
             var padding = 12f * layoutScale;
-            return TryPlaceHudNotice(HeightAt, out panel);
+            var safe = HudSafeArea();
+            return UiHudNoticePlacement.TryPlaceMeasured(safe, authored, HudDockOrigin(surface, safe),
+                UiHudLayoutNotice.PreferredWidth * layoutScale, occupied, UiHudViewport.SlotGap * layoutScale,
+                HeightAt, out panel, out _);
 
             double HeightAt(double outerWidth)
             {
@@ -111,21 +174,18 @@ namespace TopiaForge.Mods.Testing
             }
         }
 
-        internal static bool FitsHudContent(FakeUiService service, FakeUiSurface surface, out bool noticeFits)
+        private bool FitsHudContent(UiLayoutRect authored)
         {
-            var probe = new FakeUiTreeCapture(service, surface, ReferenceViewport, UiCaptureControlState.Rest, null);
             try
             {
-                if (surface.Content is { } content) probe.VerifyComposition(content);
-                else probe.MeasureBodyOnlyHud(probe.SurfaceBounds(), out _, out _);
+                if (surface.Content is { } content) VerifyComposition(content);
+                else MeasureBodyOnlyHud(CaptureRect(authored), out _, out _);
+                return true;
             }
             catch (UiLayoutException)
             {
-                noticeFits = probe.TryMeasureHudLayoutNotice(out _);
                 return false;
             }
-            noticeFits = false;
-            return true;
         }
 
         private void PaintBodyOnlyHud(UiCaptureRect panel, UiCaptureRect clip, UiThemePair surfacePair)

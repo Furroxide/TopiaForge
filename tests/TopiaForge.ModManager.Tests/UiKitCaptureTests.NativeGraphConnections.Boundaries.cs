@@ -212,14 +212,23 @@ namespace TopiaForge.ModManager.Tests
             namespace TMPro
             {
                 public enum TextAlignmentOptions { Left }
+                public enum TextOverflowModes { Ellipsis, Overflow }
                 public sealed class TextMeshProUGUI : Component
                 {
                     public bool richText;
                     public bool parseCtrlCharacters;
                     public string text = string.Empty;
+                    public TextOverflowModes overflowMode = TextOverflowModes.Ellipsis;
                     public int color;
                     public RectTransform rectTransform => (RectTransform)transform;
-                    public Vector2 GetPreferredValues() => new(text.Length * 8f, 18f);
+                    public Vector2 GetPreferredValues() => GetPreferredValues(text, float.PositiveInfinity, 0f);
+                    public Vector2 GetPreferredValues(string display, float availableWidth, float availableHeight)
+                    {
+                        var lines = display.Split('\n');
+                        var length = 0;
+                        foreach (var line in lines) length = Math.Max(length, line.Length);
+                        return new Vector2(length * 8f, lines.Length * 18f);
+                    }
                 }
             }
 
@@ -229,7 +238,7 @@ namespace TopiaForge.ModManager.Tests
 
                 public sealed class UiHost
                 {
-                    public float EffectiveUiScale => 2f;
+                    public float EffectiveUiScale { get; set; } = 2f;
                     public string OwnerId => "example.graphs";
                 }
                 public enum TopiaForgeScheme { Paper }

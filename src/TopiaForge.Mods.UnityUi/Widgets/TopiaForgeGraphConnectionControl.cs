@@ -9,11 +9,15 @@ namespace TopiaForge.Mods.UnityUi
 {
     internal sealed class TopiaForgeGraphConnectionControl
     {
-        private const float LabelInset = 12f;
+        private const float LabelInset = UiGraphConnectionLabelPages.HorizontalInset;
         private readonly TopiaForgeRoundedImage fill;
         private readonly TextMeshProUGUI label;
         private readonly TopiaForgeControlFocus? focus;
         private readonly TopiaForgeControlCues cues;
+        private string? labelSource;
+        private string? labelTarget;
+        private UiLayoutRect labelBox;
+        private UiGraphConnectionLabelPages labelPages;
 
         internal TopiaForgeGraphConnectionControl(TopiaForgeWidget owner, Transform parent, string name, Action action,
             Func<MoveDirection, bool> move)
@@ -35,9 +39,47 @@ namespace TopiaForge.Mods.UnityUi
 
         internal TopiaForgeGraphConnectionButton Button { get; }
         internal RectTransform Rect => fill.rectTransform;
+        internal TextMeshProUGUI Label => label;
         internal string DisplayLabel => label.text;
         internal string SemanticLabel { get; private set; } = string.Empty;
         internal float PreferredWidth => label.GetPreferredValues().x + 2 * LabelInset;
+        internal int LabelPages => labelPages.Count;
+
+        internal void InvalidateLabel() => labelSource = null;
+
+        internal void SetEdge(UiGraphCanvas graph, int index, UiLayoutRect box, int page)
+        {
+            var labels = UiGraphConnections.Labels(graph, graph.Edges[index]);
+            if (labelSource != labels.Source || labelTarget != labels.Target ||
+                labelBox.Width != box.Width || labelBox.Height != box.Height)
+            {
+                labelSource = labels.Source;
+                labelTarget = labels.Target;
+                labelBox = box;
+                SemanticLabel = labels.Full;
+                labelPages = UiGraphConnectionLabelPages.Measure(labels, SemanticLabel, box, MeasureText);
+            }
+
+            ShowLabelPage(page);
+        }
+
+        internal void SetRemoveText(string semantic, UiLayoutRect box)
+        {
+            label.overflowMode = TextOverflowModes.Overflow;
+            SetText(UiGraphConnectionLabelPages.RemoveCaption(semantic, box, MeasureText), semantic);
+        }
+
+        internal void ShowLabelPage(int page)
+        {
+            label.overflowMode = TextOverflowModes.Overflow;
+            SetText(labelPages.Display(page), SemanticLabel);
+        }
+
+        internal (double Width, double Height) MeasureText(string text)
+        {
+            var size = label.GetPreferredValues(text, float.PositiveInfinity, 0f);
+            return (size.x, size.y);
+        }
 
         internal void SetText(string text, string? semanticLabel = null)
         {

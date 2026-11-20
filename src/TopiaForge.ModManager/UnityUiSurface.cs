@@ -277,6 +277,7 @@ namespace TopiaForge.ModManager
 
             partial void SyncGraphConnections();
             partial void ResetGraphConnections(bool retire);
+            partial void SuspendGraphConnections();
 
             private void RefreshRetainedComposition(TopiaForgeContainer root, string clockEpoch)
             {
