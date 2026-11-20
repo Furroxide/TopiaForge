@@ -153,12 +153,12 @@ namespace TopiaForge.ModManager.Tests
 
                         viewport.transform.rect.height = 105f;
                         Require(surface.SetContent(composition).Succeeded && !retained.Go.activeSelf &&
-                            parent.Children.Count == 2 && parent.Rect.anchoredPosition.y == 0f && scroll.MovementStops == 1,
+                            surface.GraphConnectionsSuspended && parent.Children.Count == 2 && parent.Rect.anchoredPosition.y == 0f && scroll.MovementStops == 1,
                             "An aperture-only resize hides the original controls and resets the notice to the viewport start.");
                         viewport.transform.rect.height = 185f;
                         Require(surface.SetContent(composition).Succeeded && retained.Go.activeSelf &&
                             ReferenceEquals(retained, parent.Children.Single()) && parent.Rect.anchoredPosition.y == 170f &&
-                            scroll.MovementStops == 2 && logger.Errors == 0,
+                            !surface.GraphConnectionsSuspended && scroll.MovementStops == 2 && logger.Errors == 0,
                             "The larger aperture restores the original native tree and its saved scroll offset.");
                     }
 

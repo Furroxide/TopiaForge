@@ -271,6 +271,9 @@ namespace TopiaForge.ModManager.Tests
                             ClearLayoutNotice();
                         }
                         private void ClearLayoutNotice() { layoutFallback = null; }
+                        internal bool GraphConnectionsSuspended { get; private set; }
+                        partial void SuspendGraphConnections() => GraphConnectionsSuspended = true;
+                        partial void SyncGraphConnections() => GraphConnectionsSuspended = false;
                         private void UpdateRetainedLayout(TopiaForgeContainer root)
                         {
                             if (outerScroll != null) UpdateNativeRetainedLayout(root);

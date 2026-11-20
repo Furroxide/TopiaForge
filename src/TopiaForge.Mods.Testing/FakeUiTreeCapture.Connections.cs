@@ -2,13 +2,37 @@ namespace TopiaForge.Mods.Testing
 {
     internal sealed partial class FakeUiTreeCapture
     {
-        private const float GraphLabelPadding = 24f;
+        private const float GraphLabelPadding = UiGraphConnectionLabelPages.HorizontalInset * 2;
 
         internal static UiGraphConnectionsViewport MeasureGraphConnections(FakeUiService service, FakeUiSurface surface,
             UiCaptureViewport viewport)
         {
             var capture = new FakeUiTreeCapture(service, surface, viewport, UiCaptureControlState.Rest, null);
-            return capture.ConnectionsAperture(capture.SurfaceBounds());
+            return capture.GraphContentFits() ? capture.ConnectionsAperture(capture.SurfaceBounds()) : default;
+        }
+
+        private bool GraphContentFits()
+        {
+            if (surface.Content is not { } content) return false;
+            try { VerifyComposition(content); }
+            catch (UiLayoutException) { return false; }
+            return true;
+        }
+
+        internal static int SelectedConnectionLabelPages(FakeUiService service, FakeUiSurface surface, UiCaptureViewport viewport)
+        {
+            if (surface.GraphConnections is not { Graph: { } graph, Selected: { } edge }) return 0;
+            var capture = new FakeUiTreeCapture(service, surface, viewport, UiCaptureControlState.Rest, null);
+            var geometry = capture.ConnectionsAperture(capture.SurfaceBounds());
+            if (geometry.Rows == 0) return 0;
+            var labels = UiGraphConnections.Labels(graph, edge);
+            return UiGraphConnectionLabelPages.Measure(labels, labels.Full, geometry.Row(0), capture.MeasureConnectionsText).Count;
+        }
+
+        private (double Width, double Height) MeasureConnectionsText(string value)
+        {
+            var size = MeasureText(value, UiTextStyle.Label, float.PositiveInfinity, wrap: false);
+            return (size.Width / layoutScale, size.Height / layoutScale);
         }
 
         private UiGraphConnectionsViewport ConnectionsAperture(UiCaptureRect bounds) =>
@@ -17,7 +41,7 @@ namespace TopiaForge.Mods.Testing
 
         private bool PaintGraphConnections(UiCaptureRect bounds, UiCaptureRect clip, UiThemeColor? background)
         {
-            if (surface.FirstGraphWithConnections == null) return false;
+            if (surface.FirstGraphWithConnections == null || !GraphContentFits()) return false;
             var scale = layoutScale;
             var label = UiGraphConnections.LauncherLabel;
             var textWidth = MeasureText(label, UiTextStyle.Label, float.PositiveInfinity, wrap: false).Width;
@@ -43,25 +67,34 @@ namespace TopiaForge.Mods.Testing
             var first = UiGraphConnections.Reveal(model.SelectedIndex, model.First, geometry.Rows, model.Count);
             var count = System.Math.Min(geometry.Rows, model.Count);
             var selectedLabel = string.Empty;
+            var selectedFits = false;
             for (var slot = 0; slot < count; slot++)
             {
                 var index = first + slot;
                 var edge = graph.Edges[index];
-                var rowLabel = UiGraphConnections.RowLabel(graph, edge);
+                var labels = UiGraphConnections.Labels(graph, edge);
+                var full = labels.Full;
                 var selected = index == model.SelectedIndex;
-                if (selected) selectedLabel = rowLabel;
-                PaintGraphConnectionControl(ChildPath("/0", slot), edge.Id, "GraphConnectionRow", rowLabel, rowLabel,
-                    Place(geometry.Row(slot)), paneClip, UiPaintRole.Surface, enabled: true, selected,
-                    selected && controlState != UiCaptureControlState.Pressed ? controlState : UiCaptureControlState.Rest);
+                var row = geometry.Row(slot);
+                var pages = UiGraphConnectionLabelPages.Measure(labels, full, row, MeasureConnectionsText);
+                if (selected)
+                {
+                    selectedLabel = full;
+                    selectedFits = pages.Count != 0;
+                }
+
+                PaintGraphConnectionControl(ChildPath("/0", slot), edge.Id, "GraphConnectionRow",
+                    pages.Display(selected ? model.LabelPage : 0), full, Place(row), paneClip, UiPaintRole.Surface,
+                    enabled: true, selected, selected && controlState != UiCaptureControlState.Pressed ? controlState : UiCaptureControlState.Rest,
+                    labelFits: pages.Count != 0);
             }
 
             var removeLabel = UiGraphConnections.RemovePrefix + selectedLabel;
-            var remove = Place(geometry.Remove);
-            var removeTextWidth = MeasureText(removeLabel, UiTextStyle.Label, float.PositiveInfinity, wrap: false).Width;
-            var removeText = removeTextWidth + GraphLabelPadding * scale > remove.Width ? "Remove" : removeLabel;
-            PaintGraphConnectionControl("/0/remove", model.Selected?.Id, "GraphConnectionRemove", removeText, removeLabel,
-                remove, paneClip, UiPaintRole.Surface, enabled: true, selected: false,
-                controlState == UiCaptureControlState.Pressed ? controlState : UiCaptureControlState.Rest);
+            var remove = geometry.Remove;
+            var caption = UiGraphConnectionLabelPages.RemoveCaption(removeLabel, remove, MeasureConnectionsText);
+            PaintGraphConnectionControl("/0/remove", model.Selected?.Id, "GraphConnectionRemove", caption, removeLabel,
+                Place(remove), paneClip, UiPaintRole.Surface, enabled: selectedFits && caption.Length != 0, selected: false,
+                controlState == UiCaptureControlState.Pressed ? controlState : UiCaptureControlState.Rest, labelFits: caption.Length != 0);
             return true;
 
             UiCaptureRect Place(UiLayoutRect rect) =>
@@ -70,7 +103,8 @@ namespace TopiaForge.Mods.Testing
         }
 
         private void PaintGraphConnectionControl(string path, string? id, string kind, string text, string label,
-            UiCaptureRect bounds, UiCaptureRect clip, UiPaintRole backing, bool enabled, bool selected, UiCaptureControlState state)
+            UiCaptureRect bounds, UiCaptureRect clip, UiPaintRole backing, bool enabled, bool selected, UiCaptureControlState state,
+            bool labelFits = true)
         {
             var role = !enabled ? UiPaintRole.Sunken : selected ? UiPaintRole.Selected : backing;
             var flags = ControlFlags(enabled) | (selected ? UiCaptureNodeFlags.Selected : UiCaptureNodeFlags.None);
@@ -80,7 +114,8 @@ namespace TopiaForge.Mods.Testing
             var fill = StateFill(pair.Fill, state, tints);
             var authoredSelectionCue = enabled && selected && pair.Fill.Equals(PairFor(backing, UiTone.Neutral).Fill);
             if (authoredSelectionCue) flags |= UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
-            Add(path, id, kind, bounds, clip, TextContent(text, UiTextStyle.Label, flags, label),
+            var labelFlags = labelFits ? flags : flags | UiCaptureNodeFlags.InvalidLayout;
+            Add(path, id, kind, bounds, clip, TextContent(text, UiTextStyle.Label, labelFlags, label),
                 new UiCaptureNodePaint(pair.On, fill, theme.Descriptor.Shape.Control * layoutScale, 0f, 0f, 0f));
             Add(path + "/hit", null, "HitTarget", bounds, clip, StateLabel(flags | UiCaptureNodeFlags.HitTarget, label), default);
             if (enabled)

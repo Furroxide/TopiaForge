@@ -8,7 +8,7 @@ using UnityEngine.UI;
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>One local graph action and pooled connection list for an owning surface.</summary>
-    internal sealed class TopiaForgeGraphConnections : TopiaForgeWidget, ITopiaForgeThemeAware, ITopiaForgeDismissable
+    internal sealed partial class TopiaForgeGraphConnections : TopiaForgeWidget, ITopiaForgeThemeAware, ITopiaForgeDismissable
     {
         private readonly TopiaForgeContainer titleBar;
         private readonly TopiaForgeContainer content;
@@ -32,6 +32,8 @@ namespace TopiaForge.Mods.UnityUi
         private float lastTitleWidth = float.NaN;
         private float launcherTextWidth;
         private bool launcherShown;
+        private bool layoutSuspended;
+        private float suspendedTitleHeight;
 
         internal TopiaForgeGraphConnections(TopiaForgeContainer titleBar, TopiaForgeContainer content, ScrollRect scroll)
             : base(content.Host, content.Scheme, content.CreateChildGameObject("Graph connections list"))
@@ -74,18 +76,22 @@ namespace TopiaForge.Mods.UnityUi
         internal UiGraphCanvas? ActiveGraph => selection.Graph;
         internal int First => selection.First;
         internal string? SelectedEdgeId => selection.Selected?.Id;
+        internal int LabelPage => selection.LabelPage;
 
-        internal void Bind(IReadOnlyDictionary<string, TopiaForgeGraphCanvas> current)
+        internal void Bind(IReadOnlyDictionary<string, TopiaForgeGraphCanvas>? current)
         {
+            if (current == null && !layoutSuspended) suspendedTitleHeight = titleBarSize.preferredHeight;
+            layoutSuspended = current == null;
             if (graphs != null)
             {
                 foreach (var item in graphs)
-                    if (!current.TryGetValue(item.Key, out var next) || next != item.Value)
+                    if (current == null || !current.TryGetValue(item.Key, out var next) || next != item.Value)
                         item.Value.ConnectionList = null;
             }
 
             graphs = current;
-            foreach (var item in current) item.Value.ConnectionList = this;
+            if (current != null)
+                foreach (var item in current) item.Value.ConnectionList = this;
             if (focusedGraph != null && !IsAdmitted(focusedGraph))
             {
                 focusedGraph = null;
@@ -103,7 +109,7 @@ namespace TopiaForge.Mods.UnityUi
                         if (rowFocused) FocusRow();
                     }
                 }
-                else Close(restoreFocus: true);
+                else Close(restoreFocus: current != null);
             }
 
             RefreshLauncher();
@@ -140,6 +146,7 @@ namespace TopiaForge.Mods.UnityUi
             PaintLauncher(theme);
             launcherTextWidth = launcher.PreferredWidth;
             lastTitleWidth = float.NaN;
+            foreach (var row in rows) row.InvalidateLabel();
             RenderRows();
         }
 
@@ -172,7 +179,9 @@ namespace TopiaForge.Mods.UnityUi
             var height = UiGraphConnectionsViewport.RowSlot;
             var preferred = (float)UiGraphConnectionsViewport.LauncherWidth(width, launcherTextWidth);
             var shown = launcherShown && preferred > 0f;
-            var barHeight = shown ? Math.Max(originalTitleHeight, height) : originalTitleHeight;
+            // Keep the reserved title height until the underlying viewport genuinely recovers.
+            var barHeight = layoutSuspended ? suspendedTitleHeight :
+                shown ? Math.Max(originalTitleHeight, height) : originalTitleHeight;
             titleBarSize.minHeight = titleBarSize.preferredHeight = barHeight;
             if (shown)
             {
@@ -255,51 +264,6 @@ namespace TopiaForge.Mods.UnityUi
             if (rowFocused) FocusRow();
         }
 
-        private void RenderRows()
-        {
-            var graph = selection.Graph;
-            if (graph == null) return;
-            var theme = Theme;
-            var scale = Host.EffectiveUiScale;
-            var count = selection.DrawnRows;
-            while (rows.Count < count)
-            {
-                var slot = rows.Count;
-                Action select = () => SelectRow(slot);
-                var row = new TopiaForgeGraphConnectionControl(this, Go.transform, "Connection row", select, MoveRow);
-                row.Button.Selected = select;
-                rows.Add(row);
-            }
-
-            var selectedLabel = string.Empty;
-            for (var slot = 0; slot < rows.Count; slot++)
-            {
-                var row = rows[slot];
-                var drawn = slot < count;
-                if (row.Button.gameObject.activeSelf != drawn) row.Button.gameObject.SetActive(drawn);
-                if (!drawn) continue;
-                var index = selection.First + slot;
-                var selected = index == selection.SelectedIndex;
-                var label = UiGraphConnections.RowLabel(graph, graph.Edges[index]);
-                if (selected) selectedLabel = label;
-                row.SetText(label);
-                row.Paint(theme, scale, UiPaintRole.Surface, enabled: true, selected: selected);
-                Place(row.Rect, viewport.Row(slot));
-            }
-
-            var removeLabel = UiGraphConnections.RemovePrefix + selectedLabel;
-            remove.SetText(removeLabel);
-            remove.Paint(theme, scale, UiPaintRole.Surface, enabled: count != 0);
-            if (remove.PreferredWidth > viewport.Remove.Width) remove.SetText("Remove", removeLabel);
-            Place(remove.Rect, viewport.Remove);
-        }
-
-        private void SelectRow(int slot)
-        {
-            if (!IsOpen || slot >= selection.DrawnRows) return;
-            if (selection.Select(selection.First + slot)) RenderRows();
-        }
-
         private void FocusRow()
         {
             var slot = selection.SelectedIndex - selection.First;
@@ -315,7 +279,7 @@ namespace TopiaForge.Mods.UnityUi
         private void Remove()
         {
             var graph = activeGraph;
-            if (graph == null || !IsAdmitted(graph) || selection.Selected is not { } edge) return;
+            if (graph == null || !IsAdmitted(graph) || !remove.Button.interactable || selection.Selected is not { } edge) return;
             graph.HandleEdgeSelected(edge.Id);
             if (ReferenceEquals(activeGraph, graph) && EventSystem.current?.currentSelectedGameObject == remove.Button.gameObject)
                 FocusRow();
@@ -333,7 +297,7 @@ namespace TopiaForge.Mods.UnityUi
                     Scroll(1);
                     return true;
                 case MoveDirection.Right:
-                    remove.Button.Select();
+                    if (remove.Button.IsInteractable()) remove.Button.Select();
                     return true;
                 case MoveDirection.Left:
                     launcher.Button.Select();

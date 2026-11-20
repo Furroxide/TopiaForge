@@ -61,6 +61,52 @@ namespace TopiaForge.ModManager.Tests
             static bool HasMark(UiTreeCapture tree, string path) => tree.Nodes.Any(node => node.Path == path && node.IsRendered && !node.Clipped);
         }
 
+        private static void GraphConnectionsYieldToAnUnreachableLayout()
+        {
+            using var lifetime = new FakeModLifetime();
+            var ui = new FakeUiService(lifetime);
+            var fixture = FoundationPages.CreateRequest(FoundationPage.GraphConnections, UiSurfaceKind.Window);
+            var sample = ((UiColumn)fixture.Content!).Children.OfType<UiGraphCanvas>().First();
+            var removed = new List<string>();
+            var graph = new UiGraphCanvas("tall-relay-map", sample.Nodes, sample.Edges, _ => { },
+                height: 464f, connectionRemoved: removed.Add);
+            using var surface = Make(ui, new UiSurfaceRequest("tall-relay-map", "Relay map", "",
+                width: 800f, height: 540f, content: graph));
+            Check(OpenGraphConnections(surface, Viewport) &&
+                surface.Capture(Viewport).Nodes.Any(node => node.Kind == "GraphConnectionRemove" && node.IsRendered),
+                "The original aperture has reachable graph and list controls.");
+            Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: 2f)).Succeeded, "Shrink the available graph aperture.");
+            var blocked = surface.Capture(Viewport);
+            Check(blocked.Nodes.Any(node => node.Kind == "LayoutDiagnostic") &&
+                blocked.Nodes.All(node => node.Kind is not ("GraphConnectionRemove" or "GraphConnectionsAction")),
+                "A kept list cannot mask the underlying viewport diagnostic or continue to expose its launcher.");
+            Check(RemoveGraphConnectionSelection(surface).ErrorCode == ModErrorCode.InvalidState &&
+                !OpenGraphConnections(surface, Viewport) && removed.Count == 0,
+                "Remove and reopening are refused while the retained graph cannot fit.");
+            Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: 1f)).Succeeded &&
+                OpenGraphConnections(surface, Viewport) && RemoveGraphConnectionSelection(surface).Succeeded &&
+                removed.SequenceEqual(new[] { sample.Edges[0].Id }),
+                "A reachable aperture restores the admitted graph and exact owner-scoped action.");
+
+            var shallow = new UiGraphCanvas("inset-relay", sample.Nodes, sample.Edges, _ => { },
+                height: 176f, connectionRemoved: removed.Add);
+            var inset = new UiStack(new UiNode[]
+            {
+                new UiPositioned(shallow, left: 510f, top: 8f, width: 180f, height: 176f),
+            }, width: 720f, height: 204f);
+            using var compact = Make(ui, new UiSurfaceRequest("inset-relay", "Relay map", "",
+                width: 800f, height: 540f, content: inset));
+            var narrow = new UiCaptureViewport(1200, 1080);
+            Check(OpenGraphConnections(compact, narrow) &&
+                ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: 2f)).Succeeded,
+                "Open the same graph before the compact viewer shrinks.");
+            Check(compact.Capture(Viewport).Nodes.All(node => node.Kind != "LayoutDiagnostic") &&
+                compact.Capture(narrow).Nodes.Any(node => node.Kind == "LayoutDiagnostic"),
+                "Only the compact viewer has an unreachable graph.");
+            Check(RemoveGraphConnectionSelection(compact).ErrorCode == ModErrorCode.InvalidState && removed.Count == 1,
+                "Remove uses the viewport that admitted the Connections list.");
+        }
+
         private static void GraphConnectionsAreLocalPooledAndLabelled()
         {
             using var lifetime = new FakeModLifetime();

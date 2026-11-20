@@ -148,12 +148,15 @@ namespace TopiaForge.ModManager
                 catch (UiLayoutException error)
                 {
                     RememberOuterScrollOffset();
+                    SuspendGraphConnections();
                     ShowLayoutFallback(parent, root, error);
                     return;
                 }
+                var recovering = layoutFallback != null;
                 RemoveLayoutFallback();
                 root.SetShown(true);
                 RestoreOuterScrollOffset();
+                if (recovering) SyncGraphConnections();
             }
 
             private void ShowLayoutFallback(TopiaForgeContainer parent, TopiaForgeContainer? root, UiLayoutException error)

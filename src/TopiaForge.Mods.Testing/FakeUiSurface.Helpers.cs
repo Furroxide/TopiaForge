@@ -81,7 +81,7 @@ namespace TopiaForge.Mods.Testing
             graphViewports.Clear();
             CaptureState(content);
             RefreshGraphConnections();
-            if (HudOverflowText != null) RefreshHudLayoutNotice();
+            if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
             return FakeUiThemePackage.Success;
         }
 

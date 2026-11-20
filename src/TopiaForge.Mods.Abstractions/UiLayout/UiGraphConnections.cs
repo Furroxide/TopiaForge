@@ -15,6 +15,7 @@ namespace TopiaForge.Mods
         internal UiGraphCanvas? Graph { get; private set; }
         internal int SelectedIndex { get; private set; } = -1;
         internal int First { get; private set; }
+        internal int LabelPage { get; private set; }
         internal int Count => Graph?.Edges.Count ?? 0;
         internal int DrawnRows => Math.Min(visibleRows, Count);
         internal UiGraphEdge? Selected => SelectedIndex < 0 ? null : Graph!.Edges[SelectedIndex];
@@ -25,6 +26,7 @@ namespace TopiaForge.Mods
         internal bool Bind(UiGraphCanvas? graph)
         {
             if (ReferenceEquals(Graph, graph)) return false;
+            LabelPage = 0;
             var sameGraph = string.Equals(Graph?.Id, graph?.Id, StringComparison.Ordinal);
             var retainedId = sameGraph ? Selected?.Id : null;
             var priorIndex = sameGraph ? SelectedIndex : 0;
@@ -57,6 +59,7 @@ namespace TopiaForge.Mods
         {
             if (index < 0 || index >= Count || index == SelectedIndex) return false;
             SelectedIndex = index;
+            LabelPage = 0;
             Reveal();
             return true;
         }
@@ -82,9 +85,16 @@ namespace TopiaForge.Mods
             return Math.Min(first, Math.Max(0, count - rows));
         }
 
-        internal static string RowLabel(UiGraphCanvas graph, UiGraphEdge edge) =>
-            Endpoint(graph, edge.SourceNodeId, edge.SourcePortId) + " to " +
-            Endpoint(graph, edge.TargetNodeId, edge.TargetPortId);
+        internal bool AdvanceLabel(int pages)
+        {
+            if (pages <= 1) return false;
+            LabelPage = LabelPage >= pages - 1 ? 0 : LabelPage + 1;
+            return true;
+        }
+
+        internal static UiGraphConnectionLabels Labels(UiGraphCanvas graph, UiGraphEdge edge) =>
+            new UiGraphConnectionLabels(Endpoint(graph, edge.SourceNodeId, edge.SourcePortId),
+                Endpoint(graph, edge.TargetNodeId, edge.TargetPortId));
 
         private static string Endpoint(UiGraphCanvas graph, string nodeId, string portId)
         {

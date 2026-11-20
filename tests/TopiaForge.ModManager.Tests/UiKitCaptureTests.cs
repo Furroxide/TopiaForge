@@ -39,7 +39,9 @@ namespace TopiaForge.ModManager.Tests
             NativeControlsUseTheirResolvedRoles();
             GraphPortsHaveIndependentTargetsAndPaint();
             GraphConnectionsAreLocalPooledAndLabelled();
+            GraphConnectionLabelsRevealBothEndpoints();
             GraphConnectionsPaintIndependentCues();
+            GraphConnectionsYieldToAnUnreachableLayout();
             NativeGraphConnectionsUseTheActualControls();
             ListSelectionRevealsPaddedRows();
             VirtualListRowsFitBeforeScrolling();

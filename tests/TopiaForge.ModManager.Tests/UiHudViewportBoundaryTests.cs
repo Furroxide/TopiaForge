@@ -667,6 +667,8 @@ namespace TopiaForge.ModManager.Tests
                         }
                         internal void Refresh() => RefreshChangedLayout();
                         private void RefreshRetainedComposition(TopiaForgeContainer root, string clockEpoch) => UpdateRetainedLayout(root);
+                        private void SuspendGraphConnections() { }
+                        private void SyncGraphConnections() { }
                         internal UiLayoutRect Bounds => OwnerUiService.Bounds(panel);
                         internal UiLayoutException? LayoutFailure => layoutProblem;
                         internal string? NoticeCaption => fallbackTitle?.Go.GetComponent<TMPro.TMP_Text>()?.text;

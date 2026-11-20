@@ -15,7 +15,9 @@ namespace TopiaForge.ModManager.Tests
             BodyOnlyHudRetainsItsBodyAndRecovers();
             BodyOnlyOverflowUsesTheSameEpisode();
             MeasuredNoticeUsesTheNarrowOpening();
-            Console.WriteLine("Fake retained HUD checks passed for body-only admission, SetBody recovery, the 300-unit slot and 4,096 settled calls at 0 B.");
+            StackedNoticesReserveActualPaint();
+            PeerLayoutChangesRefreshOverflowEpisodes();
+            Console.WriteLine("Fake retained HUD checks passed for body-only admission, narrow and stacked notices, peer overflow and settled calls at 0 B.");
         }
 
         private static void BodyOnlyHudRetainsItsBodyAndRecovers()
@@ -120,11 +122,117 @@ namespace TopiaForge.ModManager.Tests
                 "When room opens up, the preferred 360-unit width returns and the extra wrapped line disappears.");
         }
 
+        private static void StackedNoticesReserveActualPaint()
+        {
+            using var lifetime = new FakeModLifetime();
+            var ui = new FakeUiService(lifetime);
+            var body = string.Join(" ", Enumerable.Repeat("Many words", 100));
+            using var first = Create(ui, "first", "A", "", 80f, 54f, UiHudAnchor.TopLeft);
+            using var second = Create(ui, "second", "B", "", 80f, 54f, UiHudAnchor.TopLeft);
+            second.SetBody(body);
+            first.SetBody(body);
+
+            var secondAtNormalScale = NoticePanel(second, Viewport);
+            var firstAtNormalScale = NoticePanel(first, Viewport);
+            Require(firstAtNormalScale is { X: 24f, Y: 148f, Width: 360f, Height: 76f } &&
+                secondAtNormalScale.Width == 360f && secondAtNormalScale.Height == 76f &&
+                !Overlaps(firstAtNormalScale, secondAtNormalScale),
+                "Two 80×54 HUDs reserve the painted 360×76 peer notice without overlapping.");
+            Require(SameBounds(firstAtNormalScale, NoticePanel(first, Viewport)) &&
+                SameBounds(secondAtNormalScale, NoticePanel(second, Viewport)) && ui.Toasts.Count == 0,
+                "Capturing in either order gives the same two positions without enqueueing a toast.");
+
+            second.SetBody("");
+            Require(second.Capture(Viewport).Nodes.Single(node => node.Path == "/") is { X: 24f, Y: 86f, Width: 80f, Height: 54f },
+                "The neighbour's enlarged notice leaves its original 54-unit dock reservation for stacking.");
+            second.SetBody(body);
+
+            Require(ui.ApplyAccessibility(Doubled).Succeeded, "Set doubled UI scale for alternate viewport capture.");
+            var largeViewport = new UiCaptureViewport(2560, 1440);
+            var firstLarge = NoticePanel(first, largeViewport);
+            var secondLarge = NoticePanel(second, largeViewport);
+            Require(firstLarge is { X: 64f, Width: 960f } && !Overlaps(firstLarge, secondLarge) &&
+                !Overlaps(NoticePanel(first, Viewport), NoticePanel(second, Viewport)) &&
+                SameBounds(firstLarge, NoticePanel(first, largeViewport)),
+                "Alternating resolutions produces independent non-overlapping paint at doubled scale.");
+            Require(ui.ApplyAccessibility(UiAccessibilityPreferences.Default).Succeeded, "Restore normal UI scale.");
+
+            first.Hide();
+            Require(NoticePanel(second, Viewport) is { X: 24f, Y: 24f },
+                "Hiding the first HUD releases its paint and its dock reservation.");
+            first.Show();
+            Require(SameBounds(secondAtNormalScale, NoticePanel(second, Viewport)),
+                "Showing the first HUD restores the shared plan in original creation order.");
+            first.Dispose();
+            Require(NoticePanel(second, Viewport) is { X: 24f, Y: 24f } && ui.Toasts.Count == 0,
+                "Retiring an earlier HUD releases both reservations and keeps the other notice visible.");
+
+            for (var count = 0; count < 64; count++) second.SetBody(body);
+            var start = GC.GetAllocatedBytesForCurrentThread();
+            for (var count = 0; count < 4096; count++) second.SetBody(body);
+            Require(GC.GetAllocatedBytesForCurrentThread() == start,
+                "Unchanged body calls on a settled visible fallback allocate 0 B.");
+        }
+
+        private static void PeerLayoutChangesRefreshOverflowEpisodes()
+        {
+            using var context = new FakeModContext(new ModIdentity("example.hud", "Example Pack",
+                SemanticVersion.Parse("1.0.0")));
+            var ui = context.Ui;
+            Require(ui.ApplyAccessibility(Doubled).Succeeded, "Arrange one 360×76 notice opening at doubled scale.");
+            using var right = Create(ui, "filled-right", "Reserved", "", 552f, 492f, UiHudAnchor.TopRight);
+            using var bottom = Create(ui, "filled-bottom", "Reserved", "", 360f, 350f, UiHudAnchor.BottomLeft);
+            using var first = Create(ui, "gameplay", "A", "", 80f, 80f, UiHudAnchor.Left, UiHudVisibility.Gameplay);
+            using var second = Create(ui, "always", "B", "", 80f, 80f, UiHudAnchor.Right);
+            var body = string.Join(" ", Enumerable.Repeat("Many words", 100));
+            first.SetBody(body);
+            second.SetBody(body);
+            Require(!first.IsVisible && NoticePanel(second, Viewport) is { Width: 720f, Height: 152f } && ui.Toasts.Count == 0,
+                "In the menu, only the always-visible HUD reserves the measured notice opening.");
+
+            context.Scenes.Load("TestCity");
+            Require(first.IsVisible && NoticePanel(first, Viewport).Width == 720f &&
+                HasQueuedNotice(second) && ui.Toasts.Count == 1 && ui.Toasts[0].Message == "Example Pack · HUD at right",
+                "Entering gameplay fills the sole slot with the first notice and queues one kit toast for its peer.");
+            first.SetBody("");
+            _ = NoticePanel(second, Viewport);
+            first.SetBody(body);
+            Require(HasQueuedNotice(second) && ui.Toasts.Count == 1,
+                "Changing a peer's body remeasures the notice without repeating the still-unfit HUD's toast.");
+
+            first.SetBody("");
+            second.SetBody("");
+            second.SetBody(body);
+            _ = NoticePanel(second, Viewport);
+            Require(ui.Toasts.Count == 1, "The peer gets a visible notice while the first HUD fits.");
+            first.SetBody(body);
+            Require(HasQueuedNotice(second) && ui.Toasts.Count == 2,
+                "Changing the first HUD to a notice can queue its peer after the peer's earlier unfit episode ended.");
+            context.Scenes.Load("TestCityStartMenu");
+            Require(!first.IsVisible && NoticePanel(second, Viewport).Width == 720f && ui.Toasts.Count == 2,
+                "Leaving gameplay releases its notice and retains the existing overflow history.");
+        }
+
+        private static UiCapturedNode NoticePanel(FakeUiSurface surface, UiCaptureViewport viewport)
+        {
+            var capture = surface.Capture(viewport);
+            Require(capture.Nodes.Any(node => node is { Kind: "LayoutFallback", IsRendered: true, Clipped: false }),
+                "The HUD has a readable retained notice at the selected viewport.");
+            return capture.Nodes.Single(node => node.Path == "/");
+        }
+
+        private static bool HasQueuedNotice(FakeUiSurface surface) => surface.Capture(Viewport).Nodes.Any(node =>
+            node is { Kind: UiHudOverflowNotice.CaptureKind, IsRendered: false, Clipped: false });
+
+        private static bool Overlaps(UiCapturedNode first, UiCapturedNode second) =>
+            first.X < second.X + second.Width && second.X < first.X + first.Width &&
+            first.Y < second.Y + second.Height && second.Y < first.Y + first.Height;
+
         private static FakeUiSurface Create(FakeUiService ui, string id, string title, string body, float width, float height,
-            UiHudAnchor anchor)
+            UiHudAnchor anchor, UiHudVisibility visibility = UiHudVisibility.Always)
         {
             var request = new UiSurfaceRequest(id, title, body, UiSurfaceKind.Hud, width, height)
-                .WithHudAnchor(anchor).WithHudVisibility(UiHudVisibility.Always);
+                .WithHudAnchor(anchor).WithHudVisibility(visibility);
             var created = ui.CreateSurface(request);
             if (created.TryGetValue(out var surface) && surface is FakeUiSurface fake) return fake;
             throw new InvalidOperationException(created.ErrorMessage);

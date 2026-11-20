@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager
 
             partial void SyncGraphConnections()
             {
-                if (remoteComposition || (window == null && fullscreen == null)) return;
+                if (remoteComposition || layoutFallback != null || (window == null && fullscreen == null)) return;
                 if (graphConnections == null)
                 {
                     var actionable = false;
@@ -32,6 +32,8 @@ namespace TopiaForge.ModManager
 
                 graphConnections.Bind(retainedGraphs);
             }
+
+            partial void SuspendGraphConnections() => graphConnections?.Bind(null);
 
             partial void ResetGraphConnections(bool retire)
             {

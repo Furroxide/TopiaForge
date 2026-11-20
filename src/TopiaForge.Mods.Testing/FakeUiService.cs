@@ -252,7 +252,10 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Makes gameplay HUDs follow these fake scenes: shown only while they are in gameplay.</summary>
         internal void FollowScenes(FakeSceneService fakeScenes)
         {
-            scenes = fakeScenes ?? throw new ArgumentNullException(nameof(fakeScenes));
+            if (fakeScenes == null) throw new ArgumentNullException(nameof(fakeScenes));
+            if (scenes != null) scenes.GameplayVisibilityChanged -= RefreshHudLayoutNotices;
+            scenes = fakeScenes;
+            scenes.GameplayVisibilityChanged += RefreshHudLayoutNotices;
         }
 
         private void RemoveSurface(FakeUiSurface surface)
