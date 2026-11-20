@@ -86,7 +86,7 @@ namespace TopiaForge.ModManager.Tests
             var wrap = Find<UiWrap>(decoded, "wrap");
             That(wrap.Spacing == UiSpace.Xs && wrap.RunSpacing == UiSpace.Xl && wrap.Padding.Top == UiSpace.Sm &&
                 wrap.Alignment == UiMainAxisAlignment.SpaceAround && wrap.Children.Single() is UiDivider
-                    { Id: "divider", LineStyle: UiLineStyle.Dashed, Before: UiSpace.Md, After: UiSpace.Xs },
+                { Id: "divider", LineStyle: UiLineStyle.Dashed, Before: UiSpace.Md, After: UiSpace.Xs },
                 "Wrap gaps, insets, alignment and divider fields round-trip.");
             var grid = Find<UiGrid>(decoded, "grid");
             That(grid.MinimumCellWidth == 148.5f && grid.MaximumColumns == 7 && grid.Spacing == UiSpace.Xs &&
@@ -99,8 +99,10 @@ namespace TopiaForge.ModManager.Tests
                 "Box preserves dimensions, fill, id and strict style id.");
             var stack = Find<UiStack>(decoded, "stack");
             That(stack.Width == 220.25f && stack.Height == 160 && stack.Children.Single() is UiPositioned
-                { Id: "placed", Left: 24f, Top: 12.5f, Width: null, Height: 52f, Child: UiSizedBox
-                    { Id: "sized", Width: 80f, Height: null, Child: UiText { Id: "label" } } },
+            {
+                Id: "placed", Left: 24f, Top: 12.5f, Width: null, Height: 52f, Child: UiSizedBox
+                { Id: "sized", Width: 80f, Height: null, Child: UiText { Id: "label" } }
+            },
                 "Stack and positioned retain coordinates and SizedBox's independently null height.");
             That(Bytes(decoded).SequenceEqual(bytes), "Resending decoded nodes is byte-for-byte identical.");
         }

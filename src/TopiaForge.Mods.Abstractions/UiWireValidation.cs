@@ -25,7 +25,8 @@ namespace TopiaForge.Mods
             {
                 case UiText n: Text(n.Text); break;
                 case UiColumn or UiRow or UiScroll or UiSplitPane or UiPadding or UiSizedBox or UiExpanded or UiSpacer or
-                    UiWrap or UiGrid or UiStack or UiPositioned or UiCard or UiDivider or UiBox: break;
+                    UiWrap or UiGrid or UiStack or UiPositioned or UiCard or UiDivider or UiBox:
+                    break;
                 case UiProgress n: Text(n.Label, 256); break;
                 case UiCountdown n: Text(n.Label, 256); break;
                 case UiButton n: Text(n.Label); break;

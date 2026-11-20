@@ -42,7 +42,7 @@ namespace TopiaForge.ModManager.Tests
                 "A disabled Card stops callbacks below another layout wrapper.");
             var capture = surface.Capture(Viewport);
             Require(capture.Nodes.Single(row => row.Id == "shelter-card") is
-                { StyleId: "imported-panel", CornerRadiusPixels: 0, Selected: true, Disabled: true },
+            { StyleId: "imported-panel", CornerRadiusPixels: 0, Selected: true, Disabled: true },
                 "The resolved Card captures its named flat style and state.");
             Require(capture.Nodes.Single(row => row.Id == "shelter-heading") is { FillColor: "#10141B", InkColor: "#FFFFFF" },
                 "Text inside a styled Card uses ink on its actual effective fill.");

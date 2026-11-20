@@ -81,7 +81,7 @@ namespace TopiaForge.ModManager.Tests
                 Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: scale)).Succeeded, "Set the viewer scale.");
                 var tree = narrow.Capture(Viewport);
                 Check(tree.Nodes.Single(node => node.Kind == "GraphConnectionsAction") is
-                    { Text: "LINKS", SemanticLabel: "Connections", IsRendered: true, Clipped: false } &&
+                { Text: "LINKS", SemanticLabel: "Connections", IsRendered: true, Clipped: false } &&
                     tree.CheckAccessibility().All(issue => !issue.Path.StartsWith("/graph-connections", StringComparison.Ordinal)) &&
                     OpenGraphConnections(narrow, Viewport),
                     "A compact tracked launcher paints a readable caption and keeps its full action label.");
@@ -91,13 +91,13 @@ namespace TopiaForge.ModManager.Tests
             using var broad = Make(ui, new UiSurfaceRequest("broad-launcher", "Map", "",
                 width: 650f, height: 444f, content: sample));
             Check(broad.Capture(Viewport).Nodes.Single(node => node.Kind == "GraphConnectionsAction") is
-                { Text: "CONNECTIONS", SemanticLabel: "Connections", IsRendered: true },
+            { Text: "CONNECTIONS", SemanticLabel: "Connections", IsRendered: true },
                 "An ample title bar shows the full caption.");
             using var tiny = Make(ui, new UiSurfaceRequest("tiny-launcher", "Map", "",
                 width: 164f, height: 272f, content: sample));
             var tooNarrow = tiny.Capture(Viewport);
             Check(tooNarrow.Nodes.Single(node => node.Kind == "GraphConnectionsUnavailable") is
-                { SemanticLabel: "Connections", IsRendered: false } &&
+            { SemanticLabel: "Connections", IsRendered: false } &&
                 tooNarrow.CheckAccessibility().Any(issue => issue.Path == "/graph-connections") &&
                 !OpenGraphConnections(tiny, Viewport),
                 "An unreachable caption reports its aperture and exposes no actionable control.");
@@ -215,7 +215,7 @@ namespace TopiaForge.ModManager.Tests
             Check(OpenGraphConnections(compact, Viewport), "A compact window measures a row and a separate Remove side by side.");
             var tiny = compact.Capture(Viewport);
             Check(tiny.Nodes.Single(node => node.Kind == "GraphConnectionRemove") is
-                { Text: "Remove", SemanticLabel: "Remove connection from Station / Send to Lookout / Run" },
+            { Text: "Remove", SemanticLabel: "Remove connection from Station / Send to Lookout / Run" },
                 "Compact paint retains the full semantic Remove label.");
             CheckDisjoint(tiny, 40f);
 
@@ -241,8 +241,8 @@ namespace TopiaForge.ModManager.Tests
                 node.IsRendered && !node.Clipped && node.Width >= minimum - 0.001f && node.Height >= minimum - 0.001f),
                 "Connections rows and Remove are fully visible with the reference target floor.");
             for (var index = 0; index < targets.Length; index++)
-            for (var later = index + 1; later < targets.Length; later++)
-                Check(!Overlaps(targets[index], targets[later]), "Connections uses disjoint measurable action boxes.");
+                for (var later = index + 1; later < targets.Length; later++)
+                    Check(!Overlaps(targets[index], targets[later]), "Connections uses disjoint measurable action boxes.");
             Check(capture.CheckAccessibility().Count == 0, "The Connections capture passes its accessibility checks.");
         }
 
