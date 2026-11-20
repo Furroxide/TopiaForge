@@ -95,6 +95,7 @@ namespace TopiaForge.ModManager.Tests
                 public sealed class GameObject
                 {
                     public bool activeSelf = true;
+                    public bool activeInHierarchy => activeSelf;
                     public string name = "";
                     internal object? Component;
                     private object? added;
@@ -358,6 +359,7 @@ namespace TopiaForge.ModManager.Tests
                         BodyOnlySurfaceUsesMeasuredChrome();
                         NarrowerHudNoticeUsesActualWidth();
                         FullyOccupiedHudUsesOnePlainToast();
+                        TwoQueuedNativeHudRectsDoNotOccupyPaint();
                         DockMarginsFollowTheAssignedUnits();
                         Console.WriteLine("Native HUD viewport boundary passed for body-only creation, SetBody and scale recovery, 300-unit notice placement, 24-unit margins and 4,096 settled frames at 0 B.");
                     }
@@ -475,11 +477,12 @@ namespace TopiaForge.ModManager.Tests
                         Check(calls == subject.LayoutCalls && GC.GetAllocatedBytesForCurrentThread() == start &&
                             TopiaForgeToasts.Plain.Count == 1, "A queued native notice sends nothing and allocates zero bytes at rest.");
 
-                        peer.SetDockShown(false);
+                        peer.SetDockPaint(false);
                         subject.Refresh();
                         Check(subject.PanelShown && subject.NoticeShown && !subject.NoticeQueued &&
-                            TopiaForgeToasts.Plain.Count == 1, "An open measured slot shows the panel notice within the same unfit episode.");
-                        peer.SetDockShown(true);
+                            TopiaForgeToasts.Plain.Count == 1 && peer.Bounds.Equals(occupied),
+                            "Hiding peer paint exposes a slot and leaves its authored dock reserved within the same unfit episode.");
+                        peer.SetDockPaint(true);
                         subject.Refresh();
                         Check(subject.NoticeQueued && !subject.PanelShown && TopiaForgeToasts.Plain.Count == 1,
                             "Losing the slot again does not send another toast during the same unfit episode.");
@@ -493,6 +496,36 @@ namespace TopiaForge.ModManager.Tests
                         subject.Refresh();
                         Check(subject.NoticeQueued && TopiaForgeToasts.Plain.Count == 2,
                             "A later independent unfit episode gets its own notice.");
+                    }
+
+                    private static void TwoQueuedNativeHudRectsDoNotOccupyPaint()
+                    {
+                        using var placement = new UnityUiHudPlacement();
+                        var canvas = new Canvas();
+                        var host = new UiHost();
+                        var first = new UnityUiSurface(placement, host, canvas, 1920, 1080, new UiText("One"));
+                        var second = new UnityUiSurface(placement, host, canvas, 1920, 1080, new UiText("Two"),
+                            corner: TopiaForgeCorner.BottomRight);
+                        var painted = new UnityUiSurface(placement, host, canvas, 120, 128, new UiText("Peer"),
+                            corner: TopiaForgeCorner.TopRight);
+                        Check(first.ShowOriginal() && second.ShowOriginal() && painted.ShowOriginal(),
+                            "The two broad authored HUDs and a small peer initially paint.");
+                        var peerBounds = painted.Bounds;
+                        first.SetBody(new string('A', 20000));
+                        first.Refresh();
+                        Check(first.NoticeQueued && !first.PanelShown && second.PanelShown,
+                            "The first HUD must queue while the second paints across its safe area.");
+                        second.SetBody(new string('B', 20000));
+                        for (var frame = 0; frame < 4; frame++)
+                        {
+                            first.Refresh();
+                            second.Refresh();
+                        }
+
+                        Check(first.PanelShown && second.PanelShown && first.NoticeShown && second.NoticeShown &&
+                            !first.Bounds.Intersects(second.Bounds) && !first.Bounds.Intersects(peerBounds) &&
+                            !second.Bounds.Intersects(peerBounds) && painted.Bounds.Equals(peerBounds),
+                            "Two unfit native HUDs paint disjoint notices beside the existing peer once their authored paint is gone.");
                     }
 
                     private static void DockMarginsFollowTheAssignedUnits()
@@ -680,6 +713,7 @@ namespace TopiaForge.ModManager.Tests
                         internal int BodyMeasureCalls => body.Go.GetComponent<TMPro.TMP_Text>()!.MeasureCalls;
                         internal void DropViewport() => panel.Canvas = null;
                         internal void SetDockShown(bool shown) => placement!.SetShown(dockHandle, shown);
+                        internal void SetDockPaint(bool shown) => placement!.SetPanelPaintShown(dockHandle, shown);
                         internal bool OriginalShown => compositionRoot?.Go.activeSelf == true;
                         internal int LayoutCalls => layoutRenderer?.Calls ?? 0;
                         private readonly record struct ContentStamp(TopiaForgeWidget View, string ClockEpoch, int BodyVersion,

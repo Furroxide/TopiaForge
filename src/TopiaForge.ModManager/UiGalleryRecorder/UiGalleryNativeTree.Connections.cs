@@ -10,10 +10,19 @@ namespace TopiaForge.ModManager
         private bool GraphConnectionsLauncher(TopiaForgeGraphConnections connections)
         {
             var launcher = connections.Launcher;
-            if (!launcher.Button.gameObject.activeInHierarchy) return false;
+            if (!launcher.Button.gameObject.activeInHierarchy)
+            {
+                if (connections.LauncherNeedsRoom)
+                    observations.Add(new Observation("/graph-connections", null, "GraphConnectionsUnavailable", default, default,
+                        new UiCaptureNodeContent(string.Empty, UiGraphConnections.LauncherLabel, 0f, 0f,
+                            UiCaptureNodeFlags.LayoutDiagnostic | UiCaptureNodeFlags.InvalidLayout),
+                        default, rendered: false, clipped: false, occluded: false));
+                return true;
+            }
             var bar = launcher.Rect.parent?.parent?.GetComponent<Image>();
+            var caption = UiGraphConnectionLabelPages.LauncherCaption(LocalSize(launcher), launcher.MeasureText);
             return bar != null && GraphConnectionControl("/graph-connections", null, "GraphConnectionsAction", launcher,
-                UiGraphConnections.LauncherLabel, UiGraphConnections.LauncherLabel, ToRgb(EffectiveColor(bar)), connections.IsOpen);
+                caption, UiGraphConnections.LauncherLabel, ToRgb(EffectiveColor(bar)), connections.IsOpen, labelFits: caption.Length != 0);
         }
 
         private bool GraphConnectionsList(UiNode fixture, TopiaForgeGraphConnections connections, UiThemeColor? backdrop)

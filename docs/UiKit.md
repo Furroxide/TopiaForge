@@ -205,7 +205,8 @@ selects the node, and each typed port has its own hit target and focus ring. Dra
 the node when the canvas supports editing.
 
 In a local Window or FullscreenTool, use **Connections** to inspect the focused graph's
-edges in their authored order. The list exposes both endpoints and a separate **Remove**
+edges in their authored order. A narrow title bar shows **Links** when the full caption needs more
+room. The action keeps its Connections label in captures. The list exposes both endpoints and a separate **Remove**
 action for the selected edge. It uses the same removal callback as direct graph picking.
 When a connection label needs more room, activate its row to read the next part of the
 endpoint names. The kit reuses up to twelve visible rows and restores focus to a remaining

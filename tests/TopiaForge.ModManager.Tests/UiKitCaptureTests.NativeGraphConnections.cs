@@ -207,6 +207,7 @@ namespace TopiaForge.ModManager.Tests
                         var owner = new UiHost { EffectiveUiScale = scale };
                         var window = new TopiaForgeWindow(owner);
                         window.Content.Rect.sizeDelta = new Vector2(240f, 220f);
+                        window.TitleBar.Rect.sizeDelta = new Vector2(240f, 42f);
                         var source = new string('W', 255) + "A";
                         var port = new string('M', 255) + "B";
                         var target = new string('X', 255) + "C";
@@ -231,9 +232,32 @@ namespace TopiaForge.ModManager.Tests
                         var frame = window.TitleBar.Go.GetComponent<TopiaForgeGraphConnectionsFrame>()!;
                         var tick = (Action)typeof(TopiaForgeGraphConnectionsFrame).GetMethod("LateUpdate",
                             BindingFlags.Instance | BindingFlags.NonPublic)!.CreateDelegate(typeof(Action), frame);
+                        chrome.Launcher.Label.CharacterAdvance = 14f;
+                        window.TitleBar.Rect.sizeDelta = new Vector2(241f, 42f);
                         tick();
-                        chrome.Launcher.Button.Select();
-                        chrome.Launcher.Button.OnSubmit(new BaseEventData());
+                        var launcher = chrome.Launcher;
+                        var launcherSlot = (RectTransform)launcher.Rect.parent!;
+                        var allocated = launcherSlot.gameObject.GetComponent<LayoutElement>()!;
+                        launcherSlot.sizeDelta = new Vector2(allocated.preferredWidth, allocated.preferredHeight);
+                        var labelSize = launcher.MeasureText(launcher.DisplayLabel);
+                        Require(launcher.DisplayLabel == "Links" && launcher.SemanticLabel == "Connections" &&
+                            labelSize.Width <= launcher.Label.rectTransform.rect.width &&
+                            labelSize.Height <= launcher.Label.rectTransform.rect.height,
+                            "The real launcher measures the short caption inside its padded text box.");
+                        launcher.Button.Select();
+                        launcher.Button.OnSubmit(new BaseEventData());
+                        Require(chrome.IsOpen, "The compact launcher opens the pane.");
+                        window.TitleBar.Rect.sizeDelta = new Vector2(160f, 42f);
+                        tick();
+                        launcher.Button.OnSubmit(new BaseEventData());
+                        Require(chrome.LauncherNeedsRoom && !launcher.Button.gameObject.activeInHierarchy && !chrome.IsOpen,
+                            "Losing readable launcher room retires the pane and its submit action.");
+                        window.TitleBar.Rect.sizeDelta = new Vector2(240f, 42f);
+                        tick();
+                        Require(launcher.Button.gameObject.activeInHierarchy && !chrome.IsOpen,
+                            "A restored title aperture shows the launcher and waits for player activation.");
+                        launcher.Button.Select();
+                        launcher.Button.OnSubmit(new BaseEventData());
                         Require(chrome.IsOpen && chrome.Rows.Count == 2, "Both compact authored rows open.");
                         CheckAperture(chrome, scale);
                         Require(chrome.Rows[1].DisplayLabel.Contains("Beta station") &&

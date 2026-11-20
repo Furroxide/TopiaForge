@@ -61,6 +61,48 @@ namespace TopiaForge.ModManager.Tests
             static bool HasMark(UiTreeCapture tree, string path) => tree.Nodes.Any(node => node.Path == path && node.IsRendered && !node.Clipped);
         }
 
+        private static void GraphConnectionsLauncherFitsTheLabel()
+        {
+            using var lifetime = new FakeModLifetime();
+            var ui = new FakeUiService(lifetime);
+            var theme = new UiThemeRef("wide-label");
+            Check(ui.AddThemeFixture("""
+                { "schema": 1, "id": "wide-label", "typography": { "label": { "case": "upper", "trackingEm": 0.12 } } }
+                """).Succeeded && ui.Themes.UseTheme(theme).Succeeded, "Select the uppercase and tracked Label role.");
+            ui.CompletePendingThemeRegistrations();
+            var fixture = ((UiColumn)FoundationPages.CreateRequest(FoundationPage.GraphConnections, UiSurfaceKind.Window)
+                .Content!).Children.OfType<UiGraphCanvas>().First();
+            var sample = new UiGraphCanvas("compact-relay-map", fixture.Nodes, fixture.Edges, _ => { },
+                height: 176f, connectionRemoved: _ => { });
+            using var narrow = Make(ui, new UiSurfaceRequest("narrow-launcher", "Map", "",
+                width: 240f, height: 272f, content: sample));
+            foreach (var scale in new[] { 1f, 2f })
+            {
+                Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: scale)).Succeeded, "Set the viewer scale.");
+                var tree = narrow.Capture(Viewport);
+                Check(tree.Nodes.Single(node => node.Kind == "GraphConnectionsAction") is
+                    { Text: "LINKS", SemanticLabel: "Connections", IsRendered: true, Clipped: false } &&
+                    tree.CheckAccessibility().All(issue => !issue.Path.StartsWith("/graph-connections", StringComparison.Ordinal)) &&
+                    OpenGraphConnections(narrow, Viewport),
+                    "A compact tracked launcher paints a readable caption and keeps its full action label.");
+                CloseGraphConnections(narrow);
+            }
+
+            using var broad = Make(ui, new UiSurfaceRequest("broad-launcher", "Map", "",
+                width: 650f, height: 444f, content: sample));
+            Check(broad.Capture(Viewport).Nodes.Single(node => node.Kind == "GraphConnectionsAction") is
+                { Text: "CONNECTIONS", SemanticLabel: "Connections", IsRendered: true },
+                "An ample title bar shows the full caption.");
+            using var tiny = Make(ui, new UiSurfaceRequest("tiny-launcher", "Map", "",
+                width: 164f, height: 272f, content: sample));
+            var tooNarrow = tiny.Capture(Viewport);
+            Check(tooNarrow.Nodes.Single(node => node.Kind == "GraphConnectionsUnavailable") is
+                { SemanticLabel: "Connections", IsRendered: false } &&
+                tooNarrow.CheckAccessibility().Any(issue => issue.Path == "/graph-connections") &&
+                !OpenGraphConnections(tiny, Viewport),
+                "An unreachable caption reports its aperture and exposes no actionable control.");
+        }
+
         private static void GraphConnectionsYieldToAnUnreachableLayout()
         {
             using var lifetime = new FakeModLifetime();
@@ -80,13 +122,14 @@ namespace TopiaForge.ModManager.Tests
             Check(blocked.Nodes.Any(node => node.Kind == "LayoutDiagnostic") &&
                 blocked.Nodes.All(node => node.Kind is not ("GraphConnectionRemove" or "GraphConnectionsAction")),
                 "A kept list cannot mask the underlying viewport diagnostic or continue to expose its launcher.");
-            Check(RemoveGraphConnectionSelection(surface).ErrorCode == ModErrorCode.InvalidState &&
-                !OpenGraphConnections(surface, Viewport) && removed.Count == 0,
-                "Remove and reopening are refused while the retained graph cannot fit.");
-            Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: 1f)).Succeeded &&
-                OpenGraphConnections(surface, Viewport) && RemoveGraphConnectionSelection(surface).Succeeded &&
+            Check(ui.ApplyAccessibility(UiAccessibilityPreferences.Default).Succeeded &&
+                surface.Capture(Viewport).Nodes.Any(node => node.Kind == "GraphConnectionsAction") &&
+                surface.Capture(Viewport).Nodes.All(node => node.Kind != "GraphConnectionsList" && node.Kind != "GraphConnectionRemove") &&
+                RemoveGraphConnectionSelection(surface).ErrorCode == ModErrorCode.InvalidState && removed.Count == 0,
+                "Scale recovery restores the launcher without resurrecting Connections or keeping its removal authority.");
+            Check(OpenGraphConnections(surface, Viewport) && RemoveGraphConnectionSelection(surface).Succeeded &&
                 removed.SequenceEqual(new[] { sample.Edges[0].Id }),
-                "A reachable aperture restores the admitted graph and exact owner-scoped action.");
+                "A reopened list restores the exact owner-scoped action.");
 
             var shallow = new UiGraphCanvas("inset-relay", sample.Nodes, sample.Edges, _ => { },
                 height: 176f, connectionRemoved: removed.Add);

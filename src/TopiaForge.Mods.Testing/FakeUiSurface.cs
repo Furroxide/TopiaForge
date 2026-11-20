@@ -120,6 +120,7 @@ namespace TopiaForge.Mods.Testing
             var next = body ?? string.Empty;
             if (string.Equals(Body, next, StringComparison.Ordinal)) return;
             Body = next;
+            RevalidateGraphConnections();
             if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
         }
 

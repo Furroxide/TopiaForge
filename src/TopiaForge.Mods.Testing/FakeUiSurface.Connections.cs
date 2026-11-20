@@ -35,20 +35,26 @@ namespace TopiaForge.Mods.Testing
             graphConnectionsViewport = null;
         }
 
-        internal bool MoveGraphConnection(int step) => CanUseGraphConnections() && graphConnections!.Move(step);
+        internal bool MoveGraphConnection(int step) => RevalidateGraphConnections() && graphConnections!.Move(step);
 
         internal bool AdvanceGraphConnectionLabel(UiCaptureViewport viewport) =>
-            graphConnections?.AdvanceLabel(FakeUiTreeCapture.SelectedConnectionLabelPages(owner, this, viewport)) == true;
+            RevalidateGraphConnections() && graphConnections!.AdvanceLabel(FakeUiTreeCapture.SelectedConnectionLabelPages(owner, this, viewport));
 
         internal OperationResult<bool> RemoveGraphConnectionSelection() =>
-            CanUseGraphConnections() && graphConnections!.Graph is { } graph && graphConnections.Selected is { } edge
+            RevalidateGraphConnections() && graphConnections!.Graph is { } graph && graphConnections.Selected is { } edge
                 ? RemoveGraphConnection(graph.Id!, edge.Id)
                 : OperationResult<bool>.Failure(ModErrorCode.InvalidState, "No graph connection is selected.");
 
-        private bool CanUseGraphConnections()
+        internal bool RevalidateGraphConnections()
         {
-            if (!IsVisible || graphConnections?.Graph == null || graphConnectionsViewport is not { } viewport) return false;
-            if (FakeUiTreeCapture.MeasureGraphConnections(owner, this, viewport).Rows > 0) return true;
+            if (graphConnections?.Graph == null || graphConnectionsViewport is not { } viewport) return false;
+            var rows = IsVisible ? FakeUiTreeCapture.MeasureGraphConnections(owner, this, viewport).Rows : 0;
+            if (rows > 0)
+            {
+                graphConnections.Resize(rows);
+                return true;
+            }
+
             CloseGraphConnections();
             return false;
         }
@@ -59,8 +65,15 @@ namespace TopiaForge.Mods.Testing
                 focusedConnectionGraphId = null;
             var previous = graphConnections?.Graph;
             if (previous == null) return;
-            graphConnections!.Bind(UiLayoutTree.TryFind(Content, previous.Id!, out var current, out var disabled) &&
-                current is UiGraphCanvas graph && !disabled && UiGraphConnections.IsActionable(graph) ? graph : null);
+            if (!UiLayoutTree.TryFind(Content, previous.Id!, out var current, out var disabled) ||
+                current is not UiGraphCanvas graph || disabled || !UiGraphConnections.IsActionable(graph))
+            {
+                CloseGraphConnections();
+                return;
+            }
+
+            graphConnections!.Bind(graph);
+            RevalidateGraphConnections();
         }
 
         private static UiGraphCanvas? FirstRemovableGraph(UiNode? node)

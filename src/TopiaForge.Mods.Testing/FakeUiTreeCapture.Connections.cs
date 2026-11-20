@@ -2,13 +2,13 @@ namespace TopiaForge.Mods.Testing
 {
     internal sealed partial class FakeUiTreeCapture
     {
-        private const float GraphLabelPadding = UiGraphConnectionLabelPages.HorizontalInset * 2;
-
         internal static UiGraphConnectionsViewport MeasureGraphConnections(FakeUiService service, FakeUiSurface surface,
             UiCaptureViewport viewport)
         {
             var capture = new FakeUiTreeCapture(service, surface, viewport, UiCaptureControlState.Rest, null);
-            return capture.GraphContentFits() ? capture.ConnectionsAperture(capture.SurfaceBounds()) : default;
+            var bounds = capture.SurfaceBounds();
+            return capture.GraphContentFits() && capture.MeasureConnectionsLauncher(bounds).SlotWidth > 0d
+                ? capture.ConnectionsAperture(bounds) : default;
         }
 
         private bool GraphContentFits()
@@ -39,14 +39,23 @@ namespace TopiaForge.Mods.Testing
             new UiGraphConnectionsViewport(bounds.Width / layoutScale,
                 bounds.Height / layoutScale - UiGraphConnectionsViewport.RowSlot);
 
+        private (string Caption, double SlotWidth) MeasureConnectionsLauncher(UiCaptureRect bounds) =>
+            UiGraphConnectionsViewport.MeasureLauncher(bounds.Width / layoutScale, MeasureConnectionsText);
+
         private bool PaintGraphConnections(UiCaptureRect bounds, UiCaptureRect clip, UiThemeColor? background)
         {
             if (surface.FirstGraphWithConnections == null || !GraphContentFits()) return false;
             var scale = layoutScale;
-            var label = UiGraphConnections.LauncherLabel;
-            var textWidth = MeasureText(label, UiTextStyle.Label, float.PositiveInfinity, wrap: false).Width;
-            var width = (float)UiGraphConnectionsViewport.LauncherWidth(bounds.Width / scale, textWidth / scale + GraphLabelPadding);
-            if (width <= 0f) return false;
+            var measurement = MeasureConnectionsLauncher(bounds);
+            var width = (float)measurement.SlotWidth;
+            if (width <= 0f)
+            {
+                nodes.Add(new UiCapturedNode("/graph-connections", null, "GraphConnectionsUnavailable", default,
+                    new UiCaptureNodeContent(string.Empty, UiGraphConnections.LauncherLabel, 0f, 0f,
+                        UiCaptureNodeFlags.LayoutDiagnostic | UiCaptureNodeFlags.InvalidLayout), default,
+                    theme.Descriptor.Id, theme.UsedFallback, isRendered: false, clipped: false, occluded: false));
+                return false;
+            }
 
             var model = surface.GraphConnections;
             var geometry = ConnectionsAperture(bounds);
@@ -56,7 +65,8 @@ namespace TopiaForge.Mods.Testing
                 (width - 2f * inset) * scale, UiGraphConnections.TargetHeight * scale);
             var enabled = open || geometry.Rows > 0 && surface.GraphForConnections is { } focused &&
                 UiGraphConnections.IsActionable(focused);
-            PaintGraphConnectionControl("/graph-connections", null, "GraphConnectionsAction", label, label,
+            PaintGraphConnectionControl("/graph-connections", null, "GraphConnectionsAction", measurement.Caption,
+                UiGraphConnections.LauncherLabel,
                 launcher, clip, UiPaintRole.Raised, enabled, open, open ? UiCaptureControlState.Rest : State(enabled));
             if (!open) return false;
 

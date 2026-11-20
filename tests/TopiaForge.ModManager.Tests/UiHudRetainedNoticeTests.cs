@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
             BodyOnlyHudRetainsItsBodyAndRecovers();
             BodyOnlyOverflowUsesTheSameEpisode();
             MeasuredNoticeUsesTheNarrowOpening();
+            AnUnfitAuthoredSlotDoesNotBlockAPeerNotice();
             StackedNoticesReserveActualPaint();
             PeerLayoutChangesRefreshOverflowEpisodes();
             Console.WriteLine("Fake retained HUD checks passed for body-only admission, narrow and stacked notices, peer overflow and settled calls at 0 B.");
@@ -134,7 +135,7 @@ namespace TopiaForge.ModManager.Tests
 
             var secondAtNormalScale = NoticePanel(second, Viewport);
             var firstAtNormalScale = NoticePanel(first, Viewport);
-            Require(firstAtNormalScale is { X: 24f, Y: 148f, Width: 360f, Height: 76f } &&
+            Require(firstAtNormalScale is { X: 24f, Y: 24f, Width: 360f, Height: 76f } &&
                 secondAtNormalScale.Width == 360f && secondAtNormalScale.Height == 76f &&
                 !Overlaps(firstAtNormalScale, secondAtNormalScale),
                 "Two 80×54 HUDs reserve the painted 360×76 peer notice without overlapping.");
@@ -211,6 +212,28 @@ namespace TopiaForge.ModManager.Tests
             context.Scenes.Load("TestCityStartMenu");
             Require(!first.IsVisible && NoticePanel(second, Viewport).Width == 720f && ui.Toasts.Count == 2,
                 "Leaving gameplay releases its notice and retains the existing overflow history.");
+        }
+
+        private static void AnUnfitAuthoredSlotDoesNotBlockAPeerNotice()
+        {
+            using var lifetime = new FakeModLifetime();
+            var ui = new FakeUiService(lifetime);
+            using var early = Create(ui, "early-notice", "A", "", 80, 54, UiHudAnchor.BottomRight);
+            using var wide = Create(ui, "wide-notice", "B", "", 1920, 1080, UiHudAnchor.TopLeft);
+
+            early.SetBody(string.Concat(Enumerable.Repeat("Many words ", 100)));
+            Require(HasQueuedNotice(early) && ui.Toasts.Count == 1,
+                "A painted full-area peer leaves no space for the early notice.");
+            wide.SetBody(new string('\n', 180));
+            Require(!HasQueuedNotice(early) && !HasQueuedNotice(wide),
+                "A later unfit full-area allocation must release its authored paint obstacle.");
+            var earlyPanel = NoticePanel(early, Viewport);
+            var widePanel = NoticePanel(wide, Viewport);
+            Require(!Overlaps(earlyPanel, widePanel) && ui.Toasts.Count == 1,
+                "A later unfit full-area allocation leaves room for both actual notices.");
+            wide.SetBody("Ready");
+            Require(HasQueuedNotice(early) && ui.Toasts.Count == 1,
+                "Restored authored paint blocks the slot without repeating the same episode's toast.");
         }
 
         private static UiCapturedNode NoticePanel(FakeUiSurface surface, UiCaptureViewport viewport)
