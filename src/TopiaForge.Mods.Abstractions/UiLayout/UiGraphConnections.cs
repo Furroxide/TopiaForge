@@ -5,6 +5,7 @@ namespace TopiaForge.Mods
     internal sealed class UiGraphConnections
     {
         internal const string LauncherLabel = "Connections";
+        internal const string CompactLauncherLabel = "Links";
         internal const string RemovePrefix = "Remove connection from ";
         internal const int MaximumVisibleRows = 12;
         internal const float TargetHeight = UiVirtualListGeometry.RowHeight;

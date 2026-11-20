@@ -22,15 +22,22 @@ namespace TopiaForge.ModManager.Tests
                 widgets + "TopiaForgeGraphConnectionControl.cs",
                 widgets + "TopiaForgeGraphCanvas.Connections.cs",
                 "src/TopiaForge.ModManager/UnityUiSurface.Connections.cs",
+                "src/TopiaForge.Mods.Testing/UiCapturedNode.cs",
+                "src/TopiaForge.Mods.Testing/UiCaptureViewport.cs",
                 "tests/Shared/AllocationProbe.cs",
             };
             var canvasMembers = Member(widgets + "TopiaForgeGraphCanvas.cs", "TopiaForgeGraphCanvas", "HandleEdgeSelected");
             var edgeMembers = Member(widgets + "TopiaForgeGraphCanvasRuntime.cs", "TopiaForgeGraphEdgeView",
                 "SetDirectPickingOnly", "SetGeometry", "Select");
-            var trees = files.Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file)), path: file))
+            var recorderMembers = Member("src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryNativeTree.Connections.cs",
+                "UiGalleryNativeTree", "GraphConnectionsLauncher", "LocalSize");
+            var nativeCapture = new CSharpParseOptions(preprocessorSymbols: new[] { "TOPIAFORGE_NATIVE_CAPTURE" });
+            var trees = files.Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, file)), nativeCapture, file))
                 .Append(CSharpSyntaxTree.ParseText(GraphConnectionBoundaries.Replace("/* canvas action */", canvasMembers)
                     .Replace("/* edge actions */", edgeMembers), path: "GraphConnectionBoundaries.cs"))
-                .Append(CSharpSyntaxTree.ParseText(GraphConnectionScenarios, path: "GraphConnectionScenarios.cs"));
+                .Append(CSharpSyntaxTree.ParseText(GraphConnectionScenarios, path: "GraphConnectionScenarios.cs"))
+                .Append(CSharpSyntaxTree.ParseText(GraphConnectionRecorder.Replace("/* recorder methods */", recorderMembers),
+                    path: "GraphConnectionRecorder.cs"));
             var platform = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
             var references = platform.Append(typeof(UiNode).Assembly.Location).Distinct(StringComparer.OrdinalIgnoreCase)
                 .Where(path => !Path.GetFileName(path).StartsWith("UnityEngine", StringComparison.Ordinal) &&
@@ -232,18 +239,35 @@ namespace TopiaForge.ModManager.Tests
                         var frame = window.TitleBar.Go.GetComponent<TopiaForgeGraphConnectionsFrame>()!;
                         var tick = (Action)typeof(TopiaForgeGraphConnectionsFrame).GetMethod("LateUpdate",
                             BindingFlags.Instance | BindingFlags.NonPublic)!.CreateDelegate(typeof(Action), frame);
-                        chrome.Launcher.Label.CharacterAdvance = 14f;
-                        window.TitleBar.Rect.sizeDelta = new Vector2(241f, 42f);
-                        tick();
                         var launcher = chrome.Launcher;
                         var launcherSlot = (RectTransform)launcher.Rect.parent!;
                         var allocated = launcherSlot.gameObject.GetComponent<LayoutElement>()!;
+                        window.TitleBar.Go.AddComponent<Image>();
+                        launcher.Label.CharacterAdvance = 9.09091f;
+                        window.TitleBar.Rect.sizeDelta = new Vector2(242f, 42f);
+                        tick();
+                        launcherSlot.sizeDelta = new Vector2(allocated.preferredWidth, allocated.preferredHeight);
+                        var recorder = new UiGalleryNativeTree();
+                        Require(launcher.DisplayLabel == "Connections" && launcher.MeasureText("Connections").Width >
+                            launcher.Label.rectTransform.rect.width && recorder.CaptureLauncher(chrome) &&
+                            recorder.CapturedCaption == "Connections" && recorder.CapturedLabelFits,
+                            "The real recorder preserves the assigned full caption across fractional native layout rounding.");
+
+                        launcher.Label.CharacterAdvance = 14f;
+                        window.TitleBar.Rect.sizeDelta = new Vector2(241f, 42f);
+                        tick();
                         launcherSlot.sizeDelta = new Vector2(allocated.preferredWidth, allocated.preferredHeight);
                         var labelSize = launcher.MeasureText(launcher.DisplayLabel);
                         Require(launcher.DisplayLabel == "Links" && launcher.SemanticLabel == "Connections" &&
                             labelSize.Width <= launcher.Label.rectTransform.rect.width &&
                             labelSize.Height <= launcher.Label.rectTransform.rect.height,
                             "The real launcher measures the short caption inside its padded text box.");
+                        Require(recorder.CaptureLauncher(chrome) && recorder.CapturedCaption == "Links" && recorder.CapturedLabelFits,
+                            "The native capture reports the actual compact caption and usable geometry.");
+                        launcher.Label.text = "Unlisted value";
+                        Require(recorder.CaptureLauncher(chrome) && recorder.CapturedCaption.Length == 0 && !recorder.CapturedLabelFits,
+                            "The native recorder refuses a caption outside its two authored variants.");
+                        launcher.Label.text = "Links";
                         launcher.Button.Select();
                         launcher.Button.OnSubmit(new BaseEventData());
                         Require(chrome.IsOpen, "The compact launcher opens the pane.");
