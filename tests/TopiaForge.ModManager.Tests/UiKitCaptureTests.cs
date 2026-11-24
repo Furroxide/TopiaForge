@@ -30,7 +30,7 @@ namespace TopiaForge.ModManager.Tests
             CatalogueIsAtomicAndUsesExactBytes();
             CascadeRefreshKeepsControlState();
             SiblingPreloadsAndDrainAreIndependent();
-            AssetsCommitTogetherAndEnrichTheDescriptor();
+            FakeThemeArtworkRequiresRuntimeSupport();
             PaintAndTypeRemainReadable();
             VerifyButtonCues();
             AuthoredBackplatesAndControlTargetsAreChecked();
@@ -142,33 +142,19 @@ namespace TopiaForge.ModManager.Tests
 
         }
 
-        private static void AssetsCommitTogetherAndEnrichTheDescriptor()
+        private static void FakeThemeArtworkRequiresRuntimeSupport()
         {
             using var lifetime = new FakeModLifetime();
             var ui = new FakeUiService(lifetime);
-            const string bundle = "ui/assets.bundle";
-            const string hash = "1111111111111111111111111111111111111111111111111111111111111111";
-            const string image = "{\"id\":\"marker\",\"bundlePath\":\"ui/assets.bundle\",\"assetName\":\"Marker\",\"licensePath\":\"licenses/art.txt\"}";
-            const string font = "{\"id\":\"signal\",\"bundlePath\":\"ui/assets.bundle\",\"assetName\":\"Signal\",\"licensePath\":\"licenses/font.txt\"}";
-            const string loadedJson = "{\"schema\":1,\"id\":\"field\",\"images\":[" + image + "]}";
-            const string brokenJson = "{\"schema\":1,\"id\":\"broken\",\"images\":[" + image + "],\"fonts\":[" + font + "]}";
-            Check(ui.AddThemeFixture(loadedJson).Succeeded && ui.AddThemeFixture(brokenJson).Succeeded,
-                "Definitions can be staged before fake resource metadata.");
-            ui.AddAssetFixture(new FakeUiAssetMetadata(bundle, "Marker", hash, 24, 36, 864, isMask: true));
-            ui.AddAssetFixture(new FakeUiAssetMetadata(bundle, "Signal", hash, 128, 128, 16384,
-                ascender: 0.9f, descender: -0.4f, outcome: FakeUiAssetOutcome.LoadFailure));
-
-            var field = new UiThemeRef("field");
-            var broken = new UiThemeRef("broken");
-            var loaded = ui.Themes.PreloadAsync(field);
-            var failed = ui.Themes.PreloadAsync(broken);
-            ui.CompletePendingThemeRegistrations();
-            using var fallback = Make(ui, Request("broken-asset").WithTheme(broken));
-            var marker = ThemeForWire(ui, field)!.Images.Single();
-            Check(loaded.IsCompletedSuccessfully && loaded.Result.Succeeded && marker.PixelWidth == 24 && marker.PixelHeight == 36
-                && marker.IsMask == true, "Fake receipts populate source dimensions and mask eligibility.");
-            Check(failed.IsCompletedSuccessfully && failed.Result.ErrorCode == ModErrorCode.External && fallback.Capture(Viewport).Nodes[0].UsedFallback,
-                "Failure in the last asset never commits the earlier asset or publishes the failed pack.");
+            const string image = """{"schema":1,"id":"field","images":[{"id":"marker","bundlePath":"ui/assets.bundle","assetName":"Marker","licensePath":"licenses/art.txt"}]}""";
+            const string font = """{"schema":1,"id":"field","fonts":[{"id":"signal","bundlePath":"ui/assets.bundle","assetName":"Signal","licensePath":"licenses/font.txt"}]}""";
+            foreach (var json in new[] { image, font })
+            {
+                var result = ui.AddThemeFixture(json);
+                Check(result.ErrorCode == ModErrorCode.InvalidArgument &&
+                    result.ErrorMessage.Contains("require UI kit artwork support", StringComparison.Ordinal),
+                    "A fake fixture reports the same artwork boundary as runtime admission.");
+            }
         }
 
         private static void PaintAndTypeRemainReadable()

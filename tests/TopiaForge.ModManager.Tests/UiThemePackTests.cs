@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
             StateTintsPreserveTheReviewedTransitions();
             StrictJsonRejectsInvalidInputs();
             NormalizationUsesEffectiveValuesAndContentHashes();
-            AssetMetadataIsBoundToTheDeclaration();
+            ArtworkRequiresRuntimeSupport();
             CatalogueIsStrictAndHashesExactBytes();
             EffectiveDescriptorReadsAllocateNothing();
             Console.WriteLine("UiThemePackTests passed.");
@@ -158,35 +158,25 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
-        private static void AssetMetadataIsBoundToTheDeclaration()
+        private static void ArtworkRequiresRuntimeSupport()
         {
-            const string json = """
-                {"schema":1,"id":"sample","images":[{"id":"crate","bundlePath":"ui/art.bundle","assetName":"Crate",
-                "licensePath":"LICENSES/art.txt","isMask":true}],"fonts":[{"id":"tall","bundlePath":"ui/art.bundle",
-                "assetName":"Tall Display SDF","licensePath":"LICENSES/OFL.txt"}],"typography":{"display":{"font":"tall"}}}
-                """;
-            var bundleReads = 0;
-            var source = UiThemePackParser.Parse(Bytes(json), expectedId: "sample", fileHash: _ =>
+            const string image = """{"schema":1,"id":"sample","images":[{"id":"crate","bundlePath":"ui/art.bundle","assetName":"Crate","licensePath":"LICENSES/art.txt","pixelWidth":64,"pixelHeight":48,"isMask":true}]}""";
+            const string font = """{"schema":1,"id":"sample","fonts":[{"id":"signal","bundlePath":"ui/fonts.bundle","assetName":"Signal","licensePath":"LICENSES/OFL.txt"}]}""";
+            foreach (var json in new[] { image, font })
             {
-                bundleReads++;
-                return new byte[32];
-            }, imageMetadata: _ => new UiThemeImageMetadata(64, 48, true));
-            Assert(source.Succeeded && source.Value!.Images[0].PixelHeight == 48 && source.Value!.GetText(UiTextStyle.Display).Font == "tall"
-                && bundleReads == 1, "Shared bundle receipts are read once and provide real image dimensions.");
-
-            var mismatch = UiThemePackParser.Parse(Bytes(json), imageMetadata: _ => new UiThemeImageMetadata(64, 48, false));
-            Assert(mismatch.ErrorCode == ModErrorCode.InvalidArgument, "A mismatched mask assertion fails before registration.");
-            var required = UiThemePackParser.Parse(Bytes(json), packaged: true, fileHash: _ => new byte[32]);
-            Assert(required.ErrorCode == ModErrorCode.InvalidArgument, "Packaged definitions contain explicit image metadata.");
-            var changedHash = UiThemePackParser.Parse(Bytes(json), fileHash: _ => Enumerable.Repeat((byte)3, 32).ToArray(),
-                imageMetadata: _ => new UiThemeImageMetadata(64, 48, true));
-            Assert(changedHash.Succeeded && !source.Value!.Digest.Span.SequenceEqual(changedHash.Value!.Digest.Span), "A changed bundle hash changes the digest.");
-            var changedSize = UiThemePackParser.Parse(Bytes(json), fileHash: _ => new byte[32],
-                imageMetadata: _ => new UiThemeImageMetadata(64, 49, true));
-            Assert(changedSize.Succeeded && !source.Value!.Digest.Span.SequenceEqual(changedSize.Value!.Digest.Span), "An enriched dimension changes the digest.");
-
-            var conflict = UiThemePackParser.Parse(Bytes(json), expectedId: "other");
-            Assert(conflict.ErrorCode == ModErrorCode.InvalidArgument, "The definition id must match its manifest declaration.");
+                foreach (var packaged in new[] { false, true })
+                {
+                    var result = UiThemePackParser.Parse(Bytes(json), packaged: packaged,
+                        fileHash: _ => throw new InvalidOperationException("Unsupported artwork must not read its bundle."));
+                    Assert(result.ErrorCode == ModErrorCode.InvalidArgument &&
+                        result.ErrorMessage.Contains("require UI kit artwork support", StringComparison.Ordinal),
+                        "Authored and packaged definitions require the same artwork support.");
+                }
+            }
+            Assert(UiThemePackParser.Parse(Bytes("""{"schema":1,"id":"sample","images":[],"fonts":[]}""")).Succeeded,
+                "Empty asset declarations still admit a resource-free theme.");
+            Assert(UiThemePackParser.Parse(Bytes("""{"schema":1,"id":"sample"}"""), expectedId: "other").ErrorCode ==
+                ModErrorCode.InvalidArgument, "The definition id must match its manifest declaration.");
         }
 
         private static void CatalogueIsStrictAndHashesExactBytes()

@@ -73,6 +73,12 @@ namespace TopiaForge.Mods
                 throw UiThemeDataException.Invalid(pack.At("id"), "Theme identifier differs from the catalogue entry.");
             }
 
+            const string artworkRequired = "Package theme images and fonts require UI kit artwork support.";
+            if (pack.Array("images", 64).Count > 0)
+                throw UiThemeDataException.Invalid(pack.At("images"), artworkRequired);
+            if (pack.Array("fonts", 9).Count > 0)
+                throw UiThemeDataException.Invalid(pack.At("fonts"), artworkRequired);
+
             var paper = ParseScheme(pack.Object("paper"), defaults?.SelectScheme(hud: false, highContrast: false));
             var hud = ParseScheme(pack.Object("hud"), defaults?.SelectScheme(hud: true, highContrast: false));
             var fonts = ParseFonts(pack, assets);

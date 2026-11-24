@@ -313,7 +313,8 @@ hashes to the packaged manifest.
 
 Start with the SDK's `topiaforge-ui-theme.schema.json` and `topiaforge-ui-theme.defaults.json` or the UiGallery's
 sample at `mods/TopiaForge.UiGallery/ui/themes/survival.json`. Each file declares one theme id. Supply the Paper,
-HUD, typography or token entries that differ from the kit defaults. The theme uses package-relative resources.
+HUD, typography or token entries that differ from the kit defaults. Package images and fonts require the kit's
+artwork support. Use the embedded kit faces when targeting this revision.
 
 A surface uses its `WithTheme` override first, then the nearest scope's `Context.Ui.Themes.UseTheme` selection,
 then the manifest default, then the kit default. Use the manifest for ordinary surfaces. Pass `null` to
