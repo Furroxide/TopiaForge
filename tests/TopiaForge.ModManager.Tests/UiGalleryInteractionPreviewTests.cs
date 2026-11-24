@@ -20,16 +20,21 @@ namespace TopiaForge.ModManager.Tests
             var files = new[]
             {
                 "AssetNativeWorkTracker.cs", "OwnerModLifetime.cs", "UiGameplayGate.cs", "UiSurfacePresence.cs",
-                "UiThemeScope.cs", "UnityMainThreadGuard.cs", "UnityUiService.cs", "UnityUiService.Themes.cs",
-                "UnityUiService.Remote.cs", "UnityUiSurface.GalleryCapture.cs", "Multiplayer/Presentation/UiPresentationTheme.cs",
+                "IHostDispatcher.cs", "HostDispatcher.cs", "UiThemeScope.cs", "UiThemeScope.Preload.cs",
+                "UiThemeAcquisitions.cs", "UiThemeRegistration.cs", "UnityUiThemePackages.cs", "UnityMainThreadGuard.cs",
+                "UnityUiService.cs", "UnityUiService.Themes.cs", "UnityUiService.Remote.cs", "UnityUiSurface.Artwork.cs",
+                "UnityUiSurface.GalleryCapture.cs", "Multiplayer/Presentation/UiPresentationTheme.cs",
+                "Multiplayer/Presentation/UiPresentationImages.cs",
                 "UiGalleryRecorder/UiGalleryCaptureFixture.cs", "UiGalleryRecorder/UiGallerySurvivalTheme.cs",
                 "UiGalleryRecorder/UnityUiGalleryCaptureDriver.cs", "UiGalleryRecorder/UnityUiGalleryInteractionPreview.cs",
             }.Select(path => Path.Combine(manager, path))
                 .Append(Path.Combine(gallery, "Pages", "FoundationPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "FoundationLayoutPages.cs"))
-                .Append(Path.Combine(gallery, "Pages", "FoundationGraphPages.cs"));
+                .Append(Path.Combine(gallery, "Pages", "FoundationGraphPages.cs"))
+                .Append(Path.Combine(gallery, "Pages", "FoundationArtPages.cs"));
             var trees = files.Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path))
                 .Append(CSharpSyntaxTree.ParseText(Boundaries, path: "PreviewBoundaries.cs"))
+                .Append(CSharpSyntaxTree.ParseText(AssetBoundaries, path: "PreviewAssetBoundaries.cs"))
                 .Append(CSharpSyntaxTree.ParseText(Scenario, path: "PreviewScenario.cs")).ToArray();
             CheckAcceptanceBindings(root, trees.Single(tree => Path.GetFileName(tree.FilePath) == "UnityUiGalleryInteractionPreview.cs"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)

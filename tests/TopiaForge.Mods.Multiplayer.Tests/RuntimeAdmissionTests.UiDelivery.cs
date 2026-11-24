@@ -108,7 +108,7 @@ internal static partial class RuntimeAdmissionTests
         internal readonly PlayerDirectory? Directory;
         internal readonly ThemeProbe Ui;
 
-        internal UiDeliveryEndpoint(ControlPeer peer, Func<long> clock, bool author)
+        internal UiDeliveryEndpoint(ControlPeer peer, Func<long> clock, bool author, AdmittedUiCatalogue? art = null)
         {
             var runtime = peer.Composition;
             runtime.Disconnect();
@@ -116,7 +116,9 @@ internal static partial class RuntimeAdmissionTests
             var presence = MultiplayerPresence.Install(runtime, replication, new FakePresenceBackend { RecordTrails = false }, clock);
             Players = MultiplayerPlayers.Install(runtime, presence);
             replication.Players = Players;
-            Ui = new ThemeProbe(lifetime, author);
+            if (art != null)
+                peer.Runtime.Inventory.Packages.Single(package => package.Manifest.Id == Sandbox.Id).Manifest.AdmittedUi = art;
+            Ui = new ThemeProbe(lifetime, author, art);
             var audio = new FakeAudioService(lifetime);
             Players.Presentation = new MultiplayerPresentation(Players, () => new PresentationSink(Ui, audio));
             That(runtime.Connect(), "The provider attaches to the real Players runtime.");
@@ -133,6 +135,8 @@ internal static partial class RuntimeAdmissionTests
         internal IUiSurface Shared(string title, UiTextStyle style = UiTextStyle.Label) => Players.Presentation!.CreateHud(origin!, Ui,
             new UiSurfaceRequest(title, title, "Status", UiSurfaceKind.Hud, 320, 160, new UiText(title, style))).Value!;
 
+        internal OperationResult<IUiSurface> Shared(UiSurfaceRequest request) => Players.Presentation!.CreateHud(origin!, Ui, request);
+
         public void Dispose() { Directory?.Dispose(); lifetime.Dispose(); }
     }
 
@@ -140,12 +144,19 @@ internal static partial class RuntimeAdmissionTests
     {
         private readonly FakeUiService ui;
         internal readonly Dictionary<string, ThemeSurfaceProbe> Surfaces = new(StringComparer.Ordinal);
+        internal readonly ArtCanvasRecorder? Art;
         internal bool FailNextRemoteShow;
 
-        internal ThemeProbe(FakeModLifetime lifetime, bool author)
+        internal ThemeProbe(FakeModLifetime lifetime, bool author, AdmittedUiCatalogue? art = null)
         {
             ui = new FakeUiService(lifetime);
+            if (art != null) Art = new ArtCanvasRecorder(lifetime);
             if (!author) return;
+            if (art != null)
+            {
+                PresentationThemeScope = new UiThemeScope(lifetime, art);
+                return;
+            }
             var declared = new Dictionary<string, UiThemeDescriptor>(StringComparer.Ordinal);
             foreach (var id in new[] { "first", "second" })
                 declared.Add(id, UiThemePackParser.Parse(Encoding.UTF8.GetBytes("{\"schema\":1,\"id\":\"" + id + "\"}")).Value!);
@@ -160,7 +171,8 @@ internal static partial class RuntimeAdmissionTests
         public OperationResult<bool> DescribePresentationTheme(UiSurfaceRequest request, out UiThemeDescriptor? theme) =>
             PresentationThemeScope!.TryDescribe(request.Theme, out theme) ? UiPresentationTheme.Allowed : UiPresentationTheme.UnknownTheme;
         public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences) => ui.ApplyAccessibility(preferences);
-        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => ui.CreateSurface(request);
+        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) =>
+            Art?.Create(request, default) ?? ui.CreateSurface(request);
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => ui.ShowModal(request, completed);
         public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral) => ui.ShowToast(message, tone);
         public OperationResult<IUiSurface> RemoteSurface(UiSurfaceRequest request) => RemoteSurface(request, default);
@@ -169,6 +181,7 @@ internal static partial class RuntimeAdmissionTests
 
         public OperationResult<IUiSurface> RemoteSurface(UiSurfaceRequest request, UiRemoteThemeSelection theme)
         {
+            if (Art != null) return Art.Create(request, theme);
             var created = ui.CreateSurface(request);
             if (!created.TryGetValue(out var surface)) return created;
             var wrapper = new ThemeSurfaceProbe(this, (FakeUiSurface)surface, theme, FailNextRemoteShow);

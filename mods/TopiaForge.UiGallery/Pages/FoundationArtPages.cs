@@ -1,0 +1,66 @@
+using System;
+using System.Globalization;
+using TopiaForge.Mods;
+
+namespace TopiaForge.UiGallery.Pages
+{
+    internal static class FoundationArtPages
+    {
+        internal const string ArtBundle = "ui/art/preview.bundle";
+        internal const string ArtThemeDefinition = "ui/themes/preview-art.json";
+        internal static readonly UiImageRef Card = new UiImageRef("preview-art", "card");
+        internal static readonly UiImageRef Mark = new UiImageRef("preview-art", "mark");
+        private static readonly UiFlexLayout LabelBelow = new UiFlexLayout(UiSpace.Xs,
+            crossAxisAlignment: UiCrossAxisAlignment.Start);
+
+        internal static bool IsArt(FoundationPage page) =>
+            page is FoundationPage.Icons or FoundationPage.Images or FoundationPage.BadgesAndPips;
+
+        internal static UiNode Icons()
+        {
+            var glyphs = (UiGlyph[])Enum.GetValues(typeof(UiGlyph));
+            var cells = new UiNode[glyphs.Length];
+            for (var index = 0; index < glyphs.Length; index++)
+            {
+                var glyph = glyphs[index];
+                var icon = new UiIcon(glyph, size: 18f, tone: UiTone.Primary,
+                    id: "glyph-" + index.ToString(CultureInfo.InvariantCulture));
+                var caption = glyph == UiGlyph.MicrophoneOff ? "Mic off" : icon.SemanticLabel;
+                cells[index] = new UiColumn(new UiNode[] { icon, new UiText(caption, UiTextStyle.Caption) }, LabelBelow);
+            }
+
+            return new UiGrid(cells, minimumCellWidth: 126f, maximumColumns: 6, runSpacing: UiSpace.Md, id: "glyph-grid");
+        }
+
+        internal static UiNode Images() => new UiColumn(
+            new UiRow(new UiNode[]
+            {
+                Picture("Contain", new UiImage(Card, "Supply card", 144f, 88f, id: "image-contain")),
+                Picture("Cover", new UiImage(Card, "Supply card", 144f, 88f, fit: UiImageFit.Cover, id: "image-cover")),
+                Picture("Natural size", new UiImage(Card, "Card", id: "image-natural")),
+            }, new UiFlexLayout(UiSpace.Lg, crossAxisAlignment: UiCrossAxisAlignment.Start), id: "image-fits"),
+            new UiDivider(UiLineStyle.Solid),
+            new UiRow(
+                new UiImage(Mark, "Marker", 120f, 58f, tint: UiTone.Primary, id: "image-mask"),
+                new UiText("Primary-tinted mask", UiTextStyle.Label)),
+            new UiRow(
+                new UiImage(Mark, string.Empty, tint: UiTone.Accent, decorative: true, id: "image-decorative"),
+                new UiText("Supply station", UiTextStyle.Label)));
+
+        private static UiNode Picture(string caption, UiImage image) =>
+            new UiColumn(new UiNode[] { new UiText(caption, UiTextStyle.Label), image }, LabelBelow);
+
+        internal static UiNode BadgesAndPips(bool survival) => new UiColumn(
+            new UiRow(
+                new UiBadge("Ready", UiPaintRole.Success, icon: UiGlyph.Check, id: "badge-ready"),
+                new UiBadge("Water low", UiPaintRole.Warning, UiBadgeStyle.Outlined, icon: UiGlyph.Info,
+                    style: survival ? new UiStyleRef("status.outline") : null, id: "badge-warning"),
+                new UiBadge("Closed", UiPaintRole.Danger, id: "badge-closed")),
+            new UiDivider(UiLineStyle.Solid),
+            new UiSizedBox(new UiPips(5, 3, "Energy", fraction: 0.1f, id: "pips-dots"), width: 280f),
+            new UiSizedBox(new UiPips(4, 0, "Shield", presentation: UiPipStyle.Segments,
+                role: UiPaintRole.Warning, id: "pips-empty"), width: 280f),
+            new UiSizedBox(new UiPips(4, 4, "Signal", presentation: UiPipStyle.Segments,
+                role: UiPaintRole.Success, id: "pips-full"), width: 280f));
+    }
+}

@@ -8,6 +8,9 @@
 
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
     <Compile Include="../../src/TopiaForge.ModManager/UiThemeScope.cs" Link="Runtime/UiThemeScope.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeScope.Preload.cs" Link="Runtime/UiThemeScope.Preload.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeAcquisitions.cs" Link="Runtime/UiThemeAcquisitions.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeRegistration.cs" Link="Runtime/UiThemeRegistration.cs" />
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs" Link="RobotKit/RobotAvatarAccessorySlots.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationPages.cs" Link="UiGallery/FoundationPages.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.cs" Link="UiGallery/UiGalleryCaptureFixture.cs" />
@@ -15,6 +18,7 @@
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationGraphPages.cs" Link="UiGallery/FoundationGraphPages.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGallerySurvivalTheme.cs" Link="UiGallery/UiGallerySurvivalTheme.cs" />
     <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationArtPages.cs" Link="UiGallery/FoundationArtPages.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/AcceptanceConfig.cs" Link="MultiplayerAcceptance/AcceptanceConfig.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/GalleryRemotePreview.cs" Link="MultiplayerAcceptance/GalleryRemotePreview.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/MultiplayerAcceptanceMod.cs" Link="MultiplayerAcceptance/MultiplayerAcceptanceMod.cs" />
@@ -272,6 +276,7 @@
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Core\*.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Runtime\TopiaForgeStateFileCodec.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Rendering\TopiaForgeIconRaster.cs" />
+    <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Rendering\TopiaForgeGlyphRaster*.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Text\TopiaForgeTypographyMetrics.cs" />
   </ItemGroup>
 

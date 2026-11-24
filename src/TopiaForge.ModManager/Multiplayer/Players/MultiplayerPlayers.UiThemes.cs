@@ -161,22 +161,42 @@ namespace TopiaForge.ModManager
                 if (surface.Closed || !surface.Target.IsPresent || surface.Context.Lifetime.IsStopping || scope == null) continue;
                 if (!scope.TryDescribe(surface.Request.Theme, out var theme, changed, proposed)) return UiPresentationTheme.UnknownTheme;
                 if (ReferenceEquals(surface.Theme, theme)) continue;
-                var target = surface.Target.Id;
-                var stream = Channel?.GetGeneration(target) ?? 0;
-                try
-                {
-                    var stage = StageTargetEnvelope(surface.Context, target, stream, theme, surface.Content, drafts, out var envelope);
-                    if (!stage.Succeeded) return stage;
-                    var revision = surface.Revision + 1;
-                    _ = UiWireCodec.MeasureTargetedSurface(surface.Context.Mod, target.Value, surface.Token, revision,
-                        surface.Request, surface.Body, surface.Visible, surface.Content, UiClockEpoch, retained: true, envelope);
-                }
-                catch (ArgumentException error) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, error.Message); }
-                catch (InvalidOperationException) { return Limit<bool>(); }
+                var styles = UiPresentationTheme.StylesValid(surface.PresentationContent, theme);
+                if (!styles.Succeeded) return styles;
+                var stage = MeasureTargetedSurface(surface, theme, surface.Body, drafts);
+                if (!stage.Succeeded) return stage;
                 (updates ??= new List<(RemoteUiSurface, UiThemeDescriptor?)>()).Add((surface, theme));
             }
 
             return UiPresentationTheme.Allowed;
+        }
+
+        internal void CheckTargetedBody(RemoteUiSurface surface, string body)
+        {
+            if (!surface.Target.IsPresent || surface.Context.Lifetime.IsStopping) return;
+            var checkedFrame = MeasureTargetedSurface(surface, surface.Theme, body);
+            if (checkedFrame.ErrorCode == ModErrorCode.InvalidArgument)
+                throw new ArgumentException(checkedFrame.ErrorMessage, nameof(body));
+            if (!checkedFrame.Succeeded) throw new InvalidOperationException(checkedFrame.ErrorMessage);
+        }
+
+        private OperationResult<bool> MeasureTargetedSurface(RemoteUiSurface surface, UiThemeDescriptor? theme, string body,
+            Dictionary<(ParticipantId Target, PlayerContext Scope), ulong>? drafts = null)
+        {
+            var target = surface.Target.Id;
+            var stream = Channel?.GetGeneration(target) ?? 0;
+            var epoch = UiClockEpoch;
+            try
+            {
+                var stage = StageTargetEnvelope(surface.Context, target, stream, theme, surface.PresentationContent, drafts, out var envelope);
+                if (!stage.Succeeded) return stage;
+                var revision = TargetRevision(surface, epoch, envelope, replacing: false);
+                _ = UiWireCodec.MeasureTargetedSurface(surface.Context.Mod, target.Value, surface.Token, revision,
+                    surface.Request, body, surface.Visible, surface.PresentationContent, epoch, retained: true, envelope);
+                return UiPresentationTheme.Allowed;
+            }
+            catch (ArgumentException error) { return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, error.Message); }
+            catch (InvalidOperationException) { return Limit<bool>(); }
         }
 
         private readonly struct TargetSequence

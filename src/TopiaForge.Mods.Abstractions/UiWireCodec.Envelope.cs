@@ -64,6 +64,8 @@ namespace TopiaForge.Mods
                     return EnhancedTone(progress.Tone);
                 case UiCountdown countdown:
                     return EnhancedTone(countdown.Tone);
+                case UiIcon or UiImage or UiBadge or UiPips:
+                    return true;
             }
 
             if (IsEnhancedLayout(node)) return true;

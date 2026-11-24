@@ -75,10 +75,11 @@ namespace TopiaForge.ModManager
                     Reply(owner, ui.PresentationOwned ? null : ui.Context?.Lifetime, sender, token, revision, control, value, 14);
             }, UiClockEpoch, out var envelope);
             UiNodeWireCodec.End(r);
+            if (surfaceKind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content)) return false;
             var theme = default(UiRemoteThemeSelection);
             if (envelope == null && context == null && !ui.PresentationOwned) return false;
             if (envelope != null && (!AuthenticateUiTheme(envelope, owner, out theme) || !targetedGenerations.Allows(token, envelope))) return false;
-            if (!UiPresentationTheme.ViewerAdmitsStyles(content, theme)) return false;
+            if (!UiPresentationTheme.ViewerAdmits(content, theme)) return false;
             var surfaceRequest = new UiSurfaceRequest("remote-" + token, title, body, surfaceKind, width, height, content);
             if (surfaceKind == UiSurfaceKind.Hud) surfaceRequest = surfaceRequest.WithHudAnchor(anchor).WithHudVisibility(visibility);
             if (ui.Modal != null || revision < ui.Revision ||

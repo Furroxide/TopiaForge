@@ -11,12 +11,13 @@ namespace TopiaForge.Mods
     internal readonly struct UiLayoutLeafMeasurement
     {
         internal UiLayoutLeafMeasurement(UiLayoutExtent size, UiLayoutPaintKind paintKind, UiLayoutOutsets paintOutsets = default,
-            UiLayoutOutsets focusOutsets = default, double? scrollLineHeight = null)
+            UiLayoutOutsets focusOutsets = default, UiLayoutRect? localPaintBounds = null, double? scrollLineHeight = null)
         {
             Size = size;
             PaintKind = paintKind;
             PaintOutsets = paintOutsets;
             FocusOutsets = focusOutsets;
+            LocalPaintBounds = localPaintBounds;
             ScrollLineHeight = scrollLineHeight;
         }
 
@@ -24,6 +25,7 @@ namespace TopiaForge.Mods
         internal UiLayoutPaintKind PaintKind { get; }
         internal UiLayoutOutsets PaintOutsets { get; }
         internal UiLayoutOutsets FocusOutsets { get; }
+        internal UiLayoutRect? LocalPaintBounds { get; }
         internal double? ScrollLineHeight { get; }
     }
 

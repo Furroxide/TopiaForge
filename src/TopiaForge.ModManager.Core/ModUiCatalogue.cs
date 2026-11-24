@@ -37,15 +37,25 @@ namespace TopiaForge.ModManager.Core
     internal sealed class AdmittedUiCatalogue
     {
         private readonly Dictionary<string, UiThemeDescriptor> themes;
+        private readonly IReadOnlyDictionary<string, UiAdmittedBundle>? bundles;
 
-        internal AdmittedUiCatalogue(string? defaultId, Dictionary<string, UiThemeDescriptor> themes)
+        internal AdmittedUiCatalogue(string? defaultId, Dictionary<string, UiThemeDescriptor> themes,
+            IReadOnlyDictionary<string, UiAdmittedBundle>? bundles = null)
         {
             DefaultId = defaultId;
             this.themes = themes;
+            this.bundles = bundles;
         }
 
         internal string? DefaultId { get; }
 
         internal bool TryGet(string id, out UiThemeDescriptor descriptor) => themes.TryGetValue(id, out descriptor!);
+
+        internal bool TryGetBundle(UiThemeAsset asset, out UiAdmittedBundle bundle)
+        {
+            bundle = null!;
+            return bundles != null && bundles.TryGetValue(asset.BundlePath, out bundle!) &&
+                string.Equals(asset.BundleSha256, bundle.Sha256, StringComparison.Ordinal);
+        }
     }
 }

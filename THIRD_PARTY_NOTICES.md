@@ -114,6 +114,12 @@ inventory covers every non-source file a user receives rather than only the ones
   Medium SDF (`tools/unity-ui-bundle/Assets/FontAssets/TopiaForge Body Medium SDF.asset`) for small text;
   the regenerated bundle's SHA-256 is
   `9a88235dc00312efe1c2c71e3f100fb512dca8a18901551ffe93e19b21f6b458`.
+- The UI Gallery and settings template each include a package-local preview artwork bundle at
+  `mods/TopiaForge.UiGallery/ui/art/preview.bundle` and `templates/mod/ui/ui/art/preview.bundle`.
+  The source sprites are `tools/unity-ui-bundle/Assets/UiResourceSamples/PreviewCard.png` and
+  `tools/unity-ui-bundle/Assets/UiResourceSamples/PreviewMark.png`. The repository's deterministic
+  `tools/unity-ui-bundle/make_ui_resource_samples.py` recipe builds the sprites. The Gallery and
+  template each carry the CC0 1.0 notice and a receipt for their own compiled bundle.
 - `templates/TopiaForge.UnityWorldTemplate/Assets/HDRPDefaultResources/*.asset` are Unity YAML
   configuration assets authored by this project. They hold settings values and reference HDRP script
   GUIDs; the HDRP package itself is resolved by the consumer's Unity and is not redistributed here.

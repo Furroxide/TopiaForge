@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager
         private IUiSurface inner = null!;
         private string body;
         private UiNode? content;
+        private UiNode? presentationContent;
         private bool shown = true, disposed;
         private ulong revision;
         internal EncodedHud? Encoded;
@@ -31,15 +32,21 @@ namespace TopiaForge.ModManager
         }
         internal void Attach(IUiSurface surface) => inner = surface;
         internal UiNode? Content => content;
-        internal bool Prepare(string text, UiNode? node, bool visible, UiWireEnvelope? envelope = null)
-        { Encoded = Encode(text, node, visible, owner.UiClockEpoch, envelope: envelope, needsTheme: Theme != null); return Encoded.HasValue; }
+        internal UiNode? PresentationContent => presentationContent;
+        internal bool Prepare(UiNode? presentation, UiWireEnvelope? envelope)
+        {
+            presentationContent = presentation;
+            Encoded = Encode(body, presentation, shown, owner.UiClockEpoch, envelope: envelope, needsTheme: Theme != null);
+            return Encoded.HasValue;
+        }
 
         internal EncodedHud? StageRetained(UiWireEnvelope? envelope, UiThemeDescriptor? theme) =>
-            Encode(body, content, shown, owner.UiClockEpoch, retained: true, envelope: envelope, needsTheme: theme != null);
+            Encode(body, presentationContent, shown, owner.UiClockEpoch, retained: true, envelope: envelope, needsTheme: theme != null);
         internal void RefreshClockBinding(string epoch)
         {
             if (Encoded?.ClockEpoch is not string previous || previous == epoch) return;
-            if (owner.Change(this, Encode(body, content, shown, epoch, retained: true, envelope: Encoded?.Envelope, needsTheme: Theme != null))) return;
+            if (owner.Change(this, Encode(body, presentationContent, shown, epoch, retained: true,
+                envelope: Encoded?.Envelope, needsTheme: Theme != null))) return;
             // Keep the host handle usable even if a changed wire encoding cannot fit the shared budget.
             owner.Remove(this); Encoded = null;
         }
@@ -104,7 +111,8 @@ namespace TopiaForge.ModManager
         {
             RequireActive();
             if (shown == visible || Lost()) { shown = visible; if (visible) inner.Show(); else inner.Hide(); return; }
-            var payload = Encode(body, content, visible, owner.UiClockEpoch, retained: true, envelope: Encoded?.Envelope, needsTheme: Theme != null);
+            var payload = Encode(body, presentationContent, visible, owner.UiClockEpoch, retained: true,
+                envelope: Encoded?.Envelope, needsTheme: Theme != null);
             // A solo HUD outside the shared bounds still owns a fully usable local surface.
             if (!owner.ChangeVisibility(this, payload, false)) throw TooLarge();
             var previous = shown;
@@ -124,7 +132,8 @@ namespace TopiaForge.ModManager
             RequireActive(); value ??= string.Empty;
             if (body == value) return;
             if (Lost()) { inner.SetBody(value); body = value; return; }
-            var payload = Encode(value, content, shown, owner.UiClockEpoch, retained: true, envelope: Encoded?.Envelope, needsTheme: Theme != null);
+            var payload = Encode(value, presentationContent, shown, owner.UiClockEpoch, retained: true,
+                envelope: Encoded?.Envelope, needsTheme: Theme != null);
             if (!owner.Change(this, payload, false)) throw TooLarge();
             inner.SetBody(value);
             if (!disposed) { body = value; revision++; owner.Change(this, payload); }
@@ -138,16 +147,24 @@ namespace TopiaForge.ModManager
                 RefreshClockBinding(owner.UiClockEpoch);
                 return inner.SetContent(value);
             }
-            if (UiComposition.ContainsInteractive(value)) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
+            var validated = UiPresentationImages.Prepare(value, ThemeSource?.PresentationThemeScope, Theme, out var presentation);
+            if (!validated.Succeeded) return validated;
+            if (UiComposition.ContainsInteractive(presentation)) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
                 "HUD surfaces are read-only; put controls in a window or a player's targeted UI.");
-            var staged = owner.StageEnvelope(this, Theme, value, out var envelope);
+            var staged = owner.StageEnvelope(this, Theme, presentation, out var envelope);
             if (!staged.Succeeded) return staged;
-            var payload = Encode(body, value, shown, owner.UiClockEpoch, envelope: envelope, needsTheme: Theme != null);
+            var payload = Encode(body, presentation, shown, owner.UiClockEpoch, envelope: envelope, needsTheme: Theme != null);
             if (owner.Hosting && InvalidComposition != null) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, InvalidComposition);
             if (owner.Hosting && payload == null) return MultiplayerPresentation.Limit<bool>();
             if (!owner.Change(this, payload, false)) return MultiplayerPresentation.Limit<bool>();
             var result = inner.SetContent(value);
-            if (result.Succeeded && !disposed) { content = value; revision++; owner.Change(this, payload); }
+            if (result.Succeeded && !disposed)
+            {
+                content = value;
+                presentationContent = presentation;
+                revision++;
+                owner.Change(this, payload);
+            }
             return result;
         }
         public void Dispose()

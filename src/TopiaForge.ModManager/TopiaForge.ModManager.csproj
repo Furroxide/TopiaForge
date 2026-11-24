@@ -17,6 +17,7 @@
     <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationLayoutPages.cs" Link="UiGalleryRecorder\FoundationLayoutPages.cs" />
     <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationGraphPages.cs" Link="UiGalleryRecorder\FoundationGraphPages.cs" />
     <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationArtPages.cs" Link="UiGalleryRecorder\FoundationArtPages.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiCapturedNode.cs" Link="UiGalleryRecorder\UiCapturedNode.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiCaptureViewport.cs" Link="UiGalleryRecorder\UiCaptureViewport.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiTreeCapture.cs" Link="UiGalleryRecorder\UiTreeCapture.cs" />
@@ -90,5 +91,6 @@
          PlayerInput bindings; a focused TextMeshPro field means the player types. -->
     <Reference Include="Unity.InputSystem" HintPath="$(RobotopiaManagedDir)\Unity.InputSystem.dll" Private="false" />
     <Reference Include="Unity.TextMeshPro" HintPath="$(RobotopiaManagedDir)\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="UnityEngine.TextCoreFontEngineModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextCoreFontEngineModule.dll" Private="false" />
   </ItemGroup>
 </Project>

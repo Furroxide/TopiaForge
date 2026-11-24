@@ -49,7 +49,7 @@ namespace TopiaForge.ModManager
                 var theme = default(UiRemoteThemeSelection);
                 if (envelope != null && (!players.AuthenticateUiTheme(envelope, null, out theme) || !sharedGenerations.Allows(token, envelope)))
                     return false;
-                if (!UiPresentationTheme.ViewerAdmitsStyles(content, theme)) return false;
+                if (!UiPresentationTheme.ViewerAdmits(content, theme)) return false;
                 var request = new UiSurfaceRequest("shared-" + token, title, body, UiSurfaceKind.Hud, width, height, content)
                     .WithHudAnchor(anchor).WithHudVisibility(visibility);
                 updates.Add(new HudState(token, request, visible, theme));

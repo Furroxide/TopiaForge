@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using TopiaForge.Mods;
 using UnityEngine;
 
@@ -14,12 +15,14 @@ namespace TopiaForge.Mods.UnityUi
     {
         internal GameObject? Root;
         private UiThemeDescriptor? descriptor;
+        private Func<UiTextStyle, TMP_FontAsset?>? fonts;
         private TopiaForgeResolvedTheme? resolved;
 
-        internal bool SelectTheme(UiThemeDescriptor? value)
+        internal bool SelectTheme(UiThemeDescriptor? value, Func<UiTextStyle, TMP_FontAsset?>? registeredFonts = null)
         {
-            if (ReferenceEquals(descriptor, value)) return false;
+            if (ReferenceEquals(descriptor, value) && ReferenceEquals(fonts, registeredFonts)) return false;
             descriptor = value;
+            fonts = registeredFonts;
             resolved = null;
             return true;
         }
@@ -28,7 +31,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             if (descriptor == null) return null;
             if (resolved == null || resolved.ThemeVersion != version || resolved.Scheme != scheme)
-                resolved = new TopiaForgeResolvedTheme(scheme, null, highContrast, version, descriptor);
+                resolved = new TopiaForgeResolvedTheme(scheme, null, highContrast, version, descriptor, fonts);
             return resolved;
         }
 
@@ -43,6 +46,7 @@ namespace TopiaForge.Mods.UnityUi
             Lost = null;
             resolved = null;
             descriptor = null;
+            fonts = null;
             if (!(root is null))
             {
                 TopiaForgeLayers.ReleaseDestroyed(root, lost);

@@ -26,9 +26,7 @@ namespace TopiaForge.ModManager
             if (queuedNotice != null)
             {
                 if (rendered || fixture.Kind != UiSurfaceKind.Hud) return false;
-                observations.Add(new Observation("/fallback", null, UiHudOverflowNotice.CaptureKind, default, default,
-                    new UiCaptureNodeContent(string.Empty, queuedNotice, 0f, 0f, UiCaptureNodeFlags.LayoutDiagnostic),
-                    default, rendered: false, clipped: false, occluded: false));
+                AddQueuedHudNotice(queuedNotice);
                 result = CompleteCapture();
                 return true;
             }
@@ -47,5 +45,10 @@ namespace TopiaForge.ModManager
             result = CompleteCapture();
             return true;
         }
+
+        private void AddQueuedHudNotice(string message) =>
+            observations.Add(new Observation("/fallback", null, UiHudOverflowNotice.CaptureKind, default, default,
+                new UiCaptureNodeContent(string.Empty, message, 0f, 0f, UiCaptureNodeFlags.LayoutDiagnostic),
+                default, rendered: false, clipped: false, localFallback: true, kitPaint: true));
     }
 }

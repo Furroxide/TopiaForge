@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "id": "preview-art",
+  "images": [
+    {
+      "id": "card",
+      "bundlePath": "ui/art/preview.bundle",
+      "assetName": "preview-card",
+      "licensePath": "LICENSES/ui-art.txt"
+    },
+    {
+      "id": "mark",
+      "bundlePath": "ui/art/preview.bundle",
+      "assetName": "preview-mark",
+      "licensePath": "LICENSES/ui-art.txt",
+      "isMask": true
+    }
+  ]
+}

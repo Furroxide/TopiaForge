@@ -9,7 +9,7 @@ namespace TopiaForge.Mods
         internal static bool TryPlaceMeasured(UiLayoutRect viewport, UiLayoutRect current,
             (double X, double Y, double PivotX, double PivotY) dock, double preferredWidth,
             IReadOnlyList<UiLayoutRect> occupied, double peerGap, Func<double, double> heightAt,
-            out UiLayoutRect result, out bool usesCurrent)
+            out UiLayoutRect result, out bool usesCurrent, double preferredHeight = 0d)
         {
             usesCurrent = current.HasArea && Clear(current, occupied) && heightAt(current.Width) <= current.Height;
             if (usesCurrent)
@@ -17,9 +17,16 @@ namespace TopiaForge.Mods
                 result = current;
                 return true;
             }
+            if (preferredWidth <= 0d)
+            {
+                result = default;
+                return false;
+            }
 
             var width = Math.Min(preferredWidth, viewport.Width);
             var height = heightAt(width);
+            // Keep the preferred footprint when it fits. The remaining search uses the actual measured height.
+            if (width == preferredWidth) height = Math.Max(height, preferredHeight);
             var preferred = UiHudViewport.AtPivot(dock.X, dock.Y, dock.PivotX, dock.PivotY, new UiLayoutExtent(width, height));
             if (TryPlace(viewport, preferred, occupied, peerGap, out result)) return true;
             // A longer title may fit a wide opening with less vertical space.

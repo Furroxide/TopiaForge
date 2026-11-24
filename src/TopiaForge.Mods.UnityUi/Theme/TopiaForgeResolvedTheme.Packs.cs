@@ -1,3 +1,5 @@
+using System;
+using TMPro;
 using TopiaForge.Mods;
 using UnityEngine;
 
@@ -8,6 +10,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly UiThemeScheme? packScheme;
 
         internal UiThemeDescriptor? Descriptor { get; }
+        internal Func<UiTextStyle, TMP_FontAsset?>? RegisteredFont { get; }
 
         internal Color DisabledInk => ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
 

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
 
@@ -16,36 +15,39 @@ namespace TopiaForge.ModManager
         UiThemeScope changed, UiThemeRef? proposed, out Action? commit);
 
     /// <summary>Package-local selection shared by local surfaces and authoritative wire publication.</summary>
-    internal sealed class UiThemeScope : IUiThemeService, IDisposable
+    internal sealed partial class UiThemeScope : IUiThemeService, IDisposable
     {
         private static readonly OperationResult<bool> Success = OperationResult<bool>.Success(true);
         private static readonly OperationResult<bool> Stopped =
             OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The UI scope is stopping.");
         private static readonly OperationResult<bool> Missing =
             OperationResult<bool>.Failure(ModErrorCode.NotFound, "This package does not declare the requested UI theme.");
-        private static readonly OperationResult<bool> AssetsUnavailable =
-            OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The theme's bundled UI resources could not be registered.");
-        private static readonly Task<OperationResult<bool>> Preloaded = Task.FromResult(Success);
-        private static readonly Task<OperationResult<bool>> Cancelled = Task.FromResult(Stopped);
-        private static readonly Task<OperationResult<bool>> NotFound = Task.FromResult(Missing);
-        private static readonly Task<OperationResult<bool>> Unavailable = Task.FromResult(AssetsUnavailable);
-
         private readonly AdmittedUiCatalogue? catalogue;
         private readonly UiThemeScope? parent;
         private readonly IModLifetime lifetime;
+        private readonly UiThemeAcquisitions? acquisitions;
+        private readonly CancellationTokenRegistration stopping;
         private readonly List<UiThemeScope> children = new List<UiThemeScope>();
+        private HashSet<UiThemeDemand>? surfaceDemands;
+        private UiThemeDemand? selectionDemand;
         private bool disposed;
 
-        internal UiThemeScope(IModLifetime lifetime, AdmittedUiCatalogue? catalogue, UiThemeScope? parent = null)
+        internal UiThemeScope(IModLifetime lifetime, AdmittedUiCatalogue? catalogue, UiThemeScope? parent = null,
+            UiThemeAcquisitions? acquisitions = null)
         {
             this.lifetime = lifetime;
             this.catalogue = catalogue ?? parent?.catalogue;
             this.parent = parent;
+            this.acquisitions = acquisitions ?? parent?.acquisitions;
             if (parent != null)
             {
                 parent.Changed += InheritedThemeChanged;
                 parent.children.Add(this);
             }
+            if (this.acquisitions != null)
+                stopping = lifetime.StoppingToken.Register(() => this.acquisitions.OnMain(Dispose));
+            if (!IsStopping && parent == null)
+                selectionDemand = DemandSelection(null);
         }
 
         internal event Action? Changed;
@@ -55,11 +57,12 @@ namespace TopiaForge.ModManager
         internal Func<UiThemeScope, UiThemeRef?, OperationResult<bool>>? ValidateLocalSelection { get; set; }
 
         public UiThemeRef? SelectedTheme { get; private set; }
+        internal bool IsStopping => disposed || lifetime.IsStopping;
 
         public OperationResult<bool> UseTheme(UiThemeRef? theme)
         {
             UnityMainThreadGuard.AssertCurrent();
-            if (disposed || lifetime.IsStopping) return Stopped;
+            if (IsStopping) return Stopped;
             if (theme != null && (catalogue == null || !catalogue.TryGet(theme.Id, out _))) return Missing;
             if (Equals(SelectedTheme, theme)) return Success;
             var local = ValidateSelections(this, theme);
@@ -71,9 +74,18 @@ namespace TopiaForge.ModManager
                 if (!prepared.Succeeded) return prepared;
             }
 
+            var previous = selectionDemand;
             SelectedTheme = theme;
-            commit?.Invoke();
-            Changed?.Invoke();
+            selectionDemand = DemandSelection(theme);
+            try
+            {
+                commit?.Invoke();
+                Changed?.Invoke();
+            }
+            finally
+            {
+                previous?.Dispose();
+            }
             return Success;
         }
 
@@ -83,21 +95,40 @@ namespace TopiaForge.ModManager
             if (!validation.Succeeded) return validation;
             foreach (var child in children)
             {
-                if (child.disposed || child.lifetime.IsStopping || child.SelectedTheme != null) continue;
+                if (child.IsStopping || child.SelectedTheme != null) continue;
                 validation = child.ValidateSelections(changed, proposed);
                 if (!validation.Succeeded) return validation;
             }
             return Success;
         }
 
-        public Task<OperationResult<bool>> PreloadAsync(UiThemeRef theme, CancellationToken cancellationToken = default)
+        private UiThemeDemand? DemandSelection(UiThemeRef? theme)
         {
-            UnityMainThreadGuard.AssertCurrent();
-            if (theme == null) throw new ArgumentNullException(nameof(theme));
-            if (disposed || lifetime.IsStopping || cancellationToken.IsCancellationRequested) return Cancelled;
-            if (catalogue == null || !catalogue.TryGet(theme.Id, out var descriptor)) return NotFound;
-            return HasNativeResources(descriptor) ? Unavailable : Preloaded;
+            var id = theme?.Id ?? (parent == null ? catalogue?.DefaultId : null);
+            if (id == null || catalogue == null || !catalogue.TryGet(id, out var descriptor)) return null;
+            return acquisitions?.Demand(descriptor, outcome =>
+            {
+                if (outcome.Succeeded && !IsStopping && ReferenceEquals(selectionDemand?.Descriptor, descriptor))
+                    Changed?.Invoke();
+            });
         }
+
+        internal UiThemeDemand? DemandSurface(UiThemeDescriptor? descriptor, Action<OperationResult<bool>> settled,
+            bool retryFailed = true)
+        {
+            if (IsStopping || descriptor == null) return null;
+            var demand = acquisitions?.Demand(descriptor, settled, RemoveSurfaceDemand, retryFailed);
+            if (demand != null) (surfaceDemands ??= new HashSet<UiThemeDemand>()).Add(demand);
+            return demand;
+        }
+
+        private void RemoveSurfaceDemand(UiThemeDemand demand) => surfaceDemands?.Remove(demand);
+
+        internal UiThemeRegistration? Registration(UiThemeDescriptor? descriptor) =>
+            !IsStopping && descriptor != null ? acquisitions?.Registration(descriptor) : null;
+
+        internal UiThemeDescriptor? ReadyDescriptor(UiThemeDescriptor? descriptor) =>
+            !IsStopping ? Ready(descriptor, acquisitions) : null;
 
         internal bool TryDescribe(
             UiThemeRef? surfaceTheme, out UiThemeDescriptor? descriptor,
@@ -136,15 +167,13 @@ namespace TopiaForge.ModManager
             return false;
         }
 
-        internal static UiThemeDescriptor? Ready(UiThemeDescriptor? descriptor) =>
-            descriptor != null && HasNativeResources(descriptor) ? null : descriptor;
-
-        private static bool HasNativeResources(UiThemeDescriptor descriptor) =>
-            descriptor.Images.Count != 0 || descriptor.Fonts.Count != 0;
+        internal static UiThemeDescriptor? Ready(UiThemeDescriptor? descriptor, UiThemeAcquisitions? acquisitions = null) =>
+            descriptor != null && (!UiThemeAcquisitions.HasNativeResources(descriptor) || acquisitions?.Registration(descriptor) != null)
+                ? descriptor : null;
 
         private void InheritedThemeChanged()
         {
-            if (!disposed && !lifetime.IsStopping && SelectedTheme == null) Changed?.Invoke();
+            if (!IsStopping && SelectedTheme == null) Changed?.Invoke();
         }
 
         public void Dispose()
@@ -156,11 +185,23 @@ namespace TopiaForge.ModManager
                 parent.Changed -= InheritedThemeChanged;
                 parent.children.Remove(this);
             }
-            Changed = null;
-            PrepareSelection = null;
-            ValidateLocalSelection = null;
-            children.Clear();
+            stopping.Dispose();
             SelectedTheme = null;
+            try { Changed?.Invoke(); }
+            finally
+            {
+                Changed = null;
+                PrepareSelection = null;
+                ValidateLocalSelection = null;
+                children.Clear();
+                selectionDemand?.Dispose();
+                selectionDemand = null;
+                StopPreloads();
+                var demands = surfaceDemands;
+                surfaceDemands = null;
+                if (demands != null)
+                    foreach (var demand in demands) demand.Dispose();
+            }
         }
     }
 }

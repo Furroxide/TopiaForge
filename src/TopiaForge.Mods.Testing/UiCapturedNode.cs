@@ -40,6 +40,9 @@ namespace TopiaForge.Mods.Testing
                 : 0f;
             ThemeId = themeId;
             StyleId = paint.StyleId;
+            RequestedStyleId = paint.RequestedStyleId;
+            RequestedPaintRole = paint.RequestedPaintRole;
+            EffectivePaintRole = paint.EffectivePaintRole;
             CornerRadiusPixels = paint.CornerRadius;
             BorderWidthPixels = paint.BorderWidth;
             ShadowOffsetXPixels = paint.ShadowX;
@@ -82,8 +85,14 @@ namespace TopiaForge.Mods.Testing
         public float ContrastRatio { get; }
         /// <summary>Gets the applied theme id.</summary>
         public string ThemeId { get; }
-        /// <summary>Gets the applied named style id, when present.</summary>
+        /// <summary>Gets the effective named style id, when present.</summary>
         public string? StyleId { get; }
+        /// <summary>Gets the named style requested by a badge or pip group, when present.</summary>
+        public string? RequestedStyleId { get; }
+        /// <summary>Gets the authored paint role of a badge or pip group.</summary>
+        public UiPaintRole? RequestedPaintRole { get; }
+        /// <summary>Gets the effective paint role used for a badge or pip group.</summary>
+        public UiPaintRole? EffectivePaintRole { get; }
         /// <summary>Gets the resolved ink as <c>#RRGGBB</c>, when applicable.</summary>
         public string? InkColor { get; }
         /// <summary>Gets the resolved fill as <c>#RRGGBB</c>, when applicable.</summary>
@@ -127,6 +136,7 @@ namespace TopiaForge.Mods.Testing
         HitTarget = 2048,
         FocusIndicator = 4096,
         LayoutDiagnostic = 8192,
+        BoundaryMark = 16384,
     }
 
     internal readonly struct UiCaptureNodeContent
@@ -151,7 +161,8 @@ namespace TopiaForge.Mods.Testing
     internal readonly struct UiCaptureNodePaint
     {
         internal UiCaptureNodePaint(UiThemeColor? ink, UiThemeColor? fill, float? cornerRadius = null,
-            float? borderWidth = null, float? shadowX = null, float? shadowY = null, string? styleId = null)
+            float? borderWidth = null, float? shadowX = null, float? shadowY = null, string? styleId = null,
+            string? requestedStyleId = null, UiPaintRole? requestedPaintRole = null, UiPaintRole? effectivePaintRole = null)
         {
             Ink = ink;
             Fill = fill;
@@ -160,6 +171,9 @@ namespace TopiaForge.Mods.Testing
             ShadowX = shadowX;
             ShadowY = shadowY;
             StyleId = styleId;
+            RequestedStyleId = requestedStyleId;
+            RequestedPaintRole = requestedPaintRole;
+            EffectivePaintRole = effectivePaintRole;
         }
 
         internal UiThemeColor? Ink { get; }
@@ -169,5 +183,8 @@ namespace TopiaForge.Mods.Testing
         internal float? ShadowX { get; }
         internal float? ShadowY { get; }
         internal string? StyleId { get; }
+        internal string? RequestedStyleId { get; }
+        internal UiPaintRole? RequestedPaintRole { get; }
+        internal UiPaintRole? EffectivePaintRole { get; }
     }
 }

@@ -8,7 +8,7 @@
   "assetIdentity": "Source package manifest and theme definition hashes. UI asset bundles are native visual evidence.",
   "hudSurfaceAlpha": 1,
   "hudSurfaceNote": "Opaque HUD panels keep the text background independent of gameplay.",
-  "packageManifestSha256": "A47D10A550A3897924C8FBDACED9E85477A0EF8D7CF238054D35776077EB6D26",
+  "packageManifestSha256": "EDFEDEE67FAD978CF03234A625ECAEB7F5F4BC0A857E047321B4E1A42E8E0447",
   "sampleDefinitionSha256": "0B2DE3616F0ECD6848F0F9DCEF35430326A4BF64EB719630A28BFE9F984E6DE5",
   "kit": {
     "descriptorSha256": "4602CE2902CF9C95898AEA57EDFD9E9293DD563941CBF191240C299393D89E3A",
