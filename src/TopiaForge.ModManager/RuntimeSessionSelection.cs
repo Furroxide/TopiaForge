@@ -40,7 +40,10 @@ namespace TopiaForge.ModManager
                 if (order.Errors.TryGetValue(manifest.Id, out var excluded)) errors.AddRange(excluded);
                 if (!orderedPaths.Contains(package.PackagePath) && errors.Count == 0)
                     errors.Add("The enabled selection was excluded from dependency loading.");
-                selected.Add(new ModPackage(package.PackagePath, frozen.Manifest,
+                var runtimeManifest = frozen.Manifest;
+                // The content scan's catalogue is local to this installed package.
+                if (errors.Count == 0) runtimeManifest.AdmittedUi = manifest.AdmittedUi;
+                selected.Add(new ModPackage(package.PackagePath, runtimeManifest,
                     package.State == null ? null : JsonUtil.Clone(package.State),
                     errors.Distinct(StringComparer.Ordinal).ToArray(), package.SelectionReason));
                 enabled.Add(frozen);
