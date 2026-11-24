@@ -83,6 +83,29 @@ namespace TopiaForge.ModManager
 
             private UiLayoutConstraints MeasureContentArea(TopiaForgeContainer parent, TopiaForgeWidget view)
             {
+                if (window != null || fullscreen != null)
+                {
+                    // Unity skips inactive layout components. Measure the actual scroll viewport
+                    // before presenting the window or acquiring its focus and cursor.
+                    var wasHidden = !view.Go.activeSelf;
+                    var retained = wasHidden && compositionRoot?.Go.activeSelf == true ? compositionRoot : null;
+                    try
+                    {
+                        // Retained content observes hierarchy changes for motion and sound.
+                        retained?.SetShown(false);
+                        if (wasHidden) view.SetShown(true);
+                        LayoutRebuilder.ForceRebuildLayoutImmediate(view.Rect);
+                        var scrollGroup = parent.Go.GetComponent<VerticalLayoutGroup>();
+                        var scrollWidth = Math.Max(0, parent.Rect.rect.width - (scrollGroup?.padding.horizontal ?? 0));
+                        return MeasureScrollingContent(parent, scrollWidth, scrollGroup);
+                    }
+                    finally
+                    {
+                        if (wasHidden) view.SetShown(false);
+                        retained?.SetShown(true);
+                    }
+                }
+
                 LayoutRebuilder.ForceRebuildLayoutImmediate(view.Rect);
                 var rect = parent.Rect.rect;
                 var group = parent.Go.GetComponent<VerticalLayoutGroup>();
@@ -95,8 +118,6 @@ namespace TopiaForge.ModManager
                         group?.spacing ?? 0f, includesComposition: true);
                 }
                 var width = Math.Max(0, rect.width - (padding?.horizontal ?? 0));
-                if (window != null || fullscreen != null)
-                    return MeasureScrollingContent(parent, width, group);
 
                 var available = rect.height - (padding?.vertical ?? 0);
                 for (var index = 0; index < parent.Rect.childCount; index++)

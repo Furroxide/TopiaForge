@@ -99,7 +99,13 @@ namespace TopiaForge.ModManager.Tests
                     public string name = "";
                     internal object? Component;
                     private object? added;
-                    public void SetActive(bool shown) => activeSelf = shown;
+                    internal Action<bool>? ActiveChanged;
+                    public void SetActive(bool shown)
+                    {
+                        if (shown == activeSelf) return;
+                        activeSelf = shown;
+                        ActiveChanged?.Invoke(shown);
+                    }
                     public T AddComponent<T>() where T : new()
                     {
                         var value = new T();
@@ -115,6 +121,7 @@ namespace TopiaForge.ModManager.Tests
                     public int childCount => 0;
                     public Rect rect => new Rect(0, 0, sizeDelta.x, sizeDelta.y);
                     public Canvas? Canvas;
+                    internal Action? RebuildLayout;
                     public object? GetChild(int index) => null;
                     public T? GetComponentInParent<T>(bool includeInactive) where T : class => Canvas as T;
                     public void GetWorldCorners(Vector3[] buffer)
@@ -143,7 +150,13 @@ namespace TopiaForge.ModManager.Tests
                     public readonly float spacing = 8f;
                 }
                 public sealed class Padding { public int horizontal = 24, vertical = 24; }
-                public static class LayoutRebuilder { public static void ForceRebuildLayoutImmediate(RectTransform value) { } }
+                public static class LayoutRebuilder
+                {
+                    public static void ForceRebuildLayoutImmediate(RectTransform value)
+                    {
+                        if (value.gameObject.activeInHierarchy) value.RebuildLayout?.Invoke();
+                    }
+                }
                 public static class LayoutUtility { public static float GetPreferredHeight(RectTransform value) => value.rect.height; }
             }
 
@@ -201,7 +214,7 @@ namespace TopiaForge.ModManager.Tests
                     public RectTransform Rect { get; set; } = new RectTransform();
                     public GameObject Go => Rect.gameObject;
                     public ProbeTheme ResolvedTheme = new ProbeTheme();
-                    public void SetShown(bool shown) => Go.activeSelf = shown;
+                    public void SetShown(bool shown) => Go.SetActive(shown);
                 }
                 public sealed class TopiaForgeLabel : TopiaForgeWidget
                 {
@@ -307,6 +320,8 @@ namespace TopiaForge.ModManager.Tests
 
                     public static void ProbeHudViewport()
                     {
+                        new UnityUiSurface(new TopiaForgeWindow()).VerifyScrollingLayout();
+                        new UnityUiSurface(new TopiaForgeFullscreenTool()).VerifyScrollingLayout();
                         using (var placement = new UnityUiHudPlacement())
                         {
                             var canvas = new Canvas();
@@ -866,10 +881,59 @@ namespace TopiaForge.ModManager.Tests
                         public bool IsVisible => presence.IsVisible;
                         private GameObject CanvasRoot => widget.Go;
                         private Rect OuterScrollViewport => default;
+                        private float scrollAperture = 100f;
                         private UiLayoutConstraints MeasureScrollingContent(TopiaForgeContainer parent, double width, VerticalLayoutGroup? group) =>
-                            throw new InvalidOperationException("The HUD fixture has no scroll viewport.");
+                            window == null && fullscreen == null
+                                ? throw new InvalidOperationException("The HUD fixture has no scroll viewport.")
+                                : UiLayoutConstraints.ForVerticalScroll(width, scrollAperture);
                         private void RememberOuterScrollOffset() { }
                         private void RestoreOuterScrollOffset() { }
+                        internal UnityUiSurface(TopiaForgeWidget view)
+                        {
+                            widget = view;
+                            window = view as TopiaForgeWindow;
+                            fullscreen = view as TopiaForgeFullscreenTool;
+                            panel = view.Rect;
+                            compositionRoot = new TopiaForgeContainer();
+                            compositionParent.Rect.sizeDelta = new Vector2(740, 0);
+                            view.SetShown(false);
+                        }
+                        internal void VerifyScrollingLayout()
+                        {
+                            // Unity skips layout components on an inactive hierarchy. The fixture starts with a stale aperture.
+                            var retainedReveals = 0;
+                            widget.Go.ActiveChanged = shown =>
+                            {
+                                if (shown && compositionRoot!.Go.activeSelf) retainedReveals++;
+                            };
+                            var contentVisible = false;
+                            widget.Rect.RebuildLayout = () =>
+                            {
+                                Check(compositionRoot!.Go.activeSelf == contentVisible,
+                                    "Measuring chrome must not change the retained tree's hierarchy visibility.");
+                                scrollAperture = 356f;
+                            };
+                            var graph = new UiGraphCanvas("relay-map", Array.Empty<UiGraphNode>(), Array.Empty<UiGraphEdge>(),
+                                _ => { }, height: 320f);
+                            var area = MeasureContentArea(compositionParent, widget);
+                            var measured = UiLayoutEngine.Arrange(graph, area, (_, _, _) => throw new InvalidOperationException());
+                            Check(measured.Size.Height == 320d && !widget.Go.activeSelf && compositionRoot!.Go.activeSelf &&
+                                retainedReveals == 0,
+                                "Sizing a hidden scroll surface admits its graph and restores its hierarchy state.");
+
+                            contentVisible = true;
+                            widget.SetShown(true);
+                            MeasureContentArea(compositionParent, widget);
+                            Check(widget.Go.activeSelf && compositionRoot.Go.activeSelf && retainedReveals == 1,
+                                "Measuring an already visible scroll surface preserves visibility.");
+                            widget.SetShown(false);
+                            var failed = false;
+                            widget.Rect.RebuildLayout = () => throw new InvalidOperationException("failed layout measurement");
+                            try { MeasureContentArea(compositionParent, widget); }
+                            catch (InvalidOperationException failure) when (failure.Message == "failed layout measurement") { failed = true; }
+                            Check(failed && !widget.Go.activeSelf && compositionRoot.Go.activeSelf && retainedReveals == 1,
+                                "A failed hidden scroll measurement restores the hierarchy state.");
+                        }
                         internal UnityUiSurface(UnityUiHudPlacement placement, UiHost host, Canvas canvas, float width, float height,
                             UiNode source, string title = "Readiness", string bodyText = "", TopiaForgeCorner corner = TopiaForgeCorner.TopLeft, bool remote = false)
                         {

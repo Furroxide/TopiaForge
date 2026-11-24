@@ -101,8 +101,8 @@ namespace TopiaForge.ModManager
             }
             json.Append(']').Append('}');
 
-            var captureId = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss.fffffff'Z'", CultureInfo.InvariantCulture);
-            var path = Path.Combine(ownerDirectory, "native-captures", fixture + "-" + captureId + "-" + Guid.NewGuid().ToString("N") + ".json");
+            // The atomic JSON writer also appends a temporary suffix. Keep the fixture prefix and one unique identifier.
+            var path = Path.Combine(ownerDirectory, "native-captures", fixture + "-" + Guid.NewGuid().ToString("N") + ".json");
             JsonUtil.SaveJsonObject(path, json.ToString());
         }
 
