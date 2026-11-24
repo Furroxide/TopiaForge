@@ -22,7 +22,7 @@ on:
         required: false
         type: string
       verify_public_routes:
-        description: Run public smoke checks after the custom domains are attached
+        description: Run public smoke checks (required for the production control plane)
         required: true
         type: boolean
         default: false
@@ -69,8 +69,12 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$TARGET" == control-plane-production && "$VERIFY_PUBLIC_ROUTES" != true ]]; then
+            echo '::error::The production control plane requires public smoke checks.'
+            exit 1
+          fi
           if [[ "$EXPECT_OPEN_PRODUCTION" == true ]]; then
-            [[ "$TARGET" == control-plane-production && "$VERIFY_PUBLIC_ROUTES" == true ]]
+            [[ "$TARGET" == control-plane-production ]]
           fi
           case "$TARGET" in
             status)
@@ -164,11 +168,11 @@ jobs:
             "$(printf '%s\n' 0001_status.sql 0002_claim_owners.sql 0003_public_activity.sql)"
           test "$(sha256sum migrations/0003_public_activity.sql | cut -d' ' -f1)" = "$approved"
 
-      - name: Require smoke checks for a production Worker that admits player routes
+      - name: Read the reviewed production player route setting
+        id: production-route-settings
         if: inputs.target == 'control-plane-production'
         working-directory: source/services/control-plane
         env:
-          VERIFY_PUBLIC_ROUTES: ${{ inputs.verify_public_routes }}
           EXPECT_OPEN_PRODUCTION: ${{ inputs.expect_open_production }}
         run: |
           set -euo pipefail
@@ -180,11 +184,14 @@ jobs:
               production = tomllib.load(source)['env']['production']['vars']
           if production.get('ENVIRONMENT') != 'production':
               raise SystemExit('The reviewed production Worker must identify itself as production')
-          routes_admitted = production.get('PRODUCTION_PLAYER_ROUTES_ENABLED') == 'true'
-          if routes_admitted and os.environ['VERIFY_PUBLIC_ROUTES'] != 'true':
-              raise SystemExit('Production player routes require public smoke checks')
+          setting = production.get('PRODUCTION_PLAYER_ROUTES_ENABLED', 'false')
+          if setting not in ('true', 'false'):
+              raise SystemExit('The reviewed production player route setting must be a string: true or false')
+          routes_admitted = setting == 'true'
           if os.environ['EXPECT_OPEN_PRODUCTION'] == 'true' and not routes_admitted:
               raise SystemExit('The reviewed source must explicitly allow production player routes')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              print(f'admitted={str(routes_admitted).lower()}', file=output)
           PY
 
       - name: Set up Node.js
@@ -323,6 +330,7 @@ jobs:
           TURN_KEY_ID: ${{ secrets.TURN_KEY_ID }}
           TURN_KEY_API_TOKEN: ${{ secrets.TURN_KEY_API_TOKEN }}
           ANALYTICS_API_TOKEN: ${{ secrets.ANALYTICS_API_TOKEN }}
+          PRODUCTION_PLAYER_ROUTES_ADMITTED: ${{ steps.production-route-settings.outputs.admitted }}
           TARGET: ${{ inputs.target }}
           WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
           WRANGLER_SEND_METRICS: 'false'
@@ -381,6 +389,23 @@ jobs:
           except OSError:
               raise SystemExit('Could not create temporary secrets file') from None
           PY
+
+          if [[ "$TARGET" == control-plane-production ]]; then
+            case "$PRODUCTION_PLAYER_ROUTES_ADMITTED" in
+              false)
+                # Disarm the running Worker before publishing locked source so interruption cannot retain an approval.
+                disabled='{"hosting":false,"invites":false,"signaling":false,"relay":false}'
+                printf 'Authorization: Bearer %s\n' "$ADMIN_TOKEN" \
+                  | curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 \
+                      --connect-timeout 10 --max-time 20 --request PUT --header @- \
+                      --header 'Content-Type: application/json' --data "$disabled" \
+                      https://mp.topiaforge.dev/v1/admin/features \
+                  | jq -e --argjson disabled "$disabled" '.environment == "production" and .features == $disabled' >/dev/null
+                ;;
+              true) ;;
+              *) echo '::error::Missing verified production player route setting.'; exit 1 ;;
+            esac
+          fi
           npx --no-install wrangler deploy --config wrangler.deploy.toml --env "$WRANGLER_ENVIRONMENT" --secrets-file "$secrets_file"
 
       - name: Retire unused Worker secrets through the protected environment
