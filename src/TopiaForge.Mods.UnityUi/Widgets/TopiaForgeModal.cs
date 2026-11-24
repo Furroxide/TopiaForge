@@ -49,12 +49,26 @@ namespace TopiaForge.Mods.UnityUi
             bool plainText = false,
             bool persistent = false)
         {
+            return Destructive(title, body, confirmLabel, onConfirm, onCancel, cancelLabel, plainText, persistent, trust: false);
+        }
+
+        internal TopiaForgeModalInstance Destructive(
+            string title,
+            string body,
+            string confirmLabel,
+            Action onConfirm,
+            Action onCancel,
+            string cancelLabel,
+            bool plainText,
+            bool persistent,
+            bool trust)
+        {
             if (onCancel == null)
             {
                 throw new ArgumentNullException(nameof(onCancel));
             }
 
-            return Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper, onCancel, plainText, persistent);
+            return Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper, onCancel, plainText, persistent, trust);
         }
 
         /// <summary>HUD-scheme variant for in-gameplay dialogs.</summary>
@@ -83,6 +97,10 @@ namespace TopiaForge.Mods.UnityUi
             return new TopiaForgeModalInstance(host, title, scheme, width, showTitle: !string.IsNullOrEmpty(title), persistent: persistent);
         }
 
+        internal TopiaForgeModalInstance TrustCustom(string title, float width, bool persistent) =>
+            new TopiaForgeModalInstance(host, title, TopiaForgeScheme.Paper, width, showTitle: !string.IsNullOrEmpty(title),
+                plainTitle: true, persistent: persistent, trust: true);
+
         private TopiaForgeModalInstance Open(
             string title,
             string body,
@@ -93,9 +111,11 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeScheme scheme,
             Action? onCancel = null,
             bool plainText = false,
-            bool persistent = false)
+            bool persistent = false,
+            bool trust = false)
         {
-            var modal = new TopiaForgeModalInstance(host, title, scheme, 480f, showTitle: true, plainTitle: plainText, persistent: persistent);
+            var modal = new TopiaForgeModalInstance(host, title, scheme, 480f, showTitle: true, plainTitle: plainText,
+                persistent: persistent, trust: trust);
             var confirmed = false;
             var bodyLabel = modal.Content.Label(body, TopiaForgeTextStyle.Body);
             if (plainText)
@@ -132,24 +152,30 @@ namespace TopiaForge.Mods.UnityUi
     {
         private readonly GameObject canvasRoot;
         private readonly UiHost host;
+        private readonly TopiaForgeScheme scheme;
         private readonly TopiaForgeContainer dialog;
         private readonly TopiaForgeModalColumn layout;
         private readonly UImage backdrop;
+        private readonly UImage fill;
+        private readonly UImage ring;
         private readonly TopiaForgeCursorLease cursorLease = new TopiaForgeCursorLease();
         private bool open;
         private bool closing;
         private bool tornDown;
 
-        internal TopiaForgeModalInstance(UiHost host, string title, TopiaForgeScheme scheme, float width, bool showTitle, bool plainTitle = false, bool persistent = false)
+        internal TopiaForgeModalInstance(UiHost host, string title, TopiaForgeScheme scheme, float width, bool showTitle,
+            bool plainTitle = false, bool persistent = false, bool trust = false)
         {
             this.host = host;
-            var layer = host.Layer("modal", TopiaForgeLayerBand.Modal, scheme, interactive: true, persistent: persistent);
+            this.scheme = scheme;
+            IsTrust = trust;
+            var layer = trust
+                ? host.TrustLayer(persistent)
+                : host.Layer("modal", TopiaForgeLayerBand.Modal, scheme, interactive: true, persistent: persistent);
             canvasRoot = layer.Go;
             host.RegisterModal(this);
 
-            var theme = host.Theme(scheme);
             backdrop = canvasRoot.AddComponent<UImage>();
-            backdrop.color = theme.Backdrop;
             backdrop.raycastTarget = true;
 
             var panel = layer.CreateChildGameObject("Dialog");
@@ -159,10 +185,9 @@ namespace TopiaForge.Mods.UnityUi
             panelRect.pivot = new Vector2(0.5f, 0.5f);
             panelRect.sizeDelta = new Vector2(width, 200f);
 
-            var fill = CreateDecor(panel.transform, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Dialog), raycast: true);
-            fill.color = theme.Surface;
-            var ring = CreateDecor(panel.transform, "Ring", TopiaForgeSprites.Ring(TopiaForgeRadius.Dialog, TopiaForgeTokens.BorderStrong), raycast: false);
-            ring.color = theme.OutlineStrong;
+            fill = CreateDecor(panel.transform, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Dialog), raycast: true);
+            ring = CreateDecor(panel.transform, "Ring", TopiaForgeSprites.Ring(TopiaForgeRadius.Dialog, TopiaForgeTokens.BorderStrong), raycast: false);
+            RefreshChrome();
 
             layout = panel.AddComponent<TopiaForgeModalColumn>();
             TopiaForgeLayout.ConfigureColumn(layout, TopiaForgeGap.Md, TopiaForgeGap.Xl);
@@ -190,6 +215,16 @@ namespace TopiaForge.Mods.UnityUi
         public event Action? Closed;
 
         internal GameObject CanvasRoot => canvasRoot;
+        internal bool IsTrust { get; }
+
+        internal void RefreshChrome()
+        {
+            if (tornDown || canvasRoot == null) return;
+            var theme = host.Theme(scheme);
+            if (backdrop != null) backdrop.color = theme.Backdrop;
+            if (fill != null) fill.color = theme.Surface;
+            if (ring != null) ring.color = theme.OutlineStrong;
+        }
 
         /// <summary>Gets the owner of the host the modal belongs to: whose action dismissing it is.</summary>
         internal string OwnerId => host.OwnerId;

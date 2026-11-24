@@ -171,16 +171,16 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             rig.Control.Queries[0].Complete(InternalLiveFailure.KnownHostsUnreadable, changed: served);
             rig.Frame();
-            That(rig.Prompt?.Kind == ScreenPromptKind.Destructive && rig.Prompt.Title == ConnectPresenter.TrustTitle &&
+            That(rig.Prompt?.Kind == ScreenPromptKind.TrustIdentity && rig.Prompt.Title == ConnectPresenter.TrustTitle &&
                  rig.Prompt.Paragraphs[0] == LiveFailureMessages.UncheckedServer && rig.Presenter.Connect.ResultText == LiveFailureMessages.UncheckedServer,
                 "a server the game could not check asks the player, and says why (" + rig.Presenter.Connect.ResultText + ")");
-            rig.Answer(ScreenPromptKind.Destructive, false);
+            rig.Answer(ScreenPromptKind.TrustIdentity, false);
             That(!rig.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal)), "declining joins nothing");
             rig.Presenter.Connect.JoinAddress();
             rig.Frame();
             rig.Control.Queries[1].Complete(InternalLiveFailure.KnownHostsUnreadable, changed: served);
             rig.Frame();
-            rig.Answer(ScreenPromptKind.Destructive, true);
+            rig.Answer(ScreenPromptKind.TrustIdentity, true);
             That(rig.Control.LastJoin?.TrustedServerId == served, "trusting it joins that one server only");
 
             var joined = new SessionsRig();

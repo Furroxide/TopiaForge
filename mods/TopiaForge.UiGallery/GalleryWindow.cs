@@ -141,6 +141,8 @@ namespace TopiaForge.UiGallery
             artPages.Button("Icons", () => ShowFoundation(FoundationPage.Icons, previewKind));
             artPages.Button("Images", () => ShowFoundation(FoundationPage.Images, previewKind));
             artPages.Button("Badges and pips", () => ShowFoundation(FoundationPage.BadgesAndPips, previewKind));
+            artPages.Button("Foundation integration", () => ShowFoundation(FoundationPage.FoundationIntegration, previewKind));
+            artPages.Button("Trust and fallback", () => ShowFoundation(FoundationPage.TrustAndFallback, previewKind));
 
             var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);

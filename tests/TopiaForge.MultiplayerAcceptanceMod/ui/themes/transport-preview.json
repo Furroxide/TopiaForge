@@ -9,5 +9,25 @@
   },
   "typography": {
     "label": { "trackingEm": 0.025 }
-  }
+  },
+  "images": [
+    {
+      "id": "card",
+      "bundlePath": "ui/art/preview.bundle",
+      "assetName": "preview-card",
+      "licensePath": "LICENSES/ui-art.txt",
+      "pixelWidth": 96,
+      "pixelHeight": 48,
+      "isMask": false
+    },
+    {
+      "id": "mark",
+      "bundlePath": "ui/art/preview.bundle",
+      "assetName": "preview-mark",
+      "licensePath": "LICENSES/ui-art.txt",
+      "pixelWidth": 32,
+      "pixelHeight": 32,
+      "isMask": true
+    }
+  ]
 }

@@ -44,8 +44,8 @@ namespace TopiaForge.ModManager.Tests
                             ("gallery-interaction-survival-paper", "Survival Paper", TopiaForgeScheme.Paper, UiGallerySurvivalTheme.Descriptor),
                             ("gallery-interaction-survival-hud", "Survival HUD", TopiaForgeScheme.Hud, UiGallerySurvivalTheme.Descriptor),
                         };
-                        Require(TopiaForgeHotkeys.Count == 1 && TopiaForgeWindow.Active.Count == 0,
-                            "There is one startup hotkey and no native Window before it is pressed.");
+                        Require(TopiaForgeHotkeys.Count == 2 && TopiaForgeWindow.Active.Count == 0,
+                            "There are two startup hotkeys and no native Window before either is pressed.");
                         TopiaForgeHotkeys.Press(TopiaForgeKey.F6);
                         Require(TopiaForgeWindow.Active.Count == 0, "The preview does not take SDK acceptance's F6.");
                         UiHost.ViewerAccessibility = new TopiaForgeAccessibilityProfile(true, 2, true, 0);
@@ -175,9 +175,12 @@ namespace TopiaForge.ModManager.Tests
                                 new Dictionary<string, UiThemeDescriptor> { [descriptor.Id] = descriptor }),
                         });
                         var remotePalette = new UiRemoteThemeSelection(envelope, package);
+                        using var receiverLifetime = new OwnerModLifetime();
+                        var receiver = new OwnerUiService(UiPresentationTheme.ReceiverOwner, "receiver", receiverLifetime,
+                            logger, gameplay, placement, themePackages);
                         var remoteRequest = new UiSurfaceRequest("remote-18", ordinaryRequest.Title, ordinaryRequest.Body,
                             ordinaryRequest.Kind, ordinaryRequest.Width, ordinaryRequest.Height, ordinaryRequest.Content);
-                        using var remote = Get(service.RemoteSurface(remoteRequest, remotePalette));
+                        using var remote = Get(receiver.RemoteSurface(remoteRequest, remotePalette));
                         var remoteWindow = TopiaForgeWindow.Active.Single(view => view.Id == remoteRequest.Id);
                         Require(remoteWindow.Scheme == TopiaForgeScheme.Paper && remoteWindow.Theme.Descriptor == survival,
                             "An authenticated remote window resolves its admitted descriptor in ordinary Paper.");
@@ -187,10 +190,18 @@ namespace TopiaForge.ModManager.Tests
                             "A remote caller cannot export interactive preview content.");
                         remote.Dispose();
 
-                        var typography = FoundationPages.CreateRequest(FoundationPage.Typography, UiSurfaceKind.Window);
+                        var typography = FoundationPages.CreateTransportRequest(FoundationPage.Typography,
+                            UiSurfaceKind.Window, FoundationPages.SurvivalTheme);
                         var received = new UiSurfaceRequest("remote-29", typography.Title, typography.Body,
                             typography.Kind, typography.Width, typography.Height, typography.Content);
-                        using var remoteFixture = Get(service.RemoteSurface(received, remotePalette));
+                        using (Get(service.RemoteSurface(received, remotePalette)))
+                        {
+                            GameObject.Tick();
+                            GameObject.Tick();
+                            Require(UiGalleryCaptureJson.Records.Count == beforeImitation,
+                                "Only the loader presentation receiver can record a paired fixture.");
+                        }
+                        using var remoteFixture = Get(receiver.RemoteSurface(received, remotePalette));
                         GameObject.Tick();
                         GameObject.Tick();
                         var reflected = UiGalleryCaptureJson.Records.Last();
@@ -200,10 +211,46 @@ namespace TopiaForge.ModManager.Tests
                             "The recorder receives the original authenticated Survival envelope and canonical admitted descriptor.");
                         remoteFixture.Dispose();
 
+                        var graphFixture = FoundationPages.CreateRequest(FoundationPage.GraphConnections, UiSurfaceKind.Window);
+                        foreach (var highContrast in new[] { false, true })
+                        {
+                            UiHost.ViewerAccessibility = new TopiaForgeAccessibilityProfile(highContrast, 2, true, 0);
+                            for (var index = 0; index <= modes.Length; index++)
+                            {
+                                var mode = modes[index % modes.Length];
+                                var earlier = UiGalleryCaptureJson.Records.Count;
+                                TopiaForgeHotkeys.Press(TopiaForgeKey.F4);
+                                var graphWindow = TopiaForgeWindow.Active.Single();
+                                Require(graphWindow.Id == mode.Item1.Replace("gallery-interaction-", "gallery-graph-") &&
+                                    graphWindow.Title == "Graph connections · " + mode.Item2 &&
+                                    graphWindow.Scheme == mode.Item3 && ReferenceEquals(graphWindow.Theme.Descriptor, mode.Item4) &&
+                                    graphWindow.Width == graphFixture.Width && graphWindow.Height == graphFixture.Height,
+                                    "F4 cycles the four approved palette and scheme pairs in the graph Window.");
+                                Require(All(graphWindow.Admitted!).Select(Shape).SequenceEqual(All(graphFixture.Content!).Select(Shape)),
+                                    "F4 uses the shared graph fixture and all its authored nodes.");
+                                var relay = All(graphWindow.Admitted!).OfType<UiGraphCanvas>().Single(graph => graph.Id == "relay-map");
+                                Require(relay.Edges.Count == 2, "The retained relay exposes both measured connections.");
+                                relay.ConnectionRemoved!("lower-relay");
+                                Require(graphWindow.Body?.Value == "Remove requested for lower-relay.",
+                                    "The source-owned graph callback updates the active Window.");
+                                GameObject.Tick();
+                                GameObject.Tick();
+                                var capture = UiGalleryCaptureJson.Records.Last();
+                                Require(UiGalleryCaptureJson.Records.Count == earlier + 1 && capture.Fixture == graphWindow.Id &&
+                                    capture.Viewer == "guest-local" && capture.Envelope == null &&
+                                    capture.Theme.Scheme == mode.Item3 && capture.Accessibility.HighContrast == highContrast,
+                                    "The recorder uses the graph identity, local viewer and actual contrast profile.");
+                            }
+                            TopiaForgeHotkeys.Press(TopiaForgeKey.F3);
+                            Require(TopiaForgeWindow.Active.Single().Id == modes[0].Item1,
+                                "Switching preview keys replaces the Window and restarts the other cycle.");
+                        }
+
                         preview!.Dispose();
                         Require(TopiaForgeWindow.Active.Count == 0 && TopiaForgeHotkeys.Count == 0,
-                            "Loader teardown retires its Window, F3 and settled F11 recorder.");
+                            "Loader teardown retires its Window, F3, F4 and the settled F11 recorder.");
                         TopiaForgeHotkeys.Press(TopiaForgeKey.F3);
+                        TopiaForgeHotkeys.Press(TopiaForgeKey.F4);
                         Require(TopiaForgeWindow.Active.Count == 0, "Disposed preview cannot reopen.");
                     }
 

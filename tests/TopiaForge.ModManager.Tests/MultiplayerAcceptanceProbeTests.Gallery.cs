@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
@@ -17,31 +18,27 @@ namespace TopiaForge.ModManager.Tests
         {
             var root = Program.FindRepoRoot();
             var package = Path.Combine(root, "tests", "TopiaForge.MultiplayerAcceptanceMod");
-            var declaration = File.ReadAllText(Path.Combine(package, "topiaforge.mod.json"));
-            var manifest = ModManifestJson.Deserialize(declaration);
-            const string definition = "ui/themes/transport-preview.json";
-            var fixture = File.ReadAllBytes(Path.Combine(package, "ui", "themes", "transport-preview.json"));
+            var fixture = new AcceptanceGalleryPackage();
+            var manifest = ModManifestJson.Deserialize(fixture.Manifest);
             var gallery = Path.Combine(root, "mods", "TopiaForge.UiGallery");
             var galleryManifest = ModManifestJson.Deserialize(File.ReadAllText(Path.Combine(gallery, "topiaforge.mod.json")));
             var catalogue = UiThemeCatalogueParser.ParseManifest(File.ReadAllBytes(Path.Combine(package, "topiaforge.mod.json")));
-            var descriptor = UiThemePackParser.Parse(fixture, expectedId: FoundationPages.TransportTheme.Id);
+            using var declared = JsonDocument.Parse(fixture.Manifest);
             Check(manifest.Id == UiGalleryCaptureFixture.RemoteFixtureOwner &&
                 manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.Session &&
+                declared.RootElement.GetProperty("x-topiaforge-non-distributable").GetBoolean() &&
                 catalogue.TryGetValue(out var themes) && themes.Default == null &&
-                themes.Themes.Count == 2 && themes.Themes[0].Definition == definition && descriptor.Succeeded &&
+                themes.Themes.Count == 2 && themes.Themes[0].Definition == AcceptanceGalleryPackage.DefinitionPath &&
                 themes.Themes[0].Id == FoundationPages.TransportTheme.Id &&
                 themes.Themes[1].Definition == "ui/themes/survival.json" && themes.Themes[1].Id == FoundationPages.SurvivalTheme.Id &&
                 !File.Exists(Path.Combine(package, "ui", "themes", "survival.json")),
-                "The shared test publisher owns two non-default fixture palettes. Survival is staged only when packing.");
-            var survival = File.ReadAllText(Path.Combine(gallery, "ui", "themes", "survival.json"));
-            string StagedDefinition(string path) => path switch
-            {
-                definition => System.Text.Encoding.UTF8.GetString(fixture),
-                "ui/themes/survival.json" => survival,
-                _ => throw new FileNotFoundException(path),
-            };
+                "The non-distributable Shared test publisher has both non-default palettes and stages Survival at pack time.");
+            Check(fixture.Descriptor.Images[0] is { Id: "card", PixelWidth: 96, PixelHeight: 48, IsMask: false } &&
+                fixture.Descriptor.Images[1] is { Id: "mark", PixelWidth: 32, PixelHeight: 32, IsMask: true },
+                "The actual packer admits this package's artwork and keeps the receipt's sprite dimensions and Alpha8 mask.");
             var localProfile = new ModNetProfile(ModNetworkClasses.Classify(galleryManifest), ModExecutionContext.Process);
             var publisherProfile = new ModNetProfile(ModNetworkClasses.Classify(manifest), ModExecutionContext.Process);
+            Check(publisherProfile.NetworkClass == ModNetworkClass.Shared, "The F7 publisher uses the Shared package profile.");
             Check(PresentationRoutingPolicy.Route(NetRealm.Client, localProfile, PresentationKind.HudSurface) == PresentationRoute.Local &&
                 PresentationRoutingPolicy.RouteTargeted(NetRealm.ListenHost, localProfile, false, PresentationKind.HudSurface) ==
                 PresentationRoute.Refused, "The ordinary Gallery renders on a connected guest and cannot publish to another peer.");
@@ -80,29 +77,42 @@ namespace TopiaForge.ModManager.Tests
             Check(context.Ui.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud &&
                 target.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud,
                 "F7 can advance a visible preview and retires the previous pair.");
-            Check(context.Ui.AddThemeCatalogue(declaration, StagedDefinition).Succeeded, "Admit the host's complete staged catalogue.");
+            fixture.Install(context.Ui);
             Press();
             Check(context.Ui.Surfaces.Count == 0 && target.Surfaces.Count == 0,
                 "If the target refuses its fixture, the newly opened local surface is retired.");
-            Check(target.AddThemeCatalogue(declaration, StagedDefinition).Succeeded, "Admit the guest's independent staged catalogue.");
+            fixture.Install(target);
             Press();
             Check(context.Ui.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id &&
                 target.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id &&
                 target.Surfaces[0].Request.Kind == UiSurfaceKind.Window,
                 "After a refusal the next press retries the same paired variant.");
+            for (var variant = 3; variant < GalleryRemotePreview.VariantCount; variant++)
+            {
+                Press();
+                var expected = GalleryRemotePreview.Request(variant);
+                var hostSurface = context.Ui.Surfaces.Single();
+                var guestSurface = target.Surfaces.Single();
+                Check(hostSurface.Request.Id == expected.Id && guestSurface.Request.Id == expected.Id &&
+                    hostSurface.Request.Kind == expected.Kind && guestSurface.Request.Kind == expected.Kind &&
+                    hostSurface.Request.Theme?.Id == expected.Theme?.Id && guestSurface.Request.Theme?.Id == expected.Theme?.Id,
+                    "F7 navigates every applicable K1 page in both schemes without retaining stale surfaces.");
+                if (expected.Id != FoundationLayoutPages.LayoutNotice().Id) continue;
+
+                var doubleScale = new UiAccessibilityPreferences(uiScale: 2f);
+                Check(context.Ui.ApplyAccessibility(doubleScale).Succeeded && target.ApplyAccessibility(doubleScale).Succeeded,
+                    "Both viewers can change scale after the wide HUD has been admitted.");
+                var viewport = new UiCaptureViewport(1920, 1080);
+                Check(ShowsNotice(hostSurface.Capture(viewport)) && ShowsNotice(guestSurface.Capture(viewport)),
+                    "Both paired HUDs keep their titles and replace the wide content with an unclipped layout notice.");
+                Check(context.Ui.ApplyAccessibility(UiAccessibilityPreferences.Default).Succeeded &&
+                    target.ApplyAccessibility(UiAccessibilityPreferences.Default).Succeeded &&
+                    !ShowsNotice(hostSurface.Capture(viewport)) && !ShowsNotice(guestSurface.Capture(viewport)),
+                    "Both paired HUDs restore the original content when the viewer's scale recovers.");
+            }
             Press();
-            Check(target.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud &&
-                target.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id,
-                "The separately scoped transport fixture gets both shells.");
-            Press();
-            Check(context.Ui.Surfaces.Single().Request.Theme?.Id == FoundationPages.SurvivalTheme.Id &&
-                target.Surfaces.Single().Request.Theme?.Id == FoundationPages.SurvivalTheme.Id &&
-                target.Surfaces.Single().Request.Kind == UiSurfaceKind.Window,
-                "F7 sends the Survival Window through each public owner scope.");
-            Press();
-            Check(target.Surfaces.Single().Request.Theme?.Id == FoundationPages.SurvivalTheme.Id &&
-                target.Surfaces.Single().Request.Kind == UiSurfaceKind.Hud,
-                "F7 sends the Survival HUD through the authenticated guest route.");
+            Check(context.Ui.Surfaces.Single().Request.Id == GalleryRemotePreview.Request(0).Id,
+                "F7 wraps from the diagnostics back to Theme packs.");
             var second = rig.AddRemoteClient("second-guest");
             rig.Advance(8);
             Check(second.ParticipantId.HasValue && GalleryRemotePreview.FindGuest(source.Snapshot) == null &&
@@ -110,6 +120,10 @@ namespace TopiaForge.ModManager.Tests
                 "A second guest invalidates the pair and retires both owned surfaces.");
             runner.Unload();
             context.AssertNoLeaks();
+
+            static bool ShowsNotice(UiTreeCapture captured) =>
+                captured.Nodes.Any(node => node.Kind == "LayoutFallback" && node.IsRendered && !node.Clipped) &&
+                captured.Nodes.Any(node => node.Kind == "SurfaceTitle" && node.IsRendered && !node.Clipped);
 
             void Press()
             {

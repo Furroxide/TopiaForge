@@ -27,7 +27,6 @@ namespace TopiaForge.Mods.UnityUi
         private TopiaForgeResolvedTheme? hudTheme;
         private TopiaForgeRgba? accent;
         private bool disposed;
-        private bool initReported;
         internal bool PlainText { get; set; }
 
         internal UiHost(TopiaForgeUiOptions options)
@@ -170,7 +169,18 @@ namespace TopiaForge.Mods.UnityUi
         {
             ThrowIfDisposed();
             ReportInitOnce();
-            var root = TopiaForgeLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent);
+            return TrackLayer(TopiaForgeLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent), scheme);
+        }
+
+        internal TopiaForgeContainer TrustLayer(bool persistent)
+        {
+            ThrowIfDisposed();
+            ReportInitOnce();
+            return TrackLayer(TopiaForgeLayers.CreateTrustCanvas(OwnerId + ":trust", persistent), TopiaForgeScheme.Paper);
+        }
+
+        private TopiaForgeContainer TrackLayer(GameObject root, TopiaForgeScheme scheme)
+        {
             if (PlainText) root.AddComponent<TopiaForgePlainTextRoot>();
             TopiaForgeLayers.WatchLoss(root, HandleLayerLost);
             layerRoots.Add(root);
@@ -372,21 +382,6 @@ namespace TopiaForge.Mods.UnityUi
                     TopiaForgeLog.Warn("UiHost '" + OwnerId + "' could not refresh a widget theme: " + exception.Message);
                 }
             }
-        }
-
-        private void ReportInitOnce()
-        {
-            if (initReported)
-            {
-                return;
-            }
-
-            initReported = true;
-            TopiaForgeLog.Info(
-                "UiHost '" + OwnerId + "' initialized (fonts: " + TopiaForgeFonts.ResolvedTier +
-                ", input: " + (TopiaForgeInput.LegacyAvailable ? "legacy/both" : "input-system") +
-                ", ui-scale: " + EffectiveUiScale.ToString("0.##") +
-                ", high-contrast: " + (EffectiveHighContrast ? "on" : "off") + ").");
         }
 
         private void ThrowIfDisposed()

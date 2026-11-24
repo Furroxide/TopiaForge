@@ -5,6 +5,7 @@ using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Testing;
+using TopiaForge.TestSupport;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
@@ -69,11 +70,9 @@ internal static partial class RuntimeAdmissionTests
 
         That(targetedReceipt.Surface.ActivateButton("ready").Succeeded && rig.Run(() => callbacks == 1),
             "The envelope route returns the original targeted callback without running recipient gameplay code.");
-        _ = targeted.SetContent(contents);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var index = 0; index < 10_000; index++) _ = targeted.SetContent(contents);
-        var after = GC.GetAllocatedBytesForCurrentThread();
-        That(after == before, "No-op retained writes consume zero managed bytes on the targeted K1 route.");
+        var settledBytes = AllocationProbe.Measure("settled targeted K1 content", () => _ = targeted.SetContent(contents),
+            frames: 10_000, warmups: 256);
+        That(settledBytes == 0, "No-op retained writes consume zero managed bytes on the targeted K1 route.");
 
         That(host.Ui.Themes.UseTheme(new UiThemeRef("second")).Succeeded, "Changing the scope selection stages all retained routes.");
         That(rig.Run(() => guest.Ui.Surfaces.Values.All(surface => surface.Theme.Envelope?.ThemeId == "second")),
@@ -104,6 +103,7 @@ internal static partial class RuntimeAdmissionTests
     {
         private readonly FakeModLifetime lifetime = new();
         private readonly RuntimeReplication? origin;
+        internal readonly MultiplayerReplication Replication;
         internal readonly MultiplayerPlayers Players;
         internal readonly PlayerDirectory? Directory;
         internal readonly ThemeProbe Ui;
@@ -112,10 +112,10 @@ internal static partial class RuntimeAdmissionTests
         {
             var runtime = peer.Composition;
             runtime.Disconnect();
-            var replication = new MultiplayerReplication(runtime);
-            var presence = MultiplayerPresence.Install(runtime, replication, new FakePresenceBackend { RecordTrails = false }, clock);
+            Replication = new MultiplayerReplication(runtime);
+            var presence = MultiplayerPresence.Install(runtime, Replication, new FakePresenceBackend { RecordTrails = false }, clock);
             Players = MultiplayerPlayers.Install(runtime, presence);
-            replication.Players = Players;
+            Replication.Players = Players;
             if (art != null)
                 peer.Runtime.Inventory.Packages.Single(package => package.Manifest.Id == Sandbox.Id).Manifest.AdmittedUi = art;
             Ui = new ThemeProbe(lifetime, author, art);
@@ -125,7 +125,7 @@ internal static partial class RuntimeAdmissionTests
             if (!author) return;
             Ui.PresentationThemeScope!.PrepareSelection = Players.PrepareThemeSelection;
             var profile = new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer);
-            origin = replication.Bind(Sandbox.Id, profile, lifetime);
+            origin = Replication.Bind(Sandbox.Id, profile, lifetime);
             var context = Players.Bind(Sandbox.Id, true, new CapturedModLogger(), lifetime,
                 new FakeLocalPlayerService(lifetime), Ui, new ModInputActivity());
             Directory = new PlayerDirectory(() => peer.Session.Snapshot, () => 0, context);
@@ -161,6 +161,14 @@ internal static partial class RuntimeAdmissionTests
             foreach (var id in new[] { "first", "second" })
                 declared.Add(id, UiThemePackParser.Parse(Encoding.UTF8.GetBytes("{\"schema\":1,\"id\":\"" + id + "\"}")).Value!);
             PresentationThemeScope = new UiThemeScope(lifetime, new AdmittedUiCatalogue(null, declared));
+        }
+
+        internal ThemeProbe(FakeModLifetime lifetime, AdmittedUiCatalogue catalogue)
+        {
+            ui = new FakeUiService(lifetime);
+            var scope = new UiThemeScope(lifetime, catalogue);
+            lifetime.Track(scope);
+            PresentationThemeScope = scope;
         }
 
         public IUiThemeService Themes => PresentationThemeScope!;

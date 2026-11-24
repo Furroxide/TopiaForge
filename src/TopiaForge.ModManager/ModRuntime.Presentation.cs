@@ -9,7 +9,7 @@ namespace TopiaForge.ModManager
         private PresentationSink CreatePresentationSink()
         {
             // This receiver has no author callbacks or mod dependency: server-only gamemodes can show a plain HUD too.
-            const string id = "topiaforge.presentation";
+            const string id = UiPresentationTheme.ReceiverOwner;
             var gameplay = coreGameplayServices.Create(id, string.Empty, paths.GetDataPath(id), presentationLifetime,
                 logger.ForMod(id), new ModNetProfile(ModNetworkClass.ClientLocal, ModExecutionContext.Process));
             if (gameplay.Ui is OwnerUiService owner)

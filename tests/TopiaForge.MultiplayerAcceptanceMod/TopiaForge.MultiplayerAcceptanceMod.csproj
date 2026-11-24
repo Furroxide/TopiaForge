@@ -12,6 +12,7 @@
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationLayoutPages.cs" Link="Gallery/FoundationLayoutPages.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationGraphPages.cs" Link="Gallery/FoundationGraphPages.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationArtPages.cs" Link="Gallery/FoundationArtPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationIntegrationPages.cs" Link="Gallery/FoundationIntegrationPages.cs" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj" Private="false" />
     <ProjectReference Include="../../src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

@@ -206,7 +206,7 @@ namespace TopiaForge.ModManager.Tests
             foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer"), "*.cs"))
             {
                 var source = File.ReadAllText(file);
-                foreach (Match call in Regex.Matches(source, @"Modal\.(?:Custom|Destructive|Confirm|ConfirmHud)\([^;]*;", RegexOptions.CultureInvariant | RegexOptions.Singleline))
+                foreach (Match call in Regex.Matches(source, @"Modal\.(?:Custom|TrustCustom|Destructive|Confirm|ConfirmHud)\([^;]*;", RegexOptions.CultureInvariant | RegexOptions.Singleline))
                 {
                     modals++;
                     That(call.Value.Contains("persistent: true", StringComparison.Ordinal), Path.GetFileName(file) + " opens a modal that survives scene loads: " + call.Value.Trim());

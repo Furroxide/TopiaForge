@@ -172,22 +172,71 @@ state and microphone checks still need a live run.
 
 ### Manual Gallery visual gate
 
-Use the same freshly packed `dev.topiaforge.multiplayer-acceptance` archive on both isolated peers. On the
-host profile, create the empty file
-`BepInEx/TopiaForge/data/dev.topiaforge.multiplayer-acceptance/gallery-remote-preview.enabled` before loading
-the package. The marker selects the Gallery preview in place of that process's acceptance checklist and
-automated evidence. Keep the marker outside profiles used for the acceptance runner.
+Use the same freshly packed `dev.topiaforge.multiplayer-acceptance` archive on both isolated visual profiles.
+Create the empty file `BepInEx/TopiaForge/data/dev.topiaforge.multiplayer-acceptance/gallery-remote-preview.enabled`
+before loading each visual profile. This mode selects the Gallery preview and skips the usual acceptance checklist.
+Use separate profiles for the acceptance runner.
 
-Once the normal session reports a ready host and exactly one connected guest, press F7 on the host.
-Each press opens the same authored fixture on the host and sends it to that guest through `IPlayer.Ui`.
-The sequence runs Theme packs, then Typography. Each page cycles the kit palette, the transport test palette
-and authenticated Survival, in a Paper Window and a HUD for each. Set resolution, accessibility and UI scale
-on each profile before collecting a case. The guest uses its own admitted copy of the test package and its
-own preferences. Label the viewer, palette and delivery route in the visual manifest.
+Once the normal session reports a ready listen host and exactly one admitted guest, press F7 on the host.
+Each press opens a host-local fixture and sends the same safe composition to the guest through `IPlayer.Ui`.
+The sequence starts at Theme packs and ends at Layout fit, then wraps after 69 successful presses.
+Each of the first eleven pages cycles Paper and HUD for the kit palette, the acceptance transport palette,
+and authenticated Survival, in that order. Layout fit opens one HUD for each of those palettes.
 
-Use the ordinary Gallery on the listen host and on the connected guest for the complete Interaction states
-page. Label the guest case `guest-local`. The current wire contract excludes the graph canvas in that fixture.
-The Theme packs and Typography pair provides separate authenticated delivery evidence.
+| Page | First press from a fresh fixture |
+| --- | --- |
+| Theme packs | 1 |
+| Typography | 7 |
+| Flex and padding | 13 |
+| Wrap and grid | 19 |
+| Stack and bounds | 25 |
+| Cards and dividers | 31 |
+| Icons | 37 |
+| Images | 43 |
+| Badges and pips | 49 |
+| Foundation integration | 55 |
+| Trust and fallback | 61 |
+| Layout fit | 67 |
+
+The Shared acceptance package owns its `transport-preview` descriptor and its copy of the CC0 sample bundle, receipt,
+and license. The guest checks the authenticated package and descriptor for image references even in the kit variants.
+The disposable acceptance build stages the exact Survival definition from the Gallery for the paired palette.
+Record the F7 viewers as `listen-host` and `remote-guest`, and note the targeted delivery in the visual manifest.
+Use the ordinary F8 Gallery on both peers for local Interaction states and Graph connections. Label the connected
+guest's locally opened pages `guest-local`.
+
+Set each viewer's resolution, scale, contrast, and motion preferences for the matrix before opening the fixture.
+For all three Layout fit variants, start with each viewer at scale 1.0. After the wide HUD has opened, change each
+viewer to scale 2.0 and capture its title and layout notice. Return to scale 1.0 and capture the restored content.
+With `TOPIAFORGE_UI_GALLERY_CAPTURE=1`, collect the settled tree alongside the raster capture. Use F11 to repeat a
+settled observation. Scroll tall pages in stages so the delivered evidence includes every authored row.
+The managed test executable's `--ui-kit-gallery-fixtures` option checks the publisher sequence and paired
+fixture lifetimes headlessly.
+
+#### Art fallback
+
+Compare the kit HUD variant of **Trust and fallback** on a ready pair. To reproduce unavailable artwork, use a fresh
+isolated pair that has admitted its identical archives and has yet to open a preview. On the guest only, hold an
+exclusive Windows read handle (`FileAccess.Read`, `FileShare.None`) on the installed acceptance package's
+`ui/art/preview.bundle`. Keep the handle open through the fallback capture. The bundle bytes and package identity stay
+intact. Press F7 through the diagnostic's kit HUD variant. Compare the host's picture and guest's placeholder at the
+same viewport and profile. The placeholder should retain the supply card's frame and readable label. The decorative
+marker should have no fallback text. Dispose the handle and use a fresh pair for the ready follow-up.
+
+#### Loader trust isolation
+
+Use an isolated Windows guest profile and a coordinator-owned local host reachable by typed address. Keep the guest
+out of a session for this check. Before starting that guest, take the SHA-256 of its existing
+`BepInEx/TopiaForge/data/io.github.furroxide.topiaforge.multiplayer/multiplayer/known-hosts.json` and hold an exclusive
+Windows read handle on that file. Use a disposable copy of a test profile with an existing known-hosts record.
+
+Open F8 Gallery, select its HUD scheme and the Survival sample, and open **Trust and fallback**. Leave this authored
+HUD visible and go to the manager's **MULTIPLAYER → CONNECT** tab. Enter the test host's local address and use the
+typed-address join check. When the provider returns `KnownHostsUnreadable`, the loader opens **Trust this server?**.
+Observe that the loader prompt stays in the kit Paper palette, stays above the Gallery HUD, and owns focus and Back.
+Capture the prompt with the visible Gallery area and save the Gallery's settled tree separately. Use Cancel or Back to
+dismiss the prompt. Dispose the file handle and verify the record's hash. Before exporting the raster, check that the
+typed address and any other private connection fields are outside the capture.
 
 ## Joining
 

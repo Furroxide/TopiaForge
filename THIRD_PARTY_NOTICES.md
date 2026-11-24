@@ -120,6 +120,8 @@ inventory covers every non-source file a user receives rather than only the ones
   `tools/unity-ui-bundle/Assets/UiResourceSamples/PreviewMark.png`. The repository's deterministic
   `tools/unity-ui-bundle/make_ui_resource_samples.py` recipe builds the sprites. The Gallery and
   template each carry the CC0 1.0 notice and a receipt for their own compiled bundle.
+  The paired multiplayer acceptance fixture also carries a CC0 1.0 notice and a receipt for
+  `tests/TopiaForge.MultiplayerAcceptanceMod/ui/art/preview.bundle`.
 - `templates/TopiaForge.UnityWorldTemplate/Assets/HDRPDefaultResources/*.asset` are Unity YAML
   configuration assets authored by this project. They hold settings values and reference HDRP script
   GUIDs; the HDRP package itself is resolved by the consumer's Unity and is not redistributed here.

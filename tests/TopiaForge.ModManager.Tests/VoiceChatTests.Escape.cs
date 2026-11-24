@@ -7,6 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.ModManager.Voice;
 using TopiaForge.Mods;
+using TopiaForge.Mods.UnityUi;
 using static TopiaForge.ModManager.Tests.SessionAssert;
 using LayerBand = TopiaForge.Mods.UnityUi.TopiaForgeLayerBand;
 
@@ -103,24 +104,31 @@ namespace TopiaForge.ModManager.Tests
             That(steps.Count == 3 && steps[1].ToString() == "Release();" && steps[2] is TryStatementSyntax attempt && attempt.Catches.Count == 1,
                 "Esc takes the capture off the stack, then cancels it inside a guard");
 
-            // The consent's place on the stack is the kit's and the view's own: the stack dismisses the highest band and,
-            // within it, the latest pushed; the consent is a kit modal, in the modal band and pushed as it shows; and closing it
-            // any way answers no.
             var kit = Path.Combine(root, "src", "TopiaForge.Mods.UnityUi");
             var stack = TypeIn(Path.Combine(kit, "Runtime", "TopiaForgeDismissStack.cs"), "TopiaForgeDismissStack");
-            var picks = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(kit, "Core", "TopiaForgeDismissOrder.cs"))).GetRoot().DescendantNodes()
-                .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "TopIndex");
-            That(Calls(stack, "Top", "Order.Top") &&
-                 picks.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(test => test.ToString() == "surfaces[index].Band >= surfaces[top].Band"),
-                "the kit's stack dismisses the highest band and, within it, the latest pushed");
+            That(Calls(stack, "Top", "Order.Top") && Calls(stack, "TickEscape", "Order.TakeOnBack",
+                    "TopiaForgeInput.BackHeld()", "TopiaForgeInput.BackPressedThisFrame()"),
+                "The Unity stack uses the kit's shared order when polling Back.");
+            var order = new TopiaForgeDismissOrder(_ => true, _ => false);
+            var capture = new VoiceDismissTarget(LayerBand.Modal);
+            var consentModal = new VoiceDismissTarget(LayerBand.Modal);
+            var overlayWindow = new VoiceDismissTarget(LayerBand.Window);
+            order.Push(capture, TopiaForgeInputClaim.Keyboard, null);
+            order.Push(consentModal, TopiaForgeInputClaim.Navigation, null);
+            order.Push(overlayWindow, TopiaForgeInputClaim.Navigation, null);
+            That(ReferenceEquals(order.TakeOnBack(held: true, pressedThisFrame: true), consentModal) &&
+                 ReferenceEquals(order.Top(), capture),
+                "Back dismisses the later consent modal ahead of the capture and the newer overlay window.");
             var modal = TypeIn(Path.Combine(kit, "Widgets", "TopiaForgeModal.cs"), "TopiaForgeModalInstance");
             That(BandOf(modal) == "TopiaForgeLayerBand.Modal" &&
                  Calls(modal, "Show", "TopiaForgeDismissStack.Push", "this", "TopiaForgeInputClaim.Navigation", "canvasRoot"),
                 "a kit modal joins the stack in the modal band and owns navigation as it shows");
             var consent = TypeIn(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer", "MultiplayerVoiceView.cs"), "MultiplayerVoiceView")
                 .Members.OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "AskConsent").Body!.ToString();
-            That(consent.Contains("host.Modal.Custom(", StringComparison.Ordinal) && consent.Contains("modal.Show();", StringComparison.Ordinal) &&
-                 consent.Contains("modal.Closed += () => question.Answer(false);", StringComparison.Ordinal), "the consent is such a modal, and closing it any way answers no");
+            That(consent.Contains("MultiplayerPromptModals.Consent(host, question.Title)", StringComparison.Ordinal) &&
+                 consent.Contains("modal.Show();", StringComparison.Ordinal) &&
+                 consent.Contains("modal.Closed += () => question.Answer(false);", StringComparison.Ordinal),
+                "The consent uses the loader's trust-modal factory and answers no when closed.");
             That(consent.Contains("var decline = row.Button(question.DeclineLabel, () => question.Answer(false));", StringComparison.Ordinal) &&
                  consent.IndexOf("decline.Focus();", StringComparison.Ordinal) > consent.IndexOf("modal.Show();", StringComparison.Ordinal),
                 "the consent focuses Not now after showing, so Enter and controller A decline");
@@ -130,6 +138,12 @@ namespace TopiaForge.ModManager.Tests
             That(pressed.Body!.Statements.Last() is ReturnStatementSyntax returns && returns.Expression!.ToString() ==
                  "(button != null && button.wasPressedThisFrame) || (key != Key.None && TopiaForgeInputOwnership.KeyPressedThisFrame(key))",
                 "with the Input System alone the capture reads the kit's taken keys too, without treating a mouse button as a key");
+        }
+
+        private sealed class VoiceDismissTarget(LayerBand band) : ITopiaForgeDismissable
+        {
+            public LayerBand Band { get; } = band;
+            public void Dismiss() { }
         }
 
         private static void CancelledAlone(VoiceRig rig, string order) =>

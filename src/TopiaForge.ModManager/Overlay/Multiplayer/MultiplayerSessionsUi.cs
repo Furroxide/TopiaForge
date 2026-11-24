@@ -47,23 +47,17 @@ namespace TopiaForge.ModManager.Sessions
 
         private IPromptDialog Show(ScreenPrompt prompt)
         {
-            if (prompt.Kind == ScreenPromptKind.Destructive)
+            if (prompt.Kind is ScreenPromptKind.Destructive or ScreenPromptKind.TrustIdentity)
             {
                 // A confirmation can name a player by the name they chose, so it renders as plain text. Prompts persist
                 // across scene loads, as a session that ends meanwhile can load another: a prompt destroyed unanswered
                 // would hold the queue for good, and one that no longer applies is closed through its dialog instead.
-                return new PromptDialog(host.Modal.Destructive(
-                    prompt.Title,
-                    prompt.Paragraphs.Count == 0 ? string.Empty : prompt.Paragraphs[0],
-                    prompt.ConfirmLabel,
-                    () => prompt.Answer(true),
-                    () => prompt.Answer(false),
-                    prompt.CancelLabel.Length == 0 ? "CANCEL" : prompt.CancelLabel,
-                    plainText: true,
-                    persistent: true));
+                return new PromptDialog(MultiplayerPromptModals.Destructive(host, prompt));
             }
 
-            var modal = host.Modal.Custom(prompt.Title, TopiaForgeScheme.Paper, 560f, persistent: true);
+            var modal = prompt.Kind is ScreenPromptKind.Disclosure or ScreenPromptKind.DirectConnection
+                ? MultiplayerPromptModals.Consent(host, prompt.Title)
+                : host.Modal.Custom(prompt.Title, TopiaForgeScheme.Paper, 560f, persistent: true);
             foreach (var paragraph in prompt.Paragraphs) modal.Content.Label(paragraph, TopiaForgeTextStyle.Body).PlainText();
             if (prompt.Kind == ScreenPromptKind.Password) return ShowPassword(modal, prompt);
             var row = modal.Content.Row(TopiaForgeGap.Sm);

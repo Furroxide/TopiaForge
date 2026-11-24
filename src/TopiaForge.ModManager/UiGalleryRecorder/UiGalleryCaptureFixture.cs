@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using TopiaForge.Mods;
 using TopiaForge.UiGallery.Pages;
 
@@ -10,10 +11,12 @@ namespace TopiaForge.ModManager
     {
         internal const string Owner = "io.github.furroxide.topiaforge.uigallery";
         internal const string RemoteFixtureOwner = "dev.topiaforge.multiplayer-acceptance";
+        private const string TransportBundleSha256 = "990599d76e9f7a00b08879dc413fafdeedc37f00fc7240b80d02c39bd67f32ae";
         private static readonly FoundationPage[] Pages = (FoundationPage[])Enum.GetValues(typeof(FoundationPage));
+        private static readonly Lazy<UiThemeDescriptor> Transport = new Lazy<UiThemeDescriptor>(LoadTransport);
 
         internal static bool MatchesOwner(string owner, bool remote, string? authenticatedOwner) =>
-            remote ? authenticatedOwner == RemoteFixtureOwner : owner == Owner || owner == RemoteFixtureOwner;
+            remote ? owner == UiPresentationTheme.ReceiverOwner && authenticatedOwner == RemoteFixtureOwner : owner == Owner || owner == RemoteFixtureOwner;
 
         internal static string? SafeDisplayText(string? nativeText, string authored, bool uppercase)
         {
@@ -36,19 +39,23 @@ namespace TopiaForge.ModManager
         internal static UiSurfaceRequest? Match(string owner, bool remote, UiWireEnvelope? envelope, UiSurfaceRequest request,
             UiThemeDescriptor? declared = null)
         {
-            if (!MatchesOwner(owner, remote, envelope?.OwnerPackageId)) return null;
+            if (remote != (envelope != null) || !MatchesOwner(owner, remote, envelope?.OwnerPackageId)) return null;
             if (request.Kind != UiSurfaceKind.Window && request.Kind != UiSurfaceKind.Hud) return null;
-            var requestedThemeId = remote ? envelope?.ThemeId : request.Theme?.Id ?? declared?.Id;
-            var acceptance = remote || owner == RemoteFixtureOwner;
+            if (remote && request.Theme != null) return null;
+            var transport = remote || owner == RemoteFixtureOwner;
+            var requestedThemeId = remote ? envelope!.ThemeId : request.Theme?.Id ?? declared?.Id;
             UiThemeRef? theme = null;
             if (requestedThemeId == FoundationPages.SurvivalTheme.Id)
             {
-                if ((acceptance && !UiGallerySurvivalTheme.Matches(declared)) ||
+                if ((transport && !UiGallerySurvivalTheme.Matches(declared)) ||
                     (remote && !UiGallerySurvivalTheme.MatchesDigest(envelope!.DescriptorDigest.Span))) return null;
                 theme = FoundationPages.SurvivalTheme;
             }
-            else if (acceptance && requestedThemeId == FoundationPages.TransportTheme.Id)
+            else if (transport && requestedThemeId == FoundationPages.TransportTheme.Id)
             {
+                var canonical = Transport.Value;
+                if (remote ? !envelope!.DescriptorDigest.Span.SequenceEqual(canonical.Digest.Span)
+                    : declared == null || !declared.Digest.Span.SequenceEqual(canonical.Digest.Span)) return null;
                 theme = FoundationPages.TransportTheme;
             }
             else if (requestedThemeId != null) return null;
@@ -63,9 +70,11 @@ namespace TopiaForge.ModManager
 
             foreach (var page in Pages)
             {
-                if (page is FoundationPage.InteractionStates or FoundationPage.GraphConnections && (request.Kind == UiSurfaceKind.Hud || remote ||
-                    owner == RemoteFixtureOwner)) continue;
-                var expected = FoundationPages.CreateRequest(page, request.Kind, theme);
+                if (transport ? !FoundationPages.CanPublish(page) :
+                    (page is FoundationPage.InteractionStates or FoundationPage.GraphConnections) && request.Kind == UiSurfaceKind.Hud)
+                    continue;
+                var expected = transport ? FoundationPages.CreateTransportRequest(page, request.Kind, theme)
+                    : FoundationPages.CreateRequest(page, request.Kind, theme);
                 if (Matches(expected)) return expected;
             }
             return null;
@@ -73,11 +82,13 @@ namespace TopiaForge.ModManager
             bool Matches(UiSurfaceRequest expected) => (remote || expected.Id == request.Id) &&
                 request.Title == expected.Title && request.Body == expected.Body && request.Width == expected.Width &&
                 request.Height == expected.Height && request.HudAnchor == expected.HudAnchor &&
-                request.HudVisibility == expected.HudVisibility && SameNode(request.Content, expected.Content);
+                request.HudVisibility == expected.HudVisibility && SameNode(request.Content,
+                    remote ? UiImageProjection.Rewrite(expected.Content, NormalizeTransportImage) : expected.Content);
         }
 
         private static bool IsTransportId(string id, string prefix) => id.StartsWith(prefix, StringComparison.Ordinal) &&
-            ulong.TryParse(id.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var token) && token != 0;
+            id.Length > prefix.Length && id[prefix.Length] != '0' &&
+            ulong.TryParse(id.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out _);
 
         private static bool SameNode(UiNode? actual, UiNode? expected)
         {
@@ -155,16 +166,34 @@ namespace TopiaForge.ModManager
             left.Spacing == right.Spacing && left.Padding.Equals(right.Padding) &&
             left.MainAxisAlignment == right.MainAxisAlignment && left.CrossAxisAlignment == right.CrossAxisAlignment;
 
-        private static bool SameImage(UiImage actual, UiImage expected)
+        private static bool SameImage(UiImage actual, UiImage expected) => actual.Image.Equals(expected.Image) &&
+            actual.SemanticLabel == expected.SemanticLabel && actual.Tint == expected.Tint && actual.Fit == expected.Fit &&
+            actual.Decorative == expected.Decorative && actual.Width == expected.Width && actual.Height == expected.Height &&
+            actual.PackDescriptorDigest.Span.SequenceEqual(expected.PackDescriptorDigest.Span);
+
+        private static UiImage NormalizeTransportImage(UiImage image)
         {
-            if (!actual.Image.Equals(expected.Image) || actual.SemanticLabel != expected.SemanticLabel ||
-                actual.Tint != expected.Tint || actual.Fit != expected.Fit || actual.Decorative != expected.Decorative) return false;
-            if (actual.Width == expected.Width && actual.Height == expected.Height) return true;
-            if (actual.PackDescriptorDigest.Length != 32) return false;
-            // The fixture's checked-in bundle receipt supplies the natural dimensions used by the sender.
-            var card = expected.Image.Equals(FoundationArtPages.Card);
-            var frame = UiImageFrame.Resolve(expected, card ? 96 : 32, card ? 48 : 32, isMask: !card);
-            return actual.Width == frame.Width && actual.Height == frame.Height;
+            var descriptor = Transport.Value;
+            var metadata = UiImageProjection.Find(descriptor, image.Image.ImageId)
+                ?? throw new InvalidOperationException("The Gallery transport descriptor lacks its authored image.");
+            var frame = UiImageProjection.ResolveFrame(image, metadata);
+            return image.WithWireMetadata(frame.Width, frame.Height, descriptor.Digest.Span);
+        }
+
+        private static UiThemeDescriptor LoadTransport()
+        {
+            using var source = typeof(UiGalleryCaptureFixture).Assembly.GetManifestResourceStream("TopiaForge.UiGallery.TransportPreview.json")
+                ?? throw new InvalidOperationException("The Gallery transport descriptor is missing from the capture assembly.");
+            if (source.Length > UiThemeJson.MaximumBytes) throw new InvalidOperationException("The Gallery transport descriptor is too large.");
+            using var bytes = new MemoryStream((int)source.Length);
+            source.CopyTo(bytes);
+            var hash = new byte[32];
+            for (var index = 0; index < hash.Length; index++)
+                hash[index] = (byte)((UiThemeData.HexDigit(TransportBundleSha256[index * 2]) << 4) |
+                    UiThemeData.HexDigit(TransportBundleSha256[index * 2 + 1]));
+            var parsed = UiThemePackParser.Parse(bytes.ToArray(), packaged: true, expectedId: FoundationPages.TransportTheme.Id,
+                fileHash: path => path == FoundationArtPages.ArtBundle ? hash : null);
+            return parsed.Value ?? throw new InvalidOperationException(parsed.ErrorMessage);
         }
 
         private static bool SameGraphNode(UiGraphNode first, UiGraphNode second) => first.Id == second.Id && first.Type == second.Type &&

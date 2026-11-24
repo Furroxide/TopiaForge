@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using TopiaForge.Mods;
 
 namespace TopiaForge.UiGallery.Pages
@@ -16,7 +18,9 @@ namespace TopiaForge.UiGallery.Pages
         GraphConnections,
         Icons,
         Images,
-        BadgesAndPips
+        BadgesAndPips,
+        FoundationIntegration,
+        TrustAndFallback
     }
 
     /// <summary>Safe composition requests shared by the Gallery and the headless capture harness.</summary>
@@ -24,12 +28,28 @@ namespace TopiaForge.UiGallery.Pages
     {
         internal static readonly UiThemeRef SurvivalTheme = new UiThemeRef("survival");
         internal static readonly UiThemeRef TransportTheme = new UiThemeRef("transport-preview");
+        internal static IReadOnlyList<FoundationPage> TransportPages { get; } = Array.AsReadOnly(new[]
+        {
+            FoundationPage.ThemePacks, FoundationPage.Typography, FoundationPage.FlexAndPadding,
+            FoundationPage.WrapAndGrid, FoundationPage.StackAndBounds, FoundationPage.CardsAndDividers,
+            FoundationPage.Icons, FoundationPage.Images, FoundationPage.BadgesAndPips,
+            FoundationPage.FoundationIntegration, FoundationPage.TrustAndFallback,
+        });
 
         internal static UiSurfaceRequest CreateRequest(
             FoundationPage page,
             UiSurfaceKind kind,
             UiThemeRef? theme = null,
-            Action<string>? report = null)
+            Action<string>? report = null) => CreateRequest(page, kind, theme, report, transportArt: false);
+
+        internal static UiSurfaceRequest CreateTransportRequest(FoundationPage page, UiSurfaceKind kind, UiThemeRef? theme) =>
+            CanPublish(page) ? CreateRequest(page, kind, theme, null, transportArt: true)
+                : throw new ArgumentOutOfRangeException(nameof(page));
+
+        internal static bool CanPublish(FoundationPage page) => TransportPages.Contains(page);
+
+        private static UiSurfaceRequest CreateRequest(FoundationPage page, UiSurfaceKind kind, UiThemeRef? theme,
+            Action<string>? report, bool transportArt)
         {
             string id;
             string title;
@@ -84,12 +104,22 @@ namespace TopiaForge.UiGallery.Pages
                 case FoundationPage.Images:
                     id = "gallery-images";
                     title = "Images";
-                    content = FoundationArtPages.Images();
+                    content = FoundationArtPages.Images(transportArt);
                     break;
                 case FoundationPage.BadgesAndPips:
                     id = "gallery-badges-and-pips";
                     title = "Badges and pips";
                     content = FoundationArtPages.BadgesAndPips(theme?.Id == SurvivalTheme.Id);
+                    break;
+                case FoundationPage.FoundationIntegration:
+                    id = "gallery-foundation-integration";
+                    title = "Foundation integration";
+                    content = FoundationIntegrationPages.Integration(transportArt, theme?.Id == SurvivalTheme.Id);
+                    break;
+                case FoundationPage.TrustAndFallback:
+                    id = "gallery-trust-and-fallback";
+                    title = "Trust and fallback";
+                    content = FoundationIntegrationPages.Diagnostics(transportArt);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(page));

@@ -33,5 +33,8 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>A destructive confirmation, which the view shows through the kit's destructive modal.</summary>
         internal static ScreenPrompt Destructive(string title, string body, string confirmLabel, Action<bool> answer, Func<bool>? holds = null) =>
             new ScreenPrompt(ScreenPromptKind.Destructive, title, new[] { body }, confirmLabel, "CANCEL", answer, holds);
+
+        internal static ScreenPrompt TrustIdentity(string title, string body, string confirmLabel, Action<bool> answer) =>
+            new ScreenPrompt(ScreenPromptKind.TrustIdentity, title, new[] { body }, confirmLabel, "CANCEL", answer);
     }
 }

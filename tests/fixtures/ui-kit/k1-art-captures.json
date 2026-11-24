@@ -652,6 +652,646 @@
       "visibleGroups": 59,
       "treeSha256": "428F43B7C022C306B774D379385016DCC228DC6B44511097D0BFA37D47FD7D04"
     },
+    "FoundationIntegration/kit/hud/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E6FE225C476BCDD149B4C402C14BD22D392F2B44EE470124B77539C608E653D4"
+    },
+    "FoundationIntegration/kit/hud/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E6FE225C476BCDD149B4C402C14BD22D392F2B44EE470124B77539C608E653D4"
+    },
+    "FoundationIntegration/kit/hud/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "0A1CFF06BEADF351ED7442C00028C743CE019B8E4F738895381E33F07461897F"
+    },
+    "FoundationIntegration/kit/hud/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "0A1CFF06BEADF351ED7442C00028C743CE019B8E4F738895381E33F07461897F"
+    },
+    "FoundationIntegration/kit/hud/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "BCC84470BEEEF1EA55F850A16F819991403CC5EBD71E19DDB0A9769285278E12"
+    },
+    "FoundationIntegration/kit/hud/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "BCC84470BEEEF1EA55F850A16F819991403CC5EBD71E19DDB0A9769285278E12"
+    },
+    "FoundationIntegration/kit/hud/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B4466C3193F85C2367BED18D634A9A5FDAAF777428FA85B3D4CFC0831E6C39F1"
+    },
+    "FoundationIntegration/kit/hud/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B4466C3193F85C2367BED18D634A9A5FDAAF777428FA85B3D4CFC0831E6C39F1"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D7E2FEF5BACB9ED0B8B06BCC602121073DE0AB38F0E3E24D5D9D1871F5273468"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D7E2FEF5BACB9ED0B8B06BCC602121073DE0AB38F0E3E24D5D9D1871F5273468"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "9ACC474FA1164D002165BB6BA3FD319D2004A4D7F1FA31A69CCAEF3AEFF03E46"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "9ACC474FA1164D002165BB6BA3FD319D2004A4D7F1FA31A69CCAEF3AEFF03E46"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A806CADA9B87535CA48644B7ACCA1E4A8B185CF2DF20419935602D07F9D7C72F"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A806CADA9B87535CA48644B7ACCA1E4A8B185CF2DF20419935602D07F9D7C72F"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "4D0950D0649EC5B5933336828FFC9FD4B13504502C0B17EADE91E233E381DD0A"
+    },
+    "FoundationIntegration/kit/hud/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "4D0950D0649EC5B5933336828FFC9FD4B13504502C0B17EADE91E233E381DD0A"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B6926688A8402D03A8FF306BA2F8DB60D8369A51789A40FE6202308981B5DBC7"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B6926688A8402D03A8FF306BA2F8DB60D8369A51789A40FE6202308981B5DBC7"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "982B9273463CB6EA0EDAD831A317829221DBB1D54F5436360E45F6F4DF475B38"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "982B9273463CB6EA0EDAD831A317829221DBB1D54F5436360E45F6F4DF475B38"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "744A1D6DE5C0E70836FC2B2F52F1A4719D57C9BD68D482C01FA4CB527AF111F5"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "744A1D6DE5C0E70836FC2B2F52F1A4719D57C9BD68D482C01FA4CB527AF111F5"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "6377E9BAA717D4C93DA2A144EFD389D58245EF9124F412409877DE05BC371B1E"
+    },
+    "FoundationIntegration/kit/hud/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "6377E9BAA717D4C93DA2A144EFD389D58245EF9124F412409877DE05BC371B1E"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D9A3EDB7C7F3A06421E56747128D490D106DA25C8C7130BA8E6D20F7ED229D7E"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D9A3EDB7C7F3A06421E56747128D490D106DA25C8C7130BA8E6D20F7ED229D7E"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "F4551D9884D401B21E8E58641CC4B9591C929245290C5F458DA992EE1F4C1FD8"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "F4551D9884D401B21E8E58641CC4B9591C929245290C5F458DA992EE1F4C1FD8"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5BFF63480D2E9A62BA5054A5D136B3C9527004274604CD0DE63771AEA3658130"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5BFF63480D2E9A62BA5054A5D136B3C9527004274604CD0DE63771AEA3658130"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "13F45722DD27DBA023624812EFC83FF223867E9BD4BFFB81BBC9965F1988C167"
+    },
+    "FoundationIntegration/kit/hud/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "13F45722DD27DBA023624812EFC83FF223867E9BD4BFFB81BBC9965F1988C167"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B13B2E540B2B059E361A97FC8FAD31702CDC058A9B6EBDF1A0373B18FBB71392"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B13B2E540B2B059E361A97FC8FAD31702CDC058A9B6EBDF1A0373B18FBB71392"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A3A6167102755F806587B9CC8C3A2EFEFF79048623638D2C6597FA68E4AC71BD"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A3A6167102755F806587B9CC8C3A2EFEFF79048623638D2C6597FA68E4AC71BD"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "6E0DBF2C3972A15733D172F9BBEF9A7170BB4BC22E343B202F0864EBB9891378"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "6E0DBF2C3972A15733D172F9BBEF9A7170BB4BC22E343B202F0864EBB9891378"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "0CC98C5BD3C5FB1988DDCC100C36D5FE43AAE3A85482FF2F1E4F9AE2927EA25E"
+    },
+    "FoundationIntegration/kit/paper/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "0CC98C5BD3C5FB1988DDCC100C36D5FE43AAE3A85482FF2F1E4F9AE2927EA25E"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D0EDCBB7AADEDDB512EF6AB5CA945069DA9E22AD9720068466C72F3B9D4700A0"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D0EDCBB7AADEDDB512EF6AB5CA945069DA9E22AD9720068466C72F3B9D4700A0"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5B571CD4EB9C4EBE1B25020BAD286C555EB4330794EB0DFC3D2F143ED9A2A9D8"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5B571CD4EB9C4EBE1B25020BAD286C555EB4330794EB0DFC3D2F143ED9A2A9D8"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "C50BCABEDA3869E9863DB6B06F58F303CF2B4F79FB2CD05B6C666AC3B6E83E67"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "C50BCABEDA3869E9863DB6B06F58F303CF2B4F79FB2CD05B6C666AC3B6E83E67"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "FA01681CD406440DD636991806E87D56EE91DCB79296C9C9B00C31540147A42E"
+    },
+    "FoundationIntegration/kit/paper/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "FA01681CD406440DD636991806E87D56EE91DCB79296C9C9B00C31540147A42E"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "FE161505031C68B4728366814B0577D502E30458F2D0AEEDAABB0AD89522935D"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "FE161505031C68B4728366814B0577D502E30458F2D0AEEDAABB0AD89522935D"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "390825067C3C2010A84A9066214A578DC5239FC640F090E72FA6CBDF78C26DEA"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "390825067C3C2010A84A9066214A578DC5239FC640F090E72FA6CBDF78C26DEA"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "ECE9776373B3EBC4FF64F3E7D0B520E76FE5E5A9E43E5E135C3A50FFC4B299AE"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "ECE9776373B3EBC4FF64F3E7D0B520E76FE5E5A9E43E5E135C3A50FFC4B299AE"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "FB2F3946EF63F790CD654A306845623687E0FC84AF04683CA551456D4401831F"
+    },
+    "FoundationIntegration/kit/paper/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "FB2F3946EF63F790CD654A306845623687E0FC84AF04683CA551456D4401831F"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "DC2EE0EE9DBC100B5FC6152B027529603BEB0028B70808CC6B9BBDC638C2823D"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "DC2EE0EE9DBC100B5FC6152B027529603BEB0028B70808CC6B9BBDC638C2823D"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "19B3636C9C126B77D54960CBD039D11A89285F701934D19F877227AA45F55CDE"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "19B3636C9C126B77D54960CBD039D11A89285F701934D19F877227AA45F55CDE"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "273330A27598449EF8BBCEB373D1E500A24D5449350CE94021E18D78CFE95900"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "273330A27598449EF8BBCEB373D1E500A24D5449350CE94021E18D78CFE95900"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "50799B09A6F28924859488DBD10CF68E4997DE8C09E0BC474E666310D1ECE20B"
+    },
+    "FoundationIntegration/kit/paper/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "50799B09A6F28924859488DBD10CF68E4997DE8C09E0BC474E666310D1ECE20B"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "510D29B152FEDA74D4630ED3234D30396E57107FBED7FA4087BB0887CBE5630E"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "510D29B152FEDA74D4630ED3234D30396E57107FBED7FA4087BB0887CBE5630E"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "510D29B152FEDA74D4630ED3234D30396E57107FBED7FA4087BB0887CBE5630E"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "510D29B152FEDA74D4630ED3234D30396E57107FBED7FA4087BB0887CBE5630E"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A24B039DAC60C3E4F43C78E408F544FFAB45A93E07D013BE50CB3A908B3D66FD"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A24B039DAC60C3E4F43C78E408F544FFAB45A93E07D013BE50CB3A908B3D66FD"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A24B039DAC60C3E4F43C78E408F544FFAB45A93E07D013BE50CB3A908B3D66FD"
+    },
+    "FoundationIntegration/survival/hud/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "A24B039DAC60C3E4F43C78E408F544FFAB45A93E07D013BE50CB3A908B3D66FD"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "1D73E0BD5EF7BFA19E9D4B958F37E74F2BC86ED006D393C807816A0311380B92"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "1D73E0BD5EF7BFA19E9D4B958F37E74F2BC86ED006D393C807816A0311380B92"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "1D73E0BD5EF7BFA19E9D4B958F37E74F2BC86ED006D393C807816A0311380B92"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "1D73E0BD5EF7BFA19E9D4B958F37E74F2BC86ED006D393C807816A0311380B92"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "C695CEAE5EB1417824491DBEB51ED6FBBA56488D0B85741B0FF34FD9DE52CA8C"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "C695CEAE5EB1417824491DBEB51ED6FBBA56488D0B85741B0FF34FD9DE52CA8C"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "C695CEAE5EB1417824491DBEB51ED6FBBA56488D0B85741B0FF34FD9DE52CA8C"
+    },
+    "FoundationIntegration/survival/hud/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "C695CEAE5EB1417824491DBEB51ED6FBBA56488D0B85741B0FF34FD9DE52CA8C"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "3630D7A76AC96CCAAC3B05694837704DC896B8E4EEC45AB3A6AD3E07327B551E"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "3630D7A76AC96CCAAC3B05694837704DC896B8E4EEC45AB3A6AD3E07327B551E"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "3630D7A76AC96CCAAC3B05694837704DC896B8E4EEC45AB3A6AD3E07327B551E"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "3630D7A76AC96CCAAC3B05694837704DC896B8E4EEC45AB3A6AD3E07327B551E"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E0B5FCA5B140B100BD2AB80EC85502E8E724E04CADCAB6C6DC4D1135DD10C854"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E0B5FCA5B140B100BD2AB80EC85502E8E724E04CADCAB6C6DC4D1135DD10C854"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E0B5FCA5B140B100BD2AB80EC85502E8E724E04CADCAB6C6DC4D1135DD10C854"
+    },
+    "FoundationIntegration/survival/hud/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E0B5FCA5B140B100BD2AB80EC85502E8E724E04CADCAB6C6DC4D1135DD10C854"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "70290EFF50E1E67E489F3610C1D3ED64663AADB47FB46DFC66879B3E0C1D0C9B"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "70290EFF50E1E67E489F3610C1D3ED64663AADB47FB46DFC66879B3E0C1D0C9B"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "70290EFF50E1E67E489F3610C1D3ED64663AADB47FB46DFC66879B3E0C1D0C9B"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "70290EFF50E1E67E489F3610C1D3ED64663AADB47FB46DFC66879B3E0C1D0C9B"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "90F6EF20A0D6D1D8ECFCB27C3A5BFE777B522B296BCF700B2A41106BAC547027"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "90F6EF20A0D6D1D8ECFCB27C3A5BFE777B522B296BCF700B2A41106BAC547027"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "90F6EF20A0D6D1D8ECFCB27C3A5BFE777B522B296BCF700B2A41106BAC547027"
+    },
+    "FoundationIntegration/survival/hud/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "90F6EF20A0D6D1D8ECFCB27C3A5BFE777B522B296BCF700B2A41106BAC547027"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5D1BFD7838AFA60FF6B2D8319BD1D381843D37AE15CE87F5F2D696162E556367"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5D1BFD7838AFA60FF6B2D8319BD1D381843D37AE15CE87F5F2D696162E556367"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5D1BFD7838AFA60FF6B2D8319BD1D381843D37AE15CE87F5F2D696162E556367"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "5D1BFD7838AFA60FF6B2D8319BD1D381843D37AE15CE87F5F2D696162E556367"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "631127F2FD284452BA3753025BA244BE373E0671F3FF4AA5C5053F03124CC026"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "631127F2FD284452BA3753025BA244BE373E0671F3FF4AA5C5053F03124CC026"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "631127F2FD284452BA3753025BA244BE373E0671F3FF4AA5C5053F03124CC026"
+    },
+    "FoundationIntegration/survival/paper/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "631127F2FD284452BA3753025BA244BE373E0671F3FF4AA5C5053F03124CC026"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "457A1840AD9835277B896DB7429491EB400F022B772FA204AC8237541FE6D9A6"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "457A1840AD9835277B896DB7429491EB400F022B772FA204AC8237541FE6D9A6"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "457A1840AD9835277B896DB7429491EB400F022B772FA204AC8237541FE6D9A6"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "457A1840AD9835277B896DB7429491EB400F022B772FA204AC8237541FE6D9A6"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E5D7918B0AF82FD3EE4A87FE9A1F9EB4CA137E9FF71BF990579EF623D6B273F1"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E5D7918B0AF82FD3EE4A87FE9A1F9EB4CA137E9FF71BF990579EF623D6B273F1"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E5D7918B0AF82FD3EE4A87FE9A1F9EB4CA137E9FF71BF990579EF623D6B273F1"
+    },
+    "FoundationIntegration/survival/paper/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "E5D7918B0AF82FD3EE4A87FE9A1F9EB4CA137E9FF71BF990579EF623D6B273F1"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B7C0296B3FD630C758AF9571228BCA39D266FB90CEE28585918370EFF5FCFEF1"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B7C0296B3FD630C758AF9571228BCA39D266FB90CEE28585918370EFF5FCFEF1"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B7C0296B3FD630C758AF9571228BCA39D266FB90CEE28585918370EFF5FCFEF1"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "B7C0296B3FD630C758AF9571228BCA39D266FB90CEE28585918370EFF5FCFEF1"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "41C707BB8E8A1C0F10FAEE14C7BD39EC3E61DD2EB4875C345E8DB7378D5E6E76"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "41C707BB8E8A1C0F10FAEE14C7BD39EC3E61DD2EB4875C345E8DB7378D5E6E76"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "41C707BB8E8A1C0F10FAEE14C7BD39EC3E61DD2EB4875C345E8DB7378D5E6E76"
+    },
+    "FoundationIntegration/survival/paper/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "41C707BB8E8A1C0F10FAEE14C7BD39EC3E61DD2EB4875C345E8DB7378D5E6E76"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "EBA7DD423D77769AFB4E9AE2619D4C36EAD662074B6D7C5F299770E48313B66F"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "EBA7DD423D77769AFB4E9AE2619D4C36EAD662074B6D7C5F299770E48313B66F"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "EBA7DD423D77769AFB4E9AE2619D4C36EAD662074B6D7C5F299770E48313B66F"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "EBA7DD423D77769AFB4E9AE2619D4C36EAD662074B6D7C5F299770E48313B66F"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D4E51F40136C33DCCFB567576E4B649996B697BB7095F350FD4A584A0D353C2A"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D4E51F40136C33DCCFB567576E4B649996B697BB7095F350FD4A584A0D353C2A"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D4E51F40136C33DCCFB567576E4B649996B697BB7095F350FD4A584A0D353C2A"
+    },
+    "FoundationIntegration/survival/paper/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 32,
+      "treeSha256": "D4E51F40136C33DCCFB567576E4B649996B697BB7095F350FD4A584A0D353C2A"
+    },
     "Icons/kit/hud/high/1920x1080/1/guest-received/full": {
       "snapshots": 1,
       "visibleGroups": 96,
@@ -1931,9 +2571,661 @@
       "snapshots": 1,
       "visibleGroups": 25,
       "treeSha256": "55CD0D9F9BE47D5757F32A61439EB16358AB2AA162FBF7D8E1A605F03C14CA70"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "996FEABBBA4213EEC6346484AA28B5B5012716236A0F8266FE872E5286A70D4B"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "996FEABBBA4213EEC6346484AA28B5B5012716236A0F8266FE872E5286A70D4B"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "595DCDD977471CF50C8EB40107E8B1F42B3F1F290ACC4018E680C99B71D32623"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "595DCDD977471CF50C8EB40107E8B1F42B3F1F290ACC4018E680C99B71D32623"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "88B6BE71C4E7E1812F9DCBF9D7F06FB75C1392C00B78A0356D80DC83FED23368"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "88B6BE71C4E7E1812F9DCBF9D7F06FB75C1392C00B78A0356D80DC83FED23368"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "578F9390ACE634B72E8303438D75121F4BAFC5DAA5409ED554DAC73776CCA0D4"
+    },
+    "TrustAndFallback/kit/hud/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "578F9390ACE634B72E8303438D75121F4BAFC5DAA5409ED554DAC73776CCA0D4"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "87E359ACDDF4E799AE9F69570DECCA9ABF8C480D308037001117417BCDAC4676"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "87E359ACDDF4E799AE9F69570DECCA9ABF8C480D308037001117417BCDAC4676"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DCC0395BE59E13013BCD4FA5068E854F25EE7FB06D5A79FA478826888E247191"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DCC0395BE59E13013BCD4FA5068E854F25EE7FB06D5A79FA478826888E247191"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3F069896161222CB869FD759B933315ECF1DDEABA0450FE5B9CB17EE610E4CEF"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3F069896161222CB869FD759B933315ECF1DDEABA0450FE5B9CB17EE610E4CEF"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "8AFFD50F7D69B0E6C3DAEA849C0CBCC83F03D479529D611EEFF61FA9F5A81EE1"
+    },
+    "TrustAndFallback/kit/hud/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "8AFFD50F7D69B0E6C3DAEA849C0CBCC83F03D479529D611EEFF61FA9F5A81EE1"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7AE6A040A03A3D1B95DB95D8C7BF5E082BEEEF92E97DB04A0EF0C656F6446A43"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7AE6A040A03A3D1B95DB95D8C7BF5E082BEEEF92E97DB04A0EF0C656F6446A43"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "03B65DCD75B504B1F8FE0AC0D39F025F501B65F9FDC61E036C2772BB7F30415C"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "03B65DCD75B504B1F8FE0AC0D39F025F501B65F9FDC61E036C2772BB7F30415C"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "63EFE469B7EF7A77B8E9C3931BC46386A648EB745A9163BB200959F639BC27B5"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "63EFE469B7EF7A77B8E9C3931BC46386A648EB745A9163BB200959F639BC27B5"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "F95D4CC5C8742407714B67104B36F02BB738890051D21967C0CF41A4302B901C"
+    },
+    "TrustAndFallback/kit/hud/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "F95D4CC5C8742407714B67104B36F02BB738890051D21967C0CF41A4302B901C"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "2822502519C239C953F312F99873D6B94751113537E78EB87156FFAA5084D345"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "2822502519C239C953F312F99873D6B94751113537E78EB87156FFAA5084D345"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DA2ED34EAA40892FF090BFED94885FE531C957DFD55D5A57ACA74E7A9D15E532"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DA2ED34EAA40892FF090BFED94885FE531C957DFD55D5A57ACA74E7A9D15E532"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "98ADF559847FEC0266BFDF5B43A3B457D42C80CD3CF338C4CD36A0CE31F8CC84"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "98ADF559847FEC0266BFDF5B43A3B457D42C80CD3CF338C4CD36A0CE31F8CC84"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6E3882899229CE82586A9BD469989E8555646EC039869CAEA5D8DDCB497E76AE"
+    },
+    "TrustAndFallback/kit/hud/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6E3882899229CE82586A9BD469989E8555646EC039869CAEA5D8DDCB497E76AE"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C5F03A93CDB13FBF8EFFD59757EF86D360269452AB3275E31C6C52FCE0ECBF24"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C5F03A93CDB13FBF8EFFD59757EF86D360269452AB3275E31C6C52FCE0ECBF24"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DC15C652BFDB8B10054BB0CC711E87120EB3CC60A5DE5B3FEAEF99CC42AF41AA"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DC15C652BFDB8B10054BB0CC711E87120EB3CC60A5DE5B3FEAEF99CC42AF41AA"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C381604D7B4BE5B0003E3BDC8D23494D686A45ACBF192211C255C19898D77ADB"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C381604D7B4BE5B0003E3BDC8D23494D686A45ACBF192211C255C19898D77ADB"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7D0CDCC8714BFBAEEA6542E4467951BE851714522A30FD403637CAFACFABA2BA"
+    },
+    "TrustAndFallback/kit/paper/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7D0CDCC8714BFBAEEA6542E4467951BE851714522A30FD403637CAFACFABA2BA"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "AF6DA9A6D390C392F6664104B7BE022A8E632AA04E105CF10D08E603FA65B00B"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "AF6DA9A6D390C392F6664104B7BE022A8E632AA04E105CF10D08E603FA65B00B"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "54DC36F9DD7584BBDB83A9B7967824BD561C400BB2434D040634CF9181D12280"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "54DC36F9DD7584BBDB83A9B7967824BD561C400BB2434D040634CF9181D12280"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "EE9614E8EC3F74EEE15E36D3E68A9C3E2902799564AD1A73A6AB8519075A22FA"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "EE9614E8EC3F74EEE15E36D3E68A9C3E2902799564AD1A73A6AB8519075A22FA"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3B21ADC1E762E6B3B17DD648661E60966FD26C968283CB585AC04B77CD02123E"
+    },
+    "TrustAndFallback/kit/paper/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3B21ADC1E762E6B3B17DD648661E60966FD26C968283CB585AC04B77CD02123E"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6FA648A95D8CFDC8647096F86EF9721BA1D63D43A610592B8AFC5AD1748B41DC"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6FA648A95D8CFDC8647096F86EF9721BA1D63D43A610592B8AFC5AD1748B41DC"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6A057649DA8ADD760468353E9267F392E1C102A0C770EED700FAACF8C7362B67"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6A057649DA8ADD760468353E9267F392E1C102A0C770EED700FAACF8C7362B67"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "90E60BA75FFDC299A37D3A92EE6CBFE205267CCD52B189B50A13760E6FCCCB26"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "90E60BA75FFDC299A37D3A92EE6CBFE205267CCD52B189B50A13760E6FCCCB26"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "E3AD74FDB8A33D880F127F9F9B44A08268D7B9D0AC0B6811D2DF42890AA79CD2"
+    },
+    "TrustAndFallback/kit/paper/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "E3AD74FDB8A33D880F127F9F9B44A08268D7B9D0AC0B6811D2DF42890AA79CD2"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "B52582995CF00784FE2528B331F39B7754DA978A76A0611DFFF8FAF98086308E"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "B52582995CF00784FE2528B331F39B7754DA978A76A0611DFFF8FAF98086308E"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C7CBB6F3D5FE87DC0E490E34E77AB949AE61FAED148FC4F208E19844C1B76294"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C7CBB6F3D5FE87DC0E490E34E77AB949AE61FAED148FC4F208E19844C1B76294"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "A2027B0242985F69BB5A0DC5A4F3CC7C1D1416FFF0798F718915FF15BB4627B0"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "A2027B0242985F69BB5A0DC5A4F3CC7C1D1416FFF0798F718915FF15BB4627B0"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6D6F764BE4256D0E60516A4C2EC1DEEDD4089CEE460E87541971E2F9C3F84966"
+    },
+    "TrustAndFallback/kit/paper/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6D6F764BE4256D0E60516A4C2EC1DEEDD4089CEE460E87541971E2F9C3F84966"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "595DCDD977471CF50C8EB40107E8B1F42B3F1F290ACC4018E680C99B71D32623"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "595DCDD977471CF50C8EB40107E8B1F42B3F1F290ACC4018E680C99B71D32623"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "595DCDD977471CF50C8EB40107E8B1F42B3F1F290ACC4018E680C99B71D32623"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "595DCDD977471CF50C8EB40107E8B1F42B3F1F290ACC4018E680C99B71D32623"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "578F9390ACE634B72E8303438D75121F4BAFC5DAA5409ED554DAC73776CCA0D4"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "578F9390ACE634B72E8303438D75121F4BAFC5DAA5409ED554DAC73776CCA0D4"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "578F9390ACE634B72E8303438D75121F4BAFC5DAA5409ED554DAC73776CCA0D4"
+    },
+    "TrustAndFallback/survival/hud/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "578F9390ACE634B72E8303438D75121F4BAFC5DAA5409ED554DAC73776CCA0D4"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DCC0395BE59E13013BCD4FA5068E854F25EE7FB06D5A79FA478826888E247191"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DCC0395BE59E13013BCD4FA5068E854F25EE7FB06D5A79FA478826888E247191"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DCC0395BE59E13013BCD4FA5068E854F25EE7FB06D5A79FA478826888E247191"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DCC0395BE59E13013BCD4FA5068E854F25EE7FB06D5A79FA478826888E247191"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "8AFFD50F7D69B0E6C3DAEA849C0CBCC83F03D479529D611EEFF61FA9F5A81EE1"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "8AFFD50F7D69B0E6C3DAEA849C0CBCC83F03D479529D611EEFF61FA9F5A81EE1"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "8AFFD50F7D69B0E6C3DAEA849C0CBCC83F03D479529D611EEFF61FA9F5A81EE1"
+    },
+    "TrustAndFallback/survival/hud/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "8AFFD50F7D69B0E6C3DAEA849C0CBCC83F03D479529D611EEFF61FA9F5A81EE1"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "03B65DCD75B504B1F8FE0AC0D39F025F501B65F9FDC61E036C2772BB7F30415C"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "03B65DCD75B504B1F8FE0AC0D39F025F501B65F9FDC61E036C2772BB7F30415C"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "03B65DCD75B504B1F8FE0AC0D39F025F501B65F9FDC61E036C2772BB7F30415C"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "03B65DCD75B504B1F8FE0AC0D39F025F501B65F9FDC61E036C2772BB7F30415C"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "F95D4CC5C8742407714B67104B36F02BB738890051D21967C0CF41A4302B901C"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "F95D4CC5C8742407714B67104B36F02BB738890051D21967C0CF41A4302B901C"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "F95D4CC5C8742407714B67104B36F02BB738890051D21967C0CF41A4302B901C"
+    },
+    "TrustAndFallback/survival/hud/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "F95D4CC5C8742407714B67104B36F02BB738890051D21967C0CF41A4302B901C"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DA2ED34EAA40892FF090BFED94885FE531C957DFD55D5A57ACA74E7A9D15E532"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DA2ED34EAA40892FF090BFED94885FE531C957DFD55D5A57ACA74E7A9D15E532"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DA2ED34EAA40892FF090BFED94885FE531C957DFD55D5A57ACA74E7A9D15E532"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DA2ED34EAA40892FF090BFED94885FE531C957DFD55D5A57ACA74E7A9D15E532"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6E3882899229CE82586A9BD469989E8555646EC039869CAEA5D8DDCB497E76AE"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6E3882899229CE82586A9BD469989E8555646EC039869CAEA5D8DDCB497E76AE"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6E3882899229CE82586A9BD469989E8555646EC039869CAEA5D8DDCB497E76AE"
+    },
+    "TrustAndFallback/survival/hud/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6E3882899229CE82586A9BD469989E8555646EC039869CAEA5D8DDCB497E76AE"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DC15C652BFDB8B10054BB0CC711E87120EB3CC60A5DE5B3FEAEF99CC42AF41AA"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DC15C652BFDB8B10054BB0CC711E87120EB3CC60A5DE5B3FEAEF99CC42AF41AA"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DC15C652BFDB8B10054BB0CC711E87120EB3CC60A5DE5B3FEAEF99CC42AF41AA"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "DC15C652BFDB8B10054BB0CC711E87120EB3CC60A5DE5B3FEAEF99CC42AF41AA"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7D0CDCC8714BFBAEEA6542E4467951BE851714522A30FD403637CAFACFABA2BA"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7D0CDCC8714BFBAEEA6542E4467951BE851714522A30FD403637CAFACFABA2BA"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7D0CDCC8714BFBAEEA6542E4467951BE851714522A30FD403637CAFACFABA2BA"
+    },
+    "TrustAndFallback/survival/paper/high/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "7D0CDCC8714BFBAEEA6542E4467951BE851714522A30FD403637CAFACFABA2BA"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "54DC36F9DD7584BBDB83A9B7967824BD561C400BB2434D040634CF9181D12280"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "54DC36F9DD7584BBDB83A9B7967824BD561C400BB2434D040634CF9181D12280"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "54DC36F9DD7584BBDB83A9B7967824BD561C400BB2434D040634CF9181D12280"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "54DC36F9DD7584BBDB83A9B7967824BD561C400BB2434D040634CF9181D12280"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3B21ADC1E762E6B3B17DD648661E60966FD26C968283CB585AC04B77CD02123E"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3B21ADC1E762E6B3B17DD648661E60966FD26C968283CB585AC04B77CD02123E"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3B21ADC1E762E6B3B17DD648661E60966FD26C968283CB585AC04B77CD02123E"
+    },
+    "TrustAndFallback/survival/paper/high/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "3B21ADC1E762E6B3B17DD648661E60966FD26C968283CB585AC04B77CD02123E"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6A057649DA8ADD760468353E9267F392E1C102A0C770EED700FAACF8C7362B67"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6A057649DA8ADD760468353E9267F392E1C102A0C770EED700FAACF8C7362B67"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6A057649DA8ADD760468353E9267F392E1C102A0C770EED700FAACF8C7362B67"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6A057649DA8ADD760468353E9267F392E1C102A0C770EED700FAACF8C7362B67"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "E3AD74FDB8A33D880F127F9F9B44A08268D7B9D0AC0B6811D2DF42890AA79CD2"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "E3AD74FDB8A33D880F127F9F9B44A08268D7B9D0AC0B6811D2DF42890AA79CD2"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "E3AD74FDB8A33D880F127F9F9B44A08268D7B9D0AC0B6811D2DF42890AA79CD2"
+    },
+    "TrustAndFallback/survival/paper/standard/1920x1080/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "E3AD74FDB8A33D880F127F9F9B44A08268D7B9D0AC0B6811D2DF42890AA79CD2"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/1/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C7CBB6F3D5FE87DC0E490E34E77AB949AE61FAED148FC4F208E19844C1B76294"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/1/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C7CBB6F3D5FE87DC0E490E34E77AB949AE61FAED148FC4F208E19844C1B76294"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/1/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C7CBB6F3D5FE87DC0E490E34E77AB949AE61FAED148FC4F208E19844C1B76294"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/1/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "C7CBB6F3D5FE87DC0E490E34E77AB949AE61FAED148FC4F208E19844C1B76294"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/2/guest-received/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6D6F764BE4256D0E60516A4C2EC1DEEDD4089CEE460E87541971E2F9C3F84966"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/2/guest-received/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6D6F764BE4256D0E60516A4C2EC1DEEDD4089CEE460E87541971E2F9C3F84966"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/2/host-local/full": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6D6F764BE4256D0E60516A4C2EC1DEEDD4089CEE460E87541971E2F9C3F84966"
+    },
+    "TrustAndFallback/survival/paper/standard/2560x1440/2/host-local/reduced": {
+      "snapshots": 1,
+      "visibleGroups": 14,
+      "treeSha256": "6D6F764BE4256D0E60516A4C2EC1DEEDD4089CEE460E87541971E2F9C3F84966"
     }
   },
   "diagnostics": {
+    "gallery-diagnostics-missing-pack": {
+      "visibleGroups": 15,
+      "missingAssets": 2,
+      "imageUnavailable": false,
+      "treeSha256": "0BCF22F443BD591D4C21EBB9E96962BD79AA7E74B754AB81345F8018CA1C5D99"
+    },
+    "gallery-diagnostics-ready": {
+      "visibleGroups": 14,
+      "missingAssets": 0,
+      "imageUnavailable": false,
+      "treeSha256": "03B65DCD75B504B1F8FE0AC0D39F025F501B65F9FDC61E036C2772BB7F30415C"
+    },
     "guest-digest-mismatch": {
       "visibleGroups": 29,
       "missingAssets": 5,

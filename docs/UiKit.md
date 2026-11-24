@@ -302,6 +302,11 @@ effective value. TopiaForgeUi propagates it across all owned surfaces. Text and 
 remain meaningful without color or animation, and keyboard navigation/focus must work at every
 supported scale.
 
+Confirmations opened through `Context.Ui.ShowModal(...)` and system toasts use the kit palette.
+TopiaForge's server identity, connection privacy and voice consent prompts use the kit's Paper
+scheme and the player's current accessibility settings. These prompts draw above toasts and hold
+navigation until the player answers or dismisses them. Package themes apply to the owning surfaces.
+
 ## Themes and layout
 
 ### Package themes
@@ -330,6 +335,8 @@ then the manifest default, then the kit default. Use the manifest for ordinary s
 `UseTheme` to clear the current scope's selection. `PreloadAsync` lets a scope load a declared theme before use
 and observe a registration failure. A selection that would leave an inheriting Card or Box without its named
 style is refused before any surfaces change. Confirmation modals, system toasts and manager prompts use the kit theme.
+Loader trust prompts take priority for Back and navigation while they are visible. Closing one returns control to the
+next eligible surface.
 
 Use semantic roles for text. At 1080p and scale 1.0, the reference heights are Banner 56, Display 40, Title 30,
 Heading 24, Body 20, Label 18, Caption 18, Numeral 32 and Mono 18. The Mono role uses JetBrains Mono NL. The
@@ -489,8 +496,10 @@ retain their own geometry.
 
 The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` at startup on the
 native verification process. In that process, F3 cycles the loader's fixed
-Interaction states Window through kit Paper, kit HUD, Survival Paper and
-Survival HUD. The ordinary F8 Gallery uses Survival as its package default.
+Interaction states Window and F4 cycles Graph connections. Both cycle through
+Kit Paper, Kit HUD, Survival Paper and Survival HUD. Switching keys replaces the
+preview Window and starts the other cycle at Kit Paper. The ordinary F8 Gallery
+uses Survival as its package default.
 Opening a first-party Gallery fixture records its settled geometry and paint. Press F11 to record
 another observation of the current fixture. Hold the intended state until two frames have settled.
 The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts

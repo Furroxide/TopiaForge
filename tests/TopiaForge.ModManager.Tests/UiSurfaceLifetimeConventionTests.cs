@@ -81,7 +81,7 @@ namespace TopiaForge.ModManager.Tests
 
             RequireMatch(layers, @"internal static void Release\(GameObject root\)\s*\{\s*Ledger\.Release\(root\);\s*\}",
                 "TopiaForgeLayers.Release must release by the ledger's record.");
-            RequireMatch(layers, @"var order = Ledger\.Claim\(root, band, out var exhausted\);[\s\S]*?canvas\.sortingOrder = order;[\s\S]*?AddComponent<TopiaForgeLayerSlot>\(\)",
+            RequireMatch(layers, @"var order = Ledger\.ClaimBand\(root, band, out var exhausted\);[\s\S]*?canvas\.sortingOrder = order;[\s\S]*?AddComponent<TopiaForgeLayerSlot>\(\)",
                 "Every kit canvas must be claimed through the ledger and carry the slot component that releases it.");
             Check(!registry.Contains(".sortingOrder", StringComparison.Ordinal),
                 "The window registry reads a canvas's sorting order; it must take each window's slot from the allocator's record.");

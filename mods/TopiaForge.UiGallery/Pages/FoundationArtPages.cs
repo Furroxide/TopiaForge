@@ -10,11 +10,14 @@ namespace TopiaForge.UiGallery.Pages
         internal const string ArtThemeDefinition = "ui/themes/preview-art.json";
         internal static readonly UiImageRef Card = new UiImageRef("preview-art", "card");
         internal static readonly UiImageRef Mark = new UiImageRef("preview-art", "mark");
+        internal static readonly UiImageRef TransportCard = new UiImageRef(FoundationPages.TransportTheme.Id, "card");
+        internal static readonly UiImageRef TransportMark = new UiImageRef(FoundationPages.TransportTheme.Id, "mark");
         private static readonly UiFlexLayout LabelBelow = new UiFlexLayout(UiSpace.Xs,
             crossAxisAlignment: UiCrossAxisAlignment.Start);
 
         internal static bool IsArt(FoundationPage page) =>
-            page is FoundationPage.Icons or FoundationPage.Images or FoundationPage.BadgesAndPips;
+            page is FoundationPage.Icons or FoundationPage.Images or FoundationPage.BadgesAndPips
+                or FoundationPage.FoundationIntegration or FoundationPage.TrustAndFallback;
 
         internal static UiNode Icons()
         {
@@ -32,20 +35,25 @@ namespace TopiaForge.UiGallery.Pages
             return new UiGrid(cells, minimumCellWidth: 126f, maximumColumns: 6, runSpacing: UiSpace.Md, id: "glyph-grid");
         }
 
-        internal static UiNode Images() => new UiColumn(
-            new UiRow(new UiNode[]
-            {
-                Picture("Contain", new UiImage(Card, "Supply card", 144f, 88f, id: "image-contain")),
-                Picture("Cover", new UiImage(Card, "Supply card", 144f, 88f, fit: UiImageFit.Cover, id: "image-cover")),
-                Picture("Natural size", new UiImage(Card, "Card", id: "image-natural")),
-            }, new UiFlexLayout(UiSpace.Lg, crossAxisAlignment: UiCrossAxisAlignment.Start), id: "image-fits"),
-            new UiDivider(UiLineStyle.Solid),
-            new UiRow(
-                new UiImage(Mark, "Marker", 120f, 58f, tint: UiTone.Primary, id: "image-mask"),
-                new UiText("Primary-tinted mask", UiTextStyle.Label)),
-            new UiRow(
-                new UiImage(Mark, string.Empty, tint: UiTone.Accent, decorative: true, id: "image-decorative"),
-                new UiText("Supply station", UiTextStyle.Label)));
+        internal static UiNode Images(bool transport)
+        {
+            var card = transport ? TransportCard : Card;
+            var mark = transport ? TransportMark : Mark;
+            return new UiColumn(
+                new UiRow(new UiNode[]
+                {
+                    Picture("Contain", new UiImage(card, "Supply card", 144f, 88f, id: "image-contain")),
+                    Picture("Cover", new UiImage(card, "Supply card", 144f, 88f, fit: UiImageFit.Cover, id: "image-cover")),
+                    Picture("Natural size", new UiImage(card, "Card", id: "image-natural")),
+                }, new UiFlexLayout(UiSpace.Lg, crossAxisAlignment: UiCrossAxisAlignment.Start), id: "image-fits"),
+                new UiDivider(UiLineStyle.Solid),
+                new UiRow(
+                    new UiImage(mark, "Marker", 120f, 58f, tint: UiTone.Primary, id: "image-mask"),
+                    new UiText("Primary-tinted mask", UiTextStyle.Label)),
+                new UiRow(
+                    new UiImage(mark, string.Empty, tint: UiTone.Accent, decorative: true, id: "image-decorative"),
+                    new UiText("Supply station", UiTextStyle.Label)));
+        }
 
         private static UiNode Picture(string caption, UiImage image) =>
             new UiColumn(new UiNode[] { new UiText(caption, UiTextStyle.Label), image }, LabelBelow);

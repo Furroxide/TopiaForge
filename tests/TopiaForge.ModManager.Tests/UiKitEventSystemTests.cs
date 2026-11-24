@@ -135,7 +135,12 @@ namespace TopiaForge.ModManager.Tests
             var create = Regex.Match(layers, @"public static GameObject CreateCanvas\([^)]*\)\s*\{(?<body>[\s\S]*?)\n        \}",
                 RegexOptions.CultureInvariant);
             Check(create.Success, "TopiaForgeLayers.CreateCanvas was not found.");
-            var body = create.Groups["body"].Value;
+            RequireSource(create.Groups["body"].Value, "return CreateCanvasCore(name, band, interactive, persistent);",
+                "Public and system canvases use the same raycaster setup.");
+            var shared = Regex.Match(layers, @"private static GameObject CreateCanvasCore\([^)]*\)\s*\{(?<body>[\s\S]*?)\n        \}",
+                RegexOptions.CultureInvariant);
+            Check(shared.Success, "TopiaForgeLayers.CreateCanvasCore was not found.");
+            var body = shared.Groups["body"].Value;
             Check(!body.Contains("EnsureEventSystem", StringComparison.Ordinal),
                 "CreateCanvas must not make an event system for every canvas: a HUD made in OnLoad took the main menu's input.");
             RequireMatch(body, @"raycaster\.enabled = interactive;\s*TopiaForgeEventSystems\.Track\(raycaster\);",

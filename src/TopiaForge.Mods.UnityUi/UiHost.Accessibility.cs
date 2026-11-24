@@ -73,6 +73,8 @@ namespace TopiaForge.Mods.UnityUi
                 }
             }
 
+            for (var index = 0; index < modalInstances.Count; index++)
+                modalInstances[index].RefreshChrome();
             WalkThemeAware();
         }
     }

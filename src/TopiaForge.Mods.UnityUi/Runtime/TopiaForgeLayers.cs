@@ -12,7 +12,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeLayers
     {
-        private static readonly TopiaForgeLayerBands Bands = new TopiaForgeLayerBands();
+        private static readonly TopiaForgeLayerBands Bands = TopiaForgeLayerBands.ForRuntime();
 
         // Keyed by the canvas's root object itself rather than by Unity's equality, so a destroyed canvas still finds its record.
         private static readonly TopiaForgeLayerLedger<GameObject> Ledger = new TopiaForgeLayerLedger<GameObject>(Bands);
@@ -45,6 +45,15 @@ namespace TopiaForge.Mods.UnityUi
         /// event system in charge.
         /// </summary>
         public static GameObject CreateCanvas(string name, TopiaForgeLayerBand band, bool interactive, bool persistent)
+        {
+            TopiaForgeLayerBands.RequirePublicBand(band);
+            return CreateCanvasCore(name, band, interactive, persistent);
+        }
+
+        internal static GameObject CreateTrustCanvas(string name, bool persistent) =>
+            CreateCanvasCore(name, TopiaForgeLayerBands.TrustBand, interactive: true, persistent: persistent);
+
+        private static GameObject CreateCanvasCore(string name, TopiaForgeLayerBand band, bool interactive, bool persistent)
         {
             TopiaForgeRuntime.Ensure();
 
@@ -79,7 +88,7 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         internal static void Claim(GameObject root, Canvas canvas, TopiaForgeLayerBand band, string ownerName)
         {
-            var order = Ledger.Claim(root, band, out var exhausted);
+            var order = Ledger.ClaimBand(root, band, out var exhausted);
             if (exhausted)
             {
                 TopiaForgeLog.Warn("Sorting band " + band + " exhausted while allocating for '" + ownerName + "'; reusing order " + order + ".");

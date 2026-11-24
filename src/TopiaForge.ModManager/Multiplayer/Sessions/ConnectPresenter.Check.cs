@@ -67,7 +67,7 @@ namespace TopiaForge.ModManager.Sessions
                     // The record could not be read to check the server: the player decides, as for a changed server.
                     var body = failure == InternalLiveFailure.HostIdentityChanged ? TrustBody : LiveFailureMessages.UncheckedServer;
                     Result(body, ScreenTone.Warning);
-                    context.Ask(PrivacyPrompts.Destructive(TrustTitle, body, TrustConfirm, confirmed =>
+                    context.Ask(PrivacyPrompts.TrustIdentity(TrustTitle, body, TrustConfirm, confirmed =>
                     {
                         if (!confirmed || target != chosen) return;
                         trustedServerId = changed;

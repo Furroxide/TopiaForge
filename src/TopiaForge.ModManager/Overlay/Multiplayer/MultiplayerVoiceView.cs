@@ -197,7 +197,7 @@ namespace TopiaForge.ModManager.Sessions
         /// </summary>
         private void AskConsent(VoiceConsentQuestion question)
         {
-            var modal = host.Modal.Custom(question.Title, TopiaForgeScheme.Paper, 560f, persistent: true);
+            var modal = MultiplayerPromptModals.Consent(host, question.Title);
             modal.Content.Label(question.Body, TopiaForgeTextStyle.Body).PlainText();
             var row = modal.Content.Row(TopiaForgeGap.Sm);
             row.Spacer().Flex(1f, 0f);

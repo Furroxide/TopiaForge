@@ -15,54 +15,77 @@ namespace TopiaForge.ModManager.Tests
             UiGalleryInteractionPreviewTests.Run();
             const string owner = UiGalleryCaptureFixture.Owner;
             const string publisher = UiGalleryCaptureFixture.RemoteFixtureOwner;
-            var survival = UiGallerySurvivalTheme.Descriptor;
+            const string receiver = UiPresentationTheme.ReceiverOwner;
+            var package = new AcceptanceGalleryPackage();
+            var registered = package.Descriptor;
+            var survival = package.Survival;
             var galleryPath = Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.UiGallery");
-            var manifest = UiThemeCatalogueParser.ParseManifest(File.ReadAllBytes(Path.Combine(galleryPath, "topiaforge.mod.json")));
-            Check(manifest.TryGetValue(out var gallery) && gallery?.Default == survival.Id,
+            var catalogue = UiThemeCatalogueParser.ParseManifest(File.ReadAllBytes(Path.Combine(galleryPath, "topiaforge.mod.json")));
+            Check(catalogue.TryGetValue(out var gallery) && gallery?.Default == survival.Id,
                 "The ordinary Gallery inherits its declared Survival default.");
-            var digest = Enumerable.Repeat((byte)0x5A, 32).ToArray();
-            var kit = new UiWireEnvelope(publisher, digest, 1, null, new byte[32]);
-            var transportEnvelope = new UiWireEnvelope(publisher, digest, 1, FoundationPages.TransportTheme.Id, digest);
-            var offeredSurvival = new UiWireEnvelope(publisher, digest, 1, survival.Id, survival.Digest.Span);
-            var badSurvival = new UiWireEnvelope(publisher, digest, 1, survival.Id, digest);
-            var foreignSurvival = new UiWireEnvelope(owner, digest, 1, survival.Id, survival.Digest.Span);
-            var foreignPackage = new UiWireEnvelope("io.example.other", digest, 1, null, new byte[32]);
-            var altered = File.ReadAllText(Path.Combine(galleryPath, "ui", "themes", "survival.json"))
+            var alteredSurvival = File.ReadAllText(Path.Combine(galleryPath, "ui", "themes", "survival.json"))
                 .Replace("\"small\": 3", "\"small\": 4", StringComparison.Ordinal);
-            var otherTheme = UiThemePackParser.Parse(Encoding.UTF8.GetBytes(altered));
-            Check(otherTheme.TryGetValue(out var otherSurvival) && otherSurvival != null &&
-                !survival.Digest.Span.SequenceEqual(otherSurvival.Digest.Span),
-                "The recorder can distinguish two packages' separate Survival descriptors.");
+            var otherSurvival = UiThemePackParser.Parse(Encoding.UTF8.GetBytes(alteredSurvival)).Value;
+            Check(otherSurvival != null && !UiGallerySurvivalTheme.Matches(otherSurvival),
+                "The fixture distinguishes a different pack with the Survival id.");
+            var packageDigest = Enumerable.Repeat((byte)0x5A, 32).ToArray();
+            var otherDigest = Enumerable.Repeat((byte)0x62, 32).ToArray();
+            var defaultDigest = new byte[32];
+            UiWireEnvelope Envelope(string? theme = null, string sender = publisher) =>
+                new UiWireEnvelope(sender, packageDigest, 1UL << 63, theme,
+                    theme == survival.Id ? survival.Digest.Span : theme == registered.Id ? registered.Digest.Span : defaultDigest);
+
+            UiNode? Normalize(UiNode? content) => UiImageProjection.Rewrite(content, image =>
+            {
+                Check(image.Image.PackId == registered.Id, "The acceptance package references its own admitted art in each scheme.");
+                var metadata = UiImageProjection.Find(registered, image.Image.ImageId)!;
+                var frame = UiImageProjection.ResolveFrame(image, metadata);
+                return image.WithWireMetadata(frame.Width, frame.Height, registered.Digest.Span);
+            });
+
             foreach (var page in Enum.GetValues<FoundationPage>())
             {
                 var localOnly = page is FoundationPage.InteractionStates or FoundationPage.GraphConnections;
                 var request = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.SurvivalTheme);
-                Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null,
-                    "The native recorder admits each authored Gallery fixture.");
-                Check(UiGalleryCaptureFixture.Match(owner, false, null, request.WithTheme(null), survival) != null,
-                    "The inherited Gallery theme keeps the safe F8 fixture recordable.");
-                var transport = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.TransportTheme);
-                var targeted = Reframe(transport, "remote-37");
-                Check((UiGalleryCaptureFixture.Match("topiaforge.presentation", true, transportEnvelope, targeted)?.Id == request.Id) ==
-                    !localOnly,
-                    "A targeted receiver's reconstructed id maps to the authenticated canonical Gallery id for wire-supported pages.");
-                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, foreignSurvival, targeted, survival) == null,
+                Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null &&
+                    UiGalleryCaptureFixture.Match(owner, false, null, request.WithTheme(null), survival) != null,
+                    "The native recorder admits each authored Gallery fixture and its inherited Survival case.");
+                if (!FoundationPages.CanPublish(page))
+                {
+                    Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(), Reframe(request, "remote-37")) == null,
+                        "The local Interaction states page cannot be recorded from a remote route.");
+                    continue;
+                }
+                var transport = FoundationPages.CreateTransportRequest(page, UiSurfaceKind.Window, FoundationPages.TransportTheme);
+                var targeted = Reframe(transport, "remote-37", Normalize(transport.Content));
+                Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(registered.Id), targeted)?.Id == request.Id,
+                    "A targeted receiver's authenticated id maps to the canonical Gallery id for wire-supported pages.");
+                Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(registered.Id, owner), targeted) == null,
                     "The client-local Gallery is ineligible to publish a remote fixture.");
-                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, badSurvival, targeted, survival) == null &&
-                    UiGalleryCaptureFixture.Match("topiaforge.presentation", true, offeredSurvival, targeted, otherSurvival) == null &&
-                    UiGalleryCaptureFixture.Match("topiaforge.presentation", true, offeredSurvival, targeted) == null &&
-                    UiGalleryCaptureFixture.Match(owner, false, null, transport) == null,
-                    "Exact Survival capture needs both its authenticated digest and the matching admitted descriptor.");
-                Check(UiGalleryCaptureFixture.Match(owner, true, null, targeted) == null &&
-                    UiGalleryCaptureFixture.Match(owner, true, foreignPackage, targeted) == null,
-                    "A remote fixture requires the authenticated Gallery owner.");
+                var survivalRequest = FoundationPages.CreateTransportRequest(page, UiSurfaceKind.Window, FoundationPages.SurvivalTheme);
+                var survivalTarget = Reframe(survivalRequest, "remote-48", Normalize(survivalRequest.Content));
+                var survivalEnvelope = Envelope(survival.Id);
+                Check(UiGalleryCaptureFixture.Match(receiver, true, survivalEnvelope, survivalTarget, survival)?.Id == request.Id &&
+                    UiGalleryCaptureFixture.Match(receiver, true, survivalEnvelope, survivalTarget, otherSurvival) == null &&
+                    UiGalleryCaptureFixture.Match(receiver, true, survivalEnvelope, survivalTarget) == null &&
+                    UiGalleryCaptureFixture.Match(receiver, true, new UiWireEnvelope(publisher, packageDigest,
+                        1, survival.Id, otherDigest), survivalTarget, survival) == null,
+                    "The paired Survival presentation requires its exact delivered and admitted descriptors.");
+                Check(UiGalleryCaptureFixture.Match(owner, false, null, transport) == null,
+                    "The ordinary Gallery cannot publish the acceptance palette.");
+                Check(UiGalleryCaptureFixture.Match(receiver, true, null, targeted) == null &&
+                    UiGalleryCaptureFixture.Match(receiver, true, Envelope(registered.Id, "io.example.other"), targeted) == null &&
+                    UiGalleryCaptureFixture.Match(owner, true, Envelope(registered.Id), targeted) == null,
+                    "A remote fixture requires the authenticated Gallery publisher and the loader-owned receiver.");
+                Check(UiGalleryCaptureFixture.Match(receiver, true, new UiWireEnvelope(publisher, packageDigest,
+                    1, registered.Id, otherDigest), targeted) == null,
+                    "A transport palette with the right name also requires the exact admitted fixture digest.");
                 Check(UiGalleryCaptureFixture.Match(owner, false, null, targeted) == null,
                     "The local capture route requires the original Gallery id.");
                 Check(UiGalleryCaptureFixture.Match("io.example.other", false, null, request) == null,
                     "An unrelated local package cannot opt in by copying the fixture.");
-                if (localOnly) continue;
-                var hud = FoundationPages.CreateRequest(page, UiSurfaceKind.Hud);
-                Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit, Reframe(hud, "shared-19"))?.Id == hud.Id,
+                var hud = FoundationPages.CreateTransportRequest(page, UiSurfaceKind.Hud, theme: null);
+                Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(), Reframe(hud, "shared-19", Normalize(hud.Content)))?.Id == hud.Id,
                     "A shared HUD receiver's reconstructed id maps to its canonical Gallery fixture.");
             }
 
@@ -74,11 +97,12 @@ namespace TopiaForge.ModManager.Tests
                 original.Id, original.Title, body, original.Kind, original.Width, original.Height, node);
             Check(UiGalleryCaptureFixture.Match(owner, false, null, Replace(original.Body, new UiColumn(content))) == null,
                 "A fixture id does not admit unlisted nested text.");
-            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit,
+            Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(),
                 Reframe(Replace(original.Body, new UiColumn(content)), "remote-37")) == null,
                 "An authenticated remote Gallery envelope cannot export unlisted nested text.");
-            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit, Reframe(original, "remote-0")) == null,
-                "A remote preview needs a nonzero transport id.");
+            foreach (var id in new[] { "remote-0", "remote-0037", "shared-37" })
+                Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(), Reframe(original, id)) == null,
+                    "A remote window needs a canonical nonzero targeted id.");
             Check(UiGalleryCaptureFixture.Match(owner, false, null, Replace("Unlisted body", original.Content!)) == null,
                 "A fixture id does not admit unlisted body text.");
             Check(UiGalleryCaptureFixture.Match(owner, false, null, original.WithTheme(new UiThemeRef("other"))) == null,
@@ -91,18 +115,26 @@ namespace TopiaForge.ModManager.Tests
             var wrongBounds = new UiSurfaceRequest(stack.Id, stack.Title, stack.Body, stack.Kind,
                 stack.Width, stack.Height, new UiColumn(panelChildren));
             Check(UiGalleryCaptureFixture.Match(owner, false, null, wrongBounds) == null &&
-                UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit, Reframe(wrongBounds, "remote-37")) == null,
+                UiGalleryCaptureFixture.Match(receiver, true, Envelope(), Reframe(wrongBounds, "remote-37")) == null,
                 "A copied Gallery label tree with altered stack geometry cannot reach the native export.");
 
-            var art = FoundationPages.CreateRequest(FoundationPage.Images, UiSurfaceKind.Window);
-            var sampleDigest = Enumerable.Repeat((byte)0x62, 32).ToArray();
-            UiNode? WithNormalizedArt(float width) => UiImageProjection.Rewrite(art.Content, image =>
-                image.Id == "image-natural" ? image.WithWireMetadata(width, 48f, sampleDigest) : image);
-            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit,
-                    Reframe(art, "remote-37", WithNormalizedArt(96f)))?.Id == art.Id &&
-                UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit,
-                    Reframe(art, "remote-37", WithNormalizedArt(97f))) == null,
-                "Only the exact normalized natural sprite dimensions qualify for native remote capture.");
+            var art = FoundationPages.CreateTransportRequest(FoundationPage.Images, UiSurfaceKind.Window, theme: null);
+            var cleanArt = Normalize(art.Content);
+            Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(), Reframe(art, "remote-37", cleanArt))?.Id == art.Id,
+                "Exact remote art qualifies even if the guest must render a placeholder.");
+            RejectImage("image-natural", image => image.WithWireMetadata(97f, 48f, registered.Digest.Span));
+            RejectImage("image-natural", image => image.WithWireMetadata(96f, 48f, otherDigest));
+            RejectImage("image-contain", image => image.WithWireMetadata(144f, 88f, otherDigest));
+            RejectImage("image-contain", image => new UiImage(image.Image, image.SemanticLabel, image.Width, image.Height, id: image.Id));
+            RejectImage("image-contain", image => new UiImage(FoundationArtPages.Card, image.SemanticLabel, image.Width, image.Height,
+                id: image.Id).WithWireMetadata(144f, 88f, registered.Digest.Span));
+
+            void RejectImage(string id, Func<UiImage, UiImage> change)
+            {
+                var altered = UiImageProjection.Rewrite(cleanArt, image => image.Id == id ? change(image) : image);
+                Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(), Reframe(art, "remote-37", altered)) == null,
+                    "Every remote fixture image requires its exact package-local reference, digest and normalized frame.");
+            }
 
             Check(UiGalleryCaptureFixture.SafeDisplayText("FIELD NOTE", "Field note", true) == "FIELD NOTE" &&
                 UiGalleryCaptureFixture.SafeDisplayText("Field note", "Field note", false) == "Field note",
@@ -123,29 +155,42 @@ namespace TopiaForge.ModManager.Tests
             GalleryPortFixturesRequireExactAuthoredPorts();
 
             var variants = Enumerable.Range(0, GalleryRemotePreview.VariantCount).Select(GalleryRemotePreview.Request).ToArray();
-            Check(variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 12,
+            Check(variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 69 &&
+                variants.Count(request => request.Id == FoundationLayoutPages.LayoutNotice().Id &&
+                    request.Kind == UiSurfaceKind.Hud) == 3,
                 "The test publisher cycles the complete supported page, surface and theme matrix.");
+            var originalPages = new[] { FoundationPage.ThemePacks, FoundationPage.Typography };
+            var originalPalettes = new[] { null, FoundationPages.TransportTheme, FoundationPages.SurvivalTheme };
+            for (var index = 0; index < 12; index++)
+            {
+                var kind = index % 2 == 0 ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
+                var expected = FoundationPages.CreateRequest(originalPages[index / 6], kind, originalPalettes[index % 6 / 2]);
+                var actual = variants[index];
+                Check((actual.Id, actual.Kind, actual.Theme?.Id) == (expected.Id, expected.Kind, expected.Theme?.Id),
+                    "The first twelve published variants preserve the original Theme packs and Typography order.");
+            }
+
             foreach (var request in variants)
             {
-                var local = request.WithTheme(null);
-                Check(UiGalleryCaptureFixture.Match(owner, false, null, local, survival) != null,
-                    "Connected guests can open the same Theme packs and Typography pages with Survival in their own Gallery.");
-                var declared = request.Theme?.Id == survival.Id ? survival : null;
-                Check(UiGalleryCaptureFixture.Match(publisher, false, null, request, declared) != null,
+                var palette = request.Theme?.Id == survival.Id ? survival : request.Theme?.Id == registered.Id ? registered : null;
+                Check(UiGalleryCaptureFixture.Match(publisher, false, null, request, palette) != null,
                     "The opt-in host may also record its own transport fixture.");
                 const string clock = "gallery-test";
-                var themeDigest = declared?.Digest.ToArray() ?? (request.Theme == null ? new byte[32] : digest);
-                var envelope = new UiWireEnvelope(publisher, digest, 1, request.Theme?.Id, themeDigest);
+                var envelope = Envelope(request.Theme?.Id);
+                var normalized = Normalize(request.Content);
                 var writer = new WorldWireWriter(32 * 1024);
                 Check(UiWireCodec.NeedsEnvelope(request.Content), "Each fixture exercises authenticated ownership framing.");
-                UiWireCodec.Write(writer, request.Content, clock, envelope);
+                Check(UiWireCodec.MeasureTargetedSurface(publisher, "gallery-guest", 118, 1, request, request.Body,
+                    visible: true, normalized, clock, envelope: envelope) <= 32 * 1024,
+                    "Each Gallery preview fits production targeted framing with its envelope and verified art metadata.");
+                UiWireCodec.Write(writer, normalized, clock, envelope);
                 var reader = new WorldWireReader();
                 reader.Reset(writer.Segment.ToArray());
                 var decoded = UiWireCodec.ReadWithEnvelope(reader, (_, _) => { }, clock, out var observedEnvelope);
                 UiWireCodec.End(reader);
                 var received = Reframe(request, "remote-118", decoded);
                 Check(decoded != null && observedEnvelope?.OwnerPackageId == publisher &&
-                    UiGalleryCaptureFixture.Match("topiaforge.presentation", true, observedEnvelope, received, declared)?.Id == request.Id,
+                    UiGalleryCaptureFixture.Match(receiver, true, observedEnvelope, received, palette)?.Id == request.Id,
                     "Each published page keeps its canonical fixture identity after production codec round-trip and receiver ID reconstruction.");
             }
 
