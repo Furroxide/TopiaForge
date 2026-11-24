@@ -12,6 +12,12 @@ namespace TopiaForge.ModManager.Tests
             UiOuterScrollTests.Run();
             PublicTypesValidateAndCopy();
             AxesAndSpacingKeepLegacyDefaults();
+            LegacyNestedColumnsLeaveRoomForFollowingControls();
+            AlternatingStretchBoundsIntrinsicWork();
+            StretchRealignsWrapRuns();
+            StretchedDividerPaintProtectsEarlierText();
+            StretchReflowsSizedResponsiveChildren();
+            StretchRetainsTheMainAxisBudgetForTallerWraps();
             SizedBoxesClampAndPreserveLooseAxes();
             FlexDistributesPhysicalPixelsInSourceOrder();
             WrapAndGridUseTheViewerWidth();
@@ -101,6 +107,105 @@ namespace TopiaForge.ModManager.Tests
             var padded = Arrange(inset, UiLayoutConstraints.Loose(60, 60));
             Rect(Find(padded, "padded").Bounds, 8, 4, 20, 10);
             That(padded.Size.Width == 36 && padded.Size.Height == 18, "Padding surrounds the measured size.");
+        }
+
+        private static void LegacyNestedColumnsLeaveRoomForFollowingControls()
+        {
+            var column = new UiColumn(new UiText("Name", id: "name"), new UiText("Detail", id: "detail"));
+            var button = new UiButton("go", "Go", () => { });
+            var viewport = UiLayoutConstraints.Tight(180, 120);
+            var besideColumn = Arrange(new UiRow(column, button), viewport);
+            That(Find(besideColumn, "name").Bounds.Width == 60 &&
+                Find(besideColumn, "detail").Bounds.Width == 60,
+                "A legacy column stretches its children to its measured width.");
+            That(Find(besideColumn, "go").Bounds.X == 68,
+                "The following button retains space beside a legacy column.");
+
+            var besideCard = Arrange(new UiRow(new UiCard(column), button), viewport);
+            That(Find(besideCard, "name").Bounds.Width == 60 && Find(besideCard, "go").Bounds.X == 100,
+                "Card padding preserves the intrinsic column width and leaves room for the following control.");
+        }
+
+        private static void AlternatingStretchBoundsIntrinsicWork()
+        {
+            const int levels = 24;
+            var layout = new UiFlexLayout(spacing: UiSpace.None, crossAxisAlignment: UiCrossAxisAlignment.Stretch);
+            foreach (var wideSibling in new[] { false, true })
+            {
+                UiNode tree = new UiBox(2, 2);
+                for (var depth = 1; depth <= levels; depth++)
+                {
+                    var side = wideSibling ? (float)depth * 2 : 1f;
+                    var children = new[] { tree, new UiBox(side, side) };
+                    tree = depth % 2 == 0 ? new UiColumn(children) : new UiRow(children, layout);
+                }
+
+                var calls = 0;
+                UiLayoutEngine.Arrange(tree, UiLayoutConstraints.Loose(4096, 4096), (node, limits, disabled) =>
+                {
+                    That(++calls <= (levels + 1) * (levels + 1),
+                        "A box has at most one intrinsic measurement per ancestor and one final measurement.");
+                    return Measure(node, limits, disabled);
+                });
+            }
+        }
+
+        private static void StretchRealignsWrapRuns()
+        {
+            var wrap = new UiWrap(new UiNode[] { new UiBox(20, 10, id: "inside") },
+                alignment: UiMainAxisAlignment.Center, id: "wrap");
+            var column = new UiColumn(wrap, new UiBox(100, 10));
+            var result = Arrange(column, UiLayoutConstraints.Loose(200, 200));
+            That(Find(result, "wrap").Bounds.Width == 100 && Find(result, "inside").Bounds.X == 40,
+                "A wrap realigns already measured runs against its assigned width.");
+        }
+
+        private static void StretchedDividerPaintProtectsEarlierText()
+        {
+            var divider = new UiSizedBox(new UiDivider(before: UiSpace.None, after: UiSpace.None), width: 10);
+            var stretch = new UiColumn(divider, new UiBox(100, 10));
+            var stack = new UiStack(new UiNode[]
+            {
+                new UiPositioned(new UiText("Protected"), 50, 0, width: 20, height: 1),
+                new UiPositioned(stretch, 0, 0),
+            }, 140, 40);
+            var error = Reject<UiLayoutException>(() => UiLayoutEngine.Arrange(stack, UiLayoutConstraints.Tight(140, 40),
+                (node, limits, disabled) => node is UiText
+                    ? new UiLayoutLeafMeasurement(new UiLayoutExtent(20, 1), UiLayoutPaintKind.Protected)
+                    : Measure(node, limits, disabled)));
+            That(error.Failure == UiLayoutFailure.OccludedContent,
+                "The full width of a stretched divider participates in paint validation.");
+        }
+
+        private static void StretchReflowsSizedResponsiveChildren()
+        {
+            var split = new UiSplitPane(new UiBox(10, 10), new UiBox(10, 10, id: "secondary"));
+            var grid = new UiGrid(new[] { new UiBox(10, 10, id: "first-cell"), new UiBox(10, 10, id: "second-cell") },
+                minimumCellWidth: 48, spacing: UiSpace.None);
+            var column = new UiColumn(new UiSizedBox(split, width: 42), new UiSizedBox(grid, width: 48),
+                new UiBox(128, 10));
+            var result = Arrange(column, UiLayoutConstraints.Loose(200, 200));
+            That(Find(result, "secondary").Bounds.X == 70,
+                "A stretched pane reapplies its split fraction to the final size.");
+            That(Find(result, "first-cell").Bounds.Y == Find(result, "second-cell").Bounds.Y &&
+                Find(result, "second-cell").Bounds.X == 64,
+                "A stretched grid reflows its cells at the final size.");
+        }
+
+        private static void StretchRetainsTheMainAxisBudgetForTallerWraps()
+        {
+            var wrap = new UiWrap(new UiNode[] { new UiBox(60, 10), new UiText("Wide"), new UiText("Tall") },
+                spacing: UiSpace.None, runSpacing: UiSpace.None);
+            var column = new UiColumn(new UiSizedBox(wrap, width: 100), new UiBox(110, 10, id: "after"));
+            var row = new UiRow(new UiNode[] { column, new UiBox(10, 10) },
+                new UiFlexLayout(crossAxisAlignment: UiCrossAxisAlignment.Stretch));
+            var result = UiLayoutEngine.Arrange(row, UiLayoutConstraints.Loose(200, 200),
+                (node, limits, disabled) => node is UiText text
+                    ? new UiLayoutLeafMeasurement(new UiLayoutExtent(text.Text == "Wide" ? 50 : 40, 40),
+                        UiLayoutPaintKind.Protected)
+                    : Measure(node, limits, disabled));
+            That(Find(result, "after").Bounds.Y == 88,
+                "The final wrap can grow taller within the original viewport and moves the next child down.");
         }
 
         private static void FlexDistributesPhysicalPixelsInSourceOrder()

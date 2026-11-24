@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace TopiaForge.Mods
 {
@@ -17,6 +18,18 @@ namespace TopiaForge.Mods
             var margin = SafeMargin * layoutScale;
             return new UiLayoutRect(canvas.X + margin, canvas.Y + margin, Math.Max(0d, canvas.Width - 2d * margin),
                 Math.Max(0d, canvas.Height * (1d - SubtitleFraction) - 2d * margin));
+        }
+
+        internal static void AddGameHudReservations(UiLayoutRect screen, List<UiLayoutRect> occupied)
+        {
+            // LibSurfaces records the game HUD at 1920 × 1080. Use the screen scale independently of the mod's scale.
+            var scale = ScreenScale(screen.Width, screen.Height);
+            occupied.Add(new UiLayoutRect(screen.X + 24d * scale, screen.Y + 20d * scale,
+                280d * scale, 48d * scale).Intersect(screen));
+            occupied.Add(new UiLayoutRect(screen.X + (screen.Width - 280d * scale) / 2d, screen.Y + 16d * scale,
+                280d * scale, 36d * scale).Intersect(screen));
+            occupied.Add(new UiLayoutRect(screen.Right - 464d * scale, screen.Y + 20d * scale,
+                440d * scale, 72d * scale).Intersect(screen));
         }
 
         internal static UiHudAnchor Anchor(UiHudAnchor anchor, UiHudVisibility visibility) => anchor != UiHudAnchor.Default

@@ -314,8 +314,10 @@ namespace TopiaForge.ModManager.Tests
                             SetScale(host, canvas, placement, 2f);
                             Check(!surface.Fits(), "The real staging constraints refuse the authored 1080-unit HUD at double scale.");
                             surface.Refresh();
+                            var safe = UiHudViewport.SafeArea(new UiLayoutRect(0, 0, Screen.width, Screen.height), 2d);
                             Check(surface.NoticeShown && surface.LayoutFailure?.Path == "/0/0" && !surface.OriginalShown &&
-                                surface.Bounds.X == 48d && surface.Bounds.Width == 1824d && TopiaForgeToasts.Plain.Count == 0, "The native HUD displays its retained layout notice inside physical screen bounds. " +
+                                safe.Contains(surface.Bounds) && ClearsGameHudLabels(surface.Bounds) && TopiaForgeToasts.Plain.Count == 0,
+                                "The native HUD displays its retained layout notice clear of the game labels. " +
                                 $"Notice {surface.NoticeShown}, original {surface.OriginalShown}, path {surface.LayoutFailure?.Path}, width {surface.Bounds.Width}.");
                             Check(surface.NoticeCaption == "Readiness" && surface.NoticeMessage == UiHudLayoutNotice.Text,
                                 "The native notice includes its kit message and the owning surface title.");
@@ -567,6 +569,7 @@ namespace TopiaForge.ModManager.Tests
                             subject.NoticeMessage == UiHudLayoutNotice.Text && safe.Contains(subject.Bounds) &&
                             !subject.Bounds.Intersects(obstacle) && obstacle.Equals(peer.Bounds) && TopiaForgeToasts.Plain.Count == 0,
                             "A readable layout notice paints when a wider safe opening exists.");
+                        Check(ClearsGameHudLabels(subject.Bounds), "The alternate notice clears the game HUD labels.");
 
                         for (var index = 0; index < 64; index++) subject.Refresh();
                         var calls = subject.LayoutCalls;
@@ -575,6 +578,11 @@ namespace TopiaForge.ModManager.Tests
                         Check(GC.GetAllocatedBytesForCurrentThread() == before && subject.LayoutCalls == calls,
                             "A settled wide layout notice allocates 0 B and keeps its measurement.");
                     }
+
+                    private static bool ClearsGameHudLabels(UiLayoutRect bounds) =>
+                        !bounds.Intersects(new UiLayoutRect(24, 20, 280, 48)) &&
+                        !bounds.Intersects(new UiLayoutRect(820, 16, 280, 36)) &&
+                        !bounds.Intersects(new UiLayoutRect(1456, 20, 440, 72));
 
                     private static void DockMarginsFollowTheAssignedUnits()
                     {

@@ -4,6 +4,8 @@ namespace TopiaForge.Mods
 {
     internal sealed partial class UiLayoutEngine
     {
+        private bool measuringIntrinsicCross;
+
         private void MeasureFlex(Slot slot, UiFlexLayout layout, UiLayoutConstraints constraints, bool horizontal)
         {
             var axis = new Axis(horizontal);
@@ -12,7 +14,22 @@ namespace TopiaForge.Mods
             var mainLimit = axis.MainLimit(inner);
             var crossLimit = axis.CrossLimit(inner);
             var alignment = layout.CrossAxisAlignment ?? (horizontal ? UiCrossAxisAlignment.Center : UiCrossAxisAlignment.Stretch);
-            var stretch = alignment == UiCrossAxisAlignment.Stretch && double.IsFinite(crossLimit);
+            var boundedStretch = alignment == UiCrossAxisAlignment.Stretch && double.IsFinite(crossLimit);
+            var legacyColumn = slot.Node is UiColumn { HasExplicitLayout: false };
+            var stretch = boundedStretch && (!legacyColumn || axis.CrossMinimum(inner) == crossLimit);
+            if (boundedStretch && !stretch && !measuringIntrinsicCross)
+            {
+                // Legacy columns take their content width when the parent leaves width loose. Suppress nested
+                // refinements during this probe, then measure at the selected width with the original height budget.
+                measuringIntrinsicCross = true;
+                try { MeasureFlex(slot, layout, constraints, horizontal); }
+                finally { measuringIntrinsicCross = false; }
+                var allocatedCross = axis.Cross(slot.Size);
+                var tightened = axis.CreateConstraints(axis.MainMinimum(constraints), axis.MainLimit(constraints),
+                    allocatedCross, allocatedCross);
+                MeasureFlex(slot, layout, tightened, horizontal);
+                return;
+            }
             var children = UiNodeChildren.Of(slot.Node);
             var measured = new Slot[children.Count];
             var minimumGap = (int)layout.Spacing;
@@ -161,7 +178,9 @@ namespace TopiaForge.Mods
 
             internal double Main(UiLayoutExtent size) => horizontal ? size.Width : size.Height;
             internal double Cross(UiLayoutExtent size) => horizontal ? size.Height : size.Width;
+            internal double MainMinimum(UiLayoutConstraints constraints) => horizontal ? constraints.MinWidth : constraints.MinHeight;
             internal double MainLimit(UiLayoutConstraints constraints) => horizontal ? constraints.MaxWidth : constraints.MaxHeight;
+            internal double CrossMinimum(UiLayoutConstraints constraints) => horizontal ? constraints.MinHeight : constraints.MinWidth;
             internal double CrossLimit(UiLayoutConstraints constraints) => horizontal ? constraints.MaxHeight : constraints.MaxWidth;
             internal UiLayoutExtent Extent(double main, double cross) => horizontal
                 ? new UiLayoutExtent(main, cross) : new UiLayoutExtent(cross, main);

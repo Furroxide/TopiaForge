@@ -65,6 +65,7 @@ namespace TopiaForge.ModManager
                 if (region.HasArea) occupied.Add(region);
             }
             if (protectedNoticeArea != null && TryProject(protectedNoticeArea, out var blocked)) occupied.Add(blocked);
+            UiHudViewport.AddGameHudReservations(new UiLayoutRect(0, 0, Screen.width, Screen.height), occupied);
 
             var origin = (viewport.DockX, viewport.DockY, (double)panel.AuthoredPivot.x, 1d - panel.AuthoredPivot.y);
             var scale = viewport.Scale;
