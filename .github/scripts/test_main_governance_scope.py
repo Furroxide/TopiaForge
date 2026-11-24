@@ -17,11 +17,11 @@ SPEC.loader.exec_module(SCOPE)
 class MainGovernanceScopeTests(unittest.TestCase):
     def errors(self, *, base="main", head="maintenance/main-governance",
                base_repo="Furroxide/TopiaForge", head_repo="Furroxide/TopiaForge",
-               paths=None, sidecar_blobs=None):
+               paths=None, sidecar_blobs=None, dco_blobs=None):
         return SCOPE.failures(
             base, head, base_repo, head_repo,
             [".github/workflows/release-dry-run.yml"] if paths is None else paths,
-            sidecar_blobs,
+            sidecar_blobs, dco_blobs,
         )
 
     def test_exact_same_repository_branch_and_allowed_file_pass(self):
@@ -64,6 +64,15 @@ class MainGovernanceScopeTests(unittest.TestCase):
                 entry = subprocess.CompletedProcess([], 0, f"{metadata} {old}\t{path}\n", "")
                 with patch.object(SCOPE.subprocess, "run", return_value=entry):
                     self.assertEqual(expected, SCOPE.blob_at("HEAD", path))
+
+    def test_only_the_complete_exact_dco_bootstrap_is_allowed(self):
+        blobs = SCOPE.DCO_TRUST_BOOTSTRAP
+        paths = list(blobs)
+        self.assertEqual([], self.errors(paths=paths, dco_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths[:-1], dco_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths + [".github/release-dco/0.2.0-attestation.txt"], dco_blobs=blobs))
+        substituted_key = {**blobs, ".github/release-dco/allowed-signers": ("", "wrong key")}
+        self.assertTrue(self.errors(paths=paths, dco_blobs=substituted_key))
 
     def test_workflow_runs_this_check(self):
         policy = (SCRIPT.parents[1] / "workflows" / "pr-policy.yml").read_text(

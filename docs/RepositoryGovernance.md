@@ -59,8 +59,8 @@ reject this unchanged client baseline. Release-branch pushes and their `main` pu
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
 development, or unknown scope. License and notice validation is
-release-blocking. DCO enforcement is grandfathered through the immutable
-`v1.0.0-rc.1` cutover and applies to every commit introduced afterward.
+release-blocking. DCO enforcement applies to every commit introduced between
+the verified base and head of a pull request.
 
 CodeQL is an independent ruleset gate at high-or-critical severity. For the
 Windows/Linux-only RC1, default setup covers Actions, C/C++, C#, and
@@ -138,9 +138,12 @@ The stable PR-policy check enforces these routing rules:
   together. After the backport lands, the old base blobs no longer match and the exception closes.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
-- Once `v1.0.0-rc.1` exists, every introduced commit must contain a valid
-  `Signed-off-by` trailer matching an author or committer identity. Existing
-  history reachable from the cutover tag is grandfathered.
+- Every introduced commit requires a valid `Signed-off-by` trailer. The
+  same-repository `sync/main-v0.2.0` and `release/0.2.0` routes can certify
+  their exact historical commit lists with the release maintainer's signed
+  attestation. Before merging either route, verify its exact base and head
+  independently using the verifier and public signing key from the protected
+  base.
 
 Only explicitly trusted collaborators may submit formal Approve or Request Changes reviews. Community review remains
 welcome through comments and suggestions; formal reviews become enforcement evidence only when collaboration trust
@@ -237,9 +240,8 @@ The desired live settings are:
   an eligible organization plan.
 - Immutable releases are enabled before publication. The repository push limit
   is five refs per push, preventing accidental mirror pushes. Wiki is disabled;
-  Issues remain enabled. GitHub web commit sign-off is enabled immediately
-  after the `v1.0.0-rc.1` cutover so future browser-created commits satisfy the
-  DCO policy.
+  Issues remain enabled. Enable GitHub web commit sign-off so browser-created
+  commits satisfy the DCO policy.
 
 The five-ref push limit and owner-account security posture require manual verification because GitHub does not expose
 all of them through the repository audit API. The sole owner must maintain a passkey or hardware security key, TOTP

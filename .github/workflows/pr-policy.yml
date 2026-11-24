@@ -94,29 +94,48 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Enforce DCO after the rc.1 cutover
+      - name: Enforce DCO for incoming commits
         shell: bash
         env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           git fetch --force --no-tags origin "$BASE_SHA"
-          git fetch --force origin \
-            refs/tags/v1.0.0-rc.1:refs/tags/v1.0.0-rc.1 2>/dev/null || true
-          if ! git rev-parse --verify refs/tags/v1.0.0-rc.1 >/dev/null 2>&1; then
-            echo 'DCO cutover tag does not exist yet; existing history is grandfathered.'
-            exit 0
-          fi
-          failures=0
+          # Only commits introduced by this PR need certification. Already
+          # integrated base history is excluded, independent of release tags.
+          git rev-parse --verify "$BASE_SHA^{commit}" >/dev/null
+          git rev-parse --verify "$HEAD_SHA^{commit}" >/dev/null
+          commits=$(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
+          missing=()
           while IFS= read -r commit; do
-            if ! git show -s --format=%B "$commit" |
-              grep -Eiq '^Signed-off-by:[[:space:]].+<[^<>[:space:]]+@[^<>[:space:]]+>[[:space:]]*$'; then
-              echo "::error::Commit $commit is missing a valid Signed-off-by trailer."
-              failures=1
+            [[ -n "$commit" ]] || continue
+            message=$(git show -s --format=%B "$commit")
+            if ! grep -Eiq '^Signed-off-by:[[:space:]].+<[^<>[:space:]]+@[^<>[:space:]]+>[[:space:]]*$' <<< "$message"; then
+              missing+=("$commit")
             fi
-          done < <(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
-          exit "$failures"
+          done <<< "$commits"
+          if (( ${#missing[@]} )); then
+            if [[ "$BASE_REPOSITORY" == Furroxide/TopiaForge &&
+                  "$HEAD_REPOSITORY" == "$BASE_REPOSITORY" ]] &&
+                [[ "$BASE_REF:$HEAD_REF" == main:release/0.2.0 ||
+                   "$BASE_REF:$HEAD_REF" == dev:sync/main-v0.2.0 ]]; then
+              verifier=$(mktemp -d)
+              trap 'rm -f -- "$verifier/verify.py" "$verifier/allowed-signers"; rmdir -- "$verifier"' EXIT
+              # Only the protected base supplies executable verification code and public keys.
+              git show "$BASE_SHA:.github/scripts/verify_0_2_0_dco.py" > "$verifier/verify.py"
+              git show "$BASE_SHA:.github/release-dco/allowed-signers" > "$verifier/allowed-signers"
+              python3 "$verifier/verify.py" "$verifier/allowed-signers" \
+                "$BASE_REPOSITORY" "$HEAD_REPOSITORY" "$BASE_REF" "$HEAD_REF" "$BASE_SHA" "$HEAD_SHA"
+            else
+              printf '::error::Commit %s is missing a valid Signed-off-by trailer.\n' "${missing[@]}"
+              exit 1
+            fi
+          fi
 
       - name: Limit the production service pull request
         if: github.base_ref == 'main' && github.head_ref == 'service/production-multiplayer'
