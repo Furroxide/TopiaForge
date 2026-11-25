@@ -68,7 +68,7 @@ namespace TopiaForge.ModManager.Tests
 
             var quarter = new UiThresholds(.85, .65);
             Require(UiStatusPresentation.For(UiProgress.WithThresholds(.95f, "Load", above)) is
-                { Level: UiStatusLevel.Critical, Tone: UiTone.Danger, Glyph: UiGlyph.Cross } &&
+            { Level: UiStatusLevel.Critical, Tone: UiTone.Danger, Glyph: UiGlyph.Cross } &&
                 UiStatusPresentation.For(UiProgress.WithThresholds(.85f, "Load", above)) is
                 { Level: UiStatusLevel.Warning, Tone: UiTone.Warning, Glyph: UiGlyph.Warning } &&
                 UiStatusPresentation.For(UiProgress.WithThresholds(.85f, "Supply", quarter)) is
@@ -127,7 +127,7 @@ namespace TopiaForge.ModManager.Tests
                     "Stat bar thresholds compare the actual value instead of its fraction.");
                 var exact = new UiThresholds(50d, Math.BitIncrement(50d), UiThresholdDirection.AtOrAbove);
                 Require(UiStatusPresentation.For(new UiStatBar("Integrity", 50, 100, exact)) is
-                        { Level: UiStatusLevel.Warning, Glyph: UiGlyph.Warning },
+                { Level: UiStatusLevel.Warning, Glyph: UiGlyph.Warning },
                     "Stat bar thresholds preserve the authored boundary immediately above an integer value.");
                 Require(new UiStatBar("Capacity", 0, 1_000_000).Fraction == 0f &&
                     new UiStatBar("Capacity", 1_000_000, 1_000_000).Fraction == 1f, "Stat fractions cover the permitted endpoints.");

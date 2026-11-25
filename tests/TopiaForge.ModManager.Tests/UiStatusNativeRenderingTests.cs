@@ -172,7 +172,7 @@ namespace TopiaForge.ModManager.Tests
                                 (.5f, below, UiTone.Warning, (UiGlyph?)UiGlyph.Warning), (.25f, below, UiTone.Danger, (UiGlyph?)UiGlyph.Cross),
                             })
                             {
-                                var node = new UiProgress(fraction, "Load", thresholds);
+                                var node = UiProgress.WithThresholds(fraction, "Load", thresholds);
                                 var root = new TopiaForgeContainer(theme, scale);
                                 var leaf = new NativeStatusLeaf(root, node, new UiCallbackGate());
                                 var bounds = Arrange(leaf, node, descriptor, high, scale, 350, 56);
