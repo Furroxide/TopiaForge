@@ -19,15 +19,16 @@ namespace {{ASSEMBLY_NAME}}.Tests
             AddThemeFixtures(context);
             using var runner = ModLifecycleRunner.Create<{{TYPE_NAME}}Mod>(context);
             runner.Load();
-            PressToggle(context);
+            var surface = OpenSettings(context);
 
             Assert.That(context.Ui.Themes.SelectedTheme, Is.Null);
-            var surface = context.Ui.Surfaces.Single();
             context.Ui.CompletePendingThemeRegistrations();
             AssertPalette("#27614D", "survival");
             AssertArtwork();
 
+            SelectTab(surface, {{TYPE_NAME}}Mod.ControlsTabId);
             Assert.That(surface.ChangeText({{TYPE_NAME}}Mod.GreetingInputId, "Trail marked").Succeeded, Is.True);
+            SelectTab(surface, {{TYPE_NAME}}Mod.GeneralTabId);
             var content = surface.Content;
             Assert.That(surface.ChangeToggle({{TYPE_NAME}}Mod.ThemePreviewToggleId, true).Succeeded, Is.True);
             context.Ui.CompletePendingThemeRegistrations();
@@ -105,9 +106,8 @@ namespace {{ASSEMBLY_NAME}}.Tests
                 Assert.That(context.Ui.Surfaces, Is.Empty);
             });
 
-            PressToggle(context);
+            var surface = OpenSettings(context);
             context.Ui.CompletePendingThemeRegistrations();
-            var surface = context.Ui.Surfaces[0];
             Assert.Multiple(() =>
             {
                 Assert.That(context.Ui.Surfaces, Has.Count.EqualTo(1));
@@ -116,29 +116,31 @@ namespace {{ASSEMBLY_NAME}}.Tests
                 Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.NotifyButtonId, out _), Is.True);
                 Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.SettingsGridId, out var grid), Is.True);
                 Assert.That(grid, Is.TypeOf<UiGrid>());
-                Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.SettingsSummaryId, out var summary), Is.True);
-                Assert.That(((UiText)summary!).Style, Is.EqualTo(UiTextStyle.Mono));
             });
+            var tabs = Find<UiTabs>(surface, {{TYPE_NAME}}Mod.SettingsTabsId);
+            Assert.That(tabs.Style, Is.EqualTo(UiTabsStyle.Rail));
+            Assert.That(tabs.Tabs.Select(tab => tab.Label), Is.EqualTo(new[] { "General", "Controls", "Accessibility" }));
 
-            Assert.That(surface.ChangeText({{TYPE_NAME}}Mod.GreetingInputId, "Hello, Robotopia!" ).Succeeded, Is.True);
+            SelectTab(surface, {{TYPE_NAME}}Mod.ControlsTabId);
+            Assert.That(surface.ChangeText({{TYPE_NAME}}Mod.GreetingInputId, "Hello, Robotopia!").Succeeded, Is.True);
             Assert.That(surface.ChangeDropdown({{TYPE_NAME}}Mod.ToneDropdownId, "success").Succeeded, Is.True);
             Assert.That(surface.SelectListItem({{TYPE_NAME}}Mod.TopicListId, "testing").Succeeded, Is.True);
-            Assert.That(surface.ChangeSlider({{TYPE_NAME}}Mod.UiScaleSliderId, 1.25f).Succeeded, Is.True);
             Assert.That(surface.ActivateButton({{TYPE_NAME}}Mod.NotifyButtonId).Succeeded, Is.True);
             Assert.Multiple(() =>
             {
                 Assert.That(surface.Body, Does.Contain("Hello, Robotopia!"));
                 Assert.That(surface.Body, Does.Contain("testing"));
-                Assert.That(context.Ui.Accessibility.UiScale, Is.EqualTo(1.25f));
                 Assert.That(context.Ui.Toasts, Has.Count.EqualTo(1));
                 Assert.That(context.Ui.Toasts[0].Tone, Is.EqualTo(UiTone.Success));
             });
 
             Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.NotificationBadgeId, out var badge), Is.True);
             Assert.That(((UiBadge)badge!).Text, Is.EqualTo("Notifications on"));
-            Assert.That(surface.ChangeToggle({{TYPE_NAME}}Mod.NotificationsToggleId, false).Succeeded, Is.True);
+            Assert.That(surface.ChangeCheckbox({{TYPE_NAME}}Mod.NotificationsCheckboxId, false).Succeeded, Is.True);
             Assert.That(surface.TryFindNode({{TYPE_NAME}}Mod.NotificationBadgeId, out badge), Is.True);
             Assert.That(((UiBadge)badge!).Text, Is.EqualTo("Notifications off"));
+            Assert.That(surface.TryGetSelectedTab({{TYPE_NAME}}Mod.SettingsTabsId, out var selected), Is.True);
+            Assert.That(selected, Is.EqualTo({{TYPE_NAME}}Mod.ControlsTabId));
             Assert.That(surface.ActivateButton({{TYPE_NAME}}Mod.NotifyButtonId).Succeeded, Is.True);
             Assert.That(context.Ui.Toasts, Has.Count.EqualTo(1),
                 "the toggle callback should disable new notifications");
@@ -172,6 +174,122 @@ namespace {{ASSEMBLY_NAME}}.Tests
                 Assert.That(context.Ui.Surfaces, Is.Empty);
             });
             context.AssertNoLeaks();
+        }
+
+        [Test]
+        public void AccessibilityChangesPreserveAuthoredTabAndDisableIntensityDuringReducedMotion()
+        {
+            using var context = new FakeModContext();
+            AddThemeFixtures(context);
+            Assert.That(context.Ui.ApplyAccessibility(new UiAccessibilityPreferences(uiScale: 1.13f)).Succeeded, Is.True);
+            using var runner = ModLifecycleRunner.Create<{{TYPE_NAME}}Mod>(context);
+            runner.Load();
+            var surface = OpenSettings(context);
+            context.Ui.CompletePendingThemeRegistrations();
+            SelectTab(surface, {{TYPE_NAME}}Mod.AccessibilityTabId);
+
+            var scale = Find<UiSlider>(surface, {{TYPE_NAME}}Mod.UiScaleSliderId);
+            var intensity = Find<UiSlider>(surface, {{TYPE_NAME}}Mod.MotionIntensitySliderId);
+            Assert.Multiple(() =>
+            {
+                Assert.That((scale.Minimum, scale.Maximum, scale.Divisions), Is.EqualTo((0.75f, 2f, 5)));
+                Assert.That((scale.Format.Kind, scale.Format.Decimals), Is.EqualTo((UiValueFormatKind.Multiplier, 2)));
+                Assert.That(scale.Value, Is.EqualTo(1.25f));
+                Assert.That(context.Ui.Accessibility.UiScale, Is.EqualTo(1.13f));
+                Assert.That((intensity.Minimum, intensity.Maximum), Is.EqualTo((0f, 2f)));
+                Assert.That((intensity.Format.Kind, intensity.Format.Decimals), Is.EqualTo((UiValueFormatKind.Number, 1)));
+            });
+            Assert.That(surface.ChangeSlider({{TYPE_NAME}}Mod.UiScaleSliderId, 1.98f).Succeeded, Is.True);
+            Assert.That(surface.ChangeSlider({{TYPE_NAME}}Mod.MotionIntensitySliderId, 0.5f).Succeeded, Is.True);
+            Assert.That(surface.ChangeToggle({{TYPE_NAME}}Mod.HighContrastToggleId, true).Succeeded, Is.True);
+            Assert.That(surface.ChangeToggle({{TYPE_NAME}}Mod.ReducedMotionToggleId, true).Succeeded, Is.True);
+            Assert.Multiple(() =>
+            {
+                Assert.That(context.Ui.Accessibility.UiScale, Is.EqualTo(2f));
+                Assert.That(context.Ui.Accessibility.HighContrast, Is.True);
+                Assert.That(context.Ui.Accessibility.ReducedMotion, Is.True);
+                Assert.That(Find<UiTabs>(surface, {{TYPE_NAME}}Mod.SettingsTabsId).SelectedTabId,
+                    Is.EqualTo({{TYPE_NAME}}Mod.AccessibilityTabId));
+                Assert.That(surface.TryGetSelectedTab({{TYPE_NAME}}Mod.SettingsTabsId, out var tab), Is.True);
+                Assert.That(tab, Is.EqualTo({{TYPE_NAME}}Mod.AccessibilityTabId));
+                Assert.That(Find<UiSlider>(surface, {{TYPE_NAME}}Mod.MotionIntensitySliderId).Enabled, Is.False);
+            });
+            Assert.That(surface.ChangeSlider({{TYPE_NAME}}Mod.MotionIntensitySliderId, 1.5f).Succeeded, Is.False);
+            Assert.That(context.Ui.Accessibility.MotionIntensity, Is.EqualTo(0.5f));
+
+            foreach (var viewport in new[] { new UiCaptureViewport(1920, 1080), new UiCaptureViewport(2560, 1440) })
+            {
+                var capture = surface.Capture(viewport);
+                var issues = capture.CheckAccessibility();
+                Assert.That(issues, Is.Empty, string.Join(", ", issues.Select(issue => issue.Kind + " " + issue.Path)));
+                Assert.That(capture.Nodes.Any(node => node.Text == "2.00×" && node.IsRendered), Is.True);
+                Assert.That(capture.Nodes.Any(node => node.Text == "0.5" && node.IsRendered), Is.True);
+                Assert.That(capture.Nodes.Any(node => node.Text == "Off while reduced motion is on." && node.IsRendered), Is.True);
+                Assert.That(capture.Nodes.Any(node => node.Id == {{TYPE_NAME}}Mod.PanelBindingId && node.IsRendered && !node.Clipped),
+                    Is.True);
+                Assert.That(capture.Nodes.Any(node => node.Id == {{TYPE_NAME}}Mod.DoneButtonId && node.IsRendered && !node.Clipped),
+                    Is.True);
+            }
+            Assert.That(surface.ChangeToggle({{TYPE_NAME}}Mod.ReducedMotionToggleId, false).Succeeded, Is.True);
+            Assert.That(Find<UiSlider>(surface, {{TYPE_NAME}}Mod.MotionIntensitySliderId).Enabled, Is.True);
+            Assert.That(surface.ChangeSlider({{TYPE_NAME}}Mod.MotionIntensitySliderId, 1.5f).Succeeded, Is.True);
+            Assert.That(context.Ui.Accessibility.MotionIntensity, Is.EqualTo(1.5f));
+        }
+
+        [Test]
+        public void ResetRestoresTheRegisteredPanelShortcutAndItsLiveKeyLabel()
+        {
+            using var context = new FakeModContext();
+            AddThemeFixtures(context);
+            Assert.That(context.Config.Save({{TYPE_NAME}}Config.Definition, new {{TYPE_NAME}}Config { ToggleKey = "J" }).Succeeded,
+                Is.True);
+            using var runner = ModLifecycleRunner.Create<{{TYPE_NAME}}Mod>(context);
+            runner.Load();
+            var surface = OpenSettings(context);
+            context.Ui.CompletePendingThemeRegistrations();
+            SelectTab(surface, {{TYPE_NAME}}Mod.AccessibilityTabId);
+            var action = context.Input.GetAction({{TYPE_NAME}}Mod.ToggleActionName);
+            var field = Find<UiKeyBindingField>(surface, {{TYPE_NAME}}Mod.PanelBindingId);
+            Assert.That(field.ActionName, Is.EqualTo(action.Name));
+            Assert.That(field.Label, Is.EqualTo("Open this panel"));
+            AssertKey("J");
+
+            Assert.That(surface.CaptureBinding({{TYPE_NAME}}Mod.PanelBindingId, InputBinding.Key("K")).Succeeded, Is.True);
+            Assert.That(action.Bindings, Is.EqualTo(new[] { InputBinding.Key("K") }));
+            AssertKey("K");
+
+            var unchanged = surface.Content;
+            Assert.That(surface.ActivateButton({{TYPE_NAME}}Mod.ResetBindingsId).Succeeded, Is.True);
+            Assert.That(action.Bindings, Is.EqualTo(new[] { InputBinding.Key("J") }));
+            Assert.That(surface.Content, Is.SameAs(unchanged));
+            AssertKey("J");
+            Assert.That(surface.ActivateButton({{TYPE_NAME}}Mod.DoneButtonId).Succeeded, Is.True);
+            Assert.That(surface.IsVisible, Is.False);
+
+            void AssertKey(string key)
+            {
+                var capture = surface.Capture(new UiCaptureViewport(1920, 1080));
+                Assert.That(capture.Nodes.Any(node => node.KeyLabel == key && node.IsRendered), Is.True,
+                    "The visible key field should show the action's current binding.");
+            }
+        }
+
+        private static T Find<T>(FakeUiSurface surface, string id) where T : UiNode
+        {
+            Assert.That(surface.TryFindNode(id, out var node), Is.True);
+            Assert.That(node, Is.TypeOf<T>());
+            return (T)node!;
+        }
+
+        private static void SelectTab(FakeUiSurface surface, string tabId) =>
+            Assert.That(surface.SelectTab({{TYPE_NAME}}Mod.SettingsTabsId, tabId).Succeeded, Is.True);
+
+        private static FakeUiSurface OpenSettings(FakeModContext context)
+        {
+            PressToggle(context);
+            Assert.That(context.Ui.Surfaces, Has.Count.EqualTo(1),
+                string.Join(Environment.NewLine, context.Logger.Entries.Select(entry => entry.Message)));
+            return context.Ui.Surfaces[0];
         }
 
         private static void AddThemeFixtures(FakeModContext context)

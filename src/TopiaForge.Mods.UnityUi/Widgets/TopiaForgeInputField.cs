@@ -17,9 +17,10 @@ namespace TopiaForge.Mods.UnityUi
     {
         private readonly TopiaForgeTextInput input;
         private readonly TopiaForgeControlCues cues;
-        private readonly UImage fill;
-        private readonly UImage ring;
-        private readonly UImage focusRing;
+        private readonly TopiaForgeRoundedImage shadow;
+        private readonly TopiaForgeRoundedImage fill;
+        private readonly TopiaForgeRoundedImage ring;
+        private readonly TopiaForgeRoundedImage focusRing;
         private readonly TextMeshProUGUI textComponent;
         private readonly TextMeshProUGUI placeholderComponent;
         private UImage? searchIcon;
@@ -27,17 +28,20 @@ namespace TopiaForge.Mods.UnityUi
         private bool focused;
         private bool error;
         private bool placeholderVisible;
+        private UiPaintRole? validationBackdrop;
 
         internal TopiaForgeInputField(TopiaForgeContainer parent, string placeholder, string value, Action<string> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Input"))
         {
-            fill = Go.AddComponent<UImage>();
-            fill.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Control);
-            fill.type = UImage.Type.Sliced;
-            fill.raycastTarget = true;
+            var hit = Go.AddComponent<UImage>();
+            hit.color = Color.clear;
+            hit.raycastTarget = true;
 
+            shadow = CreateStretchedImage("Shadow", TopiaForgeSprites.Fill(TopiaForgeRadius.Tip));
+            fill = CreateStretchedImage("Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
             ring = CreateStretchedImage("Ring", TopiaForgeSprites.Ring(TopiaForgeRadius.Control, TopiaForgeTokens.BorderStandard));
             focusRing = CreateStretchedImage("FocusRing", TopiaForgeSprites.Ring(TopiaForgeRadius.Control, TopiaForgeTokens.BorderStrong));
+            TopiaForgeAnchors.Stretch(focusRing.rectTransform, -2f, -2f, -2f, -2f);
             focusRing.enabled = false;
 
             // TMP_InputField needs a masked viewport containing text + placeholder.
@@ -215,6 +219,13 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        internal void SetValidationBackdrop(UiPaintRole backdrop)
+        {
+            if (validationBackdrop == backdrop) return;
+            validationBackdrop = backdrop;
+            Repaint();
+        }
+
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
@@ -227,6 +238,21 @@ namespace TopiaForge.Mods.UnityUi
         {
             var theme = Theme;
             var enabled = input.interactable;
+            var descriptor = theme.Descriptor ?? UiThemePackParser.Default;
+            var component = descriptor.Components[UiThemeTarget.Input];
+            var radius = component.Radius == UiThemeRadius.Pill ? float.MaxValue : descriptor.Shape.Resolve(component.Radius, 0, 0);
+            var border = (float)component.Border;
+            if (theme.HighContrast && border > 0f) border = Mathf.Max(border, TopiaForgeTokens.BorderStrong);
+            fill.SetShape(radius);
+            ring.SetShape(radius, error ? 3f : border);
+            focusRing.SetShape(radius == float.MaxValue ? radius : radius + 2f, TopiaForgeTokens.BorderStrong);
+            var shadowStyle = enabled && !theme.HighContrast ? component.Shadow : UiThemeShadow.None;
+            var (shadowX, shadowY) = UiLayoutDecoration.ShadowOffset(shadowStyle);
+            var shadowOffset = new Vector2((float)shadowX, (float)-shadowY);
+            shadow.rectTransform.offsetMin = shadow.rectTransform.offsetMax = shadowOffset;
+            shadow.SetShape(radius);
+            shadow.color = theme.Shadow;
+            shadow.enabled = shadowStyle != UiThemeShadow.None;
             var paint = theme.FieldPaint(UiPaintRole.Sunken, placeholderVisible ? UiTone.Muted : UiTone.Neutral, enabled);
             if (paint is { } resolved)
             {
@@ -236,10 +262,11 @@ namespace TopiaForge.Mods.UnityUi
                 input.colors = resolved.Tinted(colors);
             }
             fill.color = paint?.Fill ?? (enabled ? theme.SurfaceSunken : theme.Tint);
-            ring.color = error ? theme.Danger : theme.Outline;
-            focusRing.color = error ? theme.Danger : theme.FocusRing;
+            var danger = validationBackdrop is { } backdrop ? theme.ForegroundOn(backdrop, UiTone.Danger) : theme.Danger;
+            ring.color = error ? danger : theme.Outline;
+            focusRing.color = theme.FocusRing;
             focusRing.enabled = focused;
-            ring.enabled = !focused;
+            ring.enabled = error || (!focused && border > 0f);
             textComponent.color = theme.ForegroundOn(UiPaintRole.Sunken, enabled ? UiTone.Neutral : UiTone.Muted);
             placeholderComponent.color = theme.ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
             cues.Apply(fill.color, paint?.Content ?? textComponent.color,
@@ -296,11 +323,11 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        private UImage CreateStretchedImage(string name, Sprite sprite)
+        private TopiaForgeRoundedImage CreateStretchedImage(string name, Sprite sprite)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(Go.transform, false);
-            var image = go.AddComponent<UImage>();
+            var image = go.AddComponent<TopiaForgeRoundedImage>();
             image.sprite = sprite;
             image.type = UImage.Type.Sliced;
             image.raycastTarget = false;

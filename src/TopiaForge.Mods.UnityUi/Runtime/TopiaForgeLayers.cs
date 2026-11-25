@@ -97,6 +97,7 @@ namespace TopiaForge.Mods.UnityUi
             canvas.sortingOrder = order;
             var slot = root.AddComponent<TopiaForgeLayerSlot>();
             slot.Root = root;
+            slot.Band = band;
         }
 
         /// <summary>Calls <paramref name="lost"/> once if the canvas is destroyed outside the kit, before its slot goes back.</summary>
@@ -126,7 +127,7 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>
         /// Assigns a previously allocated order. Used only to permute allocator-owned window slots
-        /// during focus changes and to repair Unity's hard-coded dropdown popup order. A kit canvas's
+        /// during focus changes. A kit canvas's
         /// record follows, so its slot later goes back as the order it holds.
         /// </summary>
         internal static void AssignAllocatedOrder(Canvas canvas, int sortingOrder)

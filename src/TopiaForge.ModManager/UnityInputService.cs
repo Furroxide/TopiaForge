@@ -110,6 +110,34 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal UnityInputAction? FindUiAction(string ownerModId, string actionName) =>
+            FindUiActionByKey(ownerModId + ":" + actionName, actionName);
+
+        internal UnityInputAction? FindUiActionByKey(string key, string actionName)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            lock (sync)
+            {
+                return actions.TryGetValue(key, out var action) &&
+                    string.Equals(action.Name, actionName, StringComparison.Ordinal) ? action : null;
+            }
+        }
+
+        internal string? GetUiBindingConflict(IInputAction boundAction, InputBinding binding)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            lock (sync)
+            {
+                string? first = null;
+                foreach (var candidate in actions)
+                {
+                    if (ReferenceEquals(candidate.Value, boundAction) || !ContainsControl(candidate.Value.Bindings, binding)) continue;
+                    if (first == null || string.CompareOrdinal(candidate.Key, first) < 0) first = candidate.Key;
+                }
+                return first;
+            }
+        }
+
         public IReadOnlyList<InputConflict> GetConflicts(string ownerModId)
         {
             UnityMainThreadGuard.AssertCurrent();
@@ -283,6 +311,7 @@ namespace TopiaForge.ModManager
 
             public string OwnerModId { get; }
             public string Name => definition.Name;
+            internal InputActionDefinition Definition => definition;
             public IReadOnlyList<InputBinding> Bindings => bindings;
             public float Value => value;
             public bool IsHeld => held;
@@ -382,8 +411,9 @@ namespace TopiaForge.ModManager
                     // Who a press belongs to is decided as it begins: the UI that holds its control, or a press TopiaForge
                     // took from the game, keeps it until its release, however the claims change meanwhile.
                     var binding = bindings[index];
-                    value += InputActionYield.Read(ref owners[index], binding, ReadBinding(binding), focus, yielding,
-                        yielding && TakenByTopiaForge(index));
+                    var captured = TopiaForgeBindingCaptureInput.Capturing || TopiaForgeBindingCaptureInput.Took(binding);
+                    value += InputActionYield.Read(ref owners[index], binding, ReadBinding(binding), focus, yielding || captured,
+                        captured || (yielding && TakenByTopiaForge(index)));
                 }
 
                 return Mathf.Clamp(value, -1f, 1f);

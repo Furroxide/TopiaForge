@@ -466,6 +466,34 @@ Badges pair words and optional glyphs with a semantic color. The kit supplies th
 status glyph in high contrast where required. Pips show the exact labeled count,
 empty and filled segments, and an optional fractional next segment.
 
+### Control options and settings
+
+Use `UiTextInput.WithDecoration` with `UiInputDecoration` to give a text field its placeholder and inline error. The
+error carries a warning glyph and is part of the field's accessible description.
+Provide a new tree to clear it.
+
+A stepped `UiSlider` sends the nearest authored step to its callback. Use
+`UiValueFormat.Number(decimals)`, `Percent()`, or `Multiplier(decimals)` for the
+live readout. `Percent()` measures the position within the slider's range.
+`UiCheckbox` has the same value and callback shape as a switch. Both controls keep
+a visible boundary in every state, including when the off switch is pressed.
+
+`UiTabs` accepts two to twelve pages and shows one at a time. Use `UiTabsStyle.Rail`
+for settings sections beside a page and `Bar` for tabs above it. A viewer can switch
+immediately. Pages keep their controls while hidden, and a new tree changes the
+active page when its authored selection changes.
+
+`UiTooltip` wraps a control or passive label. It appears after 450 ms of pointer
+hover or as soon as the trigger gets keyboard or controller focus. Use
+`UiPatterns.ListTile` when a row needs an icon, a title and optional subtitle, or a
+trailing control inside a Card.
+
+For `UiKeyBindingField`, register an action with `IInputService.RegisterAction` and use
+its stable package-local name. Rebind changes only the selected device class. Back
+cancels capture. A reserved control reports its owner and a shared control reports
+the conflicting action. On a targeted window the guest edits their own registration.
+A guest without that action sees the author's default as a read-only hint.
+
 ## Testing UI without running Robotopia
 
 `FakeUiService` captures each immutable tree. `FakeUiSurface` can find controls by id; invoke button,

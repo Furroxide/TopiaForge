@@ -86,7 +86,7 @@ namespace TopiaForge.Mods
             {
                 foreach (var earlier in protectedGroups)
                 {
-                    if (later.Intersects(earlier))
+                    if (VisibleTogether(later.Placement, earlier.Placement) && later.Intersects(earlier))
                         throw new UiLayoutException(UiLayoutFailure.OccludedContent, later.Placement.Path,
                             "This painter covers a protected group at " + earlier.Placement.Path + ".");
                 }
@@ -95,7 +95,7 @@ namespace TopiaForge.Mods
                 {
                     foreach (var backdrop in backdrops)
                     {
-                        if (!later.Intersects(backdrop)) continue;
+                        if (!VisibleTogether(later.Placement, backdrop.Placement) || !later.Intersects(backdrop)) continue;
                         later.Placement.RequiresBackplate = true;
                         break;
                     }

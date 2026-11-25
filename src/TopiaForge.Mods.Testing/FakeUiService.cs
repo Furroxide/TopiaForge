@@ -148,7 +148,7 @@ namespace TopiaForge.Mods.Testing
             var themeCheck = themeScope.Package.ValidateSurfaceTheme(themeScope, request.Theme, receiver);
             if (!themeCheck.Succeeded)
                 return OperationResult<IUiSurface>.Failure(themeCheck.ErrorCode, themeCheck.ErrorMessage);
-            var prepared = PrepareImages(request.Content, receiver != null);
+            var prepared = PrepareImages(request.Content, receiver != null, wireBounded: wireTarget.HasValue);
             if (!prepared.TryGetValue(out var images))
                 return OperationResult<IUiSurface>.Failure(prepared.ErrorCode, prepared.ErrorMessage);
 
@@ -163,6 +163,7 @@ namespace TopiaForge.Mods.Testing
             var epoch = WidgetEpoch();
             try
             {
+                if (!wireTarget.HasValue && receiver == null) CheckLocalInput(request.Content);
                 wireTarget?.Measure(this, 1, request, request.Body, visible: true, images.Presentation, epoch, retained: false);
                 FakeUiTreeCapture.VerifyComposition(this, surface, request.Content, images);
                 UiClockBinding.Check(request.Content, epoch);

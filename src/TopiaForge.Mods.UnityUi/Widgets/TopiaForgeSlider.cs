@@ -21,13 +21,20 @@ namespace TopiaForge.Mods.UnityUi
         private readonly RectTransform fillArea;
         private readonly TMPro.TextMeshProUGUI label;
         private readonly TMPro.TextMeshProUGUI valueLabel;
+        private readonly float minimum;
+        private readonly float maximum;
         private float lastShownValue = float.NaN;
+        private int divisions;
+        private UiValueFormat? valueFormat;
+        private bool applyingRange;
         private bool declarative;
         private UiPaintRole backdrop = UiPaintRole.Surface;
 
         internal TopiaForgeSlider(TopiaForgeContainer parent, string text, float min, float max, float initial, Action<float> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Slider"))
         {
+            minimum = min;
+            maximum = max;
             TopiaForgeLayout.ApplyRow(Go, TopiaForgeGap.Sm, TopiaForgeGap.None);
             this.FixedHeight(TopiaForgeTokens.ControlSmHeight);
 
@@ -114,25 +121,28 @@ namespace TopiaForge.Mods.UnityUi
 
             slider.onValueChanged.AddListener(next =>
             {
-                UpdateValueLabel(next);
-                TopiaForgeCallbacks.Player(Host.OwnerId, onChanged, next, "Slider change");
+                if (applyingRange) return;
+                var value = FromPosition(next);
+                UpdateValueLabel(value);
+                TopiaForgeCallbacks.Player(Host.OwnerId, onChanged, value, "Slider change");
             });
 
             ApplyTheme(Theme);
         }
 
         /// <summary>Gets value.</summary>
-        public float Value => slider.value;
+        public float Value => FromPosition(slider.value);
 
         /// <summary>Dirty-checked programmatic update (does NOT fire onChanged).</summary>
         public void SetValue(float next)
         {
-            if (Mathf.Approximately(slider.value, next))
+            if (divisions != 0) next = UiSliderSteps.Snap(Mathf.Clamp(next, minimum, maximum), minimum, maximum, divisions);
+            if (Mathf.Approximately(Value, next))
             {
                 return;
             }
 
-            slider.SetValueWithoutNotify(next);
+            slider.SetValueWithoutNotify(divisions == 0 ? next : UiSliderSteps.Index(next, minimum, maximum, divisions));
             UpdateValueLabel(next);
         }
 
@@ -144,9 +154,27 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
-        internal void UseDeclarativePaint(bool enabled)
+        internal void UseDeclarativePaint(bool enabled, int steps = 0, UiValueFormat? format = null)
         {
             declarative = true;
+            var initial = Value;
+            divisions = steps;
+            valueFormat = format;
+            if (steps != 0)
+            {
+                // Unity's whole-number slider moves one index per keyboard or controller action.
+                applyingRange = true;
+                try
+                {
+                    slider.wholeNumbers = true;
+                    slider.minValue = 0f;
+                    slider.maxValue = steps;
+                    slider.SetValueWithoutNotify(UiSliderSteps.Index(initial, minimum, maximum, divisions));
+                }
+                finally { applyingRange = false; }
+            }
+            lastShownValue = float.NaN;
+            UpdateValueLabel(Value);
             slider.targetGraphic = track;
             handle.raycastTarget = false;
             fillArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter, -4f);
@@ -191,7 +219,7 @@ namespace TopiaForge.Mods.UnityUi
 
         private void UpdateValueLabel(float next)
         {
-            if (!float.IsNaN(lastShownValue) && Mathf.Abs(lastShownValue - next) < 0.005f)
+            if (lastShownValue == next || (valueFormat == null && Mathf.Abs(lastShownValue - next) < 0.005f))
             {
                 return;
             }
@@ -200,10 +228,10 @@ namespace TopiaForge.Mods.UnityUi
             valueLabel.text = FormatValue(next);
         }
 
-        private static string FormatValue(float value)
-        {
-            return value.ToString("0.##");
-        }
+        private float FromPosition(float position) => divisions == 0 ? position :
+            UiSliderSteps.At((int)position, minimum, maximum, divisions);
+
+        private string FormatValue(float value) => valueFormat?.Readout(value, minimum, maximum) ?? value.ToString("0.##");
 
         private TMPro.TextMeshProUGUI CreateText(string name, string text, int size)
         {

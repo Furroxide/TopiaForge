@@ -179,9 +179,10 @@ Use separate profiles for the acceptance runner.
 
 Once the normal session reports a ready listen host and exactly one admitted guest, press F7 on the host.
 Each press opens a host-local fixture and sends the same safe composition to the guest through `IPlayer.Ui`.
-The sequence starts at Theme packs and ends at Layout fit, then wraps after 69 successful presses.
+The sequence starts at Theme packs and ends at Tooltips and list tiles, then wraps after 79 successful presses.
 Each of the first eleven pages cycles Paper and HUD for the kit palette, the acceptance transport palette,
 and authenticated Survival, in that order. Layout fit opens one HUD for each of those palettes.
+The five interactive control pages each open a Paper Window in the kit and transport palettes.
 
 | Page | First press from a fresh fixture |
 | --- | --- |
@@ -197,6 +198,11 @@ and authenticated Survival, in that order. Layout fit opens one HUD for each of 
 | Foundation integration | 55 |
 | Trust and fallback | 61 |
 | Layout fit | 67 |
+| Buttons | 70 |
+| Text and choice inputs | 72 |
+| Toggles, checkboxes and tabs | 74 |
+| Key binding fields | 76 |
+| Tooltips and list tiles | 78 |
 
 The Shared acceptance package owns its `transport-preview` descriptor and its copy of the CC0 sample bundle, receipt,
 and license. The guest checks the authenticated package and descriptor for image references even in the kit variants.
@@ -212,6 +218,10 @@ With `TOPIAFORGE_UI_GALLERY_CAPTURE=1`, collect the settled tree alongside the r
 settled observation. Scroll tall pages in stages so the delivered evidence includes every authored row.
 The managed test executable's `--ui-kit-gallery-fixtures` option checks the publisher sequence and paired
 fixture lifetimes headlessly.
+
+The opt-in package registers the same example bindings on both viewers. To capture the unavailable key field,
+create an empty `gallery-remote-preview-no-bindings.enabled` in the guest's acceptance mod data directory
+before that profile loads. Keep the host's example bindings so it can admit and publish the fixture.
 
 #### Art fallback
 

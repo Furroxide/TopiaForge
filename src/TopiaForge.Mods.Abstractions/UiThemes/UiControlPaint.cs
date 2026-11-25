@@ -50,5 +50,11 @@ namespace TopiaForge.Mods
 
         internal static UiThemeColor SliderFill(UiThemeScheme scheme, UiThemeColor track, double minimum) =>
             UiThemeColors.RepairForeground(scheme.GetPair(UiPaintRole.Accent).Fill, track, minimum);
+
+        internal static UiThemeColor ToggleBoundary(UiThemeScheme scheme, UiPaintRole backdrop, bool value, bool enabled)
+        {
+            var ink = enabled && value ? scheme.GetPair(UiPaintRole.Primary).On : scheme.Muted;
+            return UiThemeColors.RepairForeground(ink, scheme.GetPair(backdrop).Fill, 3d);
+        }
     }
 }

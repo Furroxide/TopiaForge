@@ -35,6 +35,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TopiaForgeButtonStyle style;
         private readonly TopiaForgeCueButton button;
         private readonly TopiaForgeRoundedImage? shadow;
+        private readonly TopiaForgePressEffect? motion;
         private readonly TopiaForgeRoundedImage fill;
         private readonly TopiaForgeRoundedImage? ring;
         private readonly TextMeshProUGUI? label;
@@ -69,9 +70,6 @@ namespace TopiaForge.Mods.UnityUi
             if (HasShadow)
             {
                 shadow = CreateStretched(Go.transform, "Shadow", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
-                var shadowRect = shadow.rectTransform;
-                shadowRect.offsetMin = new Vector2(TopiaForgeTokens.ShadowSmallX, TopiaForgeTokens.ShadowSmallY);
-                shadowRect.offsetMax = new Vector2(TopiaForgeTokens.ShadowSmallX, TopiaForgeTokens.ShadowSmallY);
             }
 
             var bodyGo = new GameObject("Body", typeof(RectTransform));
@@ -137,14 +135,14 @@ namespace TopiaForge.Mods.UnityUi
 
             if (shadow != null)
             {
-                var press = Go.AddComponent<TopiaForgePressEffect>();
-                press.Initialize(Host, button, body, shadow);
+                motion = Go.AddComponent<TopiaForgePressEffect>();
+                motion.Initialize(Host, button, body, shadow);
             }
 
             ApplyTheme(Theme);
         }
 
-        private bool HasShadow => style == TopiaForgeButtonStyle.Filled || style == TopiaForgeButtonStyle.Danger || style == TopiaForgeButtonStyle.Outline;
+        private bool HasShadow => style is TopiaForgeButtonStyle.Filled or TopiaForgeButtonStyle.Danger;
 
         internal void SetBackdrop(UiPaintRole role)
         {
@@ -218,11 +216,23 @@ namespace TopiaForge.Mods.UnityUi
                 TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Label, Host.EffectiveUiScale);
                 FitLabelWidth();
             }
-            // Every opaque button uses the state tints calculated for the actual fill and label pair.
-            var radius = theme.Descriptor?.Shape.Control;
+            var descriptor = theme.Descriptor ?? UiThemePackParser.Default;
+            var component = descriptor.Components[UiThemeTarget.Button];
+            var radius = component.Radius == UiThemeRadius.Pill ? float.MaxValue : descriptor.Shape.Resolve(component.Radius, 0, 0);
+            var stroke = (float)component.Border;
+            if (theme.HighContrast && stroke > 0f) stroke = Mathf.Max(TopiaForgeTokens.BorderStrong, stroke);
             fill.SetShape(radius);
             shadow?.SetShape(radius);
-            ring?.SetShape(radius, theme.HighContrast ? TopiaForgeTokens.BorderStrong : TopiaForgeTokens.BorderStandard);
+            if (ring != null)
+            {
+                ring.enabled = stroke > 0f;
+                ring.SetShape(radius, stroke);
+            }
+            var shadowStyle = enabledState && !theme.HighContrast ? component.Shadow : UiThemeShadow.None;
+            var (shadowX, shadowY) = UiLayoutDecoration.ShadowOffset(shadowStyle);
+            motion?.SetShadow(new Vector2((float)shadowX, (float)-shadowY), shadowStyle == UiThemeShadow.None ? Color.clear : theme.Shadow);
+
+            // Every opaque button uses the state tints calculated for the actual fill and label pair.
             var paint = enabledState && style == TopiaForgeButtonStyle.Filled ? theme.Fill(TopiaForgeFillRole.FilledButton)
                 : enabledState && style == TopiaForgeButtonStyle.Danger ? theme.Fill(TopiaForgeFillRole.DangerButton)
                 : enabledState && style == TopiaForgeButtonStyle.Outline
@@ -253,11 +263,6 @@ namespace TopiaForge.Mods.UnityUi
                     iconImage.color = theme.DisabledInk;
                 }
 
-                if (shadow != null)
-                {
-                    shadow.color = Color.clear;
-                }
-
                 return;
             }
 
@@ -286,11 +291,6 @@ namespace TopiaForge.Mods.UnityUi
                     fill.color = Color.clear;
                     SetContentColor(theme.ForegroundOn(backdrop, UiTone.Primary));
                     break;
-            }
-
-            if (shadow != null)
-            {
-                shadow.color = theme.Shadow;
             }
 
             ConfigureCues(theme, radius);
@@ -324,71 +324,6 @@ namespace TopiaForge.Mods.UnityUi
             image.raycastTarget = false;
             TopiaForgeAnchors.Stretch((RectTransform)go.transform);
             return image;
-        }
-    }
-
-    /// <summary>
-    /// Press micro-interaction: shifts the button body onto its shadow while held.
-    /// Skipped entirely under reduced motion.
-    /// </summary>
-    internal sealed class TopiaForgePressEffect : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
-    {
-        private RectTransform? body;
-        private UiHost? host;
-        private Button? button;
-        private Image? shadow;
-        private Color shadowColor;
-        private bool pressed;
-
-        public void Initialize(UiHost owner, Button selectable, RectTransform bodyRect, Image shadowImage)
-        {
-            host = owner;
-            button = selectable;
-            body = bodyRect;
-            shadow = shadowImage;
-        }
-
-        public void OnPointerDown(PointerEventData eventData)
-        {
-            if (host == null || host.EffectiveReducedMotion || host.EffectiveMotion <= 0f ||
-                button == null || !button.IsInteractable() || shadow == null || shadow.color.a == 0f ||
-                body == null || pressed || eventData.button != PointerEventData.InputButton.Left)
-            {
-                return;
-            }
-
-            pressed = true;
-            var strength = Mathf.Min(1f, host.EffectiveMotion);
-            body.anchoredPosition = new Vector2(TopiaForgeTokens.ShadowSmallX * strength, TopiaForgeTokens.ShadowSmallY * strength);
-            shadowColor = shadow.color;
-            shadow.color = Color.clear;
-        }
-
-        public void OnPointerUp(PointerEventData eventData)
-        {
-            ReleasePress();
-        }
-
-        public void OnPointerExit(PointerEventData eventData)
-        {
-            ReleasePress();
-        }
-
-        private void OnDisable() => ReleasePress();
-
-        private void ReleasePress()
-        {
-            if (!pressed || body == null)
-            {
-                return;
-            }
-
-            pressed = false;
-            body.anchoredPosition = Vector2.zero;
-            if (shadow != null)
-            {
-                shadow.color = shadowColor;
-            }
         }
     }
 }

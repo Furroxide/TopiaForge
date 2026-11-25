@@ -90,6 +90,8 @@ namespace TopiaForge.Mods.Testing
             return action;
         }
 
+        internal FakeInputAction? FindAction(string name) => actions.TryGetValue(name, out var action) ? action : null;
+
         /// <summary>Sets an action's value and derives its pressed or released transition.</summary>
         public void SetValue(string name, float value) => GetAction(name).SetValue(value);
 
@@ -142,6 +144,7 @@ namespace TopiaForge.Mods.Testing
 
         /// <inheritdoc/>
         public string Name => definition.Name;
+        internal InputActionDefinition Definition => definition;
 
         /// <inheritdoc/>
         public IReadOnlyList<InputBinding> Bindings => bindings;

@@ -25,12 +25,24 @@ namespace TopiaForge.Mods.Testing
                     return new Size(Math.Max(ControlHeight, buttonLabel.Width + (28f * layoutScale)),
                         Math.Max(ControlHeight, buttonLabel.Height + 8f * layoutScale));
                 case UiTextInput input:
-                    return MeasureLabeledControl(input.Label, width);
+                    var field = MeasureLabeledControl(input.Label, width);
+                    if (input.Error == null) return field;
+                    var validation = MeasureText(input.Error, UiTextStyle.Caption, Math.Max(0f, width - 24f * layoutScale));
+                    return new Size(Math.Max(field.Width, validation.Width + 24f * layoutScale),
+                        field.Height + LabelGap + Math.Max(18f * layoutScale, validation.Height));
                 case UiDropdown dropdown:
                     return MeasureLabeledControl(dropdown.Label, width);
+                case UiKeyBindingField binding:
+                    var readout = BindingReadout(binding);
+                    var name = MeasureText(readout.Label, UiTextStyle.Caption, width, wrap: false);
+                    var rebind = MeasureText("Rebind", UiTextStyle.Label, width, wrap: false).Width + 28f * layoutScale;
+                    var cap = MeasureText(readout.Binding, UiTextStyle.Label, width, wrap: false).Width + 12f * layoutScale;
+                    return new Size(Math.Max(width, Math.Max(name.Width, cap + LabelGap + Math.Max(ControlHeight, rebind))),
+                        116f * layoutScale);
                 case UiToggle toggle:
-                    var toggleLabel = MeasureText(toggle.Label, UiTextStyle.Body, Math.Max(0, width - ToggleLabelInset));
-                    return new Size(Math.Max(width, toggleLabel.Width + ToggleLabelInset), Math.Max(ControlHeight, toggleLabel.Height));
+                    return MeasureBinaryControl(toggle.Label, width, ToggleLabelInset);
+                case UiCheckbox checkbox:
+                    return MeasureBinaryControl(checkbox.Label, width, 32f * layoutScale);
                 case UiSlider slider:
                     var sliderLabel = MeasureText(slider.Label, UiTextStyle.Body, width * 0.42f);
                     return new Size(Math.Max(Math.Max(width, sliderLabel.Width / 0.42f), ControlHeight / 0.42f),
@@ -46,6 +58,12 @@ namespace TopiaForge.Mods.Testing
         {
             var caption = MeasureText(label, UiTextStyle.Caption, width);
             return new Size(Math.Max(ControlHeight, Math.Max(width, caption.Width)), caption.Height + LabelGap + ControlHeight);
+        }
+
+        private Size MeasureBinaryControl(string text, float width, float leading)
+        {
+            var label = MeasureText(text, UiTextStyle.Body, Math.Max(0, width - leading));
+            return new Size(Math.Max(ControlHeight, label.Width + leading), Math.Max(ControlHeight, label.Height));
         }
 
         private Size MeasureText(string text, UiTextStyle style, float availableWidth, bool wrap = true,

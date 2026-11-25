@@ -12,7 +12,7 @@ namespace TopiaForge.Mods.UnityUi
     /// Brand dropdown over TMP_Dropdown, template built entirely at runtime: control
     /// chip with chevron, paper list with SelectedTint rows and a check mark.
     /// </summary>
-    public sealed class TopiaForgeDropdown : TopiaForgeWidget, ITopiaForgeThemeAware
+    public sealed partial class TopiaForgeDropdown : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private readonly TopiaForgeTmpDropdown dropdown;
         private readonly TopiaForgeControlCues cues;
@@ -96,7 +96,7 @@ namespace TopiaForge.Mods.UnityUi
             itemBackground = itemBgGo.AddComponent<UImage>();
             itemBackground.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Chip);
             itemBackground.type = UImage.Type.Sliced;
-            TopiaForgeAnchors.Stretch((RectTransform)itemBgGo.transform, 2f, 1f, 2f, 1f);
+            TopiaForgeAnchors.Stretch((RectTransform)itemBgGo.transform);
 
             var checkGo = new GameObject("Item Checkmark", typeof(RectTransform));
             checkGo.transform.SetParent(itemGo.transform, false);
@@ -129,7 +129,6 @@ namespace TopiaForge.Mods.UnityUi
             templateGo.SetActive(false);
 
             dropdown = Go.AddComponent<TopiaForgeTmpDropdown>();
-            dropdown.ConfigureSortingOrders(PopupOrders.Blocker, PopupOrders.List);
             dropdown.targetGraphic = fill;
             cues = TopiaForgeControlCues.Install(dropdown, Rect);
             dropdown.template = templateRect;
@@ -248,77 +247,5 @@ namespace TopiaForge.Mods.UnityUi
             return image;
         }
 
-        /// <summary>
-        /// TMP_Dropdown.Show() hardcodes the popup list canvas to sortingOrder 30000 and the blocker to
-        /// 29999 — both BELOW every kit band (windows start at <see cref="TopiaForgeLayerBands.DefaultWindowBase"/>),
-        /// so the opened list rendered invisibly behind its own window and clicks appeared to do nothing.
-        /// Re-band both canvases to just under the toast band: above all windows and modals (so the popup
-        /// is always visible and its blocker eats outside-clicks first), below toasts and the debug overlay.
-        /// CreateBlocker runs at the end of Show(), after the list canvas exists, so it is the one hook
-        /// where both canvases can be corrected.
-        /// </summary>
-        private sealed class TopiaForgeTmpDropdown : TMP_Dropdown
-        {
-            private GameObject? list;
-            private int blockerSortingOrder;
-            private int listSortingOrder;
-            private float itemRadius;
-            private bool highContrast;
-
-            internal void ConfigureItemCues(float radius, bool contrast)
-            {
-                itemRadius = radius;
-                highContrast = contrast;
-            }
-
-            protected override DropdownItem CreateItem(DropdownItem itemTemplate)
-            {
-                var item = base.CreateItem(itemTemplate);
-                var fill = item.toggle.targetGraphic;
-                var cues = TopiaForgeControlCues.Install(item.toggle, fill.rectTransform);
-                cues.Apply(fill.color, item.text.color, itemRadius, highContrast);
-                return item;
-            }
-
-            public void ConfigureSortingOrders(int blockerOrder, int listOrder)
-            {
-                blockerSortingOrder = blockerOrder;
-                listSortingOrder = listOrder;
-            }
-
-            protected override GameObject CreateDropdownList(GameObject template)
-            {
-                list = base.CreateDropdownList(template);
-                return list;
-            }
-
-            protected override GameObject CreateBlocker(Canvas rootCanvas)
-            {
-                var blocker = base.CreateBlocker(rootCanvas);
-                var listCanvas = list != null ? list.GetComponent<Canvas>() : null;
-                if (listCanvas != null)
-                {
-                    listCanvas.overrideSorting = true;
-                    TopiaForgeLayers.AssignAllocatedOrder(listCanvas, listSortingOrder);
-                }
-
-                var blockerCanvas = blocker.GetComponent<Canvas>();
-                if (blockerCanvas != null)
-                {
-                    blockerCanvas.overrideSorting = true;
-                    TopiaForgeLayers.AssignAllocatedOrder(blockerCanvas, blockerSortingOrder);
-                }
-
-                return blocker;
-            }
-        }
-
-        private static class PopupOrders
-        {
-            // TMP allows only one dropdown blocker at a time, so every dropdown can safely share one
-            // process-wide allocator-owned pair rather than leaking two band slots per widget rebuild.
-            public static readonly int Blocker = TopiaForgeLayers.Allocate(TopiaForgeLayerBand.Modal, "dropdown-blocker");
-            public static readonly int List = TopiaForgeLayers.Allocate(TopiaForgeLayerBand.Modal, "dropdown-list");
-        }
     }
 }

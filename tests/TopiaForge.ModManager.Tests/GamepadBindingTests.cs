@@ -96,6 +96,12 @@ namespace TopiaForge.ModManager.Tests
             {
                 internal static class TopiaForgeDismissStack { public static TopiaForgeInputClaim Claims; public static bool HoldsFocus; }
                 internal static class TopiaForgeNavigateAction { public static readonly TopiaForgeNavigationBindings Bindings = new(); }
+                // This raw-event boundary is exercised with the production filter in UiKitNativeBindingTests.
+                internal static class TopiaForgeBindingCaptureInput
+                {
+                    internal static bool Capturing => false;
+                    internal static bool Took(InputBinding binding) => false;
+                }
                 internal sealed class TopiaForgeGameTextFocus
                 {
                     public static readonly TopiaForgeGameTextFocus Current = new();

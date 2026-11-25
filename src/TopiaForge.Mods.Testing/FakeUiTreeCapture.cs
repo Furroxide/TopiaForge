@@ -129,8 +129,7 @@ namespace TopiaForge.Mods.Testing
             if ((content.Flags & UiCaptureNodeFlags.ScrollableClip) != 0 &&
                 (bounds.X < clip.X - 0.001f || bounds.Right > clip.Right + 0.001f))
             {
-                content = new UiCaptureNodeContent(content.Text, content.SemanticLabel, content.TextHeight,
-                    content.ExpectedTextHeight, content.Flags & ~UiCaptureNodeFlags.ScrollableClip);
+                content = content.WithFlags(content.Flags & ~UiCaptureNodeFlags.ScrollableClip);
             }
             var rendered = render ?? (surface.IsVisible && bounds.Overlaps(clip));
             nodes.Add(new UiCapturedNode(path, id, kind, bounds, content, paint, theme.Descriptor.Id,

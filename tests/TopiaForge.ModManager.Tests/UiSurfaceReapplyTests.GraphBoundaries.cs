@@ -99,7 +99,7 @@ namespace TopiaForge.ModManager.Tests
                 }
 
                 internal sealed class TopiaForgeControlFocusEvents : MonoBehaviour { }
-                internal sealed class TopiaForgeRoundedImage : MaskableGraphic
+                internal sealed class TopiaForgeRoundedImage : Image
                 {
                     internal void SetShape(float? radius, float border = 0f) { }
                 }

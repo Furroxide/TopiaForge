@@ -38,7 +38,7 @@ namespace TopiaForge.ModManager
                     focusRing = rect.GetComponentInChildren<TopiaForgeControlFocusEvents>(includeInactive: true) != null;
                     var target = node switch
                     {
-                        UiToggle => rect.GetComponent<Toggle>() as Selectable,
+                        UiToggle or UiCheckbox => rect.GetComponent<Toggle>() as Selectable,
                         UiSlider => rect.GetComponentInChildren<Slider>(includeInactive: true),
                         _ => null,
                     };

@@ -35,19 +35,27 @@ namespace TopiaForge.ModManager
     internal static class UiPresentationTheme
     {
         internal const string ReceiverOwner = "topiaforge.presentation";
-        internal const int LegacyVersion = 1;
-        internal const int FoundationVersion = 2;
+        internal const int LegacyVersion = UiWireCodec.LegacyContractVersion;
+        internal const int FoundationVersion = UiWireCodec.FoundationContractVersion;
         internal const string RequiredRuntime = "This UI requires TopiaForge UI contract 2 on every recipient. Update TopiaForge to continue.";
+        internal const string RequiredControlsRuntime = "This UI requires TopiaForge UI contract 3 on every recipient. Update TopiaForge to continue.";
         private static readonly byte[] DefaultDigest = new byte[32];
         private const ulong FirstTargetGeneration = 1UL << 63;
         internal static readonly OperationResult<bool> Allowed = OperationResult<bool>.Success(true);
         internal static readonly OperationResult<bool> UnsupportedPeer = OperationResult<bool>.Failure(ModErrorCode.Unavailable, RequiredRuntime);
+        private static readonly OperationResult<bool> UnsupportedControlsPeer = OperationResult<bool>.Failure(ModErrorCode.Unavailable, RequiredControlsRuntime);
         internal static readonly OperationResult<bool> UnadmittedPackage = OperationResult<bool>.Failure(ModErrorCode.Unavailable,
             "The session must admit this UI's exact package before it can be shared.");
         internal static readonly OperationResult<bool> UnknownTheme = OperationResult<bool>.Failure(ModErrorCode.NotFound,
             "This package does not declare the requested UI theme.");
         internal static readonly OperationResult<bool> TargetGenerationsExhausted = OperationResult<bool>.Failure(ModErrorCode.Unavailable,
             "This player's UI stream has reached its presentation limit. Reconnect before opening another surface.");
+
+        internal static int RequiredVersion(UiNode? content, UiThemeDescriptor? theme) =>
+            Math.Max(UiWireCodec.RequiredContractVersion(content), theme?.MinimumWireVersion ?? LegacyVersion);
+
+        internal static OperationResult<bool> UnsupportedVersion(int version) =>
+            version >= UiWireCodec.ControlsContractVersion ? UnsupportedControlsPeer : UnsupportedPeer;
 
         internal static bool TryNextTargetGeneration(ulong previous, out ulong generation)
         {

@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager
             private readonly UiNode content;
             private readonly TopiaForgeContainer stage;
             private readonly UiSurfaceArtwork? artwork;
+            private readonly UiSurfaceInputContext? input;
             private readonly Dictionary<UiNode, NativeLeaf> leaves = new Dictionary<UiNode, NativeLeaf>(NodeIdentity.Instance);
             private readonly Dictionary<UiNode, NativeArtLeaf> art = new Dictionary<UiNode, NativeArtLeaf>(NodeIdentity.Instance);
             private readonly NativeNode root;
@@ -24,22 +25,25 @@ namespace TopiaForge.ModManager
             internal bool HasRetainedImageNotice => unavailableImage?.IsMissingSemanticImage == true;
 
             private UnityUiLayoutRenderer(UiNode content, TopiaForgeContainer stage, UiThemeDescriptor? declared,
-                UiCallbackGate callbacks, UiGraphRetentionTransaction graphs, UiSurfaceArtwork? artwork)
+                UiCallbackGate callbacks, UiGraphRetentionTransaction graphs, UiSurfaceArtwork? artwork,
+                UnityUiLayoutRenderer? previous, Action? pageChanged, UiSurfaceInputContext? input)
             {
                 this.content = content;
                 this.stage = stage;
                 this.artwork = artwork;
-                root = Create(content, stage, declared, UiPaintRole.Surface, false, callbacks, graphs);
+                this.input = input;
+                root = Create(content, stage, declared, UiPaintRole.Surface, false, callbacks, graphs, previous, pageChanged);
                 root.Container.EnsureLayoutElement().ignoreLayout = true;
             }
 
             /// <summary>Builds and verifies a replacement in the caller's hidden staging container.</summary>
             internal static UnityUiLayoutRenderer Stage(UiNode content, TopiaForgeContainer stage, UiLayoutConstraints limits,
                 UiThemeDescriptor? declared, UiCallbackGate callbacks, UiGraphRetentionTransaction graphs,
-                UiSurfaceArtwork? artwork = null)
+                UiSurfaceArtwork? artwork = null, UnityUiLayoutRenderer? previous = null, Action? pageChanged = null,
+                UiSurfaceInputContext? input = null)
             {
                 UiLayoutTree.Validate(content);
-                var renderer = new UnityUiLayoutRenderer(content, stage, declared, callbacks, graphs, artwork);
+                var renderer = new UnityUiLayoutRenderer(content, stage, declared, callbacks, graphs, artwork, previous, pageChanged, input);
                 renderer.Rearrange(limits, declared);
                 return renderer;
             }
@@ -67,6 +71,7 @@ namespace TopiaForge.ModManager
                 unavailableImage = null;
                 foreach (var position in positions)
                 {
+                    if (!IsVisibleTabPage(position.Placement)) continue;
                     if (position.View.Art is not { } leaf ||
                         (protectImageLabels ? !leaf.NeedsImageNotice(position.Bounds) : !leaf.IsMissingSemanticImage)) continue;
                     UnavailableImagePath = position.Placement.Path;
@@ -92,7 +97,8 @@ namespace TopiaForge.ModManager
             }
 
             private NativeNode Create(UiNode node, TopiaForgeContainer parent, UiThemeDescriptor? declared, UiPaintRole backdrop,
-                bool ancestorDisabled, UiCallbackGate callbacks, UiGraphRetentionTransaction graphs)
+                bool ancestorDisabled, UiCallbackGate callbacks, UiGraphRetentionTransaction graphs,
+                UnityUiLayoutRenderer? previous, Action? pageChanged)
             {
                 var view = new NativeNode(parent.CreateChild(node.Id ?? node.GetType().Name));
                 var childRoot = view.Container;
@@ -120,7 +126,10 @@ namespace TopiaForge.ModManager
                     case UiScroll:
                         childRoot = CreateScroll(view);
                         break;
-                    case UiLayoutNode or UiPadding or UiSizedBox or UiExpanded or UiSpacer or UiPositioned or UiSplitPane:
+                    case UiTabs tabs:
+                        CreateTabs(tabs, view, declared, backdrop, ancestorDisabled, callbacks, graphs, previous, pageChanged);
+                        return view;
+                    case UiLayoutNode or UiPadding or UiSizedBox or UiExpanded or UiSpacer or UiPositioned or UiSplitPane or UiTooltip:
                         break;
                     case UiIcon or UiBadge or UiPips or UiImage:
                         view.Backplate = AddGraphic<Image>(view.Container, "Art backing");
@@ -135,7 +144,8 @@ namespace TopiaForge.ModManager
                         view.Backplate.enabled = false;
                         var leafHost = view.Container.CreateChild("Widget");
                         TopiaForgeAnchors.Stretch(leafHost.Rect);
-                        var paint = RenderNode(node, leafHost, callbacks, graphs, ancestorDisabled, backdrop);
+                        var paint = node is UiKeyBindingField keyBinding ? RenderInputBinding(keyBinding, leafHost, ancestorDisabled, backdrop) :
+                            RenderNode(node, leafHost, callbacks, graphs, ancestorDisabled, backdrop);
                         if (node is UiGraphCanvas) return view;
                         var leaf = new NativeLeaf(leafHost, node, backdrop, paint);
                         view.Leaf = leaf;
@@ -149,9 +159,21 @@ namespace TopiaForge.ModManager
                 view.Children = new NativeNode[children.Count];
                 for (var index = 0; index < children.Count; index++)
                 {
-                    view.Children[index] = Create(children[index], childRoot, declared, backdrop, ancestorDisabled, callbacks, graphs);
+                    view.Children[index] = Create(children[index], childRoot, declared, backdrop, ancestorDisabled, callbacks, graphs,
+                        previous, pageChanged);
                 }
+                if (node is UiTooltip tooltip)
+                    TopiaForgeScopedTooltip.Install(view.Container, tooltip.Message, !ancestorDisabled, backdrop);
                 return view;
+            }
+
+            private Action<UiPaintRole> RenderInputBinding(UiKeyBindingField field, TopiaForgeContainer host,
+                bool disabled, UiPaintRole backdrop)
+            {
+                var scope = input ?? new UiSurfaceInputContext(null, string.Empty);
+                var widget = new TopiaForgeInputBindingField(host, field, scope.OwnerPackageId, scope.Resolve(field.ActionName),
+                    scope.Conflict, !disabled, backdrop);
+                return widget.SetBackdrop;
             }
 
             private NativePlacement[] PreparePositions(UiLayoutResult result, UiThemeDescriptor effective, UiThemeDescriptor? declared,
@@ -212,6 +234,7 @@ namespace TopiaForge.ModManager
                             position.Leaf?.Apply();
                             PaintLeafBacking(view, position, scheme);
                             view.Leaf?.ApplyBackdrop(position.Backdrop, theme);
+                            view.TabButton?.Paint(position.Backdrop);
                         }
                         break;
                 }
@@ -335,6 +358,7 @@ namespace TopiaForge.ModManager
                 internal UnityUiLayoutDivider? Divider { get; set; }
                 internal NativeLeaf? Leaf { get; set; }
                 internal NativeArtLeaf? Art { get; set; }
+                internal NativeTabButton? TabButton { get; set; }
             }
 
             private struct NativePlacement
@@ -360,45 +384,6 @@ namespace TopiaForge.ModManager
                 internal LeafArrangement? Leaf { get; }
                 internal double ScrollHeight { get; set; }
             }
-        }
-    }
-
-    internal sealed class UnityUiLayoutDivider : MaskableGraphic
-    {
-        private bool dashed;
-
-        internal void SetDashed(bool value)
-        {
-            if (dashed == value) return;
-            dashed = value;
-            SetVerticesDirty();
-        }
-
-        protected override void OnPopulateMesh(VertexHelper mesh)
-        {
-            mesh.Clear();
-            var rect = GetPixelAdjustedRect();
-            if (rect.width <= 0 || rect.height <= 0) return;
-            if (!dashed)
-            {
-                AddDash(mesh, rect.xMin, rect.xMax, rect.yMin, rect.yMax, color);
-                return;
-            }
-            for (var start = rect.xMin; start < rect.xMax; start += 10f)
-            {
-                AddDash(mesh, start, Mathf.Min(start + 6f, rect.xMax), rect.yMin, rect.yMax, color);
-            }
-        }
-
-        private static void AddDash(VertexHelper mesh, float left, float right, float bottom, float top, Color32 color)
-        {
-            var first = mesh.currentVertCount;
-            mesh.AddVert(new Vector2(left, bottom), color, Vector2.zero);
-            mesh.AddVert(new Vector2(left, top), color, Vector2.zero);
-            mesh.AddVert(new Vector2(right, top), color, Vector2.zero);
-            mesh.AddVert(new Vector2(right, bottom), color, Vector2.zero);
-            mesh.AddTriangle(first, first + 1, first + 2);
-            mesh.AddTriangle(first, first + 2, first + 3);
         }
     }
 }

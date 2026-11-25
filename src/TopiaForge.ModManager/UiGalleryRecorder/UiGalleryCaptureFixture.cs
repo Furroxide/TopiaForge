@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager
         private const string TransportBundleSha256 = "990599d76e9f7a00b08879dc413fafdeedc37f00fc7240b80d02c39bd67f32ae";
         private static readonly FoundationPage[] Pages = (FoundationPage[])Enum.GetValues(typeof(FoundationPage));
         private static readonly Lazy<UiThemeDescriptor> Transport = new Lazy<UiThemeDescriptor>(LoadTransport);
+        private static readonly ControlGalleryPage[] ControlPages = (ControlGalleryPage[])Enum.GetValues(typeof(ControlGalleryPage));
 
         internal static bool MatchesOwner(string owner, bool remote, string? authenticatedOwner) =>
             remote ? owner == UiPresentationTheme.ReceiverOwner && authenticatedOwner == RemoteFixtureOwner : owner == Owner || owner == RemoteFixtureOwner;
@@ -77,14 +78,25 @@ namespace TopiaForge.ModManager
                     : FoundationPages.CreateRequest(page, request.Kind, theme);
                 if (Matches(expected)) return expected;
             }
+            if (request.Kind == UiSurfaceKind.Window)
+            {
+                foreach (var page in ControlPages)
+                {
+                    var expected = ControlGalleryPages.Create(page, theme);
+                    if (Matches(expected)) return expected;
+                }
+            }
             return null;
 
             bool Matches(UiSurfaceRequest expected) => (remote || expected.Id == request.Id) &&
                 request.Title == expected.Title && request.Body == expected.Body && request.Width == expected.Width &&
                 request.Height == expected.Height && request.HudAnchor == expected.HudAnchor &&
                 request.HudVisibility == expected.HudVisibility && SameNode(request.Content,
-                    remote ? UiImageProjection.Rewrite(expected.Content, NormalizeTransportImage) : expected.Content);
+                    remote ? NormalizeTransportContent(expected.Content) : expected.Content);
         }
+
+        private static UiNode? NormalizeTransportContent(UiNode? content) => UiWireCodec.ProjectInputDefaults(
+            UiImageProjection.Rewrite(content, NormalizeTransportImage), ControlGalleryPages.DefaultBindings);
 
         private static bool IsTransportId(string id, string prefix) => id.StartsWith(prefix, StringComparison.Ordinal) &&
             id.Length > prefix.Length && id[prefix.Length] != '0' &&
@@ -137,11 +149,19 @@ namespace TopiaForge.ModManager
                     left.Enabled == right.Enabled,
                 (UiToggle left, UiToggle right) => left.Label == right.Label && left.Value == right.Value &&
                     left.Enabled == right.Enabled,
+                (UiCheckbox left, UiCheckbox right) => left.Label == right.Label && left.Value == right.Value &&
+                    left.Enabled == right.Enabled,
                 (UiSlider left, UiSlider right) => left.Label == right.Label && left.Minimum == right.Minimum &&
-                    left.Maximum == right.Maximum && left.Value == right.Value && left.Enabled == right.Enabled,
+                    left.Maximum == right.Maximum && left.Value == right.Value && left.Enabled == right.Enabled &&
+                    left.Divisions == right.Divisions && left.Format.Kind == right.Format.Kind && left.Format.Decimals == right.Format.Decimals,
                 (UiTextInput left, UiTextInput right) => left.Label == right.Label && left.Value == right.Value &&
                     left.Placeholder == right.Placeholder && left.MaximumLength == right.MaximumLength &&
-                    left.Enabled == right.Enabled,
+                    left.Enabled == right.Enabled && left.Error == right.Error,
+                (UiTabs left, UiTabs right) => left.Style == right.Style && left.Enabled == right.Enabled &&
+                    left.SelectedTabId == right.SelectedTabId && SameEntries(left.Tabs, right.Tabs,
+                        (first, second) => first.Id == second.Id && first.Label == second.Label && SameNode(first.Child, second.Child)),
+                (UiTooltip left, UiTooltip right) => left.Message == right.Message && SameNode(left.Child, right.Child),
+                (UiKeyBindingField left, UiKeyBindingField right) => SameBindingField(left, right),
                 (UiDropdown left, UiDropdown right) => left.Label == right.Label && left.SelectedValue == right.SelectedValue &&
                     left.Enabled == right.Enabled && SameEntries(left.Choices, right.Choices,
                         (first, second) => first.Value == second.Value && first.Label == second.Label),
@@ -161,6 +181,13 @@ namespace TopiaForge.ModManager
 
         private static bool SameOptionalNode(UiNode? actual, UiNode? expected) =>
             expected == null ? actual == null : SameNode(actual, expected);
+
+        private static bool SameBindingField(UiKeyBindingField actual, UiKeyBindingField expected) =>
+            actual.ActionName == expected.ActionName && actual.Label == expected.Label &&
+            actual.Device == expected.Device && actual.Enabled == expected.Enabled &&
+            actual.HasWireDefaults == expected.HasWireDefaults &&
+            SameEntries(actual.WireDefaults, expected.WireDefaults,
+                (transmitted, defined) => transmitted.Kind == defined.Kind && transmitted.Control == defined.Control);
 
         private static bool SameFlex(UiFlexLayout left, UiFlexLayout right) =>
             left.Spacing == right.Spacing && left.Padding.Equals(right.Padding) &&
@@ -202,7 +229,8 @@ namespace TopiaForge.ModManager
             SameEntries(first.Ports, second.Ports, (left, right) => left.Id == right.Id && left.Label == right.Label &&
                 left.Direction == right.Direction && left.DataType == right.DataType && left.Required == right.Required);
 
-        private static bool SameEntries<T>(IReadOnlyList<T> first, IReadOnlyList<T> second, Func<T, T, bool> equal)
+        private static bool SameEntries<TFirst, TSecond>(IReadOnlyList<TFirst> first, IReadOnlyList<TSecond> second,
+            Func<TFirst, TSecond, bool> equal)
         {
             if (first.Count != second.Count) return false;
             for (var index = 0; index < first.Count; index++)

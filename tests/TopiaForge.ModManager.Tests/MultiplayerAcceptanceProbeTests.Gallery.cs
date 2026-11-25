@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
@@ -14,6 +16,9 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class MultiplayerAcceptanceProbeTests
     {
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "set_AuthorInputDefaults")]
+        private static extern void SetGalleryAuthorDefaults(FakeUiService service, Func<string, IReadOnlyList<InputBinding>?> defaults);
+
         private static void GalleryPreviewUsesTheOptInAndOneAdmittedGuest()
         {
             var root = Program.FindRepoRoot();
@@ -55,9 +60,9 @@ namespace TopiaForge.ModManager.Tests
                 "The Gallery-only fixture is explicitly armed without an acceptance config.");
             using var runner = ModLifecycleRunner.Create<MultiplayerAcceptanceMod>(context);
             runner.Load();
-            Check(context.Input.ActiveActionCount == 1 && context.Ui.Surfaces.Count == 0 &&
+            Check(context.Input.ActiveActionCount == 3 && context.Ui.Surfaces.Count == 0 &&
                 !context.Logger.Entries.Any(entry => entry.Message.StartsWith("TF-MP-", StringComparison.Ordinal)),
-                "Opt-in registers manual publication without opening a surface or emitting acceptance markers.");
+                "Opt-in registers publication and the two fixture actions without opening a surface or emitting acceptance markers.");
             Press();
             Check(GalleryRemotePreview.FindGuest(source.Snapshot) == null && context.Ui.Surfaces.Count == 0,
                 "A solo process cannot publish the pair.");
@@ -68,6 +73,7 @@ namespace TopiaForge.ModManager.Tests
                 "Only the host may target its single admitted connected guest.");
             players.Add(guest.ParticipantId!.Value, "Fixture guest");
             var target = players.State(guest.ParticipantId.Value).Ui;
+            SetGalleryAuthorDefaults(target, ControlGalleryPages.DefaultBindings);
             Press();
             Check(context.Ui.Surfaces.Count == 1 && target.Surfaces.Count == 1 &&
                 context.Ui.Surfaces[0].Request.Kind == UiSurfaceKind.Window && target.Surfaces[0].Request.Kind == UiSurfaceKind.Window,
@@ -96,7 +102,7 @@ namespace TopiaForge.ModManager.Tests
                 Check(hostSurface.Request.Id == expected.Id && guestSurface.Request.Id == expected.Id &&
                     hostSurface.Request.Kind == expected.Kind && guestSurface.Request.Kind == expected.Kind &&
                     hostSurface.Request.Theme?.Id == expected.Theme?.Id && guestSurface.Request.Theme?.Id == expected.Theme?.Id,
-                    "F7 navigates every applicable K1 page in both schemes without retaining stale surfaces.");
+                    "F7 navigates every paired page without retaining stale surfaces.");
                 if (expected.Id != FoundationLayoutPages.LayoutNotice().Id) continue;
 
                 var doubleScale = new UiAccessibilityPreferences(uiScale: 2f);

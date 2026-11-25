@@ -155,19 +155,39 @@ namespace TopiaForge.ModManager.Tests
             GalleryPortFixturesRequireExactAuthoredPorts();
 
             var variants = Enumerable.Range(0, GalleryRemotePreview.VariantCount).Select(GalleryRemotePreview.Request).ToArray();
-            Check(variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 69 &&
+            Check(GalleryRemotePreview.K1VariantCount == 69 &&
+                variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 79 &&
                 variants.Count(request => request.Id == FoundationLayoutPages.LayoutNotice().Id &&
                     request.Kind == UiSurfaceKind.Hud) == 3,
                 "The test publisher cycles the complete supported page, surface and theme matrix.");
-            var originalPages = new[] { FoundationPage.ThemePacks, FoundationPage.Typography };
-            var originalPalettes = new[] { null, FoundationPages.TransportTheme, FoundationPages.SurvivalTheme };
-            for (var index = 0; index < 12; index++)
+            var foundationPages = new[]
             {
+                FoundationPage.ThemePacks, FoundationPage.Typography, FoundationPage.FlexAndPadding,
+                FoundationPage.WrapAndGrid, FoundationPage.StackAndBounds, FoundationPage.CardsAndDividers,
+                FoundationPage.Icons, FoundationPage.Images, FoundationPage.BadgesAndPips,
+                FoundationPage.FoundationIntegration, FoundationPage.TrustAndFallback,
+            };
+            var originalPalettes = new[] { null, FoundationPages.TransportTheme, FoundationPages.SurvivalTheme };
+            for (var index = 0; index < GalleryRemotePreview.K1VariantCount; index++)
+            {
+                var foundationCount = foundationPages.Length * 6;
                 var kind = index % 2 == 0 ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
-                var expected = FoundationPages.CreateRequest(originalPages[index / 6], kind, originalPalettes[index % 6 / 2]);
+                var expected = index < foundationCount
+                    ? FoundationPages.CreateTransportRequest(foundationPages[index / 6], kind, originalPalettes[index % 6 / 2])
+                    : FoundationLayoutPages.LayoutNotice(originalPalettes[index - foundationCount]);
                 var actual = variants[index];
                 Check((actual.Id, actual.Kind, actual.Theme?.Id) == (expected.Id, expected.Kind, expected.Theme?.Id),
-                    "The first twelve published variants preserve the original Theme packs and Typography order.");
+                    "All 69 K1 publication positions retain their authored page, surface kind and palette.");
+            }
+            var controls = new[] { ControlGalleryPage.Buttons, ControlGalleryPage.Fields, ControlGalleryPage.Selections,
+                ControlGalleryPage.Bindings, ControlGalleryPage.HelpAndTiles };
+            for (var index = 0; index < controls.Length * 2; index++)
+            {
+                var expected = ControlGalleryPages.Create(controls[index / 2],
+                    index % 2 == 0 ? null : FoundationPages.TransportTheme);
+                var actual = variants[GalleryRemotePreview.K1VariantCount + index];
+                Check((actual.Id, actual.Kind, actual.Theme?.Id) == (expected.Id, expected.Kind, expected.Theme?.Id),
+                    "K2 adds the ten authored control positions after the original K1 fixtures.");
             }
 
             foreach (var request in variants)
@@ -177,7 +197,7 @@ namespace TopiaForge.ModManager.Tests
                     "The opt-in host may also record its own transport fixture.");
                 const string clock = "gallery-test";
                 var envelope = Envelope(request.Theme?.Id);
-                var normalized = Normalize(request.Content);
+                var normalized = UiWireCodec.ProjectInputDefaults(Normalize(request.Content), ControlGalleryPages.DefaultBindings);
                 var writer = new WorldWireWriter(32 * 1024);
                 Check(UiWireCodec.NeedsEnvelope(request.Content), "Each fixture exercises authenticated ownership framing.");
                 Check(UiWireCodec.MeasureTargetedSurface(publisher, "gallery-guest", 118, 1, request, request.Body,
@@ -192,6 +212,13 @@ namespace TopiaForge.ModManager.Tests
                 Check(decoded != null && observedEnvelope?.OwnerPackageId == publisher &&
                     UiGalleryCaptureFixture.Match(receiver, true, observedEnvelope, received, palette)?.Id == request.Id,
                     "Each published page keeps its canonical fixture identity after production codec round-trip and receiver ID reconstruction.");
+                if (request.Id == "gallery-controls-keys")
+                {
+                    var changed = UiWireCodec.ProjectInputDefaults(request.Content, _ =>
+                        new[] { InputBinding.Key("W"), InputBinding.GamepadButton(InputGamepadButton.West) });
+                    Check(UiGalleryCaptureFixture.Match(receiver, true, observedEnvelope, Reframe(request, "remote-118", changed)) == null,
+                        "The native recording policy refuses altered binding hints on an otherwise exact paired fixture.");
+                }
             }
 
             static UiSurfaceRequest Reframe(UiSurfaceRequest request, string transportId, UiNode? decoded = null)

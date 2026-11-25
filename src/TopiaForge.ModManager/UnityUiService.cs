@@ -184,6 +184,8 @@ namespace TopiaForge.ModManager
                 }
 
                 surface.SetClock(clock, clockEpoch);
+                var owningPackage = remoteTheme.HasValue ? remoteTheme.Value.Envelope?.OwnerPackageId : host.OwnerId;
+                surface.AttachInput(new UiSurfaceInputContext(uiInput, owningPackage ?? string.Empty));
                 surface.InitializeTheme(request.Theme, remoteTheme.HasValue, theme, themeScope, themePackages,
                     remoteTheme?.Package?.Manifest.AdmittedUi);
                 if (request.Content != null)

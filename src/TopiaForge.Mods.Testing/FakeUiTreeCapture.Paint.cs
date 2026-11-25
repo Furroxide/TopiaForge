@@ -32,11 +32,13 @@ namespace TopiaForge.Mods.Testing
             {
                 case UiButton button: PaintButton(button, path, bounds, clip); return;
                 case UiToggle toggle: PaintToggle(toggle, path, bounds, clip); return;
+                case UiCheckbox checkbox: PaintCheckbox(checkbox, path, bounds, clip); return;
+                case UiKeyBindingField field: PaintBindingField(field, path, bounds, clip); return;
                 case UiSlider slider: PaintSlider(slider, path, bounds, clip); return;
                 case UiTextInput input:
                     surface.TryGetTextValue(input.Id!, out var value);
                     PaintField(path, input.Id, nameof(UiTextInput), bounds, clip, input.Label,
-                        string.IsNullOrEmpty(value) ? input.Placeholder : value, Enabled(input.Enabled), string.IsNullOrEmpty(value));
+                        string.IsNullOrEmpty(value) ? input.Placeholder : value, Enabled(input.Enabled), string.IsNullOrEmpty(value), input.Error);
                     return;
                 case UiDropdown dropdown:
                     surface.TryGetDropdownValue(dropdown.Id!, out var selection);
@@ -46,6 +48,8 @@ namespace TopiaForge.Mods.Testing
                         if (choice.Value == selection) { label = choice.Label; break; }
                     }
                     PaintField(path, dropdown.Id, nameof(UiDropdown), bounds, clip, dropdown.Label, label, Enabled(dropdown.Enabled), muted: false);
+                    if (Enabled(dropdown.Enabled) && surface.DropdownIsOpen(dropdown.Id) && bounds.Overlaps(clip))
+                        PaintDropdownPopup(dropdown, selection, path, bounds);
                     return;
                 case UiVirtualList list: PaintList(list, path, bounds, clip); return;
                 case UiGraphCanvas graph: PaintGraph(graph, path, bounds, clip); return;
@@ -78,19 +82,31 @@ namespace TopiaForge.Mods.Testing
             var selected = state is UiCaptureControlState.Selected or UiCaptureControlState.SelectedPressed;
             var pressed = state is UiCaptureControlState.Pressed or UiCaptureControlState.SelectedPressed;
             if (selected) flags |= UiCaptureNodeFlags.Selected;
-            var hasShadow = enabled && button.Style != UiButtonStyle.Ghost && !preferences.HighContrast;
-            var shadowX = hasShadow ? -3f * layoutScale : 0f;
-            var shadowY = hasShadow ? 4f * layoutScale : 0f;
-            if (hasShadow && pressed && !preferences.ReducedMotion && preferences.MotionIntensity > 0f)
+            var component = theme.Descriptor.Components[UiThemeTarget.Button];
+            var shadowStyle = enabled && (button.Style is UiButtonStyle.Primary or UiButtonStyle.Danger) && !preferences.HighContrast
+                ? component.Shadow : UiThemeShadow.None;
+            var (x, y) = UiLayoutDecoration.ShadowOffset(shadowStyle);
+            var shadowX = (float)x * layoutScale;
+            var shadowY = (float)y * layoutScale;
+            var strength = shadowStyle == UiThemeShadow.None || preferences.ReducedMotion ? 0f : Math.Min(1f, preferences.MotionIntensity);
+            if (pressed && strength > 0f)
             {
-                var strength = Math.Min(1f, preferences.MotionIntensity);
                 bounds = new UiCaptureRect(bounds.X + shadowX * strength, bounds.Y + shadowY * strength, bounds.Width, bounds.Height);
                 shadowX = 0f;
                 shadowY = 0f;
             }
+            else if (state == UiCaptureControlState.Hovered && strength > 0f)
+            {
+                var lift = strength * layoutScale;
+                bounds = new UiCaptureRect(bounds.X + lift, bounds.Y - 2f * lift, bounds.Width, bounds.Height);
+                shadowX -= 2f * lift;
+                shadowY += lift;
+            }
 
-            var border = button.Style == UiButtonStyle.Secondary ? BorderWidth(true) : 0f;
-            var paint = new UiCaptureNodePaint(original.On, fill, theme.Descriptor.Shape.Control * layoutScale, border, shadowX, shadowY);
+            var stroke = button.Style == UiButtonStyle.Secondary ? (float)component.Border : 0f;
+            if (preferences.HighContrast && stroke > 0f) stroke = Math.Max(3f, stroke);
+            var radius = theme.Descriptor.Shape.Resolve(component.Radius, bounds.Width / layoutScale, bounds.Height / layoutScale);
+            var paint = new UiCaptureNodePaint(original.On, fill, radius * layoutScale, stroke * layoutScale, shadowX, shadowY);
             Add(path, button.Id, nameof(UiButton), bounds, clip,
                 TextContent(button.Label, UiTextStyle.Label, flags), paint);
             var cues = UiControlPaint.ButtonCues(original.Fill, tints);
@@ -136,6 +152,7 @@ namespace TopiaForge.Mods.Testing
             var draw = StateFill(pair.Fill, controlStateNow, tints);
             Add(path + "/track", null, "ToggleTrack", track, clip, EmptyContent,
                 new UiCaptureNodePaint(null, draw, track.Height / 2f, 0f, 0f, 0f));
+            PaintToggleBoundary(path + "/track/edge", track, clip, track.Height / 2f, value, enabled);
 
             var thumbSize = 16f * layoutScale;
             var inset = (trackHeight - thumbSize) / 2f;
@@ -146,10 +163,54 @@ namespace TopiaForge.Mods.Testing
             var mark = new UiCaptureNodeContent(string.Empty, value ? "On" : "Off", 0, 0, markFlags);
             Add(path + "/thumb", null, "ToggleThumb", thumb, clip, mark, new UiCaptureNodePaint(pair.On, draw,
                 thumbSize / 2f, 0f, 0f, 0f));
+            PaintToggleBoundary(path + "/thumb/edge", thumb, clip, thumbSize / 2f, value, enabled);
             var backplate = scheme.GetPair(backdrop);
             PaintStateCues(path, toggle.Label, controlStateNow, bounds, clip, pair.Fill, tints, backplate.On, backplate.Fill,
                 compact: true);
             PaintFocus(path, controlStateNow, bounds, clip, backdrop);
+        }
+
+        private void PaintCheckbox(UiCheckbox checkbox, string path, UiCaptureRect bounds, UiCaptureRect clip)
+        {
+            var enabled = Enabled(checkbox.Enabled);
+            surface.TryGetCheckboxValue(checkbox.Id!, out var checkedValue);
+            var flags = ControlFlags(enabled);
+            if (checkedValue) flags |= UiCaptureNodeFlags.Selected;
+            PaintHitTarget(path, bounds, clip, enabled);
+            var gutter = UiControlPaint.CompactCueGutter * layoutScale;
+            Text(path, checkbox.Id, nameof(UiCheckbox), bounds.Inset(32f * layoutScale + gutter, 0f, 0f, 0f), clip,
+                checkbox.Label, UiTextStyle.Body, enabled ? UiTone.Neutral : UiTone.Muted, flags);
+            var size = 24f * layoutScale;
+            var box = new UiCaptureRect(bounds.X + gutter, bounds.Y + (bounds.Height - size) / 2f, size, size);
+            var role = enabled && checkedValue ? UiPaintRole.Primary : UiPaintRole.Sunken;
+            var pair = PairFor(role, enabled ? UiTone.Neutral : UiTone.Muted);
+            var state = State(enabled);
+            var tints = enabled && !checkedValue
+                ? new UiThemeStateTints(UiThemeColors.ControlHighlighted, UiThemeColors.ControlHighlighted, UiThemeColors.ControlPressed)
+                : MarkTints(pair, enabled);
+            var fill = StateFill(pair.Fill, state, tints);
+            var radius = theme.Descriptor.Shape.Small * layoutScale;
+            Add(path + "/box", null, "CheckboxBox", box, clip, EmptyContent, new UiCaptureNodePaint(null, fill, radius));
+            PaintToggleBoundary(path + "/box/edge", box, clip, radius, checkedValue, enabled);
+            if (checkedValue)
+            {
+                var mark = flags | UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.RequiresNonColorCue |
+                    UiCaptureNodeFlags.HasNonColorCue;
+                var inset = 3f * layoutScale;
+                Add(path + "/check", null, "CheckboxCheck", box.Inset(inset, inset, inset, inset), clip,
+                    new UiCaptureNodeContent(string.Empty, checkbox.Label, 0f, 0f, mark), new UiCaptureNodePaint(pair.On, fill));
+            }
+            var backplate = scheme.GetPair(backdrop);
+            PaintStateCues(path, checkbox.Label, state, bounds, clip, pair.Fill, tints, backplate.On, backplate.Fill, compact: true);
+            PaintFocus(path, state, bounds, clip, backdrop, checkbox.Label);
+        }
+
+        private void PaintToggleBoundary(string path, UiCaptureRect rect, UiCaptureRect clip, float radius, bool value, bool enabled)
+        {
+            var ink = UiControlPaint.ToggleBoundary(scheme, backdrop, value, enabled);
+            Add(path, null, "ToggleBoundary", rect, clip,
+                new UiCaptureNodeContent(string.Empty, string.Empty, 0f, 0f, UiCaptureNodeFlags.BoundaryMark),
+                new UiCaptureNodePaint(ink, scheme.GetPair(backdrop).Fill, radius, (preferences.HighContrast ? 3f : 2f) * layoutScale));
         }
 
         private void PaintSlider(UiSlider slider, string path, UiCaptureRect bounds, UiCaptureRect clip)
@@ -166,7 +227,8 @@ namespace TopiaForge.Mods.Testing
             Text(path, slider.Id, nameof(UiSlider), new UiCaptureRect(bounds.X, bounds.Y, labelSize, bounds.Height), clip,
                 slider.Label, UiTextStyle.Body, text, flags);
             Text(path + "/value", null, "SliderValue", new UiCaptureRect(bounds.Right - valueSize, bounds.Y, valueSize, bounds.Height), clip,
-                value.ToString("0.##", CultureInfo.InvariantCulture), UiTextStyle.Caption, UiTone.Muted, flags);
+                slider.UsesExplicitFormat ? slider.Format.Readout(value, slider.Minimum, slider.Maximum) :
+                    value.ToString("0.##", CultureInfo.InvariantCulture), UiTextStyle.Caption, UiTone.Muted, flags);
 
             var gutter = UiControlPaint.CompactCueGutter * layoutScale;
             var track = new UiCaptureRect(body.X + gutter, body.Y + body.Height / 2f - (4f * layoutScale),
@@ -201,27 +263,60 @@ namespace TopiaForge.Mods.Testing
             : new UiThemeStateTints(1f, 1f, 1f);
 
         private void PaintField(string path, string? id, string kind, UiCaptureRect bounds, UiCaptureRect clip,
-            string label, string value, bool enabled, bool muted)
+            string label, string value, bool enabled, bool muted, string? error = null)
         {
             var captionHeight = MeasureText(label, UiTextStyle.Caption, bounds.Width).Height;
             var caption = new UiCaptureRect(bounds.X, bounds.Y, bounds.Width, captionHeight);
             var state = State(enabled);
             var flags = ControlFlags(enabled);
-            Text(path, id, kind, caption, clip, label, UiTextStyle.Caption, UiTone.Muted, flags);
-            var field = bounds.Inset(0, captionHeight + LabelGap, 0, 0);
+            if (error == null) Text(path, id, kind, caption, clip, label, UiTextStyle.Caption, UiTone.Muted, flags);
+            else
+            {
+                var captionText = TextContent(label, UiTextStyle.Caption, flags, label + ". " + error);
+                Add(path, id, kind, caption, clip, new UiCaptureNodeContent(captionText.Text, captionText.SemanticLabel,
+                    captionText.TextHeight, captionText.ExpectedTextHeight, flags, "error"),
+                    new UiCaptureNodePaint(scheme.ResolveForeground(UiTone.Muted, backdrop), scheme.GetPair(backdrop).Fill));
+            }
+            var field = error == null ? bounds.Inset(0f, captionHeight + LabelGap, 0f, 0f) :
+                new UiCaptureRect(bounds.X, caption.Bottom + LabelGap, bounds.Width, ControlHeight);
             PaintHitTarget(path, field, clip, enabled);
             var pair = PairFor(UiPaintRole.Sunken, muted || !enabled ? UiTone.Muted : UiTone.Neutral);
             var tints = UiThemeColors.ResolveTints(pair, TextMinimum, UiThemeColors.ButtonHovered,
                 UiThemeColors.ButtonSelected, UiThemeColors.ButtonPressed);
             var fill = StateFill(pair.Fill, state, tints);
+            var component = theme.Descriptor.Components[UiThemeTarget.Input];
+            var radius = theme.Descriptor.Shape.Resolve(component.Radius, field.Width / layoutScale, field.Height / layoutScale);
+            var stroke = error != null ? 3f : (float)component.Border;
+            if (preferences.HighContrast && stroke > 0f) stroke = Math.Max(3f, stroke);
+            var (shadowX, shadowY) = UiLayoutDecoration.ShadowOffset(enabled && !preferences.HighContrast
+                ? component.Shadow : UiThemeShadow.None);
             Add(path + "/value", null, "FieldValue", field, clip, TextContent(value, UiTextStyle.Body, flags, label),
-                new UiCaptureNodePaint(pair.On, fill, theme.Descriptor.Shape.Control * layoutScale, BorderWidth(true), 0f, 0f));
+                new UiCaptureNodePaint(pair.On, fill, radius * layoutScale, stroke * layoutScale,
+                    (float)shadowX * layoutScale, (float)shadowY * layoutScale));
             PaintStateCues(path, label, state, field, clip, pair.Fill, tints, pair.On, fill);
             PaintFocus(path, state, field, clip, backdrop);
+            if (error != null) PaintValidation(path, error, field, bounds, clip, radius * layoutScale);
         }
 
-        private void PaintHitTarget(string path, UiCaptureRect bounds, UiCaptureRect clip, bool enabled)
+        private void PaintValidation(string path, string error, UiCaptureRect field, UiCaptureRect bounds, UiCaptureRect clip, float radius)
         {
+            var background = scheme.GetPair(backdrop).Fill;
+            var danger = scheme.ResolveForeground(UiTone.Danger, backdrop);
+            var border = new UiCaptureNodePaint(danger, background, radius, 3f * layoutScale);
+            Add(path + "/error-outline", null, "FieldErrorOutline", field, clip,
+                new UiCaptureNodeContent(string.Empty, error, 0f, 0f, UiCaptureNodeFlags.BoundaryMark), border);
+            var message = bounds.Inset(0f, field.Bottom - bounds.Y + LabelGap, 0f, 0f);
+            var size = 18f * layoutScale;
+            Add(path + "/error-glyph", null, "FieldErrorGlyph", new UiCaptureRect(message.X, message.Y, size, size), clip,
+                new UiCaptureNodeContent(string.Empty, "Error", 0f, 0f,
+                    UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.HasNonColorCue), new UiCaptureNodePaint(danger, background));
+            Text(path + "/error", null, "FieldErrorMessage", message.Inset(24f * layoutScale, 0f, 0f, 0f), clip,
+                error, UiTextStyle.Caption, UiTone.Danger, UiCaptureNodeFlags.None);
+        }
+
+        private void PaintHitTarget(string path, UiCaptureRect bounds, UiCaptureRect clip, bool enabled, bool popup = false)
+        {
+            if (!popup && surface.HasOpenDropdown) return;
             var flags = UiCaptureNodeFlags.HitTarget | (enabled ? UiCaptureNodeFlags.None : UiCaptureNodeFlags.Disabled);
             Add(path + "/hit", null, "HitTarget", bounds, clip,
                 new UiCaptureNodeContent(string.Empty, string.Empty, 0f, 0f, flags), default);

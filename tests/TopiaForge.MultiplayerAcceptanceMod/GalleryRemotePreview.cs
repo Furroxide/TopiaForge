@@ -8,10 +8,13 @@ namespace TopiaForge.MultiplayerAcceptance
     internal sealed class GalleryRemotePreview : IDisposable
     {
         internal const string OptInFile = "gallery-remote-preview.enabled";
+        private const string SkipExampleBindings = "gallery-remote-preview-no-bindings.enabled";
         internal const string InputAction = "gallery-remote-preview";
+        private static readonly ControlGalleryPage[] ControlPages = (ControlGalleryPage[])Enum.GetValues(typeof(ControlGalleryPage));
         private const int VariantsPerPage = 6;
         private static int FoundationVariantCount => FoundationPages.TransportPages.Count * VariantsPerPage;
-        internal static int VariantCount => FoundationVariantCount + 3;
+        internal static int K1VariantCount => FoundationVariantCount + 3;
+        internal static int VariantCount => K1VariantCount + ControlPages.Length * 2;
         private readonly IModContext context;
         private readonly IMultiplayerSession session;
         private readonly IDisposable update;
@@ -47,6 +50,13 @@ namespace TopiaForge.MultiplayerAcceptance
             {
                 context.Logger.Warn("Gallery preview input could not be registered (" + registration.ErrorCode + ").");
                 return;
+            }
+            if (!context.Files.DataFileExists(SkipExampleBindings))
+            {
+                var expedition = context.Input.RegisterAction(ControlGalleryPages.Expedition());
+                var ledger = context.Input.RegisterAction(ControlGalleryPages.Ledger());
+                if (!expedition.Succeeded || !ledger.Succeeded)
+                    context.Logger.Warn("One or more Gallery example bindings could not be registered.");
             }
             context.Lifetime.Track(new GalleryRemotePreview(context, session, action));
         }
@@ -106,6 +116,12 @@ namespace TopiaForge.MultiplayerAcceptance
         internal static UiSurfaceRequest Request(int variant)
         {
             if ((uint)variant >= (uint)VariantCount) throw new ArgumentOutOfRangeException(nameof(variant));
+            if (variant >= K1VariantCount)
+            {
+                var controlVariant = variant - K1VariantCount;
+                return ControlGalleryPages.Create(ControlPages[controlVariant / 2], (controlVariant & 1) == 0
+                    ? null : FoundationPages.TransportTheme);
+            }
             if (variant >= FoundationVariantCount)
                 return FoundationLayoutPages.LayoutNotice(Palette(variant - FoundationVariantCount));
             var page = FoundationPages.TransportPages[variant / VariantsPerPage];

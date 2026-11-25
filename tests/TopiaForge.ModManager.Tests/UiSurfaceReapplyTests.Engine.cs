@@ -74,7 +74,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     internal RectTransform(GameObject owner) : base(owner) { }
                     public Rect rect = new() { width = 840, height = 460 };
-                    public Vector2 anchorMin, anchorMax, pivot, offsetMin, offsetMax, anchoredPosition;
+                    public Vector2 anchorMin, anchorMax, pivot, offsetMin, offsetMax, anchoredPosition, sizeDelta;
                 }
                 public abstract class MonoBehaviour
                 {
@@ -205,12 +205,13 @@ namespace TopiaForge.ModManager.Tests
                     public void AddTriangle(int a, int b, int c) { }
                     public void Clear() { }
                 }
-                public sealed class Image : Graphic { public object? sprite; }
+                public class Image : MaskableGraphic { public object? sprite; }
                 public sealed class RectMask2D : MonoBehaviour { }
                 public class Selectable : MonoBehaviour
                 {
                     internal bool Focused;
-                    public bool IsInteractable() => true;
+                    internal bool interactable = true;
+                    public bool IsInteractable() => interactable;
                 }
                 public sealed class Toggle : Selectable { }
                 public sealed class Slider : Selectable { }

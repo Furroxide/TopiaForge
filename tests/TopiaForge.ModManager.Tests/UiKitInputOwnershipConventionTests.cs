@@ -112,11 +112,14 @@ namespace TopiaForge.ModManager.Tests
             Require(focus, "TopiaForgeDismissStack.Claims", "and the open windows hold what they claim");
             Require(focus, "TopiaForgeNavigateAction.Bindings", "mod actions yield to the same navigation bindings as the game's event filter");
             Require(service, "value = ReadBindings(definition.SuppressWhileUiFocused, focus);",
-                "an action that opted out of yielding reads every binding");
+                "an action can opt out of ordinary focus yielding");
             var read = Between(service, "private float ReadBindings(bool yielding, UiInputFocus focus)", "private bool TakenByTopiaForge(int index)");
-            Require(read, "value += InputActionYield.Read(ref owners[index], binding, ReadBinding(binding), focus, yielding,",
+            Require(read, "TopiaForgeBindingCaptureInput.Capturing || TopiaForgeBindingCaptureInput.Took(binding)",
+                "binding capture suppresses new SDK presses before and after the chooser closes until they release");
+            Require(read, "value += InputActionYield.Read(ref owners[index], binding, ReadBinding(binding), focus, yielding || captured,",
                 "each binding yields on its own, and its press keeps the owner it began with until its release");
-            Require(read, "yielding && TakenByTopiaForge(index));", "a press TopiaForge took from the game stays TopiaForge's for mods too");
+            Require(read, "captured || (yielding && TakenByTopiaForge(index)));",
+                "captured presses are kept from every SDK action and ordinary claims affect yielding actions");
             var taken = Between(service, "private bool TakenByTopiaForge(int index)", "private static int[] Takeable(");
             Require(taken, "TopiaForgeInputOwnership.KeyTaken(control)", "a key TopiaForge took is looked up by the filter's own number");
             Require(taken, "TopiaForgeInputOwnership.PadButtonTaken(control == TakeableBack)", "and a controller's B or A");
@@ -255,11 +258,13 @@ namespace TopiaForge.ModManager.Tests
         private static void TheFilterReturnsAtOnceAtRest()
         {
             var onEvent = Between(Ownership(), "private static void OnEvent(", "private static void OnDeviceChange(");
-            var other = onEvent.IndexOf("if (stopped || kind == TopiaForgeInputDevice.Other)", StringComparison.Ordinal);
+            var capture = onEvent.IndexOf("TopiaForgeBindingCaptureInput.Filter(eventPtr, device)", StringComparison.Ordinal);
+            var other = onEvent.IndexOf("if (kind == TopiaForgeInputDevice.Other) return;", StringComparison.Ordinal);
             var claims = onEvent.IndexOf("TopiaForgeDismissStack.Claims", StringComparison.Ordinal);
             var examines = onEvent.IndexOf("if (!Gate.Examines(kind, claims))", StringComparison.Ordinal);
             var filters = onEvent.IndexOf("FilterKeyboard(", StringComparison.Ordinal);
-            Assert(other >= 0 && other < claims, "a mouse, pen or touch event returns before anything is looked up");
+            Assert(capture >= 0 && capture < other && other < claims,
+                "the raw capture sees the event first, and an ordinary claim never examines a non-keyboard/gamepad device");
             Assert(claims < examines && examines < filters, "and every other event returns at once while nothing is claimed or held");
         }
 

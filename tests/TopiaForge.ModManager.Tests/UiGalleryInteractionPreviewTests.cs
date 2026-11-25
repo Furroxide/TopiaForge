@@ -32,7 +32,8 @@ namespace TopiaForge.ModManager.Tests
                 .Append(Path.Combine(gallery, "Pages", "FoundationLayoutPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "FoundationGraphPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "FoundationArtPages.cs"))
-                .Append(Path.Combine(gallery, "Pages", "FoundationIntegrationPages.cs"));
+                .Append(Path.Combine(gallery, "Pages", "FoundationIntegrationPages.cs"))
+                .Append(Path.Combine(gallery, "Pages", "ControlGalleryPages.cs"));
             var trees = files.Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path))
                 .Append(CSharpSyntaxTree.ParseText(Boundaries, path: "PreviewBoundaries.cs"))
                 .Append(CSharpSyntaxTree.ParseText(AssetBoundaries, path: "PreviewAssetBoundaries.cs"))

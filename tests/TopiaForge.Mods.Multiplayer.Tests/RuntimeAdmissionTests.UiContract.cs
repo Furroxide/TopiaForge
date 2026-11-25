@@ -38,12 +38,13 @@ internal static partial class RuntimeAdmissionTests
             "Both runtime roles name the signed session package digest.");
 
         var foundation = rig.AddPeer("foundation", Sandbox);
+        foundation.UseRuntime(new UncheckedRuntimeHost(foundation.Runtime, InternalUiPresentationContract.FoundationVersion));
         rig.JoinAndWait(foundation);
         var foundationId = foundation.Control.SessionSnapshot.LocalParticipantId!.Value;
         That(rig.Host.Control.UiContractVersionOf(foundationId) == InternalUiPresentationContract.FoundationVersion,
             "The exact authenticated offer capability survives admission and is keyed to the receiver.");
 
-        host.RequiresFoundationUi = () => true;
+        host.RequiredSharedUiVersion = () => InternalUiPresentationContract.FoundationVersion;
         var refused = rig.AddPeer("old receiver", Sandbox);
         refused.UseRuntime(new UncheckedRuntimeHost(refused.Runtime));
         That(refused.Control.Join(refused.Target(), new InternalJoinSettings()).Succeeded, "The legacy player can ask to join.");
@@ -57,7 +58,8 @@ internal static partial class RuntimeAdmissionTests
         var offered = new RuntimeContent("2545", "0.2.0") { Runtime = foundation.Runtime };
         var descriptor = rig.Host.Provider.Live!.Host!.Descriptor!.Descriptor;
         That(ContentOfferCodec.TryDecode(offered.ClientContent(), out var oldOffer) && oldOffer!.UiContractVersion == 1 &&
-            ContentOfferCodec.TryDecode(offered.ClientContent(descriptor), out var newOffer) && newOffer!.UiContractVersion == 2,
+            ContentOfferCodec.TryDecode(offered.ClientContent(descriptor), out var newOffer) &&
+            newOffer!.UiContractVersion == InternalUiPresentationContract.ControlsVersion,
             "Legacy and extended offers remain distinct and decode to their declared versions.");
         FoundationEnvelopeReachesBothAuthenticatedRoutes();
         TargetedUpgradeSurvivesGuestScopeTeardown();
@@ -65,5 +67,6 @@ internal static partial class RuntimeAdmissionTests
         ArtUsesItsOwnPackOnBothRoutes();
         ArtUsesTheCompleteRetainedFrameBudget();
         FoundationPackagesCoexistAcrossGuestProfilesAndScopeLifetimes();
+        ControlsUseOnlyTheirAdmittedRecipient();
     }
 }

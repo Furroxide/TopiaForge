@@ -84,13 +84,15 @@ namespace TopiaForge.Mods
             if (selected) border = Math.Max(2d, border);
             if (highContrast && border > 0) border = Math.Max(3d, border);
             var shadow = highContrast ? UiThemeShadow.None : component.Shadow;
-            var (shadowX, shadowY) = shadow switch
-            {
-                UiThemeShadow.Small => (-3d, 4d),
-                UiThemeShadow.Card => (-4d, 8d),
-                _ => (0d, 0d),
-            };
+            var (shadowX, shadowY) = ShadowOffset(shadow);
             return new UiLayoutDecoration(styleId, fill, Math.Min(radius, halfShortEdge), border, shadowX, shadowY);
         }
+
+        internal static (double X, double Y) ShadowOffset(UiThemeShadow shadow) => shadow switch
+        {
+            UiThemeShadow.Small => (-3d, 4d),
+            UiThemeShadow.Card => (-4d, 8d),
+            _ => (0d, 0d),
+        };
     }
 }

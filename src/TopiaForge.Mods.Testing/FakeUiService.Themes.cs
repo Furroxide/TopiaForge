@@ -114,8 +114,21 @@ namespace TopiaForge.Mods.Testing
         internal UiThemeDescriptor? DeclaredTheme(UiThemeRef? theme, UiWireEnvelope? receiver) =>
             themeScope.Package.DescriptorForWire(themeScope, theme, receiver);
 
-        internal OperationResult<FakeUiImages> PrepareImages(UiNode? content, bool received) =>
-            themeScope.Package.PrepareImages(themeScope, content, received);
+        internal OperationResult<FakeUiImages> PrepareImages(UiNode? content, bool received, bool wireBounded = false)
+        {
+            var prepared = themeScope.Package.PrepareImages(themeScope, content, received);
+            if (!wireBounded || !prepared.TryGetValue(out var images)) return prepared;
+            try
+            {
+                var projection = UiWireCodec.ProjectInputDefaults(images.Presentation, DefaultsForWire);
+                return ReferenceEquals(projection, images.Presentation) ? prepared
+                    : OperationResult<FakeUiImages>.Success(images.WithPresentation(projection));
+            }
+            catch (ArgumentException error)
+            {
+                return OperationResult<FakeUiImages>.Failure(ModErrorCode.InvalidArgument, error.Message);
+            }
+        }
 
         internal void ImagesChanged() => themeScope.Package.ImagesChanged();
 

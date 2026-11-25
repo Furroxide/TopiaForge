@@ -229,6 +229,7 @@ namespace TopiaForge.ModManager.Tests
             namespace TopiaForge.ModManager
             {
                 internal sealed class UnityUiHudPlacement { public void Refresh() { } }
+                internal sealed record UiSurfaceInputContext(object? Registry, string OwnerPackageId);
                 internal static class MultiplayerContentInventory
                 {
                     internal sealed class LoadedPackage
@@ -283,6 +284,7 @@ namespace TopiaForge.ModManager.Tests
 
                 internal sealed partial class OwnerUiService
                 {
+                    private readonly object? uiInput = null;
                     private readonly Func<double> clock = () => 0;
                     private readonly Func<string> clockEpoch = () => "preview";
 
@@ -347,6 +349,7 @@ namespace TopiaForge.ModManager.Tests
                         internal void ApplyGameplay(bool state) { }
                         internal void HandleLost() => Dispose();
                         internal void SetClock(Func<double> source, Func<string> epoch) { }
+                        internal void AttachInput(UiSurfaceInputContext input) { }
                         internal void AttachLifetimeLease(IDisposable lease) => tracked = lease;
                         internal void Present()
                         {

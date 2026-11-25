@@ -33,6 +33,9 @@ namespace TopiaForge.UiGallery
                 return;
             }
 
+            Context.Input.RegisterAction(Pages.ControlGalleryPages.Expedition());
+            Context.Input.RegisterAction(Pages.ControlGalleryPages.Ledger());
+
             Context.Events.SubscribeUpdate(deltaTime =>
             {
                 gallery?.Tick(deltaTime);

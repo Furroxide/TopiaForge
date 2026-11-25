@@ -53,12 +53,15 @@ namespace TopiaForge.Mods
             Parent = parent;
             ChildIndex = index;
             Disabled = disabled;
+            TabPage = parent?.Node is UiTabs tabs && index < tabs.Tabs.Count
+                ? new UiLayoutTabPage(parent, index) : parent?.TabPage;
         }
 
         internal UiNode Node { get; }
         internal UiLayoutPlacement? Parent { get; }
         internal int ChildIndex { get; }
         internal bool Disabled { get; }
+        internal UiLayoutTabPage? TabPage { get; }
         internal UiLayoutRect Bounds { get; set; }
         internal UiLayoutRect Clip { get; set; }
         internal UiLayoutRect PaintBounds { get; set; }
@@ -79,5 +82,18 @@ namespace TopiaForge.Mods
             Parent?.AppendPath(path);
             path.Append('/').Append(ChildIndex.ToString(CultureInfo.InvariantCulture));
         }
+    }
+
+    internal sealed class UiLayoutTabPage
+    {
+        internal UiLayoutTabPage(UiLayoutPlacement group, int pageIndex)
+        {
+            Group = group;
+            PageIndex = pageIndex;
+        }
+
+        internal UiLayoutPlacement Group { get; }
+        internal int PageIndex { get; }
+        internal UiLayoutTabPage? Parent => Group.TabPage;
     }
 }
