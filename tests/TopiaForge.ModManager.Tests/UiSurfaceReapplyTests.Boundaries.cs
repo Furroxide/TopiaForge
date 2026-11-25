@@ -222,6 +222,17 @@ namespace TopiaForge.ModManager.Tests
                         bool enabled, UiPaintRole role) { }
                     internal void SetBackdrop(UiPaintRole role) { }
                 }
+                internal static class TopiaForgeInputOwnership
+                {
+                    internal static UiInputDevice LastViewerDevice => UiInputDevice.KeyboardMouse;
+                }
+                internal sealed class TopiaForgeActionKeyCap
+                {
+                    internal TopiaForgeActionKeyCap(TopiaForgeContainer parent) { }
+                    internal UiLayoutLeafMeasurement Measure(UiActionBindingPresentation binding, double width)
+                        => new UiLayoutLeafMeasurement(new UiLayoutExtent(32, 24), UiLayoutPaintKind.Protected);
+                    internal void Apply(UiActionBindingPresentation binding, UiLayoutRect allocation, UiPaintRole backdrop, UiTone tone) { }
+                }
                 internal static class TopiaForgeControlFocus
                 {
                     internal static Action<UiPaintRole>? Install(TopiaForgeWidget widget, UiPaintRole backdrop) => null;
@@ -351,6 +362,8 @@ namespace TopiaForge.ModManager.Tests
                         internal string OwnerPackageId { get; }
                         internal void Validate(UiNode? node) { }
                         internal Func<(IInputAction Action, string DisplayName)?> Resolve(string name) => static () => null;
+                        internal UiNativeActionBinding BindAction(string name, IReadOnlyList<UiInputBindingHint> defaults)
+                            => new UiNativeActionBinding(static () => null, Array.Empty<UiInputBindingHint>());
                         internal string? Conflict(IInputAction action, InputBinding binding) => null;
                     }
 
@@ -362,7 +375,7 @@ namespace TopiaForge.ModManager.Tests
                             private readonly UiImage image;
                             private readonly UiSurfaceArtwork artwork;
 
-                            internal NativeArtLeaf(TopiaForgeContainer host, UiNode node, UiSurfaceArtwork? artwork)
+                            internal NativeArtLeaf(TopiaForgeContainer host, UiNode node, UiSurfaceArtwork? artwork, UiCallbackGate callbacks)
                             {
                                 image = (UiImage)node;
                                 this.artwork = artwork!;
@@ -380,6 +393,23 @@ namespace TopiaForge.ModManager.Tests
 
                             internal void Apply(UiLayoutRect bounds, UiPaintRole backdrop, UiThemeScheme scheme,
                                 TopiaForgeResolvedTheme theme, UiThemeDescriptor effective, UiThemeDescriptor? declared) { }
+                        }
+
+                        private readonly Dictionary<UiNode, NativeActionSlot> actionSlots = new();
+                        private readonly List<NativeActionSlot> actionSlotViews = new();
+
+                        private static void CreateActionSlot(NativeNode view, UiActionSlot node, UiCallbackGate callbacks) =>
+                            throw new System.NotSupportedException();
+
+                        private sealed class NativeActionSlot
+                        {
+                            internal bool RefreshBinding() => false;
+
+                            internal UiLayoutLeafMeasurement Measure(UiThemeDescriptor effective,
+                                UiThemeDescriptor? declared, bool highContrast) => throw new System.NotSupportedException();
+
+                            internal void Apply(UiPaintRole surface, UiThemeScheme scheme, TopiaForgeResolvedTheme theme,
+                                UiThemeDescriptor effective, UiThemeDescriptor? declared) { }
                         }
 
                         private sealed class NativeStatusLeaf

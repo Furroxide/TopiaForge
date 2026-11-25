@@ -358,16 +358,16 @@ namespace TopiaForge.ModManager
                 }
 
                 var copy = CopyBindings(newBindings);
-                if (copy.Count == 0)
-                {
-                    return OperationResult<bool>.Failure(
-                        ModErrorCode.InvalidArgument,
-                        "At least one input binding is required.");
-                }
-
                 bindings = copy.AsReadOnly();
                 owners = new InputPressOwner[copy.Count];
                 takeable = Takeable(copy);
+                if (copy.Count == 0)
+                {
+                    value = 0f;
+                    held = false;
+                    pressed = false;
+                    released = false;
+                }
                 return OperationResult<bool>.Success(true);
             }
 

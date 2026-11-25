@@ -18,9 +18,14 @@ namespace TopiaForge.ModManager.Tests
             const string testing = "src/TopiaForge.Mods.Testing/";
             var paint = Syntax("src/TopiaForge.ModManager/UnityUiLayoutRenderer.Art.cs");
             var methods = Syntax(recorder + "UiGalleryNativeTree.Art.cs").DescendantNodes().OfType<MethodDeclarationSyntax>()
-                .Where(method => method.Identifier.ValueText is "CaptureBadge" or "CapturePips");
+                .Where(method => method.Identifier.ValueText is "CaptureBadge" or "CapturePips" or "TryReadPipRefill")
+                .Append(Syntax(recorder + "UiGalleryNativeTree.Actions.cs").DescendantNodes().OfType<MethodDeclarationSyntax>()
+                    .Single(method => method.Identifier.ValueText == "CountText"));
+            var safeText = Syntax(recorder + "UiGalleryCaptureFixture.cs").DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Single(method => method.Identifier.ValueText == "SafeDisplayText");
             var source = NativeStatusBoundary
                 .Replace("/* capture */", string.Join("\n", methods), StringComparison.Ordinal)
+                .Replace("/* authored text */", safeText.ToFullString(), StringComparison.Ordinal)
                 .Replace("/* apply */", paint.DescendantNodes().OfType<MethodDeclarationSyntax>()
                     .Single(method => method.Identifier.ValueText == "Apply").ToFullString(), StringComparison.Ordinal)
                 .Replace("/* observation */", paint.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -51,6 +56,7 @@ namespace TopiaForge.ModManager.Tests
         private const string NativeStatusBoundary = """
             using System;
             using System.Collections.Generic;
+            using System.Globalization;
             using System.Linq;
             using System.Text;
             using System.Text.Json;
@@ -67,6 +73,8 @@ namespace TopiaForge.ModManager.Tests
                     private static readonly UiCaptureNodeContent ArtMark = State(UiCaptureNodeFlags.Decorative | UiCaptureNodeFlags.SemanticMark, "");
                     private readonly List<UiCapturedNode> rows = new();
                     private readonly TopiaForgeResolvedTheme theme = new();
+                    private const double clockTime = 0d;
+                    private const string clockEpoch = "status-style";
                     internal int Width => 1920;
                     internal int Height => 1080;
                     internal float PixelsPerUnit => 1f;
@@ -168,6 +176,11 @@ namespace TopiaForge.ModManager.Tests
                     }
                 }
 
+                internal static class UiGalleryCaptureFixture
+                {
+                    /* authored text */
+                }
+
                 internal sealed record UiGalleryFontFact(string Path, string Family, string Style, float SizePixels,
                     float Ascender, float Descender, float MeasuredHeight);
                 /* observation */
@@ -197,7 +210,7 @@ namespace TopiaForge.ModManager.Tests
                 internal class MonoBehaviour { internal RectTransform rectTransform = null!; internal bool isActiveAndEnabled = true; }
                 internal class Graphic : MonoBehaviour { }
                 internal class Image : Graphic { internal object? sprite; }
-                internal sealed class TMP_Text : Graphic { }
+                internal sealed class TMP_Text : Graphic { internal string text = string.Empty; }
                 internal sealed class RectMask2D : MonoBehaviour { }
                 internal sealed class TopiaForgeRoundedImage : Image
                 {

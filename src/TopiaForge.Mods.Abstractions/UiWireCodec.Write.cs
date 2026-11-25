@@ -46,6 +46,12 @@ namespace TopiaForge.Mods
                 WriteControlNode(w, node!, tag, clockEpoch, retained, ref hasCountdown);
                 return;
             }
+            tag = ActionTag(node);
+            if (tag != 0)
+            {
+                WriteActionNode(w, node!, tag, clockEpoch, retained, ref hasCountdown);
+                return;
+            }
             tag = StatusTag(node);
             if (tag != 0)
             {

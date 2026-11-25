@@ -39,6 +39,17 @@ namespace TopiaForge.Mods
                     break;
                 case UiBadge n: Text(n.Text, 256); break;
                 case UiPips n: Text(n.Label, 256); break;
+                case UiKeyGlyph n:
+                    Text(n.ActionName, 64);
+                    InputDefaults(n.HasWireDefaults, n.WireDefaults.Count, requireWireMetadata);
+                    break;
+                case UiActionSlot n:
+                    Text(n.ActionName, 64); Text(n.Label, 24);
+                    Text(n.Detail ?? string.Empty, 48); Text(n.UnavailableReason ?? string.Empty, 48);
+                    InputDefaults(n.HasWireDefaults, n.WireDefaults.Count, requireWireMetadata);
+                    if (requireWireMetadata && n.Image != null && n.PackDescriptorDigest.Length != 32)
+                        throw new ArgumentException("Resolve the action slot image's package-local descriptor before encoding remote UI.");
+                    break;
                 case UiButton n: Text(n.Label); break;
                 case UiToggle n: Text(n.Label); break;
                 case UiCheckbox n: Text(n.Label); break;
@@ -51,8 +62,7 @@ namespace TopiaForge.Mods
                 case UiTooltip n: Text(n.Message, 256); break;
                 case UiKeyBindingField n:
                     Text(n.ActionName, 64); Text(n.Label ?? string.Empty);
-                    if ((requireWireMetadata && !n.HasWireDefaults) || n.WireDefaults.Count > UiInputBindingHint.MaximumDefaults)
-                        throw new ArgumentException("Resolve the owning action's default bindings before encoding remote UI.");
+                    InputDefaults(n.HasWireDefaults, n.WireDefaults.Count, requireWireMetadata);
                     break;
                 case UiDropdown n:
                     Text(n.Label); Text(n.SelectedValue);
@@ -70,6 +80,12 @@ namespace TopiaForge.Mods
 
             var children = UiNodeChildren.Of(node);
             for (var index = 0; index < children.Count; index++) Visit(children[index], requireWireMetadata);
+        }
+
+        private static void InputDefaults(bool hasDefaults, int count, bool required)
+        {
+            if ((required && !hasDefaults) || count > UiInputBindingHint.MaximumDefaults)
+                throw new ArgumentException("Resolve the owning action's default bindings before encoding remote UI.");
         }
     }
 }

@@ -176,7 +176,8 @@ namespace TopiaForge.ModManager
                 => SetComposition(content, declaredTheme, remoteComposition);
 
             private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor, bool remote,
-                Action<TopiaForgeContainer>? prepareTheme = null, Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null)
+                Action<TopiaForgeContainer>? prepareTheme = null, Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null,
+                UiSurfaceInputContext? prepareInput = null)
             {
                 UnityMainThreadGuard.AssertCurrent();
                 if (content == null) throw new ArgumentNullException(nameof(content));
@@ -206,14 +207,15 @@ namespace TopiaForge.ModManager
                 UnityUiLayoutRenderer? nextLayout = null;
                 UiSurfaceArtwork? nextArtwork = null;
                 var needsImageNoticeRoom = false;
+                var scopedInput = prepareInput ?? inputContext;
                 ContentStamp stamp;
                 try
                 {
                     stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
                     var retained = ReferenceEquals(content, admitted);
-                    if (retained && prepareTheme == null)
+                    if (retained && prepareTheme == null && ReferenceEquals(scopedInput, inputContext))
                     {
-                        if (!committedStamp.Matches(stamp))
+                        if (layoutRenderer?.RefreshKeyGlyphs() == true || !committedStamp.Matches(stamp))
                         {
                             RefreshRetainedComposition(compositionRoot!, stamp.ClockEpoch);
                             committedStamp = stamp;
@@ -222,7 +224,7 @@ namespace TopiaForge.ModManager
                     }
 
                     UiComposition.Validate(content);
-                    if (!remote && !retained) inputContext?.Validate(content);
+                    if (!remote && !retained) scopedInput?.Validate(content);
                     if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
                         return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                     if (!retained) UiClockBinding.Check(content, stamp.ClockEpoch);
@@ -234,7 +236,7 @@ namespace TopiaForge.ModManager
                     var area = MeasureContentArea(parent, view);
                     nextLayout = UnityUiLayoutRenderer.Stage(content, next, area,
                         descriptor ?? (remote ? null : UiThemePackParser.Default), callbacks, graphTransaction, nextArtwork,
-                        layoutRenderer, RefreshTabbedPage, inputContext);
+                        layoutRenderer, RefreshTabbedPage, scopedInput);
                     needsImageNoticeRoom = nextLayout.UnavailableImagePath != null && !CanShowImageNotice(next, area);
                     if (!remote && needsImageNoticeRoom)
                         throw new ArgumentException("The image unavailable notice cannot fit this surface at " + nextLayout.UnavailableImagePath + ".");
@@ -266,6 +268,7 @@ namespace TopiaForge.ModManager
                 admitted = content;
                 declaredTheme = descriptor;
                 remoteComposition = remote;
+                inputContext = scopedInput;
                 committedStamp = stamp;
                 retainedGraphs = graphTransaction!.Commit();
                 ShowCompositionLayout(next!, needsImageNoticeRoom, allowAlternateImageNotice: remote);

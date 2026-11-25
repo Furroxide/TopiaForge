@@ -35,6 +35,8 @@ namespace TopiaForge.UiGallery
 
             Context.Input.RegisterAction(Pages.ControlGalleryPages.Expedition());
             Context.Input.RegisterAction(Pages.ControlGalleryPages.Ledger());
+            if (!Pages.ActionGalleryPages.RegisterActions(Context.Input))
+                Context.Logger.Warn("One or more Gallery action bindings could not be registered or cleared.");
 
             Context.Events.SubscribeUpdate(deltaTime =>
             {

@@ -11,7 +11,8 @@ namespace TopiaForge.Mods
         internal static readonly string[] TextRoles = { "body", "heading", "caption", "banner", "display", "title", "label", "numeral", "mono" };
         internal const int FoundationComponentCount = (int)UiThemeTarget.Button;
         private const int ControlComponentCount = (int)UiThemeTarget.StatBar;
-        internal static readonly string[] Targets = { "card", "box", "badge", "pips", "button", "input", "tabs", "tooltip", "statBar" };
+        internal static readonly string[] Targets =
+            { "card", "box", "badge", "pips", "button", "input", "tabs", "tooltip", "statBar", "keyGlyph", "actionSlot" };
         internal static readonly string[] Radii = { "none", "small", "medium", "control", "card", "pill" };
         internal static readonly string[] Borders = { "none", "thin", "standard", "strong" };
         internal static readonly string[] Shadows = { "none", "small", "card" };
@@ -80,9 +81,17 @@ namespace TopiaForge.Mods
             var fonts = ParseFonts(pack, assets);
             var images = ParseImages(pack, assets);
             var components = ParseComponents(pack.Object("components"), defaults, out var minimumWireVersion, out var canonicalComponentCount);
+            var styles = ParseStyles(pack);
+            foreach (var style in styles.Values)
+            {
+                if (style.Target != UiThemeTarget.ActionSlot) continue;
+                minimumWireVersion = UiWireCodec.ControlsContractVersion;
+                canonicalComponentCount = Math.Max(canonicalComponentCount, (int)UiThemeTarget.ActionSlot + 1);
+                break;
+            }
             var descriptor = new UiThemeDescriptor(id, paper, hud, ParseTypography(pack.Object("typography"), fonts, defaults),
                 ParseShape(pack.Object("shape"), defaults?.Shape), ParseMotion(pack.Object("motion"), defaults?.Motion),
-                components, ParseStyles(pack), images, fonts, minimumWireVersion, canonicalComponentCount,
+                components, styles, images, fonts, minimumWireVersion, canonicalComponentCount,
                 defaults?.Digest ?? ReadOnlyMemory<byte>.Empty);
             ValidateScheme(descriptor.SelectScheme(false, false), pack.At("paper"), 4.5f);
             ValidateScheme(descriptor.SelectScheme(true, false), pack.At("hud"), 4.5f);
@@ -265,7 +274,7 @@ namespace TopiaForge.Mods
                 style.Allow("id", "target", "radius", "border", "shadow", "fill");
                 var id = UiThemeData.Id(style.RequiredString("id"), style.At("id"));
                 var target = (UiThemeTarget)ReadEnum(style, "target", Targets);
-                if ((int)target >= FoundationComponentCount)
+                if ((int)target >= FoundationComponentCount && target != UiThemeTarget.ActionSlot)
                     throw UiThemeDataException.Invalid(style.At("target"), "This component does not support named styles.");
                 var fill = style.OptionalString("fill", nullable: true);
                 UiPaintRole? role = fill == null ? null : (UiPaintRole)EnumIndex(fill, style.At("fill"), PaintRoles);

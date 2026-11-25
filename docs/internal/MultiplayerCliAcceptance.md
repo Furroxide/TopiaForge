@@ -179,11 +179,11 @@ Use separate profiles for the acceptance runner.
 
 Once the normal session reports a ready listen host and exactly one admitted guest, press F7 on the host.
 Each press opens a host-local fixture and sends the same safe composition to the guest through `IPlayer.Ui`.
-The sequence starts at Theme packs and ends at Countdowns, then wraps after 87 successful presses.
+The sequence starts at Theme packs and ends at Action slots, then wraps after 95 successful presses.
 Each of the first eleven pages cycles Paper and HUD for the kit palette, the acceptance transport palette,
 and authenticated Survival, in that order. Layout fit opens one HUD for each of those palettes.
 The five interactive control pages each open a Paper Window in the kit and transport palettes.
-Status and Countdowns each cycle kit Paper, kit HUD, transport Paper and transport HUD.
+Status, Countdowns, Key glyphs and Action slots each cycle kit Paper, kit HUD, transport Paper and transport HUD.
 
 | Page | First press from a fresh fixture |
 | --- | --- |
@@ -206,6 +206,8 @@ Status and Countdowns each cycle kit Paper, kit HUD, transport Paper and transpo
 | Tooltips and list tiles | 78 |
 | Status | 80 |
 | Countdowns | 84 |
+| Key glyphs | 88 |
+| Action slots | 92 |
 
 The Shared acceptance package owns its `transport-preview` descriptor and its copy of the CC0 sample bundle, receipt,
 and license. The guest checks the authenticated package and descriptor for image references even in the kit variants.
@@ -218,7 +220,7 @@ Set each viewer's resolution, scale, contrast, and motion preferences for the ma
 For all three Layout fit variants, start with each viewer at scale 1.0. After the wide HUD has opened, change each
 viewer to scale 2.0 and capture its title and layout notice. Return to scale 1.0 and capture the restored content.
 With `TOPIAFORGE_UI_GALLERY_CAPTURE=1`, collect the settled tree alongside the raster capture. Use F11 to repeat a
-settled observation. Scroll tall pages in stages so the delivered evidence includes every authored row.
+settled observation. The Key glyphs and Action slots pages also record automatically after each viewer changes input device. Use a gamepad control and wait for the automatic tree capture before using the keyboard again. Scroll tall pages in stages so the delivered evidence includes every authored row.
 The managed test executable's `--ui-kit-gallery-fixtures` option checks the publisher sequence and paired
 fixture lifetimes headlessly.
 
@@ -307,7 +309,7 @@ out of a session for this check. Before starting that guest, take the SHA-256 of
 `BepInEx/TopiaForge/data/io.github.furroxide.topiaforge.multiplayer/multiplayer/known-hosts.json` and hold an exclusive
 Windows read handle on that file. Use a disposable copy of a test profile with an existing known-hosts record.
 
-Open F8 Gallery, select its HUD scheme and the Survival sample, and open **Trust and fallback**. Leave this authored
+Open F8 Gallery, select HUD, and open **Trust and fallback** in its default Survival theme. Leave this authored
 HUD visible and go to the manager's **MULTIPLAYER → CONNECT** tab. Enter the test host's local address and use the
 typed-address join check. When the provider returns `KnownHostsUnreadable`, the loader opens **Trust this server?**.
 Observe that the loader prompt stays in the kit Paper palette, stays above the Gallery HUD, and owns focus and Back.

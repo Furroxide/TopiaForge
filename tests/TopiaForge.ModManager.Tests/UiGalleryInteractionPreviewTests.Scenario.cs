@@ -100,6 +100,28 @@ namespace TopiaForge.ModManager.Tests
                             "Ordinary F8 uses its inherited Survival descriptor in the standard Paper Window.");
                         ordinary.Dispose();
 
+                        var keys = ActionGalleryPages.CreateRequest(ActionGalleryPage.KeyGlyphs, UiSurfaceKind.Window, 0d);
+                        using (Get(service.CreateSurface(keys)))
+                        {
+                            var before = UiGalleryCaptureJson.Records.Count;
+                            GameObject.Tick();
+                            GameObject.Tick();
+                            Require(UiGalleryCaptureJson.Records.Count == before + 1 &&
+                                UiGalleryCaptureJson.Records.Last().Fixture == keys.Id,
+                                "The action fixture records an initial settled observation.");
+                            TopiaForgeInputOwnership.LastViewerDevice = UiInputDevice.Gamepad;
+                            GameObject.Tick();
+                            GameObject.Tick();
+                            Require(UiGalleryCaptureJson.Records.Count == before + 1,
+                                "Changing devices waits two frames for the updated action key paint.");
+                            GameObject.Tick();
+                            GameObject.Tick();
+                            Require(UiGalleryCaptureJson.Records.Count == before + 2 &&
+                                UiGalleryCaptureJson.Records.Last().Fixture == keys.Id,
+                                "A device switch records the same action fixture once its paint settles.");
+                        }
+                        TopiaForgeInputOwnership.LastViewerDevice = UiInputDevice.KeyboardMouse;
+
                         var plain = UiThemePackParser.Parse("{\"schema\":1,\"id\":\"plain-style-switch\"}"u8).Value
                             ?? throw new InvalidOperationException("The plain theme fixture must parse.");
                         using (var parentLife = new OwnerModLifetime())

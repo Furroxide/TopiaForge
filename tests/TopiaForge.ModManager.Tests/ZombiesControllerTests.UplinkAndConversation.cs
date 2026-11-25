@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using TopiaForge.Zombies;
@@ -27,6 +28,9 @@ namespace TopiaForge.ModManager.Tests
                 && harness.Controller.TestingPhase == ZombiesPhase.InterWave
                 && hud.TryFindNode(ZombiesHudPresenter.IntegrityNodeId, out _)
                 && !hud.TryFindNode(ZombiesHudPresenter.CreditsNodeId, out _)
+                && !hud.TryFindNode(ZombiesHudPresenter.RequisitionsSlotId, out _)
+                && !hud.TryFindNode(ZombiesHudPresenter.JackInSlotId, out _)
+                && !hud.TryFindNode(ZombiesHudPresenter.StandDownSlotId, out _)
                 && string.Equals(LastToast(harness.Context), "Wave clear.", StringComparison.Ordinal),
                 "disabling requisitions should remove its economy, HUD line, and wave-clear prompt without affecting score");
         }
@@ -101,6 +105,16 @@ namespace TopiaForge.ModManager.Tests
             var spent = harness.Controller.TestingUplinkCharges;
             Assert(spent < config.OverrideCharges, "a successful broadcast spends charge");
 
+            var hud = FindSurface(harness.Context, "zombies-status");
+            harness.Advance(0f);
+            AssertUplink(spent, 0);
+            harness.Advance(2.125f);
+            AssertUplink(spent, 53);
+            var partialTree = hud.Content;
+            harness.Advance(.004f);
+            Assert(ReferenceEquals(partialTree, hud.Content),
+                "World time inside one displayed refill percentage must not replace the HUD tree");
+
             // A stand-down freezes the world. On the control clock the cooldown and charge regeneration kept
             // running through the freeze the player had just created, so broadcasts could be chained forever.
             var frozen = harness.Chronos!.Freeze("test-freeze");
@@ -108,20 +122,33 @@ namespace TopiaForge.ModManager.Tests
             harness.Advance(config.OverrideChargeRegenSeconds * 3f);
             Assert(harness.Controller.TestingUplinkCharges == spent,
                 "uplink charge must not regenerate while the world is frozen");
-            AssertUplinkPips(spent);
+            Assert(ReferenceEquals(partialTree, hud.Content),
+                "The displayed uplink refill must stay at 53% while the world clock is frozen");
+            AssertUplink(spent, 53);
 
             frozen.Value!.Dispose();
-            harness.Advance(config.OverrideChargeRegenSeconds + 0.05f);
-            Assert(harness.Controller.TestingUplinkCharges > spent,
-                "uplink charge regenerates once the world is running again");
-            AssertUplinkPips(harness.Controller.TestingUplinkCharges);
+            harness.Advance(1.875f);
+            AssertUplink(spent + 1, 0);
+            harness.Advance(config.OverrideChargeRegenSeconds);
+            AssertUplink(config.OverrideCharges, 0);
 
-            void AssertUplinkPips(int available)
+            void AssertUplink(int available, int percentage)
             {
-                var hud = FindSurface(harness.Context, "zombies-status");
-                Assert(hud.TryFindNode(ZombiesHudPresenter.UplinkNodeId, out var status) &&
-                    status is UiPips pips && pips.Filled == available && pips.Total == config.OverrideCharges,
-                    "the Zombies HUD shows the real charge count before and after world-clock regeneration");
+                Assert(harness.Controller.TestingUplinkCharges == available &&
+                    hud.TryFindNode(ZombiesHudPresenter.UplinkNodeId, out var status) &&
+                    status is UiPips { Refill: null } pips && pips.Filled == available &&
+                    pips.Total == config.OverrideCharges && (int)(pips.Fraction * 100f) == percentage,
+                    "The Uplink pips show the authoritative world-time fraction and complete only at ledger expiry");
+                Assert(hud.TryFindNode(ZombiesHudPresenter.JackInSlotId, out var jack) &&
+                    jack is UiActionSlot { ActionName: "jack-in", Charges: { Refill: null } charges } &&
+                    charges.Available == available && charges.Maximum == config.OverrideCharges,
+                    "JACK IN shows the same real charge count without inventing a UI clock deadline");
+                var reading = hud.Capture(new UiCaptureViewport(1920, 1080)).Nodes.Single(node =>
+                    node.Id == ZombiesHudPresenter.UplinkNodeId);
+                var label = "Uplink: " + available + " / " + config.OverrideCharges +
+                    (percentage == 0 ? string.Empty : " (" + percentage + "% refilling)");
+                Assert(reading.IsRendered && reading.SemanticLabel == label,
+                    "The captured Uplink label reports the exact displayed percentage");
             }
         }
 

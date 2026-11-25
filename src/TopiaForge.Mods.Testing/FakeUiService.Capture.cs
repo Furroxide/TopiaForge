@@ -48,6 +48,8 @@ namespace TopiaForge.Mods.Testing
 
         internal int CapturedCountdownSeconds(UiCountdown countdown) =>
             UiCountdownFormatting.WholeSeconds(CapturedCountdownRemaining(countdown));
+
+        internal (double Time, string Epoch) CaptureClock() => (widgetClock(), widgetEpoch());
     }
 
     internal readonly struct FakeUiTextMetrics

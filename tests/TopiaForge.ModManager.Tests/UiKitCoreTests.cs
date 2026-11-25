@@ -36,6 +36,7 @@ namespace TopiaForge.ModManager.Tests
             UiKitCaptureTests.Run();
             UiKitTrustIsolationTests.Run();
             UiStatusNativeRenderingTests.Run();
+            UiActionNativeRenderingTests.Run();
             PresentationRuntimeTests.RunK1Delivery();
             Console.WriteLine("UiKitCoreTests passed.");
         }

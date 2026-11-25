@@ -36,7 +36,7 @@ namespace TopiaForge.Mods.Testing
             {
                 var pips = (UiPips)node;
                 var track = new UiPipTrack(pips, (float)limits.MaxWidth);
-                var label = MeasureStatusLabel(pips.DisplayLabel, availableWidth);
+                var label = MeasureStatusLabel(pips.Refill == null ? pips.DisplayLabel : pips.DisplayLabel + " (99% refilling)", availableWidth);
                 pixels = new Size(Math.Max(track.Width * layoutScale, label.Width), label.Height + (StatusGap + track.Height) * layoutScale);
             }
 
@@ -252,16 +252,24 @@ namespace TopiaForge.Mods.Testing
         private void PaintPips(UiPips pips, string path, UiCaptureRect bounds, UiCaptureRect clip)
         {
             var style = ResolveDecoration(pips, new UiLayoutExtent(bounds.Width / layoutScale, bounds.Height / layoutScale));
-            Add(path, pips.Id, nameof(UiPips), bounds, clip, StatusContent(pips.DisplayLabel),
+            var (time, epoch) = surface.CaptureClock();
+            var shown = UiRefillPresentation.For(pips, time, epoch);
+            var visible = pips.Refill == null ? pips.DisplayLabel : UiStatusFormatting.WithLabel(pips.Label + ":",
+                CountText(shown.Filled, shown.Total)) + (shown.Percentage is int percent ? " (" + Invariant(percent) + "% refilling)" : string.Empty);
+            var content = StatusContent(visible);
+            if (pips.Refill != null)
+                content = new UiCaptureNodeContent(content.Text, content.SemanticLabel, 0f, 0f, content.Flags,
+                    remainingSeconds: shown.RemainingSeconds, fraction: shown.Fraction);
+            Add(path, pips.Id, nameof(UiPips), bounds, clip, content,
                 DecorationPaint(style, null, null, Math.Max((float)style.BorderWidth * layoutScale, StatusBoundaryWidth),
                     pips.Style, pips.Role));
             var behind = scheme.GetPair(backdrop);
-            var measured = MeasureStatusLabel(pips.DisplayLabel, bounds.Width);
+            var measured = MeasureStatusLabel(visible, bounds.Width);
             var label = new UiCaptureRect(bounds.X, bounds.Y, measured.Width, measured.Height);
             Add(path + "/label", null, "PipsLabel", label, clip,
-                TextContent(pips.DisplayLabel, UiTextStyle.Label, ArtFlags(false)), new UiCaptureNodePaint(behind.On, behind.Fill));
+                TextContent(visible, UiTextStyle.Label, ArtFlags(false)), new UiCaptureNodePaint(behind.On, behind.Fill));
 
-            var track = new UiPipTrack(pips, bounds.Width / layoutScale);
+            var track = new UiPipTrack(shown, bounds.Width / layoutScale);
             var stroke = Math.Max((float)style.BorderWidth, preferences.HighContrast ? 3f : 2f);
             var edge = UiStatusColors.Boundary(scheme, pips.Role, backdrop);
             var fill = UiStatusColors.PipFill(scheme, pips.Role, preferences.HighContrast);

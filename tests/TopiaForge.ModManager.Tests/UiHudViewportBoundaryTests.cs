@@ -282,7 +282,11 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed class UiGameplayGate { internal bool IsGameplay => true; }
                 internal readonly record struct GalleryPreviewPalette(UiThemeDescriptor Descriptor, TopiaForgeScheme Scheme);
                 internal readonly record struct UiRemoteThemeSelection(UiWireEnvelope? Envelope, ProbePackage? Package);
-                internal sealed record UiSurfaceInputContext(object? Registry, string OwnerPackageId);
+                internal sealed record UiSurfaceInputContext(object? Registry, string OwnerPackageId)
+                {
+                    internal UiSurfaceInputContext ForRemote(UiWireEnvelope? envelope) =>
+                        this with { OwnerPackageId = envelope?.OwnerPackageId ?? string.Empty };
+                }
                 internal readonly record struct ProbePackage(ProbeManifest Manifest);
                 internal readonly record struct ProbeManifest(string Name, object? AdmittedUi = null);
                 internal static class UiThemeScope { internal static UiThemeDescriptor? Ready(UiThemeDescriptor? value) => value; }
@@ -355,6 +359,12 @@ namespace TopiaForge.ModManager.Tests
                             surface.Refresh();
                             Check(surface.OriginalShown && !surface.NoticeShown && surface.Bounds.Width == 1080d,
                                 "A compatible viewport restores the original tree and authored width.");
+                            surface.Refresh();
+                            calls = surface.LayoutCalls;
+                            surface.ChangeBinding();
+                            surface.Refresh();
+                            surface.Refresh();
+                            Check(surface.LayoutCalls == calls + 1, "A changed key cap refreshes retained HUD geometry once with the same viewport.");
                             canvas.pixelRect = new Rect(0, 0, 900, 1080);
                             Check(!surface.Fits(), "The real staging constraints include the canvas's physical aperture.");
                         }
@@ -846,9 +856,17 @@ namespace TopiaForge.ModManager.Tests
                     {
                         private readonly UiNode source;
                         public int Calls;
+                        internal bool BindingChanged { get; set; }
                         internal string? UnavailableImagePath { get; set; }
                         internal bool HasRetainedImageNotice => UnavailableImagePath != null;
                         internal ProbeLayoutRenderer(UiNode source) => this.source = source;
+                        internal bool RefreshKeyGlyphs()
+                        {
+                            var changed = BindingChanged;
+                            BindingChanged = false;
+                            return changed;
+                        }
+
                         internal void Rearrange(UiLayoutConstraints box, UiThemeDescriptor? theme)
                         {
                             Calls++;
@@ -1004,6 +1022,7 @@ namespace TopiaForge.ModManager.Tests
                             return OriginalShown;
                         }
                         internal void Refresh() => RefreshChangedLayout();
+                        internal void ChangeBinding() => layoutRenderer.BindingChanged = true;
                         internal void SetImageUnavailable(string? path)
                         {
                             layoutRenderer.UnavailableImagePath = path;

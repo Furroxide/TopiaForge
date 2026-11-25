@@ -156,7 +156,7 @@ namespace TopiaForge.Mods
     internal enum UiThemeRadius { None, Small, Medium, Control, Card, Pill }
     internal enum UiThemeBorder { None, Thin, Standard, Strong }
     internal enum UiThemeShadow { None, Small, Card }
-    internal enum UiThemeTarget { Card, Box, Badge, Pips, Button, Input, Tabs, Tooltip, StatBar }
+    internal enum UiThemeTarget { Card, Box, Badge, Pips, Button, Input, Tabs, Tooltip, StatBar, KeyGlyph, ActionSlot }
     internal enum UiThemeEase { OutCubic, OutBack }
 
     internal readonly struct UiThemeShape

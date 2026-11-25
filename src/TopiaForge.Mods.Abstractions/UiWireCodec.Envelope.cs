@@ -62,7 +62,7 @@ namespace TopiaForge.Mods
         private static int ContractVersionOf(UiNode? node)
         {
             if (node == null) return LegacyContractVersion;
-            if (ControlTag(node) != 0 || StatusTag(node) != 0) return ControlsContractVersion;
+            if (ControlTag(node) != 0 || ActionTag(node) != 0 || StatusTag(node) != 0) return ControlsContractVersion;
 
             var foundation = node switch
             {

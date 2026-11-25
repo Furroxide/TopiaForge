@@ -73,14 +73,7 @@ namespace TopiaForge.Mods
                 var label = Text(r);
                 var device = (UiInputDevice)Byte(r, (byte)UiInputDevice.Gamepad);
                 var enabled = Present();
-                var defaults = new UiInputBindingHint[Byte(r, UiInputBindingHint.MaximumDefaults)];
-                for (var index = 0; index < defaults.Length; index++)
-                {
-                    var kind = (InputBindingKind)Byte(r, (byte)InputBindingKind.GamepadAxis);
-                    if (!r.TryReadString(UiInputBindingHint.MaximumControlBytes, out var control)) throw Bad();
-                    defaults[index] = new UiInputBindingHint(kind, control);
-                }
-                return new UiKeyBindingField(id, action, label.Length == 0 ? null : label, device, enabled, Array.AsReadOnly(defaults));
+                return new UiKeyBindingField(id, action, label.Length == 0 ? null : label, device, enabled, ReadInputDefaults());
             }
         }
     }

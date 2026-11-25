@@ -1,3 +1,4 @@
+using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 
@@ -21,5 +22,10 @@ namespace TopiaForge.Mods.UnityUi
                 : ReferenceEquals(control, pad.rightStick) ? RightStick : -1;
             return Gate.IsTaken(device.deviceId, index);
         }
+    }
+
+    /// <summary>Marks a kit text field: while it has the keyboard, TopiaForge takes every key from the game.</summary>
+    internal sealed class TopiaForgeTextEntry : MonoBehaviour
+    {
     }
 }

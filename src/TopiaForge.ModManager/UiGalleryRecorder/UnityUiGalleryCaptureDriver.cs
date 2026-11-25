@@ -14,14 +14,20 @@ namespace TopiaForge.ModManager
         private Action<UiWireEnvelope?>? committed;
         private object? hotkey;
         private int requestedFrame;
+        private bool pending;
+        private bool watchDevice;
+        private UiInputDevice lastDevice;
 
         private void Awake() => enabled = false;
 
-        internal void Initialize(Func<bool, bool> capture, Action<string> warn, Action<UiWireEnvelope?>? committed)
+        internal void Initialize(Func<bool, bool> capture, Action<string> warn, Action<UiWireEnvelope?>? committed,
+            bool watchDevice = false)
         {
             this.capture = capture;
             this.warn = warn;
             this.committed = committed;
+            this.watchDevice = watchDevice;
+            lastDevice = TopiaForgeInputOwnership.LastViewerDevice;
             hotkey = TopiaForgeHotkeys.Register(UiGalleryCaptureFixture.Owner, TopiaForgeKey.F11, Request);
             Request();
         }
@@ -31,28 +37,40 @@ namespace TopiaForge.ModManager
         internal void Request()
         {
             requestedFrame = Time.frameCount;
+            pending = true;
             enabled = true;
         }
 
         private void LateUpdate()
         {
+            if (watchDevice && lastDevice != TopiaForgeInputOwnership.LastViewerDevice)
+            {
+                lastDevice = TopiaForgeInputOwnership.LastViewerDevice;
+                Request();
+            }
             var elapsed = unchecked(Time.frameCount - requestedFrame);
-            if (elapsed < 2 || capture == null) return;
+            if (!pending || elapsed < 2 || capture == null) return;
             var lastFrame = elapsed >= FrameLimit;
             try
             {
-                if (capture(lastFrame)) enabled = false;
+                if (capture(lastFrame)) CompleteRequest();
                 else if (lastFrame)
                 {
-                    enabled = false;
+                    CompleteRequest();
                     warn?.Invoke("Gallery capture did not reach a visible, settled fixture within 120 frames.");
                 }
             }
             catch (Exception error)
             {
-                enabled = false;
+                CompleteRequest();
                 warn?.Invoke("Gallery capture failed (" + error.GetType().Name + ").");
             }
+        }
+
+        private void CompleteRequest()
+        {
+            pending = false;
+            enabled = watchDevice;
         }
 
         private void OnDestroy()

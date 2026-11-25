@@ -64,9 +64,10 @@ namespace TopiaForge.ModManager
                 var selectedEnvelope = envelope;
                 var latestGeneration = envelope?.Generation ?? 0;
                 var eligible = true;
+                var action = fixture.Id is "gallery-key-glyphs" or "gallery-action-slots";
                 var status = fixture.Id is "gallery-countdowns" or "gallery-status";
                 var watchRetained = envelope != null && fixture.Id == "gallery-countdowns";
-                capture.Initialize(Collect, captureLogger.Warn, watchRetained ? ObserveRetained : null);
+                capture.Initialize(Collect, captureLogger.Warn, watchRetained ? ObserveRetained : null, watchDevice: action);
 
                 void ObserveRetained(UiWireEnvelope? latest)
                 {
@@ -90,7 +91,7 @@ namespace TopiaForge.ModManager
                     var tree = compositionRoot;
                     var view = widget;
                     if (!eligible || !ReferenceEquals(observed, admitted) || tree == null || view == null || !presence.IsLive ||
-                        status && (sentBody ?? string.Empty) != selected.Body)
+                        (action || status) && (sentBody ?? string.Empty) != selected.Body)
                         return true;
                     var notice = layoutProblem != null ? layoutFallback : null;
                     var imageNotice = notice == null ? layoutFallback?.Rect : null;

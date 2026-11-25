@@ -512,6 +512,29 @@ cancels capture. A reserved control reports its owner and a shared control repor
 the conflicting action. On a targeted window the guest edits their own registration.
 A guest without that action sees the author's default as a read-only hint.
 
+### Action slots and key glyphs
+
+Register a named action with the same package's `IInputService` before admitting
+`UiKeyGlyph` or `UiActionSlot`. Each viewer sees the binding for the device they used most
+recently. If that device has no binding, the cap uses the other device's first binding. A
+viewer with no bindings sees an Info glyph and “Unbound.” Pass an empty collection to
+`IInputAction.Rebind` to clear live bindings. The action stays registered, and
+`ResetBindings` restores its original defaults. Authenticated publisher hints always
+come from the original definition.
+
+```csharp
+var reopenAt = new UiCooldown(Context.Ui.ClockTime + 8, durationSeconds: 8);
+var slot = new UiActionSlot("survey", "Survey", glyph: UiGlyph.Map,
+    cooldown: reopenAt, charges: new UiCharges(1, 3), id: "survey-slot");
+```
+
+Slots are read-only and can appear in a HUD. A lock and its reason have priority over a
+cooldown, charge count or detail. Use `UiWrap` for several slots at larger UI scales.
+Use `UiPips.WithRefill` for a deadline-backed pip track. Cooldowns and refills advance
+from the UI clock without a per-frame content replacement.
+A refill can advance the displayed count once. The authored charge and pip values stay
+available as the source snapshot. A new world or session expires the previous deadline.
+
 ## Testing UI without running Robotopia
 
 `FakeUiService` captures each immutable tree. `FakeUiSurface` can find controls by id; invoke button,

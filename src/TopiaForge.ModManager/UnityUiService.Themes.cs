@@ -112,13 +112,14 @@ namespace TopiaForge.ModManager
             OperationResult<bool> IRemoteThemedSurface.SetRemotePresentation(UiNode? content, UiRemoteThemeSelection theme)
             {
                 var descriptor = ResolveRemoteTheme(theme);
+                var bindingScope = inputContext?.ForRemote(theme.Envelope);
                 var catalogue = theme.Package?.Manifest.AdmittedUi;
                 var assets = RemoteAssets(catalogue);
                 var changingTheme = !usesRemoteTheme || !ReferenceEquals(descriptor, declaredTheme) ||
                     !ReferenceEquals(assets, remoteAcquisitions);
                 if (!changingTheme)
                 {
-                    var committed = SetComposition(content ?? EmptyContent, descriptor, remote: true);
+                    var committed = SetComposition(content ?? EmptyContent, descriptor, remote: true, prepareInput: bindingScope);
                     if (committed.Succeeded) ObserveRemoteGalleryCommit(theme.Envelope);
                     return committed;
                 }
@@ -132,7 +133,7 @@ namespace TopiaForge.ModManager
                     var ready = UiThemeScope.Ready(descriptor, assets);
                     var result = SetComposition(content ?? EmptyContent, descriptor, remote: true,
                         prepareTheme: stage => PrepareStagedTheme(stage, ready, fonts),
-                        prepareArtwork: tree => PrepareArtwork(tree, true, catalogue, assets));
+                        prepareArtwork: tree => PrepareArtwork(tree, true, catalogue, assets), prepareInput: bindingScope);
                     if (!result.Succeeded) return result;
 
                     var previous = themeDemand;

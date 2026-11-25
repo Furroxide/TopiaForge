@@ -11,7 +11,7 @@ namespace TopiaForge.ModManager
     {
         private sealed partial class UnityUiLayoutRenderer
         {
-            private sealed class NativeArtLeaf
+            private sealed partial class NativeArtLeaf
             {
                 private const float GlyphFloor = 18f;
                 private const float BadgePadding = 8f;
@@ -29,8 +29,9 @@ namespace TopiaForge.ModManager
                 private readonly UiSurfaceArtwork? artwork;
                 private readonly TopiaForgeContainer? imageFrame;
                 private readonly UiNativeStatusPaint? statusPaint;
+                private readonly NativePipRefill? refill;
 
-                internal NativeArtLeaf(TopiaForgeContainer host, UiNode node, UiSurfaceArtwork? artwork)
+                internal NativeArtLeaf(TopiaForgeContainer host, UiNode node, UiSurfaceArtwork? artwork, UiCallbackGate callbacks)
                 {
                     this.host = host;
                     this.node = node;
@@ -62,6 +63,8 @@ namespace TopiaForge.ModManager
                             label = host.Label(pips.DisplayLabel, TopiaForgeTextStyle.Label).PlainText().AlignTopLeft();
                             marks = new NativePip[pips.Total];
                             for (var index = 0; index < marks.Length; index++) marks[index] = new NativePip(host);
+                            if (pips.Refill != null)
+                                refill = new NativePipRefill(host, pips, label.Go.GetComponent<TMP_Text>(), marks, callbacks);
                             break;
                     }
                     text = label == null ? null : label.Go.GetComponent<TMP_Text>();
@@ -114,7 +117,7 @@ namespace TopiaForge.ModManager
                 private Vector2 MeasureTitle(double width)
                 {
                     if (width <= 0) throw new ArgumentException("The status label needs a positive allocation.");
-                    var preferred = text!.GetPreferredValues(text.text, (float)width, 0f);
+                    var preferred = text!.GetPreferredValues(refill?.ReadoutSample ?? text.text, (float)width, 0f);
                     return preferred;
                 }
 
@@ -230,30 +233,33 @@ namespace TopiaForge.ModManager
                     var labelHeight = MeasureTitle(bounds.Width).y;
                     label!.SetResolvedInk(ColorOf(scheme.GetPair(backdrop).On));
                     Place(label.Rect, new UiLayoutRect(0, 0, bounds.Width, labelHeight));
-                    var track = new UiPipTrack(pips, (float)bounds.Width);
                     var edge = UiStatusColors.Boundary(scheme, pips.Role, backdrop);
                     var inside = UiStatusColors.PipFill(scheme, pips.Role, theme.HighContrast);
                     var baseColor = scheme.GetPair(UiPaintRole.Sunken).Fill;
+                    var width = (float)bounds.Width;
+                    var stroke = Math.Max((float)style.BorderWidth, theme.HighContrast ? 3f : 2f);
+                    var track = refill?.Arrange(width, labelHeight, stroke, (float)style.CornerRadius, inside) ?? new UiPipTrack(pips, width);
                     for (var index = 0; index < marks!.Length; index++)
                     {
                         var mark = track.Mark(index);
                         var y = labelHeight + StatusGap + mark.Y;
                         var rect = new UiLayoutRect(mark.X, y, mark.Width, mark.Height);
                         var radius = Math.Min((float)style.CornerRadius, Math.Min(mark.Width, mark.Height) / 2f);
-                        var stroke = Math.Max((float)style.BorderWidth, theme.HighContrast ? 3f : 2f);
-                        var fill = mark.Fill(stroke, radius);
                         var native = marks[index];
                         PaintShadow(native.Shadow, rect, style, radius, scheme.GetPair(backdrop).On, theme.Shadow.a);
                         PaintShape(native.Empty, rect, baseColor, radius);
-                        native.FillClip.SetShown(fill.VisibleBounds.HasArea);
-                        if (fill.VisibleBounds.HasArea)
-                        {
-                            // Clip the full rounded interior so a narrow or partial fill never crosses the arc of the inset border.
-                            Place(native.FillClip.Rect, fill.VisibleBounds.Translate(0f, labelHeight + StatusGap));
-                            PaintShape(native.Fill, new UiLayoutRect(0f, 0f, fill.Interior.Width, fill.Interior.Height), inside, fill.Radius);
-                        }
+                        PaintPipFill(native, mark.Fill(stroke, radius), labelHeight, inside);
                         PaintShape(native.Border, rect, edge, radius, stroke);
                     }
+                }
+
+                private static void PaintPipFill(NativePip native, UiPipFill fill, float labelHeight, UiThemeColor ink)
+                {
+                    native.FillClip.SetShown(fill.VisibleBounds.HasArea);
+                    if (!fill.VisibleBounds.HasArea) return;
+                    // Clip the full rounded interior so a narrow fill stays inside the border arc.
+                    Place(native.FillClip.Rect, fill.VisibleBounds.Translate(0f, labelHeight + StatusGap));
+                    PaintShape(native.Fill, new UiLayoutRect(0f, 0f, fill.Interior.Width, fill.Interior.Height), ink, fill.Radius);
                 }
 
                 private static void PaintGlyph(Image image, UiGlyph glyph, UiThemeColor ink, double left, double top, double size)

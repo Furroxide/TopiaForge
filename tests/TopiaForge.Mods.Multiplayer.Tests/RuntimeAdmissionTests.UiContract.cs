@@ -69,5 +69,6 @@ internal static partial class RuntimeAdmissionTests
         FoundationPackagesCoexistAcrossGuestProfilesAndScopeLifetimes();
         ControlsUseOnlyTheirAdmittedRecipient();
         StatusUsesItsAdmittedContractOnBothRoutes();
+        ActionsUseTheirAdmittedRoutes();
     }
 }

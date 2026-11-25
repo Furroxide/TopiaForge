@@ -337,6 +337,8 @@ namespace TopiaForge.Mods
         bool WasReleased { get; }
 
         /// <summary>Replaces the action's bindings while preserving its stable name.</summary>
+        /// <remarks>An empty collection clears all live bindings and leaves the action registered.
+        /// <see cref="ResetBindings"/> restores its original defaults.</remarks>
         OperationResult<bool> Rebind(IEnumerable<InputBinding> bindings);
 
         /// <summary>Restores the definition's default bindings.</summary>

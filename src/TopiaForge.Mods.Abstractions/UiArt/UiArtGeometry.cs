@@ -97,23 +97,33 @@ namespace TopiaForge.Mods
         private const float MinimumWidth = 18f;
         private const float Gap = 4f;
 
-        private readonly UiPips pips;
+        private readonly int total;
+        private readonly int filled;
+        private readonly float fraction;
         private readonly int columns;
         private readonly float markWidth;
         private readonly float markHeight;
 
         internal UiPipTrack(UiPips pips, float availableWidth)
+            : this(pips.Total, pips.Filled, pips.Fraction, pips.Presentation, availableWidth) { }
+
+        internal UiPipTrack(UiRefillPresentation pips, float availableWidth)
+            : this(pips.Total, pips.Filled, pips.Fraction, pips.Style, availableWidth) { }
+
+        private UiPipTrack(int total, int filled, float fraction, UiPipStyle presentation, float availableWidth)
         {
             if (!(availableWidth >= MinimumWidth && availableWidth <= 4096f))
                 throw new ArgumentOutOfRangeException(nameof(availableWidth),
                     "A pip track requires room for at least one readable mark.");
 
-            this.pips = pips;
-            columns = Math.Min(pips.Total, (int)((availableWidth + Gap) / (MinimumWidth + Gap)));
-            var segments = pips.Presentation == UiPipStyle.Segments;
+            this.total = total;
+            this.filled = filled;
+            this.fraction = fraction;
+            columns = Math.Min(total, (int)((availableWidth + Gap) / (MinimumWidth + Gap)));
+            var segments = presentation == UiPipStyle.Segments;
             markWidth = segments ? (availableWidth - ((columns - 1) * Gap)) / columns : MinimumWidth;
             markHeight = segments ? 8f : MinimumWidth;
-            var rows = (pips.Total + columns - 1) / columns;
+            var rows = (total + columns - 1) / columns;
             Width = (columns * markWidth) + ((columns - 1) * Gap);
             Height = (rows * markHeight) + ((rows - 1) * Gap);
         }
@@ -123,10 +133,10 @@ namespace TopiaForge.Mods
 
         internal UiPipMark Mark(int index)
         {
-            if ((uint)index >= (uint)pips.Total)
+            if ((uint)index >= (uint)total)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            var fill = index < pips.Filled ? 1f : index == pips.Filled ? pips.Fraction : 0f;
+            var fill = index < filled ? 1f : index == filled ? fraction : 0f;
             return new UiPipMark((index % columns) * (markWidth + Gap), (index / columns) * (markHeight + Gap),
                 markWidth, markHeight, fill);
         }

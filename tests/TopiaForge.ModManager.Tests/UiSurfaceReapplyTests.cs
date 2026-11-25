@@ -22,6 +22,8 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/UnityUiCompositionRenderer.cs",
                 "src/TopiaForge.ModManager/UnityUiGraphRetention.cs",
                 "src/TopiaForge.ModManager/UnityUiLayoutRenderer.cs",
+                "src/TopiaForge.ModManager/UnityUiLayoutRenderer.KeyGlyphs.cs",
+                "src/TopiaForge.ModManager/UiNativeActionBinding.cs",
                 "src/TopiaForge.ModManager/UnityUiLayoutRenderer.Leaves.cs",
                 "src/TopiaForge.ModManager/UnityUiLayoutRenderer.Tabs.cs",
                 "src/TopiaForge.ModManager/UnityUiLayoutDivider.cs",

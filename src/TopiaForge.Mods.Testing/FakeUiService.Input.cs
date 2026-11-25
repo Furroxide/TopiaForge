@@ -6,6 +6,20 @@ namespace TopiaForge.Mods.Testing
     {
         private FakeInputService? fixtureInput;
         private string? fixtureInputOwner;
+        private UiInputDevice lastInputDevice;
+
+        /// <summary>Gets or sets the device the viewing player's binding glyphs prefer.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public UiInputDevice LastInputDevice
+        {
+            get => lastInputDevice;
+            set
+            {
+                if (value != UiInputDevice.KeyboardMouse && value != UiInputDevice.Gamepad)
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                lastInputDevice = value;
+            }
+        }
 
         /// <summary>Uses the supplied input registrations for binding controls on this fake UI service.</summary>
         [RequiresTopiaForge(UiKitRelease.K2)]
@@ -28,8 +42,16 @@ namespace TopiaForge.Mods.Testing
         internal void CheckLocalInput(UiNode? node)
         {
             if (node == null) return;
-            if (node is UiKeyBindingField field && FindInputAction(field.ActionName, null) == null)
-                throw new ArgumentException("Key binding field '" + field.Id + "' has no input action named '" + field.ActionName + "'.");
+            var name = node switch
+            {
+                UiKeyBindingField field => field.ActionName,
+                UiKeyGlyph glyph => glyph.ActionName,
+                UiActionSlot slot => slot.ActionName,
+                _ => null,
+            };
+            if (name != null && FindInputAction(name, null) == null)
+                throw new ArgumentException((node.Id == null ? node.GetType().Name : "UI node '" + node.Id + "'") +
+                    " has no owning input action named '" + name + "'.");
             var children = UiNodeChildren.Of(node);
             for (var index = 0; index < children.Count; index++) CheckLocalInput(children[index]);
         }

@@ -93,6 +93,8 @@ namespace TopiaForge.ModManager
 
                     if (status.TryGetValue(node, out var statusLeaf))
                         return statusLeaf.Measure(constraints, effective, declared, theme.HighContrast);
+                    if (keyGlyphs.TryGetValue(node, out var glyph)) return glyph.Measure(constraints);
+                    if (actionSlots.TryGetValue(node, out var slot)) return slot.Measure(effective, declared, theme.HighContrast);
                     if (!art.TryGetValue(node, out var artLeaf)) return leaves[node].Measure(node, constraints, disabled);
                     measuredMissingImage |= artLeaf.IsMissingSemanticImage;
                     return artLeaf.Measure(constraints, effective, declared, theme.HighContrast, protectImageLabels);
@@ -139,8 +141,14 @@ namespace TopiaForge.ModManager
                         view.Backplate.enabled = false;
                         var artHost = view.Container.CreateChild("Artwork");
                         TopiaForgeAnchors.Stretch(artHost.Rect);
-                        view.Art = new NativeArtLeaf(artHost, node, artwork);
+                        view.Art = new NativeArtLeaf(artHost, node, artwork, callbacks);
                         art.TryAdd(node, view.Art);
+                        return view;
+                    case UiKeyGlyph keyGlyph:
+                        CreateKeyGlyph(view, keyGlyph);
+                        return view;
+                    case UiActionSlot slot:
+                        CreateActionSlot(view, slot, callbacks);
                         return view;
                     default:
                         view.Backplate = AddGraphic<Image>(view.Container, "Text backing");
@@ -238,6 +246,12 @@ namespace TopiaForge.ModManager
                     case UiIcon or UiBadge or UiPips or UiImage:
                         PaintLeafBacking(view, position, scheme);
                         view.Art!.Apply(bounds, position.Backdrop, scheme, theme, effective, declared);
+                        break;
+                    case UiKeyGlyph:
+                        view.KeyGlyph!.Apply(bounds, position.Backdrop, position.Placement.Disabled);
+                        break;
+                    case UiActionSlot:
+                        view.ActionSlot!.Apply(position.Backdrop, scheme, theme, effective, declared);
                         break;
                     default:
                         if (view.Status is { } statusLeaf)
@@ -377,6 +391,8 @@ namespace TopiaForge.ModManager
                 internal NativeArtLeaf? Art { get; set; }
                 internal NativeTabButton? TabButton { get; set; }
                 internal NativeStatusLeaf? Status { get; set; }
+                internal NativeKeyGlyph? KeyGlyph { get; set; }
+                internal NativeActionSlot? ActionSlot { get; set; }
             }
 
             private struct NativePlacement

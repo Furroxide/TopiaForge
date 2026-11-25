@@ -8,6 +8,13 @@ namespace TopiaForge.Mods
         internal static UiNode? Rewrite(UiNode? node, Func<UiImage, UiImage?> project) =>
             UiTreeProjection.Rewrite(node, candidate => candidate is UiImage image ? project(image) : candidate);
 
+        internal static UiImage ForActionSlot(UiActionSlot slot, bool remote)
+        {
+            var size = UiActionSlotGeometry.IconSize;
+            var image = new UiImage(slot.Image!, string.Empty, width: size, height: size, decorative: true);
+            return remote ? image.WithWireMetadata(size, size, slot.PackDescriptorDigest.Span) : image;
+        }
+
         internal static UiThemeImage? Find(UiThemeDescriptor pack, string id)
         {
             for (var index = 0; index < pack.Images.Count; index++)

@@ -25,6 +25,8 @@ namespace TopiaForge.ModManager.Tests
             TargetedFramesCountLayoutBytesAndPreserveClockOnRefusal();
             UiKitControlWireTests.Run();
             UiKitStatusWireTests.Run();
+            UiActionContractsTests.Run();
+            UiKitActionWireTests.Run();
             Console.WriteLine("K1 layout wire: tags, legacy bytes, bounded decoding, clocks and callbacks passed.");
         }
 

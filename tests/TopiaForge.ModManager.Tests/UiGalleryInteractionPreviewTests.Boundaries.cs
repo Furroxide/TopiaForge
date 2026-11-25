@@ -83,6 +83,10 @@ namespace TopiaForge.ModManager.Tests
             {
                 internal sealed class TopiaForgeLayerSlot : MonoBehaviour { }
                 internal sealed class TopiaForgeGraphConnections { }
+                internal static class TopiaForgeInputOwnership
+                {
+                    internal static UiInputDevice LastViewerDevice { get; set; }
+                }
                 public enum TopiaForgeScheme { Paper, Hud }
                 public enum TopiaForgeKey { F3, F4, F6, F11 }
                 public enum TopiaForgeGap { None, Sm, Md }
@@ -229,7 +233,11 @@ namespace TopiaForge.ModManager.Tests
             namespace TopiaForge.ModManager
             {
                 internal sealed class UnityUiHudPlacement { public void Refresh() { } }
-                internal sealed record UiSurfaceInputContext(object? Registry, string OwnerPackageId);
+                internal sealed record UiSurfaceInputContext(object? Registry, string OwnerPackageId)
+                {
+                    internal UiSurfaceInputContext ForRemote(UiWireEnvelope? envelope) =>
+                        this with { OwnerPackageId = envelope?.OwnerPackageId ?? string.Empty };
+                }
                 internal static class MultiplayerContentInventory
                 {
                     internal sealed class LoadedPackage
@@ -314,6 +322,7 @@ namespace TopiaForge.ModManager.Tests
                         private TopiaForgeWidget? widget;
                         private TopiaForgeContainer? compositionRoot;
                         private UiNode? admitted;
+                        private UiSurfaceInputContext? inputContext;
                         private readonly string sentBody;
                         private readonly (Func<double> Clock, Func<string> ClockEpoch) callbacks = (() => 0d, () => "preview");
                         private TopiaForgeContainer? layoutFallback;
@@ -352,7 +361,7 @@ namespace TopiaForge.ModManager.Tests
                         internal void ApplyGameplay(bool state) { }
                         internal void HandleLost() => Dispose();
                         internal void SetClock(Func<double> source, Func<string> epoch) { }
-                        internal void AttachInput(UiSurfaceInputContext input) { }
+                        internal void AttachInput(UiSurfaceInputContext input) => inputContext = input;
                         internal void AttachLifetimeLease(IDisposable lease) => tracked = lease;
                         internal void Present()
                         {
@@ -365,7 +374,7 @@ namespace TopiaForge.ModManager.Tests
                             SetComposition(content, declaredTheme, remoteComposition);
                         private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor,
                             bool remote, Action<TopiaForgeContainer>? prepareTheme = null,
-                            Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null)
+                            Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null, UiSurfaceInputContext? prepareInput = null)
                         {
                             if (widget?.Scheme == TopiaForgeScheme.Hud && widget is not TopiaForgeWindow && UiComposition.ContainsInteractive(content))
                                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD is presentation-only");
@@ -375,6 +384,7 @@ namespace TopiaForge.ModManager.Tests
                             prepareTheme?.Invoke(parent);
                             declaredTheme = descriptor;
                             admitted = content;
+                            inputContext = prepareInput ?? inputContext;
                             compositionRoot = parent;
                             if (widget is TopiaForgeWindow window)
                             {

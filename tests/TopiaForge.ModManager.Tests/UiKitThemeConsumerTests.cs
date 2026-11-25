@@ -66,13 +66,19 @@ namespace TopiaForge.ModManager.Tests
             Require(declared.Succeeded, declared.ErrorMessage);
             context.Scenes.Load("Training Yard");
             var registered = context.Input.RegisterAction(new InputActionDefinition(
-                "fire-zapper", "Fire", new[] { InputBinding.Key("K") }));
+                "zapper-fire", "Fire", new[] { InputBinding.Key("K") }));
             Require(registered.TryGetValue(out var fire), registered.ErrorMessage);
+            var jack = context.Input.RegisterAction(new InputActionDefinition(
+                "jack-in", "Jack in", new[] { InputBinding.Key("E") })).Value!;
+            var broadcast = context.Input.RegisterAction(new InputActionDefinition(
+                "stand-down-broadcast", "Stand down", new[] { InputBinding.Key("Q") })).Value!;
+            var shop = context.Input.RegisterAction(new InputActionDefinition(
+                "field-requisitions", "Requisitions", new[] { InputBinding.Key("B") })).Value!;
 
             using var presenter = new ZombiesHudPresenter(context);
             var snapshot = new ZombiesHudSnapshot(
-                ZombiesPhase.Wave, 3, 7, 1, 2, 84, 100, 420, 25, 2, 2, 3, 0, 0, true, true);
-            presenter.Update(snapshot, fire, null, null, null);
+                ZombiesPhase.Wave, 3, 7, 1, 2, 84, 100, 420, 25, 2, 2, 3, 0, null, true, true);
+            presenter.Update(snapshot, fire, jack, broadcast, shop);
             context.Ui.CompletePendingThemeRegistrations();
 
             var surface = context.Ui.Surfaces.Single();
@@ -119,16 +125,20 @@ namespace TopiaForge.ModManager.Tests
             var admitted = surface.Content;
             var allocated = AllocationProbe.Measure(
                 "unchanged Zombies HUD",
-                () => presenter.Update(snapshot, fire, null, null, null),
+                () => presenter.Update(snapshot, fire, jack, broadcast, shop),
                 frames: 1024, warmups: 32);
             Require(allocated == 0 && ReferenceEquals(admitted, surface.Content),
                 "A settled Zombies HUD must reuse its content without allocating.");
             Console.WriteLine("Zombies HUD: 0 B over 1,024 unchanged status updates.");
 
             var largeCapacity = new ZombiesHudSnapshot(
-                ZombiesPhase.InterWave, 3, 0, 1, 0, 84, 100, 420, 25, 1, 33, 34, 0, 0, true, false);
-            presenter.Update(largeCapacity, fire, null, null, null);
-            AssertRole(ZombiesHudPresenter.UplinkNodeId, "Uplink: 33 / 34", UiTextStyle.Label);
+                ZombiesPhase.InterWave, 3, 0, 1, 0, 84, 100, 420, 25, 1, 33, 34, 0, null, true, false,
+                uplinkRefillPercent: 62);
+            presenter.Update(largeCapacity, fire, jack, null, null);
+            AssertRole(ZombiesHudPresenter.UplinkNodeId, "Uplink: 33 / 34 (62% refilling)", UiTextStyle.Label);
+            Require(surface.TryFindNode(ZombiesHudPresenter.JackInSlotId, out var jackFallback) &&
+                jackFallback is UiActionSlot { Charges: null, Detail: "33 / 34" },
+                "An upgraded capacity over 32 stays visible on JACK IN without changing the ledger.");
             Require(!surface.TryFindNode(ZombiesHudPresenter.ComboNodeId, out _) &&
                 !surface.TryFindNode(ZombiesHudPresenter.CreditsIconId, out _),
                 "An inactive combo and disabled credits have no status decoration.");

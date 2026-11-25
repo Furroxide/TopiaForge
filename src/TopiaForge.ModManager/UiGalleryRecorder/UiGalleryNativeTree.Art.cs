@@ -1,3 +1,5 @@
+using System;
+using System.Globalization;
 using TMPro;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
@@ -159,13 +161,12 @@ namespace TopiaForge.ModManager
             var pixels = VerticalScale(firstTrack.rectTransform);
             var trackBox = Bounds(firstTrack.rectTransform);
             var shadowBox = firstShadow.isActiveAndEnabled ? Bounds(firstShadow.rectTransform) : trackBox;
-            var flags = UiCaptureNodeFlags.RequiresLabel | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
-            Add(path, pips.Id, nameof(UiPips), artwork, State(flags, pips.DisplayLabel),
-                new UiCaptureNodePaint(null, null, firstTrack.ResolvedCornerRadius * pixels,
-                    firstBorder.ResolvedBorderWidth * pixels, shadowBox.X - trackBox.X, shadowBox.Y - trackBox.Y,
-                    applied.StyleId, pips.Style?.Id, pips.Role, role));
-            if (!Text(path + "/label", null, "PipsLabel", Named<TMP_Text>(artwork, "Label"), pips.DisplayLabel,
-                UiTextStyle.Label, backdrop)) return false;
+            var label = Named<TMP_Text>(artwork, "Label");
+            var shown = UiRefillPresentation.For(pips, clockTime, clockEpoch);
+            var readout = pips.DisplayLabel;
+            if (pips.Refill != null && !TryReadPipRefill(pips, shown, label?.text, out readout)) return false;
+            if (!Text(path + "/label", null, "PipsLabel", label, readout, UiTextStyle.Label, backdrop)) return false;
+            float? fraction = pips.Refill != null ? 0f : null;
             for (var index = 0; index < pips.Total; index++)
             {
                 var offset = 1 + 4 * index;
@@ -183,12 +184,48 @@ namespace TopiaForge.ModManager
                 if (fill.isActiveAndEnabled)
                 {
                     if (!mask.isActiveAndEnabled) return false;
+                    if (pips.Refill != null)
+                    {
+                        var width = Bounds(track.rectTransform).Width - 2f * border.ResolvedBorderWidth * VerticalScale(border.rectTransform);
+                        var observed = Bounds(fillClip).Width;
+                        if (width <= 0f || observed <= 0f || observed > width + 0.01f ||
+                            index > shown.Filled || index == shown.Filled && !shown.IsRefilling ||
+                            index < shown.Filled && Math.Abs(observed - width) > 0.01f) return false;
+                        if (index == shown.Filled) fraction = Math.Min(1f, observed / width);
+                    }
                     Add(mark + "/fill", null, "PipFill", fill.rectTransform, ArtMark, ArtPaint(fill, trackPaint),
                         authoredFrame: fillClip);
                 }
+                else if (pips.Refill != null && index < shown.Filled) return false;
             }
+
+            var flags = UiCaptureNodeFlags.RequiresLabel | UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
+            Add(path, pips.Id, nameof(UiPips), artwork, new UiCaptureNodeContent(string.Empty, readout, 0f, 0f, flags,
+                remainingSeconds: pips.Refill == null ? null : shown.RemainingSeconds, fraction: fraction),
+                new UiCaptureNodePaint(null, null, firstTrack.ResolvedCornerRadius * pixels,
+                    firstBorder.ResolvedBorderWidth * pixels, shadowBox.X - trackBox.X, shadowBox.Y - trackBox.Y,
+                    applied.StyleId, pips.Style?.Id, pips.Role, role));
             return true;
         }
+
+        private bool TryReadPipRefill(UiPips source, UiRefillPresentation shown, string? observed, out string readout)
+        {
+            readout = source.Label + ": " + CountText(shown.Filled, shown.Total);
+            var upper = Descriptor.GetText(UiTextStyle.Label).IsUppercase;
+            if (!shown.IsRefilling) return UiGalleryCaptureFixture.SafeDisplayText(observed, readout, upper) != null;
+
+            var prefix = readout + " (";
+            const string suffix = "% refilling)";
+            var suffixLength = suffix.Length;
+            if (observed == null || observed.Length <= prefix.Length + suffixLength ||
+                !int.TryParse(observed.AsSpan(prefix.Length, observed.Length - prefix.Length - suffixLength),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var percent) || percent < 0 || percent > 99) return false;
+            readout = prefix + percent.ToString(CultureInfo.InvariantCulture) + suffix;
+            return UiGalleryCaptureFixture.SafeDisplayText(observed, readout, upper) != null;
+        }
+
+        private string? ArtStyle(UiStyleRef? style) =>
+            !fallback && style != null && Descriptor.Styles.ContainsKey(style.Id) ? style.Id : null;
 
         private UiCaptureNodePaint ArtPaint(Graphic graphic, UiThemeColor? backdrop)
         {

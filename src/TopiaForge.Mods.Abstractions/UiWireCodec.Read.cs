@@ -125,6 +125,7 @@ namespace TopiaForge.Mods
             {
                 if (!enhanced) throw Bad();
                 if (type >= FormattedCountdownTag && type <= StatBarTag) return StatusNode(type);
+                if (type >= KeyGlyphTag && type <= RefillingPipsTag) return ActionNode(type);
                 if (type >= CheckboxTag && type <= KeyBindingFieldTag) return ControlNode(type, depth);
                 if (type >= IconTag && type <= PipsTag) return ArtNode(type);
                 if (type != EnhancedTextTag && type != EnhancedProgressTag && type != EnhancedCountdownTag)
