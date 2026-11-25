@@ -83,7 +83,7 @@ namespace TopiaForge.ModManager.Tests
                 .Any(statement => PluginSourceSyntax.CallsOn(statement, "galleryInteractionPreview", "Dispose"));
             if (!capturesStartupOption || !armsAfterStartup || !retiresOnTeardown)
                 throw new InvalidOperationException("The loader arms the preview only after successful startup and owns its teardown.");
-            Console.WriteLine("UiGalleryInteractionPreviewTests passed for startup, four palettes, capture and caller isolation.");
+            Console.WriteLine("UiGalleryInteractionPreviewTests passed for startup, the F2/F3/F4 palette cycles, capture and caller isolation.");
 
             void RunProbe(string startOption, bool enabled)
             {
@@ -99,8 +99,8 @@ namespace TopiaForge.ModManager.Tests
                 .Where(call => call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "Hotkey")
                 .Select(call => ((MemberAccessExpressionSyntax)call.ArgumentList.Arguments[0].Expression).Name.Identifier.ValueText)
                 .OrderBy(key => key, StringComparer.Ordinal).ToArray();
-            if (!previewKeys.SequenceEqual(new[] { "F3", "F4" }))
-                throw new InvalidOperationException("The capture loader owns exactly F3 and F4.");
+            if (!previewKeys.SequenceEqual(new[] { "F2", "F3", "F4" }))
+                throw new InvalidOperationException("The capture loader owns exactly F2, F3 and F4.");
             var acceptance = new[] { "TopiaForge.SdkAcceptanceMod", "TopiaForge.MultiplayerAcceptanceMod" };
             var files = acceptance.SelectMany(project => Directory.EnumerateFiles(Path.Combine(root, "tests", project), "*.cs"));
             foreach (var file in files)

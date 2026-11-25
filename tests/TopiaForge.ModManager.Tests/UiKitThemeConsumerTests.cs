@@ -35,16 +35,16 @@ namespace TopiaForge.ModManager.Tests
             using var galleryManifest = ReadJson(gallery, "topiaforge.mod.json");
             using var zombiesManifest = ReadJson(zombies, "topiaforge.mod.json");
             using var templateDefaults = ReadJson(template, "template.json");
-            CheckDeclaration(galleryManifest.RootElement);
-            CheckDeclaration(zombiesManifest.RootElement);
-            CheckDeclaration(templateDefaults.RootElement.GetProperty("manifestDefaults"));
+            CheckDeclaration(galleryManifest.RootElement, false);
+            CheckDeclaration(zombiesManifest.RootElement, true);
+            CheckDeclaration(templateDefaults.RootElement.GetProperty("manifestDefaults"), true);
 
             static byte[] Hash(string directory) => SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, SurvivalPath)));
 
             static JsonDocument ReadJson(string directory, string name) =>
                 JsonDocument.Parse(File.ReadAllBytes(Path.Combine(directory, name)));
 
-            static void CheckDeclaration(JsonElement manifest)
+            static void CheckDeclaration(JsonElement manifest, bool defaultsToSurvival)
             {
                 var ui = manifest.GetProperty("ui");
                 Require(ui.GetProperty("schema").GetInt32() == 1, "Each consumer uses the schema 1 UI catalogue.");
@@ -52,8 +52,11 @@ namespace TopiaForge.ModManager.Tests
                     theme.GetProperty("id").GetString() == "survival"
                     && theme.GetProperty("definition").GetString() == SurvivalPath),
                     "The Survival pack must be declared by its own consumer.");
-                Require(ui.TryGetProperty("default", out var defaultTheme) && defaultTheme.GetString() == "survival",
-                    "Gallery, Zombies and the UI template inherit the Survival default.");
+                if (defaultsToSurvival)
+                    Require(ui.TryGetProperty("default", out var defaultTheme) && defaultTheme.GetString() == "survival",
+                        "Zombies and the UI template inherit the Survival default.");
+                else
+                    Require(!ui.TryGetProperty("default", out _), "The Gallery selector owns its initial palette.");
             }
         }
 
@@ -95,11 +98,8 @@ namespace TopiaForge.ModManager.Tests
             AssertGlyph(ZombiesHudPresenter.IntegrityIconId, UiGlyph.Health);
             AssertGlyph(ZombiesHudPresenter.CreditsIconId, UiGlyph.Notes);
             Require(surface.TryFindNode(ZombiesHudPresenter.IntegrityNodeId, out var integrity) &&
-                integrity is UiStatBar
-                {
-                    Value: 84, Maximum: 100, Format: UiStatFormat.ValueOfMaximum,
-                    Thresholds: { Direction: UiThresholdDirection.AtOrBelow, Warning: 50, Critical: 25 }
-                },
+                integrity is UiStatBar { Value: 84, Maximum: 100, Format: UiStatFormat.ValueOfMaximum,
+                    Thresholds: { Direction: UiThresholdDirection.AtOrBelow, Warning: 50, Critical: 25 } },
                 "The real Zombies integrity snapshot supplies its stat bar and low-integrity thresholds.");
 
             var capture = surface.Capture(new UiCaptureViewport(1920, 1080));

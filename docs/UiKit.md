@@ -476,6 +476,10 @@ control state intact. If a retained HUD no longer fits after a viewport or scale
 the surface title and uses another clear position if the current dock cannot hold the text.
 Nearby panels, session chat and caption space keep their positions.
 
+When upgrading a 0.2 layout, check that each control still fits at UI scale 2.0.
+Compositions that previously clipped an action now return a layout error.
+Wrap rigid rows or use a scrollable Window if the controls need more room.
+
 A Window or FullscreenTool checks that each protected control can be revealed in full within its
 outer scroll viewport. Long paragraphs can scroll a readable line at a time. When a resize leaves
 an admitted control unreachable, the layout notice appears and the original layout and scroll
@@ -599,6 +603,11 @@ resolved `StyleId` and `EffectivePaintRole`. During theme fallback the requested
 in the capture and `StyleId` is empty. The role fields use `UiPaintRole` in code and lowercase
 role names in the JSON capture.
 
+The managed `--ui-kit` suite checks the Gallery's headless manifests for controls, status,
+actions and presentation. It also runs the renderer boundary tests and the paired Gallery and
+Zombies fixtures. The Multiplayer test suite drives both authenticated presentation routes with
+the provider, including mixed UI versions, session replacement and scope retirement.
+
 ### Native Gallery capture
 
 When a control's state fills round to the same drawn color, the kit shows a
@@ -609,11 +618,18 @@ The marks stay visible with reduced motion, and the focus ring and hit area
 retain their own geometry.
 
 The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` at startup on the
-native verification process. In that process, F3 cycles the loader's fixed
-Interaction states Window and F4 cycles Graph connections. Both cycle through
-Kit Paper, Kit HUD, Survival Paper and Survival HUD. Switching keys replaces the
-preview Window and starts the other cycle at Kit Paper. The ordinary F8 Gallery
-uses Survival as its package default.
+native verification process. In that process, F2 cycles Buttons, Text and
+choice inputs, Toggles, checkboxes and tabs, Key binding fields, then Tooltips
+and list tiles. F3 opens Interaction states and F4 opens Graph connections.
+Each page cycles Kit Paper, Kit HUD, Survival Paper and Survival HUD in that
+order. Pressing a different preview key closes the current preview and
+restarts the selected cycle. The ordinary F8 Gallery starts with Survival
+selected in both scheme views. Choose Kit to use the built-in descriptor.
+
+K2.5 moves the Gallery's Survival default from the manifest to the F8 theme
+selector. The K1 golden captures document the K1 manifest-default route.
+Zombies and the generated UI template exercise manifest-default themes.
+
 Opening a first-party Gallery fixture records its settled geometry and paint. Press F11 to record
 another observation of the current fixture. Hold the intended state until two frames have settled.
 The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts

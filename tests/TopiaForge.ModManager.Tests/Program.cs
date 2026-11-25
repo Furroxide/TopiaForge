@@ -238,10 +238,10 @@ namespace TopiaForge.ModManager.Tests
                 UiKitSourceConventionTests.Run(); UiKitMultiplayerConventionTests.Run();
                 UiKitLayerLedgerTests.Run(); UiKitHudLayoutTests.Run(); UiSurfaceLifetimeTests.Run();
                 UiSurfaceLifetimeConventionTests.Run(); UiKitEventSystemTests.Run(); OverlayRefreshTests.Run();
-                UiOverlayNativeTests.Run(); UiStingerNativeTests.Run(); UiToastNativeTests.Run();
-                UiGalleryNativePresentationTests.Run();
                 UiArtContractTests.Run(); UiArtWireTests.Run(); UiBundleReceiptTests.Run(); UiThemeAssetLifetimeTests.Run();
                 UiGlyphRasterTests.Run();
+                MultiplayerAcceptanceProbeTests.Run();
+                ZombiesControllerTests.Run();
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--overlay-refresh") { OverlayRefreshTests.Run(); return 0; }

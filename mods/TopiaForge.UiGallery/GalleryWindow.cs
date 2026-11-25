@@ -13,6 +13,7 @@ namespace TopiaForge.UiGallery
     /// </summary>
     internal sealed class GalleryWindow : IDisposable
     {
+        private static readonly string[] PreviewPalettes = { "Kit", "Survival" };
         private readonly UiHost ui;
         private readonly IModContext context;
         private readonly ILocalPlayerService player;
@@ -23,8 +24,11 @@ namespace TopiaForge.UiGallery
         private readonly List<TopiaForgeToggle> highContrastControls = new List<TopiaForgeToggle>();
         private readonly List<TopiaForgeToggle> reducedMotionControls = new List<TopiaForgeToggle>();
         private readonly List<TopiaForgeSlider> uiScaleControls = new List<TopiaForgeSlider>();
+        private readonly List<TopiaForgeDropdown> paletteControls = new List<TopiaForgeDropdown>();
+        private int previewPalette = 1;
         private TopiaForgeWindow active;
         private IUiSurface? preview;
+        private (UiAccessibilityPreferences Accessibility, UiThemeRef? ClearedTheme)? priorPreviewSettings;
         private GalleryPresentation? presentation;
         private bool disposed;
 
@@ -110,7 +114,7 @@ namespace TopiaForge.UiGallery
         private void ShowPresentation(PresentationPage page)
         {
             if (disposed || preview != null || presentation != null) return;
-            presentation = GalleryPresentation.Open(context, page, theme: null, PreviewPreferences(ui.AccessibilityProfile));
+            presentation = GalleryPresentation.Open(context, page, PreviewTheme, PreviewPreferences(ui.AccessibilityProfile));
             if (presentation != null) active.Close();
         }
 
@@ -153,8 +157,9 @@ namespace TopiaForge.UiGallery
             {
                 foundation.Button("Interaction states", () => ShowFoundation(FoundationPage.InteractionStates, previewKind));
             }
-            column.Label("Foundation theme: Survival. With Gallery capture enabled at startup, press F3 to compare Kit and Survival.",
-                TopiaForgeTextStyle.Caption);
+            var palettes = column.Row(TopiaForgeGap.Sm);
+            palettes.Label("Preview theme", TopiaForgeTextStyle.Caption);
+            paletteControls.Add(palettes.Dropdown(PreviewPalettes, previewPalette, SelectPreviewPalette));
             var layoutPages = column.Row(TopiaForgeGap.Sm);
             layoutPages.Button("Flex and padding", () => ShowFoundation(FoundationPage.FlexAndPadding, previewKind));
             layoutPages.Button("Wrap and grid", () => ShowFoundation(FoundationPage.WrapAndGrid, previewKind));
@@ -221,7 +226,7 @@ namespace TopiaForge.UiGallery
         }
 
         private void ShowFoundation(FoundationPage page, UiSurfaceKind kind) =>
-            ShowSafePreview(FoundationPages.CreateRequest(page, kind, report: ReportInteraction));
+            ShowSafePreview(FoundationPages.CreateRequest(page, kind, PreviewTheme, ReportInteraction));
 
         private void ShowControls(ControlGalleryPage page) =>
             ShowSafePreview(ControlGalleryPages.Create(page, report: ReportInteraction));
@@ -235,22 +240,43 @@ namespace TopiaForge.UiGallery
         private void ShowSafePreview(UiSurfaceRequest request)
         {
             var profile = ui.AccessibilityProfile;
-            if (presentation != null) return;
-            var applied = previewUi.ApplyAccessibility(PreviewPreferences(profile));
-            if (!applied.Succeeded)
+            if (preview != null || presentation != null) return;
+            var theme = request.Theme ?? PreviewTheme;
+            var previous = previewUi.Accessibility;
+            var clearedTheme = theme == null ? previewUi.Themes.SelectedTheme : null;
+            if (clearedTheme != null)
             {
-                logger.Warn("Gallery preview settings could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
-                return;
+                var cleared = previewUi.Themes.UseTheme(null);
+                if (!cleared.Succeeded)
+                {
+                    logger.Warn("Gallery preview could not select Kit (" + cleared.ErrorCode + "): " + cleared.ErrorMessage);
+                    return;
+                }
             }
 
-            var result = previewUi.CreateSurface(request);
-            if (!result.TryGetValue(out preview) || preview == null)
+            priorPreviewSettings = (previous, clearedTheme);
+            try
             {
-                logger.Warn("Gallery preview could not be opened (" + result.ErrorCode + "): " + result.ErrorMessage);
-                return;
-            }
+                var applied = previewUi.ApplyAccessibility(PreviewPreferences(profile));
+                if (!applied.Succeeded)
+                {
+                    logger.Warn("Gallery preview settings could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
+                    return;
+                }
 
-            active.Close();
+                var result = previewUi.CreateSurface(theme == null ? request : request.WithTheme(theme));
+                if (!result.TryGetValue(out preview) || preview == null)
+                {
+                    logger.Warn("Gallery preview could not be opened (" + result.ErrorCode + "): " + result.ErrorMessage);
+                    return;
+                }
+
+                active.Close();
+            }
+            finally
+            {
+                if (preview == null) RestorePreviewSettings();
+            }
         }
 
         private void ReturnToGallery()
@@ -261,13 +287,42 @@ namespace TopiaForge.UiGallery
 
         private void ClosePreview()
         {
-            preview?.Dispose();
-            preview = null;
+            try { preview?.Dispose(); }
+            finally
+            {
+                preview = null;
+                RestorePreviewSettings();
+            }
             presentation?.Dispose();
             presentation = null;
         }
 
+        private void RestorePreviewSettings()
+        {
+            var previous = priorPreviewSettings;
+            priorPreviewSettings = null;
+            if (!previous.HasValue || context.Lifetime.IsStopping) return;
+            if (previous.Value.ClearedTheme != null)
+            {
+                var selected = previewUi.Themes.UseTheme(previous.Value.ClearedTheme);
+                if (!selected.Succeeded)
+                    logger.Warn("Gallery preview theme could not be restored (" + selected.ErrorCode + "): " + selected.ErrorMessage);
+            }
+            var restored = previewUi.ApplyAccessibility(previous.Value.Accessibility);
+            if (!restored.Succeeded)
+                logger.Warn("Gallery preview settings could not be restored (" + restored.ErrorCode + "): " + restored.ErrorMessage);
+        }
+
         private void ReportInteraction(string message) => preview?.SetBody(message);
+
+        private UiThemeRef? PreviewTheme => previewPalette == 1 ? FoundationPages.SurvivalTheme : null;
+
+        private void SelectPreviewPalette(int index)
+        {
+            previewPalette = index;
+            foreach (var control in paletteControls)
+                control.SetValue(index);
+        }
 
         private void SyncAccessibilityControls()
         {

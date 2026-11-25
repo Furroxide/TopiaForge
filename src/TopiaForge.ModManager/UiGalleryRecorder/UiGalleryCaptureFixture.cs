@@ -98,7 +98,8 @@ namespace TopiaForge.ModManager
         }
 
         private static UiNode? NormalizeTransportContent(UiNode? content) => UiWireCodec.ProjectInputDefaults(
-            NormalizeTransportArtwork(content), ActionGalleryPages.DefaultBindings);
+            NormalizeTransportArtwork(content), action =>
+                ControlGalleryPages.DefaultBindings(action) ?? ActionGalleryPages.DefaultBindings(action));
 
         private static bool IsTransportId(string id, string prefix) => id.StartsWith(prefix, StringComparison.Ordinal) &&
             id.Length > prefix.Length && id[prefix.Length] != '0' &&

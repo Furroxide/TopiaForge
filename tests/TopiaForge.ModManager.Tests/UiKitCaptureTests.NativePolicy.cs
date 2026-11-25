@@ -21,8 +21,9 @@ namespace TopiaForge.ModManager.Tests
             var survival = package.Survival;
             var galleryPath = Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.UiGallery");
             var catalogue = UiThemeCatalogueParser.ParseManifest(File.ReadAllBytes(Path.Combine(galleryPath, "topiaforge.mod.json")));
-            Check(catalogue.TryGetValue(out var gallery) && gallery?.Default == survival.Id,
-                "The ordinary Gallery inherits its declared Survival default.");
+            Check(catalogue.TryGetValue(out var gallery) && gallery!.Default == null &&
+                gallery.Themes.Any(theme => theme.Id == survival.Id),
+                "The ordinary Gallery declares Survival and lets the selector set its palette.");
             var alteredSurvival = File.ReadAllText(Path.Combine(galleryPath, "ui", "themes", "survival.json"))
                 .Replace("\"small\": 3", "\"small\": 4", StringComparison.Ordinal);
             var otherSurvival = UiThemePackParser.Parse(Encoding.UTF8.GetBytes(alteredSurvival)).Value;
@@ -55,7 +56,10 @@ namespace TopiaForge.ModManager.Tests
                 var request = FoundationPages.CreateRequest(page, UiSurfaceKind.Window, FoundationPages.SurvivalTheme);
                 Check(UiGalleryCaptureFixture.Match(owner, false, null, request) != null &&
                     UiGalleryCaptureFixture.Match(owner, false, null, request.WithTheme(null), survival) != null,
-                    "The native recorder admits each authored Gallery fixture and its inherited Survival case.");
+                    "The native recorder admits the authored Gallery fixture with an explicit or scoped Survival theme.");
+                var kit = FoundationPages.CreateRequest(page, UiSurfaceKind.Window);
+                Check(UiGalleryCaptureFixture.Match(owner, false, null, kit)?.Id == request.Id,
+                    "The native recorder admits the authored Kit selection for the same Gallery page.");
                 if (!FoundationPages.CanPublish(page))
                 {
                     Check(UiGalleryCaptureFixture.Match(receiver, true, Envelope(), Reframe(request, "remote-37")) == null,
@@ -162,9 +166,9 @@ namespace TopiaForge.ModManager.Tests
 
             var variants = Enumerable.Range(0, GalleryRemotePreview.VariantCount)
                 .Select(index => GalleryRemotePreview.Request(index, 120d)).ToArray();
-            Check(GalleryRemotePreview.K1VariantCount == 69 && GalleryRemotePreview.StatusStart == 79 &&
-                GalleryRemotePreview.ActionStart == 87 &&
-                variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 95 &&
+            Check(GalleryRemotePreview.K1VariantCount == 69 && GalleryRemotePreview.StatusStart == 84 &&
+                GalleryRemotePreview.ActionStart == 92 &&
+                variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 100 &&
                 variants.Count(request => request.Id == FoundationLayoutPages.LayoutNotice().Id &&
                     request.Kind == UiSurfaceKind.Hud) == 3,
                 "The test publisher cycles the complete supported page, surface and theme matrix.");
@@ -189,13 +193,13 @@ namespace TopiaForge.ModManager.Tests
             }
             var controls = new[] { ControlGalleryPage.Buttons, ControlGalleryPage.Fields, ControlGalleryPage.Selections,
                 ControlGalleryPage.Bindings, ControlGalleryPage.HelpAndTiles };
-            for (var index = 0; index < controls.Length * 2; index++)
+            for (var index = 0; index < controls.Length * originalPalettes.Length; index++)
             {
-                var expected = ControlGalleryPages.Create(controls[index / 2],
-                    index % 2 == 0 ? null : FoundationPages.TransportTheme);
+                var expected = ControlGalleryPages.Create(controls[index / originalPalettes.Length],
+                    originalPalettes[index % originalPalettes.Length]);
                 var actual = variants[GalleryRemotePreview.K1VariantCount + index];
                 Check((actual.Id, actual.Kind, actual.Theme?.Id) == (expected.Id, expected.Kind, expected.Theme?.Id),
-                    "K2 adds the ten authored control positions after the original K1 fixtures.");
+                    "K2 adds the fifteen authored control positions after the original K1 fixtures.");
             }
             var statusPages = new[] { StatusGalleryPage.Status, StatusGalleryPage.Countdowns };
             for (var index = 0; index < statusPages.Length * 4; index++)
@@ -225,7 +229,8 @@ namespace TopiaForge.ModManager.Tests
                     "The opt-in host may also record its own transport fixture.");
                 const string clock = "gallery-test";
                 var envelope = Envelope(request.Theme?.Id);
-                var normalized = UiWireCodec.ProjectInputDefaults(Normalize(request.Content), ActionGalleryPages.DefaultBindings);
+                var normalized = UiWireCodec.ProjectInputDefaults(Normalize(request.Content), action =>
+                    ControlGalleryPages.DefaultBindings(action) ?? ActionGalleryPages.DefaultBindings(action));
                 var writer = new WorldWireWriter(32 * 1024);
                 Check(UiWireCodec.NeedsEnvelope(request.Content), "Each fixture exercises authenticated ownership framing.");
                 Check(UiWireCodec.MeasureTargetedSurface(publisher, "gallery-guest", 118, 1, request, request.Body,

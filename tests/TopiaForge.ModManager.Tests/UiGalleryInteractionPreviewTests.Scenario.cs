@@ -33,7 +33,8 @@ namespace TopiaForge.ModManager.Tests
                         Require((preview != null) == enabled, "Changing the option after startup cannot arm or disarm the preview.");
                         if (!enabled)
                         {
-                            Require(TopiaForgeHotkeys.Count == 0, "With opt-in off the loader registers nothing.");
+                            Require(TopiaForgeHotkeys.Count == 0 && UnityInputRegistry.LastCreated == null,
+                                "With opt-in off the loader registers nothing.");
                             return;
                         }
 
@@ -44,8 +45,8 @@ namespace TopiaForge.ModManager.Tests
                             ("gallery-interaction-survival-paper", "Survival Paper", TopiaForgeScheme.Paper, UiGallerySurvivalTheme.Descriptor),
                             ("gallery-interaction-survival-hud", "Survival HUD", TopiaForgeScheme.Hud, UiGallerySurvivalTheme.Descriptor),
                         };
-                        Require(TopiaForgeHotkeys.Count == 2 && TopiaForgeWindow.Active.Count == 0,
-                            "There are two startup hotkeys and no native Window before either is pressed.");
+                        Require(TopiaForgeHotkeys.Count == 3 && TopiaForgeWindow.Active.Count == 0,
+                            "There are three startup hotkeys and no native Window before any is pressed.");
                         TopiaForgeHotkeys.Press(TopiaForgeKey.F6);
                         Require(TopiaForgeWindow.Active.Count == 0, "The preview does not take SDK acceptance's F6.");
                         UiHost.ViewerAccessibility = new TopiaForgeAccessibilityProfile(true, 2, true, 0);
@@ -91,13 +92,19 @@ namespace TopiaForge.ModManager.Tests
                         using var galleryLifetime = new OwnerModLifetime();
                         var service = new OwnerUiService(UiGalleryCaptureFixture.Owner, "gallery", galleryLifetime, logger, gameplay, placement, themePackages);
                         var survival = UiGallerySurvivalTheme.Descriptor;
-                        ((IUiThemeScopeHost)service).ConfigureThemeScope(new AdmittedUiCatalogue(survival.Id,
+                        ((IUiThemeScopeHost)service).ConfigureThemeScope(new AdmittedUiCatalogue(null,
                             new Dictionary<string, UiThemeDescriptor> { [survival.Id] = survival }), null, "UI Gallery");
                         var ordinaryRequest = FoundationPages.CreateRequest(FoundationPage.InteractionStates, UiSurfaceKind.Window);
-                        using var ordinary = Get(service.CreateSurface(ordinaryRequest));
+                        using (var kitPreview = Get(service.CreateSurface(ordinaryRequest)))
+                        {
+                            var kitWindow = TopiaForgeWindow.Active.Single(view => view.Id == ordinaryRequest.Id);
+                            Require((kitWindow.Theme.Descriptor ?? UiThemePackParser.Default) == UiThemePackParser.Default,
+                                "The Kit selection resolves the built-in theme without a Gallery manifest default.");
+                        }
+                        using var ordinary = Get(service.CreateSurface(ordinaryRequest.WithTheme(FoundationPages.SurvivalTheme)));
                         var window = TopiaForgeWindow.Active.Single(view => view.Id == ordinaryRequest.Id);
                         Require(window.Scheme == TopiaForgeScheme.Paper && window.Theme.Descriptor == survival,
-                            "Ordinary F8 uses its inherited Survival descriptor in the standard Paper Window.");
+                            "The Survival selection applies its descriptor in the standard Paper Window.");
                         ordinary.Dispose();
 
                         var keys = ActionGalleryPages.CreateRequest(ActionGalleryPage.KeyGlyphs, UiSurfaceKind.Window, 0d);
@@ -233,6 +240,24 @@ namespace TopiaForge.ModManager.Tests
                             "The recorder receives the original authenticated Survival envelope and canonical admitted descriptor.");
                         remoteFixture.Dispose();
 
+                        var remoteId = 40;
+                        foreach (var page in Enum.GetValues<ControlGalleryPage>())
+                        {
+                            var fixture = ControlGalleryPages.Create(page, FoundationPages.SurvivalTheme);
+                            var content = UiWireCodec.ProjectInputDefaults(fixture.Content, ControlGalleryPages.DefaultBindings);
+                            var paired = new UiSurfaceRequest("remote-" + remoteId++, fixture.Title, fixture.Body,
+                                fixture.Kind, fixture.Width, fixture.Height, content);
+                            var before = UiGalleryCaptureJson.Records.Count;
+                            using var pairedWindow = Get(receiver.RemoteSurface(paired, remotePalette));
+                            GameObject.Tick();
+                            GameObject.Tick();
+                            var capture = UiGalleryCaptureJson.Records.Last();
+                            Require(UiGalleryCaptureJson.Records.Count == before + 1 && capture.Fixture == fixture.Id &&
+                                capture.Viewer == "remote-guest" && capture.Envelope == envelope &&
+                                capture.Theme.Descriptor == descriptor && capture.Theme.Scheme == TopiaForgeScheme.Paper,
+                                "The F7 controls fixture accepts only the authenticated canonical Survival Window.");
+                        }
+
                         var graphFixture = FoundationPages.CreateRequest(FoundationPage.GraphConnections, UiSurfaceKind.Window);
                         foreach (var highContrast in new[] { false, true })
                         {
@@ -268,9 +293,60 @@ namespace TopiaForge.ModManager.Tests
                                 "Switching preview keys replaces the Window and restarts the other cycle.");
                         }
 
+                        var controls = new[]
+                        {
+                            ControlGalleryPage.Buttons, ControlGalleryPage.Fields, ControlGalleryPage.Selections,
+                            ControlGalleryPage.Bindings, ControlGalleryPage.HelpAndTiles,
+                        };
+                        var previewInput = UnityInputRegistry.LastCreated!;
+                        var prefix = OwnerUiService.GalleryInteractionOwner + ":";
+                        Require(previewInput.Definitions.Count == 2 &&
+                            previewInput.Definitions[prefix + ControlGalleryPages.ExpeditionAction].DefaultBindings[0].Equals(InputBinding.Key("J")) &&
+                            previewInput.Definitions[prefix + ControlGalleryPages.LedgerAction].DefaultBindings[0].Equals(InputBinding.Key("K")),
+                            "The private registry owns both editable and conflicting sample bindings.");
+                        var stageCount = controls.Length * modes.Length;
+                        foreach (var highContrast in new[] { false, true })
+                        {
+                            UiHost.ViewerAccessibility = new TopiaForgeAccessibilityProfile(highContrast, 2, true, 0);
+                            for (var index = 0; index <= stageCount; index++)
+                            {
+                                var mode = modes[index % modes.Length];
+                                var fixture = ControlGalleryPages.Create(controls[index % stageCount / modes.Length]);
+                                var before = UiGalleryCaptureJson.Records.Count;
+                                TopiaForgeHotkeys.Press(TopiaForgeKey.F2);
+                                var controlWindow = TopiaForgeWindow.Active.Single();
+                                Require(controlWindow.Id == fixture.Id + mode.Item1.Substring("gallery-interaction".Length) &&
+                                    controlWindow.Title == fixture.Title + " · " + mode.Item2 &&
+                                    controlWindow.Scheme == mode.Item3 && ReferenceEquals(controlWindow.Theme.Descriptor, mode.Item4) &&
+                                    controlWindow.Width == fixture.Width && controlWindow.Height == fixture.Height,
+                                    "F2 visits all twenty controls stages in page and palette order.");
+                                Require(All(controlWindow.Admitted!).Select(Shape).SequenceEqual(All(fixture.Content!).Select(Shape)),
+                                    "The loader uses the same authored controls as F8.");
+                                if (index % stageCount < modes.Length)
+                                {
+                                    All(controlWindow.Admitted!).OfType<UiButton>().Single(button => button.Id == "gallery-primary").Activated();
+                                    Require(controlWindow.Body?.Value == "Start survey",
+                                        "The button callback reports to its own Window.");
+                                }
+                                GameObject.Tick();
+                                GameObject.Tick();
+                                var capture = UiGalleryCaptureJson.Records.Last();
+                                Require(UiGalleryCaptureJson.Records.Count == before + 1 && capture.Fixture == controlWindow.Id &&
+                                    capture.Viewer == "guest-local" && capture.Envelope == null &&
+                                    capture.Theme.Scheme == mode.Item3 && capture.Accessibility.HighContrast == highContrast &&
+                                    capture.Accessibility.UiScale == 2 && capture.Accessibility.ReducedMotion,
+                                    "F2 records the active controls stage using viewer accessibility.");
+                            }
+                            TopiaForgeHotkeys.Press(TopiaForgeKey.F4);
+                            Require(TopiaForgeWindow.Active.Single().Id == "gallery-graph-kit-paper",
+                                "Leaving F2 removes the controls Window and resets its next sequence.");
+                        }
+
                         preview!.Dispose();
                         Require(TopiaForgeWindow.Active.Count == 0 && TopiaForgeHotkeys.Count == 0,
-                            "Loader teardown retires its Window, F3, F4 and the settled F11 recorder.");
+                            "Loader teardown retires its Window, F2, F3, F4 and the settled F11 recorder.");
+                        Require(previewInput.Definitions.Count == 0, "Teardown clears the private bindings.");
+                        TopiaForgeHotkeys.Press(TopiaForgeKey.F2);
                         TopiaForgeHotkeys.Press(TopiaForgeKey.F3);
                         TopiaForgeHotkeys.Press(TopiaForgeKey.F4);
                         Require(TopiaForgeWindow.Active.Count == 0, "Disposed preview cannot reopen.");
@@ -287,18 +363,11 @@ namespace TopiaForge.ModManager.Tests
                     private static IEnumerable<UiNode> All(UiNode root)
                     {
                         yield return root;
-                        foreach (var child in Children(root))
-                            foreach (var item in All(child))
+                        var children = UiNodeChildren.Of(root);
+                        for (var index = 0; index < children.Count; index++)
+                            foreach (var item in All(children[index]))
                                 yield return item;
                     }
-
-                    private static IEnumerable<UiNode> Children(UiNode node) => node switch
-                    {
-                        UiLayoutNode layout => layout.Children,
-                        UiSplitPane split => new[] { split.Primary, split.Secondary },
-                        UiScroll scroll => new[] { scroll.Content },
-                        _ => Array.Empty<UiNode>(),
-                    };
 
                     private static void Require(bool condition, string text)
                     {

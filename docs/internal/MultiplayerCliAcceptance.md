@@ -179,10 +179,11 @@ Use separate profiles for the acceptance runner.
 
 Once the normal session reports a ready listen host and exactly one admitted guest, press F7 on the host.
 Each press opens a host-local fixture and sends the same safe composition to the guest through `IPlayer.Ui`.
-The sequence starts at Theme packs and ends at Action slots, then wraps after 95 successful presses.
+The sequence starts at Theme packs and ends at Action slots, then wraps after 100 successful presses.
 Each of the first eleven pages cycles Paper and HUD for the kit palette, the acceptance transport palette,
 and authenticated Survival, in that order. Layout fit opens one HUD for each of those palettes.
-The five interactive control pages each open a Paper Window in the kit and transport palettes.
+The five interactive control pages each open a Paper Window in the kit palette, the acceptance transport palette,
+and authenticated Survival, in that order.
 Status, Countdowns, Key glyphs and Action slots each cycle kit Paper, kit HUD, transport Paper and transport HUD.
 
 | Page | First press from a fresh fixture |
@@ -200,14 +201,14 @@ Status, Countdowns, Key glyphs and Action slots each cycle kit Paper, kit HUD, t
 | Trust and fallback | 61 |
 | Layout fit | 67 |
 | Buttons | 70 |
-| Text and choice inputs | 72 |
-| Toggles, checkboxes and tabs | 74 |
-| Key binding fields | 76 |
-| Tooltips and list tiles | 78 |
-| Status | 80 |
-| Countdowns | 84 |
-| Key glyphs | 88 |
-| Action slots | 92 |
+| Text and choice inputs | 73 |
+| Toggles, checkboxes and tabs | 76 |
+| Key binding fields | 79 |
+| Tooltips and list tiles | 82 |
+| Status | 85 |
+| Countdowns | 89 |
+| Key glyphs | 93 |
+| Action slots | 97 |
 
 The Shared acceptance package owns its `transport-preview` descriptor and its copy of the CC0 sample bundle, receipt,
 and license. The guest checks the authenticated package and descriptor for image references even in the kit variants.

@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager.Tests
                 internal enum TopiaForgeScheme { Paper, Hud }
                 internal enum TopiaForgeGap { Sm, Md }
                 internal enum TopiaForgeButtonStyle { Outline }
+                internal enum TopiaForgeTextStyle { Caption }
                 internal readonly record struct TopiaForgeAccessibilityProfile(bool HighContrast, float UiScale, bool ReducedMotion, float MotionIntensity);
 
                 internal sealed class UiHost
@@ -52,10 +53,13 @@ namespace TopiaForge.ModManager.Tests
                     internal readonly Dictionary<string, TopiaForgeToggle> Toggles = new();
                     internal TopiaForgeTabs TabBar = null!;
                     internal TopiaForgeContainer Page = null!;
+                    internal TopiaForgeDropdown Palette = null!;
 
                     public TopiaForgeContainer Row(TopiaForgeGap gap) => this;
                     public void Button(string label, Action press, TopiaForgeButtonStyle style = TopiaForgeButtonStyle.Outline) => Buttons.Add(label, press);
                     public TopiaForgeSlider Slider(string label, float min, float max, float value, Action<float> changed) => new();
+                    public TopiaForgeDropdown Dropdown(IReadOnlyList<string> labels, int selected, Action<int> changed) =>
+                        Palette = new TopiaForgeDropdown(labels, selected, changed);
 
                     public TopiaForgeToggle Toggle(string label, bool value, Action<bool> changed)
                     {
@@ -95,6 +99,14 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public void SetValue(float value) { }
                 }
+
+                internal sealed class TopiaForgeDropdown(IReadOnlyList<string> labels, int selected, Action<int> changed)
+                {
+                    public int Value { get; private set; } = selected;
+                    internal string Label => labels[Value];
+                    public void SetValue(int value) => Value = value;
+                    internal void Choose(int value) { SetValue(value); changed(value); }
+                }
             }
 
             namespace TopiaForge.UiGallery.Pages
@@ -113,7 +125,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     internal static readonly UiThemeRef SurvivalTheme = new UiThemeRef("survival");
                     internal static UiSurfaceRequest CreateRequest(FoundationPage page, UiSurfaceKind kind, UiThemeRef? theme = null, Action<string>? report = null) =>
-                        new UiSurfaceRequest("foundation", page.ToString(), "", kind).WithTheme(theme);
+                        new UiSurfaceRequest("foundation", page.ToString(), "", kind, content: new UiText("Dispatch")).WithTheme(theme);
                 }
 
                 internal static class FoundationLayoutPages
