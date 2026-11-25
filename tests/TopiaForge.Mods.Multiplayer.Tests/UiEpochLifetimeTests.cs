@@ -137,7 +137,7 @@ internal static class UiEpochLifetimeTests
         {
             var profile = new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer);
             var context = replication.Bind("ui-epoch-test", profile, lifetime);
-            return Players.Presentation!.CreateHud(context, Ui, new UiSurfaceRequest("shared", "Shared HUD", "Original",
+            return Players.CreateContextSurface(context, Ui, new UiSurfaceRequest("shared", "Shared HUD", "Original",
                 UiSurfaceKind.Hud, 320, 160, content)).Value!;
         }
 

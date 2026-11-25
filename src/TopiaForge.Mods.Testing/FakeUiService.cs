@@ -145,6 +145,14 @@ namespace TopiaForge.Mods.Testing
                 }
             }
 
+            UiOverlayContentKind? overlayKind = null;
+            if (request.Kind == UiSurfaceKind.Overlay)
+            {
+                var overlay = CheckOverlay(request, received: receiver != null);
+                if (!overlay.Succeeded) return OperationResult<IUiSurface>.Failure(overlay.ErrorCode, overlay.ErrorMessage);
+                overlayKind = overlay.Value;
+            }
+
             var themeCheck = themeScope.Package.ValidateSurfaceTheme(themeScope, request.Theme, receiver);
             if (!themeCheck.Succeeded)
                 return OperationResult<IUiSurface>.Failure(themeCheck.ErrorCode, themeCheck.ErrorMessage);
@@ -160,6 +168,7 @@ namespace TopiaForge.Mods.Testing
                 scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay,
                 wireTarget, images, receiver);
             surface.SetClock(() => widgetClock(), () => WidgetEpoch());
+            if (overlayKind is { } kind) surface.InitializeOverlay(kind);
             var epoch = WidgetEpoch();
             try
             {
@@ -259,7 +268,7 @@ namespace TopiaForge.Mods.Testing
                     "The fake mod is stopping and cannot show a toast.");
             }
 
-            toasts.Add(new FakeToast(message, tone));
+            QueueToast(new FakeToast(LimitToastText(message, 512), tone));
             return OperationResult<bool>.Success(true);
         }
 
@@ -276,6 +285,7 @@ namespace TopiaForge.Mods.Testing
         {
             surfaces.Remove(surface);
             themeScope.Package.RemoveSurface(themeScope, surface);
+            RememberOverlayExit(surface);
             if (surface.Request.Kind == UiSurfaceKind.Hud) RefreshHudLayoutNotices();
         }
 

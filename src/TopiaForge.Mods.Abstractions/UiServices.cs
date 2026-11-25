@@ -16,7 +16,11 @@ namespace TopiaForge.Mods
         Window = 1,
 
         /// <summary>An immersive paper-scheme tool that fills the safe screen area.</summary>
-        FullscreenTool = 2
+        FullscreenTool = 2,
+
+        /// <summary>A gameplay-scheme presentation or interactive panel across the safe screen area.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        Overlay = 3
     }
 
     /// <summary>Where a HUD surface docks on the screen.</summary>
@@ -94,7 +98,7 @@ namespace TopiaForge.Mods
         Accent = 6
     }
 
-    /// <summary>Describes a simple TopiaForgeUi HUD panel or window.</summary>
+    /// <summary>Describes a TopiaForgeUi surface and its initial content.</summary>
     public sealed partial class UiSurfaceRequest
     {
         /// <summary>Creates a UI surface request.</summary>
@@ -127,6 +131,12 @@ namespace TopiaForge.Mods
                 throw new ArgumentOutOfRangeException(nameof(width));
             }
 
+            if (kind == UiSurfaceKind.Overlay)
+            {
+                if (!float.IsFinite(width)) throw new ArgumentOutOfRangeException(nameof(width));
+                if (!float.IsFinite(height)) throw new ArgumentOutOfRangeException(nameof(height));
+            }
+
             Id = id;
             Title = title;
             Body = body ?? string.Empty;
@@ -145,7 +155,7 @@ namespace TopiaForge.Mods
         }
 
         private UiSurfaceRequest(
-            UiSurfaceRequest source, UiHudAnchor anchor, UiHudVisibility visibility, UiThemeRef? theme)
+            UiSurfaceRequest source, UiHudAnchor anchor, UiHudVisibility visibility, UiThemeRef? theme, bool? dismissible = null)
         {
             Id = source.Id;
             Title = source.Title;
@@ -157,6 +167,7 @@ namespace TopiaForge.Mods
             HudAnchor = anchor;
             HudVisibility = visibility;
             Theme = theme;
+            Dismissible = dismissible ?? source.Dismissible;
         }
 
         /// <summary>Gets the stable id unique inside the current mod.</summary>
@@ -193,7 +204,7 @@ namespace TopiaForge.Mods
         public UiHudVisibility HudVisibility { get; }
 
         /// <summary>Returns a copy of this HUD request that docks at <paramref name="anchor"/>.</summary>
-        /// <exception cref="InvalidOperationException">The request is for a window or a fullscreen tool.</exception>
+        /// <exception cref="InvalidOperationException">This option requires a HUD request.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="anchor"/> is not a defined anchor.</exception>
         public UiSurfaceRequest WithHudAnchor(UiHudAnchor anchor)
         {
@@ -210,7 +221,7 @@ namespace TopiaForge.Mods
         /// Returns a copy of this HUD request that shows as <paramref name="visibility"/> says, such as
         /// <see cref="UiHudVisibility.Always"/> for a HUD that also shows at the main menu.
         /// </summary>
-        /// <exception cref="InvalidOperationException">The request is for a window or a fullscreen tool.</exception>
+        /// <exception cref="InvalidOperationException">This option requires a HUD request.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="visibility"/> is not a defined value.</exception>
         public UiSurfaceRequest WithHudVisibility(UiHudVisibility visibility)
         {
@@ -390,7 +401,7 @@ namespace TopiaForge.Mods
         OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences);
 
         /// <summary>
-        /// Creates and lifetime-tracks a HUD panel, window or fullscreen tool, shown at once. It lives until this mod, or the
+        /// Creates and lifetime-tracks a surface, shown at once. It lives until this mod, or the
         /// scope that created it, ends or it is disposed: scene loads never end it. A HUD can be created once in
         /// <c>OnLoad</c>; by default it shows only in gameplay scenes (see <see cref="UiHudVisibility"/>).
         /// </summary>

@@ -11,7 +11,11 @@ namespace TopiaForge.ModManager.Tests
             using TopiaForge.Mods.UnityUi;
 
             namespace UnityEngine { public sealed class Sprite { } }
-            namespace TMPro { public sealed class TMP_FontAsset { } }
+            namespace TMPro
+            {
+                public sealed class TMP_FontAsset { }
+                public sealed class TMP_Text : UnityEngine.MonoBehaviour { }
+            }
 
             namespace TopiaForge.ModManager
             {

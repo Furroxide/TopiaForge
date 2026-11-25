@@ -28,6 +28,12 @@ namespace TopiaForge.ModManager.Tests
             WindowMath();
             LayerBandAllocation();
             UiKitToastStackTests.Run();
+            UiOverlayStingerContractsTests.Run();
+            UiKitOverlayWireTests.Run();
+            UiKitStingerWireTests.Run();
+            UiKitOverlayFakeTests.Run();
+            UiKitPresentationGalleryTests.Run();
+            UiGalleryPresentationLifecycleTests.Run();
             UiKitChipContrastTests.Run();
             UiThemePackTests.Run();
             UiThemeWireTests.Run();

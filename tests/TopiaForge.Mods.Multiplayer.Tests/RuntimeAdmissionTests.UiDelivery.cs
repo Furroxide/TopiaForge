@@ -132,19 +132,31 @@ internal static partial class RuntimeAdmissionTests
             context.Directory = Directory;
         }
 
-        internal IUiSurface Shared(string title, UiTextStyle style = UiTextStyle.Label) => Players.Presentation!.CreateHud(origin!, Ui,
+        internal IUiSurface Shared(string title, UiTextStyle style = UiTextStyle.Label) => Shared(
             new UiSurfaceRequest(title, title, "Status", UiSurfaceKind.Hud, 320, 160, new UiText(title, style))).Value!;
 
-        internal OperationResult<IUiSurface> Shared(UiSurfaceRequest request) => Players.Presentation!.CreateHud(origin!, Ui, request);
+        internal OperationResult<IUiSurface> Shared(UiSurfaceRequest request) => Players.CreateContextSurface(origin!, Ui, request);
+        internal OperationResult<bool> Stinger(UiStingerRequest request) => Players.ShowContextStinger(origin!, Ui, request);
+        internal OperationResult<bool> Toast(string message) => Players.Presentation!.Toast(origin!, Ui, message, UiTone.Neutral);
+
+        internal RuntimeReplication Scope(IModLifetime scope, ModExecutionContext execution, string? owner = null) =>
+            origin!.Services.Bind(owner ?? Sandbox.Id, new ModNetProfile(ModNetworkClass.Shared, execution), scope);
 
         public void Dispose() { Directory?.Dispose(); lifetime.Dispose(); }
     }
 
-    private sealed class ThemeProbe : IUiService, IUiClockReceiver, IUiPresentationThemeSource, IRemoteUiReceiver,
-        IRemoteThemedUiReceiver, IUiInputDefaultsSource
+    private sealed partial class ThemeProbe : IUiService, IUiClockReceiver, IUiPresentationThemeSource, IRemoteUiReceiver,
+        IRemoteThemedUiReceiver, IUiInputDefaultsSource, IUiStingerOrigin, IRemoteUiStingerReceiver
     {
+        private static readonly Func<FakeUiService, UiSurfaceRequest, UiWireEnvelope, OperationResult<IUiSurface>> CreateReceiverCanvas =
+            typeof(FakeUiService).GetMethod("CreateReceivedSurface",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .CreateDelegate<Func<FakeUiService, UiSurfaceRequest, UiWireEnvelope, OperationResult<IUiSurface>>>();
+
         private readonly FakeUiService ui;
         private readonly FakeModLifetime lifetime;
+        internal IReadOnlyList<FakeUiSurface> LocalSurfaces => ui.Surfaces;
+        internal int ToastCount => ui.Toasts.Count;
         internal readonly Dictionary<string, ThemeSurfaceProbe> Surfaces = new(StringComparer.Ordinal);
         internal readonly Dictionary<string, InputActionDefinition> InputDefinitions = new(StringComparer.Ordinal);
         internal readonly ArtCanvasRecorder? Art;
@@ -216,15 +228,16 @@ internal static partial class RuntimeAdmissionTests
         {
             if (Art != null) return Art.Create(request, theme);
             // This probe records the decoded tree at the receiver boundary. Control layout is exercised by the capture suite.
-            var canvasRequest = RecordControlsAtBoundary
+            var canvasRequest = RecordControlsAtBoundary && request.Kind != UiSurfaceKind.Overlay
                 ? new UiSurfaceRequest(request.Id, request.Title, request.Body, request.Kind, request.Width, request.Height) : request;
-            var created = ui.CreateSurface(canvasRequest);
+            var created = request.Kind == UiSurfaceKind.Overlay && theme.Envelope is { } envelope
+                ? CreateReceiverCanvas(ui, canvasRequest, envelope) : ui.CreateSurface(canvasRequest);
             if (!created.TryGetValue(out var surface))
             {
                 LastCreateFailure = created.ErrorMessage;
                 return created;
             }
-            var wrapper = new ThemeSurfaceProbe(this, (FakeUiSurface)surface, theme, request.Content, FailNextRemoteShow);
+            var wrapper = new ThemeSurfaceProbe(this, (FakeUiSurface)surface, request, theme, FailNextRemoteShow);
             FailNextRemoteShow = false;
             Surfaces.Add(request.Title, wrapper);
             return OperationResult<IUiSurface>.Success(wrapper);
@@ -236,14 +249,24 @@ internal static partial class RuntimeAdmissionTests
         private readonly ThemeProbe owner;
         private readonly bool failOnShow;
         internal readonly FakeUiSurface Surface;
+        internal readonly UiSurfaceRequest Request;
         internal UiRemoteThemeSelection Theme;
         internal UiNode? ReceivedContent;
 
-        internal ThemeSurfaceProbe(ThemeProbe owner, FakeUiSurface surface, UiRemoteThemeSelection theme, UiNode? content, bool failOnShow)
-        { this.owner = owner; Surface = surface; Theme = theme; ReceivedContent = content; this.failOnShow = failOnShow; }
+        internal ThemeSurfaceProbe(ThemeProbe owner, FakeUiSurface surface, UiSurfaceRequest request,
+            UiRemoteThemeSelection theme, bool failOnShow)
+        {
+            this.owner = owner;
+            Surface = surface;
+            Request = request;
+            Theme = theme;
+            ReceivedContent = request.Content;
+            this.failOnShow = failOnShow;
+        }
         public string Id => Surface.Id;
         public bool IsVisible => Surface.IsVisible;
         public event Action? Dismissed;
+        internal void BackAtBoundary() => Dismissed?.Invoke();
         public void Show()
         {
             if (failOnShow) throw new InvalidOperationException("The receiving canvas failed to show.");

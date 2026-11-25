@@ -3,7 +3,7 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
-    /// <summary>Retains the exact scope's HUD while its local service preserves ordinary canvas behavior.</summary>
+    /// <summary>Retains the exact scope's shared surface while its local service owns the canvas.</summary>
     internal sealed class MirroredHudPresenter : IUiSurface, IUiSurfaceDismissalSource
     {
         private readonly MultiplayerPresentation owner;
@@ -58,17 +58,17 @@ namespace TopiaForge.ModManager
             try
             {
                 UiWireValidation.Validate(node);
-                if (envelope == null && needsTheme) return null;
+                if (envelope == null && (needsTheme || Request.Kind == UiSurfaceKind.Overlay)) return null;
                 if (!MultiplayerPlayers.Finite(Request.Width) || !MultiplayerPlayers.Finite(Request.Height) ||
                     Request.Width < 80 || Request.Width > 1920 || Request.Height < 80 || Request.Height > 1440 ||
                     UiComposition.ContainsInteractive(node))
-                    throw new ArgumentException("Shared HUDs need a finite 80-1920 by 80-1440 size and read-only content.");
+                    throw new ArgumentException("Shared surfaces need a finite 80-1920 by 80-1440 size and read-only content.");
                 var w = new WorldWireWriter(MultiplayerPresentation.MaximumBytes);
-                w.Begin(0); w.WriteVarUInt(token); UiNodeWireCodec.Text(w, Request.Title);
+                w.Begin((byte)Request.Kind); w.WriteVarUInt(token); UiNodeWireCodec.Text(w, Request.Title);
                 UiNodeWireCodec.Text(w, text); w.WriteSingle(Request.Width); w.WriteSingle(Request.Height);
                 w.WriteByte((byte)Request.HudAnchor); w.WriteByte((byte)Request.HudVisibility);
                 w.WriteByte(visible ? (byte)1 : (byte)0);
-                var timed = UiWireCodec.Prepare(w, node, epoch, retained, envelope);
+                var timed = UiWireCodec.WriteSurfaceComposition(w, Request, node, epoch, retained, envelope);
                 return new EncodedHud(MultiplayerPresentation.Copy(w), timed ? epoch : null, envelope);
             }
             catch (ArgumentException exception) { InvalidComposition = exception.Message; return null; }
@@ -142,6 +142,11 @@ namespace TopiaForge.ModManager
         public OperationResult<bool> SetContent(UiNode value)
         {
             RequireActive();
+            if (Request.Kind == UiSurfaceKind.Overlay && !ReferenceEquals(content, value))
+            {
+                var admission = UiOverlayAdmission.Check(value, Request.Dismissible, UiOverlayContentKind.PresentationOnly);
+                if (!admission.Succeeded) return OperationResult<bool>.Failure(admission.ErrorCode, admission.ErrorMessage);
+            }
             if (Lost()) return inner.SetContent(value);
             if (ReferenceEquals(content, value))
             {
@@ -177,7 +182,7 @@ namespace TopiaForge.ModManager
             disposed = true; owner.Release(this); inner.Dispose(); Tracking?.Dispose(); Tracking = null;
         }
         private static InvalidOperationException TooLarge() => new InvalidOperationException(
-            "The shared HUD is too large; shorten its content before updating it.");
+            "The shared surface is too large; shorten its content before updating it.");
 
         internal readonly struct EncodedHud
         {

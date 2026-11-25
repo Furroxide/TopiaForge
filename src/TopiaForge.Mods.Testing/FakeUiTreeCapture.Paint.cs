@@ -317,6 +317,7 @@ namespace TopiaForge.Mods.Testing
         private void PaintHitTarget(string path, UiCaptureRect bounds, UiCaptureRect clip, bool enabled, bool popup = false)
         {
             if (!popup && surface.HasOpenDropdown) return;
+            if (surface.OverlayKind.HasValue && !service.AllowsOverlayInput(surface)) return;
             var flags = UiCaptureNodeFlags.HitTarget | (enabled ? UiCaptureNodeFlags.None : UiCaptureNodeFlags.Disabled);
             Add(path + "/hit", null, "HitTarget", bounds, clip,
                 new UiCaptureNodeContent(string.Empty, string.Empty, 0f, 0f, flags), default);

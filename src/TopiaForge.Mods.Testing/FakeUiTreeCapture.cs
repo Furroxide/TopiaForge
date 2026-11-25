@@ -17,6 +17,7 @@ namespace TopiaForge.Mods.Testing
         private readonly float readableScale;
         private readonly float gap;
         private readonly bool useHudScheme;
+        private readonly string? overlayState;
         private readonly UiThemeDescriptor? declaredTheme;
         private readonly FakeUiImages images;
         private readonly List<UiCapturedNode> nodes = new List<UiCapturedNode>();
@@ -35,7 +36,8 @@ namespace TopiaForge.Mods.Testing
             theme = service.ResolveTheme(surface.Request.Theme, surface.Receiver);
             declaredTheme = service.DeclaredTheme(surface.Request.Theme, surface.Receiver);
             if (surface.Receiver == null) declaredTheme ??= UiThemePackParser.Default;
-            useHudScheme = hudScheme ?? surface.Request.Kind == UiSurfaceKind.Hud;
+            useHudScheme = hudScheme ?? surface.Request.Kind is UiSurfaceKind.Hud or UiSurfaceKind.Overlay;
+            if (surface.Request.Kind == UiSurfaceKind.Overlay) overlayState = surface.OverlayVisualState;
             scheme = theme.Descriptor.SelectScheme(useHudScheme, preferences.HighContrast);
             layoutScale = viewport.ScreenScale * preferences.UiScale;
             readableScale = viewport.ScreenScale * Math.Max(1f, preferences.UiScale);
@@ -44,6 +46,7 @@ namespace TopiaForge.Mods.Testing
 
         internal UiTreeCapture Capture(float scrollOffset)
         {
+            if (surface.Request.Kind == UiSurfaceKind.Overlay) return CaptureOverlay(scrollOffset);
             var bounds = SurfaceBounds();
             var screen = new UiCaptureRect(0, 0, viewport.Width, viewport.Height);
             var clip = bounds.Intersect(screen);
@@ -138,16 +141,17 @@ namespace TopiaForge.Mods.Testing
         }
 
         private void Add(string path, string? id, string kind, UiCaptureRect bounds, UiCaptureRect clip,
-            UiCaptureNodeContent content, UiCaptureNodePaint paint, bool usedFallback = false, bool? render = null)
+            UiCaptureNodeContent content, UiCaptureNodePaint paint, bool usedFallback = false, bool? render = null, float? fillOpacity = null)
         {
             if ((content.Flags & UiCaptureNodeFlags.ScrollableClip) != 0 &&
                 (bounds.X < clip.X - 0.001f || bounds.Right > clip.Right + 0.001f))
             {
                 content = content.WithFlags(content.Flags & ~UiCaptureNodeFlags.ScrollableClip);
             }
-            var rendered = render ?? (surface.IsVisible && bounds.Overlaps(clip));
+            var shown = surface.Request.Kind == UiSurfaceKind.Overlay ? overlayState != null : surface.IsVisible;
+            var rendered = render ?? (shown && bounds.Overlaps(clip));
             nodes.Add(new UiCapturedNode(path, id, kind, bounds, content, paint, theme.Descriptor.Id,
-                usedFallback || theme.UsedFallback, rendered, rendered && !clip.Contains(bounds), occluded: false));
+                usedFallback || theme.UsedFallback, rendered, rendered && !clip.Contains(bounds), occluded: false, fillOpacity: fillOpacity));
         }
 
         private string CountdownText(UiCountdown countdown) =>

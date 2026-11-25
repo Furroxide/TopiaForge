@@ -16,6 +16,8 @@
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.cs" Link="UiGallery/UiGalleryCaptureFixture.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.Status.cs" Link="UiGallery/UiGalleryCaptureFixture.Status.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.Actions.cs" Link="UiGallery/UiGalleryCaptureFixture.Actions.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.Presentation.cs" Link="UiGallery/UiGalleryCaptureFixture.Presentation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryToastArm.cs" Link="UiGallery/UiGalleryToastArm.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryStatusEvidence.cs" Link="UiGallery/UiGalleryStatusEvidence.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationLayoutPages.cs" Link="UiGallery/FoundationLayoutPages.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationGraphPages.cs" Link="UiGallery/FoundationGraphPages.cs" />
@@ -28,7 +30,9 @@
     <Compile Include="../../src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeInputBindingState.cs" Link="UnityUi/TopiaForgeInputBindingState.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/StatusGalleryPages.cs" Link="UiGallery/StatusGalleryPages.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/ActionGalleryPages.cs" Link="UiGallery/ActionGalleryPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/PresentationPages.cs" Link="UiGallery/PresentationPages.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/AcceptanceConfig.cs" Link="MultiplayerAcceptance/AcceptanceConfig.cs" />
+    <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/GalleryRemotePresentation.cs" Link="MultiplayerAcceptance/GalleryRemotePresentation.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/GalleryRemotePreview.cs" Link="MultiplayerAcceptance/GalleryRemotePreview.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/MultiplayerAcceptanceMod.cs" Link="MultiplayerAcceptance/MultiplayerAcceptanceMod.cs" />
     <Compile Remove="TestingKitFocusedProgram.cs" />

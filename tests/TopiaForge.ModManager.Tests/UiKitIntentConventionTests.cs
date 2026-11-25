@@ -24,7 +24,7 @@ namespace TopiaForge.ModManager.Tests
         // Raised inside an action opened where the input arrived, or by what only happens to a control: they open nothing.
         private static readonly string[] InheritingCallbacks =
         {
-            "Window Closed", "Fullscreen tool Closed", "Modal Closed", "Modal confirmation", "Modal cancellation", "Tab selection",
+            "Window Closed", "Fullscreen tool Closed", "Overlay Closed", "Modal Closed", "Modal confirmation", "Modal cancellation", "Tab selection",
             "List selection", "Table selection", "Keybind change", "Shop Purchased", "Shop PurchaseFailed", "Card hover",
             "Theme Changed", "Accessibility profile changed", "List row binding", "List row created", "Lost canvas Closed"
         };
@@ -118,7 +118,8 @@ namespace TopiaForge.ModManager.Tests
             Require(Count(tween, "TopiaForgeCallbacks.Resume(intent, onDone, \"Tween completion\")") == 2, "a tween that finishes later resumes what it captured");
             Require(Count(tween, "TopiaForgeCallbacks.Invoke(onDone, \"Tween completion\")") == 2, "one that finishes at once runs inside its caller");
             Require(Count(tween, "Intent = onDone == null ? null : TopiaForgeIntent.Capture()") == 2, "both ways of starting one capture where it began");
-            Require(Count(tween, "Pool[index].Intent = null;") == 4, "and every way of ending one drops what it captured");
+            Require(Count(tween, "Release(index);") == 4 && Count(tween, "Pool[index] = default;") == 1,
+                "every way of ending a tween clears its captured intent and its retained hosts");
         }
 
         private static void EveryListenerIsAccountedFor(IReadOnlyDictionary<string, string> kit)
@@ -153,6 +154,10 @@ namespace TopiaForge.ModManager.Tests
                 "the key the player presses into a keybind field is the player's action");
             Require(Source("TopiaForgeInputField.cs").Contains("TopiaForgeCallbacks.Player(input.isFocused ? Host.OwnerId : null, onChanged", StringComparison.Ordinal),
                 "typing is the player's action, and a value code sets runs in that code's own scope");
+            Require(Source("TopiaForgeGraphCanvasRuntime.cs").Contains("void Select() => owner.HandleNodeSelected(", StringComparison.Ordinal),
+                "a graph node control routes the player's selection through the canvas");
+            Require(Source("TopiaForgeGraphPortView.cs").Contains("void Select() => owner.HandlePortSelected(", StringComparison.Ordinal),
+                "a graph port control routes the player's selection through the canvas");
             Require(Count(Source("TopiaForgeGraphCanvas.cs"), "TopiaForgeCallbacks.Player(") == 8, "every graph handler that reaches a mod opens the action");
             Require(!Source("TopiaForgeCallbacks.cs").Contains("UnityEngine", StringComparison.Ordinal) &&
                     !Source("TopiaForgeIntent.cs").Contains("UnityEngine", StringComparison.Ordinal), "the hook stays Unity-free");

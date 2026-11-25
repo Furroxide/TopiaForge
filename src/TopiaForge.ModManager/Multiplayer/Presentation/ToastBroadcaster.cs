@@ -58,7 +58,31 @@ namespace TopiaForge.ModManager
             return OperationResult<IAudioPlayback>.Success(shared);
         }
 
-        private void Broadcast() => players.Channel?.Send(writer.Segment, InternalSystemTarget.Everyone);
+        private void Broadcast()
+        {
+            if (!Hosting || players.Snapshot is not { } snapshot) return;
+            var payload = writer.Segment;
+            foreach (var peer in snapshot.Participants)
+                if (!peer.IsLocal && peer.IsConnected) _ = SendEvent(peer.Id, payload);
+        }
+
+        internal OperationResult<bool> SendEvent(ParticipantId peer, ArraySegment<byte> payload)
+        {
+            var generation = players.Channel?.GetGeneration(peer) ?? 0;
+            if (!Hosting || generation == 0) return PlayerDirectory.Unavailable<bool>();
+            var delivery = DeliveryFor(peer, generation);
+            var now = Now;
+            if (delivery.Events.MicrosUntilAvailable(now) != 0 ||
+                delivery.EventBytes.MicrosUntilAvailable(now, payload.Count) != 0)
+                return OperationResult<bool>.Failure(ModErrorCode.RateLimited, "This player's presentation events are too frequent.");
+            var sent = players.Send(peer, payload);
+            if (sent.Succeeded)
+            {
+                delivery.Events.TryTake(now);
+                delivery.EventBytes.TryTake(now, payload.Count);
+            }
+            return sent;
+        }
 
         private void Stop(SharedAudio audio)
         {

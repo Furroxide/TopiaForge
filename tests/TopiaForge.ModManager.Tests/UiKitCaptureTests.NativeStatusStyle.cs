@@ -79,6 +79,10 @@ namespace TopiaForge.ModManager.Tests
                     internal int Height => 1080;
                     internal float PixelsPerUnit => 1f;
                     internal float? SurfaceAlpha => 1f;
+                    internal int? PresentationOrder => null;
+                    internal bool? PresentationTakesInput => null;
+                    internal bool? OverlayDismissible => null;
+                    internal bool? OverlayCovered => null;
                     internal UiAccessibilityPreferences Accessibility => UiAccessibilityPreferences.Default;
                     internal TopiaForgeScheme Scheme => TopiaForgeScheme.Paper;
                     internal UiThemeDescriptor Descriptor { get; }

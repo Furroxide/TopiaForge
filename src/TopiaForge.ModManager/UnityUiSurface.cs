@@ -16,6 +16,8 @@ namespace TopiaForge.ModManager
             private TopiaForgeWidget? widget;
             private TopiaForgeWindow? window;
             private TopiaForgeFullscreenTool? fullscreen;
+            private TopiaForgeOverlay? overlay;
+            private readonly UiOverlayContentKind? overlayKind;
             private TopiaForgeLabel? body;
             private TopiaForgeContainer? compositionParent;
             private readonly ScrollRect? outerScroll;
@@ -55,13 +57,17 @@ namespace TopiaForge.ModManager
                 UiSurfacePresence presence,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<UnityUiSurface> release)
+                Action<UnityUiSurface> release,
+                TopiaForgeOverlay? overlay = null,
+                UiOverlayContentKind? overlayKind = null)
             {
                 Id = id;
                 CanvasRoot = canvasRoot;
                 this.widget = widget;
                 this.window = window;
                 this.fullscreen = fullscreen;
+                this.overlay = overlay;
+                this.overlayKind = overlayKind;
                 this.body = body;
                 this.compositionParent = compositionParent;
                 outerScroll = window != null || fullscreen != null
@@ -81,6 +87,11 @@ namespace TopiaForge.ModManager
                     nativeClosed = HandleNativeClosed;
                     fullscreen.Closed += nativeClosed;
                 }
+                else if (overlay != null)
+                {
+                    nativeClosed = HandleNativeClosed;
+                    overlay.Closed += nativeClosed;
+                }
             }
 
             public string Id { get; }
@@ -90,6 +101,8 @@ namespace TopiaForge.ModManager
 
             /// <summary>Gets whether the surface is a HUD that hides outside gameplay.</summary>
             internal bool FollowsGameplay => presence.FollowsGameplay;
+
+            internal bool IsAuthoredOverlay => overlayKind.HasValue && !remoteComposition;
 
             public bool IsVisible => presence.IsVisible;
 
@@ -140,6 +153,19 @@ namespace TopiaForge.ModManager
                     new UiSurfacePresence(followsGameplay, gameplay), lifetime, logger, release);
             }
 
+            public static UnityUiSurface ForOverlay(
+                string id,
+                TopiaForgeOverlay overlay,
+                TopiaForgeLabel body,
+                UiOverlayContentKind contentKind,
+                IModLifetime lifetime,
+                IModLogger logger,
+                Action<UnityUiSurface> release)
+            {
+                return new UnityUiSurface(id, overlay.CanvasRoot, overlay, null, null, body, overlay.Content,
+                    new UiSurfacePresence(followsGameplay: false, gameplay: true), lifetime, logger, release, overlay, contentKind);
+            }
+
             public void AttachLifetimeLease(IDisposable lease)
             {
                 lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
@@ -173,7 +199,13 @@ namespace TopiaForge.ModManager
             }
 
             public OperationResult<bool> SetContent(UiNode content)
-                => SetComposition(content, declaredTheme, remoteComposition);
+            {
+                var result = SetComposition(content, declaredTheme, remoteComposition);
+                if (result.Succeeded) ObserveGalleryCommit(null);
+                return result;
+            }
+
+            partial void ObserveGalleryCommit(UiWireEnvelope? envelope);
 
             private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor, bool remote,
                 Action<TopiaForgeContainer>? prepareTheme = null, Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null,
@@ -211,7 +243,9 @@ namespace TopiaForge.ModManager
                 ContentStamp stamp;
                 try
                 {
-                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
+                    overlay?.RefreshViewport();
+                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0,
+                        OuterScrollViewport, overlay?.ViewportRevision ?? 0);
                     var retained = ReferenceEquals(content, admitted);
                     if (retained && prepareTheme == null && ReferenceEquals(scopedInput, inputContext))
                     {
@@ -223,10 +257,19 @@ namespace TopiaForge.ModManager
                         return ContentApplied;
                     }
 
-                    UiComposition.Validate(content);
+                    if (overlay != null)
+                    {
+                        var admission = UiOverlayAdmission.Check(content, overlay.Dismissible, overlayKind);
+                        if (!admission.Succeeded)
+                            return OperationResult<bool>.Failure(admission.ErrorCode, admission.ErrorMessage);
+                    }
+                    else
+                    {
+                        UiComposition.Validate(content);
+                        if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
+                            return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
+                    }
                     if (!remote && !retained) scopedInput?.Validate(content);
-                    if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
-                        return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                     if (!retained) UiClockBinding.Check(content, stamp.ClockEpoch);
                     nextArtwork = prepareArtwork == null ? PrepareArtwork(content) : prepareArtwork(content);
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
@@ -292,6 +335,7 @@ namespace TopiaForge.ModManager
                     catch { }
                 }
                 finally { RetireArtwork(previousArtwork); }
+                overlay?.CompositionChanged();
 
                 RestoreOuterScrollOffset();
                 return ContentApplied;
@@ -325,14 +369,17 @@ namespace TopiaForge.ModManager
                 private readonly int dockVersion;
                 private readonly int artworkVersion;
                 private readonly Rect outerScrollViewport;
+                private readonly int overlayViewportRevision;
 
-                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int artworkVersion, int dockVersion, Rect outerScrollViewport)
+                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int artworkVersion,
+                    int dockVersion, Rect outerScrollViewport, int overlayViewportRevision)
                 {
                     ClockEpoch = clockEpoch;
                     this.bodyVersion = bodyVersion;
                     this.artworkVersion = artworkVersion;
                     this.dockVersion = dockVersion;
                     this.outerScrollViewport = outerScrollViewport;
+                    this.overlayViewportRevision = overlayViewportRevision;
                     theme = view.ResolvedTheme;
                     screenWidth = Screen.width;
                     screenHeight = Screen.height;
@@ -348,6 +395,7 @@ namespace TopiaForge.ModManager
                     && ReferenceEquals(theme, other.theme)
                     && screenWidth == other.screenWidth && screenHeight == other.screenHeight
                     && width.Equals(other.width) && height.Equals(other.height) && bodyVersion == other.bodyVersion
+                    && overlayViewportRevision == other.overlayViewportRevision
                     && artworkVersion == other.artworkVersion && dockVersion == other.dockVersion
                     && outerScrollViewport.width.Equals(other.outerScrollViewport.width)
                     && outerScrollViewport.height.Equals(other.outerScrollViewport.height);

@@ -11,6 +11,12 @@ namespace TopiaForge.ModManager
     {
         internal const int MaximumBytes = 28 * 1024;
         internal const int MaximumSurfaces = 32;
+        private const int EventBurst = 32;
+        private const int EventsPerSecond = 20;
+        private const int ReceiveBurstBytes = 128 * 1024;
+        private const int ReceiveBytesPerSecond = 64 * 1024;
+        private const int BaselineBurstBytes = 32 * 1024;
+        private const int BaselineBytesPerSecond = 32 * 1024;
         private readonly MultiplayerPlayers players;
         private readonly List<MirroredHudPresenter> surfaces = new List<MirroredHudPresenter>();
         private readonly List<MirroredHudPresenter> authoredHuds = new List<MirroredHudPresenter>();
@@ -50,7 +56,7 @@ namespace TopiaForge.ModManager
 
         internal ulong Token() => ++nextToken;
 
-        internal OperationResult<IUiSurface> CreateHud(RuntimeReplication context, IUiService local, UiSurfaceRequest request)
+        internal OperationResult<IUiSurface> CreateSharedSurface(RuntimeReplication context, IUiService local, UiSurfaceRequest request)
         {
             UnityMainThreadGuard.AssertCurrent();
             if (context.Lifetime.IsStopping) return Stopped<IUiSurface>();
@@ -74,7 +80,7 @@ namespace TopiaForge.ModManager
             Token();
             hud.Attach(surface);
             authoredHuds.Add(hud);
-            // Solo remains unrestricted. Only wire-sized HUDs are eligible for a later promotion.
+            // Solo keeps its local surface even if its full wire representation cannot be published yet.
             if (prepared && surfaces.Count < MaximumSurfaces && surfaceBytes + hud.Bytes <= MaximumBytes)
             {
                 surfaces.Add(hud); surfaceBytes += hud.Bytes; version++;
@@ -151,14 +157,15 @@ namespace TopiaForge.ModManager
                 if (peer.IsLocal) continue;
                 var generation = channel.GetGeneration(peer.Id);
                 if (generation == 0) continue;
-                if (!deliveries.TryGetValue(peer.Id, out var delivery)) deliveries.Add(peer.Id, delivery = new Delivery(Now));
-                if (delivery.Generation == generation && delivery.Version == publishedVersion) continue;
-                if (delivery.Generation == generation && Now - delivery.SentAt < PresentationRoutingPolicy.HudMirrorIntervalMicros) continue;
-                // Retry each lagging peer independently with the latest full state, never gate everyone on one window.
-                if (!channel.CanSend(InternalSystemTarget.Only(peer.Id), baseline.Length) || !delivery.Bytes.TryTake(Now, baseline.Length)) continue;
+                var delivery = DeliveryFor(peer.Id, generation);
+                if (delivery.Version == publishedVersion) continue;
+                if (delivery.Version != 0 && Now - delivery.SentAt < PresentationRoutingPolicy.HudMirrorIntervalMicros) continue;
+                // Retry each lagging peer independently with the latest full state.
+                if (!channel.CanSend(InternalSystemTarget.Only(peer.Id), baseline.Length) ||
+                    !delivery.BaselineBytes.TryTake(Now, baseline.Length)) continue;
                 var result = channel.Send(new ArraySegment<byte>(baseline), InternalSystemTarget.Only(peer.Id));
                 if (result.TryGetValue(out var count) && count > 0)
-                { delivery.Generation = generation; delivery.Version = publishedVersion; delivery.SentAt = Now; }
+                { delivery.Version = publishedVersion; delivery.SentAt = Now; }
             }
         }
 
@@ -182,6 +189,7 @@ namespace TopiaForge.ModManager
             deliveries.Clear();
             ClearReceived();
             ResetEffects();
+            ResetRemoteStingers();
             version++;
         }
 
@@ -193,14 +201,33 @@ namespace TopiaForge.ModManager
         }
 
         internal static OperationResult<T> Limit<T>() where T : notnull => OperationResult<T>.Failure(ModErrorCode.RateLimited,
-            "Shared presentation is full or too large; use fewer HUDs or shorter content and try again.");
+            "Shared presentation is full or too large; use fewer surfaces or shorter content and try again.");
+
+        private Delivery DeliveryFor(ParticipantId participant, ulong generation)
+        {
+            if (!deliveries.TryGetValue(participant, out var delivery) || delivery.Generation != generation)
+                deliveries[participant] = delivery = new Delivery(generation, Now);
+            return delivery;
+        }
 
         private sealed class Delivery
         {
-            internal ulong Generation, Version;
+            internal readonly ulong Generation;
+            internal ulong Version;
             internal long SentAt;
-            internal readonly TokenBucket Bytes;
-            internal Delivery(long now) { Bytes = new TokenBucket(32 * 1024, 32 * 1024, now); }
+            internal readonly TokenBucket BaselineBytes;
+            internal readonly TokenBucket Events;
+            internal readonly TokenBucket EventBytes;
+
+            internal Delivery(ulong generation, long now)
+            {
+                Generation = generation;
+                BaselineBytes = new TokenBucket(BaselineBurstBytes, BaselineBytesPerSecond, now);
+                Events = new TokenBucket(EventBurst, EventsPerSecond, now);
+                // The receiving byte bucket covers both baselines and one-shot effects.
+                EventBytes = new TokenBucket(ReceiveBurstBytes - BaselineBurstBytes,
+                    ReceiveBytesPerSecond - BaselineBytesPerSecond, now);
+            }
         }
     }
 

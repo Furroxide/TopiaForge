@@ -67,10 +67,14 @@ namespace TopiaForge.Mods.Testing
         }
 
         private Size MeasureText(string text, UiTextStyle style, float availableWidth, bool wrap = true,
-            UiThemeDescriptor? descriptor = null)
+            UiThemeDescriptor? descriptor = null) =>
+            MeasurePlainText(text, style, availableWidth, descriptor ?? theme.Descriptor, readableScale, wrap);
+
+        internal static Size MeasurePlainText(string text, UiTextStyle style, float availableWidth, UiThemeDescriptor descriptor,
+            float readableScale, bool wrap = true)
         {
             if (text.Length == 0) return default;
-            var typography = (descriptor ?? theme.Descriptor).GetText(style);
+            var typography = descriptor.GetText(style);
             var height = typography.ReferenceSize * readableScale;
             var visual = typography.IsUppercase ? text.ToUpperInvariant() : text;
             var width = 0f;
@@ -102,7 +106,7 @@ namespace TopiaForge.Mods.Testing
                 line += advance;
             }
 
-            return new Size(Math.Max(width, line), Height(height, lines));
+            return new Size(Math.Max(width, line), Height(height, lines), lines);
         }
 
         // Advance estimates are deterministic fixture geometry, independent of native font rasterization.
@@ -118,11 +122,18 @@ namespace TopiaForge.Mods.Testing
 
         private static float Height(float height, int lines) => height + ((lines - 1) * height * 1.2f);
 
-        private readonly struct Size
+        internal readonly struct Size
         {
-            internal Size(float width, float height) { Width = width; Height = height; }
+            internal Size(float width, float height, int lines = 0)
+            {
+                Width = width;
+                Height = height;
+                Lines = lines;
+            }
+
             internal float Width { get; }
             internal float Height { get; }
+            internal int Lines { get; }
         }
     }
 }

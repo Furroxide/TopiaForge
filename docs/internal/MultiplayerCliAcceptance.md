@@ -292,6 +292,44 @@ Check the guest's exact archive and descriptor hashes across both observations. 
 or a second replacement retires the paired fixture. If the local map cannot replace the session in place,
 record the paired epoch row as pending and keep the independent solo result.
 
+#### Paired overlays, stingers and toasts
+
+Add `gallery-remote-preview-presentation-only.enabled` beside the main F7 marker on the host before
+loading the profile. Keep the Status-only and retained Countdown markers absent for this run. The presentation
+cycle has 30 successful presses and wraps at press 31. It uses the same ready listen host and single admitted guest.
+
+| Fixture ID | Kit press | Transport press |
+| --- | ---: | ---: |
+| `gallery-overlay-passive` | 1 | 16 |
+| `gallery-overlay-dismissible` | 2 | 17 |
+| `gallery-overlay-buttononly` | 3 | 18 |
+| `gallery-overlay-stack` | 4 | 19 |
+| `gallery-stinger-surface` through `gallery-stinger-danger` | 5–13 | 20–28 |
+| `gallery-stinger-queue` | 14 | 29 |
+| `gallery-toast-stack` | 15 | 30 |
+
+Record the fixture ID, palette, and each viewer's resolution and accessibility settings. Use the fixed order
+Surface, Raised, Sunken, Selected, Primary, Accent, Success, Warning, and Danger for the nine stinger rows.
+The host log records a fixture ID and palette after both public UI routes accept the step. Use the rendered result
+and settled tree on each viewer as the visual evidence. Let every stinger finish before advancing F7.
+
+For the passive overlay, check that gameplay input still works. On the dismissible overlay, use Back on the guest
+and confirm the host's copy stays open. On the button-only overlay, use B, then try Escape and controller Start
+while the same overlay is open. Capture the game's pause above the overlay and verify focus returns on resume.
+Use the enabled button to close only the viewer's copy. Repeat the ordinary controls on the other viewer.
+In the stack fixture, reveal the lower overlays in order and read `Supplies loaded.` on the existing
+`gallery-presentation-hud` after all overlays clear.
+
+On the queue step, capture `Depot open`, `Water ready`, `Weather report`, then `Lanterns lit` on both peers.
+Each plays once. The duplicate Water announcement coalesces and `Gate closing` is refused by the full queue.
+Record a tree alongside the displayed frame before advancing. Repeat the timed observations with reduced motion.
+On the toast step, collect the four system toasts over the themed HUD. Confirm kit paint, the plain messages and
+the Check, Warning and Cross glyphs on the corresponding tones.
+
+Use F8 on both viewers for the Survival sample in the phase matrix. For a live cleanup check, end or replace the
+session with the stack still open. Both viewers' owned surfaces should retire, and a new publication requires
+another host F7 press on a ready pair. The stinger and toast steps send timed events and new peers receive no replay.
+
 #### Art fallback
 
 Compare the kit HUD variant of **Trust and fallback** on a ready pair. To reproduce unavailable artwork, use a fresh

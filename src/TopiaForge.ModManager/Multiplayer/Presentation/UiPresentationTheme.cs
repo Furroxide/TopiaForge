@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -51,8 +52,11 @@ namespace TopiaForge.ModManager
         internal static readonly OperationResult<bool> TargetGenerationsExhausted = OperationResult<bool>.Failure(ModErrorCode.Unavailable,
             "This player's UI stream has reached its presentation limit. Reconnect before opening another surface.");
 
-        internal static int RequiredVersion(UiNode? content, UiThemeDescriptor? theme) =>
-            Math.Max(UiWireCodec.RequiredContractVersion(content), theme?.MinimumWireVersion ?? LegacyVersion);
+        internal static int RequiredVersion(UiSurfaceRequest request, UiNode? content, UiThemeDescriptor? theme)
+        {
+            var surfaceVersion = request.Kind == UiSurfaceKind.Overlay ? UiWireCodec.ControlsContractVersion : LegacyVersion;
+            return Math.Max(surfaceVersion, Math.Max(UiWireCodec.RequiredContractVersion(content), theme?.MinimumWireVersion ?? LegacyVersion));
+        }
 
         internal static OperationResult<bool> UnsupportedVersion(int version) =>
             version >= UiWireCodec.ControlsContractVersion ? UnsupportedControlsPeer : UnsupportedPeer;
@@ -73,6 +77,9 @@ namespace TopiaForge.ModManager
 
         internal static UiWireEnvelope Envelope(string owner, byte[] digest, ulong generation, UiThemeDescriptor? theme) =>
             new UiWireEnvelope(owner, digest, generation, theme?.Id, theme == null ? DefaultDigest.AsSpan() : theme.Digest.Span);
+
+        internal static UiWireEventEnvelope EventEnvelope(string owner, byte[] digest, UiThemeDescriptor? theme) =>
+            new UiWireEventEnvelope(owner, digest, theme?.Id, theme == null ? DefaultDigest.AsSpan() : theme.Digest.Span);
 
         internal static bool SameEnvelope(UiWireEnvelope? left, UiWireEnvelope? right) => ReferenceEquals(left, right) ||
             (left != null && right != null && left.Generation == right.Generation && left.OwnerPackageId == right.OwnerPackageId
@@ -96,10 +103,14 @@ namespace TopiaForge.ModManager
         internal static UiThemeDescriptor? ViewerTheme(UiRemoteThemeSelection selection)
         {
             var envelope = selection.Envelope;
-            var id = envelope?.ThemeId;
-            var catalogue = selection.Package?.Manifest.AdmittedUi;
+            return envelope == null ? null : ViewerTheme(envelope.ThemeId, envelope.DescriptorDigest.Span,
+                selection.Package?.Manifest.AdmittedUi);
+        }
+
+        internal static UiThemeDescriptor? ViewerTheme(string? id, ReadOnlySpan<byte> descriptorDigest, AdmittedUiCatalogue? catalogue)
+        {
             if (id == null || catalogue == null || !catalogue.TryGet(id, out var descriptor)) return null;
-            return descriptor.Digest.Span.SequenceEqual(envelope!.DescriptorDigest.Span) ? descriptor : null;
+            return descriptor.Digest.Span.SequenceEqual(descriptorDigest) ? descriptor : null;
         }
 
         internal static bool ViewerAdmits(UiNode? content, UiRemoteThemeSelection selection)

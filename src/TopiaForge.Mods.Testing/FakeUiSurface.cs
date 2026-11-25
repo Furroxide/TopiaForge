@@ -91,6 +91,7 @@ namespace TopiaForge.Mods.Testing
         {
             EnsureActive();
             if (shown) return;
+            StartOverlayTransition(entering: true);
             shown = true;
             if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
         }
@@ -100,6 +101,7 @@ namespace TopiaForge.Mods.Testing
         {
             EnsureActive();
             var wasVisible = IsVisible;
+            if (wasVisible) StartOverlayTransition(entering: false);
             shown = false;
             CloseGraphConnections();
             if (wasVisible && HudOverflowText != null) owner.RefreshHudLayoutNotices();
@@ -111,7 +113,12 @@ namespace TopiaForge.Mods.Testing
         /// <see cref="Hide"/> remains a server-initiated operation.
         /// </summary>
         [RequiresTopiaForge("0.2.0")]
-        public void DismissFromPlayer() => FakeGuestOrigin.Run(WireBounded, Hide);
+        public void DismissFromPlayer()
+        {
+            if (OverlayKind.HasValue &&
+                (OverlayKind != UiOverlayContentKind.Interactive || !Request.Dismissible || !owner.AllowsOverlayInput(this))) return;
+            FakeGuestOrigin.Run(WireBounded, Hide);
+        }
 
         /// <inheritdoc/>
         public void SetBody(string body)
@@ -121,6 +128,11 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentException("Remote UI text is limited to 4096 characters.", nameof(body));
             var next = body ?? string.Empty;
             if (string.Equals(Body, next, StringComparison.Ordinal)) return;
+            if (OverlayKind.HasValue)
+            {
+                ChangeOverlayBody(next);
+                return;
+            }
             Body = next;
             RevalidateGraphConnections();
             if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
@@ -351,6 +363,7 @@ namespace TopiaForge.Mods.Testing
         public void Dispose()
         {
             CloseGraphConnections();
+            if (IsShown) StartOverlayTransition(entering: false);
             shown = false;
             Dismissed = null;
             var callback = release;

@@ -665,6 +665,11 @@ type public sealed class TopiaForge.Mods.Testing.FakeSpawnedEntity : System.Obje
   property TopiaForge.Mods.TransformState InitialTransform { get [virtual,final,newslot]; }
   property TopiaForge.Mods.Vec3 Position { get [virtual,final,newslot]; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeStinger : System.Object [requires-topiaforge="0.2.0"]
+  property System.Boolean Broadcast { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Double ShownAt { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiStingerRequest Request { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.Testing.FakeTimeControlService : System.Object, TopiaForge.Mods.ITimeControlService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   method System.Void Advance(System.Single controlDeltaTime, System.Single playerInputMagnitude = 0, System.Boolean playerActing = false)
@@ -721,15 +726,18 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, 
   method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeCatalogue(System.String manifestJson, System.Func<System.String, System.String> readFile) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeFixture(System.String definitionJson) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.Testing.UiTreeCapture Capture(System.String surfaceId, TopiaForge.Mods.Testing.UiCaptureViewport viewport) [requires-topiaforge="0.2.0"]
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowStinger(TopiaForge.Mods.UiStingerRequest request) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowToast(System.String message, TopiaForge.Mods.UiTone tone = 0 (Neutral))
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.UiAccessibilityPreferences> ApplyAccessibility(TopiaForge.Mods.UiAccessibilityPreferences preferences)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeStinger> Stingers { get; } [requires-topiaforge="0.2.0"]
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeToast> Toasts { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeUiModal> Modals { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.FakeUiSurface> Surfaces { get; }
   property System.Double ClockTime { get [virtual,final,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IUiThemeService Themes { get [virtual,final,newslot]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.Testing.FakeStinger? ActiveStinger { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.Testing.FakeUiWorldLabels Labels { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiAccessibilityPreferences Accessibility { get [virtual,final,newslot]; }
   property TopiaForge.Mods.UiInputDevice LastInputDevice { get; set; } [requires-topiaforge="0.2.0"]
@@ -1025,6 +1033,7 @@ type public sealed class TopiaForge.Mods.Testing.UiCapturedNode : System.Object 
   property System.String SemanticLabel { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String Text { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String ThemeId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? Announcement { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? FillColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? Id { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? InkColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]

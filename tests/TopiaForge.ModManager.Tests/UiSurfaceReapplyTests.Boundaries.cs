@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
                 public enum TopiaForgeTone { Neutral, Success, Warning, Danger, Muted, Primary, Accent }
                 public enum TopiaForgeButtonStyle { Filled, Outline, Ghost, Danger }
                 public enum TopiaForgeTextStyle { Body, Heading, Caption, Banner, Display, Title, Label, Numeral, Mono }
+                public enum TopiaForgeScheme { Paper, Hud }
                 public static class TopiaForgeTokens { public const float ControlHeight = 40f; }
                 public sealed class TopiaForgeResolvedTheme
                 {
@@ -31,7 +32,6 @@ namespace TopiaForge.ModManager.Tests
                     internal TopiaForgeScheme Scheme { get; }
                     internal Color Shadow { get; }
                 }
-                internal enum TopiaForgeScheme { Paper, Hud }
 
                 public sealed class UiHost
                 {
@@ -43,6 +43,19 @@ namespace TopiaForge.ModManager.Tests
                     public bool FailNextGraphBind;
                     public readonly List<TopiaForgeGraphCanvas> Graphs = new();
                     public readonly Dictionary<string, TopiaForgeButton> Buttons = new();
+                    public int OverlaysCreated;
+                    public string OwnerId => "owner";
+
+                    public TopiaForgeWindow Window(string id, string title, float width, float height, TopiaForgeScheme scheme,
+                        bool persistent) => new TopiaForgeWindow(this);
+                    public TopiaForgeFullscreenTool FullscreenTool(string id, string title, TopiaForgeScheme scheme,
+                        bool persistent) => new TopiaForgeFullscreenTool(this);
+                    internal TopiaForgeOverlay Overlay(string id, string title, float width, float height,
+                        UiOverlayContentKind kind, bool dismissible)
+                    {
+                        OverlaysCreated++;
+                        return new TopiaForgeOverlay(this, new TopiaForgeContainer(this), dismissible);
+                    }
                 }
 
                 public class TopiaForgeWidget
@@ -147,6 +160,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public TopiaForgeWindow(UiHost host) : base(host) { }
                     public GameObject CanvasRoot => Go;
+                    public TopiaForgeContainer Content => this;
                     public event Action? Closed;
                     public void Show() => SetShown(true);
                     public void Close() { SetShown(false); Closed?.Invoke(); }
@@ -156,9 +170,39 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public TopiaForgeFullscreenTool(UiHost host) : base(host) { }
                     public GameObject CanvasRoot => Go;
+                    public TopiaForgeContainer Content => this;
                     public event Action? Closed;
                     public void Show() => SetShown(true);
                     public void Close() { SetShown(false); Closed?.Invoke(); }
+                }
+
+                internal sealed class TopiaForgeOverlay : TopiaForgeContainer
+                {
+                    private Action? retired;
+                    public TopiaForgeOverlay(UiHost host, TopiaForgeContainer content, bool dismissible) : base(host)
+                    {
+                        Content = content;
+                        Dismissible = dismissible;
+                    }
+                    public GameObject CanvasRoot => Go;
+                    public TopiaForgeContainer Content { get; }
+                    public bool Dismissible { get; }
+                    public int ViewportRevision { get; set; }
+                    public event Action? Closed;
+                    public void Show() => SetShown(true);
+                    public void Close() => SetShown(false);
+                    public void Back() { Close(); Closed?.Invoke(); }
+                    public void RefreshViewport() { }
+                    public void CompositionChanged() { }
+                    public void SetCompositionReady(bool ready) { }
+                    public UiLayoutConstraints MeasureContent(TopiaForgeLabel body)
+                    {
+                        LayoutRebuilder.ForceRebuildLayoutImmediate(Rect);
+                        var rect = Content.Rect.rect;
+                        return UiLayoutConstraints.Loose(rect.width, rect.height);
+                    }
+                    public void Retire(Action onRetired) => retired = onRetired;
+                    public void FinishRetirement() { Destroy(); retired?.Invoke(); }
                 }
 
                 public sealed class TopiaForgeHudLayer : TopiaForgeContainer
@@ -180,6 +224,7 @@ namespace TopiaForge.ModManager.Tests
                     }
                     internal void SetBackdrop(UiPaintRole role) { }
                     public TopiaForgeLabel PlainText() => this;
+                    public TopiaForgeLabel AlignCenter() => this;
                     public TopiaForgeLabel Tone(TopiaForgeTone tone) => this;
                 }
 
@@ -188,6 +233,7 @@ namespace TopiaForge.ModManager.Tests
                     public BoundaryScroll(TopiaForgeContainer content) => Content = content;
                     public TopiaForgeContainer Content { get; }
                     public BoundaryScroll FixedHeight(float height) => this;
+                    public BoundaryScroll Flex(float width, float height) => this;
                 }
                 public class BoundaryControl : TopiaForgeWidget
                 {
@@ -360,6 +406,8 @@ namespace TopiaForge.ModManager.Tests
                     {
                         internal UiSurfaceInputContext(object? registry, string ownerPackageId) => OwnerPackageId = ownerPackageId;
                         internal string OwnerPackageId { get; }
+                        internal UiSurfaceInputContext ForRemote(UiWireEnvelope? envelope) =>
+                            new UiSurfaceInputContext(null, envelope?.OwnerPackageId ?? string.Empty);
                         internal void Validate(UiNode? node) { }
                         internal Func<(IInputAction Action, string DisplayName)?> Resolve(string name) => static () => null;
                         internal UiNativeActionBinding BindAction(string name, IReadOnlyList<UiInputBindingHint> defaults)

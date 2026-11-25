@@ -15,6 +15,8 @@ internal static class Program
             }
             if (args.Length == 1 && args[0] == "--ui-session-clock") { UiSessionClockTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-epoch-lifetimes") { UiEpochLifetimeTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k2-overlay-wire") { RuntimeAdmissionTests.RunOverlayWire(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k2-stinger-wire") { RuntimeAdmissionTests.RunStingerWire(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-k1-delivery")
             {
                 RuntimeAdmissionTests.UiCapabilityNegotiatesAndBlocksLegacyOnlyWhenRequired();
@@ -707,6 +709,8 @@ internal static class Program
             RuntimeAdmissionTests.JoiningPlayersCheckTheHostsPackagesBeforeConnecting();
             RuntimeAdmissionTests.SessionModsAtCompatibleVersionsJoin();
             RuntimeAdmissionTests.UiCapabilityNegotiatesAndBlocksLegacyOnlyWhenRequired();
+            RuntimeAdmissionTests.RunOverlayWire();
+            RuntimeAdmissionTests.RunStingerWire();
             RuntimeAdmissionTests.ContentOffersRoundTripAndRefuseMalformedBytes();
             RuntimeAdmissionTests.TheContentSeamRefusesWithoutARuntime();
             RuntimeAdmissionTests.TheOfferFollowsTheLoadedPackages();

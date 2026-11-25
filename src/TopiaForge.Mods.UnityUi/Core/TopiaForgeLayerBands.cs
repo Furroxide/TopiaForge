@@ -18,6 +18,23 @@ namespace TopiaForge.Mods.UnityUi
         Debug,
     }
 
+    internal static class TopiaForgeLayerPriority
+    {
+        internal const TopiaForgeLayerBand Overlay = (TopiaForgeLayerBand)6;
+        internal const TopiaForgeLayerBand Manager = (TopiaForgeLayerBand)7;
+        internal const TopiaForgeLayerBand Stinger = (TopiaForgeLayerBand)8;
+        internal const TopiaForgeLayerBand TrustOverlay = (TopiaForgeLayerBand)9;
+
+        internal static int Rank(TopiaForgeLayerBand band) => band switch
+        {
+            Overlay => 30,
+            Stinger => 34,
+            Manager => 38,
+            TrustOverlay => 90,
+            _ => (int)band * 20,
+        };
+    }
+
     /// <summary>
     /// Sequential canvas sorting-order allocation within fixed bands, keeping every kit
     /// canvas above the game's UI and modal surfaces above HUD surfaces regardless of
@@ -38,8 +55,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>The default ceiling design-token value.</summary>
         public const int DefaultCeiling = 32000;
 
-        // Reserve the upper half of the runtime debug range for first-party trust surfaces.
-        private const int TrustBase = 31950;
+        // The first reserved framework band follows the public bands.
         internal const TopiaForgeLayerBand TrustBand = (TopiaForgeLayerBand)((int)TopiaForgeLayerBand.Debug + 1);
 
         private readonly int[] bases;
@@ -56,26 +72,35 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Creates layer-band ranges using the supplied bases and band size.</summary>
         public TopiaForgeLayerBands(int hudBase, int windowBase, int modalBase, int toastBase, int debugBase, int ceiling)
-            : this(hudBase, windowBase, modalBase, toastBase, debugBase, ceiling, trustBase: null)
+            : this(hudBase, windowBase, modalBase, toastBase, debugBase, ceiling, includeOverlayBands: false)
         {
         }
 
         internal static TopiaForgeLayerBands ForRuntime() => new TopiaForgeLayerBands(
-            DefaultHudBase, DefaultWindowBase, DefaultModalBase, DefaultToastBase, DefaultDebugBase, DefaultCeiling, TrustBase);
+            DefaultHudBase, DefaultWindowBase, DefaultModalBase, DefaultToastBase, DefaultDebugBase, DefaultCeiling, includeOverlayBands: true);
 
-        private TopiaForgeLayerBands(int hudBase, int windowBase, int modalBase, int toastBase, int debugBase, int ceiling, int? trustBase)
+        private TopiaForgeLayerBands(int hudBase, int windowBase, int modalBase, int toastBase, int debugBase, int ceiling, bool includeOverlayBands)
         {
             if (!(hudBase < windowBase && windowBase < modalBase && modalBase < toastBase && toastBase < debugBase && debugBase < ceiling))
             {
                 throw new ArgumentException("Layer band bases must be strictly ascending: hud < window < modal < toast < debug < ceiling.");
             }
 
-            bases = trustBase is int priority
-                ? new[] { hudBase, windowBase, modalBase, toastBase, debugBase, priority }
+            // Leave room between stingers and the manager for captions.
+            const int overlayBase = 31200;
+            const int stingerBase = 31340;
+            const int stingerLimit = 31360;
+            const int managerBase = 31380;
+            const int trustOverlayBase = 31950;
+            const int trustPromptBase = 31960;
+            bases = includeOverlayBands
+                ? new[] { hudBase, windowBase, modalBase, toastBase, debugBase, trustPromptBase, overlayBase, managerBase,
+                    stingerBase, trustOverlayBase }
                 : new[] { hudBase, windowBase, modalBase, toastBase, debugBase };
-            limits = new int[bases.Length];
-            Array.Copy(bases, 1, limits, 0, bases.Length - 1);
-            limits[limits.Length - 1] = ceiling;
+            limits = includeOverlayBands
+                ? new[] { windowBase, overlayBase, toastBase, debugBase, trustOverlayBase, ceiling, stingerBase, modalBase,
+                    stingerLimit, trustPromptBase }
+                : new[] { windowBase, modalBase, toastBase, debugBase, ceiling };
             next = (int[])bases.Clone();
             released = new SortedSet<int>[bases.Length];
             allocationCounts = new Dictionary<int, int>[bases.Length];
@@ -180,6 +205,11 @@ namespace TopiaForge.Mods.UnityUi
         public int Remaining(TopiaForgeLayerBand band)
         {
             RequirePublicBand(band);
+            return ReserveRemaining(band);
+        }
+
+        internal int ReserveRemaining(TopiaForgeLayerBand band)
+        {
             var index = (int)band;
             return (limits[index] - next[index]) + released[index].Count;
         }

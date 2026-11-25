@@ -33,7 +33,9 @@ namespace TopiaForge.ModManager
             {
                 if (context == null) return false;
                 var text = UiNodeWireCodec.Text(r, 512); var tone = (UiTone)UiNodeWireCodec.Byte(r, 3); UiNodeWireCodec.End(r);
-                if (context.UiService is IRemoteUiReceiver plain) plain.RemoteToast(text, tone);
+                if (context.UiService is IRemoteTargetedToastReceiver targeted)
+                    targeted.RemoteTargetedToast(owner, text, tone);
+                else if (context.UiService is IRemoteUiReceiver plain) plain.RemoteToast(text, tone);
                 else context.UiService.ShowToast(text, tone);
                 return true;
             }
@@ -64,7 +66,7 @@ namespace TopiaForge.ModManager
                 return true;
             }
             var id = UiNodeWireCodec.Text(r, 128); var title = UiNodeWireCodec.Text(r); var body = UiNodeWireCodec.Text(r);
-            var surfaceKind = (UiSurfaceKind)UiNodeWireCodec.Byte(r, 2);
+            var surfaceKind = (UiSurfaceKind)UiNodeWireCodec.Byte(r, (byte)UiSurfaceKind.Overlay);
             var width = UiNodeWireCodec.Number(r); var height = UiNodeWireCodec.Number(r);
             var anchor = (UiHudAnchor)UiNodeWireCodec.Byte(r, 8); var visibility = (UiHudVisibility)UiNodeWireCodec.Byte(r, 1);
             var visible = UiNodeWireCodec.Byte(r, 1) != 0;
@@ -74,14 +76,25 @@ namespace TopiaForge.ModManager
                 if (!ui.Disposed && ui.Surface?.IsVisible == true && ui.Revision == revision)
                     Reply(owner, ui.PresentationOwned ? null : ui.Context?.Lifetime, sender, token, revision, control, value, 14);
             }, UiClockEpoch, out var envelope);
+            var dismissible = UiWireCodec.ReadSurfaceDismissible(r, surfaceKind);
             UiNodeWireCodec.End(r);
             if (surfaceKind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content)) return false;
+            if (ui.SurfaceKind.HasValue && ui.SurfaceKind.Value != surfaceKind) return false;
+            var overlayClass = ui.OverlayClass;
+            if (surfaceKind == UiSurfaceKind.Overlay)
+            {
+                if (envelope == null || (ui.SurfaceKind.HasValue && ui.Dismissible != dismissible)) return false;
+                var admission = UiOverlayAdmission.Check(content, dismissible, overlayClass);
+                if (!admission.TryGetValue(out var kindClass)) return false;
+                overlayClass = kindClass;
+            }
             var theme = default(UiRemoteThemeSelection);
             if (envelope == null && context == null && !ui.PresentationOwned) return false;
             if (envelope != null && (!AuthenticateUiTheme(envelope, owner, out theme) || !targetedGenerations.Allows(token, envelope))) return false;
             if (!UiPresentationTheme.ViewerAdmits(content, theme)) return false;
             var surfaceRequest = new UiSurfaceRequest("remote-" + token, title, body, surfaceKind, width, height, content);
             if (surfaceKind == UiSurfaceKind.Hud) surfaceRequest = surfaceRequest.WithHudAnchor(anchor).WithHudVisibility(visibility);
+            if (surfaceKind == UiSurfaceKind.Overlay && !dismissible) surfaceRequest = surfaceRequest.WithDismissible(false);
             if (ui.Modal != null || revision < ui.Revision ||
                 (revision == ui.Revision && !UiPresentationTheme.SameEnvelope(ui.Envelope, envelope))) return false;
             var previous = ui.Surface;
@@ -100,7 +113,8 @@ namespace TopiaForge.ModManager
                 {
                     ShowReceivedSurface(surface, visible);
                     if (!MultiplayerPresentation.SurfaceAlive(surface)) return false;
-                    WatchReceivedDismissal(surface, ui, sender, token);
+                    if (overlayClass == null || (overlayClass == UiOverlayContentKind.Interactive && dismissible))
+                        WatchReceivedDismissal(surface, ui, sender, token);
                     prepared = true;
                 }
                 finally
@@ -119,6 +133,7 @@ namespace TopiaForge.ModManager
 
             targetedGenerations.Commit(token, envelope);
             ui.Body = body; ui.Revision = revision; ui.Shown = visible; ui.Envelope = envelope;
+            ui.SurfaceKind = surfaceKind; ui.OverlayClass = overlayClass; ui.Dismissible = dismissible;
             if (envelope != null)
             {
                 ui.PresentationOwned = true;
@@ -181,25 +196,27 @@ namespace TopiaForge.ModManager
                 var surface = surfaces[i];
                 if (surface.Token != token || surface.Context.Mod != context.Mod) continue;
                 if (!surface.Target.Id.Equals(sender) || !surface.Target.IsPresent || !surface.IsVisible) return false;
+                if (surface.OverlayClass != null && surface.Stream != (Channel?.GetGeneration(sender) ?? 0)) return false;
                 // An author's callback that throws is the author's failure, logged as the local UI kit logs it, never a
                 // refused reply and never the end of this frame's other replies.
                 if (kind == 15)
                 {
                     // Revisions retire controls, not the player's choice to close the same window. A content update
                     // can cross that dismissal in flight; accept its earlier revision, never an unseen future one.
-                    if (revision == 0 || revision > surface.Revision) return false;
-                    using (runtime.Intents.EnterForwarded(context.Mod, IntentSource.UiCallback, sender.Value))
+                    if (!surface.AllowsRemoteDismissal || revision == 0 || revision > surface.Revision ||
+                        control.Length != 0 || value.Length != 0) return false;
+                    using (runtime.Intents.EnterForwarded(surface.Context.Mod, IntentSource.UiCallback, sender.Value))
                     {
                         try { surface.Hide(); }
-                        catch (Exception exception) { ReportCallback(context, "window dismissal", exception); }
+                        catch (Exception exception) { ReportCallback(surface.Context, "surface dismissal", exception); }
                     }
                     return true;
                 }
                 if (surface.Revision != revision) return false;
-                using (runtime.Intents.EnterForwarded(context.Mod, IntentSource.UiCallback, sender.Value))
+                using (runtime.Intents.EnterForwarded(surface.Context.Mod, IntentSource.UiCallback, sender.Value))
                 {
                     try { return UiNodeWireCodec.Invoke(surface.Content, control, value); }
-                    catch (Exception exception) { ReportCallback(context, "window control '" + control + "'", exception); return true; }
+                    catch (Exception exception) { ReportCallback(surface.Context, "surface control '" + control + "'", exception); return true; }
                 }
             }
             for (var i = 0; i < modals.Count; i++)
@@ -214,6 +231,11 @@ namespace TopiaForge.ModManager
             }
             return false;
         }
+    }
+
+    internal interface IRemoteTargetedToastReceiver
+    {
+        OperationResult<bool> RemoteTargetedToast(string ownerPackageId, string message, UiTone tone);
     }
 
     internal interface IRemoteUiReceiver

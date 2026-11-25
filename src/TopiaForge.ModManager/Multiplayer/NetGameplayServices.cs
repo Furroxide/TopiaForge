@@ -144,16 +144,15 @@ namespace TopiaForge.ModManager
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
             UnityMainThreadGuard.AssertCurrent();
-            var presentation = Replication.Services.Players?.Presentation;
-            var profile = Replication.Profile;
-            // Retain an eligible solo HUD too, so opening the existing game to players needs no author rebuild.
-            var eligible = Core.Multiplayer.PresentationRoutingPolicy.Route(Core.Multiplayer.NetRealm.ListenHost, profile,
-                Core.Multiplayer.PresentationKind.HudSurface) == Core.Multiplayer.PresentationRoute.MirrorToEveryone;
-            return request.Kind == UiSurfaceKind.Hud && presentation != null && eligible
-                ? presentation.CreateHud(Replication, inner, request) : inner.CreateSurface(request);
+            return Replication.Services.Players is { } players
+                ? players.CreateContextSurface(Replication, inner, request)
+                : inner.CreateSurface(request);
         }
 
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => inner.ShowModal(request, completed);
+
+        public OperationResult<bool> ShowStinger(UiStingerRequest request) =>
+            Replication.Services.Players is { } players ? players.ShowContextStinger(Replication, inner, request) : inner.ShowStinger(request);
 
         public OperationResult<bool> ShowMapNotice(string message, UiTone tone)
         {

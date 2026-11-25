@@ -57,6 +57,14 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         internal bool TryShowNext(out int view, out T toast)
         {
+            if (!TryStageNext(out view, out toast)) return false;
+            CommitStaged(view);
+            return true;
+        }
+
+        /// <summary>Offers the queue head for measurement without starting its clock or taking it out of the queue.</summary>
+        internal bool TryStageNext(out int view, out T toast)
+        {
             view = -1;
             toast = default!;
             if (waiting.Count == 0 || HeldCount() >= maxShown)
@@ -64,23 +72,47 @@ namespace TopiaForge.Mods.UnityUi
                 return false;
             }
 
-            var entry = waiting.Dequeue();
             view = FreeView();
+            toast = waiting.Peek().Toast;
+            return true;
+        }
+
+        /// <summary>Admits the measured queue head to its free view and starts its visible lifetime.</summary>
+        internal void CommitStaged(int view)
+        {
+            var entry = waiting.Dequeue();
             var state = views[view];
             state.Held = true;
             state.Leaving = false;
+            state.Parked = false;
             state.Fresh = true;
             state.Remaining = entry.Seconds;
             state.Height = 0f;
-            toast = entry.Toast;
+            state.GapAbove = gap;
+        }
+
+        /// <summary>Reports whether a view still owns a toast that can be placed as space permits.</summary>
+        internal bool IsOpen(int view) => views[view].Held && !views[view].Leaving;
+
+        /// <summary>Reports whether a view is currently in the visible stack.</summary>
+        internal bool IsPlaced(int view) => Rests(views[view]);
+
+        /// <summary>Pauses or resumes an existing toast at its remaining lifetime. Returns true when it changes state.</summary>
+        internal bool SetParked(int view, bool parked)
+        {
+            var state = views[view];
+            if (state.Parked == parked) return false;
+            state.Parked = parked;
+            state.Fresh = !parked;
             return true;
         }
 
         /// <summary>Sets how tall a view's toast is, as its view measured the text; the toasts after it rest that much further along.</summary>
-        internal void SetHeight(int view, float height)
+        internal void SetHeight(int view, float height, float? gapAbove = null)
         {
             if (view < 0 || view >= views.Count) return;
             views[view].Height = height > 0f && !float.IsInfinity(height) ? height : 0f;
+            views[view].GapAbove = gapAbove ?? gap;
         }
 
         /// <summary>
@@ -93,7 +125,7 @@ namespace TopiaForge.Mods.UnityUi
             for (var index = 0; index < views.Count; index++)
             {
                 var state = views[index];
-                if (!state.Held || state.Leaving)
+                if (!Rests(state))
                 {
                     continue;
                 }
@@ -123,7 +155,7 @@ namespace TopiaForge.Mods.UnityUi
 
             for (var index = 0; index < view; index++)
             {
-                if (Rests(views[index])) top += views[index].Height + gap;
+                if (Rests(views[index])) top += views[index].Height + views[index].GapAbove;
             }
 
             fresh = views[view].Fresh;
@@ -142,6 +174,7 @@ namespace TopiaForge.Mods.UnityUi
             var state = views[view];
             state.Held = false;
             state.Leaving = false;
+            state.Parked = false;
             state.Fresh = false;
             state.Remaining = 0f;
         }
@@ -153,7 +186,7 @@ namespace TopiaForge.Mods.UnityUi
             waiting.Clear();
         }
 
-        private static bool Rests(ViewState state) => state.Held && !state.Leaving;
+        private static bool Rests(ViewState state) => state.Held && !state.Leaving && !state.Parked;
 
         private int HeldCount()
         {
@@ -194,9 +227,11 @@ namespace TopiaForge.Mods.UnityUi
         {
             internal bool Held;
             internal bool Leaving;
+            internal bool Parked;
             internal bool Fresh;
             internal float Remaining;
             internal float Height;
+            internal float GapAbove;
         }
     }
 }

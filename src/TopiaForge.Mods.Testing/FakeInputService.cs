@@ -16,8 +16,17 @@ namespace TopiaForge.Mods.Testing
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         }
 
+        private bool uiFocused;
+        private Func<bool>? overlayFocus;
+
         /// <inheritdoc/>
-        public bool IsUiFocused { get; set; }
+        public bool IsUiFocused
+        {
+            get => uiFocused || overlayFocus?.Invoke() == true;
+            set => uiFocused = value;
+        }
+
+        internal void FollowOverlayFocus(Func<bool> focus) => overlayFocus = focus;
 
         /// <inheritdoc/>
         public IReadOnlyList<InputConflict> GetConflicts()

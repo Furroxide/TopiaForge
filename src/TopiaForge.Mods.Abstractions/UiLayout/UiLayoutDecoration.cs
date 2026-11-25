@@ -91,6 +91,35 @@ namespace TopiaForge.Mods
                 }
             }
 
+            return ResolveComponent(effective, component, size, highContrast, styleId, fill, selected);
+        }
+
+        internal static UiLayoutDecoration ResolveComponent(UiThemeDescriptor effective, UiThemeTarget target,
+            UiLayoutExtent size, bool highContrast) =>
+            ResolveComponent(effective, effective.Components[target], size, highContrast, null, UiPaintRole.Surface, false);
+
+        internal static bool AdmitsStingerStyle(UiStingerRequest request, UiThemeDescriptor descriptor) =>
+            request.Style == null || descriptor.Styles.TryGetValue(request.Style.Id, out var style) &&
+            style.Target == UiThemeTarget.Stinger && (!style.Fill.HasValue || style.Fill.Value == request.Role);
+
+        internal static UiLayoutDecoration ResolveStinger(UiStingerRequest request, UiThemeDescriptor effective,
+            UiThemeDescriptor? declared, UiLayoutExtent size, bool highContrast)
+        {
+            var component = effective.Components[UiThemeTarget.Stinger];
+            string? styleId = null;
+            if (request.Style != null && declared != null && effective.Digest.Span.SequenceEqual(declared.Digest.Span) &&
+                effective.Styles.TryGetValue(request.Style.Id, out var style) && style.Target == UiThemeTarget.Stinger)
+            {
+                component = style.Component;
+                styleId = request.Style.Id;
+            }
+
+            return ResolveComponent(effective, component, size, highContrast, styleId, request.Role, false);
+        }
+
+        private static UiLayoutDecoration ResolveComponent(UiThemeDescriptor effective, UiThemeComponent component,
+            UiLayoutExtent size, bool highContrast, string? styleId, UiPaintRole fill, bool selected)
+        {
             var radius = effective.Shape.Resolve(component.Radius, (float)size.Width, (float)size.Height);
             var halfShortEdge = Math.Min(size.Width, size.Height) / 2d;
             var border = (double)component.Border;

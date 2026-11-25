@@ -12,6 +12,7 @@ namespace TopiaForge.ModManager
         private Func<bool, bool>? capture;
         private Action<string>? warn;
         private Action<UiWireEnvelope?>? committed;
+        private Action? released;
         private object? hotkey;
         private int requestedFrame;
         private bool pending;
@@ -21,11 +22,12 @@ namespace TopiaForge.ModManager
         private void Awake() => enabled = false;
 
         internal void Initialize(Func<bool, bool> capture, Action<string> warn, Action<UiWireEnvelope?>? committed,
-            bool watchDevice = false)
+            bool watchDevice = false, Action? released = null)
         {
             this.capture = capture;
             this.warn = warn;
             this.committed = committed;
+            this.released = released;
             this.watchDevice = watchDevice;
             lastDevice = TopiaForgeInputOwnership.LastViewerDevice;
             hotkey = TopiaForgeHotkeys.Register(UiGalleryCaptureFixture.Owner, TopiaForgeKey.F11, Request);
@@ -73,13 +75,21 @@ namespace TopiaForge.ModManager
             enabled = watchDevice;
         }
 
-        private void OnDestroy()
+        private void OnDestroy() => Release();
+
+        internal void Release()
         {
             if (hotkey != null) TopiaForgeHotkeys.Unregister(hotkey);
             hotkey = null;
             capture = null;
             warn = null;
             committed = null;
+            watchDevice = false;
+            pending = false;
+            enabled = false;
+            var cleanup = released;
+            released = null;
+            cleanup?.Invoke();
         }
     }
 }

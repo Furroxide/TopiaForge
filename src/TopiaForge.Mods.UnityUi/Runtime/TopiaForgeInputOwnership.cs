@@ -143,9 +143,8 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             stopped = false;
-            Gate.ForgetAll();
             ResetViewerInput();
-            TopiaForgeBindingCaptureInput.Reset();
+            ResetInputGates();
             TopiaForgeNavigateAction.Reset();
             selection = null;
             selectionText = null;
@@ -154,9 +153,8 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Lets go of every taken press, as when the game loses focus and the Input System releases every key.</summary>
         internal static void ForgetHeld()
         {
-            Gate.ForgetAll();
             ViewerInput.ForgetHeld();
-            TopiaForgeBindingCaptureInput.Reset();
+            ResetInputGates();
         }
 
         /// <summary>Gets whether a surface's root still exists and shows.</summary>
@@ -187,8 +185,7 @@ namespace TopiaForge.Mods.UnityUi
             {
                 if (eventPtr.IsA<DeviceResetEvent>())
                 {
-                    Gate.Forget(device.deviceId);
-                    TopiaForgeBindingCaptureInput.Forget(device.deviceId);
+                    ForgetInputDevice(device.deviceId);
                     return;
                 }
 
@@ -212,6 +209,7 @@ namespace TopiaForge.Mods.UnityUi
 
                 if (!Gate.Examines(kind, claims))
                 {
+                    FinishPauseEscape(device, eventPtr);
                     return;
                 }
 
@@ -235,9 +233,7 @@ namespace TopiaForge.Mods.UnityUi
             if (change == InputDeviceChange.Removed || change == InputDeviceChange.Disconnected
                 || change == InputDeviceChange.SoftReset || change == InputDeviceChange.HardReset)
             {
-                Gate.Forget(device.deviceId);
-                ViewerInput.Forget(device.deviceId);
-                TopiaForgeBindingCaptureInput.Forget(device.deviceId);
+                ForgetInputDevice(device.deviceId);
             }
         }
 
@@ -293,6 +289,8 @@ namespace TopiaForge.Mods.UnityUi
             bindings.Direction(code, out var x, out var y);
             var pressed = key.IsValueConsideredPressed(value) ? 1f : 0f;
             var before = key.isPressed ? 1f : 0f;
+            if (key.keyCode == InputSystemKey.Escape)
+                claims = RouteKeyboardEscape(keyboard.deviceId, pressed, before, claims, frame);
             if (Gate.Take(keyboard.deviceId, TopiaForgeInputDevice.Keyboard, code, bindings.RoleOf(code), pressed, before, x, y, claims, frame))
             {
                 key.ResetToDefaultStateInEvent(eventPtr);
@@ -384,8 +382,7 @@ namespace TopiaForge.Mods.UnityUi
         private static void Stop(Exception exception)
         {
             stopped = true;
-            Gate.ForgetAll();
-            TopiaForgeBindingCaptureInput.Reset(failed: true);
+            ResetInputGates(failed: true);
 
             // Only the failure's type: an Input System message can carry a device's name, which can carry a person's.
             TopiaForgeLog.Error("TopiaForge stopped keeping keys from the game after a failure (" + exception.GetType().Name

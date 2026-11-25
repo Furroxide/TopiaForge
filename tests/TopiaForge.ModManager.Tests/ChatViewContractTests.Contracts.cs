@@ -9,7 +9,6 @@ namespace TopiaForge.ModManager.Tests
             {
                 using UnityEngine;
                 using UnityEngine.EventSystems;
-                public enum TopiaForgeLayerBand { Hud, Window, Modal }
                 public enum TopiaForgeGap { Sm }
                 public enum TopiaForgeTextStyle { Caption }
                 public enum TopiaForgeTone { Muted, Warning }

@@ -1,8 +1,8 @@
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
-    /// A surface Back can dismiss (windows, modals). Back is Escape, or a controller's B. While the surface is on the
-    /// dismiss stack, the game never sees a Back press: one press dismisses only the topmost surface.
+    /// A surface that handles Back, such as a window or modal. Back is Escape or a controller's B.
+    /// TopiaForge delivers each Back press it takes to the topmost live surface.
     /// </summary>
     public interface ITopiaForgeDismissable
     {

@@ -61,6 +61,7 @@ namespace TopiaForge.ModManager.Tests
         private const string Probe = """
             using System;
             using System.Collections.Generic;
+            using System.Linq;
             using System.Reflection;
             using TopiaForge.Mods;
             using TopiaForge.Mods.UnityUi;
@@ -189,9 +190,17 @@ namespace TopiaForge.ModManager.Tests
                 public static class TopiaForgeTokens { public const float SafeMargin = 18f, ScrollGutter = 12f; }
                 public static class TopiaForgeTheme { public static event Action? Changed; }
                 internal enum TopiaForgeTone { Neutral }
+                internal static class TopiaForgeLayerPriority { internal const int Overlay = 5; }
+                internal static class TopiaForgeLayers { internal static bool HasRoom(int band) => true; }
                 internal static class TopiaForgeToasts
                 {
                     internal static readonly List<string> Plain = new();
+                    internal static float DockTop, SubtitleReserve;
+                    internal static void SetBottomRightHudTop(float height, float reserve = 0f)
+                    {
+                        DockTop = height;
+                        SubtitleReserve = reserve;
+                    }
                     internal static void ShowPlain(string text, TopiaForgeTone tone) => Plain.Add(text);
                 }
                 public sealed class UiHost
@@ -204,6 +213,19 @@ namespace TopiaForge.ModManager.Tests
                         bool persistent) => throw new NotSupportedException();
                     public TopiaForgeFullscreenTool FullscreenTool(string id, string title, TopiaForgeScheme scheme,
                         bool persistent) => throw new NotSupportedException();
+                    internal TopiaForgeOverlay Overlay(string id, string title, float width, float height,
+                        UiOverlayContentKind kind, bool dismissible) => throw new NotSupportedException();
+                }
+                internal sealed class TopiaForgeOverlay : TopiaForgeWidget
+                {
+                    internal TopiaForgeContainer Content => throw new NotSupportedException();
+                    internal void Show() => throw new NotSupportedException();
+                    internal void Close() => throw new NotSupportedException();
+                    internal int ViewportRevision => 0;
+                    internal void RefreshViewport() { }
+                    internal void SetCompositionReady(bool value) { }
+                    internal UiLayoutConstraints MeasureContent(TopiaForgeLabel label) =>
+                        throw new InvalidOperationException("The HUD fixture has no overlay content.");
                 }
                 public sealed class TopiaForgeLayerSlot
                 {
@@ -222,6 +244,7 @@ namespace TopiaForge.ModManager.Tests
                     public TopiaForgeLabel(string text, TopiaForgeTextStyle role)
                     { Go.Component = new TMPro.TMP_Text(text, role == TopiaForgeTextStyle.Heading ? 24f : 20f); }
                     public TopiaForgeLabel PlainText() => this;
+                    public TopiaForgeLabel AlignCenter() => this;
                     public TopiaForgeLabel Ellipsis() { Go.GetComponent<TMPro.TMP_Text>()!.Wrap = false; return this; }
                     public void SetText(string text) => Go.GetComponent<TMPro.TMP_Text>()!.text = text;
                 }
@@ -292,6 +315,7 @@ namespace TopiaForge.ModManager.Tests
                 internal static class UiThemeScope { internal static UiThemeDescriptor? Ready(UiThemeDescriptor? value) => value; }
                 internal sealed partial class OwnerUiService
                 {
+                    private static readonly UiNode EmptyOverlayContent = new UiColumn();
                     private readonly UiHost host;
                     private readonly object? uiInput = null;
                     private readonly UnityUiHudPlacement hudPlacement;
@@ -367,6 +391,21 @@ namespace TopiaForge.ModManager.Tests
                             Check(surface.LayoutCalls == calls + 1, "A changed key cap refreshes retained HUD geometry once with the same viewport.");
                             canvas.pixelRect = new Rect(0, 0, 900, 1080);
                             Check(!surface.Fits(), "The real staging constraints include the canvas's physical aperture.");
+                            var docked = new RectTransform { Canvas = canvas };
+                            var corner = placement.Add(host, docked, TopiaForgeCorner.BottomRight, 60f);
+                            placement.SetShown(corner, true);
+                            Check(TopiaForgeToasts.DockTop == 84f && TopiaForgeToasts.SubtitleReserve == .12f,
+                                "The visible bottom-right HUD publishes its height, margin and subtitle reserve to the toast renderer.");
+                            var scaledHost = new UiHost { EffectiveUiScale = 2f };
+                            var second = placement.Add(scaledHost, new RectTransform { Canvas = canvas }, TopiaForgeCorner.BottomRight, 60f);
+                            placement.SetShown(second, true);
+                            Check(TopiaForgeToasts.DockTop == 212f,
+                                "Toast clearance includes both HUDs at their own scales and the preceding panel gap.");
+                            placement.SetShown(corner, false);
+                            Check(TopiaForgeToasts.DockTop == 168f,
+                                "The remaining HUD publishes its own scaled safe margin after its peer hides.");
+                            placement.SetShown(second, false);
+                            Check(TopiaForgeToasts.DockTop == 0f, "A hidden HUD relinquishes its toast clearance.");
                         }
                         using (var placement = new UnityUiHudPlacement())
                         {
@@ -887,6 +926,7 @@ namespace TopiaForge.ModManager.Tests
                         private readonly ProbeLayoutRenderer? layoutRenderer;
                         private readonly TopiaForgeWindow? window;
                         private readonly TopiaForgeFullscreenTool? fullscreen;
+                        private readonly TopiaForgeOverlay? overlay;
                         private readonly ProbeLifetime lifetime = new ProbeLifetime();
                         private readonly ProbePresence presence = new ProbePresence();
                         private readonly ProbeLogger logger = new ProbeLogger();
@@ -999,6 +1039,10 @@ namespace TopiaForge.ModManager.Tests
                         public void Hide() => HideNativeView();
                         public void Dispose() => HideNativeView();
                         private void ResetGraphConnections(bool retire) { }
+                        internal bool IsAuthoredOverlay => false;
+                        internal static UnityUiSurface ForOverlay(string id, TopiaForgeOverlay overlay, TopiaForgeLabel body,
+                            UiOverlayContentKind kind, ProbeLifetime lifetime, ProbeLogger logger, Action<UnityUiSurface> release) =>
+                            throw new NotSupportedException();
 
                         /* surface chrome */
                         /* surface presence */
@@ -1047,7 +1091,7 @@ namespace TopiaForge.ModManager.Tests
                         internal bool OriginalShown => compositionRoot?.Go.activeSelf == true;
                         internal int LayoutCalls => layoutRenderer?.Calls ?? 0;
                         private readonly record struct ContentStamp(TopiaForgeWidget View, string ClockEpoch, int BodyVersion,
-                            int ArtworkVersion, int DockVersion, Rect OuterScrollViewport)
+                            int ArtworkVersion, int DockVersion, Rect OuterScrollViewport, int OverlayViewportRevision)
                         {
                             internal bool Matches(in ContentStamp other) => this == other;
                         }

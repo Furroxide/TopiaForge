@@ -72,6 +72,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             TopiaForgeDebugOverlay.Dispose();
             TopiaForgeToasts.Reset();
+            TopiaForgeStingerAnnouncements.Reset();
 
             while (Hosts.Count > 0)
             {

@@ -162,9 +162,11 @@ namespace TopiaForge.ModManager.Tests
         private static void ToastsStackFromTheBottomRight()
         {
             var toast = Read("src", "TopiaForge.Mods.UnityUi", "Widgets", "TopiaForgeToast.cs");
+            var layout = Read("src", "TopiaForge.Mods.UnityUi", "Widgets", "TopiaForgeToast.Layout.cs");
             RequireSource(toast, "root.Rect.anchorMin = new Vector2(1f, 0f);", "Toasts must dock at the bottom right.");
             RequireSource(toast, "root.Rect.pivot = new Vector2(1f, 0f);", "A toast must rest on its bottom edge.");
-            RequireSource(toast, "var targetY = TopiaForgeTokens.SafeMargin + top;", "Toasts must stack upwards from the bottom margin.");
+            RequireSource(layout, "var targetY = bottom + top;", "Toasts must stack upwards from the dock clearance.");
+            RequireSource(layout, "dockClearance + StackGap * scale", "The lowest toast must leave a gap above visible bottom-right HUDs.");
         }
 
         // A world load that waits on a paused game tells the player through its provider's own toasts.

@@ -8,6 +8,37 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class ZombiesControllerTests
     {
+        private static void WaveClearAnnouncesOncePerTransition()
+        {
+            var config = FastConfig();
+            config.ShopEnabled = true;
+            using var harness = new Harness(config);
+            harness.Advance(0.01f);
+            harness.Controller.TestingSetWavePhase();
+            harness.Advance(0.01f);
+            var ui = harness.Context.Ui;
+            var first = ui.ActiveStinger;
+            Assert(first?.Request is
+            { Title: "WAVE CLEAR", Subtitle: "Requisitions open", Glyph: UiGlyph.Check, Role: UiPaintRole.Success, DurationSeconds: 2.5 } &&
+                ui.Stingers.Count == 1 && FindSurface(harness.Context, "zombies-status")
+                    .TryFindNode(ZombiesHudPresenter.PhaseNodeId, out var phase) && phase is UiText { Text: "REQUISITIONS OPEN" },
+                "the wave clear transition announces its Success role once and leaves the available action in the HUD");
+
+            harness.Advance(1f);
+            Assert(ReferenceEquals(ui.ActiveStinger, first) && ui.Stingers.Count == 1,
+                "the inter-wave HUD does not publish or restart the same announcement on subsequent frames");
+            harness.Advance(2.1f);
+            Assert(ui.ActiveStinger == null && ui.Stingers.Count == 1,
+                "the wave clear announcement expires while requisitions remain available");
+
+            harness.Controller.TestingSetWavePhase();
+            harness.Advance(0.01f);
+            Assert(ui.Stingers.Count == 2 && ui.ActiveStinger is { Request.Title: "WAVE CLEAR" },
+                "a later wave clear can announce again after the first expires");
+            harness.Dispose();
+            Assert(ui.ActiveStinger == null, "ending the scoped Zombies controller clears an active wave announcement");
+        }
+
         // Keep deterministic uplink behavior testable even when optional live conversation services are enabled.
         private static void DisabledShopSkipsCreditsAndRequisitionFeedback()
         {
@@ -31,8 +62,10 @@ namespace TopiaForge.ModManager.Tests
                 && !hud.TryFindNode(ZombiesHudPresenter.RequisitionsSlotId, out _)
                 && !hud.TryFindNode(ZombiesHudPresenter.JackInSlotId, out _)
                 && !hud.TryFindNode(ZombiesHudPresenter.StandDownSlotId, out _)
-                && string.Equals(LastToast(harness.Context), "Wave clear.", StringComparison.Ordinal),
-                "disabling requisitions should remove its economy, HUD line, and wave-clear prompt without affecting score");
+                && hud.TryFindNode(ZombiesHudPresenter.PhaseNodeId, out var phase) && phase is UiText { Text: "INTERMISSION" }
+                && harness.Context.Ui.ActiveStinger?.Request is
+                { Title: "WAVE CLEAR", Subtitle: "", Role: UiPaintRole.Success },
+                "disabling requisitions removes its economy, HUD line, and wave-clear prompt while preserving score");
         }
 
         private static void UplinkFailuresExplainWithoutSpendingCharge()

@@ -44,15 +44,22 @@ namespace TopiaForge.ModManager
         {
             selection = default;
             if (targetedOwner != null && !string.Equals(targetedOwner, envelope.OwnerPackageId, StringComparison.Ordinal)) return false;
-            var signed = runtime.Control?.UiPresentationPackageDigest(envelope.OwnerPackageId);
+            if (!AuthenticateUiPackage(envelope.OwnerPackageId, envelope.PackageDigest.Span, out var local)) return false;
+            selection = new UiRemoteThemeSelection(envelope, local);
+            return true;
+        }
+
+        internal bool AuthenticateUiPackage(string owner, ReadOnlySpan<byte> packageDigest, out MultiplayerContentInventory.LoadedPackage? local)
+        {
+            local = null;
+            var signed = runtime.Control?.UiPresentationPackageDigest(owner);
             Span<byte> digest = stackalloc byte[32];
-            if (signed == null || !UiPresentationTheme.TryHexDigest(signed, digest) || !envelope.PackageDigest.Span.SequenceEqual(digest)) return false;
+            if (signed == null || !UiPresentationTheme.TryHexDigest(signed, digest) || !packageDigest.SequenceEqual(digest)) return false;
 
             // A compatible session package can differ locally. Only the exact installed archive may supply the theme.
-            var local = FindLocalUiPackage(envelope.OwnerPackageId);
+            local = FindLocalUiPackage(owner);
             if (local != null && (local.NetworkClass != ModNetworkClass.Shared || !string.Equals(local.Sha256, signed, StringComparison.Ordinal)))
                 local = null;
-            selection = new UiRemoteThemeSelection(envelope, local);
             return true;
         }
 
@@ -72,11 +79,11 @@ namespace TopiaForge.ModManager
         }
 
         private OperationResult<bool> StageTargetEnvelope(PlayerContext context, ParticipantId target, ulong stream,
-            UiThemeDescriptor? theme, UiNode? content, Dictionary<(ParticipantId Target, PlayerContext Scope), ulong>? drafts,
+            UiSurfaceRequest request, UiThemeDescriptor? theme, UiNode? content, Dictionary<(ParticipantId Target, PlayerContext Scope), ulong>? drafts,
             out UiWireEnvelope? envelope)
         {
             envelope = null;
-            var required = UiPresentationTheme.RequiredVersion(content, theme);
+            var required = UiPresentationTheme.RequiredVersion(request, content, theme);
             if (required == InternalUiPresentationContract.LegacyVersion) return UiPresentationTheme.Allowed;
             if (stream == 0 || !SupportsUiVersion(target, required)) return UiPresentationTheme.UnsupportedVersion(required);
             if (!TryOutgoingUiDigest(context.Mod, requireSignedRoster: true, out var digest)) return UiPresentationTheme.UnadmittedPackage;
@@ -189,7 +196,8 @@ namespace TopiaForge.ModManager
             var epoch = UiClockEpoch;
             try
             {
-                var stage = StageTargetEnvelope(surface.Context, target, stream, theme, surface.PresentationContent, drafts, out var envelope);
+                var stage = StageTargetEnvelope(surface.Context, target, stream, surface.Request, theme, surface.PresentationContent,
+                    drafts, out var envelope);
                 if (!stage.Succeeded) return stage;
                 var revision = TargetRevision(surface, epoch, envelope, replacing: false);
                 _ = UiWireCodec.MeasureTargetedSurface(surface.Context.Mod, target.Value, surface.Token, revision,

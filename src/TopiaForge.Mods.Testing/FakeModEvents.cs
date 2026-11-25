@@ -28,6 +28,7 @@ namespace TopiaForge.Mods.Testing
             sceneLifecycle.Count;
 
         internal CapturedModLogger Logger => logger;
+        internal Action? AdvanceUiPresentation { private get; set; }
 
         /// <inheritdoc/>
         public IDisposable SubscribeUpdate(Action<float> handler) => Subscribe(updates, handler);
@@ -57,7 +58,11 @@ namespace TopiaForge.Mods.Testing
         public void RaiseFixedUpdate(GameTimeSample sample) => Raise(fixedUpdates, sample, "fixed update");
 
         /// <summary>Raises one late-frame update.</summary>
-        public void RaiseLateUpdate(GameTimeSample sample) => Raise(lateUpdates, sample, "late update");
+        public void RaiseLateUpdate(GameTimeSample sample)
+        {
+            AdvanceUiPresentation?.Invoke();
+            Raise(lateUpdates, sample, "late update");
+        }
 
         /// <summary>Raises a successful scene-load notification.</summary>
         public void RaiseSceneLoaded(string sceneName) =>

@@ -45,6 +45,8 @@ namespace TopiaForge.Mods.Internal
         public bool WasReleased(string actionName) => IsPresent && backend != null && backend.Input(Id).WasReleased(actionName);
         public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral) =>
             IsPresent && backend != null ? backend.Ui(Id).ShowToast(message, tone) : Fail<bool>();
+        public OperationResult<bool> ShowStinger(UiStingerRequest request) =>
+            IsPresent && backend != null ? backend.Ui(Id).ShowStinger(request) : Fail<bool>();
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) =>
             IsPresent && backend != null ? backend.Ui(Id).ShowModal(request, completed) : Fail<IUiModal>();
         public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) =>

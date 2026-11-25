@@ -4,6 +4,7 @@
 
 - Live action bindings can be cleared with an empty rebind and restored from their defaults. The Key glyphs page shows the cleared action.
 
+- The OVERLAYS tab now previews all nine stinger roles, a coalescing announcement queue, overlays stacked above a live HUD, and the kit's four toast tones.
 - The SESSIONS page now previews the actual VOICE controls with synthetic consent, microphone, transmission and player states.
 
 ## 0.2.0

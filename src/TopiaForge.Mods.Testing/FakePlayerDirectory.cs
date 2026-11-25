@@ -68,6 +68,7 @@ namespace TopiaForge.Mods.Testing
             if (!states.TryGetValue(id, out var state)) return false;
             WorldView.RemovePlayer(id);
             RetireAppearance(id);
+            state.Ui.ForgetStingers();
             states.Remove(id);
             records.RemoveAll(record => record.Id.Equals(id)); Refresh();
             // As in the game, a player who leaves answers no modal, so each one it was asked reports a cancellation.
@@ -75,7 +76,18 @@ namespace TopiaForge.Mods.Testing
             return true;
         }
         /// <summary>Replaces the participant list generation, even if every id and key is unchanged.</summary>
-        public void ReplaceGeneration() { Check(); foreach (var id in states.Keys) { WorldView.RemovePlayer(id); RetireAppearance(id); } generation++; Refresh(); }
+        public void ReplaceGeneration()
+        {
+            Check();
+            foreach (var player in states)
+            {
+                WorldView.RemovePlayer(player.Key);
+                RetireAppearance(player.Key);
+                player.Value.Ui.ForgetStingers();
+            }
+            generation++;
+            Refresh();
+        }
         /// <summary>Gets a present player's configurable game services.</summary>
         public FakePlayerState State(ParticipantId id) => states.TryGetValue(id, out var state) ? state : throw new ArgumentException("The player is absent.", nameof(id));
         /// <summary>Clears all press/release edges, preserving held actions, for the next simulated tick.</summary>
@@ -126,6 +138,13 @@ namespace TopiaForge.Mods.Testing
         }
         private IPlayerInput BackendInput(ParticipantId id) => State(id).Input;
         private IPlayerUi BackendUi(ParticipantId id) => new FakeTargetUi(this, id);
+        internal void FanOutStinger(FakeStinger stinger)
+        {
+            if (disposed || !IsAuthoritative) return;
+            foreach (var record in records)
+                if (record.Id.Value != "local") State(record.Id).Ui.ReceiveBroadcastStinger(stinger);
+        }
+
         private bool Allowed(ParticipantId id) => IsAuthoritative || id.Value == "local";
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         private static OperationResult<T> Refused<T>() where T : notnull => OperationResult<T>.Failure(ModErrorCode.NotAuthoritative, "Only the host can act on another player.");
@@ -134,6 +153,8 @@ namespace TopiaForge.Mods.Testing
             private readonly FakePlayerDirectory owner;
             private readonly ParticipantId id;
             internal FakeTargetUi(FakePlayerDirectory owner, ParticipantId id) { this.owner = owner; this.id = id; }
+            public OperationResult<bool> ShowStinger(UiStingerRequest request) =>
+                owner.Allowed(id) ? owner.State(id).Ui.ShowTargetedStinger(request) : Refused<bool>();
             public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral) => owner.Allowed(id) ? owner.State(id).Ui.ShowToast(message, tone) : Refused<bool>();
             public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => owner.Allowed(id) ? owner.State(id).Ui.ShowModal(request, completed) : Refused<IUiModal>();
             public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)

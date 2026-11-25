@@ -8,9 +8,11 @@ namespace TopiaForge.Mods.Testing
         private static readonly UiCaptureViewport ReferenceViewport = new UiCaptureViewport(1920, 1080);
         internal static bool VerifyComposition(FakeUiService service, FakeUiSurface surface, UiNode? content, FakeUiImages images)
         {
-            if (content == null) return true;
-            return new FakeUiTreeCapture(service, surface, ReferenceViewport, UiCaptureControlState.Rest, null, images)
-                .VerifyComposition(content, admitting: true);
+            if (content == null && surface.Request.Kind != UiSurfaceKind.Overlay) return true;
+            var capture = new FakeUiTreeCapture(service, surface, ReferenceViewport, UiCaptureControlState.Rest, null, images);
+            return surface.Request.Kind == UiSurfaceKind.Overlay
+                ? capture.VerifyOverlay(content)
+                : capture.VerifyComposition(content!, admitting: true);
         }
 
         private bool VerifyComposition(UiNode content, bool admitting = false)

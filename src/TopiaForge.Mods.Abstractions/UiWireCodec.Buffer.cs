@@ -65,8 +65,23 @@ namespace TopiaForge.Mods
             writer.WriteByte((byte)request.HudAnchor);
             writer.WriteByte((byte)request.HudVisibility);
             Flag(writer, visible);
-            WriteComposition(writer, content, clockEpoch, retained, envelope);
+            WriteSurfaceComposition(writer, request, content, clockEpoch, retained, envelope);
         }
+
+        internal static bool WriteSurfaceComposition(IUiWireWriter writer, UiSurfaceRequest request,
+            UiNode? content, string clockEpoch, bool retained, UiWireEnvelope? envelope)
+        {
+            var overlay = request.Kind == UiSurfaceKind.Overlay;
+            if (overlay && envelope == null)
+                throw new ArgumentException("An overlay requires a UI ownership envelope.");
+
+            var timed = Prepare(writer, content, clockEpoch, retained, envelope);
+            if (overlay) Flag(writer, request.Dismissible);
+            return timed;
+        }
+
+        internal static bool ReadSurfaceDismissible(IUiWireReader reader, UiSurfaceKind kind) =>
+            kind != UiSurfaceKind.Overlay || Byte(reader, 1) != 0;
 
         private sealed class Counter : IUiWireWriter
         {

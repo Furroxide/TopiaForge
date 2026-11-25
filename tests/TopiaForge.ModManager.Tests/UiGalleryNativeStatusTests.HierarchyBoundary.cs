@@ -9,6 +9,8 @@ namespace TopiaForge.ModManager.Tests
             using TMPro;
             using TopiaForge.ModManager;
             using TopiaForge.Mods;
+            using TopiaForge.Mods.UnityUi;
+            using TopiaForge.UiGallery.Pages;
             using UnityEngine;
             using UnityEngine.UI;
 
@@ -32,12 +34,13 @@ namespace TopiaForge.ModManager.Tests
                         UiThemeColor? backdrop) => throw new NotSupportedException("This fixture has no graph.");
                     private static UiCaptureNodeFlags Flags(Button button) => throw new NotSupportedException();
                     private void HitAndFocus(string path, Button button, string text, UiThemeColor? backdrop) => throw new NotSupportedException();
-                    private UiCaptureNodePaint Decoration(RectTransform view, Graphic fill) => throw new NotSupportedException();
+                    /* native decoration */
                     private UiCaptureNodePaint ArtPaint(Graphic mark, UiThemeColor? backdrop) => throw new NotSupportedException();
                 }
 
                 internal static class UiGalleryCaptureFixture
                 {
+                    internal const string PresentationHudId = "gallery-presentation-hud";
                     /* authored text gates */
                 }
 
@@ -99,6 +102,7 @@ namespace TopiaForge.ModManager.Tests
                     internal GameObject(Transform transform) { this.transform = transform; }
                     internal bool activeSelf = true;
                     internal bool activeInHierarchy => activeSelf && (transform.parent?.gameObject.activeInHierarchy ?? true);
+                    internal T? GetComponent<T>() where T : Component => transform.GetComponent<T>();
                 }
                 internal class Transform
                 {
@@ -134,6 +138,7 @@ namespace TopiaForge.ModManager.Tests
                     internal RectTransform(Transform? parent, string name, float x, float y, float width, float height) : base(parent, name) =>
                         Frame = new UiCaptureRect(x, y, width, height);
                     internal UiCaptureRect Frame { get; set; }
+                    internal Vector2 anchoredPosition;
                     internal Rect rect => new(Frame.Width, Frame.Height);
                     internal Vector3 TransformPoint(Vector3 local) => new(Frame.X + local.x, Screen.height - Frame.Bottom + local.y);
                     internal void GetWorldCorners(Vector3[] corners)
@@ -160,7 +165,10 @@ namespace TopiaForge.ModManager.Tests
                     internal RenderMode renderMode => RenderMode.ScreenSpaceOverlay;
                     internal Camera? worldCamera => null;
                     internal float scaleFactor => 1f;
+                    internal int sortingOrder;
                 }
+                internal sealed class CanvasGroup : Behaviour { internal float alpha = 1f; }
+                internal static class Application { internal static string version => "fixture"; }
                 internal sealed class CanvasRenderer
                 {
                     internal bool cull;
@@ -170,6 +178,7 @@ namespace TopiaForge.ModManager.Tests
 
             namespace UnityEngine.UI
             {
+                internal sealed class GraphicRaycaster : Behaviour { }
                 internal sealed class RectMask2D : Behaviour { internal Vector4 padding; internal Vector2Int softness; }
                 internal sealed class ScrollRect : Behaviour { internal bool vertical; internal RectTransform? viewport, content; }
                 internal class Graphic : Behaviour
@@ -203,6 +212,7 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed class TMP_Text : Graphic
                 {
                     internal string text = "";
+                    internal bool richText;
                     internal float fontSize;
                     internal FontStyles fontStyle;
                     internal TMP_FontAsset? font;
@@ -229,7 +239,12 @@ namespace TopiaForge.ModManager.Tests
                 }
                 internal enum TopiaForgeScheme { Hud }
                 internal enum TopiaForgeTextStyle { Body, Label, Mono }
-                internal readonly record struct TopiaForgeEffectiveAccessibility(float UiScale);
+                internal readonly record struct TopiaForgeEffectiveAccessibility(float UiScale)
+                {
+                    internal bool HighContrast => false;
+                    internal bool ReducedMotion => false;
+                    internal float MotionIntensity => 1f;
+                }
                 internal sealed record TopiaForgeResolvedTheme(UiThemeDescriptor Descriptor)
                 {
                     internal TopiaForgeScheme Scheme => TopiaForgeScheme.Hud;
@@ -244,6 +259,36 @@ namespace TopiaForge.ModManager.Tests
                         role == TopiaForgeTextStyle.Mono ? Mono : Body;
                 }
                 internal static class TopiaForgeSprites { internal static UiGlyph? Glyph(UiGlyph glyph) => glyph; }
+                internal sealed class UiHost { }
+                internal class TopiaForgeContainer
+                {
+                    internal TopiaForgeContainer(RectTransform rect) { Rect = rect; }
+                    internal RectTransform Rect { get; }
+                    internal GameObject Go => Rect.gameObject;
+                }
+                internal sealed class TopiaForgeOverlay : TopiaForgeContainer
+                {
+                    internal TopiaForgeOverlay(RectTransform rect, RectTransform content, RectTransform title, bool dismissible)
+                        : base(rect)
+                    {
+                        Content = new TopiaForgeContainer(content);
+                        TitleLabel = new TopiaForgeContainer(title);
+                        Dismissible = dismissible;
+                    }
+                    internal TopiaForgeContainer Content { get; }
+                    internal TopiaForgeContainer TitleLabel { get; }
+                    internal bool HasNavigationFocus;
+                    internal bool Covered;
+                    internal bool Dismissible { get; }
+                }
+                internal static class TopiaForgeOverlayStack { internal static bool IsCovered(TopiaForgeOverlay overlay) => overlay.Covered; }
+                internal sealed class TopiaForgeStinger : TopiaForgeContainer
+                {
+                    internal TopiaForgeStinger(RectTransform rect, string announcement) : base(rect) { Announcement = announcement; }
+                    internal string Announcement { get; }
+                    internal bool UsesDeclaredFaces;
+                    internal UiThemeDescriptor Typography = UiThemePackParser.Default;
+                }
             }
             """;
     }

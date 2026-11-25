@@ -172,7 +172,7 @@ internal static partial class RuntimeAdmissionTests
     private sealed class FoundationAuthor : IDisposable
     {
         private readonly RuntimeReplication origin;
-        private readonly MultiplayerPresentation presentation;
+        private readonly MultiplayerPlayers players;
         private readonly ThemeProbe ui;
 
         internal FoundationAuthor(UiDeliveryEndpoint endpoint, string packageId, ControlPeer peer)
@@ -181,7 +181,7 @@ internal static partial class RuntimeAdmissionTests
             ui = new ThemeProbe(Lifetime, manifest.AdmittedUi!);
             ui.PresentationThemeScope!.PrepareSelection = endpoint.Players.PrepareThemeSelection;
             origin = endpoint.Replication.Bind(packageId, new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer), Lifetime);
-            presentation = endpoint.Players.Presentation!;
+            players = endpoint.Players;
             That(Themes.UseTheme(FoundationTheme).Succeeded, "The admitted author selects its own published theme.");
         }
 
@@ -190,7 +190,7 @@ internal static partial class RuntimeAdmissionTests
 
         internal IUiSurface Open(string title, UiNode content)
         {
-            var result = presentation.CreateHud(origin, ui,
+            var result = players.CreateContextSurface(origin, ui,
                 new UiSurfaceRequest(title, title, "Ready", UiSurfaceKind.Hud, 360, 215, content));
             That(result.Succeeded, "A signed, admitted scope can publish a themed HUD: " + result.ErrorMessage);
             return result.Value!;

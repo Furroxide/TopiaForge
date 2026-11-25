@@ -276,9 +276,11 @@ namespace TopiaForge.ModManager.Tests
             var reset = Between(filter, "internal static void Reset()", "internal static void ForgetHeld()");
             Require(reset, "InputSystem.onEvent -= Filter;", "and stops as it stops");
             Require(reset, "InputSystem.onDeviceChange -= DeviceChanged;", "device changes too");
-            Require(reset, "Gate.ForgetAll();", "letting go of every taken press");
-            Require(Between(filter, "private static void Stop(", "exception.GetType().Name"), "Gate.ForgetAll();",
+            Require(reset, "ResetInputGates();", "letting go of every taken press");
+            Require(Between(filter, "private static void Stop(", "exception.GetType().Name"), "ResetInputGates(failed: true);",
                 "a failure lets go of every taken press too, so the game keeps its input");
+            Require(Kit("Runtime", "TopiaForgeInputOwnership.PauseEscape.cs"), "Gate.ForgetAll();",
+                "the shared reset releases ordinary claimed presses");
 
             var runtime = Kit("Runtime", "TopiaForgeRuntime.cs");
             Require(Between(runtime, "private void OnEnable()", "private void OnDisable()"), "TopiaForgeInputOwnership.Install();",

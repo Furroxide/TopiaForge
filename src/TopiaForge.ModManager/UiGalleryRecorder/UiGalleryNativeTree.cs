@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager
         private readonly bool fallback;
         private readonly double clockTime;
         private readonly string clockEpoch;
+        private readonly float unitScale;
         private readonly UiCaptureRect screen;
         private readonly Vector3[] corners = new Vector3[4];
         private readonly List<Observation> observations = new List<Observation>();
@@ -28,7 +29,7 @@ namespace TopiaForge.ModManager
         private string? dropdownChoicesPath;
 
         internal UiGalleryNativeTree(Canvas canvas, TopiaForgeResolvedTheme theme,
-            TopiaForgeEffectiveAccessibility accessibility, bool fallback, double clockTime, string clockEpoch)
+            TopiaForgeEffectiveAccessibility accessibility, bool fallback, double clockTime, string clockEpoch, float unitScale = 1f)
         {
             this.canvas = canvas;
             camera = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
@@ -36,13 +37,14 @@ namespace TopiaForge.ModManager
             this.fallback = fallback;
             this.clockTime = clockTime;
             this.clockEpoch = clockEpoch;
+            this.unitScale = unitScale;
             screen = new UiCaptureRect(0, 0, Screen.width, Screen.height);
             Accessibility = accessibility;
         }
 
         internal int Width => (int)screen.Width;
         internal int Height => (int)screen.Height;
-        internal float PixelsPerUnit => canvas.scaleFactor;
+        internal float PixelsPerUnit => canvas.scaleFactor * unitScale;
         internal TopiaForgeEffectiveAccessibility Accessibility { get; }
         internal TopiaForgeScheme Scheme => theme.Scheme;
         internal UiThemeDescriptor Descriptor => theme.Descriptor ?? UiThemePackParser.Default;
@@ -51,7 +53,7 @@ namespace TopiaForge.ModManager
 
         internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform composition,
             RectTransform? imageNotice, out UiTreeCapture? result, TopiaForgeGraphConnections? connections = null,
-            string? queuedNotice = null)
+            string? queuedNotice = null, TMP_Text? presentationHudTitle = null)
         {
             result = null;
             if (!surface.IsChildOf(canvas.transform) || !composition.IsChildOf(surface) || fixture.Content == null ||
@@ -62,6 +64,12 @@ namespace TopiaForge.ModManager
             if (imageNotice == null || fixture.Kind != UiSurfaceKind.Hud)
                 Add("/", fixture.Id, fixture.Kind.ToString(), composition, EmptyContent, new UiCaptureNodePaint(null, fill));
             if (fixture.Kind == UiSurfaceKind.Window && !WindowTitle(fixture, surface, fill)) return false;
+            if (fixture.Id == UiGalleryCaptureFixture.PresentationHudId)
+            {
+                PresentationOrder = canvas.sortingOrder;
+                PresentationTakesInput = canvas.GetComponent<GraphicRaycaster>() is { isActiveAndEnabled: true };
+                if (!Text("/title", null, "SurfaceTitle", presentationHudTitle, fixture.Title, UiTextStyle.Heading, fill)) return false;
+            }
             if (connections != null && !GraphConnectionsLauncher(connections)) return false;
             if (connections?.IsOpen == true)
             {
@@ -90,9 +98,11 @@ namespace TopiaForge.ModManager
                     content = content.WithFlags((content.Flags & ~UiCaptureNodeFlags.HitTarget) | UiCaptureNodeFlags.Disabled);
                 nodes.Add(new UiCapturedNode(item.Path, item.Id, item.Kind, item.Bounds, content, item.Paint,
                     item.KitPaint ? UiThemePackParser.Default.Id : Descriptor.Id,
-                    fallback || item.LocalFallback, item.Rendered, item.Clipped, item.Occluded || (item.Group >= 0 && covered[item.Group])));
+                    fallback || item.LocalFallback, item.Rendered, item.Clipped, item.Occluded || (item.Group >= 0 && covered[item.Group]),
+                    announcement: item.Kind == "Stinger" ? announcement : null,
+                    fillOpacity: item.Kind == "OverlayScrim" ? scrimOpacity : null));
             }
-            return new UiTreeCapture(nodes, theme.HighContrast, 40f * PixelsPerUnit);
+            return new UiTreeCapture(nodes, theme.HighContrast, 40f * PixelsPerUnit, usesDeclaredStingerFaces);
         }
 
         private bool WindowTitle(UiSurfaceRequest fixture, RectTransform surface, UiThemeColor? background)
@@ -123,10 +133,10 @@ namespace TopiaForge.ModManager
         private bool Text(string path, string? id, string kind, TMP_Text? label, string authored, UiTextStyle style,
             UiThemeColor? fill, UiCaptureNodeFlags flags = UiCaptureNodeFlags.None, UiCaptureNodePaint paint = default,
             bool localFallback = false, bool kitPaint = false, string? nativeInputValue = null, string? semanticLabel = null,
-            string? state = null, string? keyLabel = null)
+            string? state = null, string? keyLabel = null, UiThemeDescriptor? textTheme = null)
         {
             if (label == null || label.font == null) return false;
-            var role = (kitPaint ? UiThemePackParser.Default : Descriptor).GetText(style);
+            var role = (textTheme ?? (kitPaint ? UiThemePackParser.Default : Descriptor)).GetText(style);
             var text = nativeInputValue != null
                 ? UiGalleryCaptureFixture.SafeAuthoredFieldValue(nativeInputValue, label.text, authored)
                 : UiGalleryCaptureFixture.SafeDisplayText(label.text, authored, role.IsUppercase);

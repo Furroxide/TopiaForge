@@ -25,7 +25,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var kit = "src/TopiaForge.Mods.UnityUi/";
             var inputFiles = new[] { "Core/TopiaForgeInputClaim.cs", "Core/TopiaForgeInputGate.cs", "Core/TopiaForgeDismissOrder.cs",
-                "Core/TopiaForgeNavigationDriver.cs", "Core/TopiaForgeTypingStart.cs", "Runtime/TopiaForgeTextInput.cs" };
+                "Core/TopiaForgeLayerBands.cs", "Core/TopiaForgeNavigationDriver.cs", "Core/TopiaForgeTypingStart.cs", "Runtime/TopiaForgeTextInput.cs" };
             var methods = "namespace TopiaForge.Mods.UnityUi { public partial class Widget { "
                 + Method(root, kit + "Widgets/TopiaForgeWidget.cs", "PushDismissable")
                 + " } public partial class TopiaForgeInputField { "

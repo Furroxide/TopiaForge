@@ -33,6 +33,7 @@ namespace TopiaForge.Mods.Testing
         {
             UseInput(input);
             fixtureInputOwner = ownerId;
+            input.FollowOverlayFocus(IsOverlayFocused);
         }
 
         internal FakeInputAction? FindInputAction(string name, UiWireEnvelope? receiver) =>

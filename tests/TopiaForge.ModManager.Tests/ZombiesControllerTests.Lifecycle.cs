@@ -62,8 +62,14 @@ namespace TopiaForge.ModManager.Tests
                 sessions.Publish(WorldSessionPhase.Running, session, session.World);
                 Assert(context.Commands.TryExecute("zombies-status", Array.Empty<string>(), out var running) && running!.Succeeded,
                     "matching running session accepts retained package commands");
+                var resourcesBeforeRestart = context.Lifetime.TrackedResourceCount;
+                var subscriptionsBeforeRestart = context.Events.ActiveSubscriptionCount;
                 Assert(pause.Invoke("zombies-restart") && session.RestartRequests == 0,
                     "restart run retains its wave-reset behavior instead of requesting a world reload");
+                Assert(context.Ui.Toasts.Count == cycle + 1 && context.Ui.Toasts[cycle].Message == "Zombies run restarted."
+                    && context.Events.ActiveSubscriptionCount == subscriptionsBeforeRestart
+                    && context.Lifetime.TrackedResourceCount == resourcesBeforeRestart,
+                    "the restart toast preserves feedback and the controller's SDK subscription baseline");
                 var successor = NewSession(context, "different-" + cycle);
                 sessions.Publish(WorldSessionPhase.Running, successor, successor.World);
                 Assert(context.Commands.TryExecute("zombies-restart", Array.Empty<string>(), out var stale)

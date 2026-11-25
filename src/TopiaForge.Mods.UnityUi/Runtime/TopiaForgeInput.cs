@@ -41,14 +41,16 @@ namespace TopiaForge.Mods.UnityUi
         internal static bool BackHeld()
         {
             Probe();
-            return (legacyAvailable && Input.GetKey(KeyCode.Escape)) || TopiaForgeInputOwnership.BackHeld;
+            return (legacyAvailable && !TopiaForgeInputOwnership.SuppressesLegacyEscape && Input.GetKey(KeyCode.Escape))
+                || TopiaForgeInputOwnership.BackHeld;
         }
 
         /// <summary>Gets whether Back was pressed this frame: Escape through legacy input, or a Back press TopiaForge took.</summary>
         internal static bool BackPressedThisFrame()
         {
             Probe();
-            return (legacyAvailable && Input.GetKeyDown(KeyCode.Escape)) || TopiaForgeInputOwnership.BackPressedThisFrame;
+            return (legacyAvailable && !TopiaForgeInputOwnership.SuppressesLegacyEscape && Input.GetKeyDown(KeyCode.Escape))
+                || TopiaForgeInputOwnership.BackPressedThisFrame;
         }
 
         private static void Probe()

@@ -181,6 +181,18 @@ namespace TopiaForge.ModManager.Tests
             var first = Parse("""{"styles":[{"id":"a","target":"box","radius":"small"},{"id":"b","target":"card","radius":"card"}]}""");
             var second = Parse("""{"styles":[{"target":"card","id":"b","radius":"card","border":"standard","shadow":"none","fill":null},{"id":"a","target":"box","radius":"small"}]}""");
             Assert(first.Digest.Span.SequenceEqual(second.Digest.Span), "Named style order and explicit null fill canonicalize identically.");
+
+            var slotFirst = Parse("""
+                {"styles":[{"id":"reload","target":"actionSlot","radius":"control"},{"id":"banner","target":"stinger","radius":"card"}]}
+                """);
+            var stingerFirst = Parse("""
+                {"styles":[{"id":"banner","target":"stinger","radius":"card"},{"id":"reload","target":"actionSlot","radius":"control"}]}
+                """);
+            Assert(slotFirst.MinimumWireVersion == UiWireCodec.ControlsContractVersion &&
+                stingerFirst.MinimumWireVersion == UiWireCodec.ControlsContractVersion &&
+                slotFirst.CanonicalComponentCount == (int)UiThemeTarget.Stinger + 1 &&
+                slotFirst.Digest.Span.SequenceEqual(stingerFirst.Digest.Span),
+                "Mixed ActionSlot and Stinger style order preserves the normalized theme fingerprint.");
             var changedFill = Parse("""{"styles":[{"id":"a","target":"box","radius":"small","fill":"surface"},{"id":"b","target":"card","radius":"card"}]}""");
             Assert(!first.Digest.Span.SequenceEqual(changedFill.Digest.Span), "A concrete named fill differs from an inherited role.");
 

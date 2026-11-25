@@ -266,6 +266,7 @@ namespace TopiaForge.ModManager
                 return;
             }
 
+            TopiaForgeOverlayStack.SetGamePaused(UIState.IsPaused.Value);
             if (Input.GetKeyDown(KeyCode.F10))
             {
                 overlay.Toggle();

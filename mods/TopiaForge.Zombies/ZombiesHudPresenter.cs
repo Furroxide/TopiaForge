@@ -371,7 +371,7 @@ namespace TopiaForge.Zombies
                 case ZombiesPhase.Starting:
                     return "SYSTEM BOOT";
                 case ZombiesPhase.InterWave:
-                    return "WAVE CLEAR";
+                    return value.ShopReady ? "REQUISITIONS OPEN" : "INTERMISSION";
                 case ZombiesPhase.GameOver:
                     return "SYSTEM FAILURE";
                 case ZombiesPhase.ReturningToMenu:

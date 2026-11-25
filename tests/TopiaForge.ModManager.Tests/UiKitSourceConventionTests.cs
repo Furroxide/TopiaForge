@@ -216,17 +216,18 @@ namespace TopiaForge.ModManager.Tests
         // tests cover; the Unity side must place and bring in such a view, and slide exits from where toasts rest.
         private static void ToastsPresentEveryViewFresh()
         {
-            var toast = File.ReadAllText(Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi", "Widgets", "TopiaForgeToast.cs"));
+            var widgets = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi", "Widgets");
+            var toast = string.Join("\n", Directory.EnumerateFiles(widgets, "TopiaForgeToast*.cs").Select(File.ReadAllText));
             RequireSource(toast, "Stack.TryPlace(index, out var top, out var fresh)", "Toasts must be placed as the toast stack says.");
             RequireSource(toast, "view.Label.textWrappingMode = TextWrappingModes.Normal;", "A longer toast must wrap to its lines, not end after one.");
-            RequireSource(toast, "view.Label.GetPreferredValues(ThreeLines, width, 0f).y", "A toast's text must stop at three lines, so a longer one ends in an ellipsis.");
-            RequireSource(toast, "Stack.SetHeight(index, height);", "A toast that wraps must push the toasts below it down.");
-            if (!Regex.IsMatch(toast, @"if \(fresh\)\s*\{[^}]*anchoredPosition = new Vector2\(restingX, targetY\);[^}]*TopiaForgeMotion\.ToastIn\(view\.Root, restingX\);"))
+            RequireSource(toast, "label.GetPreferredValues(ThreeLines, width, 0f).y", "A toast's text must stop at three lines, so a longer one ends in an ellipsis.");
+            RequireSource(toast, "Stack.SetHeight(index, MeasuredHeight(view), StackGap * view.Scale);", "The column uses the scaled measured height of each wrapped toast.");
+            if (!Regex.IsMatch(toast, @"if \(fresh\)\s*\{[^}]*anchoredPosition = new Vector2\(restingX, targetY\);[^}]*TopiaForgeMotion\.ToastIn\(root, restingX, view\.Content\.Viewer, view\.Scale\);"))
             {
                 throw new InvalidOperationException("A fresh toast view must be placed at its slot and brought in, whatever it showed before.");
             }
 
-            RequireSource(toast, "TopiaForgeMotion.ToastOut(view.Root, -TopiaForgeTokens.SafeMargin,", "A toast's exit must slide from where toasts rest, so exits never add up.");
+            RequireSource(toast, "TopiaForgeMotion.ToastOut(view.Root, view.RestingX,", "A toast's exit must slide from where toasts rest, so exits never add up.");
             if (toast.Contains("Mathf.Approximately(position.x, 0f)", StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("A toast view's freshness must come from the toast stack, not from where the view sits.");
@@ -239,7 +240,7 @@ namespace TopiaForge.ModManager.Tests
             var exit = Regex.Match(presets, @"void ToastOut\([^)]*\)\s*\{(?<body>[^}]*)\}");
             var slide = exit.Groups["body"].Value.IndexOf("TopiaForgeTween.MoveX(", StringComparison.Ordinal);
             var fade = exit.Groups["body"].Value.IndexOf("TopiaForgeTween.FadeTo(", StringComparison.Ordinal);
-            if (!exit.Success || slide < 0 || fade < 0 || slide > fade || !Regex.IsMatch(exit.Groups["body"].Value, @"FadeTo\([^;]*onDone\);"))
+            if (!exit.Success || slide < 0 || fade < 0 || slide > fade || !Regex.IsMatch(exit.Groups["body"].Value, @"FadeTo\([^;]*\bonDone\b[^;]*\);"))
             {
                 throw new InvalidOperationException("A toast's exit must start its slide before the fade whose completion hands the view to the next toast.");
             }

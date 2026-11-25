@@ -89,6 +89,44 @@ its HUDs and stops its loops. A destroyed host canvas retires its mirror; a dest
 the latest state within the once-per-second retry cadence. Guest text is displayed literally, and shared HUDs cannot
 capture input or run callbacks.
 
+A `UiSurfaceKind.Overlay` shows a centered content plate over a gameplay scrim. The HUD beneath it
+stays alive and keeps updating. An overlay with interactive content takes focus when it is on top.
+Back hides a dismissible overlay. Use `WithDismissible(false)` with an enabled button that offers a
+way forward. The game pause and trust prompts remain available. Read-only overlays leave input
+with the game. Reduced motion makes entry and exit immediate.
+
+A scope can keep four live overlays, including hidden ones. A gamemode server mirrors read-only
+overlays within the same surface and byte quotas as its shared HUDs. Interactive overlays stay
+local unless you address a player through `IPlayer.Ui.CreateSurface`. An overlay keeps its initial
+interaction class, and its viewers must support UI contract 3.
+
+`ctx.Ui.ShowStinger(request)` shows a short centre announcement. A gamemode server also sends it to
+connected guests with UI contract 3 or later. Use `player.Ui.ShowStinger(request)` for one recipient.
+An older targeted player returns `Unavailable`. Each author scope can show one announcement at a time
+and queue three more. Equal title, subtitle, glyph and role coalesce. A full queue returns `RateLimited`.
+Stingers are one-shot events, so players who join or reconnect receive future announcements.
+
+UI contract 3 uses Players presentation event kind 34 for stingers and kind 35 for their retirement.
+A stinger carries the optional audience, authenticated package ID and digest, theme ID and descriptor
+digest, a nonzero session-local scope token, one font-fit byte, and the announcement fields. Value 0
+selects measured kit faces. Value 1 permits the measured declared chain when it is ready and the theme
+matches. A receiver chooses its faces when the event enters the queue and keeps the font, case and
+tracking until retirement. A pending or failed custom face can use the measured kit fallback.
+
+Each recipient queues announcements independently by package and scope token. The sender reserves
+an addressed slot for the display duration plus the longer of the declared theme's slow exit and the
+kit's slow exit. Success acknowledges sender admission for dispatch. Delivery jitter can still
+leave the guest's queue full when a later event arrives. Broadcast uses the same per-recipient
+reservation and may skip a guest. A slower guest may drop a broadcast if its queue is still full
+when the event arrives. The receiver emits one queue-full diagnostic per delivery pattern in a session.
+
+When that scope stops, kind 35 carries the exact recipient, the same authenticated package ID and digest,
+and the scope token. Each token sends at most one retirement to each recipient that previously received
+a counted event. A scope that never sent an event sends no retirement. Retirement travels after the
+stingers on the same reliable stream and bypasses the ordinary event bucket, so a full bucket cannot
+keep the stopped scope's queue open. Both kinds are one-shot events with no retained surface generation
+or replay on reconnect.
+
 See [presentation routing](https://github.com/Furroxide/TopiaForge/blob/5c2e66efe4b7cbb90647c316bb62817d9d8822c8/docs/internal/MultiplayerRuntimeIntegration.md#scoreboard-seam-and-later-presentation) for
 the budgets and transport behavior.
 
@@ -109,8 +147,11 @@ different mods never overlap, and a hidden HUD gives its space up. A HUD keeps i
 Its title stays on one line, and its body fills the panel inside its padding, wrapping only past the
 panel's inner width: a 260-unit HUD wraps body text at 224 units, whatever the UI scale.
 
-Toasts stack upwards from the bottom-right corner, clear of the level objective, above every HUD,
-window and dialog.
+`ctx.Ui.ShowToast(message, tone)` uses the kit's HUD theme with the viewer's accessibility
+settings. Success, Warning and Danger pair their colors with a check, warning glyph and cross.
+The toast treats its text literally and fits it into three lines, up to 512 characters.
+Four toasts can show, with up to 64 waiting. They stack upward from the bottom-right corner
+above the visible HUDs there and draw above ordinary windows and dialogs.
 
 Destructive actions require a destructive modal and explicit confirmation. Long content belongs in
 a scrollable or virtualized provider surface. Gameplay overlays should avoid steady-state allocation;
