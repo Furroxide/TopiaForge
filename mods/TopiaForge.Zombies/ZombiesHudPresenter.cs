@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using TopiaForge.Mods;
@@ -33,7 +34,8 @@ namespace TopiaForge.Zombies
             int seconds,
             int chargePercent,
             bool uplinkAvailable,
-            bool shopEnabled)
+            bool shopEnabled,
+            double? interWaveEndsAt = null)
         {
             Phase = phase;
             Wave = wave;
@@ -51,6 +53,7 @@ namespace TopiaForge.Zombies
             ChargePercent = chargePercent;
             UplinkAvailable = uplinkAvailable;
             ShopEnabled = shopEnabled;
+            InterWaveEndsAt = interWaveEndsAt;
         }
 
         public ZombiesPhase Phase { get; }
@@ -66,6 +69,7 @@ namespace TopiaForge.Zombies
         public int UplinkCharges { get; }
         public int MaximumUplinkCharges { get; }
         public int Seconds { get; }
+        public double? InterWaveEndsAt { get; }
         public int ChargePercent { get; }
         public bool UplinkAvailable { get; }
         public bool ShopEnabled { get; }
@@ -79,6 +83,7 @@ namespace TopiaForge.Zombies
             && Credits == other.Credits && ComboMultiplier == other.ComboMultiplier
             && UplinkCharges == other.UplinkCharges
             && MaximumUplinkCharges == other.MaximumUplinkCharges && Seconds == other.Seconds
+            && InterWaveEndsAt == other.InterWaveEndsAt
             && ChargePercent == other.ChargePercent && UplinkAvailable == other.UplinkAvailable
             && ShopEnabled == other.ShopEnabled;
 
@@ -103,6 +108,7 @@ namespace TopiaForge.Zombies
     internal sealed class ZombiesHudPresenter : IDisposable
     {
         internal const string PhaseNodeId = "zombies-phase";
+        internal const string InterWaveTimerNodeId = "zombies-inter-wave-timer";
         internal const string WaveNodeId = "zombies-wave";
         internal const string ScoreNodeId = "zombies-score";
         internal const string DetailsNodeId = "zombies-details";
@@ -116,6 +122,7 @@ namespace TopiaForge.Zombies
 
         private static readonly UiFlexLayout IconAndLabel = new UiFlexLayout(
             spacing: UiSpace.Xs, crossAxisAlignment: UiCrossAxisAlignment.Center);
+        private static readonly UiThresholds WaveThresholds = new UiThresholds(10, 5);
 
         private readonly IUiSurface surface;
         private readonly IModLogger logger;
@@ -140,7 +147,7 @@ namespace TopiaForge.Zombies
                 string.Empty,
                 UiSurfaceKind.Hud,
                 530f,
-                330f));
+                348f));
             if (!result.TryGetValue(out var created) || created == null)
             {
                 throw new InvalidOperationException(
@@ -200,7 +207,7 @@ namespace TopiaForge.Zombies
         private UiNode BuildContent(in ZombiesHudSnapshot value)
         {
             var phase = PhaseLabel(value);
-            if (value.Seconds > 0)
+            if (value.Phase == ZombiesPhase.Starting && value.Seconds > 0)
             {
                 phase += "  //  " + value.Seconds.ToString(CultureInfo.InvariantCulture) + "s";
             }
@@ -215,32 +222,51 @@ namespace TopiaForge.Zombies
                     UiPaintRole.Accent, UiBadgeStyle.Outlined, UiGlyph.Star, id: ComboNodeId),
             } : new UiNode[] { wave, score };
 
-            var integrity = WithGlyph(UiGlyph.Health, IntegrityIconId, new UiText(
-                "INTEGRITY  " + value.Integrity.ToString(CultureInfo.InvariantCulture)
-                + " / " + value.MaximumIntegrity.ToString(CultureInfo.InvariantCulture),
-                UiTextStyle.Label, id: IntegrityNodeId));
-            var supplies = value.ShopEnabled ? new UiNode[]
-            {
-                integrity,
-                WithGlyph(UiGlyph.Notes, CreditsIconId, new UiText("CREDITS  " + value.Credits.ToString(CultureInfo.InvariantCulture),
-                    UiTextStyle.Label, id: CreditsNodeId)),
-            } : new UiNode[] { integrity };
-            var supplySummary = new UiWrap(supplies, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs);
-            var details = new UiText(BuildDetails(value), id: DetailsNodeId);
-            var supplyContent = value.UplinkAvailable
-                ? new UiColumn(supplySummary, UplinkStatus(value), details)
-                : new UiColumn(supplySummary, details);
+            UiNode waveContent = new UiWrap(waveStats, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs);
+            if (value.Phase == ZombiesPhase.InterWave)
+                waveContent = new UiColumn(waveContent, InterWaveTimer(value));
+
+            var supplies = new List<UiNode>(4) { IntegrityStatus(value) };
+            if (value.ShopEnabled)
+                supplies.Add(WithGlyph(UiGlyph.Notes, CreditsIconId, new UiText(
+                    "CREDITS  " + value.Credits.ToString(CultureInfo.InvariantCulture), UiTextStyle.Label, id: CreditsNodeId)));
+            if (value.UplinkAvailable) supplies.Add(UplinkStatus(value));
+            supplies.Add(new UiText(BuildDetails(value), id: DetailsNodeId));
 
             return new UiColumn(
-                new UiCard(new UiWrap(waveStats, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs),
+                new UiCard(waveContent,
                     header: WithGlyph(PhaseGlyph(value.Phase), PhaseIconId, new UiText(phase, UiTextStyle.Title, UiTone.Primary, PhaseNodeId)),
                     padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-wave-card"),
-                new UiCard(supplyContent,
+                new UiCard(new UiColumn(supplies),
                     padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-supplies-card"));
         }
 
         private static UiRow WithGlyph(UiGlyph glyph, string id, UiText label) => new UiRow(
             new UiNode[] { new UiIcon(glyph, size: 18f, tone: label.Tone, decorative: true, id: id), label }, IconAndLabel);
+
+        private static UiNode IntegrityStatus(in ZombiesHudSnapshot value)
+        {
+            var thresholds = new UiThresholds(value.MaximumIntegrity * 0.5d, value.MaximumIntegrity * 0.25d);
+            var bar = new UiStatBar("INTEGRITY", value.Integrity, value.MaximumIntegrity, thresholds,
+                UiStatFormat.ValueOfMaximum, id: IntegrityNodeId);
+            return new UiRow(new UiNode[]
+            {
+                new UiIcon(UiGlyph.Health, size: 18f, tone: thresholds.ToneFor(value.Integrity, bar.Tone),
+                    decorative: true, id: IntegrityIconId),
+                new UiExpanded(bar),
+            }, IconAndLabel);
+        }
+
+        private static UiNode InterWaveTimer(in ZombiesHudSnapshot value)
+        {
+            if (value.InterWaveEndsAt is double endsAt)
+                return UiCountdown.WithFormat(endsAt, "Next wave", UiCountdownFormat.MinutesSeconds, WaveThresholds,
+                    id: InterWaveTimerNodeId);
+
+            var time = (value.Seconds / 60).ToString(CultureInfo.InvariantCulture) + ":" +
+                (value.Seconds % 60).ToString("00", CultureInfo.InvariantCulture);
+            return new UiText("Next wave paused " + time, UiTextStyle.Label, id: InterWaveTimerNodeId);
+        }
 
         private static UiGlyph PhaseGlyph(ZombiesPhase phase) => phase switch
         {

@@ -12,6 +12,7 @@ namespace TopiaForge.ModManager.Tests
         {
             DefaultsAndContrastAreResolved();
             ControlComponentsPreserveLegacyThemeIdentity();
+            StatBarComponentKeepsEarlierCanonicalFields();
             AuthoredContrastIsValidated();
             StateTintsPreserveTheReviewedTransitions();
             StrictJsonRejectsInvalidInputs();
@@ -83,6 +84,23 @@ namespace TopiaForge.ModManager.Tests
                 !authored.Digest.Span.SequenceEqual(inherited.Digest.Span) &&
                 !authored.Digest.Span.SequenceEqual(amended.Digest.Span),
                 "An authored K2 component uses v3, and its effective style participates in the digest.");
+        }
+
+        private static void StatBarComponentKeepsEarlierCanonicalFields()
+        {
+            var inherited = Parse("{}");
+            var earlier = Parse("""{"components":{"button":{"radius":"control","border":"standard","shadow":"small"}}}""");
+            var authored = Parse("""{"components":{"statBar":{"radius":"pill","border":"thin","shadow":"none"}}}""");
+            var tuned = Parse("""{"components":{"statBar":{"radius":"pill","border":"strong","shadow":"none"}}}""");
+            Assert(inherited.Components[UiThemeTarget.StatBar] is
+            { Radius: UiThemeRadius.Pill, Border: UiThemeBorder.Thin, Shadow: UiThemeShadow.None } &&
+                inherited.MinimumWireVersion == UiWireCodec.FoundationContractVersion && inherited.CanonicalComponentCount == 4,
+                "The default stat bar style does not extend an existing K1 descriptor.");
+            Assert(earlier.CanonicalComponentCount == 8 && earlier.MinimumWireVersion == UiWireCodec.ControlsContractVersion,
+                "An existing K2 control theme keeps its canonical component count when a new default is available.");
+            Assert(authored.CanonicalComponentCount == 9 && authored.MinimumWireVersion == UiWireCodec.ControlsContractVersion &&
+                !authored.Digest.Span.SequenceEqual(tuned.Digest.Span),
+                "The authored stat bar component needs v3 and its border participates in the descriptor digest.");
         }
 
         private static void AuthoredContrastIsValidated()

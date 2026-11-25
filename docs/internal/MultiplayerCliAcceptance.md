@@ -179,10 +179,11 @@ Use separate profiles for the acceptance runner.
 
 Once the normal session reports a ready listen host and exactly one admitted guest, press F7 on the host.
 Each press opens a host-local fixture and sends the same safe composition to the guest through `IPlayer.Ui`.
-The sequence starts at Theme packs and ends at Tooltips and list tiles, then wraps after 79 successful presses.
+The sequence starts at Theme packs and ends at Countdowns, then wraps after 87 successful presses.
 Each of the first eleven pages cycles Paper and HUD for the kit palette, the acceptance transport palette,
 and authenticated Survival, in that order. Layout fit opens one HUD for each of those palettes.
 The five interactive control pages each open a Paper Window in the kit and transport palettes.
+Status and Countdowns each cycle kit Paper, kit HUD, transport Paper and transport HUD.
 
 | Page | First press from a fresh fixture |
 | --- | --- |
@@ -203,6 +204,8 @@ The five interactive control pages each open a Paper Window in the kit and trans
 | Toggles, checkboxes and tabs | 74 |
 | Key binding fields | 76 |
 | Tooltips and list tiles | 78 |
+| Status | 80 |
+| Countdowns | 84 |
 
 The Shared acceptance package owns its `transport-preview` descriptor and its copy of the CC0 sample bundle, receipt,
 and license. The guest checks the authenticated package and descriptor for image references even in the kit variants.
@@ -222,6 +225,69 @@ fixture lifetimes headlessly.
 The opt-in package registers the same example bindings on both viewers. To capture the unavailable key field,
 create an empty `gallery-remote-preview-no-bindings.enabled` in the guest's acceptance mod data directory
 before that profile loads. Keep the host's example bindings so it can admit and publish the fixture.
+
+#### Paired Status and Countdowns
+
+For a shorter F7 cycle, add the empty `gallery-remote-preview-status-only.enabled` alongside
+`gallery-remote-preview.enabled` before starting the host profile. The eight successful presses alternate
+Paper and HUD through kit Status, transport Status, kit Countdowns, and transport Countdowns.
+Press 9 returns to kit Status Paper. Let each publication settle before pressing F7 again.
+
+Use the two resolutions and accessibility settings of the phase's visual gate. At each setting, capture the static
+Status page on both peers. Check the captured progress percentages, Warning and Cross cues, and the text crossing
+the filled and empty sides of each stat bar. Keep the exact acceptance archive hash and check the guest tree's
+`packageSha256`, `theme`, and `descriptorSha256`.
+Both peers should use the requested palette with their own scheme and accessibility settings.
+
+Start each Countdowns run with a new F7 publication. Have both viewers ready for the automatic initial tree
+capture. Record continuous video or take frames while both timers advance. Press F11 on each viewer for a tree
+in each state and pair it with a frame showing the same digits. Use the displayed values as the source of truth.
+The expected states for `Next transfer` (`timer-transfer`) are:
+
+| Reading | Expected cue | When to request a reading after F7 |
+| --- | --- | --- |
+| `0:12` or `0:11` | None | Initial automatic capture |
+| `0:10` through `0:06` | Warning | About 3 seconds |
+| `0:05` through `0:01` | Cross | About 8 seconds |
+| `0:00` | Cross, stable at zero | About 13 seconds |
+
+Repeat the publication and use the longer `Seconds` row if the first reading settles after the short timer
+enters Warning. Its Warning, Cross, and expiry readings are roughly 15, 20, and 25 seconds after F7.
+The fixture floors the starting clock and displays whole seconds rounded up. Frame timing and guest clock
+sampling can put the two peers one displayed second apart at a boundary. Verify the displayed threshold and its
+cue on each viewer. Compare the digit alignment in the three formats. Confirm that `Elapsed` starts at
+`0:00` and that `Next transfer` stops there without pulsing or an author update.
+F7 replaces the fixture and starts fresh deadlines. F11 samples the surface already open.
+
+#### Retained countdown after a real local epoch change
+
+In a separate solo profile, open the ordinary F8 Gallery, select HUD, and open Countdowns in its default Survival theme.
+Collect the native tree and frame while the hour and minute rows still show nonzero values. Keep the Countdown HUD
+open. In the manager's GAMEMODES tab, select the fixed Multiplayer Acceptance/Open Sandbox target and choose PLAY
+without opening the session to multiplayer. After the new solo world is running, use F11 and capture the same HUD
+again without reopening the Gallery. If the profile already runs that target, a second PLAY uses the same world
+launch path. Compare the title, theme, captions and frame across both captures. The long rows must now show
+`0:00` and `0:00:00`, `Seconds` must show `0`, and `Next transfer` must show `0:00` with its Cross.
+The long values distinguish epoch retirement from ordinary expiry. File the captures as `solo`.
+
+#### Retained countdown on a paired map replacement
+
+Use a disposable listen pair with an already-admitted local map launch target. Add the empty `gallery-remote-preview-retained-countdown.enabled`
+beside `gallery-remote-preview.enabled` on the host before loading the profile. This mode selects the transport
+Countdowns HUD even if the short-cycle marker is present. Every successful F7 press starts a new run. The ordinary F7 cycle still retires
+its pair on a session replacement.
+
+Open the HUD with one F7 press after both peers are ready. Save the host and guest captures while the long
+rows are nonzero. On the same listen host, choose PLAY for the admitted local map in GAMEMODES. Use the normal
+map launch that keeps the listen process and guest connected. Once the guest follows the replacement map, use
+F11 on both peers. Keep the same acceptance archive installed and leave the original HUD in place.
+
+The host should still show formatted zeros in the old HUD. The guest should recover the same title, theme,
+captions and frame with the plain formatted zero text carried by the replacement stream: `Seconds 0`,
+`Minutes and seconds 0:00`, `Hours, minutes and seconds 0:00:00` and `Next transfer 0:00`.
+Check the guest's exact archive and descriptor hashes across both observations. A disconnect, a guest change,
+or a second replacement retires the paired fixture. If the local map cannot replace the session in place,
+record the paired epoch row as pending and keep the independent solo result.
 
 #### Art fallback
 

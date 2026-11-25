@@ -76,6 +76,9 @@ namespace TopiaForge.ModManager
                 Field(json, "themeId", node.ThemeId);
                 Field(json, "styleId", node.StyleId);
                 StatusStyle(json, node);
+                Field(json, "state", node.State);
+                Field(json, "remainingSeconds", node.RemainingSeconds);
+                Field(json, "fraction", node.Fraction);
                 Field(json, "inkColor", node.InkColor);
                 Field(json, "fillColor", node.FillColor);
                 Field(json, "cornerRadiusPixels", node.CornerRadiusPixels);
@@ -148,6 +151,10 @@ namespace TopiaForge.ModManager
 
         private static void Field(StringBuilder output, string key, float? value) =>
             Key(output, key).Append(value is float number && !float.IsNaN(number) && !float.IsInfinity(number)
+                ? number.ToString("R", CultureInfo.InvariantCulture) : "null");
+
+        private static void Field(StringBuilder output, string key, double? value) =>
+            Key(output, key).Append(value is double number && double.IsFinite(number)
                 ? number.ToString("R", CultureInfo.InvariantCulture) : "null");
     }
 }

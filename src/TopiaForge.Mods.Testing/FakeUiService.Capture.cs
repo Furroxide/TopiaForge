@@ -42,9 +42,12 @@ namespace TopiaForge.Mods.Testing
             return new FakeUiTreeCapture(owner, this, viewport, state, hudScheme).Capture(scrollOffset);
         }
 
-        internal int CapturedCountdownSeconds(UiCountdown countdown) => countdown.ClockEpoch == widgetEpoch()
-            ? countdown.RemainingSeconds(widgetClock())
-            : 0;
+        internal double CapturedCountdownRemaining(UiCountdown countdown) => countdown.ClockEpoch == widgetEpoch()
+            ? countdown.RemainingTime(widgetClock())
+            : 0d;
+
+        internal int CapturedCountdownSeconds(UiCountdown countdown) =>
+            UiCountdownFormatting.WholeSeconds(CapturedCountdownRemaining(countdown));
     }
 
     internal readonly struct FakeUiTextMetrics

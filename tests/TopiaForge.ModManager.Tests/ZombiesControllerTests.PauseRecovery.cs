@@ -215,6 +215,9 @@ namespace TopiaForge.ModManager.Tests
             presenter.Update(snapshot, null, null, null, null);
             Assert(ReferenceEquals(firstContent, surface.Content),
                 "an unchanged HUD snapshot must keep the same content tree");
+            var bytes = TopiaForge.TestSupport.AllocationProbe.Measure("settled Zombies status",
+                () => presenter.Update(snapshot, null, null, null, null), frames: 1024, warmups: 64);
+            Assert(bytes == 0, "a settled Zombies status snapshot must allocate zero bytes");
 
             presenter.ForceRefresh();
             presenter.Update(snapshot, null, null, null, null);

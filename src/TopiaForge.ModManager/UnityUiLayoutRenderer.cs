@@ -19,6 +19,7 @@ namespace TopiaForge.ModManager
             private readonly UiSurfaceInputContext? input;
             private readonly Dictionary<UiNode, NativeLeaf> leaves = new Dictionary<UiNode, NativeLeaf>(NodeIdentity.Instance);
             private readonly Dictionary<UiNode, NativeArtLeaf> art = new Dictionary<UiNode, NativeArtLeaf>(NodeIdentity.Instance);
+            private readonly Dictionary<UiNode, NativeStatusLeaf> status = new Dictionary<UiNode, NativeStatusLeaf>(NodeIdentity.Instance);
             private readonly NativeNode root;
             private NativeArtLeaf? unavailableImage;
             internal string? UnavailableImagePath { get; private set; }
@@ -90,6 +91,8 @@ namespace TopiaForge.ModManager
                         return new UiLayoutLeafMeasurement(bounds, UiLayoutPaintKind.Painter, decoration.ShadowOutsets);
                     }
 
+                    if (status.TryGetValue(node, out var statusLeaf))
+                        return statusLeaf.Measure(constraints, effective, declared, theme.HighContrast);
                     if (!art.TryGetValue(node, out var artLeaf)) return leaves[node].Measure(node, constraints, disabled);
                     measuredMissingImage |= artLeaf.IsMissingSemanticImage;
                     return artLeaf.Measure(constraints, effective, declared, theme.HighContrast, protectImageLabels);
@@ -144,6 +147,14 @@ namespace TopiaForge.ModManager
                         view.Backplate.enabled = false;
                         var leafHost = view.Container.CreateChild("Widget");
                         TopiaForgeAnchors.Stretch(leafHost.Rect);
+                        if (NativeStatusLeaf.Handles(node))
+                        {
+                            var statusHost = leafHost.CreateChild("Status");
+                            TopiaForgeAnchors.Stretch(statusHost.Rect);
+                            view.Status = new NativeStatusLeaf(statusHost, node, callbacks);
+                            status.TryAdd(node, view.Status);
+                            return view;
+                        }
                         var paint = node is UiKeyBindingField keyBinding ? RenderInputBinding(keyBinding, leafHost, ancestorDisabled, backdrop) :
                             RenderNode(node, leafHost, callbacks, graphs, ancestorDisabled, backdrop);
                         if (node is UiGraphCanvas) return view;
@@ -229,6 +240,12 @@ namespace TopiaForge.ModManager
                         view.Art!.Apply(bounds, position.Backdrop, scheme, theme, effective, declared);
                         break;
                     default:
+                        if (view.Status is { } statusLeaf)
+                        {
+                            PaintLeafBacking(view, position, scheme);
+                            statusLeaf.Apply(bounds, position.Backdrop, scheme, theme, effective, declared);
+                            break;
+                        }
                         if (view.Backplate != null)
                         {
                             position.Leaf?.Apply();
@@ -359,6 +376,7 @@ namespace TopiaForge.ModManager
                 internal NativeLeaf? Leaf { get; set; }
                 internal NativeArtLeaf? Art { get; set; }
                 internal NativeTabButton? TabButton { get; set; }
+                internal NativeStatusLeaf? Status { get; set; }
             }
 
             private struct NativePlacement

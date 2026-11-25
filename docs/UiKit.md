@@ -134,6 +134,24 @@ origin for offline scopes. It continues during pause and slow motion. A countdow
 at zero, and ends with its composition or surface. No author frame callback is needed. Progress
 and countdown nodes use the surface's semantic tones, UI scale and high-contrast theme.
 
+Use `UiThresholds` to show Warning and Critical states with a glyph and a semantic tone. Progress
+thresholds use fractions from zero to one. For a meter that warns as it rises, pass
+`UiThresholdDirection.AtOrAbove`. Countdown thresholds use the exact remaining time and warn as
+the deadline approaches. The displayed digits still round up to whole seconds.
+
+```csharp
+var progress = UiProgress.WithThresholds(0.88f, "Storage", new UiThresholds(0.85, 0.95, UiThresholdDirection.AtOrAbove));
+var integrity = new UiStatBar("Integrity", 54, 100, new UiThresholds(60, 45), UiStatFormat.ValueOfMaximum);
+var timer = UiCountdown.WithFormat(Context.Ui.ClockTime + 30, "Remaining", UiCountdownFormat.MinutesSeconds,
+    new UiThresholds(10, 5));
+```
+
+`UiStatBar` uses the same units for its value and thresholds. It prints the value, value out of
+maximum, or whole percentage. Its label stays readable on both sides of the moving fill.
+Formatted countdowns read the clock automatically and use tabular Mono digits for seconds,
+minutes and seconds, or hours, minutes and seconds. Expired timers keep their chosen format.
+The original progress and countdown overloads keep their earlier labels and behavior.
+
 Progress and countdown widgets also work in targeted player UI and shared HUDs. In the same epoch the original
 deadline travels unchanged, including in late-join baselines. A countdown created during `OnLoad` keeps its deadline when the initial
 solo multiplayer provider attaches, and opening that same world to peers retains its timeline. Opening a later UI scope never restarts the clock. Offline scopes

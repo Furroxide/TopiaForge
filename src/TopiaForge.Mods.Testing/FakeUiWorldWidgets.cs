@@ -78,7 +78,8 @@ namespace TopiaForge.Mods.Testing
         {
             seconds = 0;
             if (!TryFindNode(id, out var node) || !(node is UiCountdown countdown)) return false;
-            seconds = countdown.ClockEpoch == widgetEpoch() ? countdown.RemainingSeconds(widgetClock()) : 0; return true;
+            seconds = CapturedCountdownSeconds(countdown);
+            return true;
         }
     }
 }

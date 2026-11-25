@@ -10,7 +10,8 @@ namespace TopiaForge.Mods
         internal static readonly string[] ToneNames = { "neutral", "success", "warning", "danger", "muted", "primary", "accent" };
         internal static readonly string[] TextRoles = { "body", "heading", "caption", "banner", "display", "title", "label", "numeral", "mono" };
         internal const int FoundationComponentCount = (int)UiThemeTarget.Button;
-        internal static readonly string[] Targets = { "card", "box", "badge", "pips", "button", "input", "tabs", "tooltip" };
+        private const int ControlComponentCount = (int)UiThemeTarget.StatBar;
+        internal static readonly string[] Targets = { "card", "box", "badge", "pips", "button", "input", "tabs", "tooltip", "statBar" };
         internal static readonly string[] Radii = { "none", "small", "medium", "control", "card", "pill" };
         internal static readonly string[] Borders = { "none", "thin", "standard", "strong" };
         internal static readonly string[] Shadows = { "none", "small", "card" };
@@ -78,10 +79,10 @@ namespace TopiaForge.Mods
             var hud = ParseScheme(pack.Object("hud"), defaults?.SelectScheme(hud: true, highContrast: false));
             var fonts = ParseFonts(pack, assets);
             var images = ParseImages(pack, assets);
-            var components = ParseComponents(pack.Object("components"), defaults, out var minimumWireVersion);
+            var components = ParseComponents(pack.Object("components"), defaults, out var minimumWireVersion, out var canonicalComponentCount);
             var descriptor = new UiThemeDescriptor(id, paper, hud, ParseTypography(pack.Object("typography"), fonts, defaults),
                 ParseShape(pack.Object("shape"), defaults?.Shape), ParseMotion(pack.Object("motion"), defaults?.Motion),
-                components, ParseStyles(pack), images, fonts, minimumWireVersion,
+                components, ParseStyles(pack), images, fonts, minimumWireVersion, canonicalComponentCount,
                 defaults?.Digest ?? ReadOnlyMemory<byte>.Empty);
             ValidateScheme(descriptor.SelectScheme(false, false), pack.At("paper"), 4.5f);
             ValidateScheme(descriptor.SelectScheme(true, false), pack.At("hud"), 4.5f);
@@ -224,10 +225,11 @@ namespace TopiaForge.Mods
         }
 
         private static Dictionary<UiThemeTarget, UiThemeComponent> ParseComponents(UiThemeJsonObject value, UiThemeDescriptor? defaults,
-            out int minimumWireVersion)
+            out int minimumWireVersion, out int canonicalComponentCount)
         {
             value.Allow(Targets);
             minimumWireVersion = UiWireCodec.FoundationContractVersion;
+            canonicalComponentCount = FoundationComponentCount;
             var components = new Dictionary<UiThemeTarget, UiThemeComponent>();
             for (var index = 0; index < Targets.Length; index++)
             {
@@ -240,7 +242,10 @@ namespace TopiaForge.Mods
                     continue;
                 }
                 if (defaults != null && index >= FoundationComponentCount)
+                {
                     minimumWireVersion = UiWireCodec.ControlsContractVersion;
+                    canonicalComponentCount = Math.Max(canonicalComponentCount, Math.Max(ControlComponentCount, index + 1));
+                }
 
                 var component = value.Object(name);
                 component.Allow("radius", "border", "shadow");

@@ -57,6 +57,7 @@ namespace TopiaForge.Mods
                 UiBox box => (UiThemeTarget.Box, box.Style, box.Fill, false, false),
                 UiBadge badge => (UiThemeTarget.Badge, badge.Style, badge.Role, false, true),
                 UiPips pips => (UiThemeTarget.Pips, pips.Style, pips.Role, false, true),
+                UiStatBar => (UiThemeTarget.StatBar, null, UiPaintRole.Sunken, false, true),
                 _ => throw new ArgumentException("The node has no theme component decoration.", nameof(node)),
             };
 

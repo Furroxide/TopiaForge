@@ -25,7 +25,8 @@ namespace TopiaForge.ModManager.Tests
                 "UnityUiService.cs", "UnityUiService.Themes.cs", "UnityUiService.Remote.cs", "UnityUiSurface.Artwork.cs",
                 "UnityUiSurface.GalleryCapture.cs", "Multiplayer/Presentation/UiPresentationTheme.cs",
                 "Multiplayer/Presentation/UiPresentationImages.cs",
-                "UiGalleryRecorder/UiGalleryCaptureFixture.cs", "UiGalleryRecorder/UiGallerySurvivalTheme.cs",
+                "UiGalleryRecorder/UiGalleryCaptureFixture.cs", "UiGalleryRecorder/UiGalleryCaptureFixture.Status.cs",
+                "UiGalleryRecorder/UiGallerySurvivalTheme.cs",
                 "UiGalleryRecorder/UnityUiGalleryCaptureDriver.cs", "UiGalleryRecorder/UnityUiGalleryInteractionPreview.cs",
             }.Select(path => Path.Combine(manager, path))
                 .Append(Path.Combine(gallery, "Pages", "FoundationPages.cs"))
@@ -33,7 +34,8 @@ namespace TopiaForge.ModManager.Tests
                 .Append(Path.Combine(gallery, "Pages", "FoundationGraphPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "FoundationArtPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "FoundationIntegrationPages.cs"))
-                .Append(Path.Combine(gallery, "Pages", "ControlGalleryPages.cs"));
+                .Append(Path.Combine(gallery, "Pages", "ControlGalleryPages.cs"))
+                .Append(Path.Combine(gallery, "Pages", "StatusGalleryPages.cs"));
             var trees = files.Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path))
                 .Append(CSharpSyntaxTree.ParseText(Boundaries, path: "PreviewBoundaries.cs"))
                 .Append(CSharpSyntaxTree.ParseText(AssetBoundaries, path: "PreviewAssetBoundaries.cs"))

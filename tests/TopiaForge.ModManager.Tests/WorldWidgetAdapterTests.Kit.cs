@@ -95,10 +95,15 @@ namespace TopiaForge.ModManager.Tests
                 }
                 public sealed class TopiaForgeProgress
                 {
-                    public float Fraction;
+                    private float? layoutFraction;
+                    private float absoluteFill;
+                    public float Width = 40f;
+                    public float FillWidth => layoutFraction is float fraction ? Width * fraction : absoluteFill;
+                    public float Fraction => FillWidth / Width;
                     public TopiaForgeTone Color;
                     public TopiaForgeProgress Tone(TopiaForgeTone tone) { Color = tone; return this; }
-                    public void SetFraction(float fraction) { Fraction = fraction; }
+                    public void SetFraction(float fraction) { absoluteFill = Width * fraction; }
+                    public void SetHorizontalLayoutFraction(float fraction) { layoutFraction = fraction; }
                 }
             }
             namespace TopiaForge.ModManager

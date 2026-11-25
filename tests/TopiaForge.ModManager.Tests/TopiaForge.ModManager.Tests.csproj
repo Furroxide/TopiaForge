@@ -14,6 +14,8 @@
     <Compile Include="../../mods/TopiaForge.RobotKit/RobotAvatarAccessorySlots.cs" Link="RobotKit/RobotAvatarAccessorySlots.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationPages.cs" Link="UiGallery/FoundationPages.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.cs" Link="UiGallery/UiGalleryCaptureFixture.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryCaptureFixture.Status.cs" Link="UiGallery/UiGalleryCaptureFixture.Status.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGalleryStatusEvidence.cs" Link="UiGallery/UiGalleryStatusEvidence.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationLayoutPages.cs" Link="UiGallery/FoundationLayoutPages.cs" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationGraphPages.cs" Link="UiGallery/FoundationGraphPages.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGallerySurvivalTheme.cs" Link="UiGallery/UiGallerySurvivalTheme.cs" />
@@ -23,6 +25,7 @@
     <EmbeddedResource Include="../TopiaForge.MultiplayerAcceptanceMod/ui/themes/transport-preview.json" LogicalName="TopiaForge.UiGallery.TransportPreview.json" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/ControlGalleryPages.cs" Link="UiGallery/ControlGalleryPages.cs" />
     <Compile Include="../../src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeInputBindingState.cs" Link="UnityUi/TopiaForgeInputBindingState.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/StatusGalleryPages.cs" Link="UiGallery/StatusGalleryPages.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/AcceptanceConfig.cs" Link="MultiplayerAcceptance/AcceptanceConfig.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/GalleryRemotePreview.cs" Link="MultiplayerAcceptance/GalleryRemotePreview.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/MultiplayerAcceptanceMod.cs" Link="MultiplayerAcceptance/MultiplayerAcceptanceMod.cs" />
@@ -318,6 +321,7 @@
     <Compile Remove="@(Compile)" />
     <EmbeddedResource Remove="@(EmbeddedResource)" />
     <Compile Include="TestingKitTests*.cs" />
+    <Compile Include="UiStatusContractsTests.cs" />
     <Compile Include="TestingKitFocusedProgram.cs" />
     <Compile Include="../Shared/AllocationProbe.cs" Link="TestSupport/AllocationProbe.cs" />
   </ItemGroup>

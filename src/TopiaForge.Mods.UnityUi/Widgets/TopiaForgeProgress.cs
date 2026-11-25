@@ -119,6 +119,14 @@ namespace TopiaForge.Mods.UnityUi
                 : new Vector2(extent * fraction, 0f);
         }
 
+        // A declarative progress leaf is measured and can be resized after its widget is built.
+        // Its anchored fill tracks the assigned width without refreshing a constant fraction.
+        internal void SetHorizontalLayoutFraction(float fraction)
+        {
+            fillRect.anchorMax = new Vector2(Mathf.Clamp01(fraction), 1f);
+            fillRect.sizeDelta = Vector2.zero;
+        }
+
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public virtual void ApplyTheme(TopiaForgeResolvedTheme theme)
         {

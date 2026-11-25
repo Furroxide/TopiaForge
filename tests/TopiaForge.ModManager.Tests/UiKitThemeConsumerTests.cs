@@ -88,6 +88,13 @@ namespace TopiaForge.ModManager.Tests
             AssertGlyph(ZombiesHudPresenter.PhaseIconId, UiGlyph.Flag);
             AssertGlyph(ZombiesHudPresenter.IntegrityIconId, UiGlyph.Health);
             AssertGlyph(ZombiesHudPresenter.CreditsIconId, UiGlyph.Notes);
+            Require(surface.TryFindNode(ZombiesHudPresenter.IntegrityNodeId, out var integrity) &&
+                integrity is UiStatBar
+                {
+                    Value: 84, Maximum: 100, Format: UiStatFormat.ValueOfMaximum,
+                    Thresholds: { Direction: UiThresholdDirection.AtOrBelow, Warning: 50, Critical: 25 }
+                },
+                "The real Zombies integrity snapshot supplies its stat bar and low-integrity thresholds.");
 
             var capture = surface.Capture(new UiCaptureViewport(1920, 1080));
             var phase = capture.Nodes.Single(node => node.Id == ZombiesHudPresenter.PhaseNodeId);

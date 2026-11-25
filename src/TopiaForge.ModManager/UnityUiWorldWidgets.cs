@@ -37,7 +37,7 @@ namespace TopiaForge.ModManager
         {
             var column = parent.Column(TopiaForgeGap.Xs, TopiaForgeGap.None);
             var label = progress.Label.Length == 0 ? null : column.Label(progress.Label).PlainText().Tone(ToNativeTone(progress.Tone));
-            column.ProgressBar().Tone(ToNativeTone(progress.Tone)).SetFraction(progress.Fraction);
+            column.ProgressBar().Tone(ToNativeTone(progress.Tone)).SetHorizontalLayoutFraction(progress.Fraction);
             return label;
         }
         private static TopiaForgeLabel RenderCountdown(UiCountdown countdown, TopiaForgeContainer parent, Func<double> clock)

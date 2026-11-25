@@ -255,7 +255,7 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed class UiGalleryNativeTree
                 {
                     internal UiGalleryNativeTree(Canvas canvas, TopiaForgeResolvedTheme theme,
-                        TopiaForgeAccessibilityProfile accessibility, bool fallback)
+                        TopiaForgeAccessibilityProfile accessibility, bool fallback, double clockTime, string clockEpoch)
                     {
                         Theme = theme;
                         Accessibility = accessibility;
@@ -314,6 +314,8 @@ namespace TopiaForge.ModManager.Tests
                         private TopiaForgeWidget? widget;
                         private TopiaForgeContainer? compositionRoot;
                         private UiNode? admitted;
+                        private readonly string sentBody;
+                        private readonly (Func<double> Clock, Func<string> ClockEpoch) callbacks = (() => 0d, () => "preview");
                         private TopiaForgeContainer? layoutFallback;
                         private TopiaForgeGraphConnections? graphConnections;
                         private UiLayoutException? layoutProblem;
@@ -332,6 +334,7 @@ namespace TopiaForge.ModManager.Tests
                             TopiaForgeLabel body, IModLifetime lifetime, IModLogger logger, Action<UnityUiSurface> release)
                         {
                             Id = id; this.widget = widget; this.parent = parent; this.body = body;
+                            sentBody = body.Value;
                             CanvasRoot = widget.Go; this.release = release; this.lifetime = lifetime; this.logger = logger;
                             if (widget is TopiaForgeWindow window) window.Body = body;
                         }

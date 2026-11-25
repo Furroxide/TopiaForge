@@ -8,27 +8,38 @@ namespace TopiaForge.MultiplayerAcceptance
     internal sealed class GalleryRemotePreview : IDisposable
     {
         internal const string OptInFile = "gallery-remote-preview.enabled";
+        internal const string StatusOnlyOptInFile = "gallery-remote-preview-status-only.enabled";
+        internal const string RetainedCountdownOptInFile = "gallery-remote-preview-retained-countdown.enabled";
         private const string SkipExampleBindings = "gallery-remote-preview-no-bindings.enabled";
         internal const string InputAction = "gallery-remote-preview";
         private static readonly ControlGalleryPage[] ControlPages = (ControlGalleryPage[])Enum.GetValues(typeof(ControlGalleryPage));
         private const int VariantsPerPage = 6;
+        internal const int StatusVariantCount = 8;
         private static int FoundationVariantCount => FoundationPages.TransportPages.Count * VariantsPerPage;
         internal static int K1VariantCount => FoundationVariantCount + 3;
-        internal static int VariantCount => K1VariantCount + ControlPages.Length * 2;
+        internal static int StatusStart => K1VariantCount + ControlPages.Length * 2;
+        internal static int VariantCount => StatusStart + StatusVariantCount;
         private readonly IModContext context;
         private readonly IMultiplayerSession session;
         private readonly IDisposable update;
         private readonly IDisposable changed;
+        private readonly int first;
+        private readonly bool retainCountdown;
         private int next;
         private IUiSurface? localSurface;
         private IUiSurface? remoteSurface;
         private MultiplayerSessionId? activeSession;
         private ParticipantId? activeGuest;
+        private IPlayer? retainedTarget;
+        private bool replaced;
 
         private GalleryRemotePreview(IModContext context, IMultiplayerSession session, IInputAction action)
         {
             this.context = context;
             this.session = session;
+            retainCountdown = context.Files.DataFileExists(RetainedCountdownOptInFile);
+            first = retainCountdown ? VariantCount - 1 : (context.Files.DataFileExists(StatusOnlyOptInFile) ? StatusStart : 0);
+            next = first;
             changed = session.SubscribeChanged(Observe);
             update = context.Events.SubscribeUpdate(_ =>
             {
@@ -73,7 +84,7 @@ namespace TopiaForge.MultiplayerAcceptance
             }
 
             CloseSurfaces();
-            var request = Request(next);
+            var request = Request(next, context.Ui.ClockTime);
             var local = context.Ui.CreateSurface(request);
             if (!local.TryGetValue(out var host))
             {
@@ -92,7 +103,8 @@ namespace TopiaForge.MultiplayerAcceptance
             remoteSurface = reflected;
             activeSession = snapshot.Id;
             activeGuest = guestId;
-            next = (next + 1) % VariantCount;
+            if (retainCountdown) retainedTarget = guest;
+            if (++next == VariantCount) next = first;
             context.Logger.Info("Published the paired Gallery fixture '" + request.Id + "'.");
         }
 
@@ -113,9 +125,17 @@ namespace TopiaForge.MultiplayerAcceptance
             return guest;
         }
 
-        internal static UiSurfaceRequest Request(int variant)
+        internal static UiSurfaceRequest Request(int variant, double clockTime)
         {
             if ((uint)variant >= (uint)VariantCount) throw new ArgumentOutOfRangeException(nameof(variant));
+            if (variant >= StatusStart)
+            {
+                var status = variant - StatusStart;
+                var statusPage = (StatusGalleryPage)(status / 4);
+                var statusKind = (status & 1) == 0 ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
+                return StatusGalleryPages.CreateRequest(statusPage, statusKind, clockTime, (status & 2) == 0
+                    ? null : FoundationPages.TransportTheme);
+            }
             if (variant >= K1VariantCount)
             {
                 var controlVariant = variant - K1VariantCount;
@@ -140,9 +160,26 @@ namespace TopiaForge.MultiplayerAcceptance
         {
             if (!activeSession.HasValue) return;
             var guest = FindGuest(snapshot);
-            if (!activeSession.Value.Equals(snapshot.Id) || !guest.Equals(activeGuest))
+            if (!guest.Equals(activeGuest) || (retainedTarget != null && !OwnsRetainedTarget(retainedTarget)))
+            {
                 CloseSurfaces();
+                return;
+            }
+            if (activeSession.Value.Equals(snapshot.Id)) return;
+
+            // A map replacement can keep the original player and publication alive while the stream resynchronizes.
+            if (retainedTarget != null && !replaced && remoteSurface?.IsVisible == true && localSurface?.IsVisible == true)
+            {
+                activeSession = snapshot.Id;
+                replaced = true;
+                context.Logger.Info("Kept the Countdown fixture on its existing player route through a session replacement.");
+                return;
+            }
+            CloseSurfaces();
         }
+
+        private bool OwnsRetainedTarget(IPlayer expected) => expected.IsPresent &&
+            session.Players.TryGet(expected.Id, out var current) && ReferenceEquals(current, expected);
 
         public void Dispose()
         {
@@ -159,6 +196,8 @@ namespace TopiaForge.MultiplayerAcceptance
             remoteSurface = null;
             activeSession = null;
             activeGuest = null;
+            retainedTarget = null;
+            replaced = false;
             try { host?.Dispose(); }
             finally { guest?.Dispose(); }
         }

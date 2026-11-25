@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine;
 
@@ -10,20 +11,24 @@ namespace TopiaForge.ModManager
         private const int FrameLimit = 120;
         private Func<bool, bool>? capture;
         private Action<string>? warn;
+        private Action<UiWireEnvelope?>? committed;
         private object? hotkey;
         private int requestedFrame;
 
         private void Awake() => enabled = false;
 
-        internal void Initialize(Func<bool, bool> capture, Action<string> warn)
+        internal void Initialize(Func<bool, bool> capture, Action<string> warn, Action<UiWireEnvelope?>? committed)
         {
             this.capture = capture;
             this.warn = warn;
+            this.committed = committed;
             hotkey = TopiaForgeHotkeys.Register(UiGalleryCaptureFixture.Owner, TopiaForgeKey.F11, Request);
             Request();
         }
 
-        private void Request()
+        internal void ObserveCommit(UiWireEnvelope? envelope) => committed?.Invoke(envelope);
+
+        internal void Request()
         {
             requestedFrame = Time.frameCount;
             enabled = true;
@@ -56,6 +61,7 @@ namespace TopiaForge.ModManager
             hotkey = null;
             capture = null;
             warn = null;
+            committed = null;
         }
     }
 }

@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager.Tests
             PauseFailuresAreBackedOffAndReportedOnce();
             StaleSuperhotLeasesReacquireAfterRestart();
             HudSkipsSteadyStateContentWrites();
+            InterWaveHudTracksAndFreezesControlTime();
             DisabledShopSkipsCreditsAndRequisitionFeedback();
             UplinkFailuresExplainWithoutSpendingCharge();
             UplinkEconomyRunsOnTheWorldClock();

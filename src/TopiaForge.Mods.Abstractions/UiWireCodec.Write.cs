@@ -35,10 +35,21 @@ namespace TopiaForge.Mods
 
         private static void WriteNode(IUiWireWriter w, UiNode? node, string clockEpoch, bool retained, ref bool hasCountdown)
         {
+            if (retained && node is UiCountdown expired && expired.ClockEpoch != clockEpoch)
+            {
+                WriteExpiredCountdown(w, expired);
+                return;
+            }
             var tag = ControlTag(node);
             if (tag != 0)
             {
                 WriteControlNode(w, node!, tag, clockEpoch, retained, ref hasCountdown);
+                return;
+            }
+            tag = StatusTag(node);
+            if (tag != 0)
+            {
+                WriteStatusNode(w, node!, tag, clockEpoch, ref hasCountdown);
                 return;
             }
             if (node != null && IsEnhancedLayout(node))
@@ -81,10 +92,6 @@ namespace TopiaForge.Mods
                 case UiImage n: WriteImage(w, n); break;
                 case UiBadge n: WriteBadge(w, n); break;
                 case UiPips n: WritePips(w, n); break;
-                case UiCountdown n when retained && n.ClockEpoch != clockEpoch:
-                    // Match the zero display without carrying a stale epoch or growing the admitted wire payload.
-                    WriteText(w, n.Label.Length == 0 ? "0" : n.Label + " 0", UiTextStyle.Body, n.Tone,
-                        EnhancedTone(n.Tone) ? n.Id : null); break;
                 case UiCountdown n:
                     WriteCountdown(w, n, clockEpoch); hasCountdown = true; break;
                 default: throw new ArgumentException(node.GetType().Name + " cannot be sent to a player. Use supported declarative UI nodes.");
