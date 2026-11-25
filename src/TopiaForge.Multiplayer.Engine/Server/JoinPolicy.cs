@@ -47,26 +47,28 @@ namespace TopiaForge.Multiplayer.Engine
 
     internal readonly struct JoinDecision
     {
-        private JoinDecision(bool accepted, MultiplayerSessionEndReason reason, string message, byte[] report)
+        private JoinDecision(bool accepted, MultiplayerSessionEndReason reason, string message, byte[] report, int uiContractVersion)
         {
             Accepted = accepted;
             Reason = reason;
             Message = message;
             Report = report;
+            UiContractVersion = uiContractVersion;
         }
 
         internal bool Accepted { get; }
         internal MultiplayerSessionEndReason Reason { get; }
         internal string Message { get; }
+        internal int UiContractVersion { get; }
 
         /// <summary>Gets the opaque admission report shown to the joining player.</summary>
         internal byte[] Report { get; }
 
-        internal static JoinDecision Accept(byte[]? report = null) =>
-            new JoinDecision(true, MultiplayerSessionEndReason.None, string.Empty, report ?? Array.Empty<byte>());
+        internal static JoinDecision Accept(byte[]? report = null, int uiContractVersion = 1) =>
+            new JoinDecision(true, MultiplayerSessionEndReason.None, string.Empty, report ?? Array.Empty<byte>(), uiContractVersion);
 
         internal static JoinDecision Reject(MultiplayerSessionEndReason reason, string message, byte[]? report = null) =>
-            new JoinDecision(false, reason, message, report ?? Array.Empty<byte>());
+            new JoinDecision(false, reason, message, report ?? Array.Empty<byte>(), 1);
     }
 
     /// <summary>Decides whether a host admits a joining peer.</summary>

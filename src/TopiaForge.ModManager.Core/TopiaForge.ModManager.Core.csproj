@@ -11,5 +11,6 @@
 
   <ItemGroup>
     <PackageReference Include="System.Reflection.Metadata" Version="10.0.9" />
+    <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
   </ItemGroup>
 </Project>

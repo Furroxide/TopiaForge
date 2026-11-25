@@ -33,6 +33,7 @@ part 'models/manifest_contribution_models.dart';
 part 'models/manifest_common_reader.dart';
 part 'models/manifest_v6_reader.dart';
 part 'models/manifest_models.dart';
+part 'models/manifest_ui_models.dart';
 part 'models/manifest_license_validation.dart';
 part 'models/manifest_parsers.dart';
 part 'models/runtime_dependency_models.dart';

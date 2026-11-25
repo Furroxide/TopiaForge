@@ -64,5 +64,8 @@
     <None Include="..\..\tools\unity-ui-bundle\Assets\Fonts\Quicksand-OFL.txt"
           Link="third_party\TopiaForge.Mods.UnityUi\LICENSES\Quicksand-OFL.txt"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\tools\unity-ui-bundle\Assets\Fonts\JetBrainsMono-OFL.txt"
+          Link="third_party\TopiaForge.Mods.UnityUi\LICENSES\JetBrainsMono-OFL.txt"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

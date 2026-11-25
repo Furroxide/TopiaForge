@@ -42,9 +42,13 @@ namespace TopiaForge.Mods
         internal static void Bind(UiNode? node, string epoch)
         {
             UiComposition.Validate(node);
-            Visit(node, epoch, false);
-            Visit(node, epoch, true);
+            Check(node, epoch);
+            Commit(node, epoch);
         }
+
+        internal static void Check(UiNode? node, string epoch) => Visit(node, epoch, false);
+
+        internal static void Commit(UiNode? node, string epoch) => Visit(node, epoch, true);
 
         private static void Visit(UiNode? node, string epoch, bool commit)
         {

@@ -26,8 +26,15 @@ namespace TopiaForge.ModManager
         internal ulong Revision = 1;
         internal ulong Stream;
         internal bool Visible = true, Closed, Dirty;
-        internal RemoteUiSurface(MultiplayerPlayers runtime, PlayerContext context, IPlayer target, ulong token, UiSurfaceRequest request)
-        { Runtime = runtime; Context = context; Target = target; Token = token; Request = request; Content = request.Content; Body = request.Body; }
+        internal UiThemeDescriptor? Theme;
+        internal UiWireEnvelope? Envelope;
+        internal string? SentClockEpoch;
+        internal RemoteUiSurface(MultiplayerPlayers runtime, PlayerContext context, IPlayer target, ulong token, UiSurfaceRequest request,
+            UiThemeDescriptor? theme = null)
+        {
+            Runtime = runtime; Context = context; Target = target; Token = token; Request = request;
+            Content = request.Content; Body = request.Body; Theme = theme;
+        }
         public string Id => Request.Id;
         public bool IsVisible => !Closed && Target.IsPresent && !Context.Lifetime.IsStopping && Visible;
         public event Action? Dismissed;
@@ -45,20 +52,16 @@ namespace TopiaForge.ModManager
             Check();
             if (Closed || !Target.IsPresent) return MultiplayerPlayers.Gone<bool>();
             if (content == null) throw new ArgumentNullException(nameof(content));
-            try { UiComposition.Validate(content); }
+            if (ReferenceEquals(content, Content)) return Runtime.SendSurface(this, retained: true, replacement: content);
+            try { UiComposition.Validate(content); UiClockBinding.Check(content, Runtime.UiClockEpoch); }
             catch (ArgumentException exception)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
             }
             if (Request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(content))
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Put interactive controls in a window.");
-            // Re-sending the tree this player already has keeps its clock binding; a new tree binds strictly.
-            var old = Content;
-            var retained = ReferenceEquals(content, old);
-            Content = content; Revision++;
-            var result = Runtime.SendSurface(this, retained);
-            if (!result.Succeeded) { Content = old; Revision--; }
-            return result;
+            // A new tree binds strictly. An unchanged retained publication spends no send budget.
+            return Runtime.SendSurface(this, replacement: content);
         }
         public void Dispose() { Check(); Closed = true; Dirty = true; }
         private static void Check() => UnityMainThreadGuard.AssertCurrent();

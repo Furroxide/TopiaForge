@@ -13,7 +13,7 @@ import 'package:unorm_dart/unorm_dart.dart' as unicode;
 
 import 'bounded_process.dart';
 import 'data_root.dart';
-import 'dotnet_sdk.dart';
+import 'managed_package_validator.dart';
 import 'game_install_discovery.dart';
 import 'launch_running_probe.dart';
 import 'launch_wine_configuration.dart';

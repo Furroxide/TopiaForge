@@ -6,23 +6,32 @@ namespace TopiaForge.Mods.Testing
     /// <summary>Inspectable fake UI surface.</summary>
     public sealed partial class FakeUiSurface : IUiSurface, IUiSurfaceDismissalSource
     {
+        private readonly FakeUiService owner;
+        private readonly FakeUiWireTarget? wireTarget;
         private Action<FakeUiSurface>? release;
         private IDisposable? lifetimeLease;
         private readonly Dictionary<string, bool> toggleValues = new Dictionary<string, bool>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> sliderValues = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> textValues = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> dropdownValues = new Dictionary<string, string>(StringComparer.Ordinal);
-        private readonly Dictionary<string, string?> listSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
+        private readonly Dictionary<string, (string? Selection, float Offset)> listViewports =
+            new Dictionary<string, (string? Selection, float Offset)>(StringComparer.Ordinal);
         private readonly Dictionary<string, string?> graphSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
         private readonly Dictionary<string, UiGraphViewport> graphViewports = new Dictionary<string, UiGraphViewport>(StringComparer.Ordinal);
         private readonly List<string> callbackErrors = new List<string>();
+        private readonly IReadOnlyList<string> callbackErrorView;
         private readonly Func<bool>? gameplay;
         private ModErrorCode nextContentErrorCode;
         private string nextContentErrorMessage = string.Empty;
         private bool shown = true;
+        private ulong revision = 1;
 
-        internal FakeUiSurface(UiSurfaceRequest request, Action<FakeUiSurface> release, Func<bool>? gameplay = null)
+        internal FakeUiSurface(UiSurfaceRequest request, FakeUiService owner, Action<FakeUiSurface> release,
+            Func<bool>? gameplay, FakeUiWireTarget? wireTarget)
         {
+            this.owner = owner;
+            this.wireTarget = wireTarget;
+            callbackErrorView = callbackErrors.AsReadOnly();
             Request = request;
             Body = request.Body;
             Content = request.Content;
@@ -68,7 +77,7 @@ namespace TopiaForge.Mods.Testing
         public UiNode? Content { get; private set; }
 
         /// <summary>Gets callback failures captured without interrupting later callback subscribers.</summary>
-        public IReadOnlyList<string> CallbackErrors => callbackErrors.AsReadOnly();
+        public IReadOnlyList<string> CallbackErrors => callbackErrorView;
 
         /// <inheritdoc/>
         public event Action? Dismissed;
@@ -100,54 +109,9 @@ namespace TopiaForge.Mods.Testing
         public void SetBody(string body)
         {
             EnsureActive();
+            if (WireBounded && (body == null || body.Length > 4096))
+                throw new ArgumentException("Remote UI text is limited to 4096 characters.", nameof(body));
             Body = body ?? string.Empty;
-        }
-
-        /// <inheritdoc/>
-        public OperationResult<bool> SetContent(UiNode content)
-        {
-            if (content == null) throw new ArgumentNullException(nameof(content));
-            if (release == null)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake UI surface is disposed.");
-            }
-
-            if (nextContentErrorCode != ModErrorCode.None)
-            {
-                var errorCode = nextContentErrorCode;
-                var message = nextContentErrorMessage;
-                nextContentErrorCode = ModErrorCode.None;
-                nextContentErrorMessage = string.Empty;
-                return OperationResult<bool>.Failure(errorCode, message);
-            }
-
-            try
-            {
-                // Re-applying the shown tree keeps its clock binding, as every runtime surface does.
-                var retained = ReferenceEquals(content, Content);
-                if (WireBounded) UiWireCodec.Measure(content, widgetEpoch(), 32 * 1024, retained);
-                if (!retained) UiClockBinding.Bind(content, widgetEpoch());
-            }
-            catch (ArgumentException exception)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
-            }
-
-            catch (InvalidOperationException)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.RateLimited, "The remote UI composition is too large; shorten its content.");
-            }
-
-            Content = content;
-            toggleValues.Clear();
-            sliderValues.Clear();
-            textValues.Clear();
-            dropdownValues.Clear();
-            listSelections.Clear();
-            graphSelections.Clear();
-            graphViewports.Clear();
-            CaptureState(content);
-            return OperationResult<bool>.Success(true);
         }
 
         /// <summary>Finds a captured node by stable control id.</summary>
@@ -223,18 +187,9 @@ namespace TopiaForge.Mods.Testing
         {
             if (!TryFindNode(id, out var node) || !(node is UiVirtualList list)) return NotFound(id, "virtual list");
             if (!list.Enabled) return Disabled(id);
-            var found = false;
-            foreach (var item in list.Items)
-            {
-                if (string.Equals(item.Id, itemId, StringComparison.Ordinal))
-                {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake list item was not found.");
-            listSelections[id] = itemId;
+            var index = ListIndex(list, itemId);
+            if (index < 0) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake list item was not found.");
+            RememberListViewport(list, itemId, index);
             return Invoke(list.Selected, itemId, "virtual list '" + id + "'");
         }
 
@@ -362,7 +317,15 @@ namespace TopiaForge.Mods.Testing
         public bool TryGetDropdownValue(string id, out string? value) => dropdownValues.TryGetValue(id, out value);
 
         /// <summary>Tries to read the fake's current virtual-list selection.</summary>
-        public bool TryGetSelectedListItem(string id, out string? itemId) => listSelections.TryGetValue(id, out itemId);
+        public bool TryGetSelectedListItem(string id, out string? itemId)
+        {
+            var found = listViewports.TryGetValue(id, out var viewport);
+            itemId = viewport.Selection;
+            return found;
+        }
+
+        internal (string? Selection, float Offset) GetListViewport(string id) => listViewports.TryGetValue(id, out var viewport)
+            ? viewport : default;
 
         /// <summary>Tries to read the fake's current graph selection.</summary>
         public bool TryGetSelectedGraphNode(string id, out string? nodeId) => graphSelections.TryGetValue(id, out nodeId);

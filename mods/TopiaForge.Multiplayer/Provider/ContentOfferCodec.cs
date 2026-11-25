@@ -10,16 +10,18 @@ namespace TopiaForge.Multiplayer
     /// The content a joining player presents for admission, inside its join request. Version 1 is binary, written with the
     /// engine's protocol primitives:
     /// <code>
-    /// [version 1][game build][protocol version][peer range][mod count]
+    /// [offer version][game build][protocol version][peer range][mod count]
     /// per mod: [id][version][sha256: 32 bytes][mode]
     ///   session mods only: [presence][protocol version][peer range present][peer range]?[file count]([path][sha256: 32 bytes])*
+    /// version 2 only: [maximum UI contract version]
     /// </code>
     /// Mods are sorted by id, each once, so one offer has one spelling; client-local mods are never presented. Reading is
     /// strict and bounded: anything else is refused, and the host answers with a protocol refusal.
     /// </summary>
     internal static class ContentOfferCodec
     {
-        private const byte Version = 1;
+        private const byte Legacy = 1;
+        private const byte WithUiContract = 2;
         private const int DigestBytes = 32;
 
         /// <summary>The longest game build a descriptor allows.</summary>
@@ -30,7 +32,8 @@ namespace TopiaForge.Multiplayer
         {
             if (offer == null) throw new ArgumentNullException(nameof(offer));
             var writer = new ProtocolWriter(256 + (offer.Mods.Count * 96));
-            writer.WriteByte(Version);
+            var version = offer.UiContractVersion == InternalUiPresentationContract.LegacyVersion ? Legacy : WithUiContract;
+            writer.WriteByte(version);
             writer.WriteString(offer.GameBuild);
             writer.WriteString(offer.ProtocolVersion);
             writer.WriteString(offer.PeerVersionRange);
@@ -53,10 +56,11 @@ namespace TopiaForge.Multiplayer
                 }
             }
 
+            if (version == WithUiContract) writer.WriteByte((byte)offer.UiContractVersion);
             return writer.Length > JoinContent.MaximumContentBytes ? null : writer.ToArray();
         }
 
-        /// <summary>Reads an offer; false for anything that is not exactly a valid version 1 offer.</summary>
+        /// <summary>Reads a bounded legacy offer or one with an advertised UI capability.</summary>
         internal static bool TryDecode(byte[] bytes, out InternalContentOffer? offer)
         {
             offer = null;
@@ -65,7 +69,8 @@ namespace TopiaForge.Multiplayer
             try
             {
                 var reader = new ProtocolReader(bytes);
-                if (reader.ReadByte() != Version) return false;
+                var version = reader.ReadByte();
+                if (version != Legacy && version != WithUiContract) return false;
                 var gameBuild = reader.ReadString(MaximumGameBuildLength);
                 var protocolVersion = reader.ReadString(InternalContentLimits.MaximumVersionLength);
                 var peerRange = reader.ReadString(InternalContentLimits.MaximumRangeLength);
@@ -81,8 +86,10 @@ namespace TopiaForge.Multiplayer
                     mods.Add(mod);
                 }
 
-                if (!reader.AtEnd || !ServerDescriptor.IsGameBuild(gameBuild)) return false;
-                offer = new InternalContentOffer(gameBuild, protocolVersion, peerRange, mods.AsReadOnly());
+                var uiContractVersion = version == WithUiContract ? reader.ReadByte() : InternalUiPresentationContract.LegacyVersion;
+                if (!reader.AtEnd || !ServerDescriptor.IsGameBuild(gameBuild) ||
+                    (version == WithUiContract && uiContractVersion < InternalUiPresentationContract.FoundationVersion)) return false;
+                offer = new InternalContentOffer(gameBuild, protocolVersion, peerRange, mods.AsReadOnly(), uiContractVersion);
                 return true;
             }
             catch (ProtocolException)

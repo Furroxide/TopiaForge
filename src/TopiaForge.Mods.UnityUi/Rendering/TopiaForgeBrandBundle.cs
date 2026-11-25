@@ -22,6 +22,7 @@ namespace TopiaForge.Mods.UnityUi
         // Quicksand Light (300), the variable font's default instance: headings and numerals.
         private const string HeadingName = "TopiaForge Body SDF";
         private const string DisplayName = "TopiaForge Display SDF";
+        private const string MonoName = "TopiaForge Mono SDF";
 
         private static bool attempted;
         private static AssetBundle? bundle;
@@ -36,6 +37,7 @@ namespace TopiaForge.Mods.UnityUi
         public static TMP_FontAsset? HeadingFont { get; private set; }
         /// <summary>Gets or sets display font.</summary>
         public static TMP_FontAsset? DisplayFont { get; private set; }
+        internal static TMP_FontAsset? MonoFont { get; private set; }
 
         /// <summary>Attempts the embedded-bundle load once; subsequent calls are free.</summary>
         public static bool TryLoad()
@@ -67,13 +69,14 @@ namespace TopiaForge.Mods.UnityUi
                 BodyFont = bundle.LoadAsset<TMP_FontAsset>(BodyName);
                 HeadingFont = bundle.LoadAsset<TMP_FontAsset>(HeadingName);
                 DisplayFont = bundle.LoadAsset<TMP_FontAsset>(DisplayName);
+                MonoFont = bundle.LoadAsset<TMP_FontAsset>(MonoName);
 
                 var provenance = bundle.LoadAsset<TextAsset>("UiBundleManifest");
                 TopiaForgeLog.Info("Brand bundle loaded" + (provenance != null ? ": " + Condense(provenance.text) : "."));
 
-                if (BodyFont == null || HeadingFont == null || DisplayFont == null)
+                if (BodyFont == null || HeadingFont == null || DisplayFont == null || MonoFont == null)
                 {
-                    TopiaForgeLog.Warn("Brand bundle is missing expected font assets (" + BodyName + ", " + HeadingName + ", " + DisplayName + "); the faces it has fill the gaps.");
+                    TopiaForgeLog.Warn("Brand bundle is missing an expected body, heading, display or mono face. Font fallbacks are active.");
                 }
 
                 return true;
@@ -105,6 +108,7 @@ namespace TopiaForge.Mods.UnityUi
             BodyFont = null;
             HeadingFont = null;
             DisplayFont = null;
+            MonoFont = null;
         }
 
         private static string Condense(string json)

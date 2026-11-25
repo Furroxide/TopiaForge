@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "id": "survival",
+  "paper": {
+    "colors": {
+      "surface": { "fill": "#F3F7EE", "on": "#202D2B" },
+      "raised": { "fill": "#DFEAE2", "on": "#202D2B" },
+      "sunken": { "fill": "#E5EAE0", "on": "#202D2B" },
+      "selected": { "fill": "#CEDFD8", "on": "#202D2B" },
+      "primary": { "fill": "#286352", "on": "#FFFFFF" },
+      "accent": { "fill": "#EFAF40", "on": "#202D2B" }
+    },
+    "muted": "#465E52",
+    "outline": "#74877C",
+    "focus": "#244D42",
+    "inks": { "primary": "#27614D" }
+  },
+  "hud": {
+    "colors": {
+      "surface": { "fill": "#141D21", "on": "#F0F8F5" },
+      "raised": { "fill": "#23343A", "on": "#F0F8F5" },
+      "sunken": { "fill": "#10181C", "on": "#F0F8F5" },
+      "selected": { "fill": "#263E44", "on": "#F0F8F5" },
+      "primary": { "fill": "#BEE487", "on": "#16281E" },
+      "accent": { "fill": "#62D1BB", "on": "#172720" }
+    },
+    "muted": "#B0C6BB",
+    "outline": "#A8C7C2",
+    "focus": "#E5FA9D",
+    "inks": { "primary": "#BEE487" }
+  },
+  "typography": {
+    "display": {
+      "case": "upper",
+      "trackingEm": 0.045
+    },
+    "label": {
+      "case": "upper",
+      "trackingEm": 0.04
+    }
+  },
+  "shape": {
+    "small": 3,
+    "medium": 7,
+    "control": 10,
+    "card": 16
+  },
+  "motion": {
+    "fastMs": 80,
+    "baseMs": 150,
+    "slowMs": 220,
+    "ease": "outCubic"
+  },
+  "components": {
+    "card": { "radius": "medium", "border": "standard", "shadow": "small" },
+    "box": { "radius": "small", "border": "thin", "shadow": "none" },
+    "badge": { "radius": "small", "border": "standard", "shadow": "none" },
+    "pips": { "radius": "none", "border": "thin", "shadow": "none" }
+  },
+  "styles": [
+    {
+      "id": "panel.flat",
+      "target": "card",
+      "radius": "none",
+      "fill": "raised",
+      "border": "standard",
+      "shadow": "none"
+    },
+    {
+      "id": "status.outline",
+      "target": "badge",
+      "radius": "small",
+      "border": "strong"
+    }
+  ]
+}

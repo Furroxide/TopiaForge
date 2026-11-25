@@ -6,6 +6,7 @@ extension _PackedManifestMetadata on LocalDeveloperRepository {
     Map<String, Object?> source, {
     Map<String, String> generatedHashes = const {},
     List<String>? synchronizedFiles,
+    Map<String, Object?>? uiCatalogue,
   }) {
     final lock = _readSdkLock(root.path);
     final toolVersion = lock?.toolVersion.isNotEmpty == true
@@ -15,6 +16,7 @@ extension _PackedManifestMetadata on LocalDeveloperRepository {
         lock?.gameVersion ?? TopiaForgeRuntimeVersions.gameVersion;
     final packed = <String, Object?>{
       ...source,
+      'ui': ?uiCatalogue,
       'builtWith': {
         'sdkVersion': lock?.sdkVersion ?? TopiaForgeRuntimeVersions.sdkVersion,
         'loaderVersion': TopiaForgeRuntimeVersions.loaderVersion,

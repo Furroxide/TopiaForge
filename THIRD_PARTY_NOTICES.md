@@ -187,6 +187,15 @@ TopiaForge bundles the Audiowide font for display typography in the launcher UI 
 - Local changes: none known; filename was normalized for launcher and Unity packaging.
 - SHA-256: `c7c0f2b0f6fad8c623e31772ce79f94a4edb9321ffce9fce978ea892d20ae730`
 
+TopiaForge uses JetBrains Mono NL Regular v2.304 for monospaced text in the Unity UI kit.
+
+- [JetBrains Mono v2.304 release](https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304)
+- Release archive SHA-256: `6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf`
+- Unmodified `fonts/ttf/JetBrainsMonoNL-Regular.ttf` SHA-256: `fb3b2575d7b0657359707993288f12a7360344d39387bb26050e276d61f6bd2a`
+- SIL Open Font License 1.1 notice `OFL.txt` SHA-256: `30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad`
+- The utility source and notice live under `tools/unity-ui-bundle/Assets/Fonts`. The embedded bundle uses the
+  baked `TopiaForge Mono SDF` asset. The original OFL notice accompanies the distributed bundle.
+
 TopiaForge redistributes Unity's TextMesh Pro essential resources inside the Unity UI bundle source at
 `tools/unity-ui-bundle/Assets/TextMesh Pro`, and the release archives carry that directory. The set
 comprises shaders, materials, style sheets, line-breaking data, and the Liberation Sans font.

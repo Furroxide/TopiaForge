@@ -1,5 +1,6 @@
 using System;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -15,6 +16,7 @@ namespace TopiaForge.Mods.UnityUi
     public sealed class TopiaForgeInputField : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private readonly TopiaForgeTextInput input;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage focusRing;
@@ -24,6 +26,7 @@ namespace TopiaForge.Mods.UnityUi
         private GameObject? clearButtonGo;
         private bool focused;
         private bool error;
+        private bool placeholderVisible;
 
         internal TopiaForgeInputField(TopiaForgeContainer parent, string placeholder, string value, Action<string> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Input"))
@@ -53,13 +56,19 @@ namespace TopiaForge.Mods.UnityUi
             input = Go.AddComponent<TopiaForgeTextInput>();
             Go.AddComponent<TopiaForgeTextEntry>();
             input.targetGraphic = fill;
+            cues = TopiaForgeControlCues.Install(input, Rect);
             input.textViewport = areaRect;
             input.textComponent = textComponent;
             input.placeholder = placeholderComponent;
             input.lineType = TMP_InputField.LineType.SingleLine;
             input.text = value;
+            placeholderVisible = input.text.Length == 0;
             // Typing happens while the field has focus; a value set through Input.text runs in its setter's own scope.
-            input.onValueChanged.AddListener(next => TopiaForgeCallbacks.Player(input.isFocused ? Host.OwnerId : null, onChanged, next, "Input change"));
+            input.onValueChanged.AddListener(next =>
+            {
+                UpdatePlaceholderVisibility();
+                TopiaForgeCallbacks.Player(input.isFocused ? Host.OwnerId : null, onChanged, next, "Input change");
+            });
             input.onSelect.AddListener(_ =>
             {
                 focused = true;
@@ -175,6 +184,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             input.SetTextWithoutNotify(value);
+            UpdatePlaceholderVisibility();
         }
 
         /// <summary>Dirty-checked interactability.</summary>
@@ -208,23 +218,44 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            TopiaForgeTypography.ApplyControlText(textComponent, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
+            TopiaForgeTypography.ApplyControlText(placeholderComponent, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
             Repaint();
         }
 
         private void Repaint()
         {
             var theme = Theme;
-            fill.color = input.interactable ? theme.SurfaceSunken : theme.Tint;
+            var enabled = input.interactable;
+            var paint = theme.FieldPaint(UiPaintRole.Sunken, placeholderVisible ? UiTone.Muted : UiTone.Neutral, enabled);
+            if (paint is { } resolved)
+            {
+                var colors = input.colors;
+                colors.normalColor = Color.white;
+                colors.disabledColor = Color.white;
+                input.colors = resolved.Tinted(colors);
+            }
+            fill.color = paint?.Fill ?? (enabled ? theme.SurfaceSunken : theme.Tint);
             ring.color = error ? theme.Danger : theme.Outline;
             focusRing.color = error ? theme.Danger : theme.FocusRing;
             focusRing.enabled = focused;
             ring.enabled = !focused;
-            textComponent.color = theme.Text;
-            placeholderComponent.color = theme.TextFaint;
+            textComponent.color = theme.ForegroundOn(UiPaintRole.Sunken, enabled ? UiTone.Neutral : UiTone.Muted);
+            placeholderComponent.color = theme.ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
+            cues.Apply(fill.color, paint?.Content ?? textComponent.color,
+                theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control, theme.HighContrast);
             if (searchIcon != null)
             {
-                searchIcon.color = theme.TextMuted;
+                searchIcon.color = theme.ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
             }
+        }
+
+        private void UpdatePlaceholderVisibility()
+        {
+            var empty = string.IsNullOrEmpty(input.text);
+            if (placeholderVisible == empty) return;
+            placeholderVisible = empty;
+            Repaint();
         }
 
         private void UpdateClearVisibility()
@@ -237,7 +268,7 @@ namespace TopiaForge.Mods.UnityUi
                 clearGo.transform.SetParent(Go.transform, false);
                 var icon = clearGo.AddComponent<UImage>();
                 icon.sprite = TopiaForgeSprites.Icon(TopiaForgeIcon.Cross);
-                icon.color = Theme.TextMuted;
+                icon.color = Theme.ForegroundOn(UiPaintRole.Sunken, UiTone.Muted);
                 var rect = (RectTransform)clearGo.transform;
                 rect.anchorMin = new Vector2(1f, 0.5f);
                 rect.anchorMax = new Vector2(1f, 0.5f);

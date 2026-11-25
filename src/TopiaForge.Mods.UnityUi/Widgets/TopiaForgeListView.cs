@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -27,6 +28,13 @@ namespace TopiaForge.Mods.UnityUi
         private int selectedIndex = -1;
         private int lastFirst = -1;
         private int lastCount = -1;
+        private bool declarativeRows;
+        private float declaredViewportHeight;
+        private bool hasViewportLayout;
+        private bool enabledState = true;
+
+        private float RowSpacing => declarativeRows ? UiVirtualListGeometry.Spacing : Spacing;
+        private float RowGutter => declarativeRows ? UiVirtualListGeometry.Gutter : 0f;
 
         internal TopiaForgeListView(TopiaForgeContainer parent, float itemHeight)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("ListView"))
@@ -63,7 +71,7 @@ namespace TopiaForge.Mods.UnityUi
             scrollRect.onValueChanged.AddListener(_ => Refresh(force: false));
             // SetItems can run before the parent's layout settles. A later viewport growth must reveal the
             // remaining rows even when neither the scroll offset nor the data set changes.
-            Go.AddComponent<TopiaForgeListViewRuntime>().Initialize(viewportRect, () => Refresh(force: false));
+            Go.AddComponent<TopiaForgeListViewRuntime>().Initialize(viewportRect, ViewportResized);
 
             this.Flex(1f, 1f);
         }
@@ -100,7 +108,9 @@ namespace TopiaForge.Mods.UnityUi
                 selectedIndex = -1;
             }
 
-            content.sizeDelta = new Vector2(0f, TopiaForgeVirtualListMath.ContentHeight(items.Count, rowHeight, Spacing));
+            var height = declarativeRows ? UiVirtualListGeometry.Height(items.Count) :
+                TopiaForgeVirtualListMath.ContentHeight(items.Count, rowHeight, Spacing);
+            content.sizeDelta = new Vector2(0f, height);
             Refresh(force: true);
         }
 
@@ -129,9 +139,18 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Sets whether list rows accept pointer, keyboard, or controller input.</summary>
         public void SetEnabled(bool enabled)
         {
+            enabledState = enabled;
             var group = EnsureCanvasGroup();
             group.interactable = enabled;
             group.blocksRaycasts = enabled;
+            if (declarativeRows)
+                foreach (var row in pool) row.SetDeclarativeEnabled(enabled);
+        }
+
+        internal void UseDeclarativeRows(int visibleRows)
+        {
+            declarativeRows = true;
+            declaredViewportHeight = UiVirtualListGeometry.Height(visibleRows);
         }
 
         private void SetSelection(int index, bool notify)
@@ -144,9 +163,7 @@ namespace TopiaForge.Mods.UnityUi
             selectedIndex = index;
             if (index >= 0)
             {
-                var offset = ScrollOffset();
-                var target = TopiaForgeVirtualListMath.ScrollToRow(index, offset, ViewportHeight(), items.Count, rowHeight, Spacing);
-                SetScrollOffset(target);
+                RevealRow(index);
             }
 
             Refresh(force: true);
@@ -168,6 +185,22 @@ namespace TopiaForge.Mods.UnityUi
             Select(next);
         }
 
+        private void RevealRow(int index)
+        {
+            var offset = ScrollOffset();
+            var viewport = ViewportHeight();
+            var target = declarativeRows ? UiVirtualListGeometry.RevealRow(index, offset, viewport, items.Count) :
+                TopiaForgeVirtualListMath.ScrollToRow(index, offset, viewport, items.Count, rowHeight, Spacing);
+            if (target != offset) SetScrollOffset(target);
+        }
+
+        private void ViewportResized()
+        {
+            hasViewportLayout = true;
+            if (declarativeRows && selectedIndex >= 0) RevealRow(selectedIndex);
+            Refresh(force: false);
+        }
+
         private void Refresh(bool force)
         {
             var viewport = ViewportHeight();
@@ -177,7 +210,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             var offset = ScrollOffset();
-            var (first, count) = TopiaForgeVirtualListMath.VisibleRange(offset, viewport, items.Count, rowHeight, Spacing);
+            var (first, count) = TopiaForgeVirtualListMath.VisibleRange(offset - RowGutter, viewport, items.Count, rowHeight, RowSpacing);
             if (!force && first == lastFirst && count == lastCount)
             {
                 RepaintSelectionOnly();
@@ -187,7 +220,7 @@ namespace TopiaForge.Mods.UnityUi
             lastFirst = first;
             lastCount = count;
 
-            EnsurePool(TopiaForgeVirtualListMath.PoolSize(viewport, rowHeight, Spacing));
+            EnsurePool(TopiaForgeVirtualListMath.PoolSize(viewport, rowHeight, RowSpacing));
             for (var poolIndex = 0; poolIndex < pool.Count; poolIndex++)
             {
                 var itemIndex = first + poolIndex;
@@ -200,7 +233,9 @@ namespace TopiaForge.Mods.UnityUi
                 }
 
                 row.SetVisible(true);
-                row.Rect.anchoredPosition = new Vector2(0f, -TopiaForgeVirtualListMath.RowOffset(itemIndex, rowHeight, Spacing));
+                var top = declarativeRows ? UiVirtualListGeometry.RowTop(itemIndex) :
+                    TopiaForgeVirtualListMath.RowOffset(itemIndex, rowHeight, Spacing);
+                row.Rect.anchoredPosition = new Vector2(0f, -top);
                 poolBinding[poolIndex] = itemIndex;
                 row.SetSelected(itemIndex == selectedIndex);
                 TopiaForgeCallbacks.Invoke(binder, row, items[itemIndex], itemIndex, "List row binding");
@@ -229,7 +264,8 @@ namespace TopiaForge.Mods.UnityUi
                 row.Rect.anchorMin = new Vector2(0f, 1f);
                 row.Rect.anchorMax = new Vector2(1f, 1f);
                 row.Rect.pivot = new Vector2(0.5f, 1f);
-                row.Rect.sizeDelta = new Vector2(0f, rowHeight);
+                row.Rect.sizeDelta = new Vector2(-2f * RowGutter, rowHeight);
+                if (declarativeRows) row.UseDeclarativePaint(enabledState);
                 row.OnClick(() =>
                 {
                     var bound = poolBinding[poolIndex];
@@ -248,6 +284,7 @@ namespace TopiaForge.Mods.UnityUi
 
         private float ViewportHeight()
         {
+            if (declarativeRows && !hasViewportLayout) return declaredViewportHeight;
             return scrollRect.viewport != null ? scrollRect.viewport.rect.height : 0f;
         }
 

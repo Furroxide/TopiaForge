@@ -32,6 +32,7 @@ namespace TopiaForge
             ["Assets/FontAssets/TopiaForge Body SDF.asset"] = "a7af2c56a723c874e9d65a55ecc05d8d",
             ["Assets/FontAssets/TopiaForge Body Medium SDF.asset"] = "13e3c16d25e95364896e6d265325cd30",
             ["Assets/FontAssets/TopiaForge Display SDF.asset"] = "eda53be3aa9563042882b0e7b7678aaf",
+            ["Assets/FontAssets/TopiaForge Mono SDF.asset"] = "c9c9fe6531e744a2aaebf5d3536602f0",
         };
 
         /// <summary>Rewrites a just-saved font asset with its pinned GUID and fixed sub-asset ids.</summary>

@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -18,6 +19,7 @@ namespace TopiaForge.Mods.UnityUi
         private const float ThumbSize = 16f;
 
         private readonly Toggle toggle;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage track;
         private readonly UImage? thumb;
         private readonly UImage? box;
@@ -34,7 +36,11 @@ namespace TopiaForge.Mods.UnityUi
             checkbox = asCheckbox;
             value = initialValue;
             TopiaForgeLayout.ApplyRow(Go, TopiaForgeGap.Sm, TopiaForgeGap.None);
+            Go.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset((int)UiControlPaint.CompactCueGutter, 0, 0, 0);
             this.FixedHeight(TopiaForgeTokens.ControlSmHeight);
+            var hitArea = Go.AddComponent<UImage>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
 
             var controlGo = new GameObject("Control", typeof(RectTransform));
             controlGo.transform.SetParent(Go.transform, false);
@@ -98,6 +104,7 @@ namespace TopiaForge.Mods.UnityUi
             toggle = Go.AddComponent<Toggle>();
             toggle.targetGraphic = track;
             toggle.isOn = value;
+            cues = TopiaForgeControlCues.Install(toggle, Rect, compact: true);
             toggle.onValueChanged.AddListener(next =>
             {
                 if (value == next)
@@ -132,32 +139,39 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Sets whether the toggle accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
+            if (toggle.interactable == enabled) return;
             toggle.interactable = enabled;
+            Repaint();
         }
 
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
             Repaint();
         }
 
         private void Repaint()
         {
             var theme = Theme;
+            var enabled = toggle.interactable;
+            var colors = toggle.colors;
+            if (theme.Descriptor != null) colors.disabledColor = Color.white;
             if (checkbox)
             {
                 // An unticked box draws nothing on its sunken fill, so it keeps uGUI's default tints.
                 var on = theme.Fill(TopiaForgeFillRole.ControlOn);
-                toggle.colors = value ? on.Tinted(toggle.colors) : DefaultTints(toggle.colors);
-                track.color = value ? on.Fill : theme.SurfaceSunken;
+                toggle.colors = value ? on.Tinted(colors) : DefaultTints(colors);
+                track.color = value && enabled ? on.Fill : theme.SurfaceSunken;
                 if (boxRing != null)
                 {
-                    boxRing.color = value ? on.Fill : theme.Outline;
+                    boxRing.color = !enabled ? theme.ForegroundOn(UiPaintRole.Surface, UiTone.Muted)
+                        : value ? on.Fill : theme.Outline;
                 }
 
                 if (check != null)
                 {
-                    check.color = on.Content;
+                    check.color = enabled ? on.Content : theme.DisabledInk;
                     check.enabled = value;
                 }
             }
@@ -165,17 +179,19 @@ namespace TopiaForge.Mods.UnityUi
             {
                 // The thumb reads on the track in every state: the track's tints never move it toward the thumb far enough to stop it reading.
                 var paint = theme.Fill(value ? TopiaForgeFillRole.ControlOn : TopiaForgeFillRole.SwitchOff);
-                toggle.colors = paint.Tinted(toggle.colors);
-                track.color = paint.Fill;
+                toggle.colors = paint.Tinted(colors);
+                track.color = enabled ? paint.Fill : theme.SurfaceSunken;
                 if (thumb != null && thumbRect != null)
                 {
-                    thumb.color = paint.Content;
+                    thumb.color = enabled ? paint.Content : theme.DisabledInk;
                     var x = value ? TrackWidth - (ThumbSize / 2f) - 3f : (ThumbSize / 2f) + 3f;
                     thumbRect.anchoredPosition = new Vector2(x, 0f);
                 }
             }
 
-            label.color = theme.Text;
+            label.color = theme.ForegroundOn(UiPaintRole.Surface, enabled ? UiTone.Neutral : UiTone.Muted);
+            cues.Apply(track.color, label.color, theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control,
+                theme.HighContrast);
         }
 
         private static ColorBlock DefaultTints(ColorBlock block)

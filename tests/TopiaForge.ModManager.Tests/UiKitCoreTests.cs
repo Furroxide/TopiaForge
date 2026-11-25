@@ -29,6 +29,11 @@ namespace TopiaForge.ModManager.Tests
             LayerBandAllocation();
             UiKitToastStackTests.Run();
             UiKitChipContrastTests.Run();
+            UiThemePackTests.Run();
+            UiThemeWireTests.Run();
+            UiKitThemeConsumerTests.Run();
+            UiKitCaptureTests.Run();
+            PresentationRuntimeTests.RunK1Delivery();
             Console.WriteLine("UiKitCoreTests passed.");
         }
 
@@ -199,7 +204,8 @@ namespace TopiaForge.ModManager.Tests
                 globalReducedMotion: false,
                 globalMotionIntensity: 1.5f);
             Assert(effective.HighContrast, "host high contrast strengthens global state");
-            AssertNear(effective.UiScale, 1.5f, "host and global scale compose and clamp");
+            AssertNear(effective.UiScale, 1.5f, "host and global scale compose");
+            AssertNear(profile.Resolve(false, 2f, false, 1f).UiScale, 2f, "host and global scale clamp at 200 percent");
             AssertNear(effective.MotionIntensity, 0.75f, "host and global motion multiply");
 
             effective = profile.Resolve(

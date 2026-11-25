@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace TopiaForge.ModManager
 {
@@ -10,6 +11,8 @@ namespace TopiaForge.ModManager
     {
         private sealed partial class UnityUiSurface : IUiSurface, IUiSurfaceDismissalSource, IPresentationSurfaceState
         {
+            private static readonly OperationResult<bool> ContentApplied = OperationResult<bool>.Success(true);
+
             private TopiaForgeWidget? widget;
             private TopiaForgeWindow? window;
             private TopiaForgeFullscreenTool? fullscreen;
@@ -26,6 +29,7 @@ namespace TopiaForge.ModManager
             private Action? nativeClosed;
             private IDisposable? lifetimeLease;
             private UiNode? admitted;
+            private ContentStamp committedStamp;
             private UnityUiHudPlacement? placement;
             private int dockHandle;
             private int disposed;
@@ -151,6 +155,7 @@ namespace TopiaForge.ModManager
                 UnityMainThreadGuard.AssertCurrent();
                 if (content == null) throw new ArgumentNullException(nameof(content));
                 var parent = compositionParent;
+                var view = widget;
                 if (lifetime.IsStopping)
                 {
                     return OperationResult<bool>.Failure(
@@ -163,7 +168,7 @@ namespace TopiaForge.ModManager
                     return OperationResult<bool>.Failure(ModErrorCode.InvalidState, LostMessage);
                 }
 
-                if (parent == null || widget == null)
+                if (parent == null || view == null)
                 {
                     return OperationResult<bool>.Failure(
                         ModErrorCode.InvalidState,
@@ -172,14 +177,28 @@ namespace TopiaForge.ModManager
 
                 TopiaForgeContainer? next = null;
                 UiGraphRetentionTransaction? graphTransaction = null;
+                ContentStamp stamp;
                 try
                 {
-                    // The tree this surface already shows keeps its clock binding, as shared and targeted
-                    // surfaces keep it: an expired countdown in it shows zero instead of refusing the tree.
-                    if (!ReferenceEquals(content, admitted)) UiClockBinding.Bind(content, callbacks.ClockEpoch());
+                    stamp = new ContentStamp(view, callbacks.ClockEpoch());
+                    if (ReferenceEquals(content, admitted))
+                    {
+                        if (!committedStamp.Matches(stamp))
+                        {
+                            RefreshRetainedComposition(compositionRoot!, stamp.ClockEpoch);
+                            committedStamp = stamp;
+                        }
+                        return ContentApplied;
+                    }
+
+                    UiComposition.Validate(content);
+                    if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
+                        return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
+                    UiClockBinding.Check(content, stamp.ClockEpoch);
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
                     RenderNode(content, next, callbacks, graphTransaction);
+                    UiClockBinding.Commit(content, stamp.ClockEpoch);
                 }
                 catch (ArgumentException exception)
                 {
@@ -199,6 +218,7 @@ namespace TopiaForge.ModManager
                 var previous = compositionRoot;
                 compositionRoot = next;
                 admitted = content;
+                committedStamp = stamp;
                 retainedGraphs = graphTransaction!.Commit();
                 try
                 {
@@ -206,13 +226,55 @@ namespace TopiaForge.ModManager
                 }
                 catch (Exception exception)
                 {
-                    return OperationResult<bool>.Failure(
-                        ModErrorCode.External,
-                        "TopiaForgeUi replaced the composition, but could not clean up stale UI: " +
-                        exception.Message);
+                    // Admission has committed. Retire the stale view without reporting a failed update.
+                    try { previous?.SetShown(false); }
+                    catch { }
+                    try { logger.Error(exception, "TopiaForgeUi could not destroy a replaced composition."); }
+                    catch { }
                 }
 
-                return OperationResult<bool>.Success(true);
+                return ContentApplied;
+            }
+
+            private void RefreshRetainedComposition(TopiaForgeContainer root, string clockEpoch)
+            {
+                // Theme updates already repaint live widgets. Keep their input state and scroll positions.
+                LayoutRebuilder.MarkLayoutForRebuild(root.Rect);
+                if (!string.Equals(committedStamp.ClockEpoch, clockEpoch, StringComparison.Ordinal))
+                {
+                    foreach (var countdown in root.Go.GetComponentsInChildren<UiCountdownDriver>(includeInactive: true))
+                    {
+                        countdown.Refresh();
+                    }
+                }
+            }
+
+            private readonly struct ContentStamp
+            {
+                private readonly TopiaForgeResolvedTheme theme;
+                private readonly int screenWidth;
+                private readonly int screenHeight;
+                private readonly float width;
+                private readonly float height;
+
+                internal ContentStamp(TopiaForgeWidget view, string clockEpoch)
+                {
+                    ClockEpoch = clockEpoch;
+                    theme = view.ResolvedTheme;
+                    screenWidth = Screen.width;
+                    screenHeight = Screen.height;
+                    var rect = view.Rect.rect;
+                    width = rect.width;
+                    height = rect.height;
+                }
+
+                internal string ClockEpoch { get; }
+
+                internal bool Matches(in ContentStamp other) =>
+                    string.Equals(ClockEpoch, other.ClockEpoch, StringComparison.Ordinal)
+                    && ReferenceEquals(theme, other.theme)
+                    && screenWidth == other.screenWidth && screenHeight == other.screenHeight
+                    && width.Equals(other.width) && height.Equals(other.height);
             }
 
             private static string RollbackFailedRender(

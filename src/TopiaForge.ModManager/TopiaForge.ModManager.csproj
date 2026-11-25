@@ -8,10 +8,16 @@
     <FileVersion>0.2.0.0</FileVersion>
     <InformationalVersion>0.2.0</InformationalVersion>
     <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
+    <DefineConstants>$(DefineConstants);TOPIAFORGE_NATIVE_CAPTURE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\..\mods\Shared\NativePlayerTeleport.cs" Link="Shared\NativePlayerTeleport.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationPages.cs" Link="UiGalleryRecorder\FoundationPages.cs" />
+    <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
+    <Compile Include="..\TopiaForge.Mods.Testing\UiCapturedNode.cs" Link="UiGalleryRecorder\UiCapturedNode.cs" />
+    <Compile Include="..\TopiaForge.Mods.Testing\UiCaptureViewport.cs" Link="UiGalleryRecorder\UiCaptureViewport.cs" />
+    <Compile Include="..\TopiaForge.Mods.Testing\UiTreeCapture.cs" Link="UiGalleryRecorder\UiTreeCapture.cs" />
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
@@ -75,6 +81,7 @@
     <Reference Include="Unity.InputSystem" HintPath="$(RobotopiaManagedDir)\Unity.InputSystem.dll" Private="false" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextCoreFontEngineModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextCoreFontEngineModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="false" />
     <!-- Voice chat: push-to-talk reads the Input System when the game has no legacy input, and its census reads the game's

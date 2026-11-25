@@ -14,7 +14,7 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// runtime's admission planner, and a joining player checks the host's packages before connecting. Refusals reach the
 /// player as display lines naming mods and versions, and packages that cannot be read stop hosting and joining cleanly.
 /// </summary>
-internal static class RuntimeAdmissionTests
+internal static partial class RuntimeAdmissionTests
 {
     private static readonly PackageSpec Sandbox = PackageSpec.Implicit("io.example.sandbox", "0.2.0", 'a');
     private static readonly PackageSpec Lobby = PackageSpec.Session("io.example.lobby", "1.0.0", 'c');

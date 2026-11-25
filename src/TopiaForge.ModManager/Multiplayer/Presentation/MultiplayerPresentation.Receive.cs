@@ -8,6 +8,7 @@ namespace TopiaForge.ModManager
     internal sealed partial class MultiplayerPresentation
     {
         private readonly Dictionary<ulong, ReceivedHud> received = new Dictionary<ulong, ReceivedHud>();
+        private readonly UiPresentationGenerations sharedGenerations = new UiPresentationGenerations();
         private TokenBucket incomingBytes = new TokenBucket(128 * 1024, 64 * 1024, 0);
         private TokenBucket incomingCount = new TokenBucket(32, 20, 0);
         private TokenBucket incomingBaselines = new TokenBucket(10, 10, 0);
@@ -42,16 +43,21 @@ namespace TopiaForge.ModManager
                 var visibility = (UiHudVisibility)UiNodeWireCodec.Byte(read, 1);
                 var visible = UiNodeWireCodec.Byte(read, 1) != 0;
                 if (width < 80 || width > 1920 || height < 80 || height > 1440) return false;
-                var content = UiNodeWireCodec.Read(read, IgnoreControl, UiClockEpoch);
+                var content = UiNodeWireCodec.Read(read, IgnoreControl, UiClockEpoch, out var envelope);
                 if (UiComposition.ContainsInteractive(content)) return false;
                 UiNodeWireCodec.End(read);
+                var theme = default(UiRemoteThemeSelection);
+                if (envelope != null && (!players.AuthenticateUiTheme(envelope, null, out theme) || !sharedGenerations.Allows(token, envelope)))
+                    return false;
                 var request = new UiSurfaceRequest("shared-" + token, title, body, UiSurfaceKind.Hud, width, height, content)
                     .WithHudAnchor(anchor).WithHudVisibility(visibility);
-                updates.Add(new HudState(token, request, visible));
+                updates.Add(new HudState(token, request, visible, theme));
             }
             var audio = ReadLoops(r);
             UiNodeWireCodec.End(r);
             // Decode and validate the complete replacement before touching any existing presentation.
+            sharedGenerations.ClearActive();
+            for (var i = 0; i < updates.Count; i++) sharedGenerations.Commit(updates[i].Token, updates[i].Theme.Envelope);
             removed.Clear();
             foreach (var entry in received) if (!tokens.Contains(entry.Key)) removed.Add(entry.Key);
             for (var i = 0; i < removed.Count; i++) { received[removed[i]].Surface.Dispose(); received.Remove(removed[i]); }
@@ -93,17 +99,17 @@ namespace TopiaForge.ModManager
             }
             if (!received.TryGetValue(state.Token, out var current))
             {
-                var ui = Receiver.Ui;
-                var result = ui is IRemoteUiReceiver plain ? plain.RemoteSurface(request) : ui.CreateSurface(request);
+                var result = UiPresentationTheme.CreateRemote(Receiver.Ui, request, state.Theme);
                 if (!result.TryGetValue(out var surface)) return false;
                 current = new ReceivedHud(surface, request.Body); received.Add(state.Token, current);
             }
             else
             {
+                if (!UiPresentationTheme.UpdateRemote(current.Surface, request.Content, state.Theme, current.Themed)) return false;
                 if (current.Body != request.Body) current.Surface.SetBody(request.Body);
-                if (!current.Surface.SetContent(request.Content ?? new UiColumn()).Succeeded) return false;
             }
             current.Body = request.Body;
+            current.Themed = state.Theme.Envelope != null;
             if (state.Visible) current.Surface.Show(); else current.Surface.Hide();
             return true;
         }
@@ -112,6 +118,7 @@ namespace TopiaForge.ModManager
         {
             foreach (var hud in received.Values) hud.Surface.Dispose();
             received.Clear(); receivedVersion = 0; latestHuds = null;
+            sharedGenerations.Reset();
             incomingBytes = new TokenBucket(128 * 1024, 64 * 1024, Now);
             incomingCount = new TokenBucket(32, 20, Now);
             incomingBaselines = new TokenBucket(10, 10, Now);
@@ -121,6 +128,7 @@ namespace TopiaForge.ModManager
         {
             internal readonly IUiSurface Surface;
             internal string Body;
+            internal bool Themed;
             internal ReceivedHud(IUiSurface surface, string body) { Surface = surface; Body = body; }
         }
         private sealed class HudState
@@ -128,8 +136,10 @@ namespace TopiaForge.ModManager
             internal readonly ulong Token;
             internal readonly UiSurfaceRequest Request;
             internal readonly bool Visible;
+            internal readonly UiRemoteThemeSelection Theme;
             internal bool Retry;
-            internal HudState(ulong token, UiSurfaceRequest request, bool visible) { Token = token; Request = request; Visible = visible; }
+            internal HudState(ulong token, UiSurfaceRequest request, bool visible, UiRemoteThemeSelection theme)
+            { Token = token; Request = request; Visible = visible; Theme = theme; }
         }
     }
 }

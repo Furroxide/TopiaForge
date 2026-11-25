@@ -26,6 +26,7 @@ namespace TopiaForge.Mods.UnityUi
             Host = host;
             Scheme = scheme;
             Go = go;
+            ThemeSlot = go.GetComponentInParent<TopiaForgeLayerSlot>(includeInactive: true);
             Rect = TopiaForgeComponents.GetOrAdd<RectTransform>(go);
             host.RegisterWidget(this);
             if (this is ITopiaForgeThemeAware aware)
@@ -47,7 +48,11 @@ namespace TopiaForge.Mods.UnityUi
         public bool Visible => visible;
 
         /// <summary>Gets theme.</summary>
-        protected TopiaForgeResolvedTheme Theme => Host.Theme(Scheme);
+        protected TopiaForgeResolvedTheme Theme => ResolvedTheme;
+
+        internal TopiaForgeLayerSlot? ThemeSlot { get; }
+
+        internal TopiaForgeResolvedTheme ResolvedTheme => Host.ThemeFor(this);
 
         /// <summary>
         /// Shows/hides via CanvasGroup (alpha + interactable + raycasts) — no layout

@@ -282,7 +282,7 @@ namespace TopiaForge.Multiplayer.Network
         private JoinDecision Admit(byte[] clientContent)
         {
             var verdict = content.Admit(clientContent);
-            if (verdict != null && verdict.IsAdmitted) return JoinDecision.Accept();
+            if (verdict != null && verdict.IsAdmitted) return JoinDecision.Accept(uiContractVersion: verdict.UiContractVersion);
             var problems = verdict?.Problems ?? Array.Empty<string>();
             if (verdict?.Code == AdmissionCode.NotReady)
             {

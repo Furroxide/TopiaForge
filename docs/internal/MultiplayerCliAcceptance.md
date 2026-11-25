@@ -122,8 +122,12 @@ evidence check; an exited or unverifiable peer cannot be replaced by later marke
 
 ### Game-side prerequisite
 
-Build and pack `tests/TopiaForge.MultiplayerAcceptanceMod`, then supply its reviewed
-archive with `--package`. The probe observes the supported public session and uses
+Pack the test probe from the repository with
+`python -I tests/TopiaForge.MultiplayerAcceptanceMod/pack_acceptance.py --output <directory>`.
+Supply the reviewed archive with `--package`. The helper stages the exact Gallery
+Survival definition as an additional non-default theme for the non-distributable
+probe. This is the sole R4-11 packaging exception. The ordinary packer validates
+the staged source and writes the actual archive digest. The probe observes the supported public session and uses
 `Context.Ui` for a Paper window with scrollable manual checks, toggled by F9. It
 does not host, join, resolve addresses or write outside its mod-owned services.
 The runner owns those operations through the production launcher and V5 pipeline.
@@ -165,6 +169,25 @@ runtime isolation acknowledgements. Do not publish it or raw game logs; use
 reviewed hashes. Source-only tests exercise synthetic peers and cannot prove
 the multiplayer transport. Internet, real input, rendered
 state and microphone checks still need a live run.
+
+### Manual Gallery visual gate
+
+Use the same freshly packed `dev.topiaforge.multiplayer-acceptance` archive on both isolated peers. On the
+host profile, create the empty file
+`BepInEx/TopiaForge/data/dev.topiaforge.multiplayer-acceptance/gallery-remote-preview.enabled` before loading
+the package. The marker selects the Gallery preview in place of that process's acceptance checklist and
+automated evidence. Keep the marker outside profiles used for the acceptance runner.
+
+Once the normal session reports a ready host and exactly one connected guest, press F7 on the host.
+Each press opens the same authored fixture on the host and sends it to that guest through `IPlayer.Ui`.
+The sequence runs Theme packs, then Typography. Each page cycles the kit palette, the transport test palette
+and authenticated Survival, in a Paper Window and a HUD for each. Set resolution, accessibility and UI scale
+on each profile before collecting a case. The guest uses its own admitted copy of the test package and its
+own preferences. Label the viewer, palette and delivery route in the visual manifest.
+
+Use the ordinary Gallery on the listen host and on the connected guest for the complete Interaction states
+page. Label the guest case `guest-local`. The current wire contract excludes the graph canvas in that fixture.
+The Theme packs and Typography pair provides separate authenticated delivery evidence.
 
 ## Joining
 

@@ -40,6 +40,7 @@ class ModManifest {
     this.contributions,
     this.apiAssemblies = const [],
     this.multiplayer,
+    this.ui,
     bool? multiplayerIsPresent,
     this.extraFields = const {},
     List<String> structuralIssues = const [],
@@ -116,6 +117,9 @@ class ModManifest {
   /// Optional multiplayer admission metadata. Its absence means the mod is
   /// shared implicitly: every peer must enable the identical package.
   final ModMultiplayerMetadata? multiplayer;
+
+  /// Package-local theme declarations, when present.
+  final ModUiCatalogue? ui;
 
   /// Distinguishes a missing value from a malformed non-object value so the
   /// validator can report the correct version-specific contract error.
@@ -212,6 +216,7 @@ class ModManifest {
     if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
     if (multiplayerIsPresent && multiplayer != null)
       'multiplayer': multiplayer!.toJson(),
+    if (ui != null) 'ui': ui!.toJson(),
   };
 
   List<LauncherIssue> validate() {

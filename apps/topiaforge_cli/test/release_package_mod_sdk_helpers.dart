@@ -1,5 +1,44 @@
 part of 'release_package_mod_sdk_test.dart';
 
+void _copyRelocatedValidator(Directory payload, Directory destination) {
+  File(
+    p.join(payload.path, 'global.json'),
+  ).copySync(p.join(destination.path, 'global.json'));
+  const ReleaseFileOps().copyDirectory(
+    Directory(p.join(payload.path, 'tools', 'package-validator')),
+    Directory(p.join(destination.path, 'tools', 'package-validator')),
+  );
+}
+
+void _expectValidatorRuntimeDependency(Directory payload) {
+  const validator = ReleaseSdkPayloadValidator();
+  validator.validate(payload.path);
+  final dependency = File(
+    p.join(
+      payload.path,
+      'tools',
+      'package-validator',
+      'TopiaForge.Mods.Abstractions.dll',
+    ),
+  );
+  final removed = dependency.renameSync('${dependency.path}.withheld');
+  try {
+    expect(
+      () => validator.validate(payload.path),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains(dependency.path),
+        ),
+      ),
+    );
+  } finally {
+    removed.renameSync(dependency.path);
+  }
+  validator.validate(payload.path);
+}
+
 const _releaseModTemplates = [
   'asset',
   'gamemode',
@@ -274,6 +313,7 @@ Future<void> _runCheckedProcess(
     arguments,
     workingDirectory: workingDirectory,
     environment: environment,
+    includeParentEnvironment: false,
   );
   expect(
     result.exitCode,

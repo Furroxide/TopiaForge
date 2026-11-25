@@ -38,7 +38,8 @@ namespace TopiaForge.ModManager.Tests
             ("TopiaForgeListView.cs", "Refresh(force: false)", "scrolling rebinds rows"),
             ("TopiaForgeKeybindField.cs", "BeginCapture", "the key the player then presses is the action"),
             ("TopiaForgeTableView.Header.cs", "ToggleSort(captured)", "sorting raises no mod callback"),
-            ("TopiaForgeGraphCanvasRuntime.cs", "Select", "the canvas's handlers open the action")
+            ("TopiaForgeGraphCanvasRuntime.cs", "Select", "the canvas's handlers open the action"),
+            ("TopiaForgeGraphPortView.cs", "Select", "forwards port selection to the canvas's owning handler")
         };
 
         public static void Run()
@@ -151,6 +152,10 @@ namespace TopiaForge.ModManager.Tests
                 "the key the player presses into a keybind field is the player's action");
             Require(Source("TopiaForgeInputField.cs").Contains("TopiaForgeCallbacks.Player(input.isFocused ? Host.OwnerId : null, onChanged", StringComparison.Ordinal),
                 "typing is the player's action, and a value code sets runs in that code's own scope");
+            Require(Source("TopiaForgeGraphCanvasRuntime.cs").Contains("void Select() => owner.HandleNodeSelected(", StringComparison.Ordinal),
+                "a graph node control routes the player's selection through the canvas");
+            Require(Source("TopiaForgeGraphPortView.cs").Contains("void Select() => owner.HandlePortSelected(", StringComparison.Ordinal),
+                "a graph port control routes the player's selection through the canvas");
             Require(Count(Source("TopiaForgeGraphCanvas.cs"), "TopiaForgeCallbacks.Player(") == 8, "every graph handler that reaches a mod opens the action");
             Require(!Source("TopiaForgeCallbacks.cs").Contains("UnityEngine", StringComparison.Ordinal) &&
                     !Source("TopiaForgeIntent.cs").Contains("UnityEngine", StringComparison.Ordinal), "the hook stays Unity-free");

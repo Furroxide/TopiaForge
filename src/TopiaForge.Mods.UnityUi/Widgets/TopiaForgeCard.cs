@@ -162,7 +162,7 @@ namespace TopiaForge.Mods.UnityUi
             button.colors = colors;
 
             var press = Go.AddComponent<TopiaForgePressEffect>();
-            press.Initialize(Host, body, shadow);
+            press.Initialize(Host, button, body, shadow);
 
             var hover = Go.AddComponent<TopiaForgeHoverNotifier>();
             hover.Changed = value =>

@@ -133,6 +133,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly GameObject canvasRoot;
         private readonly UiHost host;
         private readonly TopiaForgeContainer dialog;
+        private readonly TopiaForgeModalColumn layout;
         private readonly UImage backdrop;
         private readonly TopiaForgeCursorLease cursorLease = new TopiaForgeCursorLease();
         private bool open;
@@ -163,7 +164,8 @@ namespace TopiaForge.Mods.UnityUi
             var ring = CreateDecor(panel.transform, "Ring", TopiaForgeSprites.Ring(TopiaForgeRadius.Dialog, TopiaForgeTokens.BorderStrong), raycast: false);
             ring.color = theme.OutlineStrong;
 
-            TopiaForgeLayout.ApplyColumn(panel, TopiaForgeGap.Md, TopiaForgeGap.Xl);
+            layout = panel.AddComponent<TopiaForgeModalColumn>();
+            TopiaForgeLayout.ConfigureColumn(layout, TopiaForgeGap.Md, TopiaForgeGap.Xl);
             var fitter = panel.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
@@ -212,6 +214,7 @@ namespace TopiaForge.Mods.UnityUi
                 return;
             }
 
+            layout.LimitScrollBody((RectTransform)canvasRoot.transform);
             open = true;
             canvasRoot.SetActive(true);
             cursorLease.Acquire();

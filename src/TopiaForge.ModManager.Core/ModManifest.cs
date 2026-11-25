@@ -172,6 +172,13 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "multiplayer", EmitDefaultValue = false)]
         public ModMultiplayerMetadata? Multiplayer { get; set; }
 
+        /// <summary>The package-local UI theme catalogue, when declared.</summary>
+        [DataMember(Name = "ui", EmitDefaultValue = false)]
+        public ModUiCatalogue? Ui { get; set; }
+
+        [IgnoreDataMember]
+        internal AdmittedUiCatalogue? AdmittedUi { get; set; }
+
         /// <summary>
         /// True when this manifest carries an explicit multiplayer block.
         /// </summary>

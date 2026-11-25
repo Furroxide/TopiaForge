@@ -8,6 +8,10 @@ and bounded virtual list without referencing Unity.
 The window lives as long as the mod: scene loads keep it, open or closed as the mod left it, so the
 mod creates it once and handles no scenes.
 
+The manifest applies the Survival sample theme when the window opens. Turn on **Preview alternate
+palette** to try the second theme declared in the same package, then turn it off to restore the
+manifest default. The preview changes the palette while keeping the window and its control values.
+
 ## Quick start
 
 1. Restore the pinned SDK: `topiaforge restore`
@@ -19,6 +23,7 @@ mod creates it once and handles no scenes.
 
 - `{{TYPE_NAME}}Mod.cs` — the named action, declarative controls, callbacks, and safe window lifecycle.
 - `{{TYPE_NAME}}Config.cs` — configurable nonreserved toggle key.
+- `ui/themes/` — the manifest's default theme and the alternate preview palette.
 - `tests/` — a real NUnit UI lifecycle and interaction test using the captured fake UI service.
 
 New to modding? Follow `docs/YourFirstMod.md` in the TopiaForge repository; `docs/UiKit.md` documents the TopiaForgeUi widgets.

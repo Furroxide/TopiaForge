@@ -10,7 +10,7 @@ using TopiaForge.MultiplayerAcceptance;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal static class MultiplayerAcceptanceProbeTests
+    internal static partial class MultiplayerAcceptanceProbeTests
     {
         internal static void Run()
         {
@@ -51,6 +51,7 @@ namespace TopiaForge.ModManager.Tests
             context.AssertNoLeaks();
             RoleBinding();
             ProbeCompatibility();
+            GalleryPreviewUsesTheOptInAndOneAdmittedGuest();
             Console.WriteLine("Multiplayer acceptance probe: 8 behavioral checks passed.");
         }
         private static void ProbeCompatibility()
