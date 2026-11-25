@@ -7,14 +7,14 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static class UiStatusContractsTests
     {
-        internal static void Run()
+        internal static void Run(bool report)
         {
             LegacyConstructorsKeepTheirDefaults();
             ThresholdsValidateAndResolveInclusiveStates();
             ProgressKeepsAdjacentThresholdsDistinct();
             StatBarsAndProgressFormatVisibleValues();
             CountdownFormatsUseAReusableDigitBuffer();
-            Console.WriteLine("UI status contracts passed: legacy overloads, thresholds, value formats and allocation-free countdown digits.");
+            if (report) Console.WriteLine("UI status contracts passed: legacy overloads, thresholds, value formats and allocation-free countdown digits.");
         }
 
         private static void LegacyConstructorsKeepTheirDefaults()

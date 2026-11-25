@@ -14,7 +14,7 @@ namespace TopiaForge.ModManager.Tests
             WorldWidgetOwnership();
             WorldWidgetAllocation();
             WorldWidgetCompatibility();
-            UiStatusContractsTests.Run();
+            UiStatusContractsTests.Run(report);
             if (report) Console.WriteLine("World widgets passed: values, automatic countdown, local label lifecycle, visibility, pool bounds, 10 reloads and 10,000 settled reads.");
         }
         private static void WorldWidgetValues()
