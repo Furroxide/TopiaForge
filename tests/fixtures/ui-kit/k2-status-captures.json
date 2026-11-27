@@ -4,10 +4,10 @@
   "fixture": "StatusGalleryPages",
   "transport": "Guest trees use the production ownership envelope, encoder, decoder, and fake receiver admission.",
   "clock": "Starts at 120 seconds and advances deterministically to warning, critical, and expiry before an epoch change.",
-  "packageManifestSha256": "EDFEDEE67FAD978CF03234A625ECAEB7F5F4BC0A857E047321B4E1A42E8E0447",
-  "sampleDefinitionSha256": "0B2DE3616F0ECD6848F0F9DCEF35430326A4BF64EB719630A28BFE9F984E6DE5",
+  "packageManifestSha256": "A36ECEBD35A99C8E5B797F5CDE980BD4B6546737017AD6C9A1274DE0E5569E60",
+  "sampleDefinitionSha256": "CFA196D4BF56150EE6F24C8BE475C61EB8B329481E83FEFB5FCE78A16D75CC6F",
   "kitDescriptorSha256": "4602CE2902CF9C95898AEA57EDFD9E9293DD563941CBF191240C299393D89E3A",
-  "sampleDescriptorSha256": "861FB96F450D650619D4B813B4DCEDE74E4DA86AC2C4F6502D9D4786720D0A01",
+  "sampleDescriptorSha256": "FBA6DB1860599F3CF81CC6FC6892B495F17A47CA8FF5D75ECE1DDC802DCF2E9F",
   "cases": {
     "Countdowns/kit/Hud/high/1920x1080/1/guest-received/full/critical": {
       "clockTime": 127,

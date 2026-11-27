@@ -26,13 +26,22 @@ namespace TopiaForge.UiGallery.Pages
             for (var index = 0; index < glyphs.Length; index++)
             {
                 var glyph = glyphs[index];
-                var icon = new UiIcon(glyph, size: 18f, tone: UiTone.Primary,
+                var (size, tone) = glyph switch
+                {
+                    UiGlyph.Warning => (24f, UiTone.Warning),
+                    UiGlyph.Check => (22f, UiTone.Success),
+                    _ => (18f, UiTone.Primary),
+                };
+                var icon = new UiIcon(glyph, size: size, tone: tone,
                     id: "glyph-" + index.ToString(CultureInfo.InvariantCulture));
                 var caption = glyph == UiGlyph.MicrophoneOff ? "Mic off" : icon.SemanticLabel;
-                cells[index] = new UiColumn(new UiNode[] { icon, new UiText(caption, UiTextStyle.Caption) }, LabelBelow);
+                UiNode label = new UiText(caption, UiTextStyle.Caption);
+                if (glyph == UiGlyph.Map)
+                    label = new UiRow(new UiIcon(UiGlyph.Map, size: 18f, decorative: true, id: "glyph-decorative"), label);
+                cells[index] = new UiColumn(new[] { icon, label }, LabelBelow);
             }
 
-            return new UiGrid(cells, minimumCellWidth: 126f, maximumColumns: 6, runSpacing: UiSpace.Md, id: "glyph-grid");
+            return new UiGrid(cells, minimumCellWidth: 126f, maximumColumns: 6, runSpacing: UiSpace.Sm, id: "glyph-grid");
         }
 
         internal static UiNode Images(bool transport)
@@ -64,10 +73,17 @@ namespace TopiaForge.UiGallery.Pages
                 new UiBadge("Water low", UiPaintRole.Warning, UiBadgeStyle.Outlined, icon: UiGlyph.Info,
                     style: survival ? new UiStyleRef("status.outline") : null, id: "badge-warning"),
                 new UiBadge("Closed", UiPaintRole.Danger, id: "badge-closed")),
+            new UiRow(new UiBadge("Active", UiPaintRole.Primary, id: "badge-primary"),
+                new UiBadge("Surveyed", UiPaintRole.Accent, id: "badge-accent"),
+                new UiBadge("Reserve", UiPaintRole.Surface, UiBadgeStyle.Outlined, id: "badge-surface")),
             new UiDivider(UiLineStyle.Solid),
-            new UiSizedBox(new UiPips(5, 3, "Energy", fraction: 0.1f, id: "pips-dots"), width: 280f),
+            new UiRow(new UiPips(5, 3, "Energy", fraction: 0.1f, id: "pips-dots"),
+                new UiPips(3, 0, "Empty", id: "pips-dots-empty"),
+                new UiPips(3, 3, "Full", id: "pips-dots-full")),
             new UiSizedBox(new UiPips(4, 0, "Shield", presentation: UiPipStyle.Segments,
                 role: UiPaintRole.Warning, id: "pips-empty"), width: 280f),
+            new UiSizedBox(new UiPips(4, 2, "Repair", fraction: 0.5f, presentation: UiPipStyle.Segments,
+                id: "pips-partial"), width: 280f),
             new UiSizedBox(new UiPips(4, 4, "Signal", presentation: UiPipStyle.Segments,
                 role: UiPaintRole.Success, id: "pips-full"), width: 280f));
     }

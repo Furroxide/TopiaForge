@@ -91,7 +91,7 @@ namespace TopiaForge.ModManager.Tests
                     internal static UiInputDevice LastViewerDevice { get; set; }
                 }
                 public enum TopiaForgeScheme { Paper, Hud }
-                public enum TopiaForgeKey { F3, F4, F6, F11 }
+                public enum TopiaForgeKey { F2, F3, F4, F6, F11 }
                 public enum TopiaForgeGap { None, Sm, Md }
                 public enum TopiaForgeTextStyle { Body }
                 public enum TopiaForgeButtonStyle { Ghost, Danger, Filled }
@@ -248,6 +248,25 @@ namespace TopiaForge.ModManager.Tests
             namespace TopiaForge.ModManager
             {
                 internal sealed class UnityUiHudPlacement { public void Refresh() { } }
+                internal sealed class UnityInputRegistry : IDisposable
+                {
+                    internal static UnityInputRegistry? LastCreated { get; private set; }
+                    internal Dictionary<string, InputActionDefinition> Definitions { get; } = new();
+                    internal UnityInputRegistry() => LastCreated = this;
+                    public void Dispose() => Definitions.Clear();
+                }
+                internal sealed class OwnerInputService
+                {
+                    private readonly string owner;
+                    private readonly UnityInputRegistry registry;
+                    internal OwnerInputService(string owner, IModLifetime lifetime, UnityInputRegistry registry)
+                    {
+                        this.owner = owner;
+                        this.registry = registry;
+                    }
+                    internal OperationResult<bool> RegisterAction(InputActionDefinition action) =>
+                        OperationResult<bool>.Success(registry.Definitions.TryAdd(owner + ":" + action.Name, action));
+                }
                 internal sealed record UiSurfaceInputContext(object? Registry, string OwnerPackageId)
                 {
                     internal UiSurfaceInputContext ForRemote(UiWireEnvelope? envelope) =>
@@ -316,7 +335,8 @@ namespace TopiaForge.ModManager.Tests
 
                 internal sealed partial class OwnerUiService
                 {
-                    private readonly object? uiInput = null;
+                    private UnityInputRegistry? uiInput;
+                    internal void AttachUiInput(UnityInputRegistry input) => uiInput = input;
                     private readonly Func<double> clock = () => 0;
                     private readonly Func<string> clockEpoch = () => "preview";
 

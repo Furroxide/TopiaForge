@@ -14,11 +14,12 @@ namespace TopiaForge.MultiplayerAcceptance
         internal const string InputAction = "gallery-remote-preview";
         private static readonly ControlGalleryPage[] ControlPages = (ControlGalleryPage[])Enum.GetValues(typeof(ControlGalleryPage));
         private const int VariantsPerPage = 6;
+        private const int ControlPalettesPerPage = 3;
         internal const int StatusVariantCount = 8;
         internal const int ActionVariantCount = 8;
         private static int FoundationVariantCount => FoundationPages.TransportPages.Count * VariantsPerPage;
         internal static int K1VariantCount => FoundationVariantCount + 3;
-        internal static int StatusStart => K1VariantCount + ControlPages.Length * 2;
+        internal static int StatusStart => K1VariantCount + ControlPages.Length * ControlPalettesPerPage;
         internal static int ActionStart => StatusStart + StatusVariantCount;
         internal static int VariantCount => ActionStart + ActionVariantCount;
         private readonly IModContext context;
@@ -164,8 +165,8 @@ namespace TopiaForge.MultiplayerAcceptance
             if (variant >= K1VariantCount)
             {
                 var controlVariant = variant - K1VariantCount;
-                return ControlGalleryPages.Create(ControlPages[controlVariant / 2], (controlVariant & 1) == 0
-                    ? null : FoundationPages.TransportTheme);
+                return ControlGalleryPages.Create(ControlPages[controlVariant / ControlPalettesPerPage],
+                    Palette(controlVariant % ControlPalettesPerPage));
             }
             if (variant >= FoundationVariantCount)
                 return FoundationLayoutPages.LayoutNotice(Palette(variant - FoundationVariantCount));

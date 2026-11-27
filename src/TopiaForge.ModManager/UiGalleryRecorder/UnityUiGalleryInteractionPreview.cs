@@ -19,9 +19,19 @@ namespace TopiaForge.ModManager
             {
                 var ui = new OwnerUiService(GalleryInteractionOwner, dataDirectory, lifetime, logger, gameplay, hudPlacement, themePackages);
                 ui.FollowGalleryViewer(view);
+                // Sandbox the sample bindings so editing them cannot affect a loaded mod.
+                var registry = new UnityInputRegistry();
+                lifetime.Track(registry);
+                var input = new OwnerInputService(GalleryInteractionOwner, lifetime, registry);
+                if (!input.RegisterAction(ControlGalleryPages.Expedition()).Succeeded ||
+                    !input.RegisterAction(ControlGalleryPages.Ledger()).Succeeded)
+                    throw new InvalidOperationException("The Gallery preview input actions could not be registered.");
+                ui.AttachUiInput(registry);
+
                 var preview = new GalleryInteractionPreview(ui);
-                ui.host.Hotkey(TopiaForgeKey.F3, () => preview.Advance(FoundationPage.InteractionStates));
-                ui.host.Hotkey(TopiaForgeKey.F4, () => preview.Advance(FoundationPage.GraphConnections));
+                ui.host.Hotkey(TopiaForgeKey.F2, () => preview.Advance(TopiaForgeKey.F2));
+                ui.host.Hotkey(TopiaForgeKey.F3, () => preview.Advance(TopiaForgeKey.F3));
+                ui.host.Hotkey(TopiaForgeKey.F4, () => preview.Advance(TopiaForgeKey.F4));
                 return lifetime;
             }
             catch
@@ -34,22 +44,31 @@ namespace TopiaForge.ModManager
         // Only this process-owned controller can supply the private Window stage inputs.
         private sealed class GalleryInteractionPreview
         {
+            private static readonly ControlGalleryPage[] ControlPages =
+                (ControlGalleryPage[])Enum.GetValues(typeof(ControlGalleryPage));
             private readonly OwnerUiService ui;
             private IUiSurface? active;
-            private FoundationPage? activePage;
+            private TopiaForgeKey? activeKey;
             private int next;
 
             internal GalleryInteractionPreview(OwnerUiService ui) => this.ui = ui;
 
-            internal void Advance(FoundationPage page)
+            internal void Advance(TopiaForgeKey key)
             {
                 if (ui.lifetime.IsStopping) return;
-                var index = page == activePage ? next : 0;
-                var prefix = page == FoundationPage.GraphConnections ? "gallery-graph-" : "gallery-interaction-";
-                var palette = GalleryPreviewPalette.At(index, prefix);
+                var index = key == activeKey ? next : 0;
                 IUiSurface? opened = null;
-                var fixture = FoundationPages.CreateRequest(page, UiSurfaceKind.Window,
-                    report: message => opened?.SetBody(message));
+                void Report(string message) => opened?.SetBody(message);
+                var (fixture, prefix, stages) = key switch
+                {
+                    TopiaForgeKey.F2 => ControlStage(index, Report),
+                    TopiaForgeKey.F3 => (FoundationPages.CreateRequest(FoundationPage.InteractionStates,
+                        UiSurfaceKind.Window, report: Report), "gallery-interaction-", GalleryPreviewPalette.Count),
+                    TopiaForgeKey.F4 => (FoundationPages.CreateRequest(FoundationPage.GraphConnections,
+                        UiSurfaceKind.Window, report: Report), "gallery-graph-", GalleryPreviewPalette.Count),
+                    _ => throw new ArgumentOutOfRangeException(nameof(key)),
+                };
+                var palette = GalleryPreviewPalette.At(index % GalleryPreviewPalette.Count, prefix);
                 var request = new UiSurfaceRequest(palette.Id, fixture.Title + " · " + palette.Label, fixture.Body,
                     fixture.Kind, fixture.Width, fixture.Height, fixture.Content);
                 var result = ui.CreateSurface(request, null, palette);
@@ -61,9 +80,15 @@ namespace TopiaForge.ModManager
 
                 var previous = active;
                 active = opened;
-                activePage = page;
-                next = (index + 1) % GalleryPreviewPalette.Count;
+                activeKey = key;
+                next = (index + 1) % stages;
                 previous?.Dispose();
+            }
+
+            private static (UiSurfaceRequest Fixture, string Prefix, int Stages) ControlStage(int index, Action<string> report)
+            {
+                var fixture = ControlGalleryPages.Create(ControlPages[index / GalleryPreviewPalette.Count], report: report);
+                return (fixture, fixture.Id + "-", ControlPages.Length * GalleryPreviewPalette.Count);
             }
         }
 

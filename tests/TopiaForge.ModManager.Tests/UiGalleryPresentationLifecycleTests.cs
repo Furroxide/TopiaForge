@@ -54,6 +54,7 @@ namespace TopiaForge.ModManager.Tests
                     {
                         PlayEventsInShell(manifest, read, TopiaForgeScheme.Paper);
                         PlayEventsInShell(manifest, read, TopiaForgeScheme.Hud);
+                        SelectPaletteInBothShells(manifest, read);
                         OverlayStackAndTeardown(manifest, read);
                         FailedAdmissionsRestoreTheGallery(manifest, read);
                         Console.WriteLine("F8 Gallery presentation lifecycle passed for both shells, public SDK events and overlay teardown.");
@@ -69,7 +70,7 @@ namespace TopiaForge.ModManager.Tests
                         shell.Content.Page.Press("Stingers");
                         var stingers = context.Ui.Surfaces.Single();
                         Check(!shell.IsOpen && stingers.Request.Kind == UiSurfaceKind.Window &&
-                            context.Ui.Themes.SelectedTheme == null &&
+                            context.Ui.Themes.SelectedTheme?.Equals(FoundationPages.SurvivalTheme) == true &&
                             context.Ui.Accessibility.HighContrast && context.Ui.Accessibility.UiScale == 2f &&
                             context.Ui.Accessibility.ReducedMotion,
                             "The F8 launcher inherits the Gallery selection and accessibility through its ordinary SDK service.");
@@ -100,7 +101,7 @@ namespace TopiaForge.ModManager.Tests
                         var toasts = context.Ui.Surfaces.Single();
                         Require(toasts.ActivateButton(PresentationPages.ToastStackId));
                         var toastPaint = CaptureEffect(context.Ui, "CaptureToasts").Nodes.Where(node => node.Kind == "Toast").ToArray();
-                        Check(context.Ui.Themes.SelectedTheme == null &&
+                        Check(context.Ui.Themes.SelectedTheme?.Equals(FoundationPages.SurvivalTheme) == true &&
                             context.Ui.Toasts.Select(item => item.Tone).SequenceEqual(PresentationPages.ToastTones) &&
                             toastPaint.Length == 4 && toastPaint.All(node => node.ThemeId == "topiaforge.default"),
                             "The four ShowToast calls keep the kit paint under the sample theme.");
@@ -108,6 +109,46 @@ namespace TopiaForge.ModManager.Tests
                         gallery.Tick(0f);
                         Check(shell.IsOpen && context.Ui.Surfaces.Count == 0 && Restored(context),
                             "Back from the SDK launcher restores the originating shell and its prior selection.");
+                    }
+
+                    private static void SelectPaletteInBothShells(string manifest, Func<string, string> read)
+                    {
+                        using var context = Prepare(manifest, read);
+                        var host = new UiHost();
+                        using var gallery = new GalleryWindow(host, context);
+                        gallery.Toggle();
+                        host.SetAccessibilityProfile(new TopiaForgeAccessibilityProfile(true, 1.5f, true, 0f));
+                        var paper = host.Windows[0].Content;
+                        var hud = host.Windows[1].Content;
+                        Check(paper.Palette.Label == "Survival" && hud.Palette.Label == "Survival",
+                            "Both F8 shells start in Survival.");
+                        OpenAndCheck(paper, UiSurfaceKind.Window, "survival");
+                        paper.Palette.Choose(0);
+                        Check(hud.Palette.Label == "Kit", "The Kit selection is mirrored to the HUD view.");
+                        OpenAndCheck(paper, UiSurfaceKind.Window, "topiaforge.default");
+                        paper.Press("SWAP SCHEME");
+                        OpenAndCheck(hud, UiSurfaceKind.Hud, "topiaforge.default");
+                        hud.Palette.Choose(1);
+                        Check(paper.Palette.Label == "Survival", "The Survival selection is mirrored to the Paper view.");
+                        OpenAndCheck(hud, UiSurfaceKind.Hud, "survival");
+                        hud.Press("SWAP SCHEME");
+                        OpenAndCheck(paper, UiSurfaceKind.Window, "survival");
+
+                        void OpenAndCheck(TopiaForgeContainer shell, UiSurfaceKind kind, string palette)
+                        {
+                            shell.Press("Typography");
+                            context.Ui.CompletePendingThemeRegistrations();
+                            var surface = context.Ui.Surfaces.Single();
+                            var captured = surface.Capture(Viewport);
+                            Check(surface.Request.Kind == kind &&
+                                captured.Nodes.Any(node => node.ThemeId == palette) &&
+                                context.Ui.Accessibility.HighContrast && context.Ui.Accessibility.UiScale == 1.5f,
+                                $"The ordinary {kind} paints {palette} with viewer accessibility. " +
+                                $"Observed {string.Join(", ", captured.Nodes.Select(node => node.ThemeId).Distinct())}.");
+                            gallery.Toggle();
+                            Check(context.Ui.Surfaces.Count == 0 && Restored(context),
+                                "Closing the ordinary preview restores the prior scope theme and accessibility.");
+                        }
                     }
 
                     private static void OverlayStackAndTeardown(string manifest, Func<string, string> read)

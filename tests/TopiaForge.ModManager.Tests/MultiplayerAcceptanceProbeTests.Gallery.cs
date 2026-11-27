@@ -73,7 +73,8 @@ namespace TopiaForge.ModManager.Tests
                 "Only the host may target its single admitted connected guest.");
             players.Add(guest.ParticipantId!.Value, "Fixture guest");
             var target = players.State(guest.ParticipantId.Value).Ui;
-            SetGalleryAuthorDefaults(target, ActionGalleryPages.DefaultBindings);
+            SetGalleryAuthorDefaults(target, action =>
+                ControlGalleryPages.DefaultBindings(action) ?? ActionGalleryPages.DefaultBindings(action));
             ((IUiClockReceiver)context.Ui).FollowClock(() => 120d, () => "acceptance-gallery");
             ((IUiClockReceiver)target).FollowClock(() => 120d, () => "acceptance-gallery");
             Press();
@@ -95,6 +96,7 @@ namespace TopiaForge.ModManager.Tests
                 target.Surfaces.Single().Request.Theme?.Id == FoundationPages.TransportTheme.Id &&
                 target.Surfaces[0].Request.Kind == UiSurfaceKind.Window,
                 "After a refusal the next press retries the same paired variant.");
+            var survivalControls = new HashSet<string>();
             for (var variant = 3; variant < GalleryRemotePreview.VariantCount; variant++)
             {
                 Press();
@@ -105,6 +107,10 @@ namespace TopiaForge.ModManager.Tests
                     hostSurface.Request.Kind == expected.Kind && guestSurface.Request.Kind == expected.Kind &&
                     hostSurface.Request.Theme?.Id == expected.Theme?.Id && guestSurface.Request.Theme?.Id == expected.Theme?.Id,
                     "F7 navigates every paired page without retaining stale surfaces.");
+                if (variant >= GalleryRemotePreview.K1VariantCount && variant < GalleryRemotePreview.StatusStart &&
+                    expected.Theme?.Id == FoundationPages.SurvivalTheme.Id)
+                    Check(expected.Kind == UiSurfaceKind.Window && survivalControls.Add(expected.Id),
+                        "A distinct Survival controls page is published as a paired Paper Window.");
                 if (expected.Id != FoundationLayoutPages.LayoutNotice().Id) continue;
 
                 var doubleScale = new UiAccessibilityPreferences(uiScale: 2f);
@@ -118,6 +124,9 @@ namespace TopiaForge.ModManager.Tests
                     !ShowsNotice(hostSurface.Capture(viewport)) && !ShowsNotice(guestSurface.Capture(viewport)),
                     "Both paired HUDs restore the original content when the viewer's scale recovers.");
             }
+            Check(survivalControls.SetEquals(new[] { "gallery-controls-buttons", "gallery-controls-fields",
+                    "gallery-controls-selections", "gallery-controls-keys", "gallery-controls-help" }),
+                "F7 includes all five controls pages using the Shared package's canonical Survival theme.");
             Press();
             Check(context.Ui.Surfaces.Single().Request.Id == GalleryRemotePreview.Request(0, context.Ui.ClockTime).Id,
                 "F7 wraps from the diagnostics back to Theme packs.");

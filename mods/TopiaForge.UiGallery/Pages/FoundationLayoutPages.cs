@@ -24,8 +24,29 @@ namespace TopiaForge.UiGallery.Pages
                     new UiExpanded(new UiText("This label takes two shares of the remaining space.", id: "flex-copy"), flex: 2),
                     new UiSpacer(flex: 1, id: "flex-spacer"),
                 }, new UiFlexLayout(UiSpace.Md, new UiInsets(UiSpace.Sm, UiSpace.Xs),
-                    crossAxisAlignment: UiCrossAxisAlignment.Start), id: "flex-row")),
+                    crossAxisAlignment: UiCrossAxisAlignment.Start), id: "flex-row"),
+                new UiGrid(new UiNode[]
+                {
+                    Alignment("Start", UiMainAxisAlignment.Start, UiCrossAxisAlignment.Start, "start"),
+                    Alignment("Center", UiMainAxisAlignment.Center, UiCrossAxisAlignment.Center, "center"),
+                    Alignment("End", UiMainAxisAlignment.End, UiCrossAxisAlignment.End, "end"),
+                    Alignment("Space between", UiMainAxisAlignment.SpaceBetween, UiCrossAxisAlignment.Stretch, "between"),
+                    Alignment("Space around", UiMainAxisAlignment.SpaceAround, UiCrossAxisAlignment.Center, "around"),
+                    Alignment("Space evenly", UiMainAxisAlignment.SpaceEvenly, UiCrossAxisAlignment.Center, "evenly"),
+                }, minimumCellWidth: 160f, maximumColumns: 3, runSpacing: UiSpace.Sm)),
             new UiInsets(UiSpace.Md), id: "flex-padding");
+
+        private static UiNode Alignment(string label, UiMainAxisAlignment main, UiCrossAxisAlignment cross, string id) =>
+            new UiColumn(new UiNode[]
+            {
+                new UiText(label, UiTextStyle.Caption),
+                new UiSizedBox(new UiRow(new UiNode[]
+                {
+                    new UiBox(22f, 10f, UiPaintRole.Accent),
+                    new UiBox(22f, 22f, UiPaintRole.Primary),
+                }, new UiFlexLayout(UiSpace.Sm, mainAxisAlignment: main, crossAxisAlignment: cross),
+                    id: "align-" + id), width: 144f, height: 28f),
+            }, new UiFlexLayout(UiSpace.Xs, crossAxisAlignment: UiCrossAxisAlignment.Start));
 
         internal static UiNode WrapAndGrid() => new UiColumn(
             new UiText("Weather stations", UiTextStyle.Heading),
@@ -57,6 +78,7 @@ namespace TopiaForge.UiGallery.Pages
             }, width: 320f, height: 128f, id: "layout-stack"));
 
         internal static UiNode CardsAndDividers(bool useSurvivalStyle) => new UiColumn(
+            new UiCard(new UiText("Check the trail log."), id: "card-plain"),
             new UiCard(new UiText("Shelter supplies are ready."),
                 header: new UiText("Riverside", UiTextStyle.Label),
                 style: useSurvivalStyle ? new UiStyleRef("panel.flat") : null,
@@ -64,6 +86,9 @@ namespace TopiaForge.UiGallery.Pages
             new UiDivider(UiLineStyle.Dashed, id: "divider-dashed"),
             new UiCard(new UiText("This station is unavailable.", tone: UiTone.Muted),
                 header: new UiText("West ridge", UiTextStyle.Label), disabled: true, id: "card-disabled"),
-            new UiDivider(UiLineStyle.Solid, id: "divider-solid"));
+            new UiDivider(UiLineStyle.Solid, id: "divider-solid"),
+            new UiRow(new UiBox(72f, 18f, UiPaintRole.Accent,
+                    useSurvivalStyle ? new UiStyleRef("panel.rule") : null, "card-box"),
+                new UiText("Box style", UiTextStyle.Caption)));
     }
 }

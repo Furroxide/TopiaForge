@@ -94,14 +94,14 @@ namespace TopiaForge.ModManager.Tests
             secondLife.Dispose();
             using var retired = Make(ui, ImageRequest("retired"));
             retired.Dispose();
-            using var fresh = Make(ui, ImageRequest("fresh"));
+            using var fresh = Make(ui, ImageRequest("fresh").WithTheme(FoundationPages.SurvivalTheme));
             ui.CompletePendingThemeRegistrations();
             Check(Row(fresh.Capture(Viewport), "card").UsedFallback, "A new surface cannot join the drained attempt.");
             ui.CompletePendingThemeRegistrations();
             var ready = fresh.Capture(Viewport);
             Check(!Row(ready, "card").UsedFallback && ready.Nodes[0].ThemeId == FoundationPages.SurvivalTheme.Id &&
                 ui.Themes.SelectedTheme == null,
-                "The later surface reacquires its separate art pack and keeps the Gallery's inherited Survival theme.");
+                "The later surface reacquires its separate art pack and keeps the selected Survival theme.");
 
             var retained = fresh.Content!;
             var stable = true;
