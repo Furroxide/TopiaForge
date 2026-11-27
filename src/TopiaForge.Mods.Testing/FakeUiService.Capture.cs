@@ -17,6 +17,9 @@ namespace TopiaForge.Mods.Testing
             {
                 if (surface.Id == surfaceId) return surface.Capture(viewport);
             }
+            PruneOverlayExits();
+            foreach (var surface in exitingOverlays)
+                if (surface.Id == surfaceId) return surface.Capture(viewport);
             throw new KeyNotFoundException("There is no live fake surface with that id.");
         }
 
@@ -38,7 +41,7 @@ namespace TopiaForge.Mods.Testing
             if (viewport == null) throw new ArgumentNullException(nameof(viewport));
             if (scrollOffset < 0 || float.IsNaN(scrollOffset) || float.IsInfinity(scrollOffset))
                 throw new ArgumentOutOfRangeException(nameof(scrollOffset));
-            EnsureActive();
+            if (!IsOverlayExiting) EnsureActive();
             return new FakeUiTreeCapture(owner, this, viewport, state, hudScheme).Capture(scrollOffset);
         }
 

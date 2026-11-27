@@ -143,6 +143,12 @@
         },
         "actionSlot": {
           "$ref": "#/$defs/component"
+        },
+        "overlay": {
+          "$ref": "#/$defs/component"
+        },
+        "stinger": {
+          "$ref": "#/$defs/component"
         }
       }
     },
@@ -381,7 +387,8 @@
             "box",
             "badge",
             "pips",
-            "actionSlot"
+            "actionSlot",
+            "stinger"
           ]
         },
         "radius": {

@@ -27,13 +27,17 @@ namespace TopiaForge.ModManager.Tests
                 "seven full step names and progress details use full-width rows, not narrow columns");
             That(open.Contains("scroll.FixedHeight(PreferredScrollHeight)", StringComparison.Ordinal)
                 && open.Contains("body = scroll.Content.Column", StringComparison.Ordinal)
-                && open.Contains("actions = opened.Content.Row", StringComparison.Ordinal),
+                && open.Contains("actions = opened.Content.Row", StringComparison.Ordinal)
+                && open.Contains("opened.LimitTrustedScrollBody();", StringComparison.Ordinal),
                 "long progress and failures scroll within a bounded view while cancellation stays outside it");
+            That(open.Contains("host.TrustOverlay(screen.Title, 680f)", StringComparison.Ordinal)
+                && open.Contains("opened.TitleLabel.PlainText()", StringComparison.Ordinal),
+                "the connecting presentation uses the loader's protected Paper overlay and literal title");
         }
 
         /// <summary>
         /// Holds the rail, status and password or failure advice at the preferred body height when the canvas has room.
-        /// On a shorter canvas the modal keeps its non-scroll children, which include the actions, within the safe margins.
+        /// On a shorter canvas the overlay keeps its title and actions inside the safe margins during the entrance.
         /// </summary>
         private static void TheOverlayShowsItsWordsWithoutScrolling(string root)
         {
@@ -61,16 +65,17 @@ namespace TopiaForge.ModManager.Tests
             var largest = Read(profile, @"ClampFinite\(uiScale, [0-9.]+f, ([0-9.]+)f");
             var chrome = 2 * (float)TopiaForgeGap.Xl + Line(TopiaForgeTokens.TitleSize) +
                 2 * (float)TopiaForgeGap.Md + TopiaForgeTokens.ControlHeight;
+            var travel = 2 * TopiaForge.Mods.UiOverlayLayout.EnterTravel;
             foreach (var (width, height) in new[] { (1920f, 1080f), (2560f, 1440f), (3440f, 1440f) })
             {
                 var viewport = (float)Math.Sqrt(height / width * TopiaForgeTokens.ReferenceWidth * TopiaForgeTokens.ReferenceHeight);
-                var full = TopiaForgeModalSize.LimitScrollBody(preferred, viewport, chrome);
+                var full = TopiaForgeModalSize.LimitScrollBody(preferred, viewport, chrome, travel);
                 That(full == preferred, "a roomy canvas keeps the authored body height");
                 var scaled = viewport / largest;
-                var shorter = TopiaForgeModalSize.LimitScrollBody(preferred, scaled, chrome);
+                var shorter = TopiaForgeModalSize.LimitScrollBody(preferred, scaled, chrome, travel);
                 That(shorter > 0f && shorter < preferred &&
-                    Math.Abs(shorter + chrome + 2 * TopiaForgeTokens.SafeMargin - scaled) < 0.001f,
-                    "at the largest UI scale the body still scrolls and the dialog's title and actions fit the safe area");
+                    Math.Abs(shorter + chrome + 2 * TopiaForgeTokens.SafeMargin + travel - scaled) < 0.001f,
+                    "at the largest UI scale the body still scrolls and moving overlay controls stay within the safe area");
             }
         }
 
@@ -106,8 +111,8 @@ namespace TopiaForge.ModManager.Tests
                 .Single(assignment => assignment.Left.ToString() == "opened.Closed");
             var closeCalls = closed.Right.DescendantNodes().OfType<InvocationExpressionSyntax>()
                 .Select(call => call.Expression.ToString()).ToArray();
-            That(closeCalls.Contains("screen.Dismiss") && !closeCalls.Contains("screen.Cancel"),
-                "Escape and the title-bar close use Dismiss, so only the first join is cancelled");
+            That(closeCalls.Contains("screen.Dismiss") && closeCalls.Contains("Close") && !closeCalls.Contains("screen.Cancel"),
+                "Back retires the overlay and uses Dismiss, so only the first join is cancelled");
             var shape = OverlayMethod(root, "Shape");
             That(shape.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(access => access.ToString() == "screen.CanCancel"),
                 "the overlay's layout follows whether Cancel would stop anything: " + shape);
@@ -144,8 +149,10 @@ namespace TopiaForge.ModManager.Tests
             That(choice.Statement.ToString().Contains("Button(\"CLOSE\", screen.Dismiss", StringComparison.Ordinal)
                 && choice.Else!.Statement.ToString().Contains("Button(\"CANCEL\", screen.Cancel", StringComparison.Ordinal),
                 "only the settled shape binds CLOSE to Dismiss; active shapes bind CANCEL to Cancel");
-            var tick = OverlayMethod(root, "Tick").Body!.Statements.Select(statement => statement.ToString()).ToArray();
-            That(tick.Contains("if (Shape() != shownShape) BuildBody();", StringComparer.Ordinal),
+            var rebuild = OverlayMethod(root, "Tick").Body!.Statements.OfType<IfStatementSyntax>()
+                .Single(statement => statement.Condition.ToString() == "Shape() != shownShape");
+            That(rebuild.Statement.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Any(call => call.Expression.ToString() == "BuildBody"),
                 "an open overlay builds its body again whenever its layout changes, so a join that settles or fails while it shows gets CLOSE or its failure view");
         }
 

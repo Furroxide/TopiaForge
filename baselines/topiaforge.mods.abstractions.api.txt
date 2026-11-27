@@ -395,6 +395,7 @@ type public interface TopiaForge.Mods.IUiService
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.UiAccessibilityPreferences> ApplyAccessibility(TopiaForge.Mods.UiAccessibilityPreferences preferences)
+  method [virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowStinger(TopiaForge.Mods.UiStingerRequest request) [requires-topiaforge="0.2.0"]
   property System.Double ClockTime { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IUiThemeService Themes { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.IUiWorldLabels Labels { get [virtual,newslot]; } [requires-topiaforge="0.2.0"]
@@ -1229,6 +1230,15 @@ type public enum TopiaForge.Mods.UiStatFormat : System.Int32 [requires-topiaforg
   field const TopiaForge.Mods.UiStatFormat Value = 0 (Value) [requires-topiaforge="0.2.0"]
   field const TopiaForge.Mods.UiStatFormat ValueOfMaximum = 1 (ValueOfMaximum) [requires-topiaforge="0.2.0"]
 
+type public sealed class TopiaForge.Mods.UiStingerRequest : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String title, System.String subtitle = "", System.Nullable<TopiaForge.Mods.UiGlyph> glyph = null, TopiaForge.Mods.UiPaintRole role = 4 (Primary), TopiaForge.Mods.UiStyleRef? style = null, System.Double durationSeconds = 2.5) [requires-topiaforge="0.2.0"]
+  property System.Double DurationSeconds { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.UiGlyph> Glyph { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Subtitle { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Title { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiPaintRole Role { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiStyleRef? Style { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.UiStyleRef : System.Object, System.IEquatable<TopiaForge.Mods.UiStyleRef> [requires-topiaforge="0.2.0"]
   constructor .ctor(System.String id) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.UiStyleRef? other) [requires-topiaforge="0.2.0"]
@@ -1240,13 +1250,16 @@ type public enum TopiaForge.Mods.UiSurfaceKind : System.Int32
   field System.Int32 value__
   field const TopiaForge.Mods.UiSurfaceKind FullscreenTool = 2 (FullscreenTool)
   field const TopiaForge.Mods.UiSurfaceKind Hud = 0 (Hud)
+  field const TopiaForge.Mods.UiSurfaceKind Overlay = 3 (Overlay) [requires-topiaforge="0.2.0"]
   field const TopiaForge.Mods.UiSurfaceKind Window = 1 (Window)
 
 type public sealed class TopiaForge.Mods.UiSurfaceRequest : System.Object
   constructor .ctor(System.String id, System.String title, System.String body, TopiaForge.Mods.UiSurfaceKind kind = 1 (Window), System.Single width = 460, System.Single height = 320, TopiaForge.Mods.UiNode? content = null)
+  method TopiaForge.Mods.UiSurfaceRequest WithDismissible(System.Boolean dismissible) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.UiSurfaceRequest WithHudAnchor(TopiaForge.Mods.UiHudAnchor anchor)
   method TopiaForge.Mods.UiSurfaceRequest WithHudVisibility(TopiaForge.Mods.UiHudVisibility visibility)
   method TopiaForge.Mods.UiSurfaceRequest WithTheme(TopiaForge.Mods.UiThemeRef? theme) [requires-topiaforge="0.2.0"]
+  property System.Boolean Dismissible { get; } [requires-topiaforge="0.2.0"]
   property System.Single Height { get; }
   property System.Single Width { get; }
   property System.String Body { get; }

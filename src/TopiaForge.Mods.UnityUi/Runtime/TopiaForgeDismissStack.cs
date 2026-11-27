@@ -4,9 +4,9 @@ using UnityEngine;
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
-    /// One Back press, Escape or a controller's B, dismisses the topmost visible surface. Loader trust prompts take priority,
-    /// then the highest band and the latest registration. TopiaForge takes that press from the game, so the game sees nothing
-    /// of it, and keeps the key until it is released; the next press with no surface left reaches the game as before. While
+    /// A Back press targets the topmost visible surface. Loader trust prompts take priority, followed by the highest band
+    /// and the latest registration. TopiaForge holds any Escape or controller B press it takes through release.
+    /// A non-dismissible gameplay overlay at the top can pass a new keyboard Escape to the game's pause action. While
     /// they are on the stack, surfaces also take what they claim from the game: kit modals, fullscreen tools and the manager
     /// overlay take menu navigation, a window takes it while one of its controls is selected, and a key capture takes the
     /// keyboard (see TopiaForgeInputOwnership). Unity's legacy input cannot be filtered, so code reading it still sees the key.
@@ -43,11 +43,16 @@ namespace TopiaForge.Mods.UnityUi
         /// is on the stack. Once the root is destroyed or hidden, the surface takes nothing and is never dismissed.
         /// </summary>
         internal static void Push(ITopiaForgeDismissable entry, TopiaForgeInputClaim claim, GameObject? root)
+            => Push(entry, claim, root, removesOnBack: true);
+
+        internal static void Push(ITopiaForgeDismissable entry, TopiaForgeInputClaim claim, GameObject? root, bool removesOnBack)
         {
-            if (Order.Push(entry, claim, root))
+            if (Order.Push(entry, claim, root, removesOnBack))
             {
                 TopiaForgeRuntime.Ensure();
             }
+            if (TopiaForgeLayerPriority.Rank(entry.Band) > TopiaForgeLayerPriority.Rank(TopiaForgeLayerPriority.Overlay))
+                TopiaForgeOverlayStack.RefreshCoveredFocus();
         }
 
         /// <summary>Gets what the surfaces on the stack take from the game now.</summary>

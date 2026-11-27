@@ -10,8 +10,9 @@ namespace TopiaForge.Mods.UnityUi
         private RectTransform? viewport;
         private TopiaForgeModalScrollLimit? body;
         private float measuredViewportHeight;
+        private float motionReserve;
 
-        internal void LimitScrollBody(RectTransform canvas)
+        internal void LimitScrollBody(RectTransform canvas, float motionReserve = 0f)
         {
             RectTransform? scroll = null;
             LayoutElement? requested = null;
@@ -29,6 +30,7 @@ namespace TopiaForge.Mods.UnityUi
 
             if (scroll == null || requested == null) return;
             viewport = canvas;
+            this.motionReserve = motionReserve;
             body = scroll.gameObject.AddComponent<TopiaForgeModalScrollLimit>();
             body.Initialize(scroll, requested);
         }
@@ -46,7 +48,7 @@ namespace TopiaForge.Mods.UnityUi
                 }
 
                 measuredViewportHeight = viewport.rect.height;
-                body.Limit = TopiaForgeModalSize.LimitScrollBody(body.RequestedHeight, measuredViewportHeight, fixedHeight);
+                body.Limit = TopiaForgeModalSize.LimitScrollBody(body.RequestedHeight, measuredViewportHeight, fixedHeight, motionReserve);
             }
 
             base.CalculateLayoutInputVertical();

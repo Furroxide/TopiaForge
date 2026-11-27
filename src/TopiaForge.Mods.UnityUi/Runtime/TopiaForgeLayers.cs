@@ -26,6 +26,8 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets how many kit canvases hold a sorting slot.</summary>
         internal static int HeldSlots => Ledger.Count;
 
+        internal static bool HasRoom(TopiaForgeLayerBand band) => Bands.ReserveRemaining(band) > 0;
+
         /// <summary>Allocates the next sorting order in a band, logging on exhaustion.</summary>
         public static int Allocate(TopiaForgeLayerBand band, string ownerName)
         {
@@ -47,13 +49,14 @@ namespace TopiaForge.Mods.UnityUi
         public static GameObject CreateCanvas(string name, TopiaForgeLayerBand band, bool interactive, bool persistent)
         {
             TopiaForgeLayerBands.RequirePublicBand(band);
-            return CreateCanvasCore(name, band, interactive, persistent);
+            return CreateKitCanvas(name, band, interactive, persistent);
         }
 
-        internal static GameObject CreateTrustCanvas(string name, bool persistent) =>
-            CreateCanvasCore(name, TopiaForgeLayerBands.TrustBand, interactive: true, persistent: persistent);
+        internal static GameObject CreateTrustCanvas(string name, bool persistent, bool overlay = false) =>
+            CreateKitCanvas(name, overlay ? TopiaForgeLayerPriority.TrustOverlay : TopiaForgeLayerBands.TrustBand,
+                interactive: !overlay, persistent);
 
-        private static GameObject CreateCanvasCore(string name, TopiaForgeLayerBand band, bool interactive, bool persistent)
+        internal static GameObject CreateKitCanvas(string name, TopiaForgeLayerBand band, bool interactive, bool persistent)
         {
             TopiaForgeRuntime.Ensure();
 

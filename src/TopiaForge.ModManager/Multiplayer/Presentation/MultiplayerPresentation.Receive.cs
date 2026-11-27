@@ -9,8 +9,8 @@ namespace TopiaForge.ModManager
     {
         private readonly Dictionary<ulong, ReceivedHud> received = new Dictionary<ulong, ReceivedHud>();
         private readonly UiPresentationGenerations sharedGenerations = new UiPresentationGenerations();
-        private TokenBucket incomingBytes = new TokenBucket(128 * 1024, 64 * 1024, 0);
-        private TokenBucket incomingCount = new TokenBucket(32, 20, 0);
+        private TokenBucket incomingBytes = new TokenBucket(ReceiveBurstBytes, ReceiveBytesPerSecond, 0);
+        private TokenBucket incomingCount = new TokenBucket(EventBurst, EventsPerSecond, 0);
         private TokenBucket incomingBaselines = new TokenBucket(10, 10, 0);
         private ulong receivedVersion;
         private readonly List<ulong> removed = new List<ulong>();
@@ -19,9 +19,12 @@ namespace TopiaForge.ModManager
 
         internal bool Receive(ParticipantId sender, byte kind, WorldWireReader r)
         {
-            if (!players.FromHost(sender) || kind < 30 || kind > 33 ||
-                (kind != 30 && r.Remaining > 2304) ||
-                !(kind == 30 ? incomingBaselines : incomingCount).TryTake(Now) || !incomingBytes.TryTake(Now, r.Remaining)) return false;
+            if (!players.FromHost(sender) || kind < 30 || kind > UiStingerDelivery.RetireKind ||
+                (kind != 30 && r.Remaining > 2304)) return false;
+            // A closure is bounded by its counted send and still travels behind those events on this stream.
+            if (kind == UiStingerDelivery.RetireKind) return ReceiveStingerRetirement(r);
+            if (!(kind == 30 ? incomingBaselines : incomingCount).TryTake(Now) || !incomingBytes.TryTake(Now, r.Remaining)) return false;
+            if (kind == UiStingerDelivery.EventKind) return ReceiveStinger(r);
             if (kind != 30) return ReceiveEffect(kind, r);
             var next = UiNodeWireCodec.Id(r);
             if (next == 0 || next <= receivedVersion || !r.TryReadInt32(MaximumSurfaces, out var count)) return false;
@@ -34,7 +37,9 @@ namespace TopiaForge.ModManager
                 total += bytes.Length + 4;
                 if (total > MaximumBytes) return false;
                 var read = new WorldWireReader(); read.Reset(bytes);
-                if (!read.TryReadHeader(out var tag) || tag != 0) return false;
+                if (!read.TryReadHeader(out var tag) || (tag != (byte)UiSurfaceKind.Hud && tag != (byte)UiSurfaceKind.Overlay))
+                    return false;
+                var surfaceKind = (UiSurfaceKind)tag;
                 var token = UiNodeWireCodec.Id(read);
                 if (token == 0 || !tokens.Add(token)) return false;
                 var title = UiNodeWireCodec.Text(read); var body = UiNodeWireCodec.Text(read);
@@ -45,13 +50,17 @@ namespace TopiaForge.ModManager
                 if (width < 80 || width > 1920 || height < 80 || height > 1440) return false;
                 var content = UiNodeWireCodec.Read(read, IgnoreControl, UiClockEpoch, out var envelope);
                 if (UiComposition.ContainsInteractive(content)) return false;
+                var dismissible = UiWireCodec.ReadSurfaceDismissible(read, surfaceKind);
+                // A shared overlay is read-only, so a request that requires an enabled button cannot be mirrored.
+                if (surfaceKind == UiSurfaceKind.Overlay && (envelope == null || !dismissible)) return false;
                 UiNodeWireCodec.End(read);
                 var theme = default(UiRemoteThemeSelection);
                 if (envelope != null && (!players.AuthenticateUiTheme(envelope, null, out theme) || !sharedGenerations.Allows(token, envelope)))
                     return false;
                 if (!UiPresentationTheme.ViewerAdmits(content, theme)) return false;
-                var request = new UiSurfaceRequest("shared-" + token, title, body, UiSurfaceKind.Hud, width, height, content)
-                    .WithHudAnchor(anchor).WithHudVisibility(visibility);
+                if (!KeepsSharedKind(token, surfaceKind)) return false;
+                var request = new UiSurfaceRequest("shared-" + token, title, body, surfaceKind, width, height, content);
+                if (surfaceKind == UiSurfaceKind.Hud) request = request.WithHudAnchor(anchor).WithHudVisibility(visibility);
                 updates.Add(new HudState(token, request, visible, theme));
             }
             var audio = ReadLoops(r);
@@ -66,6 +75,14 @@ namespace TopiaForge.ModManager
             latestHuds = updates; retryAt = Now + 1_000_000;
             ApplyLoops(audio);
             receivedVersion = next;
+            return true;
+        }
+
+        private bool KeepsSharedKind(ulong token, UiSurfaceKind kind)
+        {
+            if (latestHuds == null) return true;
+            for (var index = 0; index < latestHuds.Count; index++)
+                if (latestHuds[index].Token == token) return latestHuds[index].Request.Kind == kind;
             return true;
         }
 
@@ -120,8 +137,8 @@ namespace TopiaForge.ModManager
             foreach (var hud in received.Values) hud.Surface.Dispose();
             received.Clear(); receivedVersion = 0; latestHuds = null;
             sharedGenerations.Reset();
-            incomingBytes = new TokenBucket(128 * 1024, 64 * 1024, Now);
-            incomingCount = new TokenBucket(32, 20, Now);
+            incomingBytes = new TokenBucket(ReceiveBurstBytes, ReceiveBytesPerSecond, Now);
+            incomingCount = new TokenBucket(EventBurst, EventsPerSecond, Now);
             incomingBaselines = new TokenBucket(10, 10, Now);
         }
         private static void IgnoreControl(string control, string value) { }

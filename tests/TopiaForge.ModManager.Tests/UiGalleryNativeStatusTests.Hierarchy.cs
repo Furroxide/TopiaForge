@@ -11,7 +11,7 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class UiGalleryNativeStatusTests
     {
-        private static void CaptureNativeStatusChildren()
+        internal static void CaptureNativeStatusChildren(bool presentation = false)
         {
             var root = Program.FindRepoRoot();
             const string recorder = "src/TopiaForge.ModManager/UiGalleryRecorder/";
@@ -23,20 +23,32 @@ namespace TopiaForge.ModManager.Tests
                 recorder + "UiGalleryNativeTree.Status.cs",
                 recorder + "UiGalleryNativeTree.StatusText.cs",
                 recorder + "UiGalleryNativeTree.StatusStat.cs",
+                recorder + "UiGalleryNativeTree.Presentation.cs",
+                recorder + "UiGalleryCaptureJson.cs",
                 recorder + "UiGalleryStatusEvidence.cs",
                 recorder + "UiGalleryCaptureClip.cs",
                 captures + "UiCapturedNode.cs",
                 captures + "UiCaptureViewport.cs",
                 captures + "UiTreeCapture.cs",
+                "mods/TopiaForge.UiGallery/Pages/PresentationPages.cs",
             };
             var fixture = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, recorder + "UiGalleryCaptureFixture.cs")));
             var safeText = fixture.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Where(method => method.Identifier.Text is "SafeDisplayText" or "SafeAuthoredFieldValue");
+            var presentationFixture = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root,
+                recorder + "UiGalleryCaptureFixture.Presentation.cs")));
+            var toastMatch = presentationFixture.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Single(method => method.Identifier.Text == "MatchesToast");
+            var control = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, recorder + "UiGalleryNativeTree.Controls.cs")));
+            var decorate = control.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Single(method => method.Identifier.Text == "Decoration");
             var options = new CSharpParseOptions(preprocessorSymbols: new[] { "TOPIAFORGE_NATIVE_CAPTURE" });
             var sources = files.Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, path)), options, path))
                 .Append(CSharpSyntaxTree.ParseText(HierarchyBoundary.Replace("/* authored text gates */",
-                    string.Join("\n", safeText)), options, "NativeStatusBoundary.cs"))
-                .Append(CSharpSyntaxTree.ParseText(HierarchyCases, options, "NativeStatusCases.cs"));
+                    string.Join("\n", safeText.Append(toastMatch))).Replace("/* native decoration */", decorate.ToString()),
+                    options, "NativeStatusBoundary.cs"))
+                .Append(CSharpSyntaxTree.ParseText(HierarchyCases, options, "NativeStatusCases.cs"))
+                .Append(CSharpSyntaxTree.ParseText(UiGalleryNativePresentationTests.NativeCases, options, "NativePresentationCases.cs"));
             var platform = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
             var references = platform.Append(typeof(UiNode).Assembly.Location)
                 .Where(path => !Path.GetFileName(path).StartsWith("UnityEngine", StringComparison.Ordinal) &&
@@ -50,7 +62,8 @@ namespace TopiaForge.ModManager.Tests
             var emit = compilation.Emit(image);
             Check(emit.Success, "The production status recorder compiles against the Unity boundary. " +
                 string.Join("\n", emit.Diagnostics.Where(item => item.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
-            var run = Assembly.Load(image.ToArray()).GetType("NativeStatusCases", throwOnError: true)!.GetMethod("Run")!;
+            var run = Assembly.Load(image.ToArray()).GetType(presentation ? "NativePresentationCases" : "NativeStatusCases",
+                throwOnError: true)!.GetMethod("Run")!;
             try { run.Invoke(null, null); }
             catch (TargetInvocationException failure) { throw failure.InnerException!; }
         }

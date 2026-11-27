@@ -82,6 +82,7 @@ namespace TopiaForge.ModManager
             Presentation?.Reset();
             for (var i = 0; i < contexts.Count; i++) contexts[i].Reset();
             ResetUi();
+            ResetStingerSends();
             inputBudgets.Clear(); outgoingInputBudget = null;
             playerStreams.Clear();
             scoreDeliveries.Clear();
@@ -103,6 +104,7 @@ namespace TopiaForge.ModManager
             }
             AdvanceInputs();
             ReconcilePlayers();
+            ReconcileStingerScopes(channel);
             ReconcileUi();
             Presentation?.ReconcileReceivedAudio();
             Presentation?.RetryReceived();
@@ -153,11 +155,13 @@ namespace TopiaForge.ModManager
         internal bool FromHost(ParticipantId id) => !IsHost && (Snapshot?.HostParticipantId ?? InternalSystemMessage.HeadlessHostSender).Equals(id);
 
         internal void Begin(byte kind, string mod) { Writer.Begin(kind); Writer.WriteString(mod); }
-        internal OperationResult<bool> Send(ParticipantId target)
+        internal OperationResult<bool> Send(ParticipantId target) => Send(target, Writer.Segment);
+
+        internal OperationResult<bool> Send(ParticipantId target, ArraySegment<byte> payload)
         {
             if (Channel == null || !Channel.IsOpen) return PlayerDirectory.Unavailable<bool>();
             var destination = IsHost ? InternalSystemTarget.Only(target) : InternalSystemTarget.Host;
-            var result = Channel.Send(Writer.Segment, destination);
+            var result = Channel.Send(payload, destination);
             return result.TryGetValue(out var delivered) && delivered > 0 ? OperationResult<bool>.Success(true)
                 : OperationResult<bool>.Failure(result.Succeeded ? ModErrorCode.Unavailable : result.ErrorCode, "The player could not receive this yet; try again after reconnecting.");
         }

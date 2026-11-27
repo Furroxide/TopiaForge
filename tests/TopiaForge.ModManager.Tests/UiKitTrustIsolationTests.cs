@@ -49,7 +49,13 @@ namespace TopiaForge.ModManager.Tests
         {
             const string manager = "src/TopiaForge.ModManager/";
             AssertKitModal(manager + "UnityUiService.cs", "ShowModal");
-            AssertKitModal(manager + "Overlay/Multiplayer/ConnectingOverlay.cs", "Open");
+            const string connecting = manager + "Overlay/Multiplayer/ConnectingOverlay.cs";
+            var connectInLoader = FindMethod(connecting, "Open", loader: true);
+            var connectInGallery = FindMethod(connecting, "Open");
+            if (!Calls(connectInLoader, "host.TrustOverlay").Any() ||
+                Calls(connectInGallery, "host.TrustOverlay").Any())
+                throw new InvalidOperationException("The loader owns the protected connecting overlay.");
+            AssertKitModal(connecting, "Open");
             if (!Calls(FindMethod(manager + "Overlay/Multiplayer/MultiplayerVoiceView.cs", "AskConsent"), "MultiplayerPromptModals.Consent").Any())
                 throw new InvalidOperationException("Voice consent must use the first-party consent factory.");
             var prompt = FindMethod(manager + "Overlay/Multiplayer/MultiplayerSessionsUi.cs", "Show");

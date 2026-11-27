@@ -26,7 +26,7 @@ namespace TopiaForge.Mods.Testing
         {
             var descriptor = owner.ThemeForWire(request.Theme);
             UiWireEnvelope? envelope = null;
-            if (descriptor != null || UiWireCodec.NeedsEnvelope(content))
+            if (request.Kind == UiSurfaceKind.Overlay || descriptor != null || UiWireCodec.NeedsEnvelope(content))
             {
                 var digest = descriptor != null ? descriptor.Digest.Span : KitThemeDigest.AsSpan();
                 envelope = new UiWireEnvelope(OwnerPackageId, PackageDigest, generation, descriptor?.Id, digest);

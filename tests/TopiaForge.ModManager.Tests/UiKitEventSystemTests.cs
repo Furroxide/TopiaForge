@@ -135,11 +135,11 @@ namespace TopiaForge.ModManager.Tests
             var create = Regex.Match(layers, @"public static GameObject CreateCanvas\([^)]*\)\s*\{(?<body>[\s\S]*?)\n        \}",
                 RegexOptions.CultureInvariant);
             Check(create.Success, "TopiaForgeLayers.CreateCanvas was not found.");
-            RequireSource(create.Groups["body"].Value, "return CreateCanvasCore(name, band, interactive, persistent);",
+            RequireSource(create.Groups["body"].Value, "return CreateKitCanvas(name, band, interactive, persistent);",
                 "Public and system canvases use the same raycaster setup.");
-            var shared = Regex.Match(layers, @"private static GameObject CreateCanvasCore\([^)]*\)\s*\{(?<body>[\s\S]*?)\n        \}",
+            var shared = Regex.Match(layers, @"internal static GameObject CreateKitCanvas\([^)]*\)\s*\{(?<body>[\s\S]*?)\n        \}",
                 RegexOptions.CultureInvariant);
-            Check(shared.Success, "TopiaForgeLayers.CreateCanvasCore was not found.");
+            Check(shared.Success, "TopiaForgeLayers.CreateKitCanvas was not found.");
             var body = shared.Groups["body"].Value;
             Check(!body.Contains("EnsureEventSystem", StringComparison.Ordinal),
                 "CreateCanvas must not make an event system for every canvas: a HUD made in OnLoad took the main menu's input.");

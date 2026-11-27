@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine;
@@ -16,18 +17,38 @@ namespace TopiaForge.ModManager
         private static readonly Lazy<string?> BrandDigest = new Lazy<string?>(ReadBrandDigest);
 
         internal static void Save(string ownerDirectory, string fixture, string viewer, UiTreeCapture tree,
-            UiGalleryNativeTree native, UiWireEnvelope? envelope)
+            UiGalleryNativeTree native, UiWireEnvelope? envelope) => Save(ownerDirectory, fixture, viewer, tree, native,
+                envelope != null ? "authenticated-remote" : "local", envelope?.PackageDigest, envelope?.ThemeId,
+                envelope?.DescriptorDigest);
+
+        internal static void SaveEvent(string ownerDirectory, string fixture, string viewer, UiTreeCapture tree,
+            UiGalleryNativeTree native, UiWireEventEnvelope? envelope, bool legacyRemote = false) =>
+            Save(ownerDirectory, fixture, viewer, tree, native,
+                envelope != null ? "authenticated-remote" : legacyRemote ? "legacy-targeted" : "local",
+                envelope?.PackageDigest, envelope?.ThemeId, envelope?.DescriptorDigest);
+
+        internal static string Viewer(Func<NetRealm>? viewer, bool remote) => remote ? "remote-guest" : viewer?.Invoke() switch
+        {
+            NetRealm.ListenHost => "listen-host",
+            NetRealm.Client => "guest-local",
+            NetRealm.Offline => "solo",
+            _ => "local",
+        };
+
+        private static void Save(string ownerDirectory, string fixture, string viewer, UiTreeCapture tree,
+            UiGalleryNativeTree native, string delivery, ReadOnlyMemory<byte>? package,
+            string? requestedTheme, ReadOnlyMemory<byte>? requestedDescriptor)
         {
             var json = new StringBuilder();
             json.Append('{');
             Field(json, "source", "Native Gallery resolved tree");
             Field(json, "fixture", fixture);
             Field(json, "viewer", viewer);
-            Field(json, "delivery", envelope == null ? "local" : "authenticated-remote");
+            Field(json, "delivery", delivery);
             Field(json, "gameVersion", Application.version);
             Field(json, "sdkVersion", typeof(UiNode).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
             Field(json, "brandBundleSha256", BrandDigest.Value);
-            Field(json, "packageSha256", envelope == null ? null : Hex(envelope.PackageDigest.Span));
+            Field(json, "packageSha256", package.HasValue ? Hex(package.Value.Span) : null);
             Field(json, "theme", native.Descriptor.Id);
             Field(json, "descriptorSha256", Hex(native.Descriptor.Digest.Span));
             Field(json, "scheme", native.Scheme.ToString());
@@ -39,6 +60,21 @@ namespace TopiaForge.ModManager
             Field(json, "uiScale", native.Accessibility.UiScale);
             Field(json, "reducedMotion", native.Accessibility.ReducedMotion);
             Field(json, "motionIntensity", native.Accessibility.MotionIntensity);
+            if (tree.UsesDeclaredStingerFaces is bool declaredFaces)
+                Field(json, "stingerFontChain", declaredFaces ? "declared" : "kit");
+            if (native.PresentationOrder is int order)
+            {
+                Field(json, "sortingOrder", order);
+                Field(json, "takesInput", native.PresentationTakesInput == true);
+                Field(json, "requestedTheme", requestedTheme);
+                Field(json, "requestedDescriptorSha256", requestedTheme != null && requestedDescriptor.HasValue ?
+                    Hex(requestedDescriptor.Value.Span) : null);
+                if (native.OverlayDismissible is bool dismissible)
+                {
+                    Field(json, "dismissible", dismissible);
+                    Field(json, "coveredByOverlay", native.OverlayCovered == true);
+                }
+            }
 
             Key(json, "fonts").Append('[');
             foreach (var font in native.Fonts)
@@ -90,6 +126,8 @@ namespace TopiaForge.ModManager
                 Field(json, "isRendered", node.IsRendered);
                 Field(json, "clipped", node.Clipped);
                 Field(json, "occluded", node.Occluded);
+                if (node.Announcement != null) Field(json, "announcement", node.Announcement);
+                if (node.FillOpacity.HasValue) Field(json, "fillOpacity", node.FillOpacity);
                 json.Append('}');
             }
             json.Append(']');

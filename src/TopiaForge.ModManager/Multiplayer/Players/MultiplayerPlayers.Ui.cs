@@ -34,10 +34,20 @@ namespace TopiaForge.ModManager
         }
         internal OperationResult<IUiSurface> Surface(PlayerContext context, ParticipantId player, UiSurfaceRequest request)
         {
+            if (request == null) throw new ArgumentNullException(nameof(request));
             var refused = CheckUi<IUiSurface>(context, player);
             if (refused != null) return refused;
-            if (IsLocal(player)) return context.UiService.CreateSurface(request);
-            if (!context.Networked) return Unshared<IUiSurface>();
+            var local = IsLocal(player);
+            if (!local && !context.Networked) return Unshared<IUiSurface>();
+            if (request.Kind == UiSurfaceKind.Overlay)
+                return CreateOverlay(context.Lifetime, request, kind => local
+                    ? context.UiService.CreateSurface(request) : CreateTargetedSurface(context, player, request, kind));
+            return local ? context.UiService.CreateSurface(request) : CreateTargetedSurface(context, player, request, null);
+        }
+
+        private OperationResult<IUiSurface> CreateTargetedSurface(PlayerContext context, ParticipantId player,
+            UiSurfaceRequest request, UiOverlayContentKind? overlayClass)
+        {
             if (request.Id.Length > 128 || !Finite(request.Width) || !Finite(request.Height) || request.Width < 80 || request.Width > 1920 || request.Height < 80 || request.Height > 1440)
                 return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, "Use a short surface id and a window between 80 and 1920 units wide and 80 and 1440 units high.");
             var themed = UiPresentationTheme.Resolve(context.UiService, request, out var theme);
@@ -45,7 +55,7 @@ namespace TopiaForge.ModManager
             var validation = PrepareTargetedContent(context, request, request.Content, theme, out var presentation);
             if (!validation.Succeeded) return OperationResult<IUiSurface>.Failure(validation.ErrorCode, validation.ErrorMessage);
             if (UiFull(player)) return Limit<IUiSurface>();
-            var surface = new RemoteUiSurface(this, context, Target(context, player), nextUiToken + 1, request, presentation, theme);
+            var surface = new RemoteUiSurface(this, context, Target(context, player), nextUiToken + 1, request, presentation, theme, overlayClass);
             var sent = SendSurface(surface);
             if (!sent.Succeeded) return OperationResult<IUiSurface>.Failure(sent.ErrorCode, sent.ErrorMessage);
             nextUiToken++;
@@ -112,10 +122,15 @@ namespace TopiaForge.ModManager
                 var replacing = replacement != null && !retained;
                 if (replacing)
                 {
+                    if (surface.OverlayClass is { } overlayClass)
+                    {
+                        var overlay = UiOverlayAdmission.Check(replacement, request.Dismissible, overlayClass);
+                        if (!overlay.Succeeded) return OperationResult<bool>.Failure(overlay.ErrorCode, overlay.ErrorMessage);
+                    }
                     var prepared = PrepareTargetedContent(surface.Context, request, replacement, surface.Theme, out presentation);
                     if (!prepared.Succeeded) return prepared;
                 }
-                var staged = StageTargetEnvelope(surface.Context, target, stream, surface.Theme, presentation, null, out var envelope);
+                var staged = StageTargetEnvelope(surface.Context, target, stream, request, surface.Theme, presentation, null, out var envelope);
                 if (!staged.Succeeded) return staged;
                 var revision = TargetRevision(surface, epoch, envelope, replacing);
                 BeginUi(10, surface.Context, target, surface.Token, revision);
@@ -168,12 +183,14 @@ namespace TopiaForge.ModManager
             for (var i = 0; i < modals.Count; i++) if (modals[i].Target.Id.Equals(player)) count++;
             return count >= 64;
         }
-        private OperationResult<bool> SendUi(ParticipantId player)
+        private OperationResult<bool> SendUi(ParticipantId player) => SendUi(player, Writer.Segment);
+
+        private OperationResult<bool> SendUi(ParticipantId player, ArraySegment<byte> payload)
         {
             if (!uiSends.TryGetValue(player, out var budget)) uiSends.Add(player, budget = new UiSendBudget(Now));
-            if (!budget.Count.TryTake(Now) || !budget.Bytes.TryTake(Now, Writer.Length))
+            if (!budget.Count.TryTake(Now) || !budget.Bytes.TryTake(Now, payload.Count))
                 return OperationResult<bool>.Failure(ModErrorCode.RateLimited, "This player's UI updates are too frequent; combine updates or reduce their size.");
-            return Send(player);
+            return Send(player, payload);
         }
         private sealed class UiSendBudget
         {
@@ -301,6 +318,9 @@ namespace TopiaForge.ModManager
             internal ulong Revision;
             internal string Body = "";
             internal bool Shown;
+            internal UiSurfaceKind? SurfaceKind;
+            internal UiOverlayContentKind? OverlayClass;
+            internal bool Dismissible;
             internal UiWireEnvelope? Envelope;
             internal bool PresentationOwned;
             internal bool Disposed;

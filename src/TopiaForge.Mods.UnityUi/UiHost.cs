@@ -21,6 +21,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly List<TopiaForgeWidget> widgets = new List<TopiaForgeWidget>();
         private readonly List<TopiaForgeWindow> windows = new List<TopiaForgeWindow>();
         private readonly List<TopiaForgeFullscreenTool> fullscreenTools = new List<TopiaForgeFullscreenTool>();
+        private readonly List<TopiaForgeOverlay> overlays = new List<TopiaForgeOverlay>();
         private readonly List<TopiaForgeModalInstance> modalInstances = new List<TopiaForgeModalInstance>();
         private TopiaForgeModals? modals;
         private TopiaForgeResolvedTheme? paperTheme;
@@ -172,11 +173,19 @@ namespace TopiaForge.Mods.UnityUi
             return TrackLayer(TopiaForgeLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent), scheme);
         }
 
-        internal TopiaForgeContainer TrustLayer(bool persistent)
+        internal TopiaForgeContainer KitLayer(string name, TopiaForgeLayerBand band, TopiaForgeScheme scheme,
+            bool interactive, bool persistent)
         {
             ThrowIfDisposed();
             ReportInitOnce();
-            return TrackLayer(TopiaForgeLayers.CreateTrustCanvas(OwnerId + ":trust", persistent), TopiaForgeScheme.Paper);
+            return TrackLayer(TopiaForgeLayers.CreateKitCanvas(OwnerId + ":" + name, band, interactive, persistent), scheme);
+        }
+
+        internal TopiaForgeContainer TrustLayer(bool persistent, bool overlay = false)
+        {
+            ThrowIfDisposed();
+            ReportInitOnce();
+            return TrackLayer(TopiaForgeLayers.CreateTrustCanvas(OwnerId + ":trust", persistent, overlay), TopiaForgeScheme.Paper);
         }
 
         private TopiaForgeContainer TrackLayer(GameObject root, TopiaForgeScheme scheme)
@@ -240,7 +249,7 @@ namespace TopiaForge.Mods.UnityUi
                     ? window.CanvasRoot
                     : widget is TopiaForgeFullscreenTool fullscreen
                         ? fullscreen.CanvasRoot
-                        : widget.Go;
+                        : widget is TopiaForgeOverlay overlay ? overlay.CanvasRoot : widget.Go;
                 DestroySubtree(root);
             }
         }
@@ -268,6 +277,8 @@ namespace TopiaForge.Mods.UnityUi
             modalInstances.Clear();
             foreach (var tool in fullscreenTools.ToArray()) AttemptCleanup(tool.Teardown, failures);
             fullscreenTools.Clear();
+            foreach (var overlay in overlays.ToArray()) AttemptCleanup(overlay.Teardown, failures);
+            overlays.Clear();
             foreach (var window in windows.ToArray()) AttemptCleanup(window.Teardown, failures);
             windows.Clear();
             foreach (var widget in widgets.ToArray()) AttemptCleanup(() => TopiaForgeTween.Cancel(widget), failures);
@@ -288,70 +299,6 @@ namespace TopiaForge.Mods.UnityUi
         {
             try { cleanup(); }
             catch (Exception exception) { failures.Add(exception); }
-        }
-
-        private void DestroySubtree(GameObject root)
-        {
-            if (root == null)
-            {
-                return;
-            }
-
-            for (var index = modalInstances.Count - 1; index >= 0; index--)
-            {
-                var modalRoot = modalInstances[index].CanvasRoot;
-                if (modalRoot == root || modalRoot != null && modalRoot.transform.IsChildOf(root.transform))
-                {
-                    modalInstances[index].Teardown();
-                }
-            }
-
-            for (var index = windows.Count - 1; index >= 0; index--)
-            {
-                var window = windows[index];
-                if (window.Go == root || window.Go != null && window.Go.transform.IsChildOf(root.transform))
-                {
-                    window.Teardown();
-                    windows.RemoveAt(index);
-                }
-            }
-
-            for (var index = fullscreenTools.Count - 1; index >= 0; index--)
-            {
-                var fullscreen = fullscreenTools[index];
-                if (fullscreen.Go == root || fullscreen.Go != null && fullscreen.Go.transform.IsChildOf(root.transform))
-                {
-                    fullscreen.Teardown();
-                    fullscreenTools.RemoveAt(index);
-                }
-            }
-
-            for (var index = widgets.Count - 1; index >= 0; index--)
-            {
-                var widget = widgets[index];
-                if (widget.Go != root && (widget.Go == null || !widget.Go.transform.IsChildOf(root.transform)))
-                {
-                    continue;
-                }
-
-                TopiaForgeTween.Cancel(widget);
-                if (widget is ITopiaForgeThemeAware aware)
-                {
-                    themeAware.Remove(aware);
-                }
-
-                widgets.RemoveAt(index);
-            }
-
-            var layerIndex = layerRoots.IndexOf(root);
-            if (layerIndex >= 0)
-            {
-                TopiaForgeLayers.Release(root);
-                layerRoots.RemoveAt(layerIndex);
-                scalers.RemoveAt(layerIndex);
-            }
-
-            UnityEngine.Object.Destroy(root);
         }
 
         private void OnThemeChanged()

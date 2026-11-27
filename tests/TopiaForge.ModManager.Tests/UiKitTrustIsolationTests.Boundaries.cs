@@ -227,6 +227,13 @@ namespace TopiaForge.ModManager.Tests
                     public void Teardown() { }
                     public Action? Lose() => null;
                 }
+                public sealed class TopiaForgeOverlay(UiHost host, TopiaForgeContainer layer)
+                    : TopiaForgeWidget(host, layer.Scheme, layer.Go)
+                {
+                    public GameObject CanvasRoot => Go;
+                    public void Teardown() { }
+                }
+                internal static class TopiaForgeOverlayStack { internal static void RefreshCoveredFocus() { } }
                 internal static class TopiaForgeRuntime
                 {
                     internal static void Ensure() { }

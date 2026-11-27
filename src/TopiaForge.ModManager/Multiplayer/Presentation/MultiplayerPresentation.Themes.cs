@@ -17,7 +17,7 @@ namespace TopiaForge.ModManager
                 {
                     var hud = authoredHuds[index];
                     if (hud.IsAlive && !hud.Context.Lifetime.IsStopping)
-                        required = Math.Max(required, UiPresentationTheme.RequiredVersion(hud.PresentationContent, hud.Theme));
+                        required = Math.Max(required, UiPresentationTheme.RequiredVersion(hud.Request, hud.PresentationContent, hud.Theme));
                 }
 
                 return required;
@@ -38,7 +38,7 @@ namespace TopiaForge.ModManager
             envelope = null;
             try
             {
-                var required = UiPresentationTheme.RequiredVersion(content, theme);
+                var required = UiPresentationTheme.RequiredVersion(hud.Request, content, theme);
                 if (required == UiPresentationTheme.LegacyVersion) return UiPresentationTheme.Allowed;
                 if (Hosting && !players.AllPeersSupportUiVersion(required)) return UiPresentationTheme.UnsupportedVersion(required);
                 var owner = hud.Context.OwnerModId;
@@ -104,7 +104,7 @@ namespace TopiaForge.ModManager
                 var theme = hud.Theme;
                 if (preparingHost)
                 {
-                    if (UiPresentationTheme.RequiredVersion(hud.PresentationContent, theme) == UiPresentationTheme.LegacyVersion) continue;
+                    if (UiPresentationTheme.RequiredVersion(hud.Request, hud.PresentationContent, theme) == UiPresentationTheme.LegacyVersion) continue;
                 }
                 else
                 {

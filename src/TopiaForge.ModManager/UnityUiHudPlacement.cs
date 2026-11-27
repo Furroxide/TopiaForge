@@ -91,6 +91,7 @@ namespace TopiaForge.ModManager
             disposed = true;
             TopiaForgeTheme.Changed -= Refresh;
             panels.Clear();
+            TopiaForgeToasts.SetBottomRightHudTop(0f);
         }
 
         private void Apply()
@@ -101,6 +102,8 @@ namespace TopiaForge.ModManager
             }
 
             appliedVersion = dock.Version;
+            const TopiaForgeCorner corner = TopiaForgeCorner.BottomRight;
+            TopiaForgeToasts.SetBottomRightHudTop(dock.GetShownTop(corner), UiHudAnchors.SubtitleReserve(corner));
             foreach (var panel in panels)
             {
                 if (panel.Rect == null || panel.Notice.HasValue || !dock.TryGetPosition(panel.Handle, out var x, out var y))

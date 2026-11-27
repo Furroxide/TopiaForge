@@ -120,7 +120,7 @@ namespace TopiaForge.ModManager
                 if (!changingTheme)
                 {
                     var committed = SetComposition(content ?? EmptyContent, descriptor, remote: true, prepareInput: bindingScope);
-                    if (committed.Succeeded) ObserveRemoteGalleryCommit(theme.Envelope);
+                    if (committed.Succeeded) ObserveGalleryCommit(theme.Envelope);
                     return committed;
                 }
 
@@ -144,7 +144,7 @@ namespace TopiaForge.ModManager
                     adopted = true;
                     try { ApplySurfaceTheme(descriptor); }
                     finally { previous?.Dispose(); }
-                    ObserveRemoteGalleryCommit(theme.Envelope);
+                    ObserveGalleryCommit(theme.Envelope);
                     return result;
                 }
                 finally { if (!adopted) nextDemand?.Dispose(); }

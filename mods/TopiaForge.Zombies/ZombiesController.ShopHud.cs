@@ -99,7 +99,7 @@ namespace TopiaForge.Zombies
                 config.ShopEnabled,
                 interWaveEndsAt,
                 refillPercent,
-                shopReady: IsRequisitionsPhase && !timerPaused);
+                shopReady: config.ShopEnabled && IsRequisitionsPhase && !timerPaused);
             hud.Update(snapshot, fireAction, overrideAction, broadcastAction, shopAction);
         }
     }

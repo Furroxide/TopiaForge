@@ -69,7 +69,7 @@ namespace TopiaForge.ModManager
         /// <summary>Gets whether the multiplayer provider is loaded, so the main menu offers MULTIPLAYER.</summary>
         public bool HasMultiplayer => plugin.Multiplayer?.Control != null;
 
-        TopiaForgeLayerBand ITopiaForgeDismissable.Band => TopiaForgeLayerBand.Window;
+        TopiaForgeLayerBand ITopiaForgeDismissable.Band => TopiaForgeLayerPriority.Manager;
 
         void ITopiaForgeDismissable.Dismiss()
         {
@@ -204,7 +204,8 @@ namespace TopiaForge.ModManager
                 LogError = message => logger.Error(message),
             });
 
-            var layer = host.Layer("overlay", TopiaForgeLayerBand.Window, TopiaForgeScheme.Paper, interactive: true, persistent: true);
+            var layer = host.KitLayer("overlay", TopiaForgeLayerPriority.Manager, TopiaForgeScheme.Paper,
+                interactive: true, persistent: true);
             root = layer.Go;
             // The menu-button injector's canvas scan excludes this exact name.
             root.name = "TopiaForgeModManagerOverlay";

@@ -16,6 +16,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly List<ITopiaForgeDismissable> surfaces = new List<ITopiaForgeDismissable>();
         private readonly List<TopiaForgeInputClaim> claims = new List<TopiaForgeInputClaim>();
         private readonly List<object?> roots = new List<object?>();
+        private readonly List<bool> removeOnBack = new List<bool>();
         private readonly TopiaForgeBackPress back = new TopiaForgeBackPress();
         private readonly Func<object, bool> isLive;
         private readonly Func<object, bool> holdsSelection;
@@ -42,6 +43,9 @@ namespace TopiaForge.Mods.UnityUi
         /// now. Returns whether the surface was new.
         /// </summary>
         public bool Push(ITopiaForgeDismissable surface, TopiaForgeInputClaim claim, object? root)
+            => Push(surface, claim, root, removesOnBack: true);
+
+        internal bool Push(ITopiaForgeDismissable surface, TopiaForgeInputClaim claim, object? root, bool removesOnBack)
         {
             if (surface == null)
             {
@@ -53,12 +57,14 @@ namespace TopiaForge.Mods.UnityUi
             {
                 claims[index] = claim;
                 roots[index] = root;
+                removeOnBack[index] = removesOnBack;
                 return false;
             }
 
             surfaces.Add(surface);
             claims.Add(claim);
             roots.Add(root);
+            removeOnBack.Add(removesOnBack);
             return true;
         }
 
@@ -106,7 +112,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             var surface = surfaces[index];
-            RemoveAt(index);
+            if (removeOnBack[index]) RemoveAt(index);
             return surface;
         }
 
@@ -157,7 +163,7 @@ namespace TopiaForge.Mods.UnityUi
             for (var index = 0; index < surfaces.Count; index++)
             {
                 if (IsLive(index)
-                    && (surfaces[index].Band >= TopiaForgeLayerBand.Modal
+                    && (TopiaForgeLayerPriority.Rank(surfaces[index].Band) >= TopiaForgeLayerPriority.Rank(TopiaForgeLayerBand.Modal)
                         || (Resolve(index) & (TopiaForgeInputClaim.Navigation | TopiaForgeInputClaim.Keyboard)) != 0)
                     && IsAbove(index, top))
                 {
@@ -174,6 +180,7 @@ namespace TopiaForge.Mods.UnityUi
             surfaces.Clear();
             claims.Clear();
             roots.Clear();
+            removeOnBack.Clear();
             back.Reset();
         }
 
@@ -221,7 +228,9 @@ namespace TopiaForge.Mods.UnityUi
             var candidate = surfaces[index];
             var current = surfaces[top];
             var trust = isTrust(candidate);
-            return trust != isTrust(current) ? trust : candidate.Band >= current.Band;
+            return trust != isTrust(current)
+                ? trust
+                : TopiaForgeLayerPriority.Rank(candidate.Band) >= TopiaForgeLayerPriority.Rank(current.Band);
         }
 
         private void RemoveAt(int index)
@@ -229,6 +238,7 @@ namespace TopiaForge.Mods.UnityUi
             surfaces.RemoveAt(index);
             claims.RemoveAt(index);
             roots.RemoveAt(index);
+            removeOnBack.RemoveAt(index);
         }
     }
 }

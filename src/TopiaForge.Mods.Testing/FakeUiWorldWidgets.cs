@@ -59,6 +59,14 @@ namespace TopiaForge.Mods.Testing
         {
             FollowTime(time);
             widgetEvents = events;
+            events.AdvanceUiPresentation = AdvancePresentation;
+        }
+
+        private void AdvancePresentation()
+        {
+            AdvanceToasts();
+            AdvanceStingers();
+            PruneOverlayExits();
         }
     }
     public sealed partial class FakeUiSurface

@@ -63,6 +63,11 @@ namespace TopiaForge.Mods.Testing
                     return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                 if (!retained)
                 {
+                    if (OverlayKind is { } overlayKind)
+                    {
+                        var overlay = UiOverlayAdmission.Check(content, Request.Dismissible, overlayKind);
+                        if (!overlay.Succeeded) return OperationResult<bool>.Failure(overlay.ErrorCode, overlay.ErrorMessage);
+                    }
                     if (!WireBounded && Receiver == null) owner.CheckLocalInput(content);
                     var prepared = owner.PrepareImages(content, Receiver != null, wireBounded: WireBounded);
                     if (!prepared.TryGetValue(out var staged))
@@ -152,6 +157,7 @@ namespace TopiaForge.Mods.Testing
 
         private bool CanInteract(string id)
         {
+            if (!owner.AllowsOverlayInput(this)) return false;
             if (!UiLayoutTree.TryFindVisible(Content, id, ActiveTabIndex, out var disabled) || disabled) return false;
             try { return FakeUiTreeCapture.VerifyComposition(owner, this, Content, Images); }
             catch (UiLayoutException) { return false; }

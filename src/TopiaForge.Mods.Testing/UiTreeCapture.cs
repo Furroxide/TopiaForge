@@ -71,11 +71,15 @@ namespace TopiaForge.Mods.Testing
     {
         private readonly IReadOnlyList<UiAccessibilityIssue> issues;
 
-        internal UiTreeCapture(List<UiCapturedNode> nodes, bool highContrast, float minimumHitSize = 0f)
+        internal UiTreeCapture(List<UiCapturedNode> nodes, bool highContrast, float minimumHitSize = 0f,
+            bool? usesDeclaredStingerFaces = null)
         {
             Nodes = nodes.AsReadOnly();
             issues = FindIssues(Nodes, highContrast, minimumHitSize);
+            UsesDeclaredStingerFaces = usesDeclaredStingerFaces;
         }
+
+        internal bool? UsesDeclaredStingerFaces { get; }
 
         /// <summary>Gets the semantic and paint groups in tree order.</summary>
         public IReadOnlyList<UiCapturedNode> Nodes { get; }

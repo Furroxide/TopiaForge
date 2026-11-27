@@ -105,6 +105,7 @@ namespace TopiaForge.ModManager.Tests
                     internal static T GetOrAdd<T>(GameObject go) where T : Component => go.GetComponent<T>() ?? go.AddComponent<T>();
                 }
                 internal static class TopiaForgeRuntime { internal static void Ensure() { } }
+                internal static class TopiaForgeOverlayStack { internal static void RefreshCoveredFocus() { } }
                 internal static class TopiaForgeInput
                 {
                     internal static bool Back;

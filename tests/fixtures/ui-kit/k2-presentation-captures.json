@@ -1,0 +1,1936 @@
+{
+  "schema": 1,
+  "source": "FakeUiService headless captured trees",
+  "fixture": "PresentationPages",
+  "schemes": "Launcher palettes are Paper or HUD. Overlay panels and stingers use the selected HUD scheme. Toasts use the kit HUD scheme.",
+  "routes": "Guest previews use FakePlayerDirectory. Role stingers and individual toasts are targeted. The announcement queue uses the fake gamemode broadcast.",
+  "geometry": "Predicted text and layout at deterministic fake times. Native pixels, compositing and device navigation belong to the phase visual gate.",
+  "galleryManifestSha256": "EDFEDEE67FAD978CF03234A625ECAEB7F5F4BC0A857E047321B4E1A42E8E0447",
+  "sampleDefinitionSha256": "0B2DE3616F0ECD6848F0F9DCEF35430326A4BF64EB719630A28BFE9F984E6DE5",
+  "kitDescriptorSha256": "4602CE2902CF9C95898AEA57EDFD9E9293DD563941CBF191240C299393D89E3A",
+  "sampleDescriptorSha256": "861FB96F450D650619D4B813B4DCEDE74E4DA86AC2C4F6502D9D4786720D0A01",
+  "caseCount": 384,
+  "snapshots": 4992,
+  "cases": {
+    "Overlays/kit/hud/high/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "7993DB0541DA4E3F716E7502DE148B980070AE44302D09E7750D0AEB9B4642D4"
+    },
+    "Overlays/kit/hud/high/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "9A38E24F87DF43920D931C65D75F5EAE5BBAD43D347F522A27F4018E53167EC2"
+    },
+    "Overlays/kit/hud/high/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "7993DB0541DA4E3F716E7502DE148B980070AE44302D09E7750D0AEB9B4642D4"
+    },
+    "Overlays/kit/hud/high/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "9A38E24F87DF43920D931C65D75F5EAE5BBAD43D347F522A27F4018E53167EC2"
+    },
+    "Overlays/kit/hud/high/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "BA19C90B31641B5EC125AB19A0A174ACEAA2C43DB9F8A889B98B8C4D852F3ADE"
+    },
+    "Overlays/kit/hud/high/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "7C62CE1075D049A2C7FB19DE48A3DB5480A537ADE4421D4A43C1E5425E9BC5ED"
+    },
+    "Overlays/kit/hud/high/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "BA19C90B31641B5EC125AB19A0A174ACEAA2C43DB9F8A889B98B8C4D852F3ADE"
+    },
+    "Overlays/kit/hud/high/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "7C62CE1075D049A2C7FB19DE48A3DB5480A537ADE4421D4A43C1E5425E9BC5ED"
+    },
+    "Overlays/kit/hud/high/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "B730C79163F45854E0DC303DA3726C394A66E70E0C4DAB3D177096C057E2C7D9"
+    },
+    "Overlays/kit/hud/high/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "58C66FA7E8AF59F8CBC93E35B4186CA4978BDD89A269B0846BF43450393C4B5D"
+    },
+    "Overlays/kit/hud/high/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "B730C79163F45854E0DC303DA3726C394A66E70E0C4DAB3D177096C057E2C7D9"
+    },
+    "Overlays/kit/hud/high/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "58C66FA7E8AF59F8CBC93E35B4186CA4978BDD89A269B0846BF43450393C4B5D"
+    },
+    "Overlays/kit/hud/high/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "09403B2316F7D0C431F7E69B0F3DDB9A64A2CCB23F21B0E2F429A97160D1A99D"
+    },
+    "Overlays/kit/hud/high/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "EDBE9CD36EF3ECF60ADF61599E3EA2BFB2C09F87008A2194E9A03DAEC48E3635"
+    },
+    "Overlays/kit/hud/high/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "09403B2316F7D0C431F7E69B0F3DDB9A64A2CCB23F21B0E2F429A97160D1A99D"
+    },
+    "Overlays/kit/hud/high/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "EDBE9CD36EF3ECF60ADF61599E3EA2BFB2C09F87008A2194E9A03DAEC48E3635"
+    },
+    "Overlays/kit/hud/standard/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A96790664F87FA55CB7986B6A3C7DE03C3D63BD1D12ECA81E5AEB3A8FB134C05"
+    },
+    "Overlays/kit/hud/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "71DF9D1B4D5E9E7E24252028E603C785F4D33ED512C9E7FF4BFACAB29854A5D2"
+    },
+    "Overlays/kit/hud/standard/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A96790664F87FA55CB7986B6A3C7DE03C3D63BD1D12ECA81E5AEB3A8FB134C05"
+    },
+    "Overlays/kit/hud/standard/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "71DF9D1B4D5E9E7E24252028E603C785F4D33ED512C9E7FF4BFACAB29854A5D2"
+    },
+    "Overlays/kit/hud/standard/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "D319E8B7C5B60D662437BC431CC48995943BE2AD26E44ADF8E682E9B40EE34DD"
+    },
+    "Overlays/kit/hud/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6951C5DE1D8B82FF5CA4381DBA29D290A189C4C7022B30FE875891D17B28D416"
+    },
+    "Overlays/kit/hud/standard/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "D319E8B7C5B60D662437BC431CC48995943BE2AD26E44ADF8E682E9B40EE34DD"
+    },
+    "Overlays/kit/hud/standard/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6951C5DE1D8B82FF5CA4381DBA29D290A189C4C7022B30FE875891D17B28D416"
+    },
+    "Overlays/kit/hud/standard/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "5196451FF3DCEA46CE7453D5CD8BD579A16868420B4D2E34418E785C62EC6ADE"
+    },
+    "Overlays/kit/hud/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "436C8A25D38FE0FBFEA53C3E29E552564DA3A4EFC445781536D3F4EB8E3550D3"
+    },
+    "Overlays/kit/hud/standard/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "5196451FF3DCEA46CE7453D5CD8BD579A16868420B4D2E34418E785C62EC6ADE"
+    },
+    "Overlays/kit/hud/standard/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "436C8A25D38FE0FBFEA53C3E29E552564DA3A4EFC445781536D3F4EB8E3550D3"
+    },
+    "Overlays/kit/hud/standard/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "5795624092E240F8DAED29F1B3EF5C57AE9D018577E5FFC26D9D8BA7DE61F8EE"
+    },
+    "Overlays/kit/hud/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "696742ACDBA9C69BF8B1EEDA7FF662CFC36544CFDF567861602402C75B29AEDF"
+    },
+    "Overlays/kit/hud/standard/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "5795624092E240F8DAED29F1B3EF5C57AE9D018577E5FFC26D9D8BA7DE61F8EE"
+    },
+    "Overlays/kit/hud/standard/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "696742ACDBA9C69BF8B1EEDA7FF662CFC36544CFDF567861602402C75B29AEDF"
+    },
+    "Overlays/kit/paper/high/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "5DC4CC5F21BC5F6EE0181125B504545C85AC2C0DCECC55F5AEA5BB91538A8BE7"
+    },
+    "Overlays/kit/paper/high/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "E663FD4B36817A5779238FE052118E08CD23566B8DF4B64276924B173C0DF9C9"
+    },
+    "Overlays/kit/paper/high/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "5DC4CC5F21BC5F6EE0181125B504545C85AC2C0DCECC55F5AEA5BB91538A8BE7"
+    },
+    "Overlays/kit/paper/high/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "E663FD4B36817A5779238FE052118E08CD23566B8DF4B64276924B173C0DF9C9"
+    },
+    "Overlays/kit/paper/high/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "642D7D6AF04AAE498A28119BC2886EDB4BBF89E30358D4DE6C073DAF26712765"
+    },
+    "Overlays/kit/paper/high/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "F0526F2E640BD49354618C9AD254F5FA1D48321B595EE6F4EB8E1DC7C34ED423"
+    },
+    "Overlays/kit/paper/high/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "642D7D6AF04AAE498A28119BC2886EDB4BBF89E30358D4DE6C073DAF26712765"
+    },
+    "Overlays/kit/paper/high/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "F0526F2E640BD49354618C9AD254F5FA1D48321B595EE6F4EB8E1DC7C34ED423"
+    },
+    "Overlays/kit/paper/high/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "AB3D861B98EFBF9C58C83798AB72C3CA7FEC925562739C86B8AB5A4E36C331E6"
+    },
+    "Overlays/kit/paper/high/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "37D644687B2FAACB7FA2A60390FFB9857A9884C88D074DC12049EA1C072E9F44"
+    },
+    "Overlays/kit/paper/high/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "AB3D861B98EFBF9C58C83798AB72C3CA7FEC925562739C86B8AB5A4E36C331E6"
+    },
+    "Overlays/kit/paper/high/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "37D644687B2FAACB7FA2A60390FFB9857A9884C88D074DC12049EA1C072E9F44"
+    },
+    "Overlays/kit/paper/high/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "7734C25FCA595E848C4BC4F41594BA6259BC9CCFF67485025BA9EE071D51F792"
+    },
+    "Overlays/kit/paper/high/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6FB74777E42B2C0FF69F879A2D067359A0A4323A9DE51C76201DDA2D353FFDA4"
+    },
+    "Overlays/kit/paper/high/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "7734C25FCA595E848C4BC4F41594BA6259BC9CCFF67485025BA9EE071D51F792"
+    },
+    "Overlays/kit/paper/high/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6FB74777E42B2C0FF69F879A2D067359A0A4323A9DE51C76201DDA2D353FFDA4"
+    },
+    "Overlays/kit/paper/standard/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "C3E45CDF1130F35128AB3E3D6060761A8EC14EE70DC516E771E9F5290A2924CA"
+    },
+    "Overlays/kit/paper/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "420BD8AB4F35A1B671A094F32557C4EC51DECBD20B8C870426D51C96966FBFA6"
+    },
+    "Overlays/kit/paper/standard/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "C3E45CDF1130F35128AB3E3D6060761A8EC14EE70DC516E771E9F5290A2924CA"
+    },
+    "Overlays/kit/paper/standard/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "420BD8AB4F35A1B671A094F32557C4EC51DECBD20B8C870426D51C96966FBFA6"
+    },
+    "Overlays/kit/paper/standard/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "078AB52F7F87CF39A6879238ED3570EB7E31FE2CA907956E076A115D10B07921"
+    },
+    "Overlays/kit/paper/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6A91E5FD1F97BED7089A65D7EBC59B5746B6F6DD45EF985A45E124450535F832"
+    },
+    "Overlays/kit/paper/standard/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "078AB52F7F87CF39A6879238ED3570EB7E31FE2CA907956E076A115D10B07921"
+    },
+    "Overlays/kit/paper/standard/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6A91E5FD1F97BED7089A65D7EBC59B5746B6F6DD45EF985A45E124450535F832"
+    },
+    "Overlays/kit/paper/standard/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A480F862DA81BAD808B37C818B3B1C489A1D3FF1235F56E4F1BD25E8A075B269"
+    },
+    "Overlays/kit/paper/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "3327A74B3A5F3FA5461958EDB7B369E98779468AAE39E436D57645F37AD8B221"
+    },
+    "Overlays/kit/paper/standard/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A480F862DA81BAD808B37C818B3B1C489A1D3FF1235F56E4F1BD25E8A075B269"
+    },
+    "Overlays/kit/paper/standard/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "3327A74B3A5F3FA5461958EDB7B369E98779468AAE39E436D57645F37AD8B221"
+    },
+    "Overlays/kit/paper/standard/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A57066A90861B3F73140920B3C3455071148DE432A7DE2997930A72249E3A81F"
+    },
+    "Overlays/kit/paper/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "FC633E0884E6DE61BD1CA6CBB2BB0829B817031BFDC40F28B060EADE2B7F38EF"
+    },
+    "Overlays/kit/paper/standard/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A57066A90861B3F73140920B3C3455071148DE432A7DE2997930A72249E3A81F"
+    },
+    "Overlays/kit/paper/standard/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "FC633E0884E6DE61BD1CA6CBB2BB0829B817031BFDC40F28B060EADE2B7F38EF"
+    },
+    "Overlays/survival/hud/high/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "6A70365488FAF45E168F50FE6D61205A9C3343ED919DB2A6356870C513471A80"
+    },
+    "Overlays/survival/hud/high/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "700AF3B5E7C90D9D7B239CB754FE475D368A66223CD30CDE4646B42EAA768BD3"
+    },
+    "Overlays/survival/hud/high/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "6A70365488FAF45E168F50FE6D61205A9C3343ED919DB2A6356870C513471A80"
+    },
+    "Overlays/survival/hud/high/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "700AF3B5E7C90D9D7B239CB754FE475D368A66223CD30CDE4646B42EAA768BD3"
+    },
+    "Overlays/survival/hud/high/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "17B96443ABBF5E58D85D767351CBE4A16CFCB9C950A7F5BB50E2FDB66DD6E6B9"
+    },
+    "Overlays/survival/hud/high/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "408ACC4D9FFBF90831F90A1BFF24D63DCF5EE399BEBEA30588A124C4C5405284"
+    },
+    "Overlays/survival/hud/high/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "17B96443ABBF5E58D85D767351CBE4A16CFCB9C950A7F5BB50E2FDB66DD6E6B9"
+    },
+    "Overlays/survival/hud/high/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "408ACC4D9FFBF90831F90A1BFF24D63DCF5EE399BEBEA30588A124C4C5405284"
+    },
+    "Overlays/survival/hud/high/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "0B01C80222B136F502BE237705416B993D19643776BFE89071C4A3F327B5921E"
+    },
+    "Overlays/survival/hud/high/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "A0107FC5F352F50D22AE125024DF2B1A101D873B849D90E015DE8CADE9A89AB0"
+    },
+    "Overlays/survival/hud/high/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "0B01C80222B136F502BE237705416B993D19643776BFE89071C4A3F327B5921E"
+    },
+    "Overlays/survival/hud/high/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "A0107FC5F352F50D22AE125024DF2B1A101D873B849D90E015DE8CADE9A89AB0"
+    },
+    "Overlays/survival/hud/high/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "07018186D84771693068C797EF6745A1F45CA62763E7818F389AD9020EEAFAD7"
+    },
+    "Overlays/survival/hud/high/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "AA323BB096A807DEA7FEEC7FD986A10CEC42E67FB1C3AB06F4EA5930D77D2E5B"
+    },
+    "Overlays/survival/hud/high/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "07018186D84771693068C797EF6745A1F45CA62763E7818F389AD9020EEAFAD7"
+    },
+    "Overlays/survival/hud/high/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "AA323BB096A807DEA7FEEC7FD986A10CEC42E67FB1C3AB06F4EA5930D77D2E5B"
+    },
+    "Overlays/survival/hud/standard/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "7B3600974EA1EB6977E07AB7428E3339320331331F41378522B054C87BF4981B"
+    },
+    "Overlays/survival/hud/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "4754EC16EF4F147E32164C97419A13B846ACEC81B76028F5FC3786BDD2FBCE91"
+    },
+    "Overlays/survival/hud/standard/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "7B3600974EA1EB6977E07AB7428E3339320331331F41378522B054C87BF4981B"
+    },
+    "Overlays/survival/hud/standard/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "4754EC16EF4F147E32164C97419A13B846ACEC81B76028F5FC3786BDD2FBCE91"
+    },
+    "Overlays/survival/hud/standard/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "6D7F0BD8146894E41488E497739A642C82022145BD6E23263EEB3C2E31C45514"
+    },
+    "Overlays/survival/hud/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "451303F2EECD2D8A27B50236E73F61990E2761FA94E0E14191FB8E624C3BE7AC"
+    },
+    "Overlays/survival/hud/standard/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "6D7F0BD8146894E41488E497739A642C82022145BD6E23263EEB3C2E31C45514"
+    },
+    "Overlays/survival/hud/standard/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "451303F2EECD2D8A27B50236E73F61990E2761FA94E0E14191FB8E624C3BE7AC"
+    },
+    "Overlays/survival/hud/standard/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "97183EDF4EB7DC85B60C1484AB590874559E712DC787E6A7133A1C5AE09C9C9A"
+    },
+    "Overlays/survival/hud/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "91A6BC2F96E14E8EAA1801D9207A7E42ECC6CEC56BF30647E4D8D533131C448A"
+    },
+    "Overlays/survival/hud/standard/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "97183EDF4EB7DC85B60C1484AB590874559E712DC787E6A7133A1C5AE09C9C9A"
+    },
+    "Overlays/survival/hud/standard/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "91A6BC2F96E14E8EAA1801D9207A7E42ECC6CEC56BF30647E4D8D533131C448A"
+    },
+    "Overlays/survival/hud/standard/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A0913685A391507B4EF6285EC4C873249F830D2B792326ED3C27809C26F6D5EE"
+    },
+    "Overlays/survival/hud/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "7E2E02FFC96048D2A5DEA6F825F2629D1733BFABE01CD5885C4D092285740497"
+    },
+    "Overlays/survival/hud/standard/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "A0913685A391507B4EF6285EC4C873249F830D2B792326ED3C27809C26F6D5EE"
+    },
+    "Overlays/survival/hud/standard/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "7E2E02FFC96048D2A5DEA6F825F2629D1733BFABE01CD5885C4D092285740497"
+    },
+    "Overlays/survival/paper/high/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "E73CD751C9523A95E0EBB2F7D5A834535EEE0A332869AADD0DEFCD1FDDAC8F54"
+    },
+    "Overlays/survival/paper/high/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "EF6925F2831943B329851D0356ED1A0AC5E3A1B79D7E190B5F52A82E09EEB75F"
+    },
+    "Overlays/survival/paper/high/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "E73CD751C9523A95E0EBB2F7D5A834535EEE0A332869AADD0DEFCD1FDDAC8F54"
+    },
+    "Overlays/survival/paper/high/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "EF6925F2831943B329851D0356ED1A0AC5E3A1B79D7E190B5F52A82E09EEB75F"
+    },
+    "Overlays/survival/paper/high/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "B390F74094AD7253EBBA044CC6FF190382C907FC3AF35832EFAB4532E1D9DD09"
+    },
+    "Overlays/survival/paper/high/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "FBA58C35D4AE24CC9692BCA6E57530A80E7C8AFF06F1A95BC58277062C8345CB"
+    },
+    "Overlays/survival/paper/high/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "B390F74094AD7253EBBA044CC6FF190382C907FC3AF35832EFAB4532E1D9DD09"
+    },
+    "Overlays/survival/paper/high/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "FBA58C35D4AE24CC9692BCA6E57530A80E7C8AFF06F1A95BC58277062C8345CB"
+    },
+    "Overlays/survival/paper/high/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "DA2ED4F77D9A15127F4A3C5B755BA12C5772F9BE086C4ED82F4DCA3BF70A2E18"
+    },
+    "Overlays/survival/paper/high/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "ED89284D52D9A876EF10408350271CE4FDA888C5867CEF3F69857809BBE4228F"
+    },
+    "Overlays/survival/paper/high/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "DA2ED4F77D9A15127F4A3C5B755BA12C5772F9BE086C4ED82F4DCA3BF70A2E18"
+    },
+    "Overlays/survival/paper/high/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "ED89284D52D9A876EF10408350271CE4FDA888C5867CEF3F69857809BBE4228F"
+    },
+    "Overlays/survival/paper/high/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "E3C95C16E3353961074FA08CFC604B9F04B1DE6892E330A28211656C02F5B131"
+    },
+    "Overlays/survival/paper/high/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "A60B3548C0F525B896F58135D3327EB9A1FE98400617DC498F70A4619EDF5E6D"
+    },
+    "Overlays/survival/paper/high/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "E3C95C16E3353961074FA08CFC604B9F04B1DE6892E330A28211656C02F5B131"
+    },
+    "Overlays/survival/paper/high/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "A60B3548C0F525B896F58135D3327EB9A1FE98400617DC498F70A4619EDF5E6D"
+    },
+    "Overlays/survival/paper/standard/1920x1080/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "DF1D1DC5731404E2849A64EE073CD8F0EFEC62C4E3B0CDAED2C7A47F109A5D3C"
+    },
+    "Overlays/survival/paper/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6C8738FCE1D218631C1B75A8024C37241AA29D3F385BB8F0D25C0EC405F833DB"
+    },
+    "Overlays/survival/paper/standard/1920x1080/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "DF1D1DC5731404E2849A64EE073CD8F0EFEC62C4E3B0CDAED2C7A47F109A5D3C"
+    },
+    "Overlays/survival/paper/standard/1920x1080/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "6C8738FCE1D218631C1B75A8024C37241AA29D3F385BB8F0D25C0EC405F833DB"
+    },
+    "Overlays/survival/paper/standard/1920x1080/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "BCFEA68AAAC75CE5C9560611B60A3C18A06542EE614FBC680DB6F67BA2D44E1F"
+    },
+    "Overlays/survival/paper/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "F77234769CE803DB34E79D6E5640EF6801A49A19B112A49DEB49BB3A1C7E3656"
+    },
+    "Overlays/survival/paper/standard/1920x1080/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "BCFEA68AAAC75CE5C9560611B60A3C18A06542EE614FBC680DB6F67BA2D44E1F"
+    },
+    "Overlays/survival/paper/standard/1920x1080/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "F77234769CE803DB34E79D6E5640EF6801A49A19B112A49DEB49BB3A1C7E3656"
+    },
+    "Overlays/survival/paper/standard/2560x1440/1/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "097B916814E38D6EE53F7DBEED5A49430E0DEBFB6AF4FE7C16DD6C40D4E78094"
+    },
+    "Overlays/survival/paper/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "38353AF7E1FD07BBB365656667B295B11CE48036FB4B326500501A4CE0A5CCEE"
+    },
+    "Overlays/survival/paper/standard/2560x1440/1/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "097B916814E38D6EE53F7DBEED5A49430E0DEBFB6AF4FE7C16DD6C40D4E78094"
+    },
+    "Overlays/survival/paper/standard/2560x1440/1/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "38353AF7E1FD07BBB365656667B295B11CE48036FB4B326500501A4CE0A5CCEE"
+    },
+    "Overlays/survival/paper/standard/2560x1440/2/guest/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "2955CB7928B983226AFAFDC3ED03CDA5A7CB7E90970C60ECBE4259A7B6F183C7"
+    },
+    "Overlays/survival/paper/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "E2629BDB68B7F41506AA9FAB9AF54D7DED004E962239CF6C24AAB95F4BBFA7E6"
+    },
+    "Overlays/survival/paper/standard/2560x1440/2/host/full": {
+      "snapshots": 11,
+      "visibleGroups": 59,
+      "treeSha256": "2955CB7928B983226AFAFDC3ED03CDA5A7CB7E90970C60ECBE4259A7B6F183C7"
+    },
+    "Overlays/survival/paper/standard/2560x1440/2/host/reduced": {
+      "snapshots": 7,
+      "visibleGroups": 38,
+      "treeSha256": "E2629BDB68B7F41506AA9FAB9AF54D7DED004E962239CF6C24AAB95F4BBFA7E6"
+    },
+    "Stingers/kit/hud/high/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "3AB0C9D3444B8415C1943CD23BD0B6A8788314B87949AF62875706244BFD8D9B"
+    },
+    "Stingers/kit/hud/high/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "1CDF27066E9DDFD7A8B1612F763B5CAFD6C2A75CF1822E18F20EFF70F3E7C3E9"
+    },
+    "Stingers/kit/hud/high/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "3AB0C9D3444B8415C1943CD23BD0B6A8788314B87949AF62875706244BFD8D9B"
+    },
+    "Stingers/kit/hud/high/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "1CDF27066E9DDFD7A8B1612F763B5CAFD6C2A75CF1822E18F20EFF70F3E7C3E9"
+    },
+    "Stingers/kit/hud/high/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "A26A078EDB66A8C68AAEBA4F280B3DB3EF8F37829AB08638017E1FF805B8825B"
+    },
+    "Stingers/kit/hud/high/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "972DA576F0C7F5FDF83A9A711293DA1468370F712444054F07E98975BB11B16E"
+    },
+    "Stingers/kit/hud/high/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "A26A078EDB66A8C68AAEBA4F280B3DB3EF8F37829AB08638017E1FF805B8825B"
+    },
+    "Stingers/kit/hud/high/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "972DA576F0C7F5FDF83A9A711293DA1468370F712444054F07E98975BB11B16E"
+    },
+    "Stingers/kit/hud/high/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "52F319E53E52964F271AF16357F5DF4145022A4D6CB6DDD6BA3D192CFB05D4DB"
+    },
+    "Stingers/kit/hud/high/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "4E621AC5341A3DB625EDC7F8D5ACECA4109E3C1CE6EA96A4A787026225EFC209"
+    },
+    "Stingers/kit/hud/high/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "52F319E53E52964F271AF16357F5DF4145022A4D6CB6DDD6BA3D192CFB05D4DB"
+    },
+    "Stingers/kit/hud/high/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "4E621AC5341A3DB625EDC7F8D5ACECA4109E3C1CE6EA96A4A787026225EFC209"
+    },
+    "Stingers/kit/hud/high/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "5496A0B157045DBC0F6B988B27EDAB106AF3FCA140104B1A320360CF3A45122E"
+    },
+    "Stingers/kit/hud/high/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "BC2A929376EC495C591D367479D6C0FF9CF5B6EDD1D545982E8B75C5D13553EE"
+    },
+    "Stingers/kit/hud/high/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "5496A0B157045DBC0F6B988B27EDAB106AF3FCA140104B1A320360CF3A45122E"
+    },
+    "Stingers/kit/hud/high/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "BC2A929376EC495C591D367479D6C0FF9CF5B6EDD1D545982E8B75C5D13553EE"
+    },
+    "Stingers/kit/hud/standard/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D2368A70C790B54F0821F1C610DF525A9D596DD97A5E23C78D29E564A85CFEEB"
+    },
+    "Stingers/kit/hud/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "5EF56189880FC10AD42B63DB3C837BCFDA9E1E85499C8E2CC5AF5C0FC8C1082D"
+    },
+    "Stingers/kit/hud/standard/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D2368A70C790B54F0821F1C610DF525A9D596DD97A5E23C78D29E564A85CFEEB"
+    },
+    "Stingers/kit/hud/standard/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "5EF56189880FC10AD42B63DB3C837BCFDA9E1E85499C8E2CC5AF5C0FC8C1082D"
+    },
+    "Stingers/kit/hud/standard/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "ADD12E1B78B6C58A3DA0B47D71E2D082ED40BE574012BF5672185387A621FD6A"
+    },
+    "Stingers/kit/hud/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "BEACE203114CBFBA1915806562E2217926B844F5B7E50A2D8F2F374600117CAF"
+    },
+    "Stingers/kit/hud/standard/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "ADD12E1B78B6C58A3DA0B47D71E2D082ED40BE574012BF5672185387A621FD6A"
+    },
+    "Stingers/kit/hud/standard/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "BEACE203114CBFBA1915806562E2217926B844F5B7E50A2D8F2F374600117CAF"
+    },
+    "Stingers/kit/hud/standard/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "9B7A91F955BA05EC6F2503389C224EC1ABCC419206605B3037DCE3FDD9D5D7DF"
+    },
+    "Stingers/kit/hud/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "345D3C06811999A71A9F38B818C548741C2F392FA1381237C3DB1DA80EE3705B"
+    },
+    "Stingers/kit/hud/standard/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "9B7A91F955BA05EC6F2503389C224EC1ABCC419206605B3037DCE3FDD9D5D7DF"
+    },
+    "Stingers/kit/hud/standard/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "345D3C06811999A71A9F38B818C548741C2F392FA1381237C3DB1DA80EE3705B"
+    },
+    "Stingers/kit/hud/standard/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "383CE815175C7C21CE0B6F345D5479C422556ECF8E0DF32EE47D02FF48E62C33"
+    },
+    "Stingers/kit/hud/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "D0568B054CD69F741C899D5E646496815DF774EA3EB0F612919ACA5DEC374CEF"
+    },
+    "Stingers/kit/hud/standard/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "383CE815175C7C21CE0B6F345D5479C422556ECF8E0DF32EE47D02FF48E62C33"
+    },
+    "Stingers/kit/hud/standard/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "D0568B054CD69F741C899D5E646496815DF774EA3EB0F612919ACA5DEC374CEF"
+    },
+    "Stingers/kit/paper/high/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "8CBDC79EE76B5FD0C1A4C2F16359855ED6E702D72F846AFDE34080B6E8B21762"
+    },
+    "Stingers/kit/paper/high/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "F42FE18852D59F2F3D7ECDE4331EA234C6796F0C516BE512D6DAED9F8F7B4F3D"
+    },
+    "Stingers/kit/paper/high/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "8CBDC79EE76B5FD0C1A4C2F16359855ED6E702D72F846AFDE34080B6E8B21762"
+    },
+    "Stingers/kit/paper/high/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "F42FE18852D59F2F3D7ECDE4331EA234C6796F0C516BE512D6DAED9F8F7B4F3D"
+    },
+    "Stingers/kit/paper/high/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "E3C1C7581B6A573F1E97DA1B79905791F60DC41575B9127985D5567662ED978E"
+    },
+    "Stingers/kit/paper/high/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "26081C02DFDCB450D6A509F7796BE2F1A328EEE7651AC8E380E9663609E85BFF"
+    },
+    "Stingers/kit/paper/high/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "E3C1C7581B6A573F1E97DA1B79905791F60DC41575B9127985D5567662ED978E"
+    },
+    "Stingers/kit/paper/high/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "26081C02DFDCB450D6A509F7796BE2F1A328EEE7651AC8E380E9663609E85BFF"
+    },
+    "Stingers/kit/paper/high/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D04D8B99460D0D4B346D08D84D91670F88AE655E873E80B4B30C6410B8B75023"
+    },
+    "Stingers/kit/paper/high/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "A7D23BD914AA9894870FD0014588405F21B3E9DF692D8B05DB76C0CBD7775241"
+    },
+    "Stingers/kit/paper/high/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D04D8B99460D0D4B346D08D84D91670F88AE655E873E80B4B30C6410B8B75023"
+    },
+    "Stingers/kit/paper/high/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "A7D23BD914AA9894870FD0014588405F21B3E9DF692D8B05DB76C0CBD7775241"
+    },
+    "Stingers/kit/paper/high/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "9DAF22122B657B397D828B59AA3BE19323C9B53C700305343AB364BAA4FA3995"
+    },
+    "Stingers/kit/paper/high/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "EB33C7E60844B1DCFD574952A0FD562EB769D59F0BB1CA49A6759A40F35E805E"
+    },
+    "Stingers/kit/paper/high/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "9DAF22122B657B397D828B59AA3BE19323C9B53C700305343AB364BAA4FA3995"
+    },
+    "Stingers/kit/paper/high/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "EB33C7E60844B1DCFD574952A0FD562EB769D59F0BB1CA49A6759A40F35E805E"
+    },
+    "Stingers/kit/paper/standard/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "6EA688A9C3EB08A81A9B2A32752DE4434C5C82329864BF8A4ABBFC569193DEF1"
+    },
+    "Stingers/kit/paper/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "71184E358293153A6CC8CE5A2686F85CE286F9B5E521E098535C48C01FEFE0F0"
+    },
+    "Stingers/kit/paper/standard/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "6EA688A9C3EB08A81A9B2A32752DE4434C5C82329864BF8A4ABBFC569193DEF1"
+    },
+    "Stingers/kit/paper/standard/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "71184E358293153A6CC8CE5A2686F85CE286F9B5E521E098535C48C01FEFE0F0"
+    },
+    "Stingers/kit/paper/standard/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "1C6C9C1729D97F1A531C424580C6BD02E55353BD3E99349D571377D9980CA9CE"
+    },
+    "Stingers/kit/paper/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "855C39E2540E3AAD733751EF4932E75960D74337F3E904A446D493B4AB1DFAC3"
+    },
+    "Stingers/kit/paper/standard/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "1C6C9C1729D97F1A531C424580C6BD02E55353BD3E99349D571377D9980CA9CE"
+    },
+    "Stingers/kit/paper/standard/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "855C39E2540E3AAD733751EF4932E75960D74337F3E904A446D493B4AB1DFAC3"
+    },
+    "Stingers/kit/paper/standard/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D0865F4A15AE94870D640D52A2228A7516AF9D8CD1C35CD3BF37907B60176151"
+    },
+    "Stingers/kit/paper/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "48286E6ABC06959E45931DB977F80195636D72A768F7DDA4417E7FD776DDA9C8"
+    },
+    "Stingers/kit/paper/standard/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D0865F4A15AE94870D640D52A2228A7516AF9D8CD1C35CD3BF37907B60176151"
+    },
+    "Stingers/kit/paper/standard/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "48286E6ABC06959E45931DB977F80195636D72A768F7DDA4417E7FD776DDA9C8"
+    },
+    "Stingers/kit/paper/standard/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "CF7DAFA46E752CDDD6347FA36C4C8391C95A4DA1F63C14165ECE41D2EBEF16F0"
+    },
+    "Stingers/kit/paper/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "E7C0AC0506EBAC4AC812E7394043149A2A21AB798609E9FC2FAD8D4F977A4921"
+    },
+    "Stingers/kit/paper/standard/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "CF7DAFA46E752CDDD6347FA36C4C8391C95A4DA1F63C14165ECE41D2EBEF16F0"
+    },
+    "Stingers/kit/paper/standard/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "E7C0AC0506EBAC4AC812E7394043149A2A21AB798609E9FC2FAD8D4F977A4921"
+    },
+    "Stingers/survival/hud/high/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "9B17D261589B6FBE8344F4B567DE133234B5A58568D8B17D0B3D2632AC2CD379"
+    },
+    "Stingers/survival/hud/high/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "D59C6A0FB80DE16A234E63983F50CE735984756560F2CEF1E832A75C5CBC5340"
+    },
+    "Stingers/survival/hud/high/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "9B17D261589B6FBE8344F4B567DE133234B5A58568D8B17D0B3D2632AC2CD379"
+    },
+    "Stingers/survival/hud/high/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "D59C6A0FB80DE16A234E63983F50CE735984756560F2CEF1E832A75C5CBC5340"
+    },
+    "Stingers/survival/hud/high/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "1753B57FC4DA9472F5FCE9F0BDB677859870239C40306B63432DB0F8DC58AE23"
+    },
+    "Stingers/survival/hud/high/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "7BD0BA7645CB8B09873D686732AFE304E27689C8EE4835E5B3734402641CC408"
+    },
+    "Stingers/survival/hud/high/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "1753B57FC4DA9472F5FCE9F0BDB677859870239C40306B63432DB0F8DC58AE23"
+    },
+    "Stingers/survival/hud/high/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "7BD0BA7645CB8B09873D686732AFE304E27689C8EE4835E5B3734402641CC408"
+    },
+    "Stingers/survival/hud/high/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "15A55467084FCBAD59E4D7BE94B862C4A8E5CF727DC8255E3BEA72D26AA1F5A9"
+    },
+    "Stingers/survival/hud/high/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "2DE3E53B694BAEA57512A2DF45CDFC9BFB772FC7147030A922AFB8399BED935E"
+    },
+    "Stingers/survival/hud/high/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "15A55467084FCBAD59E4D7BE94B862C4A8E5CF727DC8255E3BEA72D26AA1F5A9"
+    },
+    "Stingers/survival/hud/high/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "2DE3E53B694BAEA57512A2DF45CDFC9BFB772FC7147030A922AFB8399BED935E"
+    },
+    "Stingers/survival/hud/high/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "536C3B4441E056E6C4FB7D462F187E776D66EC9176B5E35FCAB89BD5F8123801"
+    },
+    "Stingers/survival/hud/high/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "DB3ED724FA635297E0D9FAF158ED823680D98648EBF376ECAF594771D8FFB9CD"
+    },
+    "Stingers/survival/hud/high/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "536C3B4441E056E6C4FB7D462F187E776D66EC9176B5E35FCAB89BD5F8123801"
+    },
+    "Stingers/survival/hud/high/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "DB3ED724FA635297E0D9FAF158ED823680D98648EBF376ECAF594771D8FFB9CD"
+    },
+    "Stingers/survival/hud/standard/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "75CBB3D137A8A119EA658981EA8583FBBC1478925EC38181447A80AFD71B915B"
+    },
+    "Stingers/survival/hud/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "6F19F71CC64B01E8C28351D2808456A95AD2CDBFDA79364CC8E68CDA2A2ECB16"
+    },
+    "Stingers/survival/hud/standard/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "75CBB3D137A8A119EA658981EA8583FBBC1478925EC38181447A80AFD71B915B"
+    },
+    "Stingers/survival/hud/standard/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "6F19F71CC64B01E8C28351D2808456A95AD2CDBFDA79364CC8E68CDA2A2ECB16"
+    },
+    "Stingers/survival/hud/standard/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "76C90D2BDD883D6CD479A9FA52797A5F3C0D8DB0BB861856F9E94732063A893D"
+    },
+    "Stingers/survival/hud/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "C9D07D6FD07A74905BC139DDAF1B745CED1D94BDE72CC7E7569595553A4008AB"
+    },
+    "Stingers/survival/hud/standard/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "76C90D2BDD883D6CD479A9FA52797A5F3C0D8DB0BB861856F9E94732063A893D"
+    },
+    "Stingers/survival/hud/standard/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "C9D07D6FD07A74905BC139DDAF1B745CED1D94BDE72CC7E7569595553A4008AB"
+    },
+    "Stingers/survival/hud/standard/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D4412395DAAF1811D351246CE27EE23B139EBFE5CFB47F29CE910E972AB47B1C"
+    },
+    "Stingers/survival/hud/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "A2C8EC348D9580D1158EBBC806802B253CEB5D8282425B171BA6D8AA36FA3D28"
+    },
+    "Stingers/survival/hud/standard/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "D4412395DAAF1811D351246CE27EE23B139EBFE5CFB47F29CE910E972AB47B1C"
+    },
+    "Stingers/survival/hud/standard/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "A2C8EC348D9580D1158EBBC806802B253CEB5D8282425B171BA6D8AA36FA3D28"
+    },
+    "Stingers/survival/hud/standard/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "A1174C75709BC756C4FD97C0BE598A12114F60A3BD3F87CCCE11361310E9BAE1"
+    },
+    "Stingers/survival/hud/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "43491580CA32ED108BF8EEDE5BDA3CACC4722C41EB07EEECE681C13B7E5DE863"
+    },
+    "Stingers/survival/hud/standard/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "A1174C75709BC756C4FD97C0BE598A12114F60A3BD3F87CCCE11361310E9BAE1"
+    },
+    "Stingers/survival/hud/standard/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "43491580CA32ED108BF8EEDE5BDA3CACC4722C41EB07EEECE681C13B7E5DE863"
+    },
+    "Stingers/survival/paper/high/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "F1A8392E76D5585CF53109021FD049B6D0DA616AE6BB209B811CB8A58C480C21"
+    },
+    "Stingers/survival/paper/high/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "EFFE84453BF19BC88D6D2D9E6E82EC19C75618016C55304D2570F554FD27C2DB"
+    },
+    "Stingers/survival/paper/high/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "F1A8392E76D5585CF53109021FD049B6D0DA616AE6BB209B811CB8A58C480C21"
+    },
+    "Stingers/survival/paper/high/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "EFFE84453BF19BC88D6D2D9E6E82EC19C75618016C55304D2570F554FD27C2DB"
+    },
+    "Stingers/survival/paper/high/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "622239FB1AC297E62740D69AEB2B0C84450A7794292EEE71408A1004186419E3"
+    },
+    "Stingers/survival/paper/high/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "2B6D18D2624D2ED41A9AA027C39E3C374CAA84FAD1B03133FF42483CE219DD25"
+    },
+    "Stingers/survival/paper/high/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "622239FB1AC297E62740D69AEB2B0C84450A7794292EEE71408A1004186419E3"
+    },
+    "Stingers/survival/paper/high/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "2B6D18D2624D2ED41A9AA027C39E3C374CAA84FAD1B03133FF42483CE219DD25"
+    },
+    "Stingers/survival/paper/high/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "ABCAD4BF009A6CAD9303395ECED2556629A83E2726596096E9FCD4667D71531F"
+    },
+    "Stingers/survival/paper/high/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "3F20F2FC074A8CC19C84AEE6DB20FFB50D35CAC287962F9B64C99933C7E349E1"
+    },
+    "Stingers/survival/paper/high/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "ABCAD4BF009A6CAD9303395ECED2556629A83E2726596096E9FCD4667D71531F"
+    },
+    "Stingers/survival/paper/high/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "3F20F2FC074A8CC19C84AEE6DB20FFB50D35CAC287962F9B64C99933C7E349E1"
+    },
+    "Stingers/survival/paper/high/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "F2945CCA1AC5879193DB94F66F606E1D99ACDDCACA8382EFEA0106CA9C61CF50"
+    },
+    "Stingers/survival/paper/high/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "B858F364A4D35517BD38EF93B864A21136873F082A8E1B52EE054C89629FF5AE"
+    },
+    "Stingers/survival/paper/high/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "F2945CCA1AC5879193DB94F66F606E1D99ACDDCACA8382EFEA0106CA9C61CF50"
+    },
+    "Stingers/survival/paper/high/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "B858F364A4D35517BD38EF93B864A21136873F082A8E1B52EE054C89629FF5AE"
+    },
+    "Stingers/survival/paper/standard/1920x1080/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "39D479F2A1A65D18DB275BEF54EEB68F19C4A1A373325D5068EA3474D41D93AD"
+    },
+    "Stingers/survival/paper/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "09E40A60442820BDFCEBE06C9EACDE10B132EF10D893DDD601D10CFAB581DE8C"
+    },
+    "Stingers/survival/paper/standard/1920x1080/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "39D479F2A1A65D18DB275BEF54EEB68F19C4A1A373325D5068EA3474D41D93AD"
+    },
+    "Stingers/survival/paper/standard/1920x1080/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "09E40A60442820BDFCEBE06C9EACDE10B132EF10D893DDD601D10CFAB581DE8C"
+    },
+    "Stingers/survival/paper/standard/1920x1080/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "A6E1BAF1C6E97CE87DA44193186C59B63AA575F1E47231E692D87163A753EAE9"
+    },
+    "Stingers/survival/paper/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "4B98B1578FFAF814E5BA1A545E483E92B034CF79643251BF5B361B2CEB18151F"
+    },
+    "Stingers/survival/paper/standard/1920x1080/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "A6E1BAF1C6E97CE87DA44193186C59B63AA575F1E47231E692D87163A753EAE9"
+    },
+    "Stingers/survival/paper/standard/1920x1080/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "4B98B1578FFAF814E5BA1A545E483E92B034CF79643251BF5B361B2CEB18151F"
+    },
+    "Stingers/survival/paper/standard/2560x1440/1/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "F280688F308D82CC9C07F0FF4A41E76B94DCABF84D4F84E5F644FEC49725F3A0"
+    },
+    "Stingers/survival/paper/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "1D515CB2F3129DAC4362370E8851AB0D48A3AA5875F18438B5F87BDF5C12D612"
+    },
+    "Stingers/survival/paper/standard/2560x1440/1/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "F280688F308D82CC9C07F0FF4A41E76B94DCABF84D4F84E5F644FEC49725F3A0"
+    },
+    "Stingers/survival/paper/standard/2560x1440/1/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "1D515CB2F3129DAC4362370E8851AB0D48A3AA5875F18438B5F87BDF5C12D612"
+    },
+    "Stingers/survival/paper/standard/2560x1440/2/guest/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "70AB18035D612DEA90F4E8EA4CD76AF4C63D38B00D6A6BF85305F471D8505290"
+    },
+    "Stingers/survival/paper/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "12467CEAEA36233A9DD2AABFAEAEAE030D5934265883898D1A18E2A3542723CA"
+    },
+    "Stingers/survival/paper/standard/2560x1440/2/host/full": {
+      "snapshots": 40,
+      "visibleGroups": 180,
+      "treeSha256": "70AB18035D612DEA90F4E8EA4CD76AF4C63D38B00D6A6BF85305F471D8505290"
+    },
+    "Stingers/survival/paper/standard/2560x1440/2/host/reduced": {
+      "snapshots": 14,
+      "visibleGroups": 76,
+      "treeSha256": "12467CEAEA36233A9DD2AABFAEAEAE030D5934265883898D1A18E2A3542723CA"
+    },
+    "Toasts/kit/hud/high/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "8BE10E443C51BAA6DE9D3DA2B3369481B76839211D1517DFE4F5502489B159F6"
+    },
+    "Toasts/kit/hud/high/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "8BE10E443C51BAA6DE9D3DA2B3369481B76839211D1517DFE4F5502489B159F6"
+    },
+    "Toasts/kit/hud/high/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "8BE10E443C51BAA6DE9D3DA2B3369481B76839211D1517DFE4F5502489B159F6"
+    },
+    "Toasts/kit/hud/high/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "8BE10E443C51BAA6DE9D3DA2B3369481B76839211D1517DFE4F5502489B159F6"
+    },
+    "Toasts/kit/hud/high/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7BBA0BD1C4185A35D112857CCFA91584FB225A97274A11064CB65518AD78C6A6"
+    },
+    "Toasts/kit/hud/high/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7BBA0BD1C4185A35D112857CCFA91584FB225A97274A11064CB65518AD78C6A6"
+    },
+    "Toasts/kit/hud/high/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7BBA0BD1C4185A35D112857CCFA91584FB225A97274A11064CB65518AD78C6A6"
+    },
+    "Toasts/kit/hud/high/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7BBA0BD1C4185A35D112857CCFA91584FB225A97274A11064CB65518AD78C6A6"
+    },
+    "Toasts/kit/hud/high/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "FE709FBE368A60FDEB13C4DFC1399789FB442E9DF536CC03F5AEB48D24BDC5F9"
+    },
+    "Toasts/kit/hud/high/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "FE709FBE368A60FDEB13C4DFC1399789FB442E9DF536CC03F5AEB48D24BDC5F9"
+    },
+    "Toasts/kit/hud/high/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "FE709FBE368A60FDEB13C4DFC1399789FB442E9DF536CC03F5AEB48D24BDC5F9"
+    },
+    "Toasts/kit/hud/high/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "FE709FBE368A60FDEB13C4DFC1399789FB442E9DF536CC03F5AEB48D24BDC5F9"
+    },
+    "Toasts/kit/hud/high/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "EAC2CB890C3C4ECD625EC96B65353222683252101A828146F99F7F51B8E4C065"
+    },
+    "Toasts/kit/hud/high/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "EAC2CB890C3C4ECD625EC96B65353222683252101A828146F99F7F51B8E4C065"
+    },
+    "Toasts/kit/hud/high/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "EAC2CB890C3C4ECD625EC96B65353222683252101A828146F99F7F51B8E4C065"
+    },
+    "Toasts/kit/hud/high/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "EAC2CB890C3C4ECD625EC96B65353222683252101A828146F99F7F51B8E4C065"
+    },
+    "Toasts/kit/hud/standard/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D8A14B6249AEDCEC0CD388201BBD599457ABCFBE5A38167F95FA4675020AA604"
+    },
+    "Toasts/kit/hud/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D8A14B6249AEDCEC0CD388201BBD599457ABCFBE5A38167F95FA4675020AA604"
+    },
+    "Toasts/kit/hud/standard/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D8A14B6249AEDCEC0CD388201BBD599457ABCFBE5A38167F95FA4675020AA604"
+    },
+    "Toasts/kit/hud/standard/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D8A14B6249AEDCEC0CD388201BBD599457ABCFBE5A38167F95FA4675020AA604"
+    },
+    "Toasts/kit/hud/standard/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "11AB58F639A0CA3BF832C741E04742CA94AD0974848DADE5542914F59BE0FEF7"
+    },
+    "Toasts/kit/hud/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "11AB58F639A0CA3BF832C741E04742CA94AD0974848DADE5542914F59BE0FEF7"
+    },
+    "Toasts/kit/hud/standard/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "11AB58F639A0CA3BF832C741E04742CA94AD0974848DADE5542914F59BE0FEF7"
+    },
+    "Toasts/kit/hud/standard/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "11AB58F639A0CA3BF832C741E04742CA94AD0974848DADE5542914F59BE0FEF7"
+    },
+    "Toasts/kit/hud/standard/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7FB6BD7FC05B2356F38F53D46BC16DEF737376152DB88A7D68790E310F322ED8"
+    },
+    "Toasts/kit/hud/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7FB6BD7FC05B2356F38F53D46BC16DEF737376152DB88A7D68790E310F322ED8"
+    },
+    "Toasts/kit/hud/standard/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7FB6BD7FC05B2356F38F53D46BC16DEF737376152DB88A7D68790E310F322ED8"
+    },
+    "Toasts/kit/hud/standard/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "7FB6BD7FC05B2356F38F53D46BC16DEF737376152DB88A7D68790E310F322ED8"
+    },
+    "Toasts/kit/hud/standard/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0BD945BF6A6F9A6904C5A98EEFD35B34C407F2CEAB5754B1D14019B7BE01FE53"
+    },
+    "Toasts/kit/hud/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0BD945BF6A6F9A6904C5A98EEFD35B34C407F2CEAB5754B1D14019B7BE01FE53"
+    },
+    "Toasts/kit/hud/standard/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0BD945BF6A6F9A6904C5A98EEFD35B34C407F2CEAB5754B1D14019B7BE01FE53"
+    },
+    "Toasts/kit/hud/standard/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0BD945BF6A6F9A6904C5A98EEFD35B34C407F2CEAB5754B1D14019B7BE01FE53"
+    },
+    "Toasts/kit/paper/high/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "DBF7044A8414131F6416E355CD2F9BC00FEF7C763FCB2F574213B476E688CF7C"
+    },
+    "Toasts/kit/paper/high/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "DBF7044A8414131F6416E355CD2F9BC00FEF7C763FCB2F574213B476E688CF7C"
+    },
+    "Toasts/kit/paper/high/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "DBF7044A8414131F6416E355CD2F9BC00FEF7C763FCB2F574213B476E688CF7C"
+    },
+    "Toasts/kit/paper/high/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "DBF7044A8414131F6416E355CD2F9BC00FEF7C763FCB2F574213B476E688CF7C"
+    },
+    "Toasts/kit/paper/high/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "48B80BEACE20BE5BBE81EC4B35293D95E00D369D882CAA1A5FB2F0CD460FC498"
+    },
+    "Toasts/kit/paper/high/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "48B80BEACE20BE5BBE81EC4B35293D95E00D369D882CAA1A5FB2F0CD460FC498"
+    },
+    "Toasts/kit/paper/high/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "48B80BEACE20BE5BBE81EC4B35293D95E00D369D882CAA1A5FB2F0CD460FC498"
+    },
+    "Toasts/kit/paper/high/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "48B80BEACE20BE5BBE81EC4B35293D95E00D369D882CAA1A5FB2F0CD460FC498"
+    },
+    "Toasts/kit/paper/high/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D13AC6BB52D39AC91449B1A3101B8C218DF7B93490210055C9487E5B65367FA4"
+    },
+    "Toasts/kit/paper/high/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D13AC6BB52D39AC91449B1A3101B8C218DF7B93490210055C9487E5B65367FA4"
+    },
+    "Toasts/kit/paper/high/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D13AC6BB52D39AC91449B1A3101B8C218DF7B93490210055C9487E5B65367FA4"
+    },
+    "Toasts/kit/paper/high/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D13AC6BB52D39AC91449B1A3101B8C218DF7B93490210055C9487E5B65367FA4"
+    },
+    "Toasts/kit/paper/high/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "875B1411CF877A0C5AD82E49422CAFC3952B09442558A6E23719042990A99213"
+    },
+    "Toasts/kit/paper/high/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "875B1411CF877A0C5AD82E49422CAFC3952B09442558A6E23719042990A99213"
+    },
+    "Toasts/kit/paper/high/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "875B1411CF877A0C5AD82E49422CAFC3952B09442558A6E23719042990A99213"
+    },
+    "Toasts/kit/paper/high/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "875B1411CF877A0C5AD82E49422CAFC3952B09442558A6E23719042990A99213"
+    },
+    "Toasts/kit/paper/standard/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "4236D587EE336F9CF0E933E10CC011697BC920DC5B827751F68B0386E00EEE58"
+    },
+    "Toasts/kit/paper/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "4236D587EE336F9CF0E933E10CC011697BC920DC5B827751F68B0386E00EEE58"
+    },
+    "Toasts/kit/paper/standard/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "4236D587EE336F9CF0E933E10CC011697BC920DC5B827751F68B0386E00EEE58"
+    },
+    "Toasts/kit/paper/standard/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "4236D587EE336F9CF0E933E10CC011697BC920DC5B827751F68B0386E00EEE58"
+    },
+    "Toasts/kit/paper/standard/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A92FC9EA9C7474EFA0DFF8A9AEF1D96EEB60C3AE264F69EE420B39F67D9668D6"
+    },
+    "Toasts/kit/paper/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A92FC9EA9C7474EFA0DFF8A9AEF1D96EEB60C3AE264F69EE420B39F67D9668D6"
+    },
+    "Toasts/kit/paper/standard/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A92FC9EA9C7474EFA0DFF8A9AEF1D96EEB60C3AE264F69EE420B39F67D9668D6"
+    },
+    "Toasts/kit/paper/standard/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A92FC9EA9C7474EFA0DFF8A9AEF1D96EEB60C3AE264F69EE420B39F67D9668D6"
+    },
+    "Toasts/kit/paper/standard/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1BBD28B0BABBE1C4497436176E87780279F2FAA44D9B3267410426455EF82A2A"
+    },
+    "Toasts/kit/paper/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1BBD28B0BABBE1C4497436176E87780279F2FAA44D9B3267410426455EF82A2A"
+    },
+    "Toasts/kit/paper/standard/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1BBD28B0BABBE1C4497436176E87780279F2FAA44D9B3267410426455EF82A2A"
+    },
+    "Toasts/kit/paper/standard/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1BBD28B0BABBE1C4497436176E87780279F2FAA44D9B3267410426455EF82A2A"
+    },
+    "Toasts/kit/paper/standard/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "C6F04C3BB9099158E479A0B8EA167EE8A4C79AA5BB3ED0B9A3D4566A9851139F"
+    },
+    "Toasts/kit/paper/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "C6F04C3BB9099158E479A0B8EA167EE8A4C79AA5BB3ED0B9A3D4566A9851139F"
+    },
+    "Toasts/kit/paper/standard/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "C6F04C3BB9099158E479A0B8EA167EE8A4C79AA5BB3ED0B9A3D4566A9851139F"
+    },
+    "Toasts/kit/paper/standard/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "C6F04C3BB9099158E479A0B8EA167EE8A4C79AA5BB3ED0B9A3D4566A9851139F"
+    },
+    "Toasts/survival/hud/high/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0C0B07FF1DD2C1754B18419A43500C7C7D2946FAF3607B809058DFAFC320A2FA"
+    },
+    "Toasts/survival/hud/high/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0C0B07FF1DD2C1754B18419A43500C7C7D2946FAF3607B809058DFAFC320A2FA"
+    },
+    "Toasts/survival/hud/high/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0C0B07FF1DD2C1754B18419A43500C7C7D2946FAF3607B809058DFAFC320A2FA"
+    },
+    "Toasts/survival/hud/high/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "0C0B07FF1DD2C1754B18419A43500C7C7D2946FAF3607B809058DFAFC320A2FA"
+    },
+    "Toasts/survival/hud/high/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D7A11AA0511CB666C3D84BE889F216F11C7E3B32097728DE072FB0673F4522B9"
+    },
+    "Toasts/survival/hud/high/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D7A11AA0511CB666C3D84BE889F216F11C7E3B32097728DE072FB0673F4522B9"
+    },
+    "Toasts/survival/hud/high/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D7A11AA0511CB666C3D84BE889F216F11C7E3B32097728DE072FB0673F4522B9"
+    },
+    "Toasts/survival/hud/high/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D7A11AA0511CB666C3D84BE889F216F11C7E3B32097728DE072FB0673F4522B9"
+    },
+    "Toasts/survival/hud/high/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "106B35B88F6D795B536F5EF66D184E90FAEFB0C8DC0F64BA6F1F7D9028A2A548"
+    },
+    "Toasts/survival/hud/high/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "106B35B88F6D795B536F5EF66D184E90FAEFB0C8DC0F64BA6F1F7D9028A2A548"
+    },
+    "Toasts/survival/hud/high/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "106B35B88F6D795B536F5EF66D184E90FAEFB0C8DC0F64BA6F1F7D9028A2A548"
+    },
+    "Toasts/survival/hud/high/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "106B35B88F6D795B536F5EF66D184E90FAEFB0C8DC0F64BA6F1F7D9028A2A548"
+    },
+    "Toasts/survival/hud/high/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "51966C4118C977F93D952F95E333D0C8E42549D7087FB4391920F2D082E0AB48"
+    },
+    "Toasts/survival/hud/high/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "51966C4118C977F93D952F95E333D0C8E42549D7087FB4391920F2D082E0AB48"
+    },
+    "Toasts/survival/hud/high/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "51966C4118C977F93D952F95E333D0C8E42549D7087FB4391920F2D082E0AB48"
+    },
+    "Toasts/survival/hud/high/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "51966C4118C977F93D952F95E333D0C8E42549D7087FB4391920F2D082E0AB48"
+    },
+    "Toasts/survival/hud/standard/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "986A0B7EC9006E7606A2901DA4E932DE30F338D2488DA8A2F0B621DEB9EFFFB3"
+    },
+    "Toasts/survival/hud/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "986A0B7EC9006E7606A2901DA4E932DE30F338D2488DA8A2F0B621DEB9EFFFB3"
+    },
+    "Toasts/survival/hud/standard/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "986A0B7EC9006E7606A2901DA4E932DE30F338D2488DA8A2F0B621DEB9EFFFB3"
+    },
+    "Toasts/survival/hud/standard/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "986A0B7EC9006E7606A2901DA4E932DE30F338D2488DA8A2F0B621DEB9EFFFB3"
+    },
+    "Toasts/survival/hud/standard/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "447BA04235F7619A1EE3C741ECBAFC0F78272EC086C44189A47250DDDECA2905"
+    },
+    "Toasts/survival/hud/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "447BA04235F7619A1EE3C741ECBAFC0F78272EC086C44189A47250DDDECA2905"
+    },
+    "Toasts/survival/hud/standard/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "447BA04235F7619A1EE3C741ECBAFC0F78272EC086C44189A47250DDDECA2905"
+    },
+    "Toasts/survival/hud/standard/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "447BA04235F7619A1EE3C741ECBAFC0F78272EC086C44189A47250DDDECA2905"
+    },
+    "Toasts/survival/hud/standard/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "52E12CF10E81381AA2CEF2CDC815C53801618E6B9EF4E1F9635A75D0C524D49A"
+    },
+    "Toasts/survival/hud/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "52E12CF10E81381AA2CEF2CDC815C53801618E6B9EF4E1F9635A75D0C524D49A"
+    },
+    "Toasts/survival/hud/standard/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "52E12CF10E81381AA2CEF2CDC815C53801618E6B9EF4E1F9635A75D0C524D49A"
+    },
+    "Toasts/survival/hud/standard/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "52E12CF10E81381AA2CEF2CDC815C53801618E6B9EF4E1F9635A75D0C524D49A"
+    },
+    "Toasts/survival/hud/standard/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D2A6E85379F8BF70A8F1B65278F2CA5E7C02C8A3C189CF33320DD75B24FD5E69"
+    },
+    "Toasts/survival/hud/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D2A6E85379F8BF70A8F1B65278F2CA5E7C02C8A3C189CF33320DD75B24FD5E69"
+    },
+    "Toasts/survival/hud/standard/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D2A6E85379F8BF70A8F1B65278F2CA5E7C02C8A3C189CF33320DD75B24FD5E69"
+    },
+    "Toasts/survival/hud/standard/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "D2A6E85379F8BF70A8F1B65278F2CA5E7C02C8A3C189CF33320DD75B24FD5E69"
+    },
+    "Toasts/survival/paper/high/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "40837209B0FEF6AC95A3A037A4E579294DFB140ABD4D09350B26E4DE1B1E0609"
+    },
+    "Toasts/survival/paper/high/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "40837209B0FEF6AC95A3A037A4E579294DFB140ABD4D09350B26E4DE1B1E0609"
+    },
+    "Toasts/survival/paper/high/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "40837209B0FEF6AC95A3A037A4E579294DFB140ABD4D09350B26E4DE1B1E0609"
+    },
+    "Toasts/survival/paper/high/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "40837209B0FEF6AC95A3A037A4E579294DFB140ABD4D09350B26E4DE1B1E0609"
+    },
+    "Toasts/survival/paper/high/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "257EB96F8B540CEA650C6D670CCF42B9293AB28543BE6B407CAE7DB080B5FFFA"
+    },
+    "Toasts/survival/paper/high/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "257EB96F8B540CEA650C6D670CCF42B9293AB28543BE6B407CAE7DB080B5FFFA"
+    },
+    "Toasts/survival/paper/high/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "257EB96F8B540CEA650C6D670CCF42B9293AB28543BE6B407CAE7DB080B5FFFA"
+    },
+    "Toasts/survival/paper/high/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "257EB96F8B540CEA650C6D670CCF42B9293AB28543BE6B407CAE7DB080B5FFFA"
+    },
+    "Toasts/survival/paper/high/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "5EA63C77C4B19AA1456F26C1AC1342F2C1697AA31102A9FC219236A339BA9214"
+    },
+    "Toasts/survival/paper/high/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "5EA63C77C4B19AA1456F26C1AC1342F2C1697AA31102A9FC219236A339BA9214"
+    },
+    "Toasts/survival/paper/high/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "5EA63C77C4B19AA1456F26C1AC1342F2C1697AA31102A9FC219236A339BA9214"
+    },
+    "Toasts/survival/paper/high/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "5EA63C77C4B19AA1456F26C1AC1342F2C1697AA31102A9FC219236A339BA9214"
+    },
+    "Toasts/survival/paper/high/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "06E2BF9328429D26D1FFA55F47E3CFA349B562153283D2C378FCF600F141110A"
+    },
+    "Toasts/survival/paper/high/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "06E2BF9328429D26D1FFA55F47E3CFA349B562153283D2C378FCF600F141110A"
+    },
+    "Toasts/survival/paper/high/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "06E2BF9328429D26D1FFA55F47E3CFA349B562153283D2C378FCF600F141110A"
+    },
+    "Toasts/survival/paper/high/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "06E2BF9328429D26D1FFA55F47E3CFA349B562153283D2C378FCF600F141110A"
+    },
+    "Toasts/survival/paper/standard/1920x1080/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "612C598FAF43017961425E52A8479B001D2C23BE369C8EB093E6ADC7FEAB234E"
+    },
+    "Toasts/survival/paper/standard/1920x1080/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "612C598FAF43017961425E52A8479B001D2C23BE369C8EB093E6ADC7FEAB234E"
+    },
+    "Toasts/survival/paper/standard/1920x1080/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "612C598FAF43017961425E52A8479B001D2C23BE369C8EB093E6ADC7FEAB234E"
+    },
+    "Toasts/survival/paper/standard/1920x1080/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "612C598FAF43017961425E52A8479B001D2C23BE369C8EB093E6ADC7FEAB234E"
+    },
+    "Toasts/survival/paper/standard/1920x1080/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "746370B98C56E264783100887934BF7CD4DD2F2954C6C78958D5C2281AE8F3DA"
+    },
+    "Toasts/survival/paper/standard/1920x1080/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "746370B98C56E264783100887934BF7CD4DD2F2954C6C78958D5C2281AE8F3DA"
+    },
+    "Toasts/survival/paper/standard/1920x1080/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "746370B98C56E264783100887934BF7CD4DD2F2954C6C78958D5C2281AE8F3DA"
+    },
+    "Toasts/survival/paper/standard/1920x1080/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "746370B98C56E264783100887934BF7CD4DD2F2954C6C78958D5C2281AE8F3DA"
+    },
+    "Toasts/survival/paper/standard/2560x1440/1/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1FB6D3325136AD9A66234E08B03513211BCDF19D19070AC936AE92FC71EB3780"
+    },
+    "Toasts/survival/paper/standard/2560x1440/1/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1FB6D3325136AD9A66234E08B03513211BCDF19D19070AC936AE92FC71EB3780"
+    },
+    "Toasts/survival/paper/standard/2560x1440/1/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1FB6D3325136AD9A66234E08B03513211BCDF19D19070AC936AE92FC71EB3780"
+    },
+    "Toasts/survival/paper/standard/2560x1440/1/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "1FB6D3325136AD9A66234E08B03513211BCDF19D19070AC936AE92FC71EB3780"
+    },
+    "Toasts/survival/paper/standard/2560x1440/2/guest/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A12D1F11D58A7F35CD3D5ABD3256F23B4BADE2FB01EEB425488D5F8065F4D52A"
+    },
+    "Toasts/survival/paper/standard/2560x1440/2/guest/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A12D1F11D58A7F35CD3D5ABD3256F23B4BADE2FB01EEB425488D5F8065F4D52A"
+    },
+    "Toasts/survival/paper/standard/2560x1440/2/host/full": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A12D1F11D58A7F35CD3D5ABD3256F23B4BADE2FB01EEB425488D5F8065F4D52A"
+    },
+    "Toasts/survival/paper/standard/2560x1440/2/host/reduced": {
+      "snapshots": 3,
+      "visibleGroups": 28,
+      "treeSha256": "A12D1F11D58A7F35CD3D5ABD3256F23B4BADE2FB01EEB425488D5F8065F4D52A"
+    }
+  }
+}

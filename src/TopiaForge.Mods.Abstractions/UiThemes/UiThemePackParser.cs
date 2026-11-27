@@ -12,7 +12,7 @@ namespace TopiaForge.Mods
         internal const int FoundationComponentCount = (int)UiThemeTarget.Button;
         private const int ControlComponentCount = (int)UiThemeTarget.StatBar;
         internal static readonly string[] Targets =
-            { "card", "box", "badge", "pips", "button", "input", "tabs", "tooltip", "statBar", "keyGlyph", "actionSlot" };
+            { "card", "box", "badge", "pips", "button", "input", "tabs", "tooltip", "statBar", "keyGlyph", "actionSlot", "overlay", "stinger" };
         internal static readonly string[] Radii = { "none", "small", "medium", "control", "card", "pill" };
         internal static readonly string[] Borders = { "none", "thin", "standard", "strong" };
         internal static readonly string[] Shadows = { "none", "small", "card" };
@@ -84,10 +84,9 @@ namespace TopiaForge.Mods
             var styles = ParseStyles(pack);
             foreach (var style in styles.Values)
             {
-                if (style.Target != UiThemeTarget.ActionSlot) continue;
+                if (style.Target is not (UiThemeTarget.ActionSlot or UiThemeTarget.Stinger)) continue;
                 minimumWireVersion = UiWireCodec.ControlsContractVersion;
-                canonicalComponentCount = Math.Max(canonicalComponentCount, (int)UiThemeTarget.ActionSlot + 1);
-                break;
+                canonicalComponentCount = Math.Max(canonicalComponentCount, (int)style.Target + 1);
             }
             var descriptor = new UiThemeDescriptor(id, paper, hud, ParseTypography(pack.Object("typography"), fonts, defaults),
                 ParseShape(pack.Object("shape"), defaults?.Shape), ParseMotion(pack.Object("motion"), defaults?.Motion),
@@ -253,12 +252,20 @@ namespace TopiaForge.Mods
                 if (defaults != null && index >= FoundationComponentCount)
                 {
                     minimumWireVersion = UiWireCodec.ControlsContractVersion;
-                    canonicalComponentCount = Math.Max(canonicalComponentCount, Math.Max(ControlComponentCount, index + 1));
+                    if (target is not (UiThemeTarget.Overlay or UiThemeTarget.Stinger))
+                        canonicalComponentCount = Math.Max(canonicalComponentCount, Math.Max(ControlComponentCount, index + 1));
                 }
 
                 var component = value.Object(name);
                 component.Allow("radius", "border", "shadow");
-                components.Add(target, ParseComponent(component, requireComplete: true));
+                var resolved = ParseComponent(component, requireComplete: true);
+                if (target is (UiThemeTarget.Overlay or UiThemeTarget.Stinger) && defaults != null)
+                {
+                    var preset = defaults.Components[target];
+                    if (resolved.Radius != preset.Radius || resolved.Border != preset.Border || resolved.Shadow != preset.Shadow)
+                        canonicalComponentCount = Math.Max(canonicalComponentCount, index + 1);
+                }
+                components.Add(target, resolved);
             }
 
             return components;
@@ -274,7 +281,7 @@ namespace TopiaForge.Mods
                 style.Allow("id", "target", "radius", "border", "shadow", "fill");
                 var id = UiThemeData.Id(style.RequiredString("id"), style.At("id"));
                 var target = (UiThemeTarget)ReadEnum(style, "target", Targets);
-                if ((int)target >= FoundationComponentCount && target != UiThemeTarget.ActionSlot)
+                if ((int)target >= FoundationComponentCount && target is not (UiThemeTarget.ActionSlot or UiThemeTarget.Stinger))
                     throw UiThemeDataException.Invalid(style.At("target"), "This component does not support named styles.");
                 var fill = style.OptionalString("fill", nullable: true);
                 UiPaintRole? role = fill == null ? null : (UiPaintRole)EnumIndex(fill, style.At("fill"), PaintRoles);

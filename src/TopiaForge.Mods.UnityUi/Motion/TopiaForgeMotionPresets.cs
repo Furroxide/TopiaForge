@@ -29,6 +29,42 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeTween.FadeTo(window, 1f, 0f, duration, ResolvePackEase(motion, TopiaForgeEase.OutQuad), onDone);
         }
 
+        internal static void OverlayIn(TopiaForgeWidget scrim, TopiaForgeWidget panel, float fromAlpha, float fromY)
+        {
+            var motion = panel.ResolvedTheme.Descriptor?.Motion;
+            var duration = motion.HasValue ? motion.Value.BaseMs / 1000f : TopiaForgeTokens.DurationBase;
+            var ease = ResolvePackEase(motion, TopiaForgeEase.OutCubic);
+            var position = panel.Rect.anchoredPosition;
+            position.y = fromY;
+            panel.Rect.anchoredPosition = position;
+            TopiaForgeTween.FadeTo(scrim, fromAlpha, 1f, duration, ease, null, skipAtZeroIntensity: true);
+            TopiaForgeTween.MoveY(panel, fromY, 0f, duration, ease, null, skipAtZeroIntensity: true);
+        }
+
+        internal static void OverlayOut(TopiaForgeWidget overlay, Action onDone)
+        {
+            var motion = overlay.ResolvedTheme.Descriptor?.Motion;
+            var duration = motion.HasValue ? motion.Value.FastMs / 1000f : TopiaForgeTokens.DurationFast;
+            var alpha = overlay.EnsureCanvasGroup().alpha;
+            TopiaForgeTween.FadeTo(overlay, alpha, 0f, duration, ResolvePackEase(motion, TopiaForgeEase.OutQuad), onDone,
+                skipAtZeroIntensity: true);
+        }
+
+        internal static void StingerIn(TopiaForgeWidget stinger)
+        {
+            var motion = stinger.ResolvedTheme.Descriptor?.Motion;
+            var duration = motion.HasValue ? motion.Value.BaseMs / 1000f : TopiaForgeTokens.DurationBase;
+            TopiaForgeTween.ScaleTo(stinger, 0.92f, 1f, duration, TopiaForgeEase.OutBack, null, skipAtZeroIntensity: true);
+        }
+
+        internal static void StingerOut(TopiaForgeWidget stinger, Action onDone)
+        {
+            var motion = stinger.ResolvedTheme.Descriptor?.Motion;
+            var duration = motion.HasValue ? motion.Value.SlowMs / 1000f : TopiaForgeTokens.DurationSlow;
+            stinger.Rect.localScale = Vector3.one;
+            TopiaForgeTween.FadeTo(stinger, 1f, 0f, duration, TopiaForgeEase.OutQuad, onDone, skipAtZeroIntensity: true);
+        }
+
         /// <summary>Modal enter: dialog pops with OutBack; pair with a backdrop fade.</summary>
         public static void ModalIn(TopiaForgeWidget dialog)
         {
@@ -43,10 +79,13 @@ namespace TopiaForge.Mods.UnityUi
         }
 
         /// <summary>Toast enter: slide in from the right + fade.</summary>
-        public static void ToastIn(TopiaForgeWidget toast, float restingX)
+        public static void ToastIn(TopiaForgeWidget toast, float restingX) => ToastIn(toast, restingX, null, 1f);
+
+        internal static void ToastIn(TopiaForgeWidget toast, float restingX, UiHost? viewer, float scale)
         {
-            TopiaForgeTween.FadeTo(toast, 0f, 1f, TopiaForgeTokens.DurationBase);
-            TopiaForgeTween.MoveX(toast, restingX + 40f, restingX, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutCubic);
+            TopiaForgeTween.FadeTo(toast, 0f, 1f, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutQuad,
+                null, skipAtZeroIntensity: true, viewer);
+            TopiaForgeTween.MoveX(toast, restingX + 40f * scale, restingX, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutCubic, viewer);
         }
 
         /// <summary>
@@ -54,10 +93,13 @@ namespace TopiaForge.Mods.UnityUi
         /// reduced motion it runs at once, inside this call, so the slide starts first: started after it, the slide would push
         /// that next toast aside.
         /// </summary>
-        public static void ToastOut(TopiaForgeWidget toast, float restingX, Action onDone)
+        public static void ToastOut(TopiaForgeWidget toast, float restingX, Action onDone) => ToastOut(toast, restingX, onDone, null, 1f);
+
+        internal static void ToastOut(TopiaForgeWidget toast, float restingX, Action onDone, UiHost? viewer, float scale)
         {
-            TopiaForgeTween.MoveX(toast, restingX, restingX + 40f, TopiaForgeTokens.DurationBase, TopiaForgeEase.InQuad);
-            TopiaForgeTween.FadeTo(toast, 1f, 0f, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutQuad, onDone);
+            TopiaForgeTween.MoveX(toast, restingX, restingX + 40f * scale, TopiaForgeTokens.DurationBase, TopiaForgeEase.InQuad, viewer);
+            TopiaForgeTween.FadeTo(toast, 1f, 0f, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutQuad,
+                onDone, skipAtZeroIntensity: true, viewer);
         }
 
         /// <summary>Banner punch: scale 1.35 → 1 (HUD wave banners).</summary>

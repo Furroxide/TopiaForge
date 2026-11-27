@@ -18,7 +18,7 @@ namespace TopiaForge.Mods.Testing
     {
         internal UiCapturedNode(string path, string? id, string kind, UiCaptureRect bounds,
             UiCaptureNodeContent content, UiCaptureNodePaint paint, string themeId, bool usedFallback,
-            bool isRendered, bool clipped, bool occluded)
+            bool isRendered, bool clipped, bool occluded, string? announcement = null, float? fillOpacity = null)
         {
             Path = path;
             Id = id;
@@ -45,6 +45,8 @@ namespace TopiaForge.Mods.Testing
             EffectivePaintRole = paint.EffectivePaintRole;
             State = content.State;
             KeyLabel = content.KeyLabel;
+            Announcement = announcement;
+            FillOpacity = fillOpacity;
             RemainingSeconds = content.RemainingSeconds;
             Fraction = content.Fraction;
             CornerRadiusPixels = paint.CornerRadius;
@@ -109,6 +111,9 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Gets the visible input binding label when the group represents an action.</summary>
         [RequiresTopiaForge(UiKitRelease.K2)]
         public string? KeyLabel { get; }
+        /// <summary>Gets the announced text when the group represents a stinger.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public string? Announcement { get; }
         /// <summary>Gets the resolved ink as <c>#RRGGBB</c>, when applicable.</summary>
         public string? InkColor { get; }
         /// <summary>Gets the resolved fill as <c>#RRGGBB</c>, when applicable.</summary>
@@ -132,6 +137,7 @@ namespace TopiaForge.Mods.Testing
 
         internal UiCaptureNodeFlags Flags { get; }
         internal float ExpectedTextHeight { get; }
+        internal float? FillOpacity { get; }
     }
 
     [Flags]

@@ -41,6 +41,8 @@ namespace TopiaForge.ModManager
             UiThemeDescriptor? declared = null)
         {
             if (remote != (envelope != null) || !MatchesOwner(owner, remote, envelope?.OwnerPackageId)) return null;
+            var presentation = MatchPresentation(owner, envelope, request, declared);
+            if (presentation != null) return presentation;
             if (request.Kind != UiSurfaceKind.Window && request.Kind != UiSurfaceKind.Hud) return null;
             if (remote && request.Theme != null) return null;
             var transport = remote || owner == RemoteFixtureOwner;

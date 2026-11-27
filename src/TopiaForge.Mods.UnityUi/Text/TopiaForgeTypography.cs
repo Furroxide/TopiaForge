@@ -12,6 +12,11 @@ namespace TopiaForge.Mods.UnityUi
             var safeStyle = SafeStyle(style);
             var role = descriptor.GetText(safeStyle);
             var font = theme.RegisteredFont?.Invoke(safeStyle) ?? TopiaForgeFonts.ForThemeRole(role.Font, style) ?? text.font;
+            return Apply(text, role, font, uiScale);
+        }
+
+        internal static bool Apply(TMP_Text text, UiThemeTextRole role, TMP_FontAsset? font, float uiScale)
+        {
             var face = font == null ? default : font.faceInfo;
             var metrics = TopiaForgeTypographyMetrics.Resolve(role, uiScale, face.pointSize, face.ascentLine, face.descentLine, face.scale);
             if (font != null && text.font != font) text.font = font;

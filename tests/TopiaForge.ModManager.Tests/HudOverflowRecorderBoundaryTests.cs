@@ -58,16 +58,18 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed partial class UiGalleryNativeTree
                 {
                     private readonly RectTransform surface;
-                    private readonly (RectTransform transform, bool _) canvas;
+                    private readonly Canvas canvas;
                     private readonly List<Observation> observations = new();
                     private static readonly UiCaptureNodeContent EmptyContent = new("", "", 0f, 0f, 0);
                     private bool onlyUnavailableImages;
                     private bool countdownFixture;
                     internal float? SurfaceAlpha { get; private set; }
+                    private int? PresentationOrder { get; set; }
+                    private bool? PresentationTakesInput { get; set; }
 
                     private UiGalleryNativeTree()
                     {
-                        canvas = (new RectTransform(), false);
+                        canvas = new Canvas();
                         surface = new RectTransform(canvas.transform);
                     }
 
@@ -155,14 +157,26 @@ namespace TopiaForge.ModManager.Tests
                     private void Add(string path, string id, string kind, RectTransform rect, UiCaptureNodeContent content,
                         UiCaptureNodePaint paint, bool localFallback = false, bool kitPaint = false) { }
                     private bool Text(string path, string? id, string kind, TMP_Text? label, string authored, UiTextStyle style,
-                        UiThemeColor? fill, UiCaptureNodeFlags flags, bool localFallback = false, bool kitPaint = false) => true;
+                        UiThemeColor? fill, UiCaptureNodeFlags flags = UiCaptureNodeFlags.None,
+                        bool localFallback = false, bool kitPaint = false) => true;
                 }
 
                 internal sealed class TopiaForgeGraphConnections { internal bool IsOpen => false; }
+                internal static class UiGalleryCaptureFixture
+                {
+                    internal const string PresentationHudId = "gallery-presentation-hud";
+                }
             }
 
             namespace UnityEngine
             {
+                internal sealed class Canvas
+                {
+                    internal readonly RectTransform transform = new RectTransform();
+                    internal int sortingOrder => 0;
+                    internal T? GetComponent<T>() where T : class => null;
+                }
+
                 internal sealed class RectTransform(RectTransform? parent = null, object? component = null)
                 {
                     internal readonly RectTransform? parent = parent;
@@ -175,7 +189,11 @@ namespace TopiaForge.ModManager.Tests
                 }
             }
 
-            namespace UnityEngine.UI { internal sealed class Graphic { } }
+            namespace UnityEngine.UI
+            {
+                internal sealed class Graphic { }
+                internal sealed class GraphicRaycaster { internal bool isActiveAndEnabled => false; }
+            }
             namespace TMPro
             {
                 internal sealed class TMP_Text

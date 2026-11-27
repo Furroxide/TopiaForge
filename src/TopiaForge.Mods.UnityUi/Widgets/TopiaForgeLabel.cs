@@ -306,9 +306,19 @@ namespace TopiaForge.Mods.UnityUi
                 ? theme.ToneColor(tone) : theme.TextToneColor(tone);
         }
 
+        private (UiThemeTextRole Role, TMP_FontAsset? Font)? frozenTypeface;
+
+        internal void FreezeTypeface(UiThemeTextRole role, TMP_FontAsset? font)
+        {
+            frozenTypeface = (role, font ?? TopiaForgeFonts.ForThemeRole(role.Font, style) ?? text.font);
+            ApplyTypeface(Theme);
+        }
+
         private void ApplyTypeface(TopiaForgeResolvedTheme theme)
         {
-            var expected = TopiaForgeTypography.Apply(text, theme, style, Host.EffectiveUiScale);
+            var expected = frozenTypeface is { } frozen
+                ? TopiaForgeTypography.Apply(text, frozen.Role, frozen.Font, Host.EffectiveUiScale)
+                : TopiaForgeTypography.Apply(text, theme, style, Host.EffectiveUiScale);
             if (uppercase != expected)
             {
                 uppercase = expected;

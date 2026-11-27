@@ -13,6 +13,7 @@ namespace TopiaForge.Mods.Testing
             string? worldFamilyId = null, CancellationToken cancellationToken = default)
         {
             Context = context ?? throw new ArgumentNullException(nameof(context));
+            if (context is FakeModContext fake) fake.Ui.FollowGamemodeStingers(fake);
             World = world ?? throw new ArgumentNullException(nameof(world));
             SessionId = sessionId; TargetId = targetId; GamemodeId = gamemodeId;
             WorldId = worldId; WorldFamilyId = worldFamilyId; CancellationToken = cancellationToken;

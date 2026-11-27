@@ -52,6 +52,8 @@ namespace TopiaForge.Mods.UnityUi
                 }
             }
 
+            TeardownOverlayForLayer(root);
+
             var rootTransform = TransformOf(root);
             for (var index = widgets.Count - 1; index >= 0; index--)
             {
@@ -83,6 +85,84 @@ namespace TopiaForge.Mods.UnityUi
             foreach (var notify in closed)
             {
                 TopiaForgeCallbacks.Invoke(notify, "Lost canvas Closed");
+            }
+        }
+
+        private void DestroySubtree(GameObject root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            for (var index = modalInstances.Count - 1; index >= 0; index--)
+            {
+                var modalRoot = modalInstances[index].CanvasRoot;
+                if (modalRoot == root || modalRoot != null && modalRoot.transform.IsChildOf(root.transform))
+                {
+                    modalInstances[index].Teardown();
+                }
+            }
+
+            for (var index = windows.Count - 1; index >= 0; index--)
+            {
+                var window = windows[index];
+                if (window.Go == root || window.Go != null && window.Go.transform.IsChildOf(root.transform))
+                {
+                    window.Teardown();
+                    windows.RemoveAt(index);
+                }
+            }
+
+            for (var index = fullscreenTools.Count - 1; index >= 0; index--)
+            {
+                var fullscreen = fullscreenTools[index];
+                if (fullscreen.Go == root || fullscreen.Go != null && fullscreen.Go.transform.IsChildOf(root.transform))
+                {
+                    fullscreen.Teardown();
+                    fullscreenTools.RemoveAt(index);
+                }
+            }
+
+            TeardownOverlayForLayer(root);
+
+            for (var index = widgets.Count - 1; index >= 0; index--)
+            {
+                var widget = widgets[index];
+                if (widget.Go != root && (widget.Go == null || !widget.Go.transform.IsChildOf(root.transform)))
+                {
+                    continue;
+                }
+
+                TopiaForgeTween.Cancel(widget);
+                if (widget is ITopiaForgeThemeAware aware)
+                {
+                    themeAware.Remove(aware);
+                }
+
+                widgets.RemoveAt(index);
+            }
+
+            var layerIndex = layerRoots.IndexOf(root);
+            if (layerIndex >= 0)
+            {
+                TopiaForgeLayers.Release(root);
+                layerRoots.RemoveAt(layerIndex);
+                scalers.RemoveAt(layerIndex);
+            }
+
+            UnityEngine.Object.Destroy(root);
+        }
+
+        private void TeardownOverlayForLayer(GameObject root)
+        {
+            for (var index = overlays.Count - 1; index >= 0; index--)
+            {
+                var overlay = overlays[index];
+                if (!ReferenceEquals(overlay.CanvasRoot, root)) continue;
+                overlays.RemoveAt(index);
+                overlay.Teardown();
+                return;
             }
         }
 

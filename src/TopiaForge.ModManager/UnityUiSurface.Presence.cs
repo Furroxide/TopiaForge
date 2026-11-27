@@ -113,8 +113,10 @@ namespace TopiaForge.ModManager
                 retainedGraphs = new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);
                 body = null;
                 DetachNativeClosed();
+                var retiringOverlay = overlay;
                 window = null;
                 fullscreen = null;
+                overlay = null;
                 Dismissed = null;
                 placement?.Remove(dockHandle);
                 placement = null;
@@ -123,12 +125,18 @@ namespace TopiaForge.ModManager
                 var lease = Interlocked.Exchange(ref lifetimeLease, null);
                 try
                 {
-                    currentWidget?.Destroy();
+                    if (retiringOverlay != null)
+                    {
+                        retiringOverlay.Retire(ReleaseViewResources);
+                    }
+                    else
+                    {
+                        try { currentWidget?.Destroy(); }
+                        finally { ReleaseViewResources(); }
+                    }
                 }
                 finally
                 {
-                    ReleaseThemeResources();
-                    ReleaseArtwork();
                     try
                     {
                         releaseOwner?.Invoke(this);
@@ -138,6 +146,12 @@ namespace TopiaForge.ModManager
                         lease?.Dispose();
                     }
                 }
+            }
+
+            private void ReleaseViewResources()
+            {
+                try { ReleaseThemeResources(); }
+                finally { ReleaseArtwork(); }
             }
 
             private void HandleNativeClosed()
@@ -181,6 +195,10 @@ namespace TopiaForge.ModManager
                 {
                     fullscreen.Show();
                 }
+                else if (overlay != null)
+                {
+                    overlay.Show();
+                }
                 else if (widget != null)
                 {
                     widget.SetShown(true);
@@ -199,6 +217,10 @@ namespace TopiaForge.ModManager
                 else if (fullscreen != null)
                 {
                     fullscreen.Close();
+                }
+                else if (overlay != null)
+                {
+                    overlay.Close();
                 }
                 else if (widget != null)
                 {
@@ -222,6 +244,10 @@ namespace TopiaForge.ModManager
                 else if (fullscreen != null)
                 {
                     fullscreen.Closed -= closed;
+                }
+                else if (overlay != null)
+                {
+                    overlay.Closed -= closed;
                 }
             }
 

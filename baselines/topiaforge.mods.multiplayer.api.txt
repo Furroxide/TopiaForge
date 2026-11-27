@@ -130,6 +130,7 @@ type public interface TopiaForge.Mods.IPlayerUi
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowToast(System.String message, TopiaForge.Mods.UiTone tone = 0 (Neutral))
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
+  method [virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowStinger(TopiaForge.Mods.UiStingerRequest request) [requires-topiaforge="0.2.0"]
 
 type public interface TopiaForge.Mods.IPresentationEventRegistration : System.IDisposable
   property System.Boolean IsActive { get [abstract,virtual,newslot]; }

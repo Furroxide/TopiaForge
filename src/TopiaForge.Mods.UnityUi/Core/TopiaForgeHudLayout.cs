@@ -155,6 +155,28 @@ namespace TopiaForge.Mods.UnityUi
         public bool TryGetPosition(int handle, out float x, out float y) =>
             TryGetPosition(handle, includeTarget: false, out x, out y);
 
+        internal float GetShownTop(TopiaForgeCorner corner)
+        {
+            var end = 0f;
+            var gap = 0f;
+            var centered = corner is TopiaForgeCorner.Left or TopiaForgeCorner.Right;
+            foreach (var entry in entries)
+            {
+                if (!entry.Shown || entry.Corner != corner) continue;
+                PlaceNext(entry, centered, ref end, ref gap);
+            }
+            return end;
+        }
+
+        private static float PlaceNext(Entry entry, bool centered, ref float end, ref float gap)
+        {
+            var start = end + gap;
+            if (!centered) start = Math.Max(start, entry.PhysicalMargin);
+            end = start + entry.Height * entry.UiScale;
+            gap = entry.PhysicalGap;
+            return start;
+        }
+
         internal bool TryGetProspectivePosition(int handle, out float x, out float y) =>
             TryGetPosition(handle, includeTarget: true, out x, out y);
 
@@ -181,11 +203,8 @@ namespace TopiaForge.Mods.UnityUi
                     continue;
                 }
 
-                var start = end + gap;
-                if (!centered) start = Math.Max(start, candidate.PhysicalMargin);
+                var start = PlaceNext(candidate, centered, ref end, ref gap);
                 if (other == index) offset = start;
-                end = start + candidate.Height * candidate.UiScale;
-                gap = candidate.PhysicalGap;
             }
 
             x = HorizontalSign(entry.Corner) * entry.PhysicalMargin / entry.UiScale;

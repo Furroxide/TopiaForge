@@ -28,6 +28,7 @@ namespace TopiaForge.MultiplayerAcceptance
         private readonly int first;
         private readonly int limit;
         private readonly bool retainCountdown;
+        private readonly GalleryRemotePresentation? presentation;
         private int next;
         private IUiSurface? localSurface;
         private IUiSurface? remoteSurface;
@@ -42,6 +43,8 @@ namespace TopiaForge.MultiplayerAcceptance
             this.session = session;
             retainCountdown = context.Files.DataFileExists(RetainedCountdownOptInFile);
             var statusOnly = retainCountdown || context.Files.DataFileExists(StatusOnlyOptInFile);
+            if (!statusOnly && context.Files.DataFileExists(GalleryRemotePresentation.OptInFile))
+                presentation = new GalleryRemotePresentation(context, session);
             first = retainCountdown ? ActionStart - 1 : statusOnly ? StatusStart : 0;
             limit = statusOnly ? ActionStart : VariantCount;
             next = first;
@@ -80,12 +83,20 @@ namespace TopiaForge.MultiplayerAcceptance
 
         private void ShowNext()
         {
+            if (context.Lifetime.IsStopping) return;
             var snapshot = session.Snapshot;
             var guestId = FindGuest(snapshot);
             if (!guestId.HasValue || !session.Players.TryGet(guestId.Value, out var guest) || guest == null ||
-                !guest.IsPresent || guest.IsLocal)
+                !guest.Id.Equals(guestId.Value) || !guest.IsPresent || guest.IsLocal)
             {
+                presentation?.Observe(snapshot);
                 context.Logger.Warn("The Gallery preview needs a ready listen host and exactly one connected guest.");
+                return;
+            }
+
+            if (presentation != null)
+            {
+                presentation.ShowNext(snapshot, guest);
                 return;
             }
 
@@ -172,6 +183,12 @@ namespace TopiaForge.MultiplayerAcceptance
 
         private void Observe(MultiplayerSessionSnapshot snapshot)
         {
+            if (presentation != null)
+            {
+                presentation.Observe(snapshot);
+                return;
+            }
+
             if (!activeSession.HasValue) return;
             var guest = FindGuest(snapshot);
             if (!guest.Equals(activeGuest) || (retainedTarget != null && !OwnsRetainedTarget(retainedTarget)))
@@ -199,6 +216,7 @@ namespace TopiaForge.MultiplayerAcceptance
         {
             update.Dispose();
             changed.Dispose();
+            presentation?.Dispose();
             CloseSurfaces();
         }
 

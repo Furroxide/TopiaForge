@@ -13,10 +13,23 @@ namespace TopiaForge.Mods
             string ownerPackageId, ReadOnlySpan<byte> packageDigest, ulong generation, string? themeId,
             ReadOnlySpan<byte> descriptorDigest)
         {
+            ValidateIdentity(ownerPackageId, packageDigest, themeId, descriptorDigest);
+            if (generation == 0) throw new ArgumentException("The remote UI envelope requires a nonzero generation.", nameof(generation));
+
+            OwnerPackageId = ownerPackageId;
+            PackageDigest = packageDigest.ToArray();
+            Generation = generation;
+            ThemeId = themeId;
+            DescriptorDigest = descriptorDigest.ToArray();
+        }
+
+        internal static void ValidateIdentity(string ownerPackageId, ReadOnlySpan<byte> packageDigest, string? themeId,
+            ReadOnlySpan<byte> descriptorDigest)
+        {
             if (string.IsNullOrWhiteSpace(ownerPackageId) || Utf8.GetByteCount(ownerPackageId) > 128)
                 throw new ArgumentException("The owning package id must fit in 128 UTF-8 bytes.", nameof(ownerPackageId));
-            if (packageDigest.Length != 32 || descriptorDigest.Length != 32 || generation == 0)
-                throw new ArgumentException("The remote UI envelope requires two SHA-256 digests and a nonzero generation.");
+            if (packageDigest.Length != 32 || descriptorDigest.Length != 32)
+                throw new ArgumentException("The remote UI envelope requires two SHA-256 digests.");
             if (themeId != null && !UiThemeIds.IsAuthorId(themeId))
                 throw new ArgumentException("The remote UI theme id is invalid.", nameof(themeId));
 
@@ -25,12 +38,6 @@ namespace TopiaForge.Mods
                 hasDescriptor |= value != 0;
             if (hasDescriptor != (themeId != null))
                 throw new ArgumentException("A descriptor digest is required exactly when the envelope names a theme.");
-
-            OwnerPackageId = ownerPackageId;
-            PackageDigest = packageDigest.ToArray();
-            Generation = generation;
-            ThemeId = themeId;
-            DescriptorDigest = descriptorDigest.ToArray();
         }
 
         internal string OwnerPackageId { get; }

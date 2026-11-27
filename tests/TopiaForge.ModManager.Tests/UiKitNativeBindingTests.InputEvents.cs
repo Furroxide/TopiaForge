@@ -15,10 +15,11 @@ namespace TopiaForge.ModManager.Tests
         {
             var kit = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi");
             var manager = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.ModManager");
-            var ownershipFiles = new[] { "TopiaForgeInputOwnership.cs", "TopiaForgeInputOwnership.Capture.cs" };
+            var ownershipFiles = new[] { "TopiaForgeInputOwnership.cs", "TopiaForgeInputOwnership.Capture.cs",
+                "TopiaForgeInputOwnership.PauseEscape.cs" };
             var nativeMethods = ownershipFiles.SelectMany(file => CSharpSyntaxTree.ParseText(
                 File.ReadAllText(Path.Combine(kit, "Runtime", file))).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>());
-            var routedMethods = nativeMethods.Where(method => method.Identifier.Text is "OnEvent" or "HoldsControl" or "OnDeviceChange");
+            var routedMethods = nativeMethods.Where(method => method.Identifier.Text is "OnEvent" or "HoldsControl" or "OnDeviceChange" or "ForgetInputDevice");
             var files = new[] { "Core/TopiaForgeInputClaim.cs", "Core/TopiaForgeInputGate.cs",
                 "Core/TopiaForgeNavigationBindings.cs", "Runtime/TopiaForgeViewerInput.cs",
                 "Widgets/TopiaForgeBindingCaptureInput.cs", "Widgets/TopiaForgeActionKeyCap.cs" };
@@ -297,6 +298,9 @@ namespace TopiaForge.ModManager.Tests
                         (int)Key.Enter, TopiaForgeInputRole.Submit, 1, 0, 0, 0, TopiaForgeInputClaim.Keyboard, Time.frameCount);
                     private static bool KitTextFieldHasKeyboard() => false;
                     private static void Stop(Exception exception) => throw exception;
+                    // The full overlay harness supplies the base-pause boundary.
+                    private static void FinishPauseEscape(InputDevice device, InputEventPtr input) { }
+                    private static void ForgetPauseEscape(int deviceId) { }
                     private static void FilterKeyboard(Keyboard keyboard, InputEventPtr input, TopiaForgeInputClaim claims, int frame)
                     {
                         Observe(keyboard, keyboard.escape, TopiaForgeInputDevice.Keyboard, (int)Key.Escape, TopiaForgeInputRole.Back, input, claims, frame);

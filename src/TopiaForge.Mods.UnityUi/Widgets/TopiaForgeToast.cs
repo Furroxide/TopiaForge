@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace TopiaForge.Mods.UnityUi
     /// where it rests, is <see cref="TopiaForgeToastStack{T}"/>: a view that takes a new
     /// toast is always placed and brought in afresh, whatever it showed before.
     /// </summary>
-    public static class TopiaForgeToasts
+    public static partial class TopiaForgeToasts
     {
         private const int MaxVisible = 4;
         private const int MaxQueued = 64;
@@ -25,6 +26,7 @@ namespace TopiaForge.Mods.UnityUi
         private const float ToastHeight = 44f;
         private const float TextInsetX = 14f;
         private const float TextInsetY = 12f;
+        private const float GlyphSize = 20f;
 
         // The most text a toast shows: three lines, measured in its own face and size.
         private const string ThreeLines = "A\nA\nA";
@@ -35,7 +37,17 @@ namespace TopiaForge.Mods.UnityUi
             public TopiaForgeContainer? Root;
             public UImage? Fill;
             public UImage? Ring;
+            public UImage? Glyph;
             public TextMeshProUGUI? Label;
+            public Pending Content;
+            public float UiScale;
+            public float Scale;
+            public bool HighContrast;
+            public float RestingX;
+            public float RestingY;
+            public TopiaForgeResolvedTheme? PaintedTheme;
+            public Action? ReleaseCapture;
+            public uint CaptureGeneration;
         }
 
         private struct Pending
@@ -43,6 +55,8 @@ namespace TopiaForge.Mods.UnityUi
             public string Text;
             public TopiaForgeTone Tone;
             public bool Plain;
+            public UiHost? Viewer;
+            public ToastObserver? Observe;
         }
 
         private static readonly TopiaForgeToastStack<Pending> Stack = new TopiaForgeToastStack<Pending>(MaxVisible, MaxQueued, StackGap);
@@ -51,12 +65,28 @@ namespace TopiaForge.Mods.UnityUi
         private static readonly List<ToastView> Views = new List<ToastView>();
         private static readonly List<int> Expired = new List<int>(MaxVisible);
         private static TopiaForgeContainer? layer;
+        private static ToastView? blockedOffer;
         private static bool queueOverflowLogged;
+        private static int appliedThemeVersion;
+        private static TopiaForgeResolvedTheme? contrastTheme;
+        private static float bottomRightHudTop;
+        private static float subtitleReserve;
+        private static float appliedHudTop;
+        private static float appliedSubtitleReserve;
+        private static int appliedScreenWidth;
+        private static int appliedScreenHeight;
+
+        // The dock reports height in scale-independent reference units and the subtitle reserve as a screen fraction.
+        internal static void SetBottomRightHudTop(float height, float reserve = 0f)
+        {
+            bottomRightHudTop = height;
+            subtitleReserve = reserve;
+        }
 
         // Moves on with every reset, so an exit that finishes after one frees nothing in the views that came after it.
         private static int generation;
 
-        /// <summary>Shows a toast (queues when 4 are already visible).</summary>
+        /// <summary>Shows a toast when a view fits on screen, with at most four shown at once.</summary>
         public static void Show(string text, TopiaForgeTone tone = TopiaForgeTone.Neutral, float duration = DefaultDuration)
         {
             Enqueue(text, tone, duration, plain: false);
@@ -71,7 +101,13 @@ namespace TopiaForge.Mods.UnityUi
             Enqueue(text, tone, duration, plain: true);
         }
 
-        private static void Enqueue(string text, TopiaForgeTone tone, float duration, bool plain)
+        internal static void ShowPlain(string text, TopiaForgeTone tone, UiHost viewer, float duration = DefaultDuration)
+        {
+            Enqueue(text, tone, duration, plain: true, viewer);
+        }
+
+        private static void Enqueue(string text, TopiaForgeTone tone, float duration, bool plain, UiHost? viewer = null,
+            ToastObserver? observe = null)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -84,6 +120,8 @@ namespace TopiaForge.Mods.UnityUi
                 Text = text.Length > MaxTextChars ? text.Substring(0, MaxTextChars) : text,
                 Tone = tone,
                 Plain = plain,
+                Viewer = viewer,
+                Observe = observe,
             };
             if (Stack.Enqueue(pending, Mathf.Clamp(duration, 0.25f, 30f)) && !queueOverflowLogged)
             {
@@ -108,18 +146,17 @@ namespace TopiaForge.Mods.UnityUi
 
         internal static void Tick(float unscaledDelta)
         {
-            Stack.Expire(unscaledDelta, Expired);
-            if (Expired.Count == 0)
-            {
-                return;
-            }
+            if (layer == null) return;
+            var reflow = RefreshMeasurements();
+            if (reflow) FitHeldViews(CurrentViewport(), resume: false);
 
+            Stack.Expire(unscaledDelta, Expired);
             for (var index = 0; index < Expired.Count; index++)
             {
                 DismissView(Expired[index]);
             }
 
-            Pump();
+            if (reflow || Expired.Count > 0) Pump();
         }
 
         /// <summary>Releases the process-wide toast host, pending work, and pooled views.</summary>
@@ -127,11 +164,14 @@ namespace TopiaForge.Mods.UnityUi
         {
             try
             {
+                foreach (var view in Views) ReleaseCapture(view);
                 TopiaForgeToastHost.Reset();
             }
             finally
             {
                 layer = null;
+                blockedOffer = null;
+                contrastTheme = null;
                 Stack.Clear();
                 Views.Clear();
                 queueOverflowLogged = false;
@@ -141,25 +181,37 @@ namespace TopiaForge.Mods.UnityUi
 
         private static void Pump()
         {
-            while (Stack.TryShowNext(out var index, out var pending))
+            EnsureLayer();
+            RefreshMeasurements();
+            var viewport = CurrentViewport();
+            blockedOffer = null;
+            if (FitHeldViews(viewport, resume: true))
             {
-                while (Views.Count <= index)
+                while (Stack.TryStageNext(out var index, out var pending))
                 {
-                    Views.Add(new ToastView());
-                }
+                    while (Views.Count <= index) Views.Add(new ToastView());
+                    var view = Views[index];
+                    Stage(view, pending);
+                    if (!FitsPending(viewport, index))
+                    {
+                        blockedOffer = view;
+                        break;
+                    }
 
-                Present(index, Views[index], pending);
+                    Stack.CommitStaged(index);
+                    Stack.SetHeight(index, MeasuredHeight(view), StackGap * view.Scale);
+                }
             }
 
-            Restack();
+            Restack(viewport);
         }
 
-        private static void Present(int index, ToastView view, Pending pending)
+        private static void Stage(ToastView view, Pending pending)
         {
-            EnsureLayer();
             if (view.Root == null)
             {
                 var root = layer!.Stack("Toast");
+                root.Go.SetActive(false);
                 root.Rect.anchorMin = new Vector2(1f, 0f);
                 root.Rect.anchorMax = new Vector2(1f, 0f);
                 root.Rect.pivot = new Vector2(1f, 0f);
@@ -167,6 +219,13 @@ namespace TopiaForge.Mods.UnityUi
 
                 view.Fill = CreateImage(root.Go.transform, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
                 view.Ring = CreateImage(root.Go.transform, "Ring", TopiaForgeSprites.Ring(TopiaForgeRadius.Control, TopiaForgeTokens.BorderStandard));
+                var glyphGo = new GameObject("Tone glyph", typeof(RectTransform));
+                glyphGo.transform.SetParent(root.Go.transform, false);
+                view.Glyph = glyphGo.AddComponent<UImage>();
+                view.Glyph.raycastTarget = false;
+                var glyphRect = (RectTransform)glyphGo.transform;
+                glyphRect.anchorMin = glyphRect.anchorMax = glyphRect.pivot = new Vector2(0f, 0.5f);
+                glyphRect.anchoredPosition = new Vector2(TextInsetX, 0f);
 
                 var labelGo = new GameObject("Label", typeof(RectTransform));
                 labelGo.transform.SetParent(root.Go.transform, false);
@@ -181,36 +240,23 @@ namespace TopiaForge.Mods.UnityUi
                     view.Label.font = font;
                 }
 
-                TopiaForgeAnchors.Stretch((RectTransform)labelGo.transform, TextInsetX, TextInsetY, TextInsetX, TextInsetY);
                 view.Root = root;
             }
 
-            view.Root.Go.SetActive(true);
+            view.Content = pending;
 
             // Views are pooled, so each presentation says whether its text may hold markup.
             view.Label!.richText = !pending.Plain;
             view.Label.parseCtrlCharacters = !pending.Plain;
             view.Label.text = pending.Text;
 
-            // A result that needs more than one line wraps, up to three, and its toast grows to hold them, so a second sentence
-            // saying what to do next is read, not cut off. The text box holds three lines at most, so a longer result
-            // overflows it and ends its third line in an ellipsis.
-            var width = ToastWidth - (2f * TextInsetX);
-            var textHeight = Mathf.Min(view.Label.GetPreferredValues(pending.Text, width, 0f).y, view.Label.GetPreferredValues(ThreeLines, width, 0f).y);
-            var height = Mathf.Max(ToastHeight, textHeight + (2f * TextInsetY));
-            view.Root.Rect.sizeDelta = new Vector2(ToastWidth, height);
-            Stack.SetHeight(index, height);
-
-            // Dark chip styling with a tone-colored ring; readable over anything.
-            var hudTheme = new TopiaForgeResolvedTheme(TopiaForgeScheme.Hud, null);
-            view.Fill!.color = hudTheme.SurfaceAlt;
-            view.Ring!.color = hudTheme.ToneColor(pending.Tone);
-            view.Label.color = hudTheme.Text;
+            ApplyAppearance(view, ViewerSettings(view));
         }
 
         private static void DismissView(int index)
         {
             var view = Views[index];
+            ReleaseCapture(view);
             if (view.Root == null)
             {
                 Stack.Release(index);
@@ -219,7 +265,7 @@ namespace TopiaForge.Mods.UnityUi
 
             // The exit slides from where a toast rests, so a view's exits never add up.
             var owner = generation;
-            TopiaForgeMotion.ToastOut(view.Root, -TopiaForgeTokens.SafeMargin, () =>
+            TopiaForgeMotion.ToastOut(view.Root, view.RestingX, () =>
             {
                 if (owner != generation)
                 {
@@ -230,41 +276,11 @@ namespace TopiaForge.Mods.UnityUi
                 if (view.Root != null)
                 {
                     view.Root.Go.SetActive(false);
+                    view.Content = default;
                 }
 
                 Pump();
-            });
-        }
-
-        private static void Restack()
-        {
-            var restingX = -TopiaForgeTokens.SafeMargin;
-            for (var index = 0; index < Views.Count; index++)
-            {
-                var view = Views[index];
-                if (view.Root == null || !Stack.TryPlace(index, out var top, out var fresh))
-                {
-                    continue;
-                }
-
-                // The first toast rests at the bottom margin and each later one above the toasts before it.
-                var targetY = TopiaForgeTokens.SafeMargin + top;
-                if (fresh)
-                {
-                    // A new toast, in a new view or in one whose last exit left it faded out and slid aside: place it and
-                    // bring it in.
-                    view.Root.Rect.anchoredPosition = new Vector2(restingX, targetY);
-                    TopiaForgeMotion.ToastIn(view.Root, restingX);
-                }
-                else
-                {
-                    var position = view.Root.Rect.anchoredPosition;
-                    if (!Mathf.Approximately(position.y, targetY))
-                    {
-                        TopiaForgeTween.MoveY(view.Root, position.y, targetY, TopiaForgeTokens.DurationFast);
-                    }
-                }
-            }
+            }, view.Content.Viewer, view.Scale);
         }
 
         private static void EnsureLayer()
@@ -274,6 +290,7 @@ namespace TopiaForge.Mods.UnityUi
                 return;
             }
 
+            appliedThemeVersion = TopiaForgeTheme.Version;
             layer = TopiaForgeToastHost.Instance.Layer(
                 "toasts",
                 TopiaForgeLayerBand.Toast,

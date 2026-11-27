@@ -9,6 +9,7 @@ namespace TopiaForge.ModManager
         private readonly ParticipantId player;
         internal RemotePlayerUi(PlayerContext context, ParticipantId player) { this.context = context; this.player = player; }
         public OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral) => context.Runtime.Toast(context, player, message, tone);
+        public OperationResult<bool> ShowStinger(UiStingerRequest request) => context.Runtime.Stinger(context, player, request);
         public OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed) => context.Runtime.Modal(context, player, request, completed);
         public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => context.Runtime.Surface(context, player, request);
     }
@@ -21,6 +22,9 @@ namespace TopiaForge.ModManager
         internal readonly IPlayer Target;
         internal readonly ulong Token;
         internal readonly UiSurfaceRequest Request;
+        internal readonly UiOverlayContentKind? OverlayClass;
+        internal bool AllowsRemoteDismissal => OverlayClass == null ||
+            OverlayClass == UiOverlayContentKind.Interactive && Request.Dismissible;
         internal UiNode? Content;
         internal UiNode? PresentationContent;
         internal string Body;
@@ -31,10 +35,10 @@ namespace TopiaForge.ModManager
         internal UiWireEnvelope? Envelope;
         internal string? SentClockEpoch;
         internal RemoteUiSurface(MultiplayerPlayers runtime, PlayerContext context, IPlayer target, ulong token,
-            UiSurfaceRequest request, UiNode? presentation, UiThemeDescriptor? theme)
+            UiSurfaceRequest request, UiNode? presentation, UiThemeDescriptor? theme, UiOverlayContentKind? overlayClass)
         {
             Runtime = runtime; Context = context; Target = target; Token = token; Request = request;
-            Content = request.Content; PresentationContent = presentation; Body = request.Body; Theme = theme;
+            Content = request.Content; PresentationContent = presentation; Body = request.Body; Theme = theme; OverlayClass = overlayClass;
         }
         public string Id => Request.Id;
         public bool IsVisible => !Closed && Target.IsPresent && !Context.Lifetime.IsStopping && Visible;

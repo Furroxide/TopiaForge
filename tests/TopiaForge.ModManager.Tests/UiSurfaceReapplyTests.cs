@@ -51,6 +51,8 @@ namespace TopiaForge.ModManager.Tests
                 .Append(CSharpSyntaxTree.ParseText(GraphBoundaries, path: "SurfaceTestGraph.cs"))
                 .Append(CSharpSyntaxTree.ParseText(GraphScenarios, path: "SurfaceTestGraphScenarios.cs"))
                 .Append(CSharpSyntaxTree.ParseText(ArtworkScenarios, path: "SurfaceTestArtwork.cs"))
+                .Append(CSharpSyntaxTree.ParseText(OwnerBoundaries, path: "OwnerTestBoundaries.cs"))
+                .Append(CSharpSyntaxTree.ParseText(OwnerAdmissionSource(root), path: "OwnerSurfaceAdmission.cs"))
                 .Append(CSharpSyntaxTree.ParseText(Scenarios, path: "SurfaceTestScenarios.cs"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(path => !Path.GetFileName(path).StartsWith("UnityEngine", StringComparison.Ordinal)
@@ -66,7 +68,21 @@ namespace TopiaForge.ModManager.Tests
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.ModManager.OwnerUiService", throwOnError: true)!;
             ((Action)probe.GetMethod("ProbeReapply", BindingFlags.Public | BindingFlags.Static)!
                 .CreateDelegate(typeof(Action)))();
-            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool, HUD, retained graphs and local tab selection.");
+            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool, HUD, Overlay, graph and tab retention, and per-scope admission.");
+        }
+
+        private static string OwnerAdmissionSource(string root)
+        {
+            var path = Path.Combine(root, "src", "TopiaForge.ModManager", "UnityUiService.cs");
+            var source = CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()
+                .DescendantNodes().OfType<ClassDeclarationSyntax>().Single(type => type.Identifier.ValueText == "OwnerUiService");
+            var fields = source.Members.OfType<FieldDeclarationSyntax>().Where(field => field.Declaration.Variables
+                .Any(item => item.Identifier.ValueText is "surfaces" or "surfaceIds" or "EmptyOverlayContent"));
+            var methods = source.Members.OfType<MethodDeclarationSyntax>().Where(method =>
+                method.Identifier.ValueText is "CreateSurface" or "ReleaseSurface" or "AbortSurfaceCreation" or "ReportCleanupFailure");
+            return "using System; using System.Collections.Generic; using System.Linq; using TopiaForge.Mods; using TopiaForge.Mods.UnityUi; "
+                + "namespace TopiaForge.ModManager { internal sealed partial class OwnerUiService { "
+                + string.Join("\n", fields.Cast<MemberDeclarationSyntax>().Concat(methods)) + "} }";
         }
 
         private static string OuterScrollAdapter(string root)
@@ -113,6 +129,8 @@ namespace TopiaForge.ModManager.Tests
                         ProbeArtworkRetries(remote: false, retryWhileDraining: true);
                         ProbeOuterScroll(useFullscreen: false);
                         ProbeOuterScroll(useFullscreen: true);
+                        ProbeOverlay();
+                        ProbeScopeAdmission();
                     }
 
                     private static void ProbeOuterScroll(bool useFullscreen)
@@ -319,6 +337,70 @@ namespace TopiaForge.ModManager.Tests
                         surface.Show();
                         Require(!surface.IsVisible && surface.SetContent(newTree).ErrorCode == ModErrorCode.InvalidState,
                             "A lost surface refuses a same-reference update and cannot reopen");
+                    }
+
+                    private static void ProbeOverlay()
+                    {
+                        var host = new UiHost();
+                        var parent = new TopiaForgeContainer(host);
+                        var body = new TopiaForgeLabel();
+                        using var lifetime = new FakeModLifetime();
+                        var view = new TopiaForgeOverlay(host, parent, dismissible: true);
+                        var released = 0;
+                        using var overlay = UnityUiSurface.ForOverlay("overlay", view, body, UiOverlayContentKind.Interactive,
+                            lifetime, new BoundaryLogger(), _ => released++);
+                        var selected = new UiButton("confirmed", "Confirm", () => { });
+                        Require(overlay.SetContent(selected).Succeeded, "Interactive overlay content reaches the native surface");
+                        var retained = parent.Children.Single();
+                        Require(overlay.SetContent(new UiText("Presentation only")).ErrorCode == ModErrorCode.InvalidArgument &&
+                            ReferenceEquals(parent.Children.Single(), retained),
+                            "The live native overlay rejects a delivery-class change and preserves its committed tree");
+                        var reflows = LayoutRebuilder.Requests;
+                        view.ViewportRevision++;
+                        Require(overlay.SetContent(selected).Succeeded && LayoutRebuilder.Requests == reflows + 1 &&
+                            ReferenceEquals(parent.Children.Single(), retained),
+                            "The same overlay content reflows for a changed safe inset");
+                        overlay.Present();
+                        var dismissed = 0;
+                        overlay.Dismissed += () => dismissed++;
+                        view.Back();
+                        Require(!overlay.IsVisible && dismissed == 1, "Native Back hides the surface and raises Dismissed once");
+                        overlay.Show();
+                        overlay.Dispose();
+                        Require(released == 1 && !overlay.IsVisible && view.Go.Shown,
+                            "Disposing releases the logical owner while the native exit still paints");
+                        view.FinishRetirement();
+                        Require(!view.Go.Shown && dismissed == 1, "Finishing disposal does not dispatch another dismissal");
+                    }
+
+                    private static void ProbeScopeAdmission()
+                    {
+                        var owner = new OwnerUiService();
+                        using var ownerLifetime = (FakeModLifetime)owner.lifetime;
+                        UiSurfaceRequest Request(string id) => new UiSurfaceRequest(id, "Title", "", UiSurfaceKind.Overlay);
+                        var unsafeRequest = Request("overlay-0").WithDismissible(false);
+                        var declined = owner.CreateSurface(unsafeRequest);
+                        Require(declined.ErrorCode == ModErrorCode.InvalidArgument && owner.host.OverlaysCreated == 0,
+                            "Native creation refuses a non-dismissible tree without a reachable button before building a canvas");
+                        var handles = Enumerable.Range(0, 4).Select(i => owner.CreateSurface(Request("overlay-" + i)).Value!).ToArray();
+                        Require(handles.All(handle => handle is { IsVisible: true }) && owner.host.OverlaysCreated == 4,
+                            "Four ordinary overlay requests are admitted independently");
+                        handles[1].Hide();
+                        Require(owner.CreateSurface(Request("retry")).ErrorCode == ModErrorCode.RateLimited &&
+                            owner.host.OverlaysCreated == 4, "Hidden overlays count and a fifth fails before another canvas is allocated");
+                        handles[1].Dispose();
+                        using var retry = owner.CreateSurface(Request("retry")).Value!;
+                        Require(retry.IsVisible && owner.host.OverlaysCreated == 5,
+                            "Disposal returns the live position and a rate-limited attempt never reserves its ID");
+                        var received = default(UiRemoteThemeSelection);
+                        using var remoteA = owner.CreateSurface(Request("incoming-a"), received).Value!;
+                        using var remoteB = owner.CreateSurface(Request("incoming-b"), received).Value!;
+                        Require(remoteA is { IsVisible: true } && remoteB is { IsVisible: true },
+                            "The shared viewer accepts separate remote scopes after four local overlays");
+                        handles[0].Dispose();
+                        using var replacement = owner.CreateSurface(Request("local-replacement")).Value!;
+                        Require(replacement is { IsVisible: true } && owner.host.OverlaysCreated == 8,
+                            "Incoming overlays do not count against the authored-local quota");
                     }
 
                     private static void Require(bool condition, string message)

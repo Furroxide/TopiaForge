@@ -10,6 +10,7 @@ using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 using static TopiaForge.ModManager.Tests.SessionAssert;
 using LayerBand = TopiaForge.Mods.UnityUi.TopiaForgeLayerBand;
+using LayerPriority = TopiaForge.Mods.UnityUi.TopiaForgeLayerPriority;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -90,11 +91,12 @@ namespace TopiaForge.ModManager.Tests
             asked.Escape.Press();
             That(asked.Escape.OverlayCloses == 1, "and the third closes the overlay");
 
-            // The game's side, which no harness can run: the capture sits in the modal band, above the overlay's window band,
+            // The game's side, which no harness can run: the capture sits in the modal band, above the manager,
             // the kit picking the highest band; it leaves the stack before its cancel runs, and the cancel cannot escape.
             var adapter = TypeIn(Path.Combine(root, "src", "TopiaForge.ModManager", "Multiplayer", "Voice", "Unity", "UnityVoiceEscape.cs"), "UnityVoiceEscape");
             var overlay = TypeIn(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "ManagerOverlay.cs"), "ManagerOverlay");
-            That(BandOf(adapter) == "TopiaForgeLayerBand.Modal" && BandOf(overlay) == "TopiaForgeLayerBand.Window" && LayerBand.Modal > LayerBand.Window,
+            That(BandOf(adapter) == "TopiaForgeLayerBand.Modal" && BandOf(overlay) == "TopiaForgeLayerPriority.Manager" &&
+                 LayerPriority.Rank(LayerBand.Modal) > LayerPriority.Rank(LayerPriority.Manager),
                 "a capture's Esc beats the overlay's on the kit's stack (" + BandOf(adapter) + " over " + BandOf(overlay) + ")");
             That(Calls(adapter, "Hold", "TopiaForgeDismissStack.Push", "this", "TopiaForgeInputClaim.Keyboard", "null") &&
                  Calls(adapter, "Release", "TopiaForgeDismissStack.Remove", "this"),

@@ -120,7 +120,7 @@ namespace TopiaForge.Mods
     /// travels to that player's process; windows and modals stay interactive, and their callbacks run here after the
     /// response is checked against the player it was sent to.
     /// </summary>
-    public interface IPlayerUi
+    public partial interface IPlayerUi
     {
         /// <summary>Shows a toast to this player.</summary>
         OperationResult<bool> ShowToast(string message, UiTone tone = UiTone.Neutral);
@@ -128,7 +128,7 @@ namespace TopiaForge.Mods
         /// <summary>Shows a modal to this player and reports their choice.</summary>
         OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed);
 
-        /// <summary>Creates a HUD surface or window shown only to this player.</summary>
+        /// <summary>Creates a surface shown only to this player.</summary>
         OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request);
     }
 

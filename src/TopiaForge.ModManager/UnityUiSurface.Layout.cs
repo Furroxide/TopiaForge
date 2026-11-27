@@ -44,7 +44,9 @@ namespace TopiaForge.ModManager
                 var view = widget;
                 var root = compositionRoot;
                 if (view == null || (root == null && placement == null) || !presence.IsLive || lifetime.IsStopping) return;
-                var stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
+                overlay?.RefreshViewport();
+                var stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0,
+                    OuterScrollViewport, overlay?.ViewportRevision ?? 0);
                 var occupancyChanged = layoutFallback != null && placement is { } dock && dock.Version != noticeDockVersion;
                 var bindingsChanged = layoutRenderer?.RefreshKeyGlyphs() == true;
                 if (!bindingsChanged && committedStamp.Matches(stamp) && !occupancyChanged) return;
@@ -84,6 +86,7 @@ namespace TopiaForge.ModManager
 
             private UiLayoutConstraints MeasureContentArea(TopiaForgeContainer parent, TopiaForgeWidget view)
             {
+                if (overlay != null) return overlay.MeasureContent(body!);
                 if (window != null || fullscreen != null)
                 {
                     // Unity skips inactive layout components. Measure the actual scroll viewport
@@ -208,6 +211,7 @@ namespace TopiaForge.ModManager
                 root.SetShown(true);
                 RestoreOuterScrollOffset();
                 if (recovering) SyncGraphConnections();
+                overlay?.SetCompositionReady(true);
             }
 
             private bool CanShowImageNotice(TopiaForgeContainer stage, UiLayoutConstraints areas)
@@ -232,6 +236,7 @@ namespace TopiaForge.ModManager
             private void ShowLayoutNotice(TopiaForgeContainer parent, TopiaForgeContainer? root, string message, string path,
                 UiLayoutException? error = null, bool preferContentViewport = false, bool canMoveImageNotice = false)
             {
+                overlay?.SetCompositionReady(false);
                 root?.SetShown(false);
                 var noticeChanged = layoutFallback == null || (layoutProblem == null) != (error == null);
                 layoutProblem = error;

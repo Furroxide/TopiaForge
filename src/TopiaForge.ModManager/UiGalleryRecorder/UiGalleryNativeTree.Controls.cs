@@ -385,12 +385,12 @@ namespace TopiaForge.ModManager
         private bool HasRectangularRaycast(Image image) => image.isActiveAndEnabled && image.raycastTarget &&
             image.canvas == canvas && image.raycastPadding == Vector4.zero && image.alphaHitTestMinimumThreshold <= 0f;
 
-        private UiCaptureNodePaint Decoration(RectTransform rect, Graphic? fill)
+        private UiCaptureNodePaint Decoration(RectTransform rect, Graphic? fill, string borderName = "Ring")
         {
             if (fill is not TopiaForgeRoundedImage rounded || rounded.ResolvedCornerRadius is not float radius) return default;
             var scale = VerticalScale(rounded.rectTransform);
             var local = rounded.rectTransform.rect;
-            var border = Named<TopiaForgeRoundedImage>(rect, "Ring");
+            var border = Named<TopiaForgeRoundedImage>(rect, borderName);
             var shadow = Named<TopiaForgeRoundedImage>(rect, "Shadow");
             var body = Bounds(rounded.rectTransform);
             var hasShadow = shadow != null && shadow.isActiveAndEnabled && EffectiveColor(shadow).a > 0.001f;

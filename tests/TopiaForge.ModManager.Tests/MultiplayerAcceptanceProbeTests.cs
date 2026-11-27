@@ -52,6 +52,7 @@ namespace TopiaForge.ModManager.Tests
             RoleBinding();
             ProbeCompatibility();
             GalleryPreviewUsesTheOptInAndOneAdmittedGuest();
+            PresentationVisualFixtures();
             PresentationRuntimeTests.GalleryStatusUsesTheRetainedSoloWorldClock();
             Console.WriteLine("Multiplayer acceptance probe: 8 behavioral checks passed.");
         }

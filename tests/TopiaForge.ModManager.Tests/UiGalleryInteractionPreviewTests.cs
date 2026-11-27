@@ -26,7 +26,8 @@ namespace TopiaForge.ModManager.Tests
                 "UnityUiSurface.GalleryCapture.cs", "Multiplayer/Presentation/UiPresentationTheme.cs",
                 "Multiplayer/Presentation/UiPresentationImages.cs",
                 "UiGalleryRecorder/UiGalleryCaptureFixture.cs", "UiGalleryRecorder/UiGalleryCaptureFixture.Status.cs",
-                "UiGalleryRecorder/UiGalleryCaptureFixture.Actions.cs", "UiGalleryRecorder/UiGallerySurvivalTheme.cs",
+                "UiGalleryRecorder/UiGalleryCaptureFixture.Actions.cs", "UiGalleryRecorder/UiGalleryCaptureFixture.Presentation.cs",
+                "UiGalleryRecorder/UiGallerySurvivalTheme.cs", "UiGalleryRecorder/UiGalleryToastArm.cs",
                 "UiGalleryRecorder/UnityUiGalleryCaptureDriver.cs", "UiGalleryRecorder/UnityUiGalleryInteractionPreview.cs",
             }.Select(path => Path.Combine(manager, path))
                 .Append(Path.Combine(gallery, "Pages", "FoundationPages.cs"))
@@ -36,9 +37,14 @@ namespace TopiaForge.ModManager.Tests
                 .Append(Path.Combine(gallery, "Pages", "FoundationIntegrationPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "ControlGalleryPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "StatusGalleryPages.cs"))
-                .Append(Path.Combine(gallery, "Pages", "ActionGalleryPages.cs"));
+                .Append(Path.Combine(gallery, "Pages", "ActionGalleryPages.cs"))
+                .Append(Path.Combine(gallery, "Pages", "PresentationPages.cs"));
+            var jsonSource = Path.Combine(manager, "UiGalleryRecorder", "UiGalleryCaptureJson.cs");
+            var viewer = CSharpSyntaxTree.ParseText(File.ReadAllText(jsonSource)).GetRoot().DescendantNodes()
+                .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "Viewer");
             var trees = files.Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path))
-                .Append(CSharpSyntaxTree.ParseText(Boundaries, path: "PreviewBoundaries.cs"))
+                .Append(CSharpSyntaxTree.ParseText(Boundaries.Replace("/* capture viewer */", viewer.ToFullString(),
+                    StringComparison.Ordinal), path: "PreviewBoundaries.cs"))
                 .Append(CSharpSyntaxTree.ParseText(AssetBoundaries, path: "PreviewAssetBoundaries.cs"))
                 .Append(CSharpSyntaxTree.ParseText(Scenario, path: "PreviewScenario.cs")).ToArray();
             CheckAcceptanceBindings(root, trees.Single(tree => Path.GetFileName(tree.FilePath) == "UnityUiGalleryInteractionPreview.cs"));

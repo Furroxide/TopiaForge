@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager
         private readonly UnityUiThemePackages themePackages;
         private readonly HashSet<string> surfaceIds = new HashSet<string>(StringComparer.Ordinal);
         private readonly List<UnityUiSurface> surfaces = new List<UnityUiSurface>();
+        private static readonly UiColumn EmptyOverlayContent = new UiColumn(Array.Empty<UiNode>());
         private UiAccessibilityPreferences accessibility = UiAccessibilityPreferences.Default;
 
         public OwnerUiService(
@@ -105,6 +106,18 @@ namespace TopiaForge.ModManager
                     "The mod is stopping and cannot create UI surfaces.");
             }
 
+            UiOverlayContentKind? overlayKind = null;
+            if (request.Kind == UiSurfaceKind.Overlay)
+            {
+                var admission = UiOverlayAdmission.Check(request.Content, request.Dismissible);
+                if (!admission.Succeeded)
+                    return OperationResult<IUiSurface>.Failure(admission.ErrorCode, admission.ErrorMessage);
+                if ((!remoteTheme.HasValue && surfaces.Count(surface => surface.IsAuthoredOverlay) >= UiOverlayLayout.MaximumLive) ||
+                    !TopiaForgeLayers.HasRoom(TopiaForgeLayerPriority.Overlay))
+                    return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "The UI overlay limit has been reached.");
+                overlayKind = admission.Value;
+            }
+
             UiThemeDescriptor? theme;
             if (preview.HasValue)
             {
@@ -174,6 +187,16 @@ namespace TopiaForge.ModManager
                         ReleaseSurface);
                     nativeRoot = null;
                 }
+                else if (overlayKind.HasValue)
+                {
+                    var overlay = host.Overlay(request.Id, request.Title, request.Width, request.Height,
+                        overlayKind.Value, request.Dismissible);
+                    nativeRoot = overlay;
+                    var body = overlay.Content.Label(request.Body, TopiaForgeTextStyle.Body).AlignCenter();
+                    surface = UnityUiSurface.ForOverlay(request.Id, overlay, body, overlayKind.Value, lifetime, logger,
+                        ReleaseSurface);
+                    nativeRoot = null;
+                }
                 else
                 {
                     var packageName = remoteTheme is { } remote
@@ -188,9 +211,10 @@ namespace TopiaForge.ModManager
                 surface.AttachInput(remoteTheme.HasValue ? input.ForRemote(remoteTheme.Value.Envelope) : input);
                 surface.InitializeTheme(request.Theme, remoteTheme.HasValue, theme, themeScope, themePackages,
                     remoteTheme?.Package?.Manifest.AdmittedUi);
-                if (request.Content != null)
+                var content = request.Content ?? (overlayKind.HasValue ? EmptyOverlayContent : null);
+                if (content != null)
                 {
-                    var contentResult = surface.SetContent(request.Content);
+                    var contentResult = surface.SetContent(content);
                     if (!contentResult.Succeeded)
                     {
                         AbortSurfaceCreation(surface, nativeRoot, request.Id);
@@ -306,7 +330,7 @@ namespace TopiaForge.ModManager
 
             try
             {
-                TopiaForgeToasts.ShowPlain(message, ToNativeTone(tone));
+                PresentGalleryToast(message, tone, legacyRemote: false);
                 return OperationResult<bool>.Success(true);
             }
             catch (Exception exception)

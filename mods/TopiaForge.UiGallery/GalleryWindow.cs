@@ -14,6 +14,7 @@ namespace TopiaForge.UiGallery
     internal sealed class GalleryWindow : IDisposable
     {
         private readonly UiHost ui;
+        private readonly IModContext context;
         private readonly ILocalPlayerService player;
         private readonly IUiService previewUi;
         private readonly IModLogger logger;
@@ -24,11 +25,13 @@ namespace TopiaForge.UiGallery
         private readonly List<TopiaForgeSlider> uiScaleControls = new List<TopiaForgeSlider>();
         private TopiaForgeWindow active;
         private IUiSurface? preview;
+        private GalleryPresentation? presentation;
         private bool disposed;
 
         public GalleryWindow(UiHost host, IModContext context)
         {
             ui = host;
+            this.context = context;
             player = context.LocalPlayer;
             previewUi = context.Ui;
             logger = context.Logger;
@@ -48,6 +51,11 @@ namespace TopiaForge.UiGallery
                     ReturnToGallery();
                 }
 
+                if (presentation != null && !presentation.Tick())
+                {
+                    ReturnToGallery();
+                }
+
                 Pages.MultiplayerPage.Tick(deltaTime);
                 Pages.SessionsPage.Tick(deltaTime);
             }
@@ -55,7 +63,9 @@ namespace TopiaForge.UiGallery
 
         public void Toggle()
         {
-            if (preview != null)
+            if (disposed) return;
+
+            if (preview != null || presentation != null)
             {
                 ReturnToGallery();
                 return;
@@ -80,14 +90,32 @@ namespace TopiaForge.UiGallery
 
             disposed = true;
             ui.AccessibilityProfileChanged -= SyncAccessibilityControls;
-            preview?.Dispose();
-            preview = null;
+            ClosePreview();
             Pages.HudPage.Reset();
             Pages.OverlaysPage.Reset();
             Pages.ShopPage.Reset();
             Pages.MultiplayerPage.Reset();
             Pages.SessionsPage.Reset();
         }
+
+        private void BuildOverlays(TopiaForgeContainer page)
+        {
+            var demos = page.Row(TopiaForgeGap.Sm);
+            demos.Button("Stingers", () => ShowPresentation(PresentationPage.Stingers), TopiaForgeButtonStyle.Outline);
+            demos.Button("Overlay examples", () => ShowPresentation(PresentationPage.Overlays), TopiaForgeButtonStyle.Outline);
+            demos.Button("Kit toasts", () => ShowPresentation(PresentationPage.Toasts), TopiaForgeButtonStyle.Outline);
+            Pages.OverlaysPage.Build(page);
+        }
+
+        private void ShowPresentation(PresentationPage page)
+        {
+            if (disposed || preview != null || presentation != null) return;
+            presentation = GalleryPresentation.Open(context, page, theme: null, PreviewPreferences(ui.AccessibilityProfile));
+            if (presentation != null) active.Close();
+        }
+
+        private static UiAccessibilityPreferences PreviewPreferences(TopiaForgeAccessibilityProfile profile) =>
+            new UiAccessibilityPreferences(profile.HighContrast, profile.UiScale, profile.ReducedMotion, profile.MotionIntensity);
 
         private TopiaForgeWindow Build(TopiaForgeScheme scheme)
         {
@@ -171,7 +199,7 @@ namespace TopiaForge.UiGallery
                 Pages.ListsPage.Build,
                 Pages.GraphPage.Build,
                 Pages.ShopPage.Build,
-                Pages.OverlaysPage.Build,
+                BuildOverlays,
                 Pages.HudPage.Build,
                 Pages.MotionPage.Build,
                 page => Pages.MultiplayerPage.Build(page, player),
@@ -207,8 +235,8 @@ namespace TopiaForge.UiGallery
         private void ShowSafePreview(UiSurfaceRequest request)
         {
             var profile = ui.AccessibilityProfile;
-            var applied = previewUi.ApplyAccessibility(new UiAccessibilityPreferences(
-                profile.HighContrast, profile.UiScale, profile.ReducedMotion, profile.MotionIntensity));
+            if (presentation != null) return;
+            var applied = previewUi.ApplyAccessibility(PreviewPreferences(profile));
             if (!applied.Succeeded)
             {
                 logger.Warn("Gallery preview settings could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
@@ -227,9 +255,16 @@ namespace TopiaForge.UiGallery
 
         private void ReturnToGallery()
         {
+            ClosePreview();
+            active.Show();
+        }
+
+        private void ClosePreview()
+        {
             preview?.Dispose();
             preview = null;
-            active.Show();
+            presentation?.Dispose();
+            presentation = null;
         }
 
         private void ReportInteraction(string message) => preview?.SetBody(message);

@@ -9,6 +9,7 @@ namespace TopiaForge.ModManager.Tests
             using System.Reflection;
             using TMPro;
             using TopiaForge.ModManager.Core;
+            using TopiaForge.ModManager.Core.Multiplayer;
             using TopiaForge.Mods;
             using TopiaForge.Mods.UnityUi;
             using UnityEngine;
@@ -83,6 +84,8 @@ namespace TopiaForge.ModManager.Tests
             {
                 internal sealed class TopiaForgeLayerSlot : MonoBehaviour { }
                 internal sealed class TopiaForgeGraphConnections { }
+                internal static class TopiaForgeLayerPriority { internal const int Overlay = 5; }
+                internal static class TopiaForgeLayers { internal static bool HasRoom(int band) => true; }
                 internal static class TopiaForgeInputOwnership
                 {
                     internal static UiInputDevice LastViewerDevice { get; set; }
@@ -106,7 +109,10 @@ namespace TopiaForge.ModManager.Tests
                     public Action<string>? LogError { get; set; }
                 }
                 public static class TopiaForgeUi { public static UiHost Create(TopiaForgeUiOptions options) => new(options.OwnerId); }
-                public static class TopiaForgeToasts { public static void ShowPlain(string message, TopiaForgeTone tone) { } }
+                public static class TopiaForgeToasts
+                {
+                    internal static void ShowPlain(string message, TopiaForgeTone tone, UiHost viewer) => throw new NotSupportedException();
+                }
 
                 public static class TopiaForgeHotkeys
                 {
@@ -153,6 +159,8 @@ namespace TopiaForge.ModManager.Tests
                         new(this, id, title, width, height, scheme, persistent);
                     public TopiaForgeFullscreenTool FullscreenTool(string id, string title, TopiaForgeScheme scheme, bool persistent) =>
                         new(this, scheme);
+                    internal TopiaForgeOverlay Overlay(string id, string title, float width, float height,
+                        UiOverlayContentKind kind, bool dismissible) => throw new NotSupportedException();
                     public void Dispose()
                     {
                         foreach (var handle in hotkeys) TopiaForgeHotkeys.Unregister(handle);
@@ -187,6 +195,13 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public TopiaForgeLabel(string value) => Value = value;
                     public string Value { get; set; }
+                    public GameObject Go => throw new NotSupportedException();
+                    public TopiaForgeLabel AlignCenter() => this;
+                }
+                internal sealed class TopiaForgeOverlay : TopiaForgeWidget
+                {
+                    internal TopiaForgeOverlay(UiHost host) : base(host, TopiaForgeScheme.Hud) { }
+                    internal TopiaForgeContainer Content => throw new NotSupportedException();
                 }
                 public sealed class TopiaForgeWindow : TopiaForgeWidget
                 {
@@ -246,6 +261,10 @@ namespace TopiaForge.ModManager.Tests
                         public ModManifest Manifest { get; }
                     }
                 }
+                internal interface IRemoteTargetedToastReceiver
+                {
+                    OperationResult<bool> RemoteTargetedToast(string ownerPackageId, string message, UiTone tone);
+                }
                 internal interface IRemoteUiReceiver
                 {
                     OperationResult<IUiSurface> RemoteSurface(UiSurfaceRequest request);
@@ -260,6 +279,7 @@ namespace TopiaForge.ModManager.Tests
                     public void Error(string message) { }
                     public void Error(Exception error, string message) { }
                 }
+                internal sealed record UiTreeCapture(UiNode Content);
                 internal sealed class UiGalleryNativeTree
                 {
                     internal UiGalleryNativeTree(Canvas canvas, TopiaForgeResolvedTheme theme,
@@ -271,13 +291,16 @@ namespace TopiaForge.ModManager.Tests
                     internal TopiaForgeResolvedTheme Theme { get; }
                     internal TopiaForgeAccessibilityProfile Accessibility { get; }
                     internal bool TryCapture(UiSurfaceRequest fixture, RectTransform surface, RectTransform tree, RectTransform? imageNotice,
-                        out object? result, TopiaForgeGraphConnections? connections = null, string? queuedNotice = null)
+                        out UiTreeCapture? result, TopiaForgeGraphConnections? connections = null, string? queuedNotice = null,
+                        TMP_Text? presentationHudTitle = null)
                     {
-                        result = fixture.Content;
+                        result = fixture.Content == null ? null : new UiTreeCapture(fixture.Content);
                         return result != null;
                     }
+                    internal bool TryCaptureOverlay(UiSurfaceRequest fixture, TopiaForgeOverlay overlay, RectTransform tree,
+                        TMP_Text? body, out UiTreeCapture? result) => throw new NotSupportedException();
                     internal bool TryCaptureLayoutNotice(UiSurfaceRequest fixture, RectTransform surface, RectTransform notice,
-                        UiLayoutException failure, out object? result, string? queuedNotice = null) =>
+                        UiLayoutException failure, out UiTreeCapture? result, string? queuedNotice = null) =>
                         throw new InvalidOperationException("The interaction fixture should fit without a layout notice.");
                 }
                 internal static class UiGalleryCaptureJson
@@ -285,7 +308,8 @@ namespace TopiaForge.ModManager.Tests
                     internal sealed record Capture(string Fixture, string Viewer, TopiaForgeResolvedTheme Theme,
                         TopiaForgeAccessibilityProfile Accessibility, UiWireEnvelope? Envelope);
                     internal static readonly List<Capture> Records = new();
-                    internal static void Save(string directory, string fixture, string viewer, object tree,
+                    /* capture viewer */
+                    internal static void Save(string directory, string fixture, string viewer, UiTreeCapture tree,
                         UiGalleryNativeTree native, UiWireEnvelope? envelope) =>
                         Records.Add(new Capture(fixture, viewer, native.Theme, native.Accessibility, envelope));
                 }
@@ -295,6 +319,9 @@ namespace TopiaForge.ModManager.Tests
                     private readonly object? uiInput = null;
                     private readonly Func<double> clock = () => 0;
                     private readonly Func<string> clockEpoch = () => "preview";
+
+                    private void PresentGalleryToast(string message, UiTone tone, bool legacyRemote) =>
+                        throw new NotSupportedException();
 
                     private UnityUiSurface CreateHud(UiSurfaceRequest request, string? packageDisplayName, ref TopiaForgeWidget? nativeRoot)
                     {
@@ -324,6 +351,8 @@ namespace TopiaForge.ModManager.Tests
                         private UiNode? admitted;
                         private UiSurfaceInputContext? inputContext;
                         private readonly string sentBody;
+                        private readonly TopiaForgeOverlay? overlay;
+                        private readonly TopiaForgeLabel? hudTitle;
                         private readonly (Func<double> Clock, Func<string> ClockEpoch) callbacks = (() => 0d, () => "preview");
                         private TopiaForgeContainer? layoutFallback;
                         private TopiaForgeGraphConnections? graphConnections;
@@ -354,8 +383,14 @@ namespace TopiaForge.ModManager.Tests
                             TopiaForgeContainer parent, IModLifetime lifetime, IModLogger logger, Action<UnityUiSurface> release) =>
                             new(id, window, parent, body, lifetime, logger, release);
 
+                        internal static UnityUiSurface ForOverlay(string id, TopiaForgeOverlay overlay, TopiaForgeLabel body,
+                            UiOverlayContentKind kind, IModLifetime lifetime, IModLogger logger, Action<UnityUiSurface> release) =>
+                            throw new NotSupportedException();
+                        partial void ObserveGalleryCommit(UiWireEnvelope? envelope);
+
                         public string Id { get; }
                         public bool IsVisible => presence.IsVisible;
+                        internal bool IsAuthoredOverlay => false;
                         internal GameObject CanvasRoot { get; }
                         internal bool FollowsGameplay => false;
                         internal void ApplyGameplay(bool state) { }

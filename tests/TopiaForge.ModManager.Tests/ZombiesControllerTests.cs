@@ -33,6 +33,7 @@ namespace TopiaForge.ModManager.Tests
             HudSkipsSteadyStateContentWrites();
             InterWaveHudTracksAndFreezesControlTime();
             ActionBarFollowsInputAndRequisitionsPhase();
+            WaveClearAnnouncesOncePerTransition();
             DisabledShopSkipsCreditsAndRequisitionFeedback();
             UplinkFailuresExplainWithoutSpendingCharge();
             UplinkEconomyRunsOnTheWorldClock();

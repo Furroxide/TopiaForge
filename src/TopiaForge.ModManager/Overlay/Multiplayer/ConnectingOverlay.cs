@@ -1,13 +1,18 @@
 using System.Collections.Generic;
 using TopiaForge.Mods.UnityUi;
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+using ConnectingPanel = TopiaForge.Mods.UnityUi.TopiaForgeOverlay;
+#else
+using ConnectingPanel = TopiaForge.Mods.UnityUi.TopiaForgeModalInstance;
+#endif
 
 namespace TopiaForge.ModManager.Sessions
 {
     /// <summary>
-    /// The connecting overlay: a Paper modal with the join's phase stepper (Resolving, Connecting, Authenticating, Verifying
+    /// The connecting overlay: a protected Paper surface with the join's phase stepper (Resolving, Connecting, Authenticating, Verifying
     /// mods, Loading world, Synchronizing, Spawning), a password field when the session asks, and a failure view with Retry,
-    /// Open launcher and Copy details. Cancel, the close button and ESC all stop a first join; during a re-follow only Cancel
-    /// leaves, while the close button and ESC hide that attempt's card. Once nothing runs that Cancel
+    /// Open launcher and Copy details. Cancel and Back stop a first join; during a re-follow only Cancel leaves, while Back
+    /// hides that attempt's card. Once nothing runs that Cancel
     /// would stop, as while a finished join lingers or a follow waits at the menu, CLOSE takes its place. Its layout is
     /// rebuilt only when it switches between those; otherwise it binds through dirty-checked setters, the failure's own
     /// words included, so a failure that replaces another in the same layout never keeps the earlier one's.
@@ -20,7 +25,7 @@ namespace TopiaForge.ModManager.Sessions
         private readonly UiHost host;
         private readonly IConnectingScreen screen;
         private readonly StepperOperations operations = new StepperOperations();
-        private TopiaForgeModalInstance? modal;
+        private ConnectingPanel? overlay;
         private TopiaForgePhaseStepper? stepper;
         private TopiaForgeLabel? title;
         private TopiaForgeLabel? status;
@@ -37,6 +42,7 @@ namespace TopiaForge.ModManager.Sessions
         private TopiaForgeButton? launcher;
         private TopiaForgeButton? copy;
         private TopiaForgeButton? trust;
+        private TopiaForgeButton? defaultAction;
         private IReadOnlyList<string>? shownLines;
         private int appliedVersion = -1;
         private int shownShape = -1;
@@ -49,27 +55,57 @@ namespace TopiaForge.ModManager.Sessions
 
         internal void Tick()
         {
-            if (screen.IsVisible && modal == null) Open();
-            else if (!screen.IsVisible && modal != null) Close();
-            if (modal == null) return;
-            if (Shape() != shownShape) BuildBody();
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+            if (overlay is { IsRetired: true })
+            {
+                Close();
+                screen.Dismiss();
+            }
+#endif
+            if (screen.IsVisible && overlay == null) Open();
+            else if (!screen.IsVisible && overlay != null) Close();
+            if (overlay == null) return;
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+            overlay.RefreshViewport();
+#endif
+            if (Shape() != shownShape)
+            {
+                BuildBody();
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+                overlay.CompositionChanged();
+#endif
+                FocusDefaultAction();
+            }
             Bind();
         }
 
         internal void Close()
         {
-            var open = modal;
-            modal = null;
-            open?.Close();
+            var open = overlay;
+            overlay = null;
+            if (open == null) return;
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+            if (!open.IsRetired) password?.SetText(string.Empty);
+            open.Retire(static () => { });
+#else
+            password?.SetText(string.Empty);
+            open.Close();
+#endif
         }
 
         private void Open()
         {
             // Persistent: joining from a running game returns to the main menu first, and the overlay follows the join
             // through that scene load, and later through loading the host's world.
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+            var opened = host.TrustOverlay(screen.Title, 680f);
+            title = opened.TitleLabel.PlainText().Ellipsis().AlignTopLeft();
+#else
+            // The Gallery links this view for its synthetic Sessions preview.
             var opened = host.Modal.Custom(string.Empty, TopiaForgeScheme.Paper, 680f, persistent: true);
-            modal = opened;
             title = opened.Content.Label(screen.Title, TopiaForgeTextStyle.Title).PlainText().Ellipsis();
+#endif
+            overlay = opened;
             var scroll = opened.Content.Scroll(TopiaForgeGap.Sm);
             scroll.FixedHeight(PreferredScrollHeight);
             stepper = scroll.Content.VerticalPhaseStepper(ToArray(screen.StepLabels));
@@ -79,14 +115,19 @@ namespace TopiaForge.ModManager.Sessions
             body = scroll.Content.Column(TopiaForgeGap.Sm);
             actions = opened.Content.Row(TopiaForgeGap.Sm);
             BuildBody();
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+            opened.LimitTrustedScrollBody();
+#endif
 
-            // ESC and close dismiss through the presenter: cancel the first join, hide a re-follow or a settled view.
+            // Back dismisses through the presenter: cancel the first join, hide a re-follow or a settled view.
             opened.Closed += () =>
             {
-                if (ReferenceEquals(modal, opened)) modal = null;
+                if (!ReferenceEquals(overlay, opened)) return;
+                Close();
                 screen.Dismiss();
             };
             opened.Show();
+            FocusDefaultAction();
         }
 
         /// <summary>Gets the overlay's layout: running, asking for a password, failed, or settled with nothing Cancel would stop.</summary>
@@ -120,8 +161,8 @@ namespace TopiaForge.ModManager.Sessions
                 actions!.Spacer().Flex(1f, 0f);
 
                 // No CANCEL that cancels nothing: a finished join, or a follow that waits at the menu, closes instead.
-                if (shownShape == 3) actions.Button("CLOSE", screen.Dismiss, TopiaForgeButtonStyle.Outline).Focus();
-                else actions.Button("CANCEL", screen.Cancel, TopiaForgeButtonStyle.Outline).Focus();
+                if (shownShape == 3) defaultAction = actions.Button("CLOSE", screen.Dismiss, TopiaForgeButtonStyle.Outline);
+                else defaultAction = actions.Button("CANCEL", screen.Cancel, TopiaForgeButtonStyle.Outline);
                 return;
             }
 
@@ -135,7 +176,16 @@ namespace TopiaForge.ModManager.Sessions
             copy = buttons.Button("COPY DETAILS", screen.CopyDetails, TopiaForgeButtonStyle.Ghost);
             trust = buttons.Button("TRUST AND JOIN", screen.Trust, TopiaForgeButtonStyle.Outline);
             buttons.Spacer().Flex(1f, 0f);
-            buttons.Button("CLOSE", screen.Dismiss, TopiaForgeButtonStyle.Ghost).Focus();
+            defaultAction = buttons.Button("CLOSE", screen.Dismiss, TopiaForgeButtonStyle.Ghost);
+        }
+
+        private void FocusDefaultAction()
+        {
+#if TOPIAFORGE_LOADER_TRUST_DIALOGS
+            if (overlay?.HasNavigationFocus == true) defaultAction?.Focus();
+#else
+            defaultAction?.Focus();
+#endif
         }
 
         private void Bind()

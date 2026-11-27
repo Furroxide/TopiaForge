@@ -240,13 +240,13 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             active = true;
-            first?.Select();
+            if (!HigherOverlayOwnsInput()) first?.Select();
         }
 
         public void Deactivate()
         {
             active = false;
-            if (previous != null && previous.activeInHierarchy)
+            if (!HigherOverlayOwnsInput() && previous != null && previous.activeInHierarchy)
             {
                 EventSystem.current?.SetSelectedGameObject(previous);
             }
@@ -257,12 +257,16 @@ namespace TopiaForge.Mods.UnityUi
 
         private void Update()
         {
-            if (!active || root == null || first == null) return;
+            if (!active || root == null || first == null || HigherOverlayOwnsInput()) return;
             var current = EventSystem.current?.currentSelectedGameObject;
             if (current == null || current.transform != root && !current.transform.IsChildOf(root))
             {
                 first.Select();
             }
         }
+
+        private static bool HigherOverlayOwnsInput() => TopiaForgeOverlayStack.OwnsInput ||
+            TopiaForgeDismissStack.Top() is { } higher &&
+            TopiaForgeLayerPriority.Rank(higher.Band) > TopiaForgeLayerPriority.Rank(TopiaForgeLayerBand.Window);
     }
 }
