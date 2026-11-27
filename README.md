@@ -25,7 +25,8 @@ mod would.
 
 ## For players
 
-You need **no developer tools** — no Flutter, Dart, .NET, or Node.
+You need **no developer tools** — no Flutter, Dart, .NET, or Node. Follow these steps once
+`0.2.0-rc.1` is available on GitHub.
 
 1. Download the archive and `SHA256SUMS` from [Releases](https://github.com/Furroxide/TopiaForge/releases).
 2. Check the archive against `SHA256SUMS`, then extract it with its layout intact.
@@ -38,7 +39,7 @@ built in. The **Developer** tab is hidden unless you turn it on under **Settings
 In game, open the manager from the main-menu **TopiaForge** button or press `F10`.
 
 > [!IMPORTANT]
-> The current candidate ships a **Windows x64 archive only.** Linux is held for a later 0.x release
+> The initial candidate targets **Windows x64 only.** Linux is held for a later 0.x release
 > because Proton acceptance could not be validated on the release host, and macOS additionally
 > requires Developer ID signing and notarization. Both remain supported in source.
 
@@ -143,7 +144,7 @@ TopiaForge is in early **0.x** development and has not had a stable release.
 
 | | |
 | --- | --- |
-| Current candidate | `v0.2.0` — release readiness **blocked** (see [release notes](release/notes/v0.2.0.md)) |
+| Current candidate | `v0.2.0-rc.1` · release readiness **blocked** ([release notes](release/notes/v0.2.0-rc.1.md)) |
 | Platforms | Windows x64 only in this candidate |
 | Robotopia target | build `2640` (canonical pin: [`.github/robotopia-game-build.json`](.github/robotopia-game-build.json)) |
 | Registry | First-party artifacts only; community submissions closed pending moderation policy |

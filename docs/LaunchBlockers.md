@@ -42,10 +42,10 @@ unsigned archives do not establish current candidate readiness.
 Governance relaxed for the `0.x` line on 2026-08-22; see
 [What blocks a `0.x` release](#what-blocks-a-0x-release).
 
-Scope change on 2026-08-12: **Linux is out of `0.1.0-rc.1`** and returns in `0.1.0-rc.2`.
+Linux was deferred on 2026-08-12 during preparation for the withdrawn `0.1.0-rc.1`.
 The administrator host cannot reach a GPU Vulkan implementation inside WSL2, and
 Robotopia's Direct3D 12 renderer requires it through VKD3D, so no credible Proton
-acceptance evidence was obtainable. RC1 is scoped to Windows x64 only. See `P0-LINUX-01`.
+acceptance evidence was obtainable. `0.2.0-rc.1` targets Windows x64 only. See `P0-LINUX-01`.
 
 A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
 the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
@@ -292,7 +292,7 @@ cannot reach `ready` while any *blocking* gate is unresolved and an unmet
 advisory gate is still visible in the published summary.
 
 The decision carries **twelve** gates for RC1. `P0-LINUX-01` is deliberately absent
-because Linux is out of this candidate; restoring it belongs to `0.1.0-rc.2`
+because Linux is out of this candidate. Restore it for a future Linux release
 alongside the policy archive entry and both schema gate contracts. `P0-OSS-01` is
 present: it was re-opened on 2026-08-06 and the readiness contract must be able to
 carry it rather than infer it from the legal inventory passing.
@@ -593,8 +593,7 @@ automated tests cannot close Unity object lifetime.
   exercise clean install/repair/profile/safe-mode/failure/diagnostics/confirmed
   update, forced rollback, and uninstall journeys.
 
-- **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.** *(OUT OF RC1;
-  deferred to `0.1.0-rc.2` on 2026-08-12)*
+- **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.** *(Deferred from RC1.)*
 
   Owner: Linux/Proton release QA.
 
@@ -613,13 +612,13 @@ automated tests cannot close Unity object lifetime.
   rather than weakened.
 
   RC1 consequences: `release/release-policy.json` targets Windows x64 only, the readiness
-  and BOM gate contracts drop `P0-LINUX-01`, and the orchestrator's WSL
-  build, Proton acceptance, and their preflight checks are gated on the policy rather than
-  removed. Linux support is untouched in the source tree.
+  and BOM gate contracts omit `P0-LINUX-01`, and the orchestrator skips Linux build and
+  acceptance. Linux support remains in the source tree. The release acceptance entry points
+  fail closed until native Linux isolation is implemented.
 
-  Exit criteria for `0.1.0-rc.2`: restore the Linux archive to the policy, the gate to both
-  schemas, and `P0-LINUX-01` to the readiness decision, then build Linux x64 from the frozen
-  SHA and inspect final ZIP executable modes, links, checksums, notices, and bundled
+  Before a future Linux release, implement native Linux isolation, restore the Linux archive
+  to the policy, the gate to both schemas, and `P0-LINUX-01` to the readiness decision.
+  Build Linux x64 from the frozen SHA and inspect final ZIP executable modes, links, checksums, notices, and bundled
   payloads. Run the actual Robotopia matrix for the pinned build through Proton with
   `WINEDLLOVERRIDES=winhttp=n,b` **on a host that can reach a GPU Vulkan implementation**,
   exercise the native Linux launcher/CLI, discovery, path translation, process launch,

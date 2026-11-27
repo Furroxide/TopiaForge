@@ -1,8 +1,8 @@
 # Admin-orchestrated release
 
-The current development target is [0.2.0](../release/notes/v0.2.0.md), with catalog status
-blocked. RC1 examples and approvals below remain historical; they do not qualify 0.2.0.
-Explicit distribution mode, current-version readiness and exact-candidate native evidence remain required.
+The initial release target is [0.2.0-rc.1](../release/notes/v0.2.0-rc.1.md), with catalog status
+blocked. It requires an explicit distribution mode, approvals for the current version and native evidence
+bound to the exact candidate. Earlier release evidence remains historical.
 
 
 Production archives are built only on maintainer-controlled machines. GitHub
@@ -153,7 +153,7 @@ The checkout must be a clean `main` exactly equal to `origin/main`. Configure:
 - .NET `10.0.301`, Flutter `3.44.6`, Dart `3.12.2`, Node `24.18.0`,
   Unity `6000.0.23f1`, MSVC `14.51.36231`, Windows SDK
   `10.0.26100.0`, Python 3.11 or newer, Git LFS, 7-Zip, tar, `jq`, `bash`
-  (Git for Windows), WSL, and GitHub CLI;
+  (Git for Windows), and GitHub CLI;
 - an activated local Unity license and the Robotopia build-2640 installation.
 
 On Windows systems where `python` resolves to the nonfunctional Microsoft
@@ -283,17 +283,14 @@ GitHub CLI token for the audit secret.
 The preflight opens the exact Unity project in batch mode to prove that the
 local activation is usable. It never needs Unity email/password credentials.
 
-> **Out of `0.1.0-rc.1`.** Linux is descoped from RC1 and returns in `0.1.0-rc.2`, so
-> everything from here to the end of *Same-host WSL2/WSLg Proton evidence* is inert for
-> this candidate. `release-admin.ps1` reads `release/release-policy.json` and skips the
-> WSL build, the Proton acceptance, and their preflight checks whenever
-> `TopiaForge-linux-x64.zip` is absent from `platformArchives`; re-adding it turns the
-> whole path back on unchanged. The instructions are retained for rc.2.
+> **Scope for `0.2.0-rc.1`.** The Windows x64 candidate skips the WSL build, Proton acceptance and
+> their preflight checks because `TopiaForge-linux-x64.zip` is absent from `platformArchives`.
+> The Linux and Proton material below is retained for reference. A future Linux release needs
+> its own policy, isolation and native acceptance.
 >
-> Note for rc.2: WSL2 on this host cannot reach a GPU Vulkan implementation. NVIDIA
-> ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, so only
-> software lavapipe is available, while Robotopia's Direct3D 12 renderer needs Vulkan
-> through VKD3D. A venue that provides real Vulkan is required before Linux acceptance
+> In the recorded WSL2 test, the builder could only reach software Vulkan through lavapipe.
+> Robotopia's Direct3D 12 renderer needs Vulkan through VKD3D. A venue that provides
+> hardware Vulkan is required before Linux acceptance
 > can be recorded; if it is not this Windows workstation, the `wsl2-wslg` execution
 > environment in the evidence contract and the WSL-driven collection below must be
 > reworked first.
@@ -340,11 +337,12 @@ The deterministic procedure is:
    bare depot download does not produce one.
 2. Before using it, read `steamapps/appmanifest_3658110.acf` and confirm every
    value in the table above.
-3. Run the preflight from inside the WSL distribution. It checks the same values,
-   plus the WSL2/WSLg environment, without launching the game:
+3. Use the version of the Linux candidate under test for `$version`. Run the preflight from
+   inside the WSL distribution. It checks the same values and the WSL2/WSLg environment
+   without launching the game:
 
 ```bash
-tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 0.1.0-rc.1 --game-dir "$gameDir" --game-build-id 2640 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
+tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version "$version" --game-dir "$gameDir" --game-build-id 2640 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
 ```
 
 If Steam has moved `Proton 10.0` to a newer build, the appmanifest will carry a
@@ -407,7 +405,7 @@ The generated descriptor is deterministic JSON and binds at least:
 ```json
 {
   "schema": "release-proton-evidence-v1",
-  "version": "0.1.0-rc.1",
+  "version": "<linux-candidate-version>",
   "targetSha": "0123456789abcdef0123456789abcdef01234567",
   "platform": "linux-proton",
   "executionEnvironment": "wsl2-wslg",
@@ -436,8 +434,8 @@ evidence bundle bytes match the descriptor. Do not put usernames, hostnames,
 paths, timestamps,
 credentials, or raw game logs in the deterministic descriptor. Both QA bundles
 remain private local evidence; only their scrubbed digests enter the public
-handoff. If this retained runner is used for RC2, record its evidence as
-same-host and non-independent. It does not establish Linux acceptance for RC1.
+handoff. Record evidence from this runner as same-host and non-independent if it is
+used for a future Linux release.
 
 ## Staging and publication
 
