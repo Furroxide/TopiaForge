@@ -70,5 +70,6 @@ internal static partial class RuntimeAdmissionTests
         ControlsUseOnlyTheirAdmittedRecipient();
         StatusUsesItsAdmittedContractOnBothRoutes();
         ActionsUseTheirAdmittedRoutes();
+        ActionSlotArtUsesBothRoutes();
     }
 }

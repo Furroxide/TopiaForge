@@ -18,7 +18,12 @@ namespace TopiaForge.ModManager
                 var styles = UiPresentationTheme.StylesValid(content, theme);
                 if (!styles.Succeeded) return styles;
                 if (content == null) return UiPresentationTheme.Allowed;
-                presentation = UiImageProjection.Rewrite(content, image => NormalizeImage(image, scope));
+                presentation = UiTreeProjection.Rewrite(content, node => node switch
+                {
+                    UiImage image => NormalizeImage(image, scope),
+                    UiActionSlot { Image: not null } slot => NormalizeSlot(slot, scope),
+                    _ => node,
+                });
                 return presentation == null ? ImageMissing : UiPresentationTheme.Allowed;
             }
             catch (ArgumentException error)
@@ -41,6 +46,14 @@ namespace TopiaForge.ModManager
                 : image.WithWireMetadata(frame.Width, frame.Height, pack.Digest.Span);
         }
 
+        private static UiActionSlot? NormalizeSlot(UiActionSlot slot, UiThemeScope? scope)
+        {
+            var image = NormalizeImage(UiImageProjection.ForActionSlot(slot, remote: false), scope);
+            if (image == null) return null;
+            return slot.PackDescriptorDigest.Span.SequenceEqual(image.PackDescriptorDigest.Span) ? slot
+                : slot.WithWireImageDigest(image.PackDescriptorDigest.Span);
+        }
+
         internal static bool ViewerAdmits(UiNode? node, UiRemoteThemeSelection selection)
         {
             var catalogue = selection.Package?.Manifest.AdmittedUi;
@@ -50,21 +63,25 @@ namespace TopiaForge.ModManager
         private static bool Admits(UiNode? node, AdmittedUiCatalogue catalogue)
         {
             if (node == null) return true;
-            if (node is UiImage image)
-            {
-                // Unknown or different descriptors have no local art authority. Keep the transmitted box for fallback.
-                if (!catalogue.TryGet(image.Image.PackId, out var pack) ||
-                    !image.PackDescriptorDigest.Span.SequenceEqual(pack.Digest.Span)) return true;
-                var metadata = UiImageProjection.Find(pack, image.Image.ImageId);
-                if (metadata == null) return false;
-                try { _ = UiImageProjection.ResolveFrame(image, metadata); }
-                catch (ArgumentException) { return false; }
-                return true;
-            }
+            if (node is UiImage image) return AdmitsImage(image, catalogue);
+            if (node is UiActionSlot { Image: not null } slot)
+                return AdmitsImage(UiImageProjection.ForActionSlot(slot, remote: true), catalogue);
 
             var children = UiNodeChildren.Of(node);
             for (var index = 0; index < children.Count; index++)
                 if (!Admits(children[index], catalogue)) return false;
+            return true;
+        }
+
+        private static bool AdmitsImage(UiImage image, AdmittedUiCatalogue catalogue)
+        {
+            // Unknown or different descriptors have no local art authority. Keep the transmitted box for fallback.
+            if (!catalogue.TryGet(image.Image.PackId, out var pack) ||
+                !image.PackDescriptorDigest.Span.SequenceEqual(pack.Digest.Span)) return true;
+            var metadata = UiImageProjection.Find(pack, image.Image.ImageId);
+            if (metadata == null) return false;
+            try { _ = UiImageProjection.ResolveFrame(image, metadata); }
+            catch (ArgumentException) { return false; }
             return true;
         }
 

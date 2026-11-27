@@ -91,21 +91,25 @@ namespace TopiaForge.Mods.Testing
             var state = UiActionSlotPresentation.Resolve(slot, now, epoch);
             var binding = ActionBinding(slot.ActionName, slot.WireDefaults);
             var decoration = ResolveDecoration(slot, new UiLayoutExtent(size.Width, size.Height));
+            var border = (float)decoration.BorderWidth * layoutScale;
+            var emphasisBorder = UiActionSlotGeometry.EmphasisStroke(border, readableScale);
             var role = state.Backdrop(decoration.Fill);
             var color = PairFor(role, inheritedDisabled ? UiTone.Muted : state.Tone);
             var (visible, spoken, seconds, fraction) = SlotStatus(state, slot.Charges?.Refill != null);
             var flags = ArtFlags(false);
             if (state.State == UiActionSlotState.Unavailable) flags |= UiCaptureNodeFlags.Disabled;
             if (state.Emphasized) flags |= UiCaptureNodeFlags.Selected;
-            if (state.Emphasized || state.StatusGlyph.HasValue || state.Status == UiActionSlotStatus.Charges)
+            if (state.Emphasized)
+                flags |= UiCaptureNodeFlags.RequiresNonColorCue;
+            if ((state.Emphasized && emphasisBorder > border) || state.StatusGlyph.HasValue || state.Status == UiActionSlotStatus.Charges)
                 flags |= UiCaptureNodeFlags.RequiresNonColorCue | UiCaptureNodeFlags.HasNonColorCue;
             var semantic = slot.Label + ", " + (binding.Cue.HasValue ? binding.SpokenControl : "key " + binding.SpokenControl) + ", " + spoken;
             Add(path, slot.Id, nameof(UiActionSlot), bounds, clip, new UiCaptureNodeContent(string.Empty, semantic, 0f, 0f, flags,
-                state.StateName, binding.Label, seconds, fraction), DecorationPaint(decoration, null, color.Fill, (float)decoration.BorderWidth * layoutScale));
+                state.StateName, binding.Label, seconds, fraction), DecorationPaint(decoration, null, color.Fill, border));
 
             if (state.Emphasized)
                 Add(path + "/emphasis", null, "ActionEmphasis", bounds, clip, MeaningfulEdge, new UiCaptureNodePaint(
-                    scheme.ResolveForeground(UiTone.Primary, role), color.Fill, borderWidth: UiActionSlotGeometry.EmphasisBorder * readableScale));
+                    scheme.ResolveForeground(UiTone.Primary, role), color.Fill, borderWidth: emphasisBorder));
             if (state.Status == UiActionSlotStatus.Cooldown && state.Cooldown.Elapsed > 0f)
             {
                 var sweep = new UiCaptureRect(bounds.X, bounds.Y, bounds.Width * state.Cooldown.Elapsed, bounds.Height);

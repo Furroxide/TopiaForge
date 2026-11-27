@@ -7,6 +7,40 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 
 internal static partial class RuntimeAdmissionTests
 {
+    private static void ActionSlotArtUsesBothRoutes()
+    {
+        UnityMainThreadGuard.CaptureCurrentThread();
+        var catalogue = ArtCatalogue(out var imagePack, out _);
+        using var rig = new ControlRig(167, Sandbox);
+        using var host = new UiDeliveryEndpoint(rig.Host, () => rig.Network.Now, author: true, art: catalogue);
+        var peer = rig.AddPeer("Artwork receiver", Sandbox);
+        using var guest = new UiDeliveryEndpoint(peer, () => rig.Network.Now, author: false, art: catalogue);
+        var target = JoinTargetedUi(rig, host, peer);
+        host.Ui.RegisterActionFixture(new InputActionDefinition("confirm", "Confirm", new[] { InputBinding.Key("Q") }));
+
+        var image = new UiImageRef(imagePack.Id, "card");
+        var slot = new UiActionSlot("confirm", "Confirm", image: image, id: "slot");
+        var missing = new UiActionSlot("confirm", "Confirm", image: new UiImageRef(imagePack.Id, "missing"), id: "missing");
+        That(target.Ui.CreateSurface(new UiSurfaceRequest("missing-art", "Missing art", "", content: missing)).ErrorCode == ModErrorCode.NotFound &&
+            host.Shared(new UiSurfaceRequest("missing-hud", "Missing HUD", "", UiSurfaceKind.Hud, 420, 340, missing)).ErrorCode == ModErrorCode.NotFound,
+            "Both publishing routes refuse an undeclared slot image.");
+
+        var sent = target.Ui.CreateSurface(new UiSurfaceRequest("action-art", "Action art", "", content: slot));
+        var mirrored = host.Shared(new UiSurfaceRequest("action-art-hud", "Action art HUD", "", UiSurfaceKind.Hud, 420, 340, slot));
+        using var targetedHandle = sent.Value;
+        using var mirroredHandle = mirrored.Value;
+        var received = guest.Ui.Art!.Surfaces;
+        That(sent.Succeeded && mirrored.Succeeded && rig.Run(() => received.ContainsKey("Action art") && received.ContainsKey("Action art HUD")),
+            "Both authenticated publishers deliver the action slot to the receiving canvas.");
+        foreach (var name in new[] { "Action art", "Action art HUD" })
+        {
+            That(received[name].Content is UiActionSlot decoded && decoded.Image?.ImageId == image.ImageId &&
+                decoded.PackDescriptorDigest.Span.SequenceEqual(imagePack.Digest.Span),
+                "The decoded action slot identifies the image and the exact declared descriptor.");
+        }
+        That(slot.PackDescriptorDigest.IsEmpty, "Projection preserves the authored action slot for local use.");
+    }
+
     private static void ActionsUseTheirAdmittedRoutes()
     {
         UnityMainThreadGuard.CaptureCurrentThread();

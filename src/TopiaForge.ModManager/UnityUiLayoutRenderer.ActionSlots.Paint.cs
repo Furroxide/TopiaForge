@@ -41,7 +41,7 @@ namespace TopiaForge.ModManager
                 {
                     var panel = new UiLayoutRect(0, 0, layout.Size.Width, layout.Size.Height);
                     var fill = ColorOf(colors.GetPair(role).Fill);
-                    var stroke = current.Emphasized ? UiActionSlotGeometry.EmphasisBorder * layout.Readability
+                    var stroke = current.Emphasized ? UiActionSlotGeometry.EmphasisStroke((float)decoration.BorderWidth, layout.Readability)
                         : (float)decoration.BorderWidth;
                     var radius = (float)decoration.CornerRadius;
                     var edge = current.Emphasized ? colors.ResolveForeground(UiTone.Primary, role) : colors.ResolveBoundary(backdrop);

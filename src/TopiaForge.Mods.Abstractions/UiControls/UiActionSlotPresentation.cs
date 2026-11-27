@@ -102,6 +102,9 @@ namespace TopiaForge.Mods
     {
         internal const int MaximumLabelLines = 2;
         internal const float EmphasisBorder = 3f;
+
+        internal static float EmphasisStroke(float standardBorder, float readableScale) =>
+            Math.Max(EmphasisBorder * readableScale, standardBorder + readableScale);
         internal const float IconSize = 24f;
         private const float ReferenceWidth = 128f;
         private const float ReferenceHeight = 112f;

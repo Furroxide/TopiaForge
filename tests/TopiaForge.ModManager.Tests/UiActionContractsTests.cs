@@ -221,6 +221,10 @@ namespace TopiaForge.ModManager.Tests
             }
             Require(UiActionSlotGeometry.MaximumLabelLines == 2 && UiActionSlotGeometry.EmphasisBorder == 3,
                 "The slot's label line limit and visible emphasis geometry are fixed.");
+            foreach (var readableScale in new[] { 1f, 2f })
+                foreach (var boundary in new[] { 0f, 1f, 2f, 3f, 4f })
+                    Require(UiActionSlotGeometry.EmphasisStroke(boundary * readableScale, readableScale) > boundary * readableScale,
+                        "Emphasis stays visibly wider than a theme or high-contrast boundary.");
             Require(UiActionSlotGeometry.ContentBounds(1f, new UiInsets(UiSpace.Xxxl)).HasArea,
                 "The largest kit insets leave room inside the slot.");
             Reject(() => UiActionSlotGeometry.ContentBounds(float.NaN), "uiScale");
