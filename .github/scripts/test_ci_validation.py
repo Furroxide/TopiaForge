@@ -157,7 +157,8 @@ class CiValidationTests(unittest.TestCase):
                 self.assertIn("--source public --cache-key-only", step(body, "Resolve Robotopia refs cache key"))
                 restore = step(body, "Restore Robotopia managed refs")
                 if name == "docs":
-                    self.assertIn("else { @('--require-latest') }", restore)
+                    self.assertIn("$latest = @('--require-latest')", restore)
+                    self.assertIn("if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }", restore)
                     self.assertIn("--source public @latest", restore)
                 else:
                     self.assertIn('if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi', restore)
