@@ -397,6 +397,19 @@ jobs:
       - name: Test README count audit
         run: python3 .github/scripts/test_check_readme_counts.py
 
+      # Use the diagram builder's dependency outside the tree scanned below.
+      - name: Set up the README diagram audit environment
+        run: |
+          python3 -m venv "$RUNNER_TEMP/readme-diagrams"
+          "$RUNNER_TEMP/readme-diagrams/bin/python" -m pip install \
+            --no-input --disable-pip-version-check "Pillow==12.2.0"
+
+      - name: Keep the README diagrams and their descriptions in sync
+        run: '"$RUNNER_TEMP/readme-diagrams/bin/python" .github/scripts/check_readme_diagrams.py'
+
+      - name: Test README diagram audit
+        run: '"$RUNNER_TEMP/readme-diagrams/bin/python" .github/scripts/test_check_readme_diagrams.py'
+
       - name: Keep the gamemode contract fixture index closed over its fixtures
         run: python3 .github/scripts/check_fixture_index.py
 
