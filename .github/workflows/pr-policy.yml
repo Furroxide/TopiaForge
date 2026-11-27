@@ -97,7 +97,11 @@ jobs:
       - name: Enforce DCO for incoming commits
         shell: bash
         env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
@@ -107,16 +111,31 @@ jobs:
           git rev-parse --verify "$BASE_SHA^{commit}" >/dev/null
           git rev-parse --verify "$HEAD_SHA^{commit}" >/dev/null
           commits=$(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
-          failures=0
+          missing=()
           while IFS= read -r commit; do
             [[ -n "$commit" ]] || continue
-            if ! git show -s --format=%B "$commit" |
-              grep -Eiq '^Signed-off-by:[[:space:]].+<[^<>[:space:]]+@[^<>[:space:]]+>[[:space:]]*$'; then
-              echo "::error::Commit $commit is missing a valid Signed-off-by trailer."
-              failures=1
+            message=$(git show -s --format=%B "$commit")
+            if ! grep -Eiq '^Signed-off-by:[[:space:]].+<[^<>[:space:]]+@[^<>[:space:]]+>[[:space:]]*$' <<< "$message"; then
+              missing+=("$commit")
             fi
           done <<< "$commits"
-          exit "$failures"
+          if (( ${#missing[@]} )); then
+            if [[ "$BASE_REPOSITORY" == Furroxide/TopiaForge &&
+                  "$HEAD_REPOSITORY" == "$BASE_REPOSITORY" ]] &&
+                [[ "$BASE_REF:$HEAD_REF" == main:release/0.2.0 ||
+                   "$BASE_REF:$HEAD_REF" == dev:sync/main-v0.2.0 ]]; then
+              verifier=$(mktemp -d)
+              trap 'rm -f -- "$verifier/verify.py" "$verifier/allowed-signers"; rmdir -- "$verifier"' EXIT
+              # Only the protected base supplies executable verification code and public keys.
+              git show "$BASE_SHA:.github/scripts/verify_0_2_0_dco.py" > "$verifier/verify.py"
+              git show "$BASE_SHA:.github/release-dco/allowed-signers" > "$verifier/allowed-signers"
+              python3 "$verifier/verify.py" "$verifier/allowed-signers" \
+                "$BASE_REPOSITORY" "$HEAD_REPOSITORY" "$BASE_REF" "$HEAD_REF" "$BASE_SHA" "$HEAD_SHA"
+            else
+              printf '::error::Commit %s is missing a valid Signed-off-by trailer.\n' "${missing[@]}"
+              exit 1
+            fi
+          fi
 
       - name: Validate release source against the product version
         if: github.base_ref == 'main'
