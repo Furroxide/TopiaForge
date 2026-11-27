@@ -5,6 +5,7 @@ using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Testing;
+using TopiaForge.TestSupport;
 using FakeEntity = TopiaForge.Mods.Testing.FakeEntity;
 using TopiaForge.Multiplayer.Engine;
 
@@ -521,18 +522,12 @@ internal static class WorldViewLifetimeRefreshTests
 
     private static void Idle(Node host, Node observer, InternalNetRef reference)
     {
-        for (var index = 0; index < 200; index++)
+        var allocated = AllocationProbe.Measure("settled hidden world views and canonical references", () =>
         {
             host.Players.TryResolveReference(reference, out _);
-            host.Services.Views.Run(.25f); observer.Services.Views.Run(.25f);
-        }
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var index = 0; index < 10_000; index++)
-        {
-            host.Players.TryResolveReference(reference, out _);
-            host.Services.Views.Run(.25f); observer.Services.Views.Run(.25f);
-        }
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            host.Services.Views.Run(.25f);
+            observer.Services.Views.Run(.25f);
+        }, frames: 10_000, warmups: 200);
         if (allocated != 0)
             throw new InvalidOperationException("Lifetime view: unchanged hidden views and canonical references retain exact-zero idle allocation (allocated "
                 + allocated + " bytes).");
