@@ -307,6 +307,20 @@ jobs:
           lfs: true
           persist-credentials: false
 
+      - name: Prepare neutral Unix build root
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: bash .github/scripts/prepare-hosted-dart-build.sh
+
+      - name: Configure neutral macOS .NET paths
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="${TOPIAFORGE_CI_BUILD_ROOT%/source}"
+          printf 'DOTNET_INSTALL_DIR=%s\nDOTNET_CLI_HOME=%s\nNUGET_PACKAGES=%s\n' \
+            "$root/dotnet" "$root/dotnet-home" "$root/nuget-packages" >> "$GITHUB_ENV"
+
       - name: Set up .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
@@ -379,11 +393,6 @@ jobs:
           dotnet run `
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
             -c Release -- @latest
-
-      - name: Prepare neutral Dart build root
-        if: matrix.platform != 'windows'
-        shell: bash
-        run: bash .github/scripts/prepare-hosted-dart-build.sh
 
       - name: Download macOS x64 CLI
         if: matrix.platform == 'macos'
@@ -474,11 +483,22 @@ jobs:
           set -euo pipefail
           workspace="${GITHUB_WORKSPACE//\\//}"
           temp="${RUNNER_TEMP//\\//}"
+          output="$workspace/release-artifacts"
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            # Single-file .NET bundles and Mach-O tooling can retain build paths.
+            root="${TOPIAFORGE_CI_BUILD_ROOT%/source}"
+            export TMPDIR="$root/tmp"
+            mkdir "$TMPDIR"
+            cp -R "${RobotopiaManagedDir:?}" "$root/managed-refs"
+            export RobotopiaManagedDir="$root/managed-refs"
+            output="$root/release-artifacts"
+            cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"
+          fi
           dart pub get --enforce-lockfile
           args=(
             release build-package
             --platform "${{ matrix.platform }}"
-            --output "$workspace/release-artifacts"
+            --output "$output"
             --configuration Release
             --prebuilt-launcher "$temp/prebuilt-launcher"
             --prebuilt-dist "$temp/prebuilt-dist"
@@ -489,6 +509,10 @@ jobs:
             args+=(--prebuilt-cli "$temp/topiaforge-linux-x64")
           fi
           dart run bin/topiaforge.dart "${args[@]}"
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            mkdir -p "$workspace/release-artifacts"
+            mv "$output/${{ matrix.asset }}" "$workspace/release-artifacts/"
+          fi
 
       - name: Smoke test release package
         shell: bash
