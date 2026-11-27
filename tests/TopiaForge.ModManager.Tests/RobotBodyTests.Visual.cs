@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager.Tests
             var probe = Assembly.Load(bytes.ToArray()).GetType("VisualSnapshotScenarios", true)!;
             var run = (Func<int>)probe.GetMethod("Run")!.CreateDelegate(typeof(Func<int>));
             assertions += run();
+            PersistentBodyComposition(robotKit);
         }
 
         private const string VisualFixture = """
@@ -174,17 +175,52 @@ internal static class VisualSnapshotScenarios
 namespace UnityEngine
 {
     public readonly struct Vector3 { public Vector3(float x, float y, float z) { } }
-    public readonly struct Quaternion { public static Quaternion Euler(float x, float y, float z) => default; }
-    public sealed class Material { }
-    public sealed class MaterialPropertyBlock { public void Clear() { } }
+    public readonly struct Quaternion
+    {
+        public Quaternion(float x, float y, float z, float w) { }
+        public static Quaternion Euler(float x, float y, float z) => default;
+    }
+    public readonly record struct Color(float R, float G, float B, float A)
+    {
+        public static Color operator *(Color value, float scale) => new(value.R * scale, value.G * scale, value.B * scale, value.A * scale);
+    }
+    public sealed class Material { internal bool Metal; }
+    public static class Shader { public static int PropertyToID(string name) => StringComparer.Ordinal.GetHashCode(name); }
+    public sealed class MaterialPropertyBlock
+    {
+        private readonly Dictionary<int, Color> colors = new();
+        public void Clear() => colors.Clear();
+        public void SetColor(int id, Color color) => colors[id] = color;
+        internal Color ColorAt(int id) => colors[id];
+        internal void CopyFrom(MaterialPropertyBlock source)
+        { Clear(); foreach (var pair in source.colors) colors.Add(pair.Key, pair.Value); }
+    }
 
-    public sealed class GameObject
+    public class Object
+    {
+        internal static Func<GameObject, GameObject>? Clone;
+        internal static readonly List<Object> Destroyed = new();
+        public static GameObject Instantiate(GameObject prefab, Transform parent, bool worldPositionStays)
+        {
+            var copy = Clone!(prefab);
+            copy.transform.SetParent(parent, worldPositionStays);
+            return copy;
+        }
+        public static void Destroy(Object value) => Destroyed.Add(value);
+    }
+
+    public sealed class GameObject : Object
     {
         private readonly List<Component> components = new List<Component>();
+        internal static readonly List<GameObject> Activated = new();
+        internal static readonly List<GameObject> Created = new();
+        public string name { get; }
         public Transform transform { get; }
         public bool activeSelf { get; private set; } = true;
-        public GameObject(string name) { transform = new Transform(this); }
-        public void SetActive(bool active) => activeSelf = active;
+        public bool activeInHierarchy => activeSelf && (transform.parent?.gameObject.activeInHierarchy ?? true);
+        public GameObject(string name) { this.name = name; transform = new Transform(this); Created.Add(this); }
+        public void SetActive(bool active)
+        { activeSelf = active; if (active) Activated.Add(this); }
         public T AddComponent<T>() where T : Component, new()
         {
             var component = new T { gameObject = this };
@@ -192,6 +228,8 @@ namespace UnityEngine
             return component;
         }
         public T? GetComponent<T>() where T : Component => components.OfType<T>().FirstOrDefault();
+        public Component? GetComponentInChildren(Type type, bool includeInactive) =>
+            GetComponentsInChildren<Component>(includeInactive).FirstOrDefault(type.IsInstanceOfType);
         public T[] GetComponentsInChildren<T>(bool includeInactive) where T : Component => components.OfType<T>()
             .Concat(transform.Children.SelectMany(child => child.gameObject.GetComponentsInChildren<T>(includeInactive))).ToArray();
     }
@@ -204,6 +242,8 @@ namespace UnityEngine
         public Vector3 localPosition { get; set; }
         public Quaternion localRotation { get; set; }
         public Vector3 localScale { get; set; }
+        public Vector3 position { get; set; }
+        public Quaternion rotation { get; set; }
         public int childCount => Children.Count;
         public Transform(GameObject owner) { gameObject = owner; }
         public Transform GetChild(int index) => Children[index];
@@ -221,7 +261,7 @@ namespace UnityEngine
         public T? GetComponent<T>() where T : Component => gameObject.GetComponent<T>();
     }
 
-    public sealed class Mesh
+    public sealed class Mesh : Object
     {
         internal Exception? VertexFailure;
         internal int Vertices;
@@ -233,6 +273,8 @@ namespace UnityEngine
     public class Renderer : Component
     {
         private Material[] materials = new[] { new Material() };
+        private readonly Dictionary<int, MaterialPropertyBlock> blocks = new();
+        internal Action<MaterialPropertyBlock, int>? OnSetBlock;
         internal Exception? MaterialFailure;
         public Material[] sharedMaterials
         {
@@ -242,8 +284,14 @@ namespace UnityEngine
         public bool enabled { get; set; } = true;
         public int shadowCastingMode { get; set; }
         public bool receiveShadows { get; set; }
-        public void GetPropertyBlock(MaterialPropertyBlock block, int index = 0) { }
-        public void SetPropertyBlock(MaterialPropertyBlock block, int index = 0) { }
+        public void GetPropertyBlock(MaterialPropertyBlock block, int index = -1)
+        { if (blocks.TryGetValue(index, out var current)) block.CopyFrom(current); else block.Clear(); }
+        public void SetPropertyBlock(MaterialPropertyBlock block, int index = -1)
+        {
+            OnSetBlock?.Invoke(block, index);
+            if (!blocks.TryGetValue(index, out var current)) blocks.Add(index, current = new MaterialPropertyBlock());
+            current.CopyFrom(block);
+        }
     }
 
     public sealed class MeshRenderer : Renderer { }
@@ -253,10 +301,12 @@ namespace UnityEngine
         internal Exception? BakeFailure;
         internal int BakedVertices = 11;
         internal int Bakes;
+        internal Action? BeforeBake;
         public Mesh? sharedMesh { get; set; }
         public void BakeMesh(Mesh mesh)
         {
             Bakes++;
+            BeforeBake?.Invoke();
             if (BakeFailure != null) throw BakeFailure;
             mesh.Vertices = BakedVertices;
         }

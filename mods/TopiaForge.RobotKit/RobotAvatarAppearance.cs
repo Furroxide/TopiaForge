@@ -21,10 +21,26 @@ namespace TopiaForge.RobotKit
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         private static readonly int Emissive = Shader.PropertyToID("_EmissiveColor");
 
-        internal static void Apply(GameObject clone, AvatarAppearance appearance)
+        internal static void Apply(GameObject clone, AvatarAppearance appearance) => Apply(clone, appearance, composeDefault: false);
+
+        internal static void ApplyPersistentBody(GameObject clone, AvatarAppearance appearance)
+        {
+            if (clone.activeInHierarchy) throw new InvalidOperationException("The persistent body source must stay inactive.");
+            Apply(clone, appearance, composeDefault: true);
+        }
+
+        private static void Apply(GameObject clone, AvatarAppearance appearance, bool composeDefault)
         {
             var composer = Composer == null ? null : clone.GetComponentInChildren(Composer, true);
-            if (appearance.Accessory != null) ApplyAccessory(composer, appearance);
+            if (appearance.Accessory != null) SelectAccessory(composer, appearance);
+            if (composeDefault || appearance.Accessory != null)
+            {
+                if (composer == null || Build == null)
+                    throw new InvalidOperationException("The avatar body composition binding is unavailable.");
+                // An inactive snapshot source will never get native activation to assemble its default parts.
+                Build.Invoke(composer, null);
+            }
+            if (composeDefault) RobotBodyVisual.CheckHierarchy(clone.transform);
             if (IsMetal == null || !IsMetal.IsStatic && composer == null)
                 throw new InvalidOperationException("The avatar material binding is unavailable.");
             var renderers = clone.GetComponentsInChildren<Renderer>(true);
@@ -52,7 +68,7 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        private static void ApplyAccessory(Component? composer, AvatarAppearance appearance)
+        private static void SelectAccessory(Component? composer, AvatarAppearance appearance)
         {
             if (composer == null || PartType == null || Parts == null || Select == null || Build == null || None == null)
                 throw new InvalidOperationException("The avatar accessory binding is unavailable.");
@@ -74,7 +90,6 @@ namespace TopiaForge.RobotKit
             }
             if (selected == null) throw new InvalidOperationException("The avatar accessory is unavailable.");
             Select.Invoke(composer, new object[] { slot, selected });
-            Build.Invoke(composer, null);
         }
     }
 }
