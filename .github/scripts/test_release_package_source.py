@@ -97,7 +97,7 @@ class ReleasePackageSourceTests(unittest.TestCase):
         matrix = job(package, "build")
         self.assertLess(intel.index(stage), intel.index(neutral_cli))
         self.assertLess(matrix.index(stage), matrix.index(neutral_cli))
-        self.assertEqual(matrix.count(neutral_cli), 2)
+        self.assertEqual(matrix[: matrix.index("- name: Build release package")].count(neutral_cli), 2)
         self.assertIn('args+=(--prebuilt-cli "$temp/topiaforge-linux-x64")', matrix)
         self.assertIn('args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")', matrix)
 
@@ -105,6 +105,22 @@ class ReleasePackageSourceTests(unittest.TestCase):
         self.assertLess(launcher.index(stage), launcher.index(build_launcher))
         self.assertIn('source="${TOPIAFORGE_CI_BUILD_ROOT:-', launcher)
         self.assertIn('cd "${TOPIAFORGE_CI_BUILD_ROOT:-', launcher)
+
+    def test_macos_extractor_publish_uses_neutral_build_paths(self) -> None:
+        matrix = job(workflow("release-package-build.yml"), "build")
+        setup = matrix.index("- name: Set up .NET")
+        stage = matrix.index("bash .github/scripts/prepare-hosted-dart-build.sh")
+        self.assertLess(stage, setup)
+        for setting in ("DOTNET_INSTALL_DIR", "DOTNET_CLI_HOME", "NUGET_PACKAGES"):
+            self.assertIn(f"{setting}=%s", matrix[stage:setup])
+        start = matrix.index("- name: Build release package")
+        end = matrix.index("- name: Smoke test release package")
+        build = matrix[start:end]
+        invoke = build.index('dart run bin/topiaforge.dart "${args[@]}"')
+        self.assertLess(build.index('cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"'), invoke)
+        self.assertIn('export RobotopiaManagedDir="$root/robotopia-managed"', build)
+        self.assertIn('mv "$output/${{ matrix.asset }}" "$workspace/release-artifacts/"', build)
+        self.assertIn("args+=(--require-mac-universal)", matrix[end:])
 
     def test_release_prs_keep_latest_managed_ref_requirement(self) -> None:
         package = workflow("release-package-build.yml")
