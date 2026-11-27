@@ -140,21 +140,32 @@ class PrivateStatusDeployTests(unittest.TestCase):
         self.assertIsNotNone(bash)
         valid_sha = "a" * 40
         cases = [
-            ("status", valid_sha, "refs/heads/main", "control-plane-production", "", True),
-            ("control-plane-staging", valid_sha, "refs/heads/main", "control-plane-staging", "staging", True),
-            ("control-plane-production", valid_sha, "refs/heads/main", "control-plane-production", "production", True),
-            ("status", valid_sha, "refs/heads/dev", "", "", False),
-            ("status", "a" * 39, "refs/heads/main", "", "", False),
-            ("status", "A" * 40, "refs/heads/main", "", "", False),
-            ("unknown", valid_sha, "refs/heads/main", "", "", False),
+            ("status", valid_sha, "refs/heads/main", False, True, "control-plane-production", "", True),
+            ("control-plane-staging", valid_sha, "refs/heads/main", False, True,
+             "control-plane-staging", "staging", True),
+            ("control-plane-production", valid_sha, "refs/heads/main", False, False, "", "", False),
+            ("control-plane-production", valid_sha, "refs/heads/main", False, True,
+             "control-plane-production", "production", True),
+            ("control-plane-production", valid_sha, "refs/heads/main", True, True,
+             "control-plane-production", "production", True),
+            ("control-plane-production", valid_sha, "refs/heads/main", True, False, "", "", False),
+            ("control-plane-staging", valid_sha, "refs/heads/main", True, True, "", "", False),
+            ("status", valid_sha, "refs/heads/main", True, True, "", "", False),
+            ("status", valid_sha, "refs/heads/dev", False, True, "", "", False),
+            ("status", "a" * 39, "refs/heads/main", False, True, "", "", False),
+            ("status", "A" * 40, "refs/heads/main", False, True, "", "", False),
+            ("unknown", valid_sha, "refs/heads/main", False, True, "", "", False),
         ]
-        for target, sha, ref, environment, wrangler, accepted in cases:
-            with self.subTest(target=target, sha=sha, ref=ref), tempfile.TemporaryDirectory() as folder:
+        for target, sha, ref, open_expected, verify, environment, wrangler, accepted in cases:
+            with self.subTest(target=target, sha=sha, ref=ref, open_expected=open_expected, verify=verify), \
+                    tempfile.TemporaryDirectory() as folder:
                 output = Path(folder) / "output"
                 output.touch()
                 variables = {
                     "TARGET": target, "SOURCE_SHA": sha, "GITHUB_REF": ref,
                     "GITHUB_OUTPUT": str(output),
+                    "EXPECT_OPEN_PRODUCTION": str(open_expected).lower(),
+                    "VERIFY_PUBLIC_ROUTES": str(verify).lower(),
                 }
                 if os.name == "nt":
                     variables["SystemRoot"] = os.environ["SystemRoot"]
@@ -402,28 +413,135 @@ npx() {
                 )
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
-    def test_production_public_smoke_rejects_enabled_features(self):
+    def test_open_production_smoke_requires_explicit_reviewed_source_opt_in(self):
+        deploy = jobs()["deploy"]
+        step = deploy.split(
+            "      - name: Read the reviewed production player route setting\n", 1
+        )[1]
+        step = step.split("\n      - name:", 1)[0]
+        self.assertIn("if: inputs.target == 'control-plane-production'", step)
+        run = textwrap.dedent(
+            step.split("          python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        )
+        for deployment_env, setting, open_expected, expected_output in [
+            ("production", '"true"', True, "admitted=true\n"),
+            ("production", '"true"', False, "admitted=true\n"),
+            ("production", '"false"', False, "admitted=false\n"),
+            ("production", None, False, "admitted=false\n"),
+            ("production", '"false"', True, ""),
+            ("production", "true", False, ""),
+            ("production", None, True, ""),
+            ("staging", '"true"', False, ""),
+            (None, None, False, ""),
+        ]:
+            with self.subTest(deployment=deployment_env, setting=setting, open_expected=open_expected), \
+                    tempfile.TemporaryDirectory() as folder:
+                config = Path(folder) / "wrangler.toml"
+                output = Path(folder) / "output"
+                output.touch()
+                values = ["[env.production.vars]"]
+                if deployment_env:
+                    values.append(f'ENVIRONMENT = "{deployment_env}"')
+                if setting:
+                    values.append(f"PRODUCTION_PLAYER_ROUTES_ENABLED = {setting}")
+                config.write_text("\n".join(values) + "\n", encoding="utf-8")
+                environment = dict(os.environ, GITHUB_OUTPUT=str(output),
+                                   EXPECT_OPEN_PRODUCTION=str(open_expected).lower())
+                result = subprocess.run([sys.executable, "-c", run], cwd=folder, env=environment, capture_output=True,
+                                        text=True, timeout=10, check=False)
+                self.assertEqual(result.returncode == 0, bool(expected_output), result.stderr)
+                self.assertEqual(output.read_text(encoding="utf-8"), expected_output)
+
+    def test_locked_production_clears_feature_approval_before_deploy(self):
+        deploy = jobs()["deploy"]
+        section = "      - name: Deploy the control plane\n"
+        self.assertLess(deploy.index(section), deploy.index("      - name: Smoke-test public routes"))
+        step = deploy.split(section, 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("PRODUCTION_PLAYER_ROUTES_ADMITTED: ${{ steps.production-route-settings.outputs.admitted }}", step)
+        self.assertIn("ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}", step)
+        bash = git_bash()
+        self.assertIsNotNone(bash)
+        self.assertIsNotNone(shutil.which("jq"))
+        run = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        disabled = {"hosting": False, "invites": False, "signaling": False, "relay": False}
+        fake_commands = textwrap.dedent(r'''
+            python3() {
+              cat >/dev/null
+              printf '%s\n' credentials >> "$EVENTS"
+              [[ "$CREDENTIALS_OK" == true ]]
+            }
+            curl() {
+              printf '%s\n' clear >> "$EVENTS"
+              [[ "$*" != *"$ADMIN_TOKEN"* ]] || return 1
+              read -r authorization
+              [[ "$authorization" == "Authorization: Bearer $ADMIN_TOKEN" ]] || return 1
+              [[ "$*" == *'--request PUT --header @-'* ]] || return 1
+              [[ "$*" == *'https://mp.topiaforge.dev/v1/admin/features' ]] || return 1
+              [[ "$*" == *'--data {"hosting":false,"invites":false,"signaling":false,"relay":false}'* ]] || return 1
+              [[ "$REQUEST_OK" == true ]] || return 22
+              printf '%s\n' "$RESPONSE"
+            }
+            npx() { printf '%s\n' deploy >> "$EVENTS"; }
+        ''')
+        for target, admitted, response_environment, features, credentials_ok, request_ok, events in [
+            ("production", "false", "production", disabled, True, True, ["credentials", "clear", "deploy"]),
+            ("production", "false", "production", dict(disabled, relay=True), True, True, ["credentials", "clear"]),
+            ("production", "false", "staging", disabled, True, True, ["credentials", "clear"]),
+            ("production", "false", "production", disabled, False, True, ["credentials"]),
+            ("production", "false", "production", disabled, True, False, ["credentials", "clear"]),
+            ("production", "", "production", disabled, True, True, ["credentials"]),
+            ("production", "true", "production", disabled, True, True, ["credentials", "deploy"]),
+            ("staging", "", "staging", disabled, True, True, ["credentials", "deploy"]),
+        ]:
+            with self.subTest(target=target, admitted=admitted, response_environment=response_environment,
+                              features=features, credentials_ok=credentials_ok, request_ok=request_ok), \
+                    tempfile.TemporaryDirectory() as folder:
+                trace = Path(folder) / "events"
+                trace.touch()
+                credential = "test-only-admin-token" if credentials_ok else ""
+                environment = dict(
+                    os.environ, TARGET=f"control-plane-{target}", WRANGLER_ENVIRONMENT=target,
+                    PRODUCTION_PLAYER_ROUTES_ADMITTED=admitted, RUNNER_TEMP=folder, EVENTS=str(trace),
+                    CLOUDFLARE_API_TOKEN="test-only-deploy-token", CLOUDFLARE_ACCOUNT_ID="a" * 32,
+                    ADMIN_TOKEN=credential, CREDENTIALS_OK=str(credentials_ok).lower(), REQUEST_OK=str(request_ok).lower(),
+                    RESPONSE=json.dumps({"environment": response_environment, "features": features}),
+                )
+                result = subprocess.run([bash, "--noprofile", "--norc", "-c", fake_commands + run],
+                                        env=environment, capture_output=True, text=True, timeout=10, check=False)
+                self.assertEqual(result.returncode == 0, "deploy" in events, result.stderr)
+                self.assertEqual(trace.read_text(encoding="utf-8").splitlines(), events)
+                if credential:
+                    self.assertNotIn(credential, result.stdout + result.stderr)
+
+    def test_production_public_smoke_matches_the_expected_features(self):
         smoke = jobs()["deploy"].split("      - name: Smoke-test public routes after domain cutover\n", 1)[1]
-        base = re.search(r"predicate='([^']+)'", smoke)
-        production = re.search(r'predicate="\$predicate and ([^"]+)"', smoke)
-        self.assertIsNotNone(base)
-        self.assertIsNotNone(production)
+        run = smoke.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+        script = 'curl() { printf "%s\\n" "$SMOKE_RESPONSE"; }\n' + textwrap.dedent(run)
+        bash = git_bash()
+        self.assertIsNotNone(bash)
         jq = shutil.which("jq")
         if jq is None:
-            self.skipTest("jq is required to execute the public smoke predicate")
-        predicate = f"{base.group(1)} and {production.group(1)}"
+            self.skipTest("jq is required to execute the public smoke test")
         disabled = {name: False for name in ("hosting", "invites", "signaling", "relay")}
-        for features, accepted in (
-            (disabled, True),
-            (dict(disabled, relay=True), False),
-            (dict(disabled, hosting=True), False),
-            ({"hosting": False, "invites": False, "signaling": False}, False),
+        enabled = dict.fromkeys(disabled, True)
+        for open_expected, features, kill_switch, accepted in (
+            (False, disabled, True, True),
+            (False, dict(disabled, relay=True), False, False),
+            (False, enabled, False, False),
+            (False, {"hosting": False, "invites": False, "signaling": False}, False, False),
+            (True, enabled, False, True),
+            (True, enabled, True, False),
+            (True, dict(enabled, relay=False), False, False),
+            (True, enabled, None, False),
         ):
-            with self.subTest(features=features):
+            with self.subTest(open_expected=open_expected, features=features, kill_switch=kill_switch):
                 response = {"schema": "topiaforge.control-plane-status/1", "api": 1,
-                            "features": features}
+                            "features": features, "killSwitch": kill_switch}
+                environment = dict(os.environ, TARGET="control-plane-production",
+                                   EXPECT_OPEN_PRODUCTION=str(open_expected).lower(),
+                                   SMOKE_RESPONSE=json.dumps(response))
                 result = subprocess.run(
-                    [jq, "-e", predicate], input=json.dumps(response),
+                    [bash, "--noprofile", "--norc", "-c", script], env=environment,
                     capture_output=True, text=True, timeout=10, check=False,
                 )
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)
