@@ -28,6 +28,8 @@ namespace TopiaForge.ModManager
         private readonly GameObject loopObject;
         private readonly UiGameplayGate uiGameplay = new UiGameplayGate();
         private readonly UnityUiHudPlacement hudPlacement = new UnityUiHudPlacement();
+        private readonly UnityUiThemePackages uiThemePackages;
+        internal UnityUiThemePackages UiThemePackages => uiThemePackages;
         private bool activeSceneSampled;
         private int sampledActiveScene;
         private bool sampledActiveIsGameplay;
@@ -38,6 +40,7 @@ namespace TopiaForge.ModManager
             sceneCoordinator = nativeHost.Coordinator;
             scenes = nativeHost.Scenes;
             dispatcher = nativeHost.Dispatcher;
+            uiThemePackages = new UnityUiThemePackages(dispatcher);
             worlds = new UnityWorldRuntimeBackend(entities);
             this.runtimeOwnershipId = runtimeOwnershipId;
             UnityMainThreadGuard.CaptureCurrentThread();
@@ -102,7 +105,7 @@ namespace TopiaForge.ModManager
                 lifetime.StoppingToken, transitionAccess,
                 runtimeOwnershipId + ":" + (transitionAccess?.OwnershipId ?? ownerModId));
             var ownerScheduler = new OwnerScheduler(lifetime, scheduler, logger);
-            var ui = new OwnerUiService(ownerModId, dataPath, lifetime, logger, uiGameplay, hudPlacement);
+            var ui = new OwnerUiService(ownerModId, dataPath, lifetime, logger, uiGameplay, hudPlacement, uiThemePackages);
             ui.AttachWorldWidgets(entities);
             ui.FollowClock(() => Math.Max(0, UnityEngine.Time.realtimeSinceStartupAsDouble - uiClockOrigin), () => uiClockEpoch);
             return new GameplayContextServices(

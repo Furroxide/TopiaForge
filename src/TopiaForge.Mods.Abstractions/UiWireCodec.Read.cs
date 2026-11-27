@@ -129,6 +129,7 @@ namespace TopiaForge.Mods
             private UiNode EnhancedNode(byte type, int depth)
             {
                 if (!enhanced) throw Bad();
+                if (type >= IconTag && type <= PipsTag) return ArtNode(type);
                 if (type != EnhancedTextTag && type != EnhancedProgressTag && type != EnhancedCountdownTag)
                     return LayoutNode(type, depth);
                 var optionalId = LayoutId();

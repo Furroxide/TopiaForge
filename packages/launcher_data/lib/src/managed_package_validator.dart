@@ -6,12 +6,14 @@ import 'package:path/path.dart' as p;
 import 'bounded_process.dart';
 import 'dotnet_sdk.dart';
 
+enum ManagedPackageValidation { package, themes, prepareThemes }
+
 Future<List<String>> runManagedPackageValidator(
   Directory packageRoot, {
   required Directory repositoryRoot,
   required Iterable<Directory> searchRoots,
   RepositoryDotnetSdkResolver resolveDotnet = resolveRepositoryDotnetSdk,
-  bool uiThemesOnly = false,
+  ManagedPackageValidation mode = ManagedPackageValidation.package,
 }) async {
   final validator = _resolveManagedPackageValidator(
     repositoryRoot,
@@ -22,7 +24,13 @@ Future<List<String>> runManagedPackageValidator(
   try {
     final result = await runBoundedProcess(
       dotnet.executable,
-      [validator.path, if (uiThemesOnly) '--ui-themes-only', packageRoot.path],
+      [
+        validator.path,
+        if (mode == ManagedPackageValidation.themes) '--ui-themes-only',
+        if (mode == ManagedPackageValidation.prepareThemes)
+          '--prepare-ui-themes',
+        packageRoot.path,
+      ],
       workingDirectory: hostRoot.path,
       runInShell: false,
       timeout: const Duration(seconds: 30),

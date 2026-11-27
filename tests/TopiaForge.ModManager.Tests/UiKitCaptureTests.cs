@@ -31,8 +31,9 @@ namespace TopiaForge.ModManager.Tests
             CatalogueIsAtomicAndUsesExactBytes();
             CascadeRefreshKeepsControlState();
             CardAndBoxThemeSwitchesAreAtomic();
+            InheritedThemeSwitchPreflightsNamedStyles();
             SiblingPreloadsAndDrainAreIndependent();
-            FakeThemeArtworkRequiresRuntimeSupport();
+            AssetsCommitTogetherAndEnrichTheDescriptor();
             PaintAndTypeRemainReadable();
             VerifyButtonCues();
             AuthoredBackplatesAndControlTargetsAreChecked();
@@ -50,7 +51,37 @@ namespace TopiaForge.ModManager.Tests
             NativeVirtualListUsesPooledTextMetrics();
             TargetedBudgetsIncludeFramingWithoutEarlyClockBinding();
             UnchangedReapplicationAllocatesNothing();
+            RunArtCaptureTests();
             VerifyGoldenManifest();
+            VerifyArtGoldenManifest();
+        }
+
+        private static void InheritedThemeSwitchPreflightsNamedStyles()
+        {
+            using var parentLife = new FakeModLifetime();
+            var parent = new FakeUiService(parentLife);
+            Check(parent.AddThemeFixture("""{"schema":1,"id":"badges","styles":[{"id":"status","target":"badge","radius":"card"}]}""").Succeeded &&
+                parent.AddThemeFixture("""{"schema":1,"id":"boxes","styles":[{"id":"status","target":"box","radius":"small"}]}""").Succeeded,
+                "The two package styles are independently valid.");
+            var badges = new UiThemeRef("badges");
+            var boxes = new UiThemeRef("boxes");
+            Check(parent.Themes.UseTheme(badges).Succeeded, "The original package style is selected.");
+            using var childLife = new FakeModLifetime();
+            var child = CreateThemeScope(parent, childLife);
+            var badge = new UiBadge("Stocked", style: new UiStyleRef("status"), id: "status-mark");
+            using var inherited = Make(child, new UiSurfaceRequest("inherited", "Status", "", UiSurfaceKind.Window, 420, 300, badge));
+            using var overridden = Make(parent, new UiSurfaceRequest("overridden", "Status", "", UiSurfaceKind.Window, 420, 300, badge)
+                .WithTheme(badges));
+            parent.CompletePendingThemeRegistrations();
+
+            Check(parent.Themes.UseTheme(boxes).ErrorCode == ModErrorCode.InvalidArgument && Equals(parent.Themes.SelectedTheme, badges) &&
+                inherited.Capture(Viewport).Nodes.Any(node => node.Id == "status-mark" && node.StyleId == "status" && node.IsRendered),
+                "A parent's incompatible target leaves its inheriting child's current content and paint live.");
+            Check(child.Themes.UseTheme(badges).Succeeded && parent.Themes.UseTheme(boxes).Succeeded,
+                "An explicitly selected child and an explicit surface override shield their authored references.");
+            Check(child.Themes.UseTheme(null).ErrorCode == ModErrorCode.InvalidArgument && Equals(child.Themes.SelectedTheme, badges) &&
+                overridden.Capture(Viewport).Nodes.Any(node => node.StyleId == "status" && node.IsRendered),
+                "Clearing a child selection also preflights the prospective inherited theme without disrupting a surface override.");
         }
 
         private static void CatalogueIsAtomicAndUsesExactBytes()
@@ -153,19 +184,33 @@ namespace TopiaForge.ModManager.Tests
 
         }
 
-        private static void FakeThemeArtworkRequiresRuntimeSupport()
+        private static void AssetsCommitTogetherAndEnrichTheDescriptor()
         {
             using var lifetime = new FakeModLifetime();
             var ui = new FakeUiService(lifetime);
-            const string image = """{"schema":1,"id":"field","images":[{"id":"marker","bundlePath":"ui/assets.bundle","assetName":"Marker","licensePath":"licenses/art.txt"}]}""";
-            const string font = """{"schema":1,"id":"field","fonts":[{"id":"signal","bundlePath":"ui/assets.bundle","assetName":"Signal","licensePath":"licenses/font.txt"}]}""";
-            foreach (var json in new[] { image, font })
-            {
-                var result = ui.AddThemeFixture(json);
-                Check(result.ErrorCode == ModErrorCode.InvalidArgument &&
-                    result.ErrorMessage.Contains("require UI kit artwork support", StringComparison.Ordinal),
-                    "A fake fixture reports the same artwork boundary as runtime admission.");
-            }
+            const string bundle = "ui/assets.bundle";
+            const string hash = "1111111111111111111111111111111111111111111111111111111111111111";
+            const string image = "{\"id\":\"marker\",\"bundlePath\":\"ui/assets.bundle\",\"assetName\":\"Marker\",\"licensePath\":\"licenses/art.txt\"}";
+            const string font = "{\"id\":\"signal\",\"bundlePath\":\"ui/assets.bundle\",\"assetName\":\"Signal\",\"licensePath\":\"licenses/font.txt\"}";
+            const string loadedJson = "{\"schema\":1,\"id\":\"field\",\"images\":[" + image + "]}";
+            const string brokenJson = "{\"schema\":1,\"id\":\"broken\",\"images\":[" + image + "],\"fonts\":[" + font + "]}";
+            Check(ui.AddThemeFixture(loadedJson).Succeeded && ui.AddThemeFixture(brokenJson).Succeeded,
+                "Definitions can be staged before fake resource metadata.");
+            ui.AddAssetFixture(new FakeUiAssetMetadata(bundle, "Marker", hash, 24, 36, 864, isMask: true));
+            ui.AddAssetFixture(new FakeUiAssetMetadata(bundle, "Signal", hash, 128, 128, 16384,
+                ascender: 0.9f, descender: -0.4f, outcome: FakeUiAssetOutcome.LoadFailure));
+
+            var field = new UiThemeRef("field");
+            var broken = new UiThemeRef("broken");
+            var loaded = ui.Themes.PreloadAsync(field);
+            var failed = ui.Themes.PreloadAsync(broken);
+            ui.CompletePendingThemeRegistrations();
+            using var fallback = Make(ui, Request("broken-asset").WithTheme(broken));
+            var marker = ThemeForWire(ui, field)!.Images.Single();
+            Check(loaded.IsCompletedSuccessfully && loaded.Result.Succeeded && marker.PixelWidth == 24 && marker.PixelHeight == 36
+                && marker.IsMask == true, "Fake receipts populate source dimensions and mask eligibility.");
+            Check(failed.IsCompletedSuccessfully && failed.Result.ErrorCode == ModErrorCode.External && fallback.Capture(Viewport).Nodes[0].UsedFallback,
+                "Failure in the last asset never commits the earlier asset or publishes the failed pack.");
         }
 
         private static void PaintAndTypeRemainReadable()

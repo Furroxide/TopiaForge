@@ -108,6 +108,14 @@ namespace TopiaForge.Zombies
         internal const string DetailsNodeId = "zombies-details";
         internal const string IntegrityNodeId = "zombies-integrity";
         internal const string CreditsNodeId = "zombies-credits";
+        internal const string ComboNodeId = "zombies-combo";
+        internal const string UplinkNodeId = "zombies-uplink";
+        internal const string PhaseIconId = "zombies-phase-icon";
+        internal const string IntegrityIconId = "zombies-integrity-icon";
+        internal const string CreditsIconId = "zombies-credits-icon";
+
+        private static readonly UiFlexLayout IconAndLabel = new UiFlexLayout(
+            spacing: UiSpace.Xs, crossAxisAlignment: UiCrossAxisAlignment.Center);
 
         private readonly IUiSurface surface;
         private readonly IModLogger logger;
@@ -197,35 +205,64 @@ namespace TopiaForge.Zombies
                 phase += "  //  " + value.Seconds.ToString(CultureInfo.InvariantCulture) + "s";
             }
 
-            var score = "SCORE  " + value.Score.ToString(CultureInfo.InvariantCulture);
-            if (value.ComboMultiplier > 1)
+            var wave = new UiText("WAVE  " + value.Wave.ToString(CultureInfo.InvariantCulture), UiTextStyle.Label, id: WaveNodeId);
+            var score = new UiText("SCORE  " + value.Score.ToString(CultureInfo.InvariantCulture), UiTextStyle.Numeral, id: ScoreNodeId);
+            var waveStats = value.ComboMultiplier > 1 ? new UiNode[]
             {
-                score += "  x" + value.ComboMultiplier.ToString(CultureInfo.InvariantCulture);
-            }
+                wave,
+                score,
+                new UiBadge("Combo ×" + value.ComboMultiplier.ToString(CultureInfo.InvariantCulture),
+                    UiPaintRole.Accent, UiBadgeStyle.Outlined, UiGlyph.Star, id: ComboNodeId),
+            } : new UiNode[] { wave, score };
 
-            var integrity = new UiText("INTEGRITY  " + value.Integrity.ToString(CultureInfo.InvariantCulture)
+            var integrity = WithGlyph(UiGlyph.Health, IntegrityIconId, new UiText(
+                "INTEGRITY  " + value.Integrity.ToString(CultureInfo.InvariantCulture)
                 + " / " + value.MaximumIntegrity.ToString(CultureInfo.InvariantCulture),
-                UiTextStyle.Label, id: IntegrityNodeId);
+                UiTextStyle.Label, id: IntegrityNodeId));
             var supplies = value.ShopEnabled ? new UiNode[]
             {
                 integrity,
-                new UiText("CREDITS  " + value.Credits.ToString(CultureInfo.InvariantCulture),
-                    UiTextStyle.Label, id: CreditsNodeId),
+                WithGlyph(UiGlyph.Notes, CreditsIconId, new UiText("CREDITS  " + value.Credits.ToString(CultureInfo.InvariantCulture),
+                    UiTextStyle.Label, id: CreditsNodeId)),
             } : new UiNode[] { integrity };
+            var supplySummary = new UiWrap(supplies, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs);
+            var details = new UiText(BuildDetails(value), id: DetailsNodeId);
+            var supplyContent = value.UplinkAvailable
+                ? new UiColumn(supplySummary, UplinkStatus(value), details)
+                : new UiColumn(supplySummary, details);
 
             return new UiColumn(
-                new UiCard(new UiRow(new UiNode[]
-                {
-                    new UiText("WAVE  " + value.Wave.ToString(CultureInfo.InvariantCulture),
-                        UiTextStyle.Label, id: WaveNodeId),
-                    new UiText(score, UiTextStyle.Numeral, id: ScoreNodeId),
-                }, new UiFlexLayout(spacing: UiSpace.Lg)),
-                    header: new UiText(phase, UiTextStyle.Title, UiTone.Primary, PhaseNodeId),
+                new UiCard(new UiWrap(waveStats, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs),
+                    header: WithGlyph(PhaseGlyph(value.Phase), PhaseIconId, new UiText(phase, UiTextStyle.Title, UiTone.Primary, PhaseNodeId)),
                     padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-wave-card"),
-                new UiCard(new UiColumn(
-                    new UiWrap(supplies, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs),
-                    new UiText(BuildDetails(value), id: DetailsNodeId)),
+                new UiCard(supplyContent,
                     padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-supplies-card"));
+        }
+
+        private static UiRow WithGlyph(UiGlyph glyph, string id, UiText label) => new UiRow(
+            new UiNode[] { new UiIcon(glyph, size: 18f, tone: label.Tone, decorative: true, id: id), label }, IconAndLabel);
+
+        private static UiGlyph PhaseGlyph(ZombiesPhase phase) => phase switch
+        {
+            ZombiesPhase.WaitingForWorld => UiGlyph.Signal,
+            ZombiesPhase.Starting => UiGlyph.Play,
+            ZombiesPhase.InterWave => UiGlyph.Check,
+            ZombiesPhase.GameOver => UiGlyph.Warning,
+            ZombiesPhase.ReturningToMenu => UiGlyph.Leave,
+            _ => UiGlyph.Flag,
+        };
+
+        private static UiNode UplinkStatus(in ZombiesHudSnapshot value)
+        {
+            // Run upgrades can take the real capacity beyond the kit's 32-mark track.
+            // Keep the actual readings visible in those runs.
+            if (value.MaximumUplinkCharges is >= 1 and <= 32 && value.UplinkCharges >= 0 &&
+                value.UplinkCharges <= value.MaximumUplinkCharges)
+                return new UiPips(value.MaximumUplinkCharges, value.UplinkCharges, "Uplink",
+                    presentation: UiPipStyle.Segments, id: UplinkNodeId);
+
+            return new UiText("Uplink: " + value.UplinkCharges.ToString(CultureInfo.InvariantCulture) +
+                " / " + value.MaximumUplinkCharges.ToString(CultureInfo.InvariantCulture), UiTextStyle.Label, id: UplinkNodeId);
         }
 
         private string BuildDetails(in ZombiesHudSnapshot value)
@@ -242,12 +279,6 @@ namespace TopiaForge.Zombies
                 text.Append("    ALLIES  ").Append(value.Allies.ToString(CultureInfo.InvariantCulture));
             }
 
-            if (value.UplinkAvailable)
-            {
-                text.Append("    UPLINK  ")
-                    .Append(value.UplinkCharges.ToString(CultureInfo.InvariantCulture))
-                    .Append(" / ").Append(value.MaximumUplinkCharges.ToString(CultureInfo.InvariantCulture));
-            }
             if (value.ChargePercent > 0)
             {
                 text.Append("\nZAPPER CHARGE  ").Append(value.ChargePercent.ToString(CultureInfo.InvariantCulture)).Append('%');

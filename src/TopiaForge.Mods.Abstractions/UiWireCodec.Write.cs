@@ -23,7 +23,7 @@ namespace TopiaForge.Mods
 
         private static bool WriteComposition(IUiWireWriter w, UiNode? node, string clockEpoch, bool retained, UiWireEnvelope? envelope)
         {
-            UiWireValidation.Validate(node);
+            UiWireValidation.Validate(node, requireImageWireMetadata: true);
             if (!retained) UiClockBinding.Check(node, clockEpoch);
             if (envelope != null) WriteEnvelope(w, envelope);
             else if (HasEnhancedNode(node)) throw new ArgumentException("The composition requires a version 2 UI envelope.");
@@ -71,6 +71,10 @@ namespace TopiaForge.Mods
                     break;
                 case UiProgress n:
                     WriteProgress(w, n); break;
+                case UiIcon n: WriteIcon(w, n); break;
+                case UiImage n: WriteImage(w, n); break;
+                case UiBadge n: WriteBadge(w, n); break;
+                case UiPips n: WritePips(w, n); break;
                 case UiCountdown n when retained && n.ClockEpoch != clockEpoch:
                     // Match the zero display without carrying a stale epoch or growing the admitted wire payload.
                     WriteText(w, n.Label.Length == 0 ? "0" : n.Label + " 0", UiTextStyle.Body, n.Tone,
@@ -126,6 +130,7 @@ namespace TopiaForge.Mods
             if (text.Length > 4096) throw new ArgumentException("Remote UI text is limited to 4096 characters.");
             w.WriteString(text);
         }
+
         private static void Flag(IUiWireWriter w, bool flag) => w.WriteByte(flag ? (byte)1 : (byte)0);
 
         internal static bool Invoke(UiNode? node, string id, string value)

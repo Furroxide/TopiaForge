@@ -14,10 +14,12 @@ namespace TopiaForge.Mods
         private const int MaximumItems = 64;
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
         private readonly string source;
+        private readonly int maximumItems;
         private int position;
 
-        private UiThemeJson(ReadOnlySpan<byte> utf8, int maximumBytes, string path)
+        private UiThemeJson(ReadOnlySpan<byte> utf8, int maximumBytes, string path, int maximumItems = MaximumItems)
         {
+            this.maximumItems = maximumItems;
             if (utf8.Length > maximumBytes)
             {
                 throw UiThemeDataException.Limit(path, "JSON exceeds its UTF-8 size limit.");
@@ -33,9 +35,10 @@ namespace TopiaForge.Mods
             }
         }
 
-        internal static UiThemeJsonObject Read(ReadOnlySpan<byte> utf8, string path)
+        internal static UiThemeJsonObject Read(ReadOnlySpan<byte> utf8, string path,
+            int maximumBytes = MaximumBytes, int maximumItems = MaximumItems)
         {
-            var reader = new UiThemeJson(utf8, MaximumBytes, path);
+            var reader = new UiThemeJson(utf8, maximumBytes, path, maximumItems);
             var value = reader.Value(0, MaximumThemeDepth, true, path);
             reader.End(path);
             return UiThemeJsonObject.From(value, path);
@@ -119,7 +122,7 @@ namespace TopiaForge.Mods
             {
                 do
                 {
-                    if (values?.Count == MaximumItems)
+                    if (values?.Count == maximumItems)
                     {
                         throw UiThemeDataException.Limit(path, "JSON object exceeds its field limit.");
                     }
@@ -149,7 +152,7 @@ namespace TopiaForge.Mods
             {
                 do
                 {
-                    if (values?.Count == MaximumItems)
+                    if (values?.Count == maximumItems)
                     {
                         throw UiThemeDataException.Limit(path, "JSON array exceeds its entry limit.");
                     }

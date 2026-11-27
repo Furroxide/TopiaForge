@@ -56,10 +56,13 @@ namespace TopiaForge.ModManager
             if (context.Lifetime.IsStopping) return Stopped<IUiSurface>();
             var themed = UiPresentationTheme.Resolve(local, request, out var theme);
             if (!themed.Succeeded) return OperationResult<IUiSurface>.Failure(themed.ErrorCode, themed.ErrorMessage);
-            var hud = new MirroredHudPresenter(this, context, request, nextToken + 1, local as IUiPresentationThemeSource, theme);
-            var staged = StageEnvelope(hud, theme, request.Content, out var envelope);
+            var source = local as IUiPresentationThemeSource;
+            var validation = UiPresentationImages.Prepare(request.Content, source?.PresentationThemeScope, theme, out var presentation);
+            if (!validation.Succeeded) return OperationResult<IUiSurface>.Failure(validation.ErrorCode, validation.ErrorMessage);
+            var hud = new MirroredHudPresenter(this, context, request, nextToken + 1, source, theme);
+            var staged = StageEnvelope(hud, theme, presentation, out var envelope);
             if (!staged.Succeeded) return OperationResult<IUiSurface>.Failure(staged.ErrorCode, staged.ErrorMessage);
-            var prepared = hud.Prepare(request.Body, request.Content, true, envelope);
+            var prepared = hud.Prepare(presentation, envelope);
             if (Hosting && hud.InvalidComposition != null)
                 return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, hud.InvalidComposition);
             if (Hosting && (!prepared || surfaces.Count >= MaximumSurfaces || surfaceBytes + hud.Bytes > MaximumBytes))

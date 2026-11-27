@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/UnityUiSurface.cs",
                 "src/TopiaForge.ModManager/UnityUiSurface.OuterScroll.cs",
                 "src/TopiaForge.ModManager/UnityUiSurface.Presence.cs",
+                "src/TopiaForge.ModManager/UnityUiSurface.Artwork.cs",
                 "src/TopiaForge.ModManager/UnityUiCompositionRenderer.cs",
                 "src/TopiaForge.ModManager/UnityUiGraphRetention.cs",
                 "src/TopiaForge.ModManager/UnityUiLayoutRenderer.cs",
@@ -26,6 +27,14 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/UnityUiWorldWidgets.cs",
                 "src/TopiaForge.ModManager/UnityMainThreadGuard.cs",
                 "src/TopiaForge.ModManager/UiSurfacePresence.cs",
+                "src/TopiaForge.ModManager/UiThemeScope.cs",
+                "src/TopiaForge.ModManager/UiThemeScope.Preload.cs",
+                "src/TopiaForge.ModManager/UiThemeAcquisitions.cs",
+                "src/TopiaForge.ModManager/UiThemeRegistration.cs",
+                "src/TopiaForge.ModManager/OwnerModLifetime.cs",
+                "src/TopiaForge.ModManager/AssetNativeWorkTracker.cs",
+                "src/TopiaForge.ModManager/IHostDispatcher.cs",
+                "src/TopiaForge.ModManager/HostDispatcher.cs",
                 "src/TopiaForge.ModManager/Multiplayer/Presentation/IPresentationSurfaceState.cs",
                 "tests/Shared/AllocationProbe.cs",
             };
@@ -37,6 +46,7 @@ namespace TopiaForge.ModManager.Tests
                 .Append(CSharpSyntaxTree.ParseText(EngineBoundaries, path: "SurfaceTestEngine.cs"))
                 .Append(CSharpSyntaxTree.ParseText(GraphBoundaries, path: "SurfaceTestGraph.cs"))
                 .Append(CSharpSyntaxTree.ParseText(GraphScenarios, path: "SurfaceTestGraphScenarios.cs"))
+                .Append(CSharpSyntaxTree.ParseText(ArtworkScenarios, path: "SurfaceTestArtwork.cs"))
                 .Append(CSharpSyntaxTree.ParseText(Scenarios, path: "SurfaceTestScenarios.cs"));
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Where(path => !Path.GetFileName(path).StartsWith("UnityEngine", StringComparison.Ordinal)
@@ -65,10 +75,11 @@ namespace TopiaForge.ModManager.Tests
             var refresh = methods.Single(method => method.Identifier.ValueText == "UpdateRetainedLayout")
                 .WithIdentifier(SyntaxFactory.Identifier("UpdateNativeRetainedLayout"));
             var preferred = methods.Single(method => method.Identifier.ValueText == "PreferredSize");
+            var show = methods.Single(method => method.Identifier.ValueText == "ShowCompositionLayout");
             return "using System; using TMPro; using TopiaForge.Mods; using TopiaForge.Mods.UnityUi; " +
                 "using UnityEngine; using UnityEngine.UI; namespace TopiaForge.ModManager { " +
                 "internal sealed partial class OwnerUiService { private sealed partial class UnityUiSurface { " +
-                measure + "\n" + refresh + "\n" + preferred + " } } }";
+                measure + "\n" + refresh + "\n" + preferred + "\n" + show + " } } }";
         }
 
         private const string Scenarios = """
@@ -91,6 +102,10 @@ namespace TopiaForge.ModManager.Tests
                         foreach (var kind in new[] { UiSurfaceKind.Window, UiSurfaceKind.FullscreenTool, UiSurfaceKind.Hud })
                             ProbeSurface(kind);
                         ProbeGraphAdmission();
+                        ProbeArtworkAdmission();
+                        ProbeArtworkRetries(remote: false, retryWhileDraining: false);
+                        ProbeArtworkRetries(remote: true, retryWhileDraining: false);
+                        ProbeArtworkRetries(remote: false, retryWhileDraining: true);
                         ProbeOuterScroll(useFullscreen: false);
                         ProbeOuterScroll(useFullscreen: true);
                     }

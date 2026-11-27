@@ -26,8 +26,10 @@ namespace TopiaForge.ModManager.Tests
                         var logger = new PreviewLogger();
                         var gameplay = new UiGameplayGate();
                         var placement = new UnityUiHudPlacement();
+                        using var dispatcher = new HostDispatcher();
+                        var themePackages = new UnityUiThemePackages(dispatcher);
                         using var preview = OwnerUiService.StartGalleryInteractionPreview("captured-preview", logger, gameplay,
-                            placement, () => NetRealm.Client);
+                            placement, themePackages, () => NetRealm.Client);
                         Require((preview != null) == enabled, "Changing the option after startup cannot arm or disarm the preview.");
                         if (!enabled)
                         {
@@ -87,7 +89,7 @@ namespace TopiaForge.ModManager.Tests
                         }
 
                         using var galleryLifetime = new OwnerModLifetime();
-                        var service = new OwnerUiService(UiGalleryCaptureFixture.Owner, "gallery", galleryLifetime, logger, gameplay, placement);
+                        var service = new OwnerUiService(UiGalleryCaptureFixture.Owner, "gallery", galleryLifetime, logger, gameplay, placement, themePackages);
                         var survival = UiGallerySurvivalTheme.Descriptor;
                         ((IUiThemeScopeHost)service).ConfigureThemeScope(new AdmittedUiCatalogue(survival.Id,
                             new Dictionary<string, UiThemeDescriptor> { [survival.Id] = survival }), null, "UI Gallery");
@@ -103,8 +105,8 @@ namespace TopiaForge.ModManager.Tests
                         using (var parentLife = new OwnerModLifetime())
                         using (var childLife = new OwnerModLifetime())
                         {
-                            var parent = new OwnerUiService("example.style-parent", "parent", parentLife, logger, gameplay, placement);
-                            var child = new OwnerUiService("example.style-child", "child", childLife, logger, gameplay, placement);
+                            var parent = new OwnerUiService("example.style-parent", "parent", parentLife, logger, gameplay, placement, themePackages);
+                            var child = new OwnerUiService("example.style-child", "child", childLife, logger, gameplay, placement, themePackages);
                             ((IUiThemeScopeHost)parent).ConfigureThemeScope(new AdmittedUiCatalogue(null,
                                 new Dictionary<string, UiThemeDescriptor> { [plain.Id] = plain, [survival.Id] = survival }), null, "Style parent");
                             ((IUiThemeScopeHost)child).ConfigureThemeScope(null, parent, "Style child");
@@ -146,7 +148,7 @@ namespace TopiaForge.ModManager.Tests
                         lookalike.Dispose();
 
                         using var spoofLifetime = new OwnerModLifetime();
-                        var spoof = new OwnerUiService(OwnerUiService.GalleryInteractionOwner, "spoof", spoofLifetime, logger, gameplay, placement);
+                        var spoof = new OwnerUiService(OwnerUiService.GalleryInteractionOwner, "spoof", spoofLifetime, logger, gameplay, placement, themePackages);
                         using var spoofed = Get(spoof.CreateSurface(imitation));
                         Require(TopiaForgeWindow.Active.Single(view => view != actual).Scheme == TopiaForgeScheme.Paper,
                             "Copying the loader's host label cannot select the preview scheme.");

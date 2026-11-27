@@ -94,6 +94,16 @@ namespace TopiaForge.ModManager.Tests
                 UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit, Reframe(wrongBounds, "remote-37")) == null,
                 "A copied Gallery label tree with altered stack geometry cannot reach the native export.");
 
+            var art = FoundationPages.CreateRequest(FoundationPage.Images, UiSurfaceKind.Window);
+            var sampleDigest = Enumerable.Repeat((byte)0x62, 32).ToArray();
+            UiNode? WithNormalizedArt(float width) => UiImageProjection.Rewrite(art.Content, image =>
+                image.Id == "image-natural" ? image.WithWireMetadata(width, 48f, sampleDigest) : image);
+            Check(UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit,
+                    Reframe(art, "remote-37", WithNormalizedArt(96f)))?.Id == art.Id &&
+                UiGalleryCaptureFixture.Match("topiaforge.presentation", true, kit,
+                    Reframe(art, "remote-37", WithNormalizedArt(97f))) == null,
+                "Only the exact normalized natural sprite dimensions qualify for native remote capture.");
+
             Check(UiGalleryCaptureFixture.SafeDisplayText("FIELD NOTE", "Field note", true) == "FIELD NOTE" &&
                 UiGalleryCaptureFixture.SafeDisplayText("Field note", "Field note", false) == "Field note",
                 "The export emits the verified authored text and allowed case variant.");

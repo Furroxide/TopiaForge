@@ -12,8 +12,8 @@ namespace TopiaForge.Mods.Testing
             OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The theme request ended before registration completed.");
         private static readonly OperationResult<bool> NotDeclared =
             OperationResult<bool>.Failure(ModErrorCode.NotFound, "The theme is not declared in this package.");
-        private static readonly OperationResult<bool> StyleMismatch =
-            OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "A named UI style must be declared for its component.");
+        private static readonly OperationResult<bool> StyleMismatch = OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
+            "A named UI style must be declared for its component and preserve its semantic role.");
         private static readonly Task<OperationResult<bool>> CancelledTask = Task.FromResult(Cancelled);
         private static readonly Task<OperationResult<bool>> ReadyTask = Task.FromResult(Success);
 
@@ -70,11 +70,11 @@ namespace TopiaForge.Mods.Testing
                 var next = EffectiveId(scope, null, changed, proposed);
                 if (prior == next) continue;
                 var descriptor = next != null && registrations.TryGetValue(next, out var registration)
-                    ? registration.Definition.Descriptor : UiThemePackParser.Default;
+                    ? VerifyDefinition(registration).Value : null;
                 foreach (var surface in scope.Surfaces)
                 {
-                    if (surface.Request.Theme != null) continue;
-                    if (!UiLayoutDecoration.AdmitsNamedStyles(surface.Content, descriptor)) return false;
+                    if (surface.Receiver != null || surface.Request.Theme != null) continue;
+                    if (!UiLayoutDecoration.AdmitsNamedStyles(surface.Content, descriptor ?? UiThemePackParser.Default)) return false;
                 }
             }
             return true;
@@ -85,8 +85,27 @@ namespace TopiaForge.Mods.Testing
             lock (gate)
             {
                 if (scope.Stopped) return Cancelled;
-                return theme == null || registrations.ContainsKey(theme.Id) ? Success : NotDeclared;
+                if (theme == null) return Success;
+                return registrations.TryGetValue(theme.Id, out var registration) ? ValidateDefinition(registration) : NotDeclared;
             }
+        }
+
+        internal OperationResult<bool> ValidateSurfaceTheme(FakeUiThemeScope scope, UiThemeRef? theme, UiWireEnvelope? receiver)
+        {
+            lock (gate)
+            {
+                if (receiver != null) return scope.Stopped ? Cancelled : Success;
+                var explicitSelection = ValidateSelection(scope, theme);
+                if (!explicitSelection.Succeeded || theme != null) return explicitSelection;
+                var id = EffectiveId(scope, null);
+                return id != null && registrations.TryGetValue(id, out var registration) ? ValidateDefinition(registration) : Success;
+            }
+        }
+
+        private OperationResult<bool> ValidateDefinition(FakeUiThemeRegistration registration)
+        {
+            var verified = VerifyDefinition(registration);
+            return verified.Succeeded ? Success : OperationResult<bool>.Failure(verified.ErrorCode, verified.ErrorMessage);
         }
 
         internal void AddSurface(FakeUiThemeScope scope, FakeUiSurface surface)
@@ -107,26 +126,38 @@ namespace TopiaForge.Mods.Testing
             }
         }
 
-        internal FakeUiThemeResolution Resolve(FakeUiThemeScope scope, UiThemeRef? surfaceTheme)
+        internal void ImagesChanged()
+        {
+            lock (gate) Reconcile();
+        }
+
+        internal FakeUiThemeResolution Resolve(FakeUiThemeScope scope, UiThemeRef? surfaceTheme, UiWireEnvelope? receiver = null)
         {
             lock (gate)
             {
-                var id = EffectiveId(scope, surfaceTheme);
-                if (id != null && registrations.TryGetValue(id, out var registration) && registration.Loaded != null)
-                    return new FakeUiThemeResolution(registration.Loaded, id, usedFallback: false);
+                var id = receiver != null ? receiver.ThemeId : EffectiveId(scope, surfaceTheme);
+                if (DescribeRegistration(id, receiver)?.Loaded is UiThemeDescriptor ready)
+                    return new FakeUiThemeResolution(ready, id, usedFallback: false);
                 return new FakeUiThemeResolution(UiThemePackParser.Default, id, usedFallback: id != null);
             }
         }
 
-        internal UiThemeDescriptor? DescriptorForWire(FakeUiThemeScope scope, UiThemeRef? surfaceTheme)
+        internal UiThemeDescriptor? DescriptorForWire(FakeUiThemeScope scope, UiThemeRef? surfaceTheme, UiWireEnvelope? receiver = null)
         {
             lock (gate)
             {
-                var id = EffectiveId(scope, surfaceTheme);
-                return id != null && registrations.TryGetValue(id, out var registration)
-                    ? registration.Loaded ?? registration.Definition.Descriptor
-                    : null;
+                var id = receiver != null ? receiver.ThemeId : EffectiveId(scope, surfaceTheme);
+                var registration = DescribeRegistration(id, receiver);
+                return registration == null ? null : VerifyDefinition(registration).Value;
             }
+        }
+
+        private FakeUiThemeRegistration? DescribeRegistration(string? id, UiWireEnvelope? receiver)
+        {
+            if (id == null || !registrations.TryGetValue(id, out var registration)) return null;
+            if (receiver == null) return registration;
+            var descriptor = VerifyDefinition(registration).Value;
+            return descriptor != null && receiver.DescriptorDigest.Span.SequenceEqual(descriptor.Digest.Span) ? registration : null;
         }
 
         internal Task<OperationResult<bool>> Preload(FakeUiThemeScope scope, UiThemeRef theme, CancellationToken cancellation)
@@ -135,6 +166,8 @@ namespace TopiaForge.Mods.Testing
             {
                 if (scope.Stopped || cancellation.IsCancellationRequested) return CancelledTask;
                 if (!registrations.TryGetValue(theme.Id, out var registration)) return Task.FromResult(NotDeclared);
+                var verified = ValidateDefinition(registration);
+                if (!verified.Succeeded) return Task.FromResult(verified);
 
                 if (!scope.Preloads.TryGetValue(theme.Id, out var preload))
                     scope.Preloads.Add(theme.Id, preload = new FakeUiThemePreload());
@@ -170,9 +203,12 @@ namespace TopiaForge.Mods.Testing
 
                     if (registration.State != FakeUiThemeLoadState.Loading) continue;
                     completed = true;
-                    var result = Acquire(registration.Definition);
+                    var result = Acquire(registration);
                     registration.Loaded = result.Value;
                     registration.State = result.Succeeded ? FakeUiThemeLoadState.Ready : FakeUiThemeLoadState.Failed;
+                    foreach (var scope in scopes)
+                        foreach (var surface in scope.Surfaces)
+                            if (surface.Images.Uses(registration)) surface.AdvanceArtwork();
                     FinishWaiters(registration.Definition.Descriptor.Id, result.Succeeded
                         ? Success
                         : OperationResult<bool>.Failure(result.ErrorCode, result.ErrorMessage));
@@ -236,7 +272,13 @@ namespace TopiaForge.Mods.Testing
             {
                 Demand(scope.Selection?.Id);
                 foreach (var preload in scope.Preloads.Keys) Demand(preload);
-                foreach (var surface in scope.Surfaces) Demand(EffectiveId(scope, surface.Request.Theme));
+                foreach (var surface in scope.Surfaces)
+                {
+                    var receiver = surface.Receiver;
+                    if (receiver == null) Demand(EffectiveId(scope, surface.Request.Theme));
+                    else if (DescribeRegistration(receiver.ThemeId, receiver) is FakeUiThemeRegistration selection) demanded.Add(selection);
+                    foreach (var imagePack in surface.Images.Packs) demanded.Add(imagePack);
+                }
             }
 
             foreach (var registration in registrations.Values)
@@ -304,6 +346,7 @@ namespace TopiaForge.Mods.Testing
 
         internal FakeUiThemeDefinition Definition { get; }
         internal FakeUiThemeLoadState State { get; set; }
+        internal OperationResult<UiThemeDescriptor>? Verified { get; set; }
         internal UiThemeDescriptor? Loaded { get; set; }
     }
 

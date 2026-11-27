@@ -32,6 +32,9 @@ namespace TopiaForge.ModManager
                 case UiLayoutNode or UiPadding or UiSizedBox or UiExpanded or UiSpacer or UiPositioned or UiSplitPane:
                     Add(path, fixture.Id, fixture.GetType().Name, native, EmptyContent, default);
                     break;
+                case UiIcon or UiImage or UiBadge or UiPips:
+                    return native.Find("Artwork") is RectTransform artwork &&
+                        CaptureArt(fixture, artwork, path, backdrop);
                 default:
                     if (!SingleChild(native.Find("Widget"), out var widget)) return false;
                     var backing = native.Find("Text backing")?.GetComponent<Graphic>();

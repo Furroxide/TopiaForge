@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager
         private readonly UiHost host;
         private readonly UiGameplayGate gameplay;
         private readonly UnityUiHudPlacement hudPlacement;
+        private readonly UnityUiThemePackages themePackages;
         private readonly HashSet<string> surfaceIds = new HashSet<string>(StringComparer.Ordinal);
         private readonly List<UnityUiSurface> surfaces = new List<UnityUiSurface>();
         private UiAccessibilityPreferences accessibility = UiAccessibilityPreferences.Default;
@@ -30,7 +31,8 @@ namespace TopiaForge.ModManager
             IModLifetime lifetime,
             IModLogger logger,
             UiGameplayGate gameplay,
-            UnityUiHudPlacement hudPlacement)
+            UnityUiHudPlacement hudPlacement,
+            UnityUiThemePackages themePackages)
         {
             UnityMainThreadGuard.AssertCurrent();
             this.lifetime = lifetime;
@@ -38,6 +40,7 @@ namespace TopiaForge.ModManager
             this.gameplay = gameplay ?? throw new ArgumentNullException(nameof(gameplay));
             this.hudPlacement = hudPlacement ?? throw new ArgumentNullException(nameof(hudPlacement));
             galleryCaptureDirectory = dataPath;
+            this.themePackages = themePackages ?? throw new ArgumentNullException(nameof(themePackages));
             host = TopiaForgeUi.Create(new TopiaForgeUiOptions
             {
                 OwnerId = ownerModId,
@@ -181,7 +184,8 @@ namespace TopiaForge.ModManager
                 }
 
                 surface.SetClock(clock, clockEpoch);
-                surface.InitializeTheme(request.Theme, remoteTheme.HasValue, theme);
+                surface.InitializeTheme(request.Theme, remoteTheme.HasValue, theme, themeScope, themePackages,
+                    remoteTheme?.Package?.Manifest.AdmittedUi);
                 if (request.Content != null)
                 {
                     var contentResult = surface.SetContent(request.Content);

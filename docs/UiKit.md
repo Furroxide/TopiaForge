@@ -323,8 +323,7 @@ hashes to the packaged manifest.
 
 Start with the SDK's `topiaforge-ui-theme.schema.json` and `topiaforge-ui-theme.defaults.json` or the UiGallery's
 sample at `mods/TopiaForge.UiGallery/ui/themes/survival.json`. Each file declares one theme id. Supply the Paper,
-HUD, typography or token entries that differ from the kit defaults. Package images and fonts require the kit's
-artwork support. Use the embedded kit faces when targeting this revision.
+HUD, typography or token entries that differ from the kit defaults. The theme uses package-relative resources.
 
 A surface uses its `WithTheme` override first, then the nearest scope's `Context.Ui.Themes.UseTheme` selection,
 then the manifest default, then the kit default. Use the manifest for ordinary surfaces. Pass `null` to
@@ -428,6 +427,38 @@ available safe slot. If every slot is occupied, a system toast gives the manifes
 HUD dock once per unfit episode. The capture marks the overflow as queued, and the authored panel
 returns when it fits.
 
+### Artwork and status
+
+`UiIcon` draws one of the kit's 31 glyphs. It uses the glyph's plain-text label unless
+you supply one. Set `decorative: true` for a redundant glyph beside visible text.
+
+Declare sprites and fonts in the package's theme description. Pack sprites in a Unity
+bundle, include the matching receipt and any notices. A receipt gives the packager the
+source dimensions and texture format. Only an Alpha8 mask can take a `UiTone` tint.
+Theme typography roles can select an admitted font from the same pack.
+
+```csharp
+var art = new UiColumn(
+    new UiImage(new UiImageRef("preview-art", "card"), "Supply card",
+        width: 144, height: 88, fit: UiImageFit.Contain),
+    new UiBadge("Ready", UiPaintRole.Success, icon: UiGlyph.Check),
+    new UiPips(total: 5, filled: 3, label: "Energy", fraction: 0.5f));
+```
+
+`Contain` fits the whole sprite inside the frame. `Cover` fills the frame and crops
+the excess inside its edges. Both preserve the sprite's aspect ratio. Each omitted
+frame dimension uses the corresponding source dimension in reference units.
+The same frame survives pending, failed and unavailable art. A semantic image has
+a plain-text label. If it cannot fit inside the frame, the kit shows a readable
+“Image unavailable” panel until the art or layout recovers. A decorative image uses
+a bounded placeholder.
+If a remote HUD's original dock cannot hold the notice, the kit uses available safe
+space while the other docked panels keep their positions.
+
+Badges pair words and optional glyphs with a semantic color. The kit supplies the
+status glyph in high contrast where required. Pips show the exact labeled count,
+empty and filled segments, and an optional fractional next segment.
+
 ## Testing UI without running Robotopia
 
 `FakeUiService` captures each immutable tree. `FakeUiSurface` can find controls by id; invoke button,
@@ -441,6 +472,11 @@ callbacks; finish UI tests with `context.AssertNoLeaks()`.
 while a gameplay scene is active and no scene load is pending. `FakeModContext` starts at the main
 menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay HUD on screen.
 `IsShown` says whether the mod shows the surface, whatever TopiaForge does with it.
+
+Badge and pip rows keep the author's `RequestedStyleId` and `RequestedPaintRole` alongside the
+resolved `StyleId` and `EffectivePaintRole`. During theme fallback the requested style stays visible
+in the capture and `StyleId` is empty. The role fields use `UiPaintRole` in code and lowercase
+role names in the JSON capture.
 
 ### Native Gallery capture
 

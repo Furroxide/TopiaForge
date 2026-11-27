@@ -25,10 +25,11 @@ namespace TopiaForge.ModManager
             internal void SetHudNoticeSource(string? packageDisplayName, UiHudAnchor anchor, UiHudVisibility visibility) =>
                 overflowToast = UiHudOverflowNotice.Text(packageDisplayName, anchor, visibility);
 
-            private static void PrepareStagedTheme(TopiaForgeContainer stage, UiThemeDescriptor? descriptor)
+            private static void PrepareStagedTheme(TopiaForgeContainer stage, UiThemeDescriptor? descriptor,
+                Func<UiTextStyle, TMP_FontAsset?>? fonts = null)
             {
                 var slot = stage.Go.AddComponent<TopiaForgeLayerSlot>();
-                slot.SelectTheme(UiThemeScope.Ready(descriptor) ?? UiThemePackParser.Default);
+                slot.SelectTheme(descriptor ?? UiThemePackParser.Default, fonts);
             }
 
             private void ObserveLayout()
@@ -43,7 +44,7 @@ namespace TopiaForge.ModManager
                 var view = widget;
                 var root = compositionRoot;
                 if (view == null || (root == null && placement == null) || !presence.IsLive || lifetime.IsStopping) return;
-                var stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
+                var stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
                 var occupancyChanged = layoutFallback != null && placement is { } dock && dock.Version != noticeDockVersion;
                 if (committedStamp.Matches(stamp) && !occupancyChanged) return;
 
@@ -140,16 +141,39 @@ namespace TopiaForge.ModManager
                 var parent = compositionParent;
                 var view = widget;
                 if (layoutRenderer == null || parent == null || view == null) return;
+                UiLayoutConstraints area;
                 try
                 {
-                    layoutRenderer.Rearrange(MeasureContentArea(parent, view),
+                    area = MeasureContentArea(parent, view);
+                    layoutRenderer.Rearrange(area,
                         declaredTheme ?? (remoteComposition ? null : UiThemePackParser.Default));
                 }
                 catch (UiLayoutException error)
                 {
+                    if (placement != null && layoutRenderer.HasRetainedImageNotice)
+                    {
+                        ShowCompositionLayout(root, needsNoticeRoom: true, allowAlternateImageNotice: true);
+                        return;
+                    }
+
                     RememberOuterScrollOffset();
                     SuspendGraphConnections();
                     ShowLayoutFallback(parent, root, error);
+                    return;
+                }
+                var needsNoticeRoom = layoutRenderer.UnavailableImagePath != null &&
+                    !CanShowImageNotice(root, area);
+                ShowCompositionLayout(root, needsNoticeRoom, allowAlternateImageNotice: true);
+            }
+
+            private void ShowCompositionLayout(TopiaForgeContainer root, bool needsNoticeRoom, bool allowAlternateImageNotice)
+            {
+                if (layoutRenderer?.UnavailableImagePath is string imagePath && compositionParent is { } parent)
+                {
+                    RememberOuterScrollOffset();
+                    SuspendGraphConnections();
+                    ShowLayoutNotice(parent, root, UiImageNotice.Text, imagePath,
+                        preferContentViewport: !needsNoticeRoom, canMoveImageNotice: allowAlternateImageNotice);
                     return;
                 }
                 var recovering = layoutFallback != null;
@@ -159,9 +183,30 @@ namespace TopiaForge.ModManager
                 if (recovering) SyncGraphConnections();
             }
 
-            private void ShowLayoutFallback(TopiaForgeContainer parent, TopiaForgeContainer? root, UiLayoutException error)
+            private bool CanShowImageNotice(TopiaForgeContainer stage, UiLayoutConstraints areas)
+            {
+                if (areas.MaxWidth <= 0) return false;
+                var probe = stage.Column(TopiaForgeGap.None, TopiaForgeGap.None);
+                try
+                {
+                    PrepareStagedTheme(probe, null);
+                    var label = probe.Label(UiImageNotice.Text, TopiaForgeTextStyle.Body);
+                    var text = label.Go.GetComponent<TMP_Text>();
+                    var measured = text.GetPreferredValues(text.text, (float)areas.MaxWidth, 0f);
+                    var reclaimed = body == null ? 0f : LayoutUtility.GetPreferredHeight(body.Rect);
+                    return measured.x <= areas.MaxWidth && measured.y <= areas.MaxHeight + reclaimed;
+                }
+                finally { probe.Destroy(); }
+            }
+
+            private void ShowLayoutFallback(TopiaForgeContainer parent, TopiaForgeContainer? root, UiLayoutException error) =>
+                ShowLayoutNotice(parent, root, UiHudLayoutNotice.Text, error.Path, error);
+
+            private void ShowLayoutNotice(TopiaForgeContainer parent, TopiaForgeContainer? root, string message, string path,
+                UiLayoutException? error = null, bool preferContentViewport = false, bool canMoveImageNotice = false)
             {
                 root?.SetShown(false);
+                var noticeChanged = layoutFallback == null || (layoutProblem == null) != (error == null);
                 layoutProblem = error;
                 if (layoutFallback == null)
                 {
@@ -178,10 +223,17 @@ namespace TopiaForge.ModManager
                         fallbackTitle = fallback.Label(hudTitleText, TopiaForgeTextStyle.Heading).PlainText();
                         fallbackTitle.Go.name = "LayoutNoticeTitle";
                     }
-                    fallbackMessage = fallback.Label(UiHudLayoutNotice.Text, TopiaForgeTextStyle.Body).PlainText();
-                    fallbackMessage.Go.name = "LayoutNoticeMessage";
+                    fallbackMessage = fallback.Label(message, TopiaForgeTextStyle.Body).PlainText();
                     layoutFallback = fallback;
-                    try { logger.Warn("UI surface '" + Id + "' is showing a layout fallback at " + error.Path + "."); }
+                }
+                else if (noticeChanged)
+                {
+                    fallbackMessage!.SetText(message);
+                }
+                if (noticeChanged)
+                {
+                    fallbackMessage!.Go.name = error == null ? "Label" : "LayoutNoticeMessage";
+                    try { logger.Warn("UI surface '" + Id + "' is showing '" + message + "' at " + path + "."); }
                     catch { }
                 }
 
@@ -189,7 +241,17 @@ namespace TopiaForge.ModManager
                 var group = parent.Go.GetComponent<VerticalLayoutGroup>();
                 var marginX = group?.padding.horizontal ?? 0;
                 var marginY = group?.padding.vertical ?? 0;
-                var fits = dock.SetNoticeRoom(dockHandle, UiHudLayoutNotice.PreferredWidth, NoticeHeight);
+                bool fits;
+                if (error != null)
+                {
+                    fits = dock.SetNoticeRoom(dockHandle, UiHudLayoutNotice.PreferredWidth, NoticeHeight);
+                }
+                else
+                {
+                    var preferredWidth = canMoveImageNotice ? UiImageNotice.RemoteHudWidth : 0d;
+                    fits = dock.SetNoticeRoom(dockHandle, preferredWidth, NoticeHeight,
+                        useContentViewport: preferContentViewport, preferredHeight: UiImageNotice.RemoteHudHeight);
+                }
                 layoutFallback.SetShown(fits);
                 dock.SetPanelPaintShown(dockHandle, fits);
                 hudNoticeOverflowing = !fits;

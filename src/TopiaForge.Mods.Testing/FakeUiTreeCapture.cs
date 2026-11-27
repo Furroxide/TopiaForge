@@ -17,21 +17,24 @@ namespace TopiaForge.Mods.Testing
         private readonly float readableScale;
         private readonly float gap;
         private readonly bool useHudScheme;
-        private readonly UiThemeDescriptor declaredTheme;
+        private readonly UiThemeDescriptor? declaredTheme;
+        private readonly FakeUiImages images;
         private readonly List<UiCapturedNode> nodes = new List<UiCapturedNode>();
         private UiPaintRole backdrop = UiPaintRole.Surface;
         private bool inheritedDisabled;
 
         internal FakeUiTreeCapture(FakeUiService service, FakeUiSurface surface, UiCaptureViewport viewport,
-            UiCaptureControlState controlState, bool? hudScheme)
+            UiCaptureControlState controlState, bool? hudScheme, FakeUiImages? stagedImages = null)
         {
             this.service = service;
             this.surface = surface;
             this.viewport = viewport;
             this.controlState = controlState;
             preferences = service.Accessibility;
-            theme = service.ResolveTheme(surface.Request.Theme);
-            declaredTheme = service.ThemeForWire(surface.Request.Theme) ?? UiThemePackParser.Default;
+            images = stagedImages ?? surface.Images;
+            theme = service.ResolveTheme(surface.Request.Theme, surface.Receiver);
+            declaredTheme = service.DeclaredTheme(surface.Request.Theme, surface.Receiver);
+            if (surface.Receiver == null) declaredTheme ??= UiThemePackParser.Default;
             useHudScheme = hudScheme ?? surface.Request.Kind == UiSurfaceKind.Hud;
             scheme = theme.Descriptor.SelectScheme(useHudScheme, preferences.HighContrast);
             layoutScale = viewport.ScreenScale * preferences.UiScale;
@@ -94,6 +97,9 @@ namespace TopiaForge.Mods.Testing
                 case UiProgress progress:
                     PaintProgress(progress, path, bounds, clip);
                     return;
+                case UiIcon or UiImage or UiBadge or UiPips:
+                    PaintArt(node, path, bounds, clip);
+                    return;
                 default:
                     PaintControl(node, path, bounds, clip);
                     return;
@@ -118,7 +124,7 @@ namespace TopiaForge.Mods.Testing
         }
 
         private void Add(string path, string? id, string kind, UiCaptureRect bounds, UiCaptureRect clip,
-            UiCaptureNodeContent content, UiCaptureNodePaint paint)
+            UiCaptureNodeContent content, UiCaptureNodePaint paint, bool usedFallback = false, bool? render = null)
         {
             if ((content.Flags & UiCaptureNodeFlags.ScrollableClip) != 0 &&
                 (bounds.X < clip.X - 0.001f || bounds.Right > clip.Right + 0.001f))
@@ -126,9 +132,9 @@ namespace TopiaForge.Mods.Testing
                 content = new UiCaptureNodeContent(content.Text, content.SemanticLabel, content.TextHeight,
                     content.ExpectedTextHeight, content.Flags & ~UiCaptureNodeFlags.ScrollableClip);
             }
-            var rendered = surface.IsVisible && bounds.Overlaps(clip);
+            var rendered = render ?? (surface.IsVisible && bounds.Overlaps(clip));
             nodes.Add(new UiCapturedNode(path, id, kind, bounds, content, paint, theme.Descriptor.Id,
-                theme.UsedFallback, rendered, rendered && !clip.Contains(bounds), occluded: false));
+                usedFallback || theme.UsedFallback, rendered, rendered && !clip.Contains(bounds), occluded: false));
         }
 
         private string CountdownText(UiCountdown countdown)
