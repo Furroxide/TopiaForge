@@ -74,6 +74,18 @@ class MainGovernanceScopeTests(unittest.TestCase):
         substituted_key = {**blobs, ".github/release-dco/allowed-signers": ("", "wrong key")}
         self.assertTrue(self.errors(paths=paths, dco_blobs=substituted_key))
 
+    def test_prerelease_dco_scope_admits_only_the_reviewed_verifier_and_test_transition(self):
+        blobs = SCOPE.DCO_PRERELEASE_TRUST
+        paths = list(blobs)
+        self.assertEqual([], self.errors(paths=paths, dco_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths[:1], dco_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths + [".github/release-dco/allowed-signers"], dco_blobs=blobs))
+        self.assertTrue(self.errors(paths=paths + [".github/release-dco/0.2.0-rc.1-attestation.txt"], dco_blobs=blobs))
+        for path, (old, new) in blobs.items():
+            with self.subTest(path=path):
+                self.assertTrue(self.errors(paths=paths, dco_blobs={**blobs, path: ("", new)}))
+                self.assertTrue(self.errors(paths=paths, dco_blobs={**blobs, path: (old, "wrong blob")}))
+
     def test_workflow_runs_this_check(self):
         policy = (SCRIPT.parents[1] / "workflows" / "pr-policy.yml").read_text(
             encoding="utf-8"

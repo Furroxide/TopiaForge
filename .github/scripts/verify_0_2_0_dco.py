@@ -13,6 +13,9 @@ SIGNING_NAMESPACE = "topiaforge-release-dco"
 SIGNING_PRINCIPAL = "Furroxide"
 ATTESTATION = ".github/release-dco/0.2.0-attestation.txt"
 ROUTES = {("main", "release/0.2.0"), ("dev", "sync/main-v0.2.0")}
+PRERELEASE_ROUTE = ("main", "release/0.2.0-rc.1")
+PRERELEASE_ATTESTATION = ".github/release-dco/0.2.0-rc.1-attestation.txt"
+PRERELEASE_SHA256 = "51e5f60e584e03cfec2910c8af71ea4553596731847e9497550f9cc0f1dff79a"
 SIGNOFF = re.compile(rb"Signed-off-by:[ \t].+<[^<>\s]+@[^<>\s]+>[ \t]*", re.IGNORECASE)
 
 
@@ -37,12 +40,23 @@ def unsigned_commits(base, head):
     ]
 
 
+def attestation_spec(base_ref, head_ref):
+    route = (base_ref, head_ref)
+    if route == PRERELEASE_ROUTE:
+        return PRERELEASE_ATTESTATION, PRERELEASE_SHA256
+    if route in ROUTES:
+        return ATTESTATION, ATTESTATION_SHA256
+    return None
+
+
 def verify(base_repository, head_repository, base_ref, head_ref, missing, payload, signature, allowed_signers):
     if base_repository != REPOSITORY or head_repository != REPOSITORY:
         return "Historical DCO certification belongs to Furroxide/TopiaForge."
-    if (base_ref, head_ref) not in ROUTES:
-        return "Historical DCO certification applies only to the 0.2.0 sync and release."
-    if sha256(payload).hexdigest() != ATTESTATION_SHA256:
+    spec = attestation_spec(base_ref, head_ref)
+    if spec is None:
+        return "Historical DCO certification applies only to the declared 0.2.0 routes."
+    _, digest = spec
+    if sha256(payload).hexdigest() != digest:
         return "Historical DCO attestation does not match the reviewed bytes."
     heading = f"[{head_ref} -> {base_ref}]\n"
     certified = payload.decode("ascii").split(heading, 1)[1].split("\n\n", 1)[0].splitlines()
@@ -77,9 +91,13 @@ def main(args):
         git("rev-parse", "--verify", f"{base}^{{commit}}")
         git("rev-parse", "--verify", f"{head}^{{commit}}")
         missing = unsigned_commits(base, head)
+        spec = attestation_spec(base_ref, head_ref)
+        if spec is None:
+            raise ValueError("Unrecognized attestation route")
+        attestation, _ = spec
         failure = verify(
             base_repository, head_repository, base_ref, head_ref, missing,
-            candidate_blob(head, ATTESTATION), candidate_blob(head, ATTESTATION + ".sig"),
+            candidate_blob(head, attestation), candidate_blob(head, attestation + ".sig"),
             allowed_signers,
         )
     except (ValueError, OSError, subprocess.SubprocessError):

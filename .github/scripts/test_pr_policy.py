@@ -46,9 +46,9 @@ git() {
     show)
       case "$2" in
         "$BASE_SHA:.github/scripts/verify_0_2_0_dco.py")
-          printf '%s\n' 'import sys' 'from pathlib import Path' \
+          printf '%s\n' 'import os, sys' 'from pathlib import Path' \
             'assert Path(sys.argv[1]).read_text() == "trusted base key\n"' \
-            'assert sys.argv[2:] == ["Furroxide/TopiaForge", "Furroxide/TopiaForge", "main", "release/0.2.0", "b"*40, "a"*40]' \
+            'assert sys.argv[2:] == ["Furroxide/TopiaForge", "Furroxide/TopiaForge", "main", os.environ["HEAD_REF"], "b"*40, "a"*40]' \
             'print("protected verifier used")'
           return ;;
         "$BASE_SHA:.github/release-dco/allowed-signers")
@@ -123,14 +123,16 @@ python3() { "$PYTHON_EXE" "$@"; }
         self.assertNotEqual(self.dco(SHOW_FAIL="true").returncode, 0)
 
     def test_scoped_unsigned_route_loads_the_verifier_and_key_from_the_base(self):
-        context = dict(HEAD_REF="release/0.2.0", SECOND_MESSAGE="test: unsigned")
-        result = self.dco(**context)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("protected verifier used", result.stdout)
-        self.assertNotEqual(self.dco(**context, BASE_SIGNER_FAIL="true").returncode, 0)
-        fork = self.dco(**context, HEAD_REPOSITORY="fork/TopiaForge")
-        self.assertNotEqual(fork.returncode, 0)
-        self.assertNotIn("protected verifier used", fork.stdout)
+        for branch in ("release/0.2.0", "release/0.2.0-rc.1"):
+            with self.subTest(branch=branch):
+                context = dict(HEAD_REF=branch, SECOND_MESSAGE="test: unsigned")
+                result = self.dco(**context)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("protected verifier used", result.stdout)
+                self.assertNotEqual(self.dco(**context, BASE_SIGNER_FAIL="true").returncode, 0)
+                fork = self.dco(**context, HEAD_REPOSITORY="fork/TopiaForge")
+                self.assertNotEqual(fork.returncode, 0)
+                self.assertNotIn("protected verifier used", fork.stdout)
 
     def test_empty_commit_range_is_valid(self):
         self.assertEqual(self.dco(NO_COMMITS="true").returncode, 0)
@@ -138,7 +140,8 @@ python3() { "$PYTHON_EXE" "$@"; }
     def test_future_release_source_must_match_current_product(self):
         name = "Validate release source against the product version"
         self.assertEqual(self.run_policy(name).returncode, 0)
-        for branch in ("release/0.1.0-rc.1", "release/0.3.0", "dev"):
+        self.assertEqual(self.run_policy(name, HEAD_REF="release/0.2.0-rc.1", PRODUCT_VERSION="0.2.0-rc.1").returncode, 0)
+        for branch in ("release/0.1.0-rc.1", "release/0.2.0-rc.1", "release/0.3.0", "dev"):
             self.assertNotEqual(self.run_policy(name, HEAD_REF=branch).returncode, 0)
         self.assertNotEqual(self.run_policy(name, PRODUCT_VERSION="invalid").returncode, 0)
 
@@ -193,6 +196,42 @@ class HistoricalDcoTests(unittest.TestCase):
         self.assertIsNotNone(self.verify(self.release, repository="some-fork/TopiaForge"))
         self.assertIsNotNone(self.verify(self.release, head="release/0.3.0"))
         self.assertIsNotNone(self.verify(self.sync, base="dev", head="sync/main-v0.3.0"))
+
+    def test_prerelease_requires_its_own_exact_route_and_signature(self):
+        prerelease = "release/0.2.0-rc.1"
+        signed = self.root / "fixture-prerelease.txt"
+        payload = (f"[{prerelease} -> main]\n" + "\n".join(self.release) + "\n").encode("ascii")
+        signed.write_bytes(payload)
+        subprocess.run(
+            ["ssh-keygen", "-Y", "sign", "-f", str(self.signer),
+             "-n", historical_dco.SIGNING_NAMESPACE, str(signed)],
+            capture_output=True, check=True, timeout=10,
+        )
+        signature = signed.with_suffix(".txt.sig").read_bytes()
+        with patch.object(historical_dco, "PRERELEASE_SHA256", historical_dco.sha256(payload).hexdigest()):
+            self.assertIsNone(self.verify(self.release, head=prerelease, payload=payload, signature=signature))
+            self.assertIn("reviewed bytes", self.verify(self.release, head=prerelease))
+            self.assertIn("reviewed bytes", self.verify(self.release, payload=payload, signature=signature))
+            self.assertIn("valid release-maintainer signature", self.verify(self.release, head=prerelease, payload=payload))
+            self.assertIn("complete certified list", self.verify(
+                self.release[:-1], head=prerelease, payload=payload, signature=signature,
+            ))
+            self.assertIsNotNone(self.verify(
+                self.release, base="dev", head=prerelease, payload=payload, signature=signature,
+            ))
+
+    def test_prerelease_verifier_reads_the_distinct_candidate_blobs(self):
+        base, head = "a" * 40, "b" * 40
+        path = ".github/release-dco/0.2.0-rc.1-attestation.txt"
+        with patch.object(historical_dco, "git"), \
+                patch.object(historical_dco, "unsigned_commits", return_value=self.release), \
+                patch.object(historical_dco, "candidate_blob", side_effect=[b"payload", b"signature"]) as blobs, \
+                patch.object(historical_dco, "verify", return_value=None):
+            self.assertEqual(historical_dco.main([
+                str(self.fixture_signers), "Furroxide/TopiaForge", "Furroxide/TopiaForge",
+                "main", "release/0.2.0-rc.1", base, head,
+            ]), 0)
+        self.assertEqual([call.args for call in blobs.call_args_list], [(head, path), (head, f"{path}.sig")])
 
     def test_new_missing_commit_and_partial_lists_are_rejected(self):
         for invalid in (self.release + ["f" * 40], self.release[:-1], self.sync, self.release + self.release[:1]):

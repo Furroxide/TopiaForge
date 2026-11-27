@@ -123,6 +123,7 @@ jobs:
             if [[ "$BASE_REPOSITORY" == Furroxide/TopiaForge &&
                   "$HEAD_REPOSITORY" == "$BASE_REPOSITORY" ]] &&
                 [[ "$BASE_REF:$HEAD_REF" == main:release/0.2.0 ||
+                   "$BASE_REF:$HEAD_REF" == main:release/0.2.0-rc.1 ||
                    "$BASE_REF:$HEAD_REF" == dev:sync/main-v0.2.0 ]]; then
               verifier=$(mktemp -d)
               trap 'rm -f -- "$verifier/verify.py" "$verifier/allowed-signers"; rmdir -- "$verifier"' EXIT

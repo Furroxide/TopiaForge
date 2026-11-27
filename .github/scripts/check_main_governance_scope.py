@@ -46,6 +46,17 @@ DCO_TRUST_BOOTSTRAP = {
     ".github/scripts/verify_0_2_0_dco.py": ("", "4059e25fa377d7832f9f3489e61e55dc6cf0d285"),
 }
 
+DCO_PRERELEASE_TRUST = {
+    ".github/scripts/test_pr_policy.py": (
+        "13fbce0cb86a8edb581acad364e5ee4898987910",
+        "af27f067734993655bd015a7c28a0754835b501d",
+    ),
+    ".github/scripts/verify_0_2_0_dco.py": (
+        "4059e25fa377d7832f9f3489e61e55dc6cf0d285",
+        "cc49df6576265c8c89ca140e3013b84d2214e9f2",
+    ),
+}
+
 
 def failures(
     base_ref: str,
@@ -70,8 +81,11 @@ def failures(
     if sidecar_paths and (sidecar_paths != SIDECAR_BACKPORT.keys() or sidecar_blobs != SIDECAR_BACKPORT):
         errors.append("The sidecar backport requires both exact reviewed dependency changes.")
     dco_paths = DCO_TRUST_BOOTSTRAP.keys() & set(changed_paths)
-    if dco_paths and (dco_paths != DCO_TRUST_BOOTSTRAP.keys() or dco_blobs != DCO_TRUST_BOOTSTRAP):
-        errors.append("The DCO trust bootstrap requires the exact reviewed trust files together.")
+    if dco_paths and not any(
+        dco_paths == scope.keys() and dco_blobs == scope
+        for scope in (DCO_TRUST_BOOTSTRAP, DCO_PRERELEASE_TRUST)
+    ):
+        errors.append("The DCO trust change requires the exact reviewed trust files together.")
     return errors
 
 
