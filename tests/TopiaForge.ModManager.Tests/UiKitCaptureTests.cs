@@ -53,6 +53,7 @@ namespace TopiaForge.ModManager.Tests
             UnchangedReapplicationAllocatesNothing();
             RunArtCaptureTests();
             RunStatusCaptureTests();
+            RunActionCaptureTests();
             UiGalleryNativeStatusTests.Run();
             VerifyGoldenManifest();
             VerifyArtGoldenManifest();

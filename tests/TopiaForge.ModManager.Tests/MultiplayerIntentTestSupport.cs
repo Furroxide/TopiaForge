@@ -266,6 +266,7 @@ namespace TopiaForge.ModManager.Tests
     /// <summary>An input action the test holds and lets go of; the host's sample turns that into edges, as the game's does.</summary>
     internal sealed class IntentInputAction : IInputAction
     {
+        private static readonly IReadOnlyList<InputBinding> Defaults = Array.AsReadOnly(new[] { InputBinding.Key("Space") });
         private bool down;
 
         internal IntentInputAction(string owner, string name)
@@ -282,7 +283,7 @@ namespace TopiaForge.ModManager.Tests
 
         public string Name { get; }
 
-        public IReadOnlyList<InputBinding> Bindings { get; private set; } = new[] { InputBinding.Key("Space") };
+        public IReadOnlyList<InputBinding> Bindings { get; private set; } = Defaults;
 
         public float Value => IsHeld ? 1f : 0f;
 
@@ -299,7 +300,7 @@ namespace TopiaForge.ModManager.Tests
         internal void Sample()
         {
             var previous = held;
-            held = down && !Disposed;
+            held = down && !Disposed && Bindings.Count != 0;
             WasPressed = held && !previous;
             WasReleased = !held && previous;
         }
@@ -307,10 +308,16 @@ namespace TopiaForge.ModManager.Tests
         public OperationResult<bool> Rebind(IEnumerable<InputBinding> bindings)
         {
             Bindings = new List<InputBinding>(bindings).AsReadOnly();
+            if (Bindings.Count == 0)
+            {
+                held = false;
+                WasPressed = false;
+                WasReleased = false;
+            }
             return OperationResult<bool>.Success(true);
         }
 
-        public OperationResult<bool> ResetBindings() => OperationResult<bool>.Success(true);
+        public OperationResult<bool> ResetBindings() => Rebind(Defaults);
 
         public void Dispose()
         {

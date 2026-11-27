@@ -43,13 +43,16 @@ namespace TopiaForge.Mods
             writer.WriteString(badge.Style?.Id ?? string.Empty);
         }
 
-        private static void WritePips(IUiWireWriter writer, UiPips pips)
+        private static void WritePips(IUiWireWriter writer, UiPips pips) =>
+            WritePips(writer, pips, pips.Filled, pips.Fraction);
+
+        private static void WritePips(IUiWireWriter writer, UiPips pips, int filled, float fraction)
         {
             LayoutHeader(writer, PipsTag, pips);
             writer.WriteByte((byte)pips.Total);
-            writer.WriteByte((byte)pips.Filled);
+            writer.WriteByte((byte)filled);
             Text(writer, pips.Label);
-            writer.WriteSingle(pips.Fraction);
+            writer.WriteSingle(fraction);
             writer.WriteByte((byte)pips.Presentation);
             writer.WriteByte((byte)pips.Role);
             writer.WriteString(pips.Style?.Id ?? string.Empty);

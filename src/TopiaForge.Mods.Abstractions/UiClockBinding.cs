@@ -7,7 +7,7 @@ namespace TopiaForge.Mods
     internal static class UiClockBinding
     {
         // Only the runtime's unique initial epoch is adopted, once, when its first solo provider attaches.
-        // Weak keys keep the identity alive only while its epoch or a bound countdown still needs it.
+        // Weak keys keep the identity alive only while its epoch or a bound deadline still needs it.
         private static readonly ConditionalWeakTable<string, EpochIdentity> identities = new ConditionalWeakTable<string, EpochIdentity>();
         internal sealed class EpochIdentity
         {
@@ -30,6 +30,8 @@ namespace TopiaForge.Mods
         {
             if (node == null) return true;
             if (node is UiCountdown countdown) return countdown.ClockEpoch == epoch;
+            if (node is UiActionSlot slot) return Matches(slot.Cooldown, epoch) && Matches(slot.Charges?.Refill, epoch);
+            if (node is UiPips pips) return Matches(pips.Refill, epoch);
             var children = UiNodeChildren.Of(node);
             for (var index = 0; index < children.Count; index++)
             {
@@ -37,6 +39,9 @@ namespace TopiaForge.Mods
             }
             return true;
         }
+
+        private static bool Matches(UiCooldown? cooldown, string epoch) =>
+            cooldown == null || StringComparer.Ordinal.Equals(cooldown.ClockEpoch, epoch);
 
         internal static void Bind(UiNode? node, string epoch)
         {
@@ -59,8 +64,26 @@ namespace TopiaForge.Mods
                 if (commit) countdown.ClockIdentity = Identity(epoch);
                 return;
             }
+            if (node is UiActionSlot slot)
+            {
+                Visit(slot.Cooldown, epoch, commit);
+                Visit(slot.Charges?.Refill, epoch, commit);
+                return;
+            }
+            if (node is UiPips pips)
+            {
+                Visit(pips.Refill, epoch, commit);
+                return;
+            }
             var children = UiNodeChildren.Of(node);
             for (var index = 0; index < children.Count; index++) Visit(children[index], epoch, commit);
+        }
+
+        private static void Visit(UiCooldown? cooldown, string epoch, bool commit)
+        {
+            if (cooldown == null) return;
+            if (commit) cooldown.CommitClock(Identity(epoch));
+            else cooldown.CheckClock(epoch);
         }
     }
 }

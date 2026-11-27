@@ -118,6 +118,16 @@ namespace TopiaForge.ModManager.Tests
                 "runtime rebinding resolves conflicts without changing the action identity");
             Assert(alternate.ResetBindings().Succeeded && alternate.Bindings.Count == 2,
                 "actions restore keyboard, mouse, or gamepad defaults deterministically");
+            context.Input.IsUiFocused = false;
+            context.Input.SetValue("alternate", 1f);
+            Assert(alternate.IsHeld && context.Input.GetConflicts().Count == 2, "The fake begins held and reports its existing conflict.");
+            Assert(alternate.Rebind(Array.Empty<InputBinding>()).Succeeded && alternate.Bindings.Count == 0,
+                "An empty fake rebind keeps the registered action available for a later reset.");
+            context.Input.SetValue("alternate", 1f);
+            Assert(!alternate.IsHeld && !alternate.WasPressed && context.Input.GetConflicts().Count == 0,
+                "A cleared fake action stays idle and has no physical control conflicts.");
+            Assert(alternate.ResetBindings().Succeeded && alternate.Bindings.Count == 2 && context.Input.GetConflicts().Count == 2,
+                "Reset returns the original bindings and conflicts after a clear.");
             var duplicate = context.Input.RegisterAction(new InputActionDefinition(
                 "alternate",
                 "Duplicate alternate",

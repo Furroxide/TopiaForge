@@ -192,6 +192,16 @@
       "radius": "pill",
       "border": "thin",
       "shadow": "none"
+    },
+    "keyGlyph": {
+      "radius": "small",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "actionSlot": {
+      "radius": "medium",
+      "border": "standard",
+      "shadow": "small"
     }
   }
 }

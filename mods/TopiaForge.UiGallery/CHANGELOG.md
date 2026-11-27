@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Live action bindings can be cleared with an empty rebind and restored from their defaults. The Key glyphs page shows the cleared action.
+
 - The SESSIONS page now previews the actual VOICE controls with synthetic consent, microphone, transmission and player states.
 
 ## 0.2.0

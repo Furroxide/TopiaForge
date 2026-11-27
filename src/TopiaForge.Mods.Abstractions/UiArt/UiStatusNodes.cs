@@ -96,6 +96,33 @@ namespace TopiaForge.Mods
             DisplayLabel = FormatLabel();
         }
 
+        /// <summary>Creates a pip indicator whose next pip refills on the shared UI clock.</summary>
+        /// <param name="total">The maximum pip count, from 1 to 32.</param>
+        /// <param name="filled">The authored number of full pips, from zero to one less than <paramref name="total"/>.</param>
+        /// <param name="label">The plain-text label, from 1 to 256 characters.</param>
+        /// <param name="refill">The deadline for the next pip.</param>
+        /// <param name="presentation">The shape of the pips.</param>
+        /// <param name="role">The semantic paint role of the filled pips.</param>
+        /// <param name="style">An optional named style declared for pips.</param>
+        /// <param name="id">The optional stable presentation id.</param>
+        /// <remarks>The kit derives the next pip's fractional fill and readout from the deadline.</remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="label"/> or <paramref name="refill"/> is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">A count, presentation, or role is outside its permitted range.</exception>
+        /// <exception cref="ArgumentException">The label or supplied id is blank or exceeds its allowed length.</exception>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public static UiPips WithRefill(int total, int filled, string label, UiCooldown refill,
+            UiPipStyle presentation = UiPipStyle.Dots, UiPaintRole role = UiPaintRole.Accent,
+            UiStyleRef? style = null, string? id = null) =>
+            new UiPips(total, filled, label, refill, presentation, role, style, id);
+
+        private UiPips(int total, int filled, string label, UiCooldown refill,
+            UiPipStyle presentation, UiPaintRole role, UiStyleRef? style, string? id)
+            : this(total, filled, label, 0f, presentation, role, style, id)
+        {
+            Refill = refill ?? throw new ArgumentNullException(nameof(refill));
+            if (filled == total) throw new ArgumentOutOfRangeException(nameof(filled));
+        }
+
         /// <summary>Gets the total number of pips.</summary>
         public int Total { get; }
         /// <summary>Gets the number of fully filled pips.</summary>
@@ -110,6 +137,10 @@ namespace TopiaForge.Mods
         public UiPaintRole Role { get; }
         /// <summary>Gets the named pip style, if supplied.</summary>
         public UiStyleRef? Style { get; }
+
+        /// <summary>Gets the optional refill deadline. Static pip indicators have no deadline.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public UiCooldown? Refill { get; }
 
         internal string DisplayLabel { get; }
 

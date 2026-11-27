@@ -114,6 +114,13 @@ namespace TopiaForge.ModManager.Tests
             True(action.Rebind(new[] { InputBinding.Key("E") }).Succeeded && fake.Bindings[0].Control == "E" && action.ResetBindings().Succeeded,
                 "and rebinding reaches it");
             True(builder.HasActiveInput, "a held action makes its mod's input active");
+            True(action.Rebind(Array.Empty<InputBinding>()).Succeeded && fake.Bindings.Count == 0 &&
+                action.Bindings.Count == 0 && !action.IsHeld && !builder.HasActiveInput,
+                "The network action forwards an empty rebind and stops contributing held input.");
+            True(action.ResetBindings().Succeeded && action.Bindings.Count == 1 && action.Bindings[0].Control == "Space",
+                "Reset through the network facade restores the original host binding.");
+            world.Host.BeginFrame();
+            True(action.IsHeld && builder.HasActiveInput, "The restored binding participates in sampling again.");
             fake.ThrowOnRead = true;
             True(!builder.HasActiveInput, "an action that cannot be read counts as idle");
             var trace = new List<string>();

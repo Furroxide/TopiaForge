@@ -144,6 +144,7 @@ namespace TopiaForge.Mods.UnityUi
 
             stopped = false;
             Gate.ForgetAll();
+            ResetViewerInput();
             TopiaForgeBindingCaptureInput.Reset();
             TopiaForgeNavigateAction.Reset();
             selection = null;
@@ -154,6 +155,7 @@ namespace TopiaForge.Mods.UnityUi
         internal static void ForgetHeld()
         {
             Gate.ForgetAll();
+            ViewerInput.ForgetHeld();
             TopiaForgeBindingCaptureInput.Reset();
         }
 
@@ -179,6 +181,7 @@ namespace TopiaForge.Mods.UnityUi
         private static void OnEvent(InputEventPtr eventPtr, InputDevice device)
         {
             if (stopped) return;
+            ObserveViewerInput(eventPtr, device);
 
             try
             {
@@ -233,6 +236,7 @@ namespace TopiaForge.Mods.UnityUi
                 || change == InputDeviceChange.SoftReset || change == InputDeviceChange.HardReset)
             {
                 Gate.Forget(device.deviceId);
+                ViewerInput.Forget(device.deviceId);
                 TopiaForgeBindingCaptureInput.Forget(device.deviceId);
             }
         }
@@ -387,10 +391,5 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeLog.Error("TopiaForge stopped keeping keys from the game after a failure (" + exception.GetType().Name
                 + "); until the game restarts, the game sees every key and button, Escape included.");
         }
-    }
-
-    /// <summary>Marks a kit text field: while it has the keyboard, TopiaForge takes every key from the game.</summary>
-    internal sealed class TopiaForgeTextEntry : MonoBehaviour
-    {
     }
 }

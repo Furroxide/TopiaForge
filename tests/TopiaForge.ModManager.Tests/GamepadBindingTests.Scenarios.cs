@@ -92,6 +92,17 @@ namespace TopiaForge.ModManager.Tests
                     registry.Sample(); Equal(-1, action.Value);
                     action.Rebind(new[] { InputBinding.GamepadAxis(InputGamepadAxis.LeftTrigger, 2) }); registry.Sample(); Equal(.6f, action.Value);
                     action.ResetBindings(); registry.Sample(); Equal(-1, action.Value);
+                    using var overlapping = registry.Register("example.input", new InputActionDefinition("peer", "Peer",
+                        new[] { InputBinding.GamepadAxis(InputGamepadAxis.RightX) })).Value;
+                    Check(registry.GetConflicts("example.input").Count == 2, "The held binding conflicts with the peer.");
+                    Check(action.Rebind(Array.Empty<InputBinding>()).Succeeded && action.Bindings.Count == 0 &&
+                        action.Value == 0f && !action.IsHeld && !action.WasPressed, "Clear removes a held action immediately.");
+                    registry.Sample();
+                    Check(!action.IsHeld && registry.GetConflicts("example.input").Count == 0,
+                        "A cleared action cannot sample a held control or conflict with another action.");
+                    Check(action.ResetBindings().Succeeded, "Reset restores the original definition.");
+                    registry.Sample(); Equal(-1, action.Value);
+                    Check(registry.GetConflicts("example.input").Count == 2, "Reset restores the original physical control.");
                 }
                 public static void MissingAndChangingPad()
                 {

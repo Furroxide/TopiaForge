@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
@@ -234,9 +235,16 @@ namespace TopiaForge.ModManager.Tests
             internal string ReceiptSha256 { get; }
 
             internal void Install(FakeUiService ui, FakeUiAssetOutcome outcome = FakeUiAssetOutcome.Available,
-                string? digestOverride = null)
+                string? digestOverride = null, bool inheritDefaultTheme = true)
             {
-                Check(ui.AddThemeCatalogue(manifest, path => File.ReadAllText(Path.Combine(directory, path))).Succeeded,
+                var catalogue = manifest;
+                if (!inheritDefaultTheme)
+                {
+                    var parsed = JsonNode.Parse(manifest)!;
+                    parsed["ui"]!.AsObject().Remove("default");
+                    catalogue = parsed.ToJsonString();
+                }
+                Check(ui.AddThemeCatalogue(catalogue, path => File.ReadAllText(Path.Combine(directory, path))).Succeeded,
                     "Read the Gallery's owned theme definitions.");
                 foreach (var image in art.Images)
                 {

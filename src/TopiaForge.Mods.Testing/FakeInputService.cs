@@ -180,12 +180,13 @@ namespace TopiaForge.Mods.Testing
             }
 
             var copy = CopyBindings(newBindings);
+            bindings = copy.AsReadOnly();
             if (copy.Count == 0)
             {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "At least one binding is required.");
+                rawValue = 0f;
+                pressed = false;
+                released = false;
             }
-
-            bindings = copy.AsReadOnly();
             return OperationResult<bool>.Success(true);
         }
 
@@ -200,6 +201,7 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentOutOfRangeException(nameof(value));
             }
 
+            if (bindings.Count == 0) return;
             var wasHeld = rawValue != 0f;
             var isHeld = value != 0f;
             rawValue = value;
@@ -210,6 +212,7 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Sets exact sampled state for an edge-case test.</summary>
         public void SetState(float value, bool wasPressed, bool wasReleased)
         {
+            if (bindings.Count == 0) return;
             rawValue = value;
             pressed = wasPressed;
             released = wasReleased;

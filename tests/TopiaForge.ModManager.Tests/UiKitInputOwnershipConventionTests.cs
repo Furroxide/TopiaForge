@@ -277,7 +277,7 @@ namespace TopiaForge.ModManager.Tests
             Require(reset, "InputSystem.onEvent -= Filter;", "and stops as it stops");
             Require(reset, "InputSystem.onDeviceChange -= DeviceChanged;", "device changes too");
             Require(reset, "Gate.ForgetAll();", "letting go of every taken press");
-            Require(Between(filter, "private static void Stop(", "internal sealed class TopiaForgeTextEntry"), "Gate.ForgetAll();",
+            Require(Between(filter, "private static void Stop(", "exception.GetType().Name"), "Gate.ForgetAll();",
                 "a failure lets go of every taken press too, so the game keeps its input");
 
             var runtime = Kit("Runtime", "TopiaForgeRuntime.cs");

@@ -175,6 +175,17 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
             if (args.Length == 1 && args[0] == "--ui-k2-status-wire") { UiKitStatusWireTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k2-action-wire") { UiKitActionWireTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k2-action-captures") { UiKitCaptureTests.RunActionCaptureTests(); return 0; }
+            if (args.Length == 2 && args[0] == "--write-ui-k2-action-goldens") { UiKitCaptureTests.WriteActionGoldenManifest(args[1]); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k2-native-keys")
+            {
+                UiKitNativeBindingTests.Run();
+                UiHudViewportBoundaryTests.Run();
+                UiSurfaceReapplyTests.Run();
+                UiActionNativeRenderingTests.Run();
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--write-ui-kit-status-goldens")
             {
                 UiKitCaptureTests.WriteStatusGoldenManifest(args[1]);

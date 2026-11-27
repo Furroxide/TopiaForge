@@ -105,6 +105,12 @@ namespace TopiaForge.Mods.Testing
                 case UiStatBar stat:
                     PaintStatBar(stat, path, bounds, clip);
                     return;
+                case UiKeyGlyph glyph:
+                    PaintKeyGlyph(glyph, path, bounds, clip);
+                    return;
+                case UiActionSlot slot:
+                    PaintActionSlot(slot, path, bounds, clip);
+                    return;
                 case UiIcon or UiImage or UiBadge or UiPips:
                     PaintArt(node, path, bounds, clip);
                     return;

@@ -137,6 +137,12 @@
         },
         "statBar": {
           "$ref": "#/$defs/component"
+        },
+        "keyGlyph": {
+          "$ref": "#/$defs/component"
+        },
+        "actionSlot": {
+          "$ref": "#/$defs/component"
         }
       }
     },
@@ -374,7 +380,8 @@
             "card",
             "box",
             "badge",
-            "pips"
+            "pips",
+            "actionSlot"
           ]
         },
         "radius": {

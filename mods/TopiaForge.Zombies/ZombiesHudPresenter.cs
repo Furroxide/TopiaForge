@@ -32,10 +32,12 @@ namespace TopiaForge.Zombies
             int uplinkCharges,
             int maximumUplinkCharges,
             int seconds,
-            int chargePercent,
+            int? chargePercent,
             bool uplinkAvailable,
             bool shopEnabled,
-            double? interWaveEndsAt = null)
+            double? interWaveEndsAt = null,
+            int uplinkRefillPercent = 0,
+            bool shopReady = false)
         {
             Phase = phase;
             Wave = wave;
@@ -54,6 +56,8 @@ namespace TopiaForge.Zombies
             UplinkAvailable = uplinkAvailable;
             ShopEnabled = shopEnabled;
             InterWaveEndsAt = interWaveEndsAt;
+            UplinkRefillPercent = uplinkRefillPercent;
+            ShopReady = shopReady;
         }
 
         public ZombiesPhase Phase { get; }
@@ -70,11 +74,11 @@ namespace TopiaForge.Zombies
         public int MaximumUplinkCharges { get; }
         public int Seconds { get; }
         public double? InterWaveEndsAt { get; }
-        public int ChargePercent { get; }
+        public int? ChargePercent { get; }
+        public int UplinkRefillPercent { get; }
         public bool UplinkAvailable { get; }
         public bool ShopEnabled { get; }
-        public bool ShopAvailable => ShopEnabled
-            && (Phase == ZombiesPhase.Starting || Phase == ZombiesPhase.InterWave);
+        public bool ShopReady { get; }
 
         public bool Equals(ZombiesHudSnapshot other) =>
             Phase == other.Phase && Wave == other.Wave && Hostiles == other.Hostiles
@@ -84,8 +88,8 @@ namespace TopiaForge.Zombies
             && UplinkCharges == other.UplinkCharges
             && MaximumUplinkCharges == other.MaximumUplinkCharges && Seconds == other.Seconds
             && InterWaveEndsAt == other.InterWaveEndsAt
-            && ChargePercent == other.ChargePercent && UplinkAvailable == other.UplinkAvailable
-            && ShopEnabled == other.ShopEnabled;
+            && ChargePercent == other.ChargePercent && UplinkRefillPercent == other.UplinkRefillPercent
+            && UplinkAvailable == other.UplinkAvailable && ShopEnabled == other.ShopEnabled && ShopReady == other.ShopReady;
 
         public override int GetHashCode()
         {
@@ -119,6 +123,10 @@ namespace TopiaForge.Zombies
         internal const string PhaseIconId = "zombies-phase-icon";
         internal const string IntegrityIconId = "zombies-integrity-icon";
         internal const string CreditsIconId = "zombies-credits-icon";
+        internal const string FireSlotId = "zombies-fire-slot";
+        internal const string JackInSlotId = "zombies-jack-in-slot";
+        internal const string StandDownSlotId = "zombies-stand-down-slot";
+        internal const string RequisitionsSlotId = "zombies-requisitions-slot";
 
         private static readonly UiFlexLayout IconAndLabel = new UiFlexLayout(
             spacing: UiSpace.Xs, crossAxisAlignment: UiCrossAxisAlignment.Center);
@@ -128,14 +136,6 @@ namespace TopiaForge.Zombies
         private readonly IModLogger logger;
         private bool hasSnapshot;
         private ZombiesHudSnapshot snapshot;
-        private InputBindingKind fireKind;
-        private string fireControl = string.Empty;
-        private InputBindingKind overrideKind;
-        private string overrideControl = string.Empty;
-        private InputBindingKind broadcastKind;
-        private string broadcastControl = string.Empty;
-        private InputBindingKind shopKind;
-        private string shopControl = string.Empty;
         private bool disposed;
 
         public ZombiesHudPresenter(IModContext context)
@@ -146,8 +146,8 @@ namespace TopiaForge.Zombies
                 "ZOMBIES // SURVIVAL",
                 string.Empty,
                 UiSurfaceKind.Hud,
-                530f,
-                348f));
+                604f,
+                652f));
             if (!result.TryGetValue(out var created) || created == null)
             {
                 throw new InvalidOperationException(
@@ -170,18 +170,14 @@ namespace TopiaForge.Zombies
                 return;
             }
 
-            var bindingsChanged = CaptureBinding(fire, ref fireKind, ref fireControl)
-                | CaptureBinding(overrideAction, ref overrideKind, ref overrideControl)
-                | CaptureBinding(broadcast, ref broadcastKind, ref broadcastControl)
-                | CaptureBinding(shop, ref shopKind, ref shopControl);
-            if (hasSnapshot && next.Equals(snapshot) && !bindingsChanged)
+            if (hasSnapshot && next.Equals(snapshot))
             {
                 return;
             }
 
             snapshot = next;
             hasSnapshot = true;
-            var updated = surface.SetContent(BuildContent(next));
+            var updated = surface.SetContent(BuildContent(next, fire, overrideAction, broadcast, shop));
             if (!updated.Succeeded)
             {
                 logger.Warn("The Zombies HUD could not update (" + updated.ErrorCode + "): " + updated.ErrorMessage);
@@ -204,7 +200,8 @@ namespace TopiaForge.Zombies
             surface.Dispose();
         }
 
-        private UiNode BuildContent(in ZombiesHudSnapshot value)
+        private static UiNode BuildContent(in ZombiesHudSnapshot value, IInputAction? fire,
+            IInputAction? overrideAction, IInputAction? broadcast, IInputAction? shop)
         {
             var phase = PhaseLabel(value);
             if (value.Phase == ZombiesPhase.Starting && value.Seconds > 0)
@@ -226,19 +223,28 @@ namespace TopiaForge.Zombies
             if (value.Phase == ZombiesPhase.InterWave)
                 waveContent = new UiColumn(waveContent, InterWaveTimer(value));
 
-            var supplies = new List<UiNode>(4) { IntegrityStatus(value) };
+            UiNode counters = new UiText(BuildDetails(value), id: DetailsNodeId);
             if (value.ShopEnabled)
-                supplies.Add(WithGlyph(UiGlyph.Notes, CreditsIconId, new UiText(
-                    "CREDITS  " + value.Credits.ToString(CultureInfo.InvariantCulture), UiTextStyle.Label, id: CreditsNodeId)));
+            {
+                var credits = WithGlyph(UiGlyph.Notes, CreditsIconId, new UiText(
+                    "CREDITS  " + value.Credits.ToString(CultureInfo.InvariantCulture), UiTextStyle.Label, id: CreditsNodeId));
+                counters = new UiWrap(new[] { credits, counters }, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs);
+            }
+            var supplies = new List<UiNode>(3) { IntegrityStatus(value), counters };
             if (value.UplinkAvailable) supplies.Add(UplinkStatus(value));
-            supplies.Add(new UiText(BuildDetails(value), id: DetailsNodeId));
 
-            return new UiColumn(
+            var content = new List<UiNode>(3)
+            {
                 new UiCard(waveContent,
                     header: WithGlyph(PhaseGlyph(value.Phase), PhaseIconId, new UiText(phase, UiTextStyle.Title, UiTone.Primary, PhaseNodeId)),
                     padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-wave-card"),
                 new UiCard(new UiColumn(supplies),
-                    padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-supplies-card"));
+                    padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-supplies-card"),
+            };
+            var actions = ActionSlots(value, fire, overrideAction, broadcast, shop);
+            if (actions.Count != 0)
+                content.Add(new UiWrap(actions, spacing: UiSpace.Sm, runSpacing: UiSpace.Sm));
+            return new UiColumn(content);
         }
 
         private static UiRow WithGlyph(UiGlyph glyph, string id, UiText label) => new UiRow(
@@ -278,22 +284,70 @@ namespace TopiaForge.Zombies
             _ => UiGlyph.Flag,
         };
 
-        private static UiNode UplinkStatus(in ZombiesHudSnapshot value)
+        private static List<UiNode> ActionSlots(in ZombiesHudSnapshot value, IInputAction? fire,
+            IInputAction? overrideAction, IInputAction? broadcast, IInputAction? shop)
         {
-            // Run upgrades can take the real capacity beyond the kit's 32-mark track.
-            // Keep the actual readings visible in those runs.
-            if (value.MaximumUplinkCharges is >= 1 and <= 32 && value.UplinkCharges >= 0 &&
-                value.UplinkCharges <= value.MaximumUplinkCharges)
-                return new UiPips(value.MaximumUplinkCharges, value.UplinkCharges, "Uplink",
-                    presentation: UiPipStyle.Segments, id: UplinkNodeId);
+            var slots = new List<UiNode>(4);
+            if (fire != null)
+            {
+                var detail = value.ChargePercent is int percent ? "Charge " + PercentText(percent) : null;
+                slots.Add(new UiActionSlot(fire.Name, "FIRE", detail: detail, emphasis: true, id: FireSlotId));
+            }
 
-            return new UiText("Uplink: " + value.UplinkCharges.ToString(CultureInfo.InvariantCulture) +
-                " / " + value.MaximumUplinkCharges.ToString(CultureInfo.InvariantCulture), UiTextStyle.Label, id: UplinkNodeId);
+            if (value.UplinkAvailable)
+            {
+                if (overrideAction != null)
+                {
+                    var charges = FitsPipTrack(value) ? new UiCharges(value.UplinkCharges, value.MaximumUplinkCharges) : null;
+                    var detail = charges == null ? UplinkCount(value) : null;
+                    slots.Add(new UiActionSlot(overrideAction.Name, "JACK IN", detail: detail, charges: charges, id: JackInSlotId));
+                }
+
+                if (broadcast != null)
+                    slots.Add(new UiActionSlot(broadcast.Name, "STAND DOWN", id: StandDownSlotId));
+            }
+
+            if (value.ShopEnabled && shop != null)
+            {
+                var reason = value.ShopReady ? null : value.Phase == ZombiesPhase.Wave ? "After the wave" : "Unavailable";
+                slots.Add(new UiActionSlot(shop.Name, "REQUISITIONS", unavailableReason: reason, id: RequisitionsSlotId));
+            }
+
+            return slots;
         }
 
-        private string BuildDetails(in ZombiesHudSnapshot value)
+        private static bool FitsPipTrack(in ZombiesHudSnapshot value) =>
+            value.MaximumUplinkCharges is >= 1 and <= 32 && value.UplinkCharges >= 0 &&
+            value.UplinkCharges <= value.MaximumUplinkCharges;
+
+        private static UiNode UplinkStatus(in ZombiesHudSnapshot value)
         {
-            var text = new StringBuilder(224);
+            if (FitsPipTrack(value))
+            {
+                var fraction = value.UplinkRefillPercent / 100f;
+                // The kit truncates the percentage. Round one float upwards when conversion put it below its bucket.
+                if ((int)(fraction * 100f) < value.UplinkRefillPercent)
+                    fraction = BitConverter.Int32BitsToSingle(BitConverter.SingleToInt32Bits(fraction) + 1);
+                return new UiPips(value.MaximumUplinkCharges, value.UplinkCharges, "Uplink", fraction,
+                    presentation: UiPipStyle.Segments, id: UplinkNodeId);
+            }
+
+            // Run upgrades can take the real capacity beyond the kit's 32-mark track.
+            var label = "Uplink: " + UplinkCount(value);
+            if (value.UplinkRefillPercent > 0)
+                label += " (" + PercentText(value.UplinkRefillPercent) + " refilling)";
+            return new UiText(label, UiTextStyle.Label, id: UplinkNodeId);
+        }
+
+        private static string UplinkCount(in ZombiesHudSnapshot value) =>
+            value.UplinkCharges.ToString(CultureInfo.InvariantCulture) + " / " +
+            value.MaximumUplinkCharges.ToString(CultureInfo.InvariantCulture);
+
+        private static string PercentText(int percent) => percent.ToString(CultureInfo.InvariantCulture) + "%";
+
+        private static string BuildDetails(in ZombiesHudSnapshot value)
+        {
+            var text = new StringBuilder(64);
             text.Append("HOSTILES  ").Append(value.Hostiles.ToString(CultureInfo.InvariantCulture));
             if (value.Pending > 0)
             {
@@ -303,22 +357,6 @@ namespace TopiaForge.Zombies
             if (value.Allies > 0)
             {
                 text.Append("    ALLIES  ").Append(value.Allies.ToString(CultureInfo.InvariantCulture));
-            }
-
-            if (value.ChargePercent > 0)
-            {
-                text.Append("\nZAPPER CHARGE  ").Append(value.ChargePercent.ToString(CultureInfo.InvariantCulture)).Append('%');
-            }
-
-            text.Append("\n").Append(BindingLabel(fireKind, fireControl)).Append(" FIRE");
-            if (value.UplinkAvailable)
-            {
-                text.Append("    ").Append(BindingLabel(overrideKind, overrideControl)).Append(" JACK IN")
-                    .Append("    ").Append(BindingLabel(broadcastKind, broadcastControl)).Append(" STAND DOWN");
-            }
-            if (value.ShopAvailable)
-            {
-                text.Append("    ").Append(BindingLabel(shopKind, shopControl)).Append(" REQUISITIONS");
             }
 
             return text.ToString();
@@ -333,54 +371,13 @@ namespace TopiaForge.Zombies
                 case ZombiesPhase.Starting:
                     return "SYSTEM BOOT";
                 case ZombiesPhase.InterWave:
-                    return value.ShopAvailable ? "WAVE CLEAR // REQUISITIONS OPEN" : "WAVE CLEAR";
+                    return "WAVE CLEAR";
                 case ZombiesPhase.GameOver:
                     return "SYSTEM FAILURE";
                 case ZombiesPhase.ReturningToMenu:
                     return "RETURNING TO MENU";
                 default:
                     return "HORDE ACTIVE";
-            }
-        }
-
-        private static bool CaptureBinding(
-            IInputAction? action,
-            ref InputBindingKind kind,
-            ref string control)
-        {
-            var nextKind = default(InputBindingKind);
-            var nextControl = string.Empty;
-            if (action != null && action.Bindings.Count > 0)
-            {
-                nextKind = action.Bindings[0].Kind;
-                nextControl = action.Bindings[0].Control ?? string.Empty;
-            }
-
-            if (nextKind == kind && string.Equals(nextControl, control, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            kind = nextKind;
-            control = nextControl;
-            return true;
-        }
-
-        private static string BindingLabel(InputBindingKind kind, string control)
-        {
-            if (string.IsNullOrEmpty(control))
-            {
-                return "UNBOUND";
-            }
-
-            switch (kind)
-            {
-                case InputBindingKind.MouseButton:
-                    return "MOUSE " + control.ToUpperInvariant();
-                case InputBindingKind.GamepadButton:
-                    return "PAD " + control.ToUpperInvariant();
-                default:
-                    return control.ToUpperInvariant();
             }
         }
     }

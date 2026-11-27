@@ -14,15 +14,21 @@ namespace TopiaForge.ModManager.Tests
         private static void TheNativeEventAdapterUsesThoseClaims()
         {
             var kit = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi");
+            var manager = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.ModManager");
             var ownershipFiles = new[] { "TopiaForgeInputOwnership.cs", "TopiaForgeInputOwnership.Capture.cs" };
             var nativeMethods = ownershipFiles.SelectMany(file => CSharpSyntaxTree.ParseText(
                 File.ReadAllText(Path.Combine(kit, "Runtime", file))).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>());
             var routedMethods = nativeMethods.Where(method => method.Identifier.Text is "OnEvent" or "HoldsControl" or "OnDeviceChange");
             var files = new[] { "Core/TopiaForgeInputClaim.cs", "Core/TopiaForgeInputGate.cs",
-                "Core/TopiaForgeNavigationBindings.cs", "Widgets/TopiaForgeBindingCaptureInput.cs" };
+                "Core/TopiaForgeNavigationBindings.cs", "Runtime/TopiaForgeViewerInput.cs",
+                "Widgets/TopiaForgeBindingCaptureInput.cs", "Widgets/TopiaForgeActionKeyCap.cs" };
             var nativeSources = files.Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(kit, file))))
+                .Concat(new[] { "UiNativeActionBinding.cs", "UnityUiService.Input.cs" }.Select(
+                    file => CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(manager, file)))))
                 .Append(CSharpSyntaxTree.ParseText(InputContract.Replace("/* production routes */", string.Join("\n", routedMethods))))
-                .Append(CSharpSyntaxTree.ParseText(EventCases));
+                .Append(CSharpSyntaxTree.ParseText(EventCases))
+                .Append(CSharpSyntaxTree.ParseText(ActionViewCases))
+                .Append(CSharpSyntaxTree.ParseText(ActionViewDoubles));
             var trusted = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
             var references = trusted.Append(typeof(InputBinding).Assembly.Location).Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(path => MetadataReference.CreateFromFile(path));
@@ -35,7 +41,11 @@ namespace TopiaForge.ModManager.Tests
                 result.Diagnostics.Where(item => item.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
 
             var assembly = Assembly.Load(bytes.ToArray());
-            try { assembly.GetType("EventCases")!.GetMethod("Run")!.Invoke(null, null); }
+            try
+            {
+                assembly.GetType("EventCases")!.GetMethod("Run")!.Invoke(null, null);
+                assembly.GetType("ActionViewCases")!.GetMethod("Run")!.Invoke(null, null);
+            }
             catch (TargetInvocationException exception) { throw exception.InnerException!; }
         }
 
@@ -158,7 +168,12 @@ namespace TopiaForge.ModManager.Tests
             {
                 internal static class Time { internal static int frameCount; }
                 internal enum KeyCode { None, A, D, W, S, Escape, Return, Alpha1, F8, LeftArrow, RightArrow, UpArrow, DownArrow }
-                internal readonly record struct Vector2(float x, float y) { internal float magnitude => MathF.Sqrt(x * x + y * y); }
+                internal readonly record struct Vector2(float x, float y)
+                {
+                    internal float magnitude => MathF.Sqrt(sqrMagnitude);
+                    internal float sqrMagnitude => x * x + y * y;
+                    public static Vector2 operator -(Vector2 left, Vector2 right) => new(left.x - right.x, left.y - right.y);
+                }
             }
 
             namespace UnityEngine.InputSystem
@@ -185,7 +200,7 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed class Mouse : InputDevice
                 {
                     internal readonly ButtonControl leftButton = new(), rightButton = new(), middleButton = new(), backButton = new(), forwardButton = new();
-                    internal readonly Vector2Control scroll = new(), delta = new();
+                    internal readonly Vector2Control scroll = new(), delta = new(), position = new();
                     internal Mouse(int id) { deviceId = id; }
                 }
             }
@@ -195,7 +210,12 @@ namespace TopiaForge.ModManager.Tests
                 internal class AxisControl : InputControl
                 {
                     internal float Current;
-                    internal bool ReadValueFromEvent(InputEventPtr input, out float value) => input.TryRead(this, out value);
+                    internal bool Broken;
+                    internal bool ReadValueFromEvent(InputEventPtr input, out float value)
+                    {
+                        if (Broken) throw new InvalidOperationException("Device reader failed.");
+                        return input.TryRead(this, out value);
+                    }
                     internal float ReadValue() => Current;
                     internal void ResetToDefaultStateInEvent(InputEventPtr input) => input.Reset(this);
                 }
@@ -218,7 +238,7 @@ namespace TopiaForge.ModManager.Tests
                         var hasX = x.ReadValueFromEvent(input, out var horizontal);
                         var hasY = y.ReadValueFromEvent(input, out var vertical);
                         value = new(horizontal, vertical);
-                        return hasX || hasY;
+                        return input.IsA<DeltaStateEvent>() ? hasX && hasY : hasX || hasY;
                     }
                     internal void ResetToDefaultStateInEvent(InputEventPtr input)
                     {
@@ -265,11 +285,12 @@ namespace TopiaForge.ModManager.Tests
                 {
                     internal static TopiaForgeInputClaim Claims => TopiaForgeInputClaim.Back | TopiaForgeInputClaim.Keyboard;
                 }
-                internal static class TopiaForgeInputOwnership
+                internal static partial class TopiaForgeInputOwnership
                 {
                     private const int EastButton = 0, SouthButton = 1, Dpad = 2, LeftStick = 3, RightStick = 4;
                     private static readonly TopiaForgeInputGate Gate = new();
                     private static bool stopped;
+                    internal static void ResetViewerForTest() => ResetViewerInput();
                     internal static bool SawBack;
                     internal static void Deliver(InputEventPtr input, InputDevice device) => OnEvent(input, device);
                     internal static void PrimeSubmit(Keyboard keyboard) => Gate.Take(keyboard.deviceId, TopiaForgeInputDevice.Keyboard,
@@ -294,6 +315,7 @@ namespace TopiaForge.ModManager.Tests
 
                     /* production routes */
                 }
+                internal static class TopiaForgeLog { internal static void Error(string message) { } }
             }
             """;
     }

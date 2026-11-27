@@ -32,6 +32,7 @@ namespace TopiaForge.Mods
                 UiBox box => (box.Style, UiThemeTarget.Box, null),
                 UiBadge badge => (badge.Style, UiThemeTarget.Badge, badge.Role),
                 UiPips pips => (pips.Style, UiThemeTarget.Pips, pips.Role),
+                UiActionSlot slot => (slot.Style, UiThemeTarget.ActionSlot, null),
                 _ => (null, default, null),
             };
             var (style, target, fixedRole) = named;
@@ -58,17 +59,28 @@ namespace TopiaForge.Mods
                 UiBadge badge => (UiThemeTarget.Badge, badge.Style, badge.Role, false, true),
                 UiPips pips => (UiThemeTarget.Pips, pips.Style, pips.Role, false, true),
                 UiStatBar => (UiThemeTarget.StatBar, null, UiPaintRole.Sunken, false, true),
+                UiActionSlot slot => (UiThemeTarget.ActionSlot, slot.Style, UiPaintRole.Surface, false, false),
+                UiKeyGlyph => (UiThemeTarget.KeyGlyph, null, UiPaintRole.Sunken, false, true),
                 _ => throw new ArgumentException("The node has no theme component decoration.", nameof(node)),
             };
+            return Resolve(target, style, fill, selected, fixedRole, effective, declared, size, highContrast);
+        }
 
+        internal static UiLayoutDecoration ResolveKeyGlyph(UiThemeDescriptor effective, UiLayoutExtent size, bool highContrast) =>
+            Resolve(UiThemeTarget.KeyGlyph, null, UiPaintRole.Sunken, false, true, effective, null, size, highContrast);
+
+        private static UiLayoutDecoration Resolve(UiThemeTarget target, UiStyleRef? style, UiPaintRole fill,
+            bool selected, bool fixedRole, UiThemeDescriptor effective, UiThemeDescriptor? declared,
+            UiLayoutExtent size, bool highContrast)
+        {
             string? styleId = null;
             var component = effective.Components[target];
             if (style != null && declared != null)
             {
                 if (!declared.Styles.TryGetValue(style.Id, out var definition) || definition.Target != target)
-                    throw new ArgumentException("The named style must be declared for this component.", nameof(node));
+                    throw new ArgumentException("The named style must be declared for this component.", "node");
                 if (fixedRole && definition.Fill.HasValue && definition.Fill.Value != fill)
-                    throw new ArgumentException("The named status style must preserve the requested paint role.", nameof(node));
+                    throw new ArgumentException("The named status style must preserve the requested paint role.", "node");
 
                 if (effective.Digest.Span.SequenceEqual(declared.Digest.Span) &&
                     effective.Styles.TryGetValue(style.Id, out var applied) && applied.Target == target)

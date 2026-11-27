@@ -80,7 +80,7 @@ namespace TopiaForge.Zombies
 
             UpdateEnemyLifecycles(worldDelta);
 
-            if (phase == ZombiesPhase.Starting || phase == ZombiesPhase.InterWave)
+            if (IsRequisitionsPhase)
             {
                 if (shopAction?.WasPressed == true)
                 {

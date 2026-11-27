@@ -734,6 +734,19 @@ type public sealed class TopiaForge.Mods.UiAccessibilityPreferences : System.Obj
   property System.Single UiScale { get; }
   property static TopiaForge.Mods.UiAccessibilityPreferences Default { get [static]; }
 
+type public sealed class TopiaForge.Mods.UiActionSlot : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String actionName, System.String label, System.Nullable<TopiaForge.Mods.UiGlyph> glyph = null, TopiaForge.Mods.UiImageRef? image = null, System.String? detail = null, System.Boolean emphasis = false, TopiaForge.Mods.UiCooldown? cooldown = null, TopiaForge.Mods.UiCharges? charges = null, System.String? unavailableReason = null, TopiaForge.Mods.UiStyleRef? style = null, System.String? id = null) [requires-topiaforge="0.2.0"]
+  property System.Boolean Emphasis { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Nullable<TopiaForge.Mods.UiGlyph> Glyph { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String ActionName { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String Label { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? Detail { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? UnavailableReason { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiCharges? Charges { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiCooldown? Cooldown { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiImageRef? Image { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiStyleRef? Style { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.UiBadge : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
   constructor .ctor(System.String text, TopiaForge.Mods.UiPaintRole role = 0 (Surface), TopiaForge.Mods.UiBadgeStyle presentation = 0 (Filled), System.Nullable<TopiaForge.Mods.UiGlyph> icon = null, TopiaForge.Mods.UiStyleRef? style = null, System.String? id = null) [requires-topiaforge="0.2.0"]
   property System.Nullable<TopiaForge.Mods.UiGlyph> Icon { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
@@ -777,6 +790,12 @@ type public sealed class TopiaForge.Mods.UiCard : TopiaForge.Mods.UiNode [requir
   property TopiaForge.Mods.UiNode? Header { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiStyleRef? Style { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
+type public sealed class TopiaForge.Mods.UiCharges : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Int32 available, System.Int32 maximum, TopiaForge.Mods.UiCooldown? refill = null) [requires-topiaforge="0.2.0"]
+  property System.Int32 Available { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Int32 Maximum { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiCooldown? Refill { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public sealed class TopiaForge.Mods.UiCheckbox : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
   constructor .ctor(System.String id, System.String label, System.Boolean value, System.Action<System.Boolean> changed, System.Boolean enabled = true) [requires-topiaforge="0.2.0"]
   property System.Action<System.Boolean> Changed { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
@@ -794,6 +813,13 @@ type public sealed class TopiaForge.Mods.UiColumn : TopiaForge.Mods.UiLayoutNode
   constructor .ctor(System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiNode> children, TopiaForge.Mods.UiFlexLayout layout, System.String? id = null) [requires-topiaforge="0.2.0"]
   constructor .ctor(params TopiaForge.Mods.UiNode[] children)
   property TopiaForge.Mods.UiFlexLayout Layout { get; } [requires-topiaforge="0.2.0"]
+
+type public sealed class TopiaForge.Mods.UiCooldown : System.Object [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.Double endsAt, System.Double durationSeconds) [requires-topiaforge="0.2.0"]
+  method System.Int32 RemainingSeconds(System.Double clockTime) [requires-topiaforge="0.2.0"]
+  method System.Single Elapsed(System.Double clockTime) [requires-topiaforge="0.2.0"]
+  property System.Double DurationSeconds { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.Double EndsAt { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.UiCountdown : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
   constructor .ctor(System.Double endsAt, System.String label = "", TopiaForge.Mods.UiTone tone = 0 (Neutral), System.String? id = null) [requires-topiaforge="0.2.0"]
@@ -1035,6 +1061,10 @@ type public sealed class TopiaForge.Mods.UiKeyBindingField : TopiaForge.Mods.UiN
   property System.String? Label { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiInputDevice Device { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
+type public sealed class TopiaForge.Mods.UiKeyGlyph : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
+  constructor .ctor(System.String actionName, System.String? id = null) [requires-topiaforge="0.2.0"]
+  property System.String ActionName { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+
 type public abstract class TopiaForge.Mods.UiLayoutNode : TopiaForge.Mods.UiNode
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiNode> Children { get; }
 
@@ -1097,10 +1127,12 @@ type public enum TopiaForge.Mods.UiPipStyle : System.Int32 [requires-topiaforge=
 
 type public sealed class TopiaForge.Mods.UiPips : TopiaForge.Mods.UiNode [requires-topiaforge="0.2.0"]
   constructor .ctor(System.Int32 total, System.Int32 filled, System.String label, System.Single fraction = 0, TopiaForge.Mods.UiPipStyle presentation = 0 (Dots), TopiaForge.Mods.UiPaintRole role = 5 (Accent), TopiaForge.Mods.UiStyleRef? style = null, System.String? id = null) [requires-topiaforge="0.2.0"]
+  method [static] TopiaForge.Mods.UiPips WithRefill(System.Int32 total, System.Int32 filled, System.String label, TopiaForge.Mods.UiCooldown refill, TopiaForge.Mods.UiPipStyle presentation = 0 (Dots), TopiaForge.Mods.UiPaintRole role = 5 (Accent), TopiaForge.Mods.UiStyleRef? style = null, System.String? id = null) [requires-topiaforge="0.2.0"]
   property System.Int32 Filled { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Int32 Total { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.Single Fraction { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String Label { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property TopiaForge.Mods.UiCooldown? Refill { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiPaintRole Role { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiPipStyle Presentation { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiStyleRef? Style { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]

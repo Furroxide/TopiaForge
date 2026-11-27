@@ -86,7 +86,7 @@ namespace TopiaForge.ModManager
                     if (Matches(expected)) return expected;
                 }
             }
-            return MatchStatus(request, theme, remote);
+            return MatchStatus(request, theme, remote) ?? MatchActions(request, theme, remote, transport);
 
             bool Matches(UiSurfaceRequest expected) => (remote || expected.Id == request.Id) &&
                 request.Title == expected.Title && request.Body == expected.Body && request.Width == expected.Width &&
@@ -96,7 +96,7 @@ namespace TopiaForge.ModManager
         }
 
         private static UiNode? NormalizeTransportContent(UiNode? content) => UiWireCodec.ProjectInputDefaults(
-            UiImageProjection.Rewrite(content, NormalizeTransportImage), ControlGalleryPages.DefaultBindings);
+            NormalizeTransportArtwork(content), ActionGalleryPages.DefaultBindings);
 
         private static bool IsTransportId(string id, string prefix) => id.StartsWith(prefix, StringComparison.Ordinal) &&
             id.Length > prefix.Length && id[prefix.Length] != '0' &&
@@ -147,7 +147,10 @@ namespace TopiaForge.ModManager
                     left.Presentation == right.Presentation && left.Icon == right.Icon && left.Style?.Id == right.Style?.Id,
                 (UiPips left, UiPips right) => left.Total == right.Total && left.Filled == right.Filled &&
                     left.Fraction == right.Fraction && left.Label == right.Label && left.Presentation == right.Presentation &&
-                    left.Role == right.Role && left.Style?.Id == right.Style?.Id,
+                    left.Role == right.Role && left.Style?.Id == right.Style?.Id && SameCooldown(left.Refill, right.Refill),
+                (UiKeyGlyph left, UiKeyGlyph right) => left.ActionName == right.ActionName && left.HasWireDefaults == right.HasWireDefaults &&
+                    SameBindingHints(left.WireDefaults, right.WireDefaults),
+                (UiActionSlot left, UiActionSlot right) => SameActionSlot(left, right),
                 (UiScroll left, UiScroll right) => left.Height == right.Height && SameNode(left.Content, right.Content),
                 (UiSplitPane left, UiSplitPane right) => left.Orientation == right.Orientation &&
                     left.PrimaryFraction == right.PrimaryFraction && SameNode(left.Primary, right.Primary) &&
@@ -193,8 +196,7 @@ namespace TopiaForge.ModManager
             actual.ActionName == expected.ActionName && actual.Label == expected.Label &&
             actual.Device == expected.Device && actual.Enabled == expected.Enabled &&
             actual.HasWireDefaults == expected.HasWireDefaults &&
-            SameEntries(actual.WireDefaults, expected.WireDefaults,
-                (transmitted, defined) => transmitted.Kind == defined.Kind && transmitted.Control == defined.Control);
+            SameBindingHints(actual.WireDefaults, expected.WireDefaults);
 
         private static bool SameFlex(UiFlexLayout left, UiFlexLayout right) =>
             left.Spacing == right.Spacing && left.Padding.Equals(right.Padding) &&

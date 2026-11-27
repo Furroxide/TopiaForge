@@ -59,7 +59,9 @@ namespace TopiaForge.ModManager
             var source = local as IUiPresentationThemeSource;
             var validation = UiPresentationImages.Prepare(request.Content, source?.PresentationThemeScope, theme, out var presentation);
             if (!validation.Succeeded) return OperationResult<IUiSurface>.Failure(validation.ErrorCode, validation.ErrorMessage);
-            var hud = new MirroredHudPresenter(this, context, request, nextToken + 1, source, theme);
+            validation = UiPresentationInputs.Prepare(local, presentation, out presentation);
+            if (!validation.Succeeded) return OperationResult<IUiSurface>.Failure(validation.ErrorCode, validation.ErrorMessage);
+            var hud = new MirroredHudPresenter(this, context, request, nextToken + 1, local, theme);
             var staged = StageEnvelope(hud, theme, presentation, out var envelope);
             if (!staged.Succeeded) return OperationResult<IUiSurface>.Failure(staged.ErrorCode, staged.ErrorMessage);
             var prepared = hud.Prepare(presentation, envelope);

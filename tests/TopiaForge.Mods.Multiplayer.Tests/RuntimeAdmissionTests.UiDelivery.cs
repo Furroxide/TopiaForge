@@ -144,6 +144,7 @@ internal static partial class RuntimeAdmissionTests
         IRemoteThemedUiReceiver, IUiInputDefaultsSource
     {
         private readonly FakeUiService ui;
+        private readonly FakeModLifetime lifetime;
         internal readonly Dictionary<string, ThemeSurfaceProbe> Surfaces = new(StringComparer.Ordinal);
         internal readonly Dictionary<string, InputActionDefinition> InputDefinitions = new(StringComparer.Ordinal);
         internal readonly ArtCanvasRecorder? Art;
@@ -153,6 +154,7 @@ internal static partial class RuntimeAdmissionTests
 
         internal ThemeProbe(FakeModLifetime lifetime, bool author, AdmittedUiCatalogue? art = null)
         {
+            this.lifetime = lifetime;
             ui = new FakeUiService(lifetime);
             if (art != null) Art = new ArtCanvasRecorder(lifetime);
             if (!author) return;
@@ -167,9 +169,8 @@ internal static partial class RuntimeAdmissionTests
             PresentationThemeScope = new UiThemeScope(lifetime, new AdmittedUiCatalogue(null, declared));
         }
 
-        internal ThemeProbe(FakeModLifetime lifetime, AdmittedUiCatalogue catalogue)
+        internal ThemeProbe(FakeModLifetime lifetime, AdmittedUiCatalogue catalogue) : this(lifetime, author: false)
         {
-            ui = new FakeUiService(lifetime);
             var scope = new UiThemeScope(lifetime, catalogue);
             lifetime.Track(scope);
             PresentationThemeScope = scope;
@@ -191,6 +192,16 @@ internal static partial class RuntimeAdmissionTests
             }
             defaults = Array.Empty<InputBinding>();
             return false;
+        }
+
+        internal void RegisterActionFixture(InputActionDefinition definition)
+        {
+            var input = new FakeInputService(lifetime);
+            That(input.RegisterAction(definition).Succeeded, "The author fake registers the fixture's live action.");
+            var follow = typeof(FakeUiService).GetMethod("FollowInput",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            follow!.Invoke(ui, new object[] { input, Sandbox.Id });
+            InputDefinitions.Add(definition.Name, definition);
         }
         public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences) => ui.ApplyAccessibility(preferences);
         public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) =>

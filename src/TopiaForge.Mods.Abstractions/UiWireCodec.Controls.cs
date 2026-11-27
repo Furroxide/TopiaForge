@@ -69,13 +69,7 @@ namespace TopiaForge.Mods
                     Text(writer, field.Label ?? string.Empty);
                     writer.WriteByte((byte)field.Device);
                     Flag(writer, field.Enabled);
-                    writer.WriteByte((byte)field.WireDefaults.Count);
-                    for (var index = 0; index < field.WireDefaults.Count; index++)
-                    {
-                        var binding = field.WireDefaults[index];
-                        writer.WriteByte((byte)binding.Kind);
-                        writer.WriteString(binding.Control);
-                    }
+                    WriteInputDefaults(writer, field.WireDefaults);
                     return;
                 default:
                     throw new ArgumentException("This UI control cannot be sent to a player.");

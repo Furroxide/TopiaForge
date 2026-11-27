@@ -10,6 +10,7 @@ namespace TopiaForge.ModManager
         internal readonly RuntimeReplication Context;
         internal readonly UiSurfaceRequest Request;
         internal readonly IUiPresentationThemeSource? ThemeSource;
+        private readonly IUiService local;
         private readonly ulong token;
         private IUiSurface inner = null!;
         private string body;
@@ -25,10 +26,10 @@ namespace TopiaForge.ModManager
         internal int Bytes => (Payload?.Length ?? 0) + 4;
 
         internal MirroredHudPresenter(MultiplayerPresentation owner, RuntimeReplication context, UiSurfaceRequest request, ulong token,
-            IUiPresentationThemeSource? themeSource = null, UiThemeDescriptor? theme = null)
+            IUiService local, UiThemeDescriptor? theme = null)
         {
-            this.owner = owner; Context = context; Request = request; this.token = token;
-            body = request.Body; content = request.Content; ThemeSource = themeSource; Theme = theme;
+            this.owner = owner; Context = context; Request = request; this.token = token; this.local = local;
+            body = request.Body; content = request.Content; ThemeSource = local as IUiPresentationThemeSource; Theme = theme;
         }
         internal void Attach(IUiSurface surface) => inner = surface;
         internal UiNode? Content => content;
@@ -151,6 +152,8 @@ namespace TopiaForge.ModManager
             if (!validated.Succeeded) return validated;
             if (UiComposition.ContainsInteractive(presentation)) return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument,
                 "HUD surfaces are read-only; put controls in a window or a player's targeted UI.");
+            validated = UiPresentationInputs.Prepare(local, presentation, out presentation);
+            if (!validated.Succeeded) return validated;
             var staged = owner.StageEnvelope(this, Theme, presentation, out var envelope);
             if (!staged.Succeeded) return staged;
             var payload = Encode(body, presentation, shown, owner.UiClockEpoch, envelope: envelope, needsTheme: Theme != null);

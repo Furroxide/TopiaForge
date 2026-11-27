@@ -22,6 +22,8 @@ namespace TopiaForge.ModManager.Tests
                         throw new NotSupportedException("This fixture has no tooltip.");
                     private bool CaptureArt(UiNode fixture, RectTransform native, string path, UiThemeColor? backdrop) =>
                         throw new NotSupportedException("This fixture has no artwork.");
+                    private bool CaptureAction(UiNode fixture, RectTransform native, string path, UiThemeColor? backdrop) =>
+                        throw new NotSupportedException("This fixture has no action controls.");
                     private bool CaptureImageNotice(UiSurfaceRequest fixture, RectTransform native, string? queuedNotice) =>
                         throw new NotSupportedException("This fixture has no image fallback.");
                     private bool GraphConnectionsLauncher(TopiaForge.Mods.UnityUi.TopiaForgeGraphConnections connections) =>

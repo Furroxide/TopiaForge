@@ -15,15 +15,18 @@ namespace TopiaForge.MultiplayerAcceptance
         private static readonly ControlGalleryPage[] ControlPages = (ControlGalleryPage[])Enum.GetValues(typeof(ControlGalleryPage));
         private const int VariantsPerPage = 6;
         internal const int StatusVariantCount = 8;
+        internal const int ActionVariantCount = 8;
         private static int FoundationVariantCount => FoundationPages.TransportPages.Count * VariantsPerPage;
         internal static int K1VariantCount => FoundationVariantCount + 3;
         internal static int StatusStart => K1VariantCount + ControlPages.Length * 2;
-        internal static int VariantCount => StatusStart + StatusVariantCount;
+        internal static int ActionStart => StatusStart + StatusVariantCount;
+        internal static int VariantCount => ActionStart + ActionVariantCount;
         private readonly IModContext context;
         private readonly IMultiplayerSession session;
         private readonly IDisposable update;
         private readonly IDisposable changed;
         private readonly int first;
+        private readonly int limit;
         private readonly bool retainCountdown;
         private int next;
         private IUiSurface? localSurface;
@@ -38,7 +41,9 @@ namespace TopiaForge.MultiplayerAcceptance
             this.context = context;
             this.session = session;
             retainCountdown = context.Files.DataFileExists(RetainedCountdownOptInFile);
-            first = retainCountdown ? VariantCount - 1 : (context.Files.DataFileExists(StatusOnlyOptInFile) ? StatusStart : 0);
+            var statusOnly = retainCountdown || context.Files.DataFileExists(StatusOnlyOptInFile);
+            first = retainCountdown ? ActionStart - 1 : statusOnly ? StatusStart : 0;
+            limit = statusOnly ? ActionStart : VariantCount;
             next = first;
             changed = session.SubscribeChanged(Observe);
             update = context.Events.SubscribeUpdate(_ =>
@@ -66,8 +71,9 @@ namespace TopiaForge.MultiplayerAcceptance
             {
                 var expedition = context.Input.RegisterAction(ControlGalleryPages.Expedition());
                 var ledger = context.Input.RegisterAction(ControlGalleryPages.Ledger());
-                if (!expedition.Succeeded || !ledger.Succeeded)
-                    context.Logger.Warn("One or more Gallery example bindings could not be registered.");
+                var actions = ActionGalleryPages.RegisterActions(context.Input);
+                if (!expedition.Succeeded || !ledger.Succeeded || !actions)
+                    context.Logger.Warn("One or more Gallery example bindings could not be registered or cleared.");
             }
             context.Lifetime.Track(new GalleryRemotePreview(context, session, action));
         }
@@ -104,7 +110,7 @@ namespace TopiaForge.MultiplayerAcceptance
             activeSession = snapshot.Id;
             activeGuest = guestId;
             if (retainCountdown) retainedTarget = guest;
-            if (++next == VariantCount) next = first;
+            if (++next == limit) next = first;
             context.Logger.Info("Published the paired Gallery fixture '" + request.Id + "'.");
         }
 
@@ -128,6 +134,14 @@ namespace TopiaForge.MultiplayerAcceptance
         internal static UiSurfaceRequest Request(int variant, double clockTime)
         {
             if ((uint)variant >= (uint)VariantCount) throw new ArgumentOutOfRangeException(nameof(variant));
+            if (variant >= ActionStart)
+            {
+                var action = variant - ActionStart;
+                var actionPage = (ActionGalleryPage)(action / 4);
+                var surface = (action & 1) == 0 ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
+                return ActionGalleryPages.CreateRequest(actionPage, surface, clockTime,
+                    (action & 2) == 0 ? null : FoundationPages.TransportTheme, transport: true);
+            }
             if (variant >= StatusStart)
             {
                 var status = variant - StatusStart;

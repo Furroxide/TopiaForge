@@ -42,6 +42,7 @@ namespace TopiaForge.ModManager
         private sealed class UiSurfaceArtwork : IDisposable
         {
             private readonly Dictionary<UiImage, ImageEntry> images = new Dictionary<UiImage, ImageEntry>();
+            private readonly Dictionary<UiActionSlot, UiImage> slotIcons = new Dictionary<UiActionSlot, UiImage>();
             private readonly Dictionary<UiThemeDescriptor, UiThemeDemand?> demands = new Dictionary<UiThemeDescriptor, UiThemeDemand?>();
 
             internal bool HasPendingDemand()
@@ -68,7 +69,15 @@ namespace TopiaForge.ModManager
 
                 void Visit(UiNode node)
                 {
-                    if (node is UiImage image)
+                    var image = node as UiImage;
+                    if (node is UiActionSlot { Image: not null } slot)
+                    {
+                        artwork ??= new UiSurfaceArtwork();
+                        if (artwork.slotIcons.ContainsKey(slot)) return;
+                        image = UiImageProjection.ForActionSlot(slot, remote);
+                        artwork.slotIcons.Add(slot, image);
+                    }
+                    if (image != null)
                     {
                         artwork ??= new UiSurfaceArtwork();
                         if (artwork.images.ContainsKey(image)) return;
@@ -92,7 +101,7 @@ namespace TopiaForge.ModManager
                                     : scope?.DemandSurface(pack, Settled, retryFailed: false);
                                 artwork.demands.Add(pack, demand);
                             }
-                            artwork.images.Add(image, new ImageEntry(pack, frame));
+                            artwork.images.Add(image, new ImageEntry(pack, frame, metadata.IsMask == true));
                         }
                         else if (!remote) throw new UiImageNotDeclaredException();
                         else if (image.PackDescriptorDigest.Length == 32 && image.Width.HasValue && image.Height.HasValue)
@@ -116,18 +125,31 @@ namespace TopiaForge.ModManager
                 return new BoundImage(entry.Frame, sprite);
             }
 
+            internal (Sprite? Sprite, bool IsMask) Resolve(UiActionSlot slot)
+            {
+                var image = slotIcons[slot];
+                return (Resolve(image).Sprite, images[image].IsMask);
+            }
+
             public void Dispose()
             {
                 foreach (var demand in demands.Values) demand?.Dispose();
                 demands.Clear();
                 images.Clear();
+                slotIcons.Clear();
             }
 
             private readonly struct ImageEntry
             {
-                internal ImageEntry(UiThemeDescriptor? pack, UiImageFrame frame) { Pack = pack; Frame = frame; }
+                internal ImageEntry(UiThemeDescriptor? pack, UiImageFrame frame, bool isMask = false)
+                {
+                    Pack = pack;
+                    Frame = frame;
+                    IsMask = isMask;
+                }
                 internal UiThemeDescriptor? Pack { get; }
                 internal UiImageFrame Frame { get; }
+                internal bool IsMask { get; }
             }
         }
 

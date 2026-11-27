@@ -22,6 +22,7 @@
     <EmbeddedResource Include="../../tests/TopiaForge.MultiplayerAcceptanceMod/ui/themes/transport-preview.json" LogicalName="TopiaForge.UiGallery.TransportPreview.json" />
     <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\ControlGalleryPages.cs" Link="UiGalleryRecorder\ControlGalleryPages.cs" />
     <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\StatusGalleryPages.cs" Link="UiGalleryRecorder\StatusGalleryPages.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\ActionGalleryPages.cs" Link="UiGalleryRecorder\ActionGalleryPages.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiCapturedNode.cs" Link="UiGalleryRecorder\UiCapturedNode.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiCaptureViewport.cs" Link="UiGalleryRecorder\UiCaptureViewport.cs" />
     <Compile Include="..\TopiaForge.Mods.Testing\UiTreeCapture.cs" Link="UiGalleryRecorder\UiTreeCapture.cs" />

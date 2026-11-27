@@ -46,7 +46,8 @@ namespace TopiaForge.ModManager
                 if (view == null || (root == null && placement == null) || !presence.IsLive || lifetime.IsStopping) return;
                 var stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
                 var occupancyChanged = layoutFallback != null && placement is { } dock && dock.Version != noticeDockVersion;
-                if (committedStamp.Matches(stamp) && !occupancyChanged) return;
+                var bindingsChanged = layoutRenderer?.RefreshKeyGlyphs() == true;
+                if (!bindingsChanged && committedStamp.Matches(stamp) && !occupancyChanged) return;
 
                 try
                 {

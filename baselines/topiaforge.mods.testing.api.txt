@@ -732,6 +732,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, 
   property TopiaForge.Mods.IUiThemeService Themes { get [virtual,final,newslot]; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.Testing.FakeUiWorldLabels Labels { get; } [requires-topiaforge="0.2.0"]
   property TopiaForge.Mods.UiAccessibilityPreferences Accessibility { get [virtual,final,newslot]; }
+  property TopiaForge.Mods.UiInputDevice LastInputDevice { get; set; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, System.IDisposable, TopiaForge.Mods.IUiSurface, TopiaForge.Mods.IUiSurfaceDismissalSource
   event System.Action? Dismissed { add [virtual,final,newslot]; remove [virtual,final,newslot]; }

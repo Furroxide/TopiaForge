@@ -77,6 +77,7 @@ namespace TopiaForge.ModManager
                 Field(json, "styleId", node.StyleId);
                 StatusStyle(json, node);
                 Field(json, "state", node.State);
+                Field(json, "keyLabel", node.KeyLabel);
                 Field(json, "remainingSeconds", node.RemainingSeconds);
                 Field(json, "fraction", node.Fraction);
                 Field(json, "inkColor", node.InkColor);
