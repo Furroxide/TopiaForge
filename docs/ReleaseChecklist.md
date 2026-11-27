@@ -8,7 +8,8 @@ Machine setup and the resumable command sequence are in
 
 ## 1. Scope, policy, and ownership
 
-- [x] Product target is `0.2.0` (catalog blocked); components/mods version independently; initial release has no rollback target.
+- [x] Product target is `0.2.0-rc.1` (catalog blocked). Components and mods version independently.
+      The initial release has no rollback target.
 - [ ] Freeze the tracked twelve-gate register at the candidate SHA. Run
       `release validate-prerequisites --version <version> --target-sha <sha>`:
       `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01` require real
@@ -57,7 +58,8 @@ Machine setup and the resumable command sequence are in
 ## 2. Candidate and toolchains
 
 - [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
-- [ ] Create a protected, annotated `v0.2.0` tag on that SHA after all stable-release gates pass through the approved administrator process.
+- [ ] After candidate qualification, create the protected, signed annotated `v0.2.0-rc.1` tag on the exact final
+      `main` SHA through the administrator staging process.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
 - [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, and Node `24.18.0` in each
       applicable production environment, plus Unity `6000.0.23f1` on the
@@ -173,7 +175,7 @@ Machine setup and the resumable command sequence are in
 - [ ] The exact Windows archive matches its reviewed distribution mode. Signed mode requires all three
       executables signed and timestamped by the pinned certificate. Explicit unsigned mode requires all three
       unsigned; a missing certificate never selects that mode implicitly.
-- [ ] *(Out of RC1; `0.1.0-rc.2`.)* The Proton evidence bundle matches the exact Linux archive digest and covers real
+- [ ] *(Future Linux release.)* The Proton evidence bundle matches the exact Linux archive digest and covers real
       discovery, path/process, repair, custom-world, runtime, and uninstall behavior with Proton `10.0-4`.
       Metadata records whether this future evidence is same-host and non-independent;
       build output without the actual game run is not accepted.
@@ -182,8 +184,7 @@ Machine setup and the resumable command sequence are in
 
 ## 8. Platform release archives
 
-- [ ] On a clean checkout of the frozen SHA, build Windows x64 on the administrator workstation. *(Linux x64 in
-      Ubuntu 24.04 under WSL2 is out of RC1 and returns in `0.1.0-rc.2`.)*
+- [ ] On a clean checkout of the frozen SHA, build the Windows x64 candidate on the administrator workstation.
 - [ ] Build the canonical ecosystem twice byte-identically before distribution and prove every platform archive
       contains that exact ecosystem digest.
 - [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
@@ -192,7 +193,7 @@ Machine setup and the resumable command sequence are in
       Authenticode signatures from the exact reviewed leaf-certificate
       SHA-256 pin and valid HTTPS RFC 3161 timestamps. Unsigned, partly signed,
       untimestamped, expired-at-signing, mismatched, or invalid output fails.
-- [ ] *(Out of RC1; `0.1.0-rc.2`.)* Linux executable modes, native launcher/CLI, and
+- [ ] *(Future Linux release.)* Linux executable modes, native launcher/CLI, and
       discovery/path/process/repair/custom-world assumptions for Robotopia's Windows build under Proton pass on a
       clean host that can reach a GPU Vulkan implementation.
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
