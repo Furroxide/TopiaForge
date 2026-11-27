@@ -148,11 +148,15 @@ namespace TopiaForge.Mods.Testing
 
         private void AdvanceStingers()
         {
-            if (stingerQueue is not { } queue || queue.Active is not { } current) return;
+            if (stingerQueue is not { } queue) return;
             var now = ClockTime;
-            var exitSeconds = MotionSeconds(current.Presentation.Theme.Descriptor.Motion.SlowMs);
-            if (now - queue.ShownAt >= current.Request.DurationSeconds + exitSeconds && queue.Advance(now, out _))
+            while (queue.Active is { } current)
+            {
+                var exitSeconds = MotionSeconds(current.Presentation.Theme.Descriptor.Motion.SlowMs);
+                var boundary = queue.ShownAt + current.Request.DurationSeconds + exitSeconds;
+                if (now < boundary || !queue.Advance(boundary, out _)) return;
                 MarkActiveStinger(queue);
+            }
         }
 
         private static void MarkActiveStinger(UiStingerQueue<FakeStinger> queue)

@@ -27,13 +27,13 @@ namespace TopiaForge.Mods.Testing
         {
             gameThread.AssertCurrent();
             fixtureInput = input ?? throw new ArgumentNullException(nameof(input));
+            input.FollowOverlayFocus(IsOverlayFocused);
         }
 
         internal void FollowInput(FakeInputService input, string ownerId)
         {
             UseInput(input);
             fixtureInputOwner = ownerId;
-            input.FollowOverlayFocus(IsOverlayFocused);
         }
 
         internal FakeInputAction? FindInputAction(string name, UiWireEnvelope? receiver) =>

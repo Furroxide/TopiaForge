@@ -40,6 +40,7 @@ namespace TopiaForge.ModManager.Tests
             TargetedOverlayAdmitsWithTheWireEnvelope();
             ReceivedOverlaysKeepSeparateAuthorQuota();
             StingersAdvanceCoalesceAndDrain();
+            ALongFrameDrainsCompletedStingers();
             StingerDeliveryIsPerViewerAndNeverReplayed();
             StingerCapturesKeepTheAdmittedFontChain();
             ToastsKeepTheKitThemeAndBoundedStack();
@@ -177,15 +178,30 @@ namespace TopiaForge.ModManager.Tests
                 "The exit holds the active stinger until the slow preset completes.");
             var history = ui.Stingers;
             context.AdvanceFrame(TimeSpan.FromSeconds(.5));
-            Check(history[1].ShownAt == 1.5d && ui.ActiveStinger is { Request.Title: "Second", ShownAt: 1.5d },
+            Check(Math.Abs(history[1].ShownAt - 1.24d) < 1e-9 && ui.ActiveStinger is { Request.Title: "Second" },
                 "The host frame promotes the next stinger before another UI read.");
             ui.ApplyAccessibility(new UiAccessibilityPreferences(reducedMotion: true));
             context.AdvanceFrame(TimeSpan.FromSeconds(1));
-            Check(ui.ActiveStinger is { Request.Title: "Third", ShownAt: 2.5d } &&
+            Check(ui.ActiveStinger is { Request.Title: "Third" } third && Math.Abs(third.ShownAt - 2.24d) < 1e-9 &&
                 Part(StingerCapture(ui, Standard), "Stinger").State == "shown", "Reduced motion promotes at expiry without a fade.");
             context.Dispose();
             Check(ui.ActiveStinger == null && ui.Stingers.Count == 4 &&
                 ui.ShowStinger(first).ErrorCode == ModErrorCode.Cancelled, "Stopping clears displayed and waiting announcements and retains the test history.");
+        }
+
+        private static void ALongFrameDrainsCompletedStingers()
+        {
+            using var context = new FakeModContext();
+            var ui = context.Ui;
+            SelectFieldTheme(ui);
+            foreach (var title in new[] { "One", "Two", "Three" })
+                Check(ui.ShowStinger(new UiStingerRequest(title, durationSeconds: 1d)).Succeeded, "Admit a distinct timed announcement.");
+
+            context.AdvanceFrame(TimeSpan.FromSeconds(10));
+            Check(ui.ActiveStinger == null && ui.Stingers[0].ShownAt == 0d && Math.Abs(ui.Stingers[1].ShownAt - 1.24d) < 1e-9 &&
+                Math.Abs(ui.Stingers[2].ShownAt - 2.48d) < 1e-9, "One frame processes every completed presentation at its actual boundary.");
+            foreach (var title in new[] { "Four", "Five", "Six", "Seven" })
+                Check(ui.ShowStinger(new UiStingerRequest(title, durationSeconds: 1d)).Succeeded, "A drained queue has all four slots available.");
         }
 
         private static void TargetedOverlayAdmitsWithTheWireEnvelope()
@@ -230,11 +246,9 @@ namespace TopiaForge.ModManager.Tests
                 == ModErrorCode.InvalidArgument, "Incoming overlays still enforce interactive class and non-dismissible admission.");
 
             last.Dispose();
-            Check(ui.CreateSurface(Request("local-five", content)).ErrorCode == ModErrorCode.RateLimited,
-                "A local exit continues to hold its author slot.");
-            context.AdvanceFrame(TimeSpan.FromSeconds(.5));
             using var replacement = Overlay(ui, "local-five", content);
-            Check(received.IsShown && replacement.IsShown, "The completed local exit releases one slot while the remote overlay stays live.");
+            Check(received.IsShown && replacement.IsShown && Part(last.Capture(Standard), "Overlay").State == "exiting",
+                "Disposal frees the author slot immediately while the local exit and incoming overlay stay visible.");
         }
 
         private static void StingerDeliveryIsPerViewerAndNeverReplayed()

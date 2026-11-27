@@ -74,7 +74,7 @@ namespace TopiaForge.Mods
         }
 
         internal bool IsExpired(double now) => !stopping && Active is { } current &&
-            now - ShownAt >= current.Request.DurationSeconds;
+            now >= ShownAt + current.Request.DurationSeconds;
 
         /// <summary>Expires the active presentation and starts the next for its complete display duration.</summary>
         internal bool Advance(double now, out UiStingerQueueEntry<T>? expired)

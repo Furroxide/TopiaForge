@@ -18,8 +18,6 @@ namespace TopiaForge.Mods.Testing
             if (!received)
             {
                 var count = 0;
-                foreach (var surface in exitingOverlays)
-                    if (surface.Receiver == null) count++;
                 foreach (var surface in surfaces)
                     if (surface.Receiver == null && surface.OverlayKind.HasValue) count++;
                 if (count >= 4) return OverlayLimit;
