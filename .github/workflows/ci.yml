@@ -319,6 +319,9 @@ jobs:
       - name: Test main governance pull request scope
         run: python3 .github/scripts/test_main_governance_scope.py
 
+      - name: Test incoming commit certification policy
+        run: python3 .github/scripts/test_pr_policy.py
+
       - name: Test required release package source boundary
         run: python3 .github/scripts/test_release_package_source.py
 

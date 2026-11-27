@@ -39,6 +39,13 @@ SIDECAR_BACKPORT = {
     ),
 }
 
+DCO_TRUST_BOOTSTRAP = {
+    ".github/release-dco/.gitattributes": ("", "fcadb2cf97913f58a2523f535336e725c6b59d1f"),
+    ".github/release-dco/allowed-signers": ("", "6545e8b37fbbea1802e6a5b367b270a7c8b9a835"),
+    ".github/scripts/test_pr_policy.py": ("", "13fbce0cb86a8edb581acad364e5ee4898987910"),
+    ".github/scripts/verify_0_2_0_dco.py": ("", "4059e25fa377d7832f9f3489e61e55dc6cf0d285"),
+}
+
 
 def failures(
     base_ref: str,
@@ -47,6 +54,7 @@ def failures(
     head_repository: str,
     changed_paths: list[str],
     sidecar_blobs: dict[str, tuple[str, str]] | None = None,
+    dco_blobs: dict[str, tuple[str, str]] | None = None,
 ) -> list[str]:
     errors: list[str] = []
     if base_ref != "main" or head_ref != BRANCH:
@@ -56,11 +64,14 @@ def failures(
     if not changed_paths:
         errors.append("Governance maintenance requires at least one changed file.")
     for path in changed_paths:
-        if path not in ALLOWED_PATHS and path not in SIDECAR_BACKPORT:
+        if path not in ALLOWED_PATHS and path not in SIDECAR_BACKPORT and path not in DCO_TRUST_BOOTSTRAP:
             errors.append(f"Out-of-scope governance file: {path}")
     sidecar_paths = SIDECAR_BACKPORT.keys() & set(changed_paths)
     if sidecar_paths and (sidecar_paths != SIDECAR_BACKPORT.keys() or sidecar_blobs != SIDECAR_BACKPORT):
         errors.append("The sidecar backport requires both exact reviewed dependency changes.")
+    dco_paths = DCO_TRUST_BOOTSTRAP.keys() & set(changed_paths)
+    if dco_paths and (dco_paths != DCO_TRUST_BOOTSTRAP.keys() or dco_blobs != DCO_TRUST_BOOTSTRAP):
+        errors.append("The DCO trust bootstrap requires the exact reviewed trust files together.")
     return errors
 
 
@@ -100,6 +111,10 @@ def main() -> int:
         path: (blob_at(args.base_sha, path), blob_at("HEAD", path))
         for path in SIDECAR_BACKPORT.keys() & set(changed)
     }
+    dco_blobs = {
+        path: (blob_at(args.base_sha, path), blob_at("HEAD", path))
+        for path in DCO_TRUST_BOOTSTRAP.keys() & set(changed)
+    }
     errors = failures(
         args.base_ref,
         args.head_ref,
@@ -107,6 +122,7 @@ def main() -> int:
         args.head_repository,
         changed,
         sidecar_blobs,
+        dco_blobs,
     )
     for error in errors:
         print(f"::error::{error}", file=sys.stderr)
