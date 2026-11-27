@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
@@ -109,7 +110,7 @@ class ReleaseMetadataInventoryBuilder {
     final input = InputFileStream(file.path);
     final Archive archive;
     try {
-      archive = ZipDecoder().decodeStream(input);
+      archive = ZipDecoder().decodeStream(input, throwOnError: true);
     } finally {
       await input.close();
     }
@@ -235,8 +236,22 @@ class ReleaseMetadataInventoryBuilder {
         p.relative(entity.path, from: root),
       'packages/launcher_ui/fonts/Audiowide-OFL.txt',
       'packages/launcher_ui/fonts/Quicksand-OFL.txt',
+      for (final notice in topiaForgeRuntimeLoaderNotices) notice.sourcePath,
       'tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt',
+      // Notices for vendored source a mod compiles, packed into its package.
+      'mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md',
       if (policy.licenseFile != null) policy.licenseFile!,
+      // Owned license texts that are physically redistributed: the shared mod
+      // license injected into every .topiaforgemod, the launcher UI package
+      // license, the contribution certificate copied beside the payload, and
+      // the license shipped inside each VPM package.
+      'DCO',
+      'mods/LICENSE',
+      'packages/launcher_ui/LICENSE',
+      'templates/TopiaForge.UnityWorldTemplate/Packages/'
+          'io.github.furroxide.topiaforge.vpm-resolver/LICENSE.md',
+      'templates/TopiaForge.UnityWorldTemplate/Packages/'
+          'io.github.furroxide.topiaforge.world-companion/LICENSE.md',
     };
     if (paths.length < 9 || paths.length > 32) {
       throw StateError('License/notice inventory is incomplete or excessive.');

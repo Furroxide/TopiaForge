@@ -1,5 +1,6 @@
 using System;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -12,35 +13,37 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Brand-orange primary action.</summary>
         Filled,
 
-        /// <summary>Surface with strong border — secondary action.</summary>
+        /// <summary>Surface with strong border â€” secondary action.</summary>
         Outline,
 
-        /// <summary>No chrome until hover — tertiary/inline action.</summary>
+        /// <summary>No chrome until hover â€” tertiary/inline action.</summary>
         Ghost,
 
-        /// <summary>Filled with the danger role — destructive action.</summary>
+        /// <summary>Filled with the danger role â€” destructive action.</summary>
         Danger,
     }
 
     /// <summary>
     /// Brand button. The press micro-interaction pushes the body down-left onto its
-    /// hard shadow (the "press the sticker" motion) — shadow shrink and body offset,
+    /// hard shadow (the "press the sticker" motion) â€” shadow shrink and body offset,
     /// no color flash needed. Hover/pressed tinting rides uGUI's ColorBlock multiplier.
     /// </summary>
-    public sealed class TopiaForgeButton : TopiaForgeWidget, ITopiaForgeThemeAware
+    public sealed partial class TopiaForgeButton : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private const float LabelInsetX = 14f;
 
         private readonly TopiaForgeButtonStyle style;
-        private readonly Button button;
-        private readonly Image? shadow;
-        private readonly Image fill;
-        private readonly Image? ring;
+        private readonly TopiaForgeCueButton button;
+        private readonly TopiaForgeRoundedImage? shadow;
+        private readonly TopiaForgePressEffect? motion;
+        private readonly TopiaForgeRoundedImage fill;
+        private readonly TopiaForgeRoundedImage? ring;
         private readonly TextMeshProUGUI? label;
         private readonly Image? iconImage;
         private readonly RectTransform body;
         private bool enabledState = true;
         private string lastText;
+        private UiPaintRole backdrop = UiPaintRole.Surface;
 
         internal TopiaForgeButton(TopiaForgeContainer parent, string text, Action onClick, TopiaForgeButtonStyle buttonStyle)
             : this(parent, text, null, onClick, buttonStyle)
@@ -58,13 +61,15 @@ namespace TopiaForge.Mods.UnityUi
             style = buttonStyle;
             lastText = text ?? string.Empty;
 
+            // The painted body moves on press. The raycast surface stays inside its layout slot.
+            var hitArea = Go.AddComponent<Image>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
+
             // Shadow sits outside the body so the body can press down onto it.
             if (HasShadow)
             {
                 shadow = CreateStretched(Go.transform, "Shadow", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
-                var shadowRect = shadow.rectTransform;
-                shadowRect.offsetMin = new Vector2(TopiaForgeTokens.ShadowSmallX, TopiaForgeTokens.ShadowSmallY);
-                shadowRect.offsetMax = new Vector2(TopiaForgeTokens.ShadowSmallX, TopiaForgeTokens.ShadowSmallY);
             }
 
             var bodyGo = new GameObject("Body", typeof(RectTransform));
@@ -73,7 +78,6 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeAnchors.Stretch(body);
 
             fill = CreateStretched(body, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
-            fill.raycastTarget = true;
 
             if (style == TopiaForgeButtonStyle.Outline)
             {
@@ -118,32 +122,45 @@ namespace TopiaForge.Mods.UnityUi
                 FitLabelWidth();
             }
 
-            button = Go.AddComponent<Button>();
+            button = Go.AddComponent<TopiaForgeCueButton>();
+            button.ObserveCues(ShowCues);
             button.targetGraphic = fill;
-            button.onClick.AddListener(() => TopiaForgeCallbacks.Invoke(onClick, "Button click"));
+            button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "Button click"));
 
+            // ApplyTheme sets the hovered, selected and pressed tints, which keep the label readable on the fill.
             var colors = button.colors;
             colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.06f, 1.06f, 1.06f, 1f);
-            colors.pressedColor = new Color(0.94f, 0.94f, 0.94f, 1f);
-            colors.selectedColor = new Color(1.04f, 1.04f, 1.04f, 1f);
             colors.disabledColor = Color.white; // disabled visuals are theme-driven, not multiplied
             button.colors = colors;
 
-            var press = Go.AddComponent<TopiaForgePressEffect>();
-            press.Initialize(Host, body, shadow);
+            if (shadow != null)
+            {
+                motion = Go.AddComponent<TopiaForgePressEffect>();
+                motion.Initialize(Host, button, body, shadow);
+            }
 
             ApplyTheme(Theme);
         }
 
-        private bool HasShadow => style == TopiaForgeButtonStyle.Filled || style == TopiaForgeButtonStyle.Danger || style == TopiaForgeButtonStyle.Outline;
+        private bool HasShadow => style is TopiaForgeButtonStyle.Filled or TopiaForgeButtonStyle.Danger;
+
+        internal void SetBackdrop(UiPaintRole role)
+        {
+            if (backdrop == role) return;
+            backdrop = role;
+            ApplyTheme(Theme);
+        }
 
         /// <summary>Gets button.</summary>
         public Button Button => button;
 
-        /// <summary>Moves keyboard/controller focus to this button.</summary>
+        /// <summary>
+        /// Moves keyboard/controller focus to this button. A dialog focuses its default button in the frame it appears, and
+        /// Unity drops a selection made while no event system is active, so one is made active first.
+        /// </summary>
         public void Focus()
         {
+            TopiaForgeEventSystems.EnsureEventSystem();
             button.Select();
         }
 
@@ -194,27 +211,56 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
+            if (label != null)
+            {
+                TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Label, Host.EffectiveUiScale);
+                FitLabelWidth();
+            }
+            var descriptor = theme.Descriptor ?? UiThemePackParser.Default;
+            var component = descriptor.Components[UiThemeTarget.Button];
+            var radius = component.Radius == UiThemeRadius.Pill ? float.MaxValue : descriptor.Shape.Resolve(component.Radius, 0, 0);
+            var stroke = (float)component.Border;
+            if (theme.HighContrast && stroke > 0f) stroke = Mathf.Max(TopiaForgeTokens.BorderStrong, stroke);
+            fill.SetShape(radius);
+            shadow?.SetShape(radius);
+            if (ring != null)
+            {
+                ring.enabled = stroke > 0f;
+                ring.SetShape(radius, stroke);
+            }
+            var shadowStyle = enabledState && !theme.HighContrast ? component.Shadow : UiThemeShadow.None;
+            var (shadowX, shadowY) = UiLayoutDecoration.ShadowOffset(shadowStyle);
+            motion?.SetShadow(new Vector2((float)shadowX, (float)-shadowY), shadowStyle == UiThemeShadow.None ? Color.clear : theme.Shadow);
+
+            // Every opaque button uses the state tints calculated for the actual fill and label pair.
+            var paint = enabledState && style == TopiaForgeButtonStyle.Filled ? theme.Fill(TopiaForgeFillRole.FilledButton)
+                : enabledState && style == TopiaForgeButtonStyle.Danger ? theme.Fill(TopiaForgeFillRole.DangerButton)
+                : enabledState && style == TopiaForgeButtonStyle.Outline
+                    ? theme.FieldPaint(UiPaintRole.Surface, UiTone.Neutral, enabled: true)
+                : (TopiaForgeFillPaint?)null;
+            var colors = button.colors;
+            colors.highlightedColor = Tint(TopiaForgeOnColors.ButtonHoveredTint);
+            colors.selectedColor = Tint(TopiaForgeOnColors.ButtonSelectedTint);
+            colors.pressedColor = Tint(TopiaForgeOnColors.ButtonPressedTint);
+            button.colors = paint.HasValue ? paint.Value.Tinted(colors) : colors;
+
             if (!enabledState)
             {
-                fill.color = theme.Tint;
+                button.ConfigureCues(UiButtonCue.None);
+                fill.color = theme.Descriptor == null ? theme.Tint : theme.SurfaceSunken;
                 if (ring != null)
                 {
-                    ring.color = theme.Tint;
+                    ring.color = theme.Descriptor == null ? theme.Tint : theme.BoundaryOn(backdrop);
                 }
 
                 if (label != null)
                 {
-                    label.color = theme.TextFaint;
+                    label.color = theme.DisabledInk;
                 }
 
                 if (iconImage != null)
                 {
-                    iconImage.color = theme.TextFaint;
-                }
-
-                if (shadow != null)
-                {
-                    shadow.color = Color.clear;
+                    iconImage.color = theme.DisabledInk;
                 }
 
                 return;
@@ -222,33 +268,37 @@ namespace TopiaForge.Mods.UnityUi
 
             switch (style)
             {
+                // A label on a fill takes the color that reads on it, dark on the brand orange where white read at 2.6:1,
+                // and the fill's state tints never move it toward that color far enough to stop it reading.
                 case TopiaForgeButtonStyle.Filled:
-                    fill.color = theme.Primary;
-                    SetContentColor(theme.OnPrimary);
-                    break;
                 case TopiaForgeButtonStyle.Danger:
-                    fill.color = theme.Danger;
-                    SetContentColor(theme.OnStatus);
+                    var resolved = paint.GetValueOrDefault();
+                    fill.color = resolved.Fill;
+                    SetContentColor(resolved.Content);
                     break;
                 case TopiaForgeButtonStyle.Outline:
                     fill.color = theme.Surface;
                     if (ring != null)
                     {
-                        ring.color = theme.OutlineStrong;
+                        ring.color = theme.BoundaryOn(backdrop);
                     }
 
-                    SetContentColor(theme.Text);
+                    SetContentColor(paint?.Content ?? theme.Text);
                     break;
                 default:
+                    // No fill: the label sits on the surface itself, so it takes the Primary tone's readable text color. On
+                    // Paper the brand orange reads at only 2.0 to 2.6:1, and labels in that tone are darkened the same way.
                     fill.color = Color.clear;
-                    SetContentColor(theme.Primary);
+                    SetContentColor(theme.ForegroundOn(backdrop, UiTone.Primary));
                     break;
             }
 
-            if (shadow != null)
-            {
-                shadow.color = theme.Shadow;
-            }
+            ConfigureCues(theme, radius);
+        }
+
+        private static Color Tint(float value)
+        {
+            return new Color(value, value, value, 1f);
         }
 
         private void SetContentColor(Color color)
@@ -264,77 +314,16 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        private static Image CreateStretched(Transform parent, string name, Sprite sprite)
+        private static TopiaForgeRoundedImage CreateStretched(Transform parent, string name, Sprite sprite)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            var image = go.AddComponent<Image>();
+            var image = go.AddComponent<TopiaForgeRoundedImage>();
             image.sprite = sprite;
             image.type = Image.Type.Sliced;
             image.raycastTarget = false;
             TopiaForgeAnchors.Stretch((RectTransform)go.transform);
             return image;
-        }
-    }
-
-    /// <summary>
-    /// Press micro-interaction: shifts the button body onto its shadow while held.
-    /// Skipped entirely under reduced motion.
-    /// </summary>
-    internal sealed class TopiaForgePressEffect : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
-    {
-        private RectTransform? body;
-        private UiHost? host;
-        private Image? shadow;
-        private Color shadowColor;
-        private bool pressed;
-
-        public void Initialize(UiHost owner, RectTransform bodyRect, Image? shadowImage)
-        {
-            host = owner;
-            body = bodyRect;
-            shadow = shadowImage;
-        }
-
-        public void OnPointerDown(PointerEventData eventData)
-        {
-            if (host?.EffectiveReducedMotion != false || body == null || pressed)
-            {
-                return;
-            }
-
-            pressed = true;
-            body.anchoredPosition = new Vector2(TopiaForgeTokens.ShadowSmallX * 0.75f, TopiaForgeTokens.ShadowSmallY * 0.75f);
-            if (shadow != null)
-            {
-                shadowColor = shadow.color;
-                shadow.color = new Color(shadowColor.r, shadowColor.g, shadowColor.b, shadowColor.a * 0.25f);
-            }
-        }
-
-        public void OnPointerUp(PointerEventData eventData)
-        {
-            ReleasePress();
-        }
-
-        public void OnPointerExit(PointerEventData eventData)
-        {
-            ReleasePress();
-        }
-
-        private void ReleasePress()
-        {
-            if (!pressed || body == null)
-            {
-                return;
-            }
-
-            pressed = false;
-            body.anchoredPosition = Vector2.zero;
-            if (shadow != null)
-            {
-                shadow.color = shadowColor;
-            }
         }
     }
 }

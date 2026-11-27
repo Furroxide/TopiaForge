@@ -82,6 +82,24 @@ void main() {
     },
   );
 
+  test('scaffolded Unity package carries no project copyright', () async {
+    // The template ships the project's own LICENSE.md. A scaffolded package is
+    // the author's work, so it must take the project's terms without the
+    // project's copyright line - the same rule _builtInScaffoldLicense follows
+    // for mods, and the reason its MIT branch refuses a placeholder author.
+    final output = Directory(p.join(scratch.path, 'attribution'))..createSync();
+    final packagePath = await repository.createUnityPackage(
+      parentDirectory: output.path,
+      id: 'com.author.widget',
+      name: 'Author Widget',
+    );
+    final license = File(p.join(packagePath, 'LICENSE.md')).readAsStringSync();
+
+    expect(license, contains('GNU AFFERO GENERAL PUBLIC LICENSE'));
+    expect(license, contains('Remote Network Interaction'));
+    expect(license, isNot(contains('furroxide')));
+  });
+
   test('community scaffold packs a deterministic integrity listing', () async {
     final output = Directory(p.join(scratch.path, 'community'))..createSync();
     final packagePath = await repository.createUnityPackage(
@@ -308,6 +326,16 @@ void _writeTemplate(Directory repo) {
       'displayName': 'Example',
       'author': {'name': 'Example Author'},
     }),
+  );
+  // The real template ships the project's own LICENSE.md; model that here so
+  // the scaffolder is actually exercised against a copyright-bearing file.
+  File(p.join(root.path, 'LICENSE.md')).writeAsStringSync(
+    '''# GNU Affero General Public License v3.0 or later
+
+Copyright (C) 2026 furroxide
+
+                    GNU AFFERO GENERAL PUBLIC LICENSE
+''',
   );
   for (final area in const ['Runtime', 'Editor']) {
     Directory(p.join(root.path, area)).createSync();

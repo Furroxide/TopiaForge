@@ -1,0 +1,217 @@
+{
+  "$schema": "./topiaforge-ui-theme.schema.json",
+  "schema": 1,
+  "id": "topiaforge.default",
+  "paper": {
+    "colors": {
+      "surface": {
+        "fill": "#FFFCF6",
+        "on": "#2D3748"
+      },
+      "raised": {
+        "fill": "#FFF3E4",
+        "on": "#2D3748"
+      },
+      "sunken": {
+        "fill": "#F5F1E8",
+        "on": "#2D3748"
+      },
+      "selected": {
+        "fill": "#FFE8D1",
+        "on": "#2D3748"
+      },
+      "primary": {
+        "fill": "#FF7A11",
+        "on": "#2D3748"
+      },
+      "accent": {
+        "fill": "#20F6FE",
+        "on": "#2D3748"
+      },
+      "success": {
+        "fill": "#0F7A55",
+        "on": "#FFFFFF"
+      },
+      "warning": {
+        "fill": "#F6C453",
+        "on": "#2D3748"
+      },
+      "danger": {
+        "fill": "#C83E4D",
+        "on": "#FFFFFF"
+      }
+    },
+    "muted": "#6C6670",
+    "outline": "#E4B373",
+    "focus": "#2D3748"
+  },
+  "hud": {
+    "colors": {
+      "surface": {
+        "fill": "#10141B",
+        "on": "#FFFFFF"
+      },
+      "raised": {
+        "fill": "#3A465C",
+        "on": "#FFFFFF"
+      },
+      "sunken": {
+        "fill": "#161B24",
+        "on": "#FFFFFF"
+      },
+      "selected": {
+        "fill": "#1E2531",
+        "on": "#FFFFFF"
+      },
+      "primary": {
+        "fill": "#FF7A11",
+        "on": "#10141B"
+      },
+      "accent": {
+        "fill": "#20F6FE",
+        "on": "#10141B"
+      },
+      "success": {
+        "fill": "#2FBF8F",
+        "on": "#10141B"
+      },
+      "warning": {
+        "fill": "#F2A03D",
+        "on": "#10141B"
+      },
+      "danger": {
+        "fill": "#FF5C6E",
+        "on": "#10141B"
+      }
+    },
+    "muted": "#C7C1B4",
+    "outline": "#FFFFFF",
+    "focus": "#FFFFFF"
+  },
+  "typography": {
+    "body": {
+      "font": "body",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "heading": {
+      "font": "body",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "caption": {
+      "font": "body",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "banner": {
+      "font": "display",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "display": {
+      "font": "display",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "title": {
+      "font": "display",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "label": {
+      "font": "body",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "numeral": {
+      "font": "display",
+      "case": "preserve",
+      "trackingEm": 0
+    },
+    "mono": {
+      "font": "mono",
+      "case": "preserve",
+      "trackingEm": 0
+    }
+  },
+  "shape": {
+    "small": 8,
+    "medium": 14,
+    "control": 18,
+    "card": 26
+  },
+  "motion": {
+    "fastMs": 90,
+    "baseMs": 160,
+    "slowMs": 240,
+    "ease": "outCubic"
+  },
+  "components": {
+    "card": {
+      "radius": "card",
+      "border": "standard",
+      "shadow": "card"
+    },
+    "box": {
+      "radius": "small",
+      "border": "none",
+      "shadow": "none"
+    },
+    "badge": {
+      "radius": "pill",
+      "border": "thin",
+      "shadow": "none"
+    },
+    "pips": {
+      "radius": "small",
+      "border": "none",
+      "shadow": "none"
+    },
+    "button": {
+      "radius": "control",
+      "border": "standard",
+      "shadow": "small"
+    },
+    "input": {
+      "radius": "medium",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "tabs": {
+      "radius": "control",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "tooltip": {
+      "radius": "medium",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "statBar": {
+      "radius": "pill",
+      "border": "thin",
+      "shadow": "none"
+    },
+    "keyGlyph": {
+      "radius": "small",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "actionSlot": {
+      "radius": "medium",
+      "border": "standard",
+      "shadow": "small"
+    },
+    "overlay": {
+      "radius": "card",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "stinger": {
+      "radius": "card",
+      "border": "strong",
+      "shadow": "card"
+    }
+  }
+}

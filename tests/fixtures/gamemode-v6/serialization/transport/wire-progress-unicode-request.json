@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-unicode-request",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec unicode request",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "é",
+    "sequence": 3,
+    "phase": "loading-world",
+    "nativeBusy": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

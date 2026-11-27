@@ -187,7 +187,7 @@ namespace TopiaForge.ModManager.Tests
                 "restart must replace both stale Superhot leases");
         }
 
-        private static void HudSkipsSteadyStateBodyWrites()
+        private static void HudSkipsSteadyStateContentWrites()
         {
             var context = new FakeModContext();
             var presenter = new ZombiesHudPresenter(context);
@@ -210,15 +210,19 @@ namespace TopiaForge.ModManager.Tests
                 false);
             presenter.Update(snapshot, null, null, null, null);
             var surface = context.Ui.Surfaces[0];
-            var firstBody = surface.Body;
+            var firstContent = surface.Content;
+            Assert(firstContent != null, "the first HUD snapshot must publish content");
             presenter.Update(snapshot, null, null, null, null);
-            Assert(ReferenceEquals(firstBody, surface.Body),
-                "an unchanged HUD snapshot must not build or assign another body string");
+            Assert(ReferenceEquals(firstContent, surface.Content),
+                "an unchanged HUD snapshot must keep the same content tree");
+            var bytes = TopiaForge.TestSupport.AllocationProbe.Measure("settled Zombies status",
+                () => presenter.Update(snapshot, null, null, null, null), frames: 1024, warmups: 64);
+            Assert(bytes == 0, "a settled Zombies status snapshot must allocate zero bytes");
 
             presenter.ForceRefresh();
             presenter.Update(snapshot, null, null, null, null);
-            Assert(!ReferenceEquals(firstBody, surface.Body),
-                "the reference assertion detects a real forced body refresh");
+            Assert(!ReferenceEquals(firstContent, surface.Content),
+                "the reference assertion detects a real forced content refresh");
             presenter.Dispose();
             context.Dispose();
             context.AssertNoLeaks();

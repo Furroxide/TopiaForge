@@ -265,9 +265,47 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
     }
 
 
-def fold_login(value: Any) -> Any:
-    """Compare GitHub logins case-insensitively while preserving actor IDs."""
+def normalise_codeql_languages(security: Any) -> Any:
+    """Collapses GitHub's CodeQL language aliases before comparison.
 
+    Default setup reports `javascript-typescript` together with its `javascript`
+    and `typescript` aliases, so an exact list comparison against the analysed
+    scope can never match. Dropping the aliases keeps the desired state
+    expressing what is analysed rather than how the API happens to spell it; a
+    genuinely extra language still fails, because only these two collapse.
+    """
+    if not isinstance(security, dict):
+        return security
+    setup = security.get("codeql_default_setup")
+    if not isinstance(setup, dict):
+        return security
+    languages = setup.get("languages")
+    if not isinstance(languages, list):
+        return security
+    if "javascript-typescript" not in languages:
+        return security
+    normalised = [
+        language
+        for language in languages
+        if language not in {"javascript", "typescript"}
+    ]
+    if normalised == languages:
+        return security
+    return {
+        **security,
+        "codeql_default_setup": {**setup, "languages": normalised},
+    }
+
+
+def fold_login(value: Any) -> Any:
+    """Case-folds a GitHub login or `owner/repo` for comparison.
+
+    GitHub stores logins case-insensitively but echoes back the canonical
+    casing, so `${{ github.repository }}` yields `Furroxide/TopiaForge` while
+    the desired state is written lowercase. Comparing the raw strings made the
+    audit permanently unsatisfiable for a difference that identifies the same
+    account. Actor IDs, which are the real identity, are compared unfolded.
+    """
     if isinstance(value, str):
         return value.casefold()
     if isinstance(value, list):
@@ -698,7 +736,7 @@ def evaluate_snapshot(snapshot: dict[str, Any], policy: dict[str, Any]) -> list[
     compare_mapping(
         failures,
         "security",
-        snapshot.get("security"),
+        normalise_codeql_languages(snapshot.get("security")),
         policy.get("security", {}),
     )
     compare_mapping(

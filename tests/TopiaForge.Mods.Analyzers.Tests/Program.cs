@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace TopiaForge.Mods.Analyzers.Tests
 {
-    internal static class Program
+    internal static partial class Program
     {
         private static readonly ModuleFixture[] SpecialistModules =
         {
@@ -36,7 +36,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "io.github.furroxide.topiaforge.robotkit"),
             new ModuleFixture(
                 "TopiaForge.Mods.Worlds",
-                "IWorldGamemodeService",
+                "IWorldSessionService",
                 "io.github.furroxide.topiaforge.worlds"),
             new ModuleFixture(
                 "TopiaForge.Mods.Ugc",
@@ -44,8 +44,9 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "io.github.furroxide.topiaforge.ugc.livesync"),
         };
 
-        private static int Main()
+        private static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--robot-body-version-gates") { RobotBodyVersionGate(); return 0; }
             try
             {
                 ReportsUnsafeNativeUsing();
@@ -70,6 +71,17 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 AllowsDrainSplitAcrossPartialFiles();
                 ReportsBlockingWaitInNonSafeProject();
                 AllowsAuthorsOwnMemberNamedLikeARetiredApi();
+                RunFixedUpdateInputTests();
+                EveryRuleLinksToItsEntry();
+                RunBlockingWaitFixTests();
+                RunVersionGateTests();
+                RobotBodyVersionGate();
+                RunVersionGateCoverageTests();
+                RunVersionGateEventTests();
+                RunMapWorldTests();
+                RunAuthoredMapTests();
+                RunRealAuthoredMapTests();
+                RunWorldViewTests();
                 Console.WriteLine("All TopiaForge analyzer tests passed.");
                 return 0;
             }
@@ -156,7 +168,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
         {
             var module = SpecialistModules.Single(item => item.AssemblyName.EndsWith("RobotKit", StringComparison.Ordinal));
             const string spoofedManifest = "{"
-                + "\"schemaVersion\":5,"
+                + "\"schemaVersion\":6,"
                 + "\"name\":\"example.spoof\","
                 + "\"description\":\"unsafe-native io.github.furroxide.topiaforge.robotkit\","
                 + "\"capabilities\":[],"
@@ -200,7 +212,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
         private static void RequiresCompileAndRuntimeModuleDependencies()
         {
             var module = SpecialistModules.Single(item => item.AssemblyName.EndsWith("Worlds", StringComparison.Ordinal));
-            var source = "using TopiaForge.Mods; public sealed class Mod { IWorldGamemodeService value = null!; }";
+            var source = "using TopiaForge.Mods; public sealed class Mod { IWorldSessionService value = null!; }";
             Assert(Compile(source).Any(item => item.Id == "CS0246"),
                 "module type use without the compile-time contract reference should fail compilation");
 
@@ -231,7 +243,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             Assert(missing.Any(item => item.Id == "TF1006"),
                 "Interop.Unity should require the unsafe-native capability");
 
-            const string spoofed = "{\"schemaVersion\":5,\"name\":\"example.interop\","
+            const string spoofed = "{\"schemaVersion\":6,\"name\":\"example.interop\","
                 + "\"description\":\"unsafe-native\",\"capabilities\":[],\"dependencies\":{},"
                 + "\"x-capabilities\":[\"unsafe-native\"]}";
             var spoofedDiagnostics = Analyze(
@@ -303,6 +315,9 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 Manifest());
             Assert(diagnostics.Any(item => item.Id == "TF1008"),
                 "GetAwaiter().GetResult() on a task should report TF1008");
+            var message = diagnostics.First(item => item.Id == "TF1008").GetMessage();
+            Assert(message.Contains("await the task instead") && message.Contains("PendingOperation<T>"),
+                "TF1008 offers awaiting first, which in multiplayer keeps a player's action, and the poll: " + message);
         }
 
         private static void ReportsBlockingResultProperty()
@@ -473,7 +488,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             string dependencies = "",
             string optionalDependencies = "")
         {
-            return "{\"schemaVersion\":5,\"name\":\"example.mod\",\"capabilities\":["
+            return "{\"schemaVersion\":6,\"name\":\"example.mod\",\"capabilities\":["
                 + capabilities + "],\"dependencies\":{" + dependencies
                 + "},\"optionalDependencies\":{" + optionalDependencies + "}}";
         }

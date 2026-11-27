@@ -16,12 +16,13 @@ namespace TopiaForge.Mods.UnityUi
         private const int Gutter = 2;
         private const int StraightMargin = 4;
         private const int CircleSize = 24;
-        private const int IconSize = 24;
+        private const int IconSize = TopiaForgeGlyphRaster.TileSize;
 
         private static readonly int[] Radii = { 6, 10, 14, 18, 26, 28 };
 
         private static Texture2D? atlas;
         private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>(StringComparer.Ordinal);
+        private static readonly Sprite[] Glyphs = new Sprite[TopiaForgeGlyphRaster.Count];
         private static Sprite? white;
 
         /// <summary>Plain white sprite for flat fills, flashes, vignettes, bars.</summary>
@@ -72,6 +73,14 @@ namespace TopiaForge.Mods.UnityUi
             return Cache["icon-" + icon];
         }
 
+        internal static Sprite Glyph(UiGlyph glyph)
+        {
+            var index = (int)glyph;
+            if ((uint)index >= Glyphs.Length) throw new ArgumentOutOfRangeException(nameof(glyph));
+            EnsureAtlas();
+            return Glyphs[index];
+        }
+
         private static void EnsureAtlas()
         {
             if (atlas != null)
@@ -96,6 +105,12 @@ namespace TopiaForge.Mods.UnityUi
             {
                 var captured = icon;
                 tiles.Add(("icon-" + captured, IconSize, Vector4.zero, (x, y, s) => TopiaForgeIconRaster.Coverage(captured, x, y, s)));
+            }
+            for (var index = 0; index < Glyphs.Length; index++)
+            {
+                var glyph = (UiGlyph)index;
+                if (TopiaForgeGlyphRaster.SharedIcon(glyph) == null)
+                    tiles.Add(("glyph-" + glyph, IconSize, Vector4.zero, (x, y, s) => TopiaForgeGlyphRaster.Coverage(glyph, x, y, s)));
             }
 
             // Shelf packing: rows of tiles left-to-right on a fixed-width atlas.
@@ -146,7 +161,6 @@ namespace TopiaForge.Mods.UnityUi
 
             texture.SetPixels32(pixels);
             texture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
-            atlas = texture;
 
             for (var index = 0; index < tiles.Count; index++)
             {
@@ -164,6 +178,15 @@ namespace TopiaForge.Mods.UnityUi
                 sprite.hideFlags = HideFlags.HideAndDontSave;
                 Cache[key] = sprite;
             }
+
+            for (var index = 0; index < Glyphs.Length; index++)
+            {
+                var glyph = (UiGlyph)index;
+                var key = TopiaForgeGlyphRaster.SharedIcon(glyph) is TopiaForgeIcon shared
+                    ? "icon-" + shared : "glyph-" + glyph;
+                Glyphs[index] = Cache[key];
+            }
+            atlas = texture;
 
             TopiaForgeLog.Info("Sprite atlas generated (" + AtlasWidth + "x" + atlasHeight + ", " + tiles.Count + " tiles).");
         }

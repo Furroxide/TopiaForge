@@ -9,11 +9,14 @@ using System.Reflection.PortableExecutable;
 namespace TopiaForge.ModManager.Core
 {
     /// <summary>Validates managed package assemblies from metadata without loading or executing package code.</summary>
-    public static class ManagedModAssemblyValidator
+    public static partial class ManagedModAssemblyValidator
     {
         private const string SdkAssemblyName = "TopiaForge.Mods.Abstractions";
         private const string SupportedTargetFramework = ".NETStandard,Version=v2.1";
-        private static readonly Version CompatibleSdkAssemblyVersion = new Version(1, 0, 0, 0);
+        // Frozen for the whole 0.x line. Mono/BepInEx has no binding-redirect infrastructure, so changing the
+        // SDK's assembly identity is a hard load failure for every already-compiled third-party mod. Tracking
+        // the minor would be "correct" SemVer and operationally useless.
+        private static readonly Version CompatibleSdkAssemblyVersion = new Version(0, 1, 0, 0);
 
         private static readonly HashSet<string> ProhibitedExactNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -100,6 +103,10 @@ namespace TopiaForge.ModManager.Core
                      assemblyName.StartsWith("UnityEngine", StringComparison.OrdinalIgnoreCase)))
                 {
                     errors.Add("Package must not bundle framework/runtime assembly: " + name + ".");
+                }
+                else if (isManagedArtifact && InternalsVisibleToRefusal(name, assemblyName, manifest) is string refusal)
+                {
+                    errors.Add(refusal);
                 }
             }
 
@@ -345,7 +352,7 @@ namespace TopiaForge.ModManager.Core
                     errors.Add(
                         "entryAssembly references incompatible SDK identity '" +
                         DescribeAssemblyReference(reader, reference) +
-                        "'; V1 requires unsigned " + SdkAssemblyName + " " +
+                        "'; the loader requires unsigned " + SdkAssemblyName + " " +
                         CompatibleSdkAssemblyVersion + ".");
                 }
             }

@@ -1,0 +1,332 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using TopiaForge.ModManager.Core.Multiplayer;
+using TopiaForge.ModManager.TestDoubles;
+using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
+using TopiaForge.RobotKit;
+
+namespace TopiaForge.ModManager.Tests
+{
+    internal static class RobotSpeechNativeLifetimeTests
+    {
+        internal static void Run()
+        {
+            // Execute the shipped registration, cleanup, Despawn and service Tick, with only the native boundary
+            // replaced. A destroyed head deliberately compares null while its managed reference remains alive.
+            var root = Program.FindRepoRoot();
+            string Source(string file) => File.ReadAllText(Path.Combine(root, file));
+            CompilationUnitSyntax Read(string file) => CSharpSyntaxTree.ParseText(Source("mods/TopiaForge.RobotKit/" + file)).GetCompilationUnitRoot();
+            string Methods(CompilationUnitSyntax syntax, params string[] names) => string.Join("\n", names.Select(name =>
+                syntax.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.Text == name).ToFullString()));
+            var speech = Read("RobotAgent.Speech.cs");
+            var agent = Read("RobotAgent.cs");
+            var native = Read("NativeRobotSpeech.cs");
+            var source = Contract.Replace("/* speech fields */", string.Join("\n", speech.DescendantNodes().OfType<FieldDeclarationSyntax>()))
+                .Replace("/* visibility */", Methods(speech, "IsSpeechVisible", "OwnsSpeechAssociation"))
+                .Replace("/* agent methods */", Methods(speech, "RegisterSpeech", "ReleaseSpeech", "BindSpeech") + Methods(agent, "Despawn"))
+                .Replace("/* composed destroy */", Methods(Read("RobotComposedLifetime.cs"), "DestroyActor"))
+                .Replace("/* alive */", agent.DescendantNodes().OfType<PropertyDeclarationSyntax>().Single(p => p.Identifier.Text == "IsAlive").ToFullString())
+                .Replace("/* registry */", native.DescendantNodes().OfType<FieldDeclarationSyntax>()
+                    .Single(f => f.Declaration.Variables.Any(v => v.Identifier.Text == "agents")).ToFullString() + Methods(native, "Register", "Release"))
+                .Replace("/* tick */", Methods(Read("RobotAgentService.cs"), "Tick"));
+            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+                .Where(p => !Path.GetFileName(p).StartsWith("UnityEngine", StringComparison.Ordinal)
+                    && !Path.GetFileName(p).StartsWith("TopiaForge", StringComparison.Ordinal))
+                .Select(p => MetadataReference.CreateFromFile(p));
+            // Resolve marker types from the managed fixture instead of loading game assemblies.
+            var hiding = Source("mods/TopiaForge.Worlds/View/NativeViewHiding.cs")
+                .Replace("Type.GetType(\"UgcImportedEntity, GameCode\", false)", "typeof(UgcImportedEntity)")
+                .Replace("Type.GetType(\"UgcImportedVisualRoot, GameCode\", false)", "typeof(UgcImportedVisualRoot)");
+            var sources = new[] { source, hiding, Source("mods/TopiaForge.Worlds/View/ViewRendererSelection.cs"),
+                Source("src/TopiaForge.Mods.Abstractions/Internal/OwnedRendererVisibility.cs") };
+            var compilation = CSharpCompilation.Create("RobotSpeechLifetimeProbe", sources.Select(s => CSharpSyntaxTree.ParseText(s)), references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+            using var bytes = new MemoryStream();
+            var emitted = compilation.Emit(bytes);
+            if (!emitted.Success) throw new InvalidOperationException(string.Join("\n", emitted.Diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)));
+            var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.RobotKit.RobotAgentService", true)!;
+            ((Action)probe.GetMethod("Scenarios")!.CreateDelegate(typeof(Action)))();
+            Console.WriteLine("Robot speech native lifetime: 6 production-path scenarios passed.");
+        }
+
+        private const string Contract = """
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
+namespace UnityEngine {
+ public class Object {
+  public bool Destroyed; public static int DestroyCalls;
+  public static bool operator ==(Object? a,Object? b) => ReferenceEquals(a,b)
+   || ReferenceEquals(a,null) && b!.Destroyed || ReferenceEquals(b,null) && a!.Destroyed;
+  public static bool operator !=(Object? a,Object? b) => !(a==b);
+  public override bool Equals(object? other) => ReferenceEquals(this,other);
+  public override int GetHashCode() => RuntimeHelpers.GetHashCode(this);
+  public static void Destroy(Object o) { DestroyCalls++; o.Destroyed=true; }
+  public static void DontDestroyOnLoad(GameObject go) { go.Scene=-1; }
+ }
+ public class GameObject : Object {
+  public AgentHead Head=new(); public bool Killed;
+  public int Scene=1; public int scene => transform.parent?.Owner?.scene ?? Scene;
+  public bool activeSelf=true; public bool activeInHierarchy => activeSelf && (transform.parent?.Owner?.activeInHierarchy ?? true);
+  public Renderer[] Renderers=Array.Empty<Renderer>();
+  public T[] GetComponentsInChildren<T>(bool inactive) => Renderers.OfType<T>().ToArray();
+  public void GetComponentsInChildren<T>(bool inactive, List<T> into) => into.AddRange(Renderers.OfType<T>());
+  public Transform transform;
+  public GameObject() { transform=new Transform { Owner=this }; }
+  public T GetComponentInChildren<T>(bool inactive) where T:class => (Head as T)!;
+ }
+ public class Renderer : Object {
+  public bool enabled=true; public GameObject gameObject=new(); public Transform transform=>gameObject.transform;
+ }
+ public class Transform {
+  public Transform? parent; public GameObject? Owner;
+  public void SetParent(Transform value, bool preserve) { parent=value; }
+  internal TopiaForge.RobotKit.RobotComposedLifetime? Lease;
+  public T? GetComponent<T>() where T:class => Lease as T;
+  public object? GetComponent(Type type) => null;
+ }
+}
+namespace UnityEngine.SceneManagement { public static class SceneManager { public static int GetActiveScene()=>1; } }
+public class AgentHead : UnityEngine.Object { }
+public sealed class UgcImportedEntity { }
+public sealed class UgcImportedVisualRoot { }
+namespace TopiaForge.Mods {
+ public enum ModErrorCode { Unavailable, External }
+ public class OperationResult<T> {
+  public T Value=default!;
+  public static OperationResult<T> Success(T value) => new() { Value=value };
+  public static OperationResult<T> Failure(ModErrorCode code,string message) => throw new InvalidOperationException(message);
+ }
+}
+namespace TopiaForge.Mods.Internal { internal interface IInternalNativeSpeechPlayback : IDisposable { } }
+namespace TopiaForge.RobotKit {
+ // Only the native owner boundary is replaced. DestroyActor below is read from the shipped source,
+ // so the test catches both a missing harness dependency and incorrect owned-parent routing.
+ internal sealed class RobotComposedLifetime : UnityEngine.Object {
+  internal GameObject? Actor;
+  internal int DisposeCalls;
+  internal void Dispose() { DisposeCalls++; UnityEngine.Object.Destroy(Actor!); }
+  /* composed destroy */
+ }
+ internal static class NativeRobotSpeech {
+  /* registry */
+  internal static bool Contains(AgentHead head) => agents.ContainsKey(head);
+  internal static int Count => agents.Count;
+ }
+ internal static class GameReflection { internal static bool HasKilledComponent(GameObject go) => go.Killed; }
+ internal static class RobotKitLog { internal static string ExceptionType(Exception ex) => ex.GetType().Name; }
+ internal sealed class Logger { internal void Debug(string text) { } }
+ internal sealed class Replication { internal int Forgets; internal void Forget(string id) { Forgets++; } }
+ internal sealed class Search { internal bool IsComplete; internal void Step() { } internal void Cancel() { } }
+ internal sealed class RobotAgent {
+  internal readonly GameObject go=new(); internal string Id=Guid.NewGuid().ToString(); private bool despawned;
+  internal int Steps;
+  /* speech fields */
+  /* alive */
+  private Renderer[]? renderers;
+  /* visibility */
+  internal void Associate(Func<bool> current, CancellationToken stopping=default) {
+   speechAssociation=new object(); speechAssociationCurrent=current; speechOwnerStopping=stopping;
+  }
+  /* agent methods */
+  internal void Step() { Steps++; }
+  private void ReleaseWalk() { }
+  private void ResetInteractionOverrides() { }
+  internal CancellationToken SpeechToken => speechLifetime.Token;
+  internal bool SpeechDetached => speechRoute is null && ReferenceEquals(speechHead,null);
+ }
+ internal sealed class RobotAgentService {
+  private bool disposed,activeDirty; private readonly List<RobotAgent> agents=new();
+  private readonly Dictionary<string,RobotAgent> agentsById=new(); private readonly List<Search> searches=new();
+  private readonly Logger logger=new(); private readonly Replication Replication=new();
+  /* tick */
+  private void Add(RobotAgent a) { agents.Add(a); agentsById.Add(a.Id,a); }
+  private static void Check(bool ok,string message) { if(!ok) throw new InvalidOperationException(message); }
+  public static void Scenarios() {
+   { var root=new GameObject(); UnityEngine.Object.DontDestroyOnLoad(root);
+     var a=new RobotAgent(); a.go.transform.SetParent(root.transform,true);
+     var renderedChild=new GameObject(); renderedChild.transform.SetParent(a.go.transform,true);
+     var renderer=new Renderer { gameObject=renderedChild }; a.go.Renderers=new[]{renderer};
+     var currentWorld=true; a.Associate(()=>currentWorld);
+     Check(a.go.scene!=SceneManager.GetActiveScene(),"DDOL boundary models the actual persistent parent scene");
+     Check(a.IsSpeechVisible(canonical: true),"DdolProductionVisibility: current owned DDOL child must be speech-visible");
+     root.activeSelf=false; Check(!a.IsSpeechVisible(canonical: true),"inactive persistent parent refuses"); root.activeSelf=true;
+     renderer.enabled=false; Check(!a.IsSpeechVisible(canonical: true),"hidden renderer refuses"); renderer.enabled=true;
+     using var hiding=new TopiaForge.Worlds.NativeViewHiding();
+     using var overlapping=new TopiaForge.Worlds.NativeViewHiding();
+     using (var first=hiding.Hide(a.go,()=>true).Value) {
+      using (var second=overlapping.Hide(a.go,()=>true).Value) {
+       Check(!renderer.enabled && a.IsSpeechVisible(canonical: true) && !a.IsSpeechVisible(canonical: false),
+        "real view hide keeps an enabled original speakable while refusing local playback");
+       hiding.Dispose();
+       Check(!renderer.enabled && a.IsSpeechVisible(canonical: true),"overlapping owners retain the original until the final release");
+       root.activeSelf=false;
+       Check(!a.IsSpeechVisible(canonical: true),"a view hold cannot bypass an inactive hierarchy");
+       root.activeSelf=true;
+      }
+      Check(renderer.enabled && a.IsSpeechVisible(canonical: false),"last hold restores local renderer and playback eligibility");
+     }
+     renderer.enabled=false;
+     using (var disabled=overlapping.Hide(a.go,()=>true).Value)
+      Check(!a.IsSpeechVisible(canonical: true),"a view hold never enables canonical speech on an originally disabled renderer");
+     Check(!renderer.enabled,"release keeps an originally disabled renderer disabled");
+     renderer.enabled=true;
+     renderedChild.activeSelf=false; Check(!a.IsSpeechVisible(canonical: true),"inactive rendered child refuses"); renderedChild.activeSelf=true;
+     a.go.activeSelf=false; Check(!a.IsSpeechVisible(canonical: true),"inactive body refuses"); a.go.activeSelf=true;
+     currentWorld=false; Check(!a.IsSpeechVisible(canonical: true),"old owning world refuses despite live persistent body"); currentWorld=true;
+     using var stopping=new CancellationTokenSource(); a.Associate(()=>true,stopping.Token); stopping.Cancel();
+     Check(!a.IsSpeechVisible(canonical: true),"stopped owning context refuses"); a.Associate(()=>true);
+     a.ReleaseSpeech(); Check(!a.IsSpeechVisible(canonical: true),"released body association refuses");
+     var disposed=new RobotAgent(); disposed.go.Renderers=new[]{new Renderer {gameObject=disposed.go}};
+     disposed.Associate(()=>true); disposed.Despawn(); Check(!disposed.IsSpeechVisible(canonical: true),"disposed body refuses");
+     Console.WriteLine("DdolProductionVisibility: passed actual getter and association lifetime negatives.");
+   }
+   // Both native death with a retained corpse and outright destruction must release speech during prune.
+   foreach(var destroyBody in new[]{false,true}) {
+    var service=new RobotAgentService(); var dead=new RobotAgent(); var live=new RobotAgent();
+    dead.RegisterSpeech(); live.RegisterSpeech(); var head=dead.go.Head; var token=dead.SpeechToken;
+    int cancellations=0; using var callback=token.Register(()=>cancellations++);
+    dead.BindSpeech((_,_)=>Task.FromResult(new OperationResult<bool>()));
+    service.Add(dead); service.Add(live); head.Destroyed=true; dead.go.Killed=true; dead.go.Destroyed=destroyBody;
+    Check(head==null && !ReferenceEquals(head,null) && NativeRobotSpeech.Contains(head!),"destroyed head must still be registered before prune");
+    UnityEngine.Object.DestroyCalls=0; service.Tick(0);
+    Check(!NativeRobotSpeech.Contains(head!) && NativeRobotSpeech.Count==1 && dead.SpeechDetached,"prune releases the real static registry and route");
+    Check(token.IsCancellationRequested && cancellations==1,"prune cancels native speech once");
+    Check(service.agents.Count==1 && service.agentsById.Count==1 && service.Replication.Forgets==1 && service.activeDirty,"prune retains service bookkeeping");
+    Check(UnityEngine.Object.DestroyCalls==0 && dead.go.Destroyed==destroyBody && live.Steps==1,"prune preserves native corpse and live agents");
+    service.Tick(0); dead.ReleaseSpeech(); dead.ReleaseSpeech(); dead.Despawn(); dead.Despawn();
+    Check(cancellations==1 && service.Replication.Forgets==1 && dead.SpeechDetached,"repeated cleanup and later scope despawn are idempotent");
+    live.Despawn(); Check(NativeRobotSpeech.Count==0,"surviving registrations clean up independently");
+   }
+   // Explicit despawn can also encounter a destroyed head before the service has pruned it.
+   { var a=new RobotAgent(); a.RegisterSpeech(); var head=a.go.Head; var token=a.SpeechToken; head.Destroyed=true;
+     a.Despawn(); a.ReleaseSpeech(); a.Despawn();
+     Check(!NativeRobotSpeech.Contains(head!) && token.IsCancellationRequested && a.SpeechDetached,"explicit despawn removes a managed dead head"); }
+   { var a=new RobotAgent(); var token=a.SpeechToken; a.ReleaseSpeech(); a.ReleaseSpeech(); a.Despawn();
+     Check(token.IsCancellationRequested && NativeRobotSpeech.Count==0 && a.SpeechDetached,"missing head cleanup is idempotent too"); }
+   // Explicit composed despawn must route to its exact owner's cleanup, without destroying a sibling.
+   { var a=new RobotAgent(); var sibling=new GameObject(); var lease=new RobotComposedLifetime { Actor=a.go };
+     a.go.transform.parent=new Transform { Lease=lease }; a.RegisterSpeech(); var token=a.SpeechToken;
+     a.Despawn(); a.Despawn();
+     Check(lease.DisposeCalls==1 && a.go.Destroyed && !sibling.Destroyed,"composed despawn releases its matching owner once");
+     Check(token.IsCancellationRequested && a.SpeechDetached && NativeRobotSpeech.Count==0,"composed ownership preserves speech teardown"); }
+   // A parent lease belonging to another actor is not permission to release that actor's assets.
+   { var a=new RobotAgent(); var other=new GameObject(); var lease=new RobotComposedLifetime { Actor=other };
+     a.go.transform.parent=new Transform { Lease=lease }; a.Despawn();
+     Check(a.go.Destroyed && !other.Destroyed && lease.DisposeCalls==0,"foreign composition ownership falls back to exact actor destruction"); }
+  }
+ }
+}
+""";
+    }
+
+    internal sealed partial class FirstPartyRobot : IRobotNativeSpeech
+    {
+        internal int SpeechPlays;
+        internal bool Visible = true, MissingVoice;
+        internal string Voice = new string('a', 64);
+        internal readonly List<TaskCompletionSource<OperationResult<bool>>> SpeechCompletions = new();
+        internal readonly List<CancellationToken> SpeechTokens = new List<CancellationToken>();
+        internal Func<string, CancellationToken, Task<OperationResult<bool>>>? Route;
+        internal object? PlaybackAssociation;
+        internal Func<bool>? PlaybackCurrent;
+        internal CancellationToken PlaybackStopping;
+        public void BindSpeechPlayback(object association, Func<bool> isCurrent, CancellationToken ownerStopping = default)
+        { PlaybackAssociation = association; PlaybackCurrent = isCurrent; PlaybackStopping = ownerStopping; }
+        public bool IsSpeechVisible(bool canonical) => IsAlive
+            && (OwnedRendererVisibility<FirstPartyRobot>.TryGetOriginal(this, out var original) ? canonical && original : Visible);
+        public OperationResult<string> VoiceIdentity() => MissingVoice
+            ? OperationResult<string>.Failure(ModErrorCode.Unavailable, "No voice binding.") : OperationResult<string>.Success(Voice);
+        public Task<OperationResult<bool>> PlaySpeechAsync(string voice, string text, CancellationToken token)
+        {
+            if (!IsSpeechVisible(canonical: false) || MissingVoice || voice != Voice) return Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "No matching voice."));
+            SpeechPlays++; SpeechTokens.Add(token);
+            var completion = new TaskCompletionSource<OperationResult<bool>>();
+            SpeechCompletions.Add(completion);
+            token.Register(() => completion.TrySetResult(OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Stopped.")));
+            return completion.Task;
+        }
+        public void BindSpeech(Func<string, CancellationToken, Task<OperationResult<bool>>> route) => Route = route;
+    }
+
+    internal sealed class RobotSpeechRig : IDisposable
+    {
+        internal readonly WorldRig World = new WorldRig();
+        internal readonly SpeechPeer Host;
+        internal readonly List<SpeechPeer> Guests = new List<SpeechPeer>();
+        internal readonly AuthorityMod Owner;
+        internal readonly IRobotAgent Robot;
+        internal FirstPartyRobot Canonical => Host.Robots.Agents.Values.Single();
+        internal RobotSpeechRig(int players = 1, bool open = true)
+        {
+            World.UseScene(scene => scene.AddScene("Yard"));
+            Host = new SpeechPeer(World, World.Host);
+            if (open) World.OpenToMultiplayer();
+            World.Host.World.Proxies.IsSharedMod = _ => true;
+            Owner = new AuthorityMod(World.Host, ModExecutionContext.GamemodeServer);
+            Robot = Host.Robots.Provider.Spawn(Owner.Seam, new RobotAgentSpawnRequest(Vec3.Zero, brainMode: RobotBrainMode.Autonomous)).Value!;
+            for (var i = 0; i < players; i++) Add("listener" + i);
+            World.Frames(30);
+        }
+        internal SpeechPeer Add(string id)
+        {
+            var peer = new SpeechPeer(World, World.AddPlayer(id)); Guests.Add(peer);
+            World.JoinAndSynchronize(peer.Peer); World.Frames(30); return peer;
+        }
+        internal void Move(SpeechPeer peer, float x)
+        {
+            var position = new NetVector3(x, 0, 0);
+            peer.Backend.Feet = position;
+            if (!peer.Peer.Control.IsHost && Host.Presence.TryGetPeer(peer.Peer.Control.Id, out var known))
+                known!.Plausibility!.ExpectPlacement(NetQuantization.QuantizePosition(position), World.Clock.Now);
+            World.Frames(10);
+        }
+        internal void Later() { World.Clock.Advance(1_100_000); World.Frames(5); }
+        internal List<(ParticipantId To, byte[] Payload)> Log => Host.Channel.Log!;
+        internal byte[] LastLine => Log.Last(p => p.Payload[1] == RobotSpeechWire.Line).Payload;
+        public void Dispose()
+        {
+            Owner.Lifetime.Dispose();
+            World.Host.World.Speech.Reset();
+            foreach (var guest in Guests) guest.Peer.World.Speech.Reset();
+        }
+        internal sealed class SpeechPeer
+        {
+            internal readonly WorldPeer Peer;
+            internal readonly FakePresenceBackend Backend = new FakePresenceBackend();
+            internal readonly MultiplayerPresence Presence;
+            internal readonly FirstPartyRobots Robots;
+            internal string? CurrentWorld = "world-one";
+            internal int Scene;
+            internal FirstPartyRobot Body => Robots.Agents.Values.Last();
+            internal LoopbackChannel Channel => Peer.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+            internal SpeechPeer(WorldRig rig, WorldPeer peer)
+            {
+                Peer = peer; peer.Runtime.Disconnect();
+                Presence = MultiplayerPresence.Install(peer.Runtime, peer.Replication, Backend, rig.Clock.Read);
+                Presence.RunningWorld = () => CurrentWorld;
+                Presence.SceneVersion = () => Scene;
+                Presence.RunningSpawn = () => TransformState.Identity;
+                peer.Replication.Players = MultiplayerPlayers.Install(peer.Runtime, Presence);
+                peer.Runtime.Connect(); Robots = new FirstPartyRobots(peer);
+                Channel.Log = new List<(ParticipantId, byte[])>();
+            }
+        }
+    }
+}

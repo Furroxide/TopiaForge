@@ -1,28 +1,38 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.zombies",
   "displayName": "Zombies",
-  "version": "1.0.0-rc.1",
+  "version": "0.2.0",
   "author": {
     "name": "TopiaForge"
   },
   "description": "A safe-SDK wave-survival showcase built from Worlds, RobotKit, Chronos, named input, physics, dialogue, audio, and TopiaForgeUi. Fight distinct infected archetypes with headshots and charged piercing fire, build combos, recruit wavering allies through deterministic or explicitly enabled live JACK IN conversations, buy run upgrades, and restart or return to the menu cleanly.",
   "entryAssembly": "TopiaForge.Zombies.dll",
   "entryType": "TopiaForge.Zombies.ZombiesMod",
+  "ui": {
+    "schema": 1,
+    "default": "survival",
+    "themes": [
+      {
+        "id": "survival",
+        "definition": "ui/themes/survival.json"
+      }
+    ]
+  },
   "dependencies": {
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.chronos": ">=1.0.0-rc.1 <2.0.0"
+    "io.github.furroxide.topiaforge.worlds": ">=0.2.0 <0.3.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=0.2.0 <0.3.0",
+    "io.github.furroxide.topiaforge.chronos": ">=0.2.0 <0.3.0"
   },
   "loadAfter": [
     "io.github.furroxide.topiaforge.worlds",
     "io.github.furroxide.topiaforge.robotkit",
     "io.github.furroxide.topiaforge.chronos"
   ],
-  "supportedGameVersionRange": "0.0.2309",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedGameVersionRange": ">=0.0.2640 <0.0.2700",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "category": "Gameplay",
   "tags": [
     "zombies",
@@ -39,7 +49,7 @@
     "requisitions",
     "chronos"
   ],
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "licenseFiles": [
     "LICENSE"
   ],
@@ -59,11 +69,38 @@
     "microphone",
     "speech-to-text"
   ],
-  "worldGamemodes": [
-    {
-      "id": "io.github.furroxide.topiaforge.zombies.survival",
-      "name": "Zombies",
-      "description": "Survive escalating waves of infected robots with a built-in zapper."
-    }
-  ]
+  "contributions": {
+    "gamemodes": [
+      {
+        "id": "io.github.furroxide.topiaforge.zombies.survival",
+        "name": "Zombies",
+        "description": "Survive escalating waves of infected robots with a built-in zapper.",
+        "implementation": {
+          "type": "TopiaForge.Zombies.ZombiesGamemode"
+        },
+        "worldRequirements": {
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": "any"
+        },
+        "sceneChangePolicy": "end-session"
+      }
+    ],
+    "launchTargets": [
+      {
+        "id": "io.github.furroxide.topiaforge.zombies.menu",
+        "title": "Zombies",
+        "description": "Survive escalating waves of infected robots with a built-in zapper.",
+        "sortKey": 20,
+        "gamemode": "io.github.furroxide.topiaforge.zombies.survival",
+        "world": {
+          "policy": "fixed",
+          "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "allowPlayerOverride": false
+        },
+        "transition": "auto"
+      }
+    ]
+  }
 }

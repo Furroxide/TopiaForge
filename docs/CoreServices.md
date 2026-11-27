@@ -32,7 +32,7 @@ package root, or global cleanup target.
 | `LocalPlayer` | Process-local camera aim, position, health, damage/heal, and control leases. |
 | `Scenes` | Active/loaded scenes, checkpoint observation, and typed scene loading. |
 | `Entities` | Opaque entity transforms, bounded queries, destruction, and motion leases. |
-| `Physics` | Raycasts, sphere casts, and bounded overlap queries. |
+| `Physics` | Raycasts, sphere casts, bounded overlap queries, and lifetime-owned invisible blockers (0.2). |
 | `Interactions` | Interactable registration and current focus. |
 | `Items` | Held-item observation, give, and drop operations. |
 | `Assets` | Package bundle and prefab handles, then lifetime-owned spawn operations. |
@@ -43,12 +43,59 @@ package root, or global cleanup target.
 | `Diagnostics` | Bounded structured reports mirrored to the attributed log. |
 | `Extensions` | Typed providers exposed by declared dependencies. |
 
-Locality is part of the V1 contract. `Files`, `Config`, `LocalStorage`, `Input`, `Time`,
+Locality is part of the safe SDK contract. `Files`, `Config`, `LocalStorage`, `Input`, `Time`,
 `LocalPlayer`, `Interactions`, `Items`, `Audio`, and `Ui` describe this game process only; they do
 not silently synchronize between peers. `IEntity.Id` and scene instance ids are process-local
 correlation keys, not network identities. A future authoritative world-state service will be a
 separate specialist contract rather than a reinterpretation of local storage. Hosts without an
 interactive player or presentation surface return the usual typed `Unavailable` results.
+
+## Invisible blockers (0.2)
+
+Place an invisible box from a server controller to seal a doorway, without a Unity project or an
+asset bundle:
+
+```csharp
+var result = session.Context.Physics.AddBlocker(
+    BlockerRequest.Box(new Vec3(4f, 1.5f, 8f), new Vec3(2f, 3f, 0.2f), yawDegrees: 90f));
+if (result.TryGetValue(out var blocker))
+{
+    // Keep the handle to open the doorway early: blocker.Dispose().
+    // Otherwise the session context removes it automatically when the session ends.
+}
+```
+
+The host records and replicates the box, including to players who join later. Move a sliding door
+with `session.Context.Entities.SetTransform(blocker, placement)`. Use the `TransformState` overload
+of `BlockerRequest.Box` for an existing placement. Both ignore a placement's scale, so a blocker keeps
+the explicit size, in metres, it was made with. Every side must be finite and between 0.05 and 1,000
+metres, inclusive; position and rotation must be finite. A mod can keep 1,024 live blockers across all
+its scopes.
+
+Blockers use a kinematic box collider, with no renderer. `blocksSight: false` selects Unity's Ignore
+Raycast layer, excluding the box from ordinary raycast, sphere-cast and overlap queries while retaining
+its collider. No tool can hold or throw a blocker: `Context.Entities.AcquireMotion` refuses one on
+every peer, so the Gravity Gun cannot pull it out of a doorway, and the host refuses any player's grab
+of one. Collision with the game's player, robots and props, including how robots navigate around the
+box, needs live-game acceptance for the supported game build.
+
+Process and world-owner scripts on a joined player receive a shadow of the host's box. Participant
+code is refused in every role, including single player; a joined player's own input is refused too.
+Send a command to the host's server controller to request a change. There is no client prediction
+or author-written replication code. A stopping scope returns `Cancelled`; exceeding the live limit
+returns `RateLimited`, with instructions to dispose an existing blocker.
+
+Set both manifest version floors to `>=0.2.0` with an appropriate upper bound, for example
+`>=0.2.0 <0.3.0`. TF1010 checks uses of the new API. In launcher developer mode, the manager's
+Settings tab offers **Show invisible blockers**, a translucent local preview that changes neither
+collision nor network state.
+
+`FakeModContext.Physics.Blockers` records test handles. Its overlap queries account for box size and
+rotation; `FakeModContext.Entities.SetTransform` moves them, and disposing the context removes them.
+As in the game, a move keeps their size, `AcquireMotion` refuses them, and a participant controller's
+context (a `FakeGamemodeParticipantSession`'s, including `GamemodeSessionRunner.ParticipantContext`)
+refuses `AddBlocker` with `NotAuthoritative`. The fake's raycast and sphere-cast results remain
+explicitly configured test inputs.
 
 ## Start from a compiled template
 
@@ -200,6 +247,12 @@ non-keyboard bindings. These SDK names describe physical position or purpose, so
 on Unity button ordinals or platform-specific native enums. Keyboard bindings use portable SDK key
 names such as `F`, `Space`, or `F8`.
 
+`InputGamepadAxis` reads the current Input System controller: both sticks are signed,
+and triggers range from zero to one. Keyboard movement never drives these bindings;
+use `InputAxis.Horizontal` or `Vertical` for the game's combined movement axes. With no
+controller connected, gamepad axes are idle. Stick deadzones follow the Input System's
+processed controls. Bindings keep the same focus and held-press rules as keyboard input.
+
 Gameplay actions are suppressed while text entry or another framework UI surface owns focus.
 Use the configurable action in the `ui` template rather than reserving a function key globally.
 F5 routes the shared Creator workbench, F8 opens UiGallery in development installs, and F10 opens
@@ -259,5 +312,5 @@ asset interfaces are opaque handles with ordinary state and lifetime operations.
 mods portable across supported runtimes and make tests deterministic.
 
 See [specialist modules](Modules.md) for creator content, robots, worlds, time control, prompts,
-UGC, and multiplayer, or open the generated C# reference from the developer site for every member
+and multiplayer, or open the generated C# reference from the developer site for every member
 and default value.

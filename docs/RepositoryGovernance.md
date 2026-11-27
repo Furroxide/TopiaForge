@@ -59,8 +59,9 @@ reject this unchanged client baseline. Release-branch pushes and their `main` pu
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
 development, or unknown scope. License and notice validation is
-release-blocking. DCO enforcement applies to every commit introduced between
-the verified base and head of a pull request.
+release-blocking. DCO applies to every commit introduced by a PR against
+its verified base. Already-integrated base history is outside that range;
+release tags and product version do not enable or disable enforcement.
 
 CodeQL is an independent ruleset gate at high-or-critical severity. For the
 Windows/Linux-only RC1, default setup covers Actions, C/C++, C#, and
@@ -131,8 +132,8 @@ The stable PR-policy check enforces these routing rules:
 - Dependabot PRs may target only `dev`.
 - `release/*` accepts same-repository stabilization branches only.
 - `main` accepts the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
-  from that head's `release/release-policy.json`. The exact `service/production-multiplayer` and
-  `cloudflare/deploy-host-main` branches are file-allowlisted service exceptions. The exact
+  from that head's `release/release-policy.json`. The exact `cloudflare/deploy-host-main` branch is
+  limited to files that support the protected Status deployment workflow. The exact
   `maintenance/main-governance` branch is limited to repository governance and release-check workflow files.
   The one-time sidecar security backport also admits the exact reviewed manifest and lockfile transition
   together. After the backport lands, the old base blobs no longer match and the exception closes.
@@ -240,8 +241,9 @@ The desired live settings are:
   an eligible organization plan.
 - Immutable releases are enabled before publication. The repository push limit
   is five refs per push, preventing accidental mirror pushes. Wiki is disabled;
-  Issues remain enabled. Enable GitHub web commit sign-off so browser-created
-  commits satisfy the DCO policy.
+  Issues remain enabled. GitHub web commit sign-off must be enabled so
+  browser-created commits satisfy the DCO policy; verify the setting
+  independently of any release tag.
 
 The five-ref push limit and owner-account security posture require manual verification because GitHub does not expose
 all of them through the repository audit API. The sole owner must maintain a passkey or hardware security key, TOTP
@@ -276,3 +278,9 @@ GitHub references: [rulesets](https://docs.github.com/en/repositories/configurin
 [deployment environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments),
 [Dependabot configuration](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference),
 and [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
+
+## Multiplayer deployment environments
+
+The [protected Status deployment host](internal/CloudflareDeploymentHost.md)
+documents the staging and production environments, credentials, and deployment
+review procedure. Client compilation needs no Cloudflare credentials.

@@ -1,0 +1,65 @@
+using System;
+using TopiaForge.Mods;
+
+namespace TopiaForge.Multiplayer.Engine
+{
+    /// <summary>Logical channels a link carries. The engine's protocol uses the session channel, and voice the voice channel.</summary>
+    internal enum EngineChannel : byte
+    {
+        /// <summary>Reliable and ordered: every frame arrives once, in send order, or the link closes.</summary>
+        Session = 0,
+
+        /// <summary>Unreliable and sequenced: stale frames are dropped. Reserved for high-rate presence.</summary>
+        Realtime = 1,
+
+        /// <summary>Unreliable and sequenced: voice datagrams, never held behind session frames.</summary>
+        Voice = 2
+    }
+
+    internal enum EngineLinkState
+    {
+        /// <summary>Frames flow in both directions.</summary>
+        Open = 0,
+
+        /// <summary>The path stopped delivering but the connection has not timed out; reliable frames are held.</summary>
+        Stalled = 1,
+
+        /// <summary>The connection is gone. Frames already received can still be read.</summary>
+        Closed = 2
+    }
+
+    /// <summary>
+    /// One authenticated connection to a peer: the seam between the engine and a transport. The real secure transport
+    /// and the rig's virtual transport both implement it. A link never exposes a network address.
+    /// </summary>
+    internal interface IEngineLink
+    {
+        /// <summary>Gets the transport-authenticated identity of the remote peer. It is opaque and stable per peer.</summary>
+        string PeerIdentity { get; }
+
+        /// <summary>Gets the per-host player key the transport derived for the remote peer, or the default value.</summary>
+        MultiplayerPlayerKey PlayerKey { get; }
+
+        /// <summary>
+        /// Gets a value both ends of this link share and nobody else knows: the secure transport's handshake hash, or a
+        /// value the rig's virtual transport invents per link. A proof bound to it cannot be replayed on another link.
+        /// The array is a copy.
+        /// </summary>
+        byte[] ChannelBinding { get; }
+
+        /// <summary>
+        /// Gets the current path state. The engine drains a link and then checks this, so a link fed from another thread
+        /// reports <see cref="EngineLinkState.Closed"/> only once every session frame delivered before the close is read.
+        /// </summary>
+        EngineLinkState State { get; }
+
+        /// <summary>Queues one frame. The link copies the bytes before returning.</summary>
+        void Send(EngineChannel channel, ArraySegment<byte> frame);
+
+        /// <summary>Dequeues the next received frame, if any. The array is the caller's; the link never reuses it.</summary>
+        bool TryReceive(out EngineChannel channel, out byte[] frame);
+
+        /// <summary>Closes the link after frames already sent are delivered.</summary>
+        void Close();
+    }
+}

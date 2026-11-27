@@ -19,6 +19,7 @@ namespace TopiaForge.Mods.Testing
             }
 
             Agents = new FakeRobotAgentService(lifetime);
+            Bodies = new FakeRobotBodyService(lifetime);
             Objectives = new FakeRobotObjectiveService(lifetime);
             BrainQueries = new FakeRobotBrainQueryService(lifetime);
             Conversations = new FakeRobotConversationService(lifetime);
@@ -27,6 +28,10 @@ namespace TopiaForge.Mods.Testing
 
         /// <summary>Gets deterministic robot spawning and movement.</summary>
         public FakeRobotAgentService Agents { get; }
+
+        /// <summary>Gets persistent cosmetic body snapshots owned by this fake scope.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public FakeRobotBodyService Bodies { get; }
 
         /// <summary>Gets deterministic named targets and objectives.</summary>
         public FakeRobotObjectiveService Objectives { get; }
@@ -42,7 +47,7 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Deterministic robot agent service that creates inspectable SDK-native agents.</summary>
-    public sealed class FakeRobotAgentService : IRobotAgentService, IRobotPlayerEntitySource
+    public sealed partial class FakeRobotAgentService : IRobotAgentService, IRobotPlayerEntitySource
     {
         private readonly FakeModLifetime lifetime;
         private readonly List<FakeRobotAgent> agents = new List<FakeRobotAgent>();
@@ -101,6 +106,12 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentNullException(nameof(request));
             }
 
+            if (lifetime.IsStopping)
+                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Cancelled, "The fake mod is stopping and cannot spawn robots.");
+
+            var refusal = PrepareSpawn(ref request);
+            if (refusal != null) return refusal;
+
             if (!IsAvailable)
             {
                 return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, "Fake RobotKit is unavailable.");
@@ -113,10 +124,21 @@ namespace TopiaForge.Mods.Testing
                 return OperationResult<IRobotAgent>.Failure(failure, "The configured fake spawn failed.");
             }
 
+            if (!string.IsNullOrWhiteSpace(request.RobotTypeId))
+            {
+                var found = false;
+                foreach (var type in RobotTypes)
+                    if (string.Equals(type.Id, request.RobotTypeId, StringComparison.OrdinalIgnoreCase)) found = true;
+                if (!found) return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable,
+                    "The requested robot type is unavailable.");
+            }
+
             var agent = new FakeRobotAgent(
                 "fake-robot-" + (++serial).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 request,
-                value => agents.Remove(value))
+                value => agents.Remove(value),
+                () => IsClient || IsGuestOrigin,
+                () => IsClient)
             {
                 AutoCompleteMovement = AutoCompleteAgentMovement
             };

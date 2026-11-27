@@ -84,7 +84,7 @@ Future<void> _showNewModDialog(BuildContext context) async {
                 value: includeUnityCompanion,
                 onChanged: (value) =>
                     setState(() => includeUnityCompanion = value ?? false),
-                title: const Text('Include Unity companion (UGC live-sync)'),
+                title: const Text('Include Unity companion (custom worlds)'),
               ),
             ],
           ),
@@ -190,8 +190,9 @@ Future<void> _showNewUnityProjectDialog(BuildContext context) async {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Copies the Unity world template and installs the UGC companion. '
-              'Open it in Unity to author markers, then Go Live from the cockpit.',
+              'Copies the Unity world template. '
+              'Open it in Unity to author your scene, then build its bundle '
+              'with `topiaforge world build`.',
               style: TextStyle(fontSize: 12),
             ),
           ],

@@ -1,0 +1,487 @@
+extern alias provider;
+
+using System.Security.Cryptography;
+using provider::TopiaForge.Multiplayer.Network;
+using provider::TopiaForge.Multiplayer.Transport;
+
+namespace TopiaForge.Mods.Multiplayer.Tests;
+
+/// <summary>Link conditions every datagram on a <see cref="VirtualDatagramNetwork"/> meets.</summary>
+internal sealed class NetworkConditions
+{
+    internal long LatencyMicros { get; set; } = 10_000;
+
+    /// <summary>Gets or sets the extra delay drawn uniformly per datagram; any jitter reorders datagrams.</summary>
+    internal long JitterMicros { get; set; }
+
+    internal double LossRate { get; set; }
+
+    internal double DuplicateRate { get; set; }
+}
+
+/// <summary>
+/// Anything else that takes and yields datagrams on the virtual clock, such as a NAT-traversing peer or a fake TURN
+/// server. It names the source each datagram leaves from, or null for its own address, and is told where each arrived.
+/// </summary>
+internal interface IVirtualAttachment
+{
+    void Receive(TransportPath source, TransportPath destination, byte[] datagram, long now);
+
+    void Poll(long now);
+
+    long NextTimeoutMicros();
+
+    bool TryDequeue(out TransportPath? source, out TransportPath destination, out byte[] datagram);
+}
+
+/// <summary>Decides where an attachment's datagram goes, through whatever NATs lie between: the receiver and what it sees, or null when lost.</summary>
+internal interface IVirtualRouter
+{
+    (VirtualNode To, TransportPath Source, TransportPath Destination)? Route(VirtualNode from, TransportPath? source, TransportPath destination, long now);
+}
+
+/// <summary>
+/// One attachment point: a transport endpoint, a network stack around one, or a raw inbox a test reads and writes by hand. A node is reachable
+/// three ways, as in the field: directly, through a relay, and on the LAN. A datagram sent to one of its addresses
+/// arrives as if from the sender's address of the same kind, the way a relay shows each side only its channel.
+/// </summary>
+internal sealed class VirtualNode
+{
+    private const int LanPort = 0x6A72;
+    private const int RelayPort = 0x0D96;
+
+    private readonly int index;
+    private readonly int portOffset;
+    private int rebinds;
+
+    /// <param name="index">The node's address: two bytes, so a long run never hands two nodes the same one.</param>
+    /// <param name="portOffset">Moves the node's ports, so several nodes can share one address as one machine's sockets do.</param>
+    internal VirtualNode(string name, int index, TransportEndpoint? endpoint, NetworkStack? stack = null, int portOffset = 0, IVirtualAttachment? attachment = null)
+    {
+        if (index < 1 || index > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(index));
+        if (portOffset < 0 || portOffset > 0x8000) throw new ArgumentOutOfRangeException(nameof(portOffset));
+        Name = name;
+        Stack = stack;
+        Endpoint = stack?.Endpoint ?? endpoint;
+        Attachment = attachment;
+        this.index = index;
+        this.portOffset = portOffset;
+    }
+
+    /// <summary>Gets the node's address, which nodes made with <see cref="VirtualDatagramNetwork.AddStack"/>'s sharing share.</summary>
+    internal int AddressIndex => index;
+
+    /// <summary>Gets how far the node's ports sit from the usual ones; nodes sharing an address differ here.</summary>
+    internal int PortOffset => portOffset;
+
+    /// <summary>Gets the attachment the node runs, whose datagrams the network's router delivers.</summary>
+    internal IVirtualAttachment? Attachment { get; }
+
+    internal string Name { get; }
+
+    internal TransportEndpoint? Endpoint { get; }
+
+    /// <summary>Gets the network stack the node runs, which polls its endpoint and moves frames to its links.</summary>
+    internal NetworkStack? Stack { get; }
+
+    /// <summary>Gets the direct address; a NAT rebinding changes it.</summary>
+    internal byte[] Address => AddressOf(TransportPathKind.Direct);
+
+    internal Queue<(VirtualNode From, byte[] Bytes)> Inbox { get; } = new();
+
+    /// <summary>Gets whether the node left the network: nothing reaches it any more, as with a closed socket.</summary>
+    internal bool Removed { get; set; }
+
+    /// <summary>
+    /// Gets an address of the node. The node's index takes two bytes, so a long run that opens a network for every join
+    /// never hands two nodes the same address; the first 255 nodes keep the addresses they always had.
+    /// </summary>
+    internal byte[] AddressOf(TransportPathKind kind)
+    {
+        var port = PortOf(kind);
+        return kind switch
+        {
+            TransportPathKind.Relayed => new byte[] { 100, 64, (byte)(index >> 8), (byte)index, (byte)(port >> 8), (byte)port },
+            TransportPathKind.Lan => new byte[] { 192, 168, (byte)(index >> 8), (byte)index, (byte)(port >> 8), (byte)port },
+            _ => new byte[] { 10, (byte)rebinds, (byte)(index >> 8), (byte)index, (byte)(port >> 8), (byte)port }
+        };
+    }
+
+    /// <summary>Gets whether <paramref name="key"/> is this node's address of <paramref name="kind"/>, without allocating.</summary>
+    internal bool Owns(byte[] key, TransportPathKind kind)
+    {
+        if (key.Length != 6 || key[2] != (byte)(index >> 8) || key[3] != (byte)index) return false;
+        var port = PortOf(kind);
+        if (key[4] != (byte)(port >> 8) || key[5] != (byte)port) return false;
+        return kind switch
+        {
+            TransportPathKind.Relayed => key[0] == 100 && key[1] == 64,
+            TransportPathKind.Lan => key[0] == 192 && key[1] == 168,
+            _ => key[0] == 10 && key[1] == (byte)rebinds
+        };
+    }
+
+    private int PortOf(TransportPathKind kind) => (kind == TransportPathKind.Relayed ? RelayPort : LanPort) + portOffset;
+
+    /// <summary>Moves the node to a new direct address, as a NAT does when its mapping expires; the old one goes dead.</summary>
+    internal void Rebind() => rebinds++;
+}
+
+/// <summary>
+/// A deterministic datagram network for transport tests. It carries the endpoints' own bytes with seeded latency,
+/// jitter, loss and duplication, enforces the 1,200-byte limit, and polls each endpoint exactly when its next timer
+/// falls due. With the same seeds, two runs exchange identical datagrams at identical times.
+/// </summary>
+internal sealed class VirtualDatagramNetwork
+{
+    private const int SpinLimit = 10_000;
+
+    private static readonly TransportPathKind[] Kinds = { TransportPathKind.Direct, TransportPathKind.Relayed, TransportPathKind.Lan };
+
+    private readonly Random random;
+    private readonly List<VirtualNode> nodes = new();
+    private readonly List<InFlight> inFlight = new();
+    private readonly List<(VirtualNode Node, long At)> retiring = new();
+    private readonly HashSet<(VirtualNode, VirtualNode)> partitions = new();
+    private readonly Dictionary<int, int> portsTaken = new();
+    private readonly IncrementalHash transcript = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    private long ordinal;
+    private int spinStreak;
+    private int nodeCount;
+
+    internal VirtualDatagramNetwork(int seed, long startMicros = 1_000_000)
+    {
+        random = new Random(seed);
+        Now = startMicros;
+    }
+
+    internal long Now { get; private set; }
+
+    internal NetworkConditions Conditions { get; } = new();
+
+    /// <summary>Gets or sets the router attachments' datagrams take; without one they go nowhere.</summary>
+    internal IVirtualRouter? Router { get; set; }
+
+    /// <summary>Gets or sets the largest datagram the network carries: 1,200 bytes, or more where TURN framing rides on top.</summary>
+    internal int MaximumDatagramBytes { get; set; } = TransportOptions.MaximumDatagramBytes;
+
+    /// <summary>Gets or sets a filter that loses the datagrams it returns true for, on top of the random loss.</summary>
+    internal Func<VirtualNode, VirtualNode, byte[], bool>? Drop { get; set; }
+
+    /// <summary>Gets or sets an observer of every datagram an endpoint sends, before the network acts on it.</summary>
+    internal Action<VirtualNode, VirtualNode?, byte[]>? Observe { get; set; }
+
+    /// <summary>Gets or sets an observer that also sees the path each datagram was addressed to, and so its kind.</summary>
+    internal Action<VirtualNode, TransportPath, byte[]>? ObservePath { get; set; }
+
+    /// <summary>Gets or sets a filter on the destination path, which can make one kind of path unreachable.</summary>
+    internal Func<VirtualNode, TransportPath, bool>? Unreachable { get; set; }
+
+    internal long Sent { get; private set; }
+
+    internal long Delivered { get; private set; }
+
+    internal long Lost { get; private set; }
+
+    internal long Duplicated { get; private set; }
+
+    /// <summary>Gets how often an endpoint reported a timer already due right after it was polled: a busy loop.</summary>
+    internal long Spins { get; private set; }
+
+    internal VirtualNode AddEndpoint(string name, TransportEndpoint endpoint) => Add(name, endpoint);
+
+    internal VirtualNode AddRaw(string name) => Add(name, null);
+
+    /// <summary>
+    /// Attaches a network stack. With <paramref name="sharesAddressOf"/>, the new node takes that node's address and a port
+    /// of its own, as another socket on the same machine does, so it reaches the same hosts from the same network. With
+    /// <paramref name="samePort"/> as well, it takes that node's port too, as the next socket bound to a port the last one
+    /// let go: the node it replaces must already have left the network.
+    /// </summary>
+    internal VirtualNode AddStack(string name, NetworkStack stack, VirtualNode? sharesAddressOf = null, bool samePort = false)
+    {
+        VirtualNode node;
+        if (sharesAddressOf == null)
+        {
+            node = new VirtualNode(name, ++nodeCount, null, stack);
+        }
+        else if (samePort)
+        {
+            if (nodes.Exists(existing => existing.AddressIndex == sharesAddressOf.AddressIndex && existing.PortOffset == sharesAddressOf.PortOffset))
+            {
+                throw new InvalidOperationException("Another node still holds that address and port.");
+            }
+
+            node = new VirtualNode(name, sharesAddressOf.AddressIndex, null, stack, sharesAddressOf.PortOffset);
+        }
+        else
+        {
+            var offset = portsTaken.TryGetValue(sharesAddressOf.AddressIndex, out var taken) ? taken + 1 : 1;
+            portsTaken[sharesAddressOf.AddressIndex] = offset;
+            node = new VirtualNode(name, sharesAddressOf.AddressIndex, null, stack, offset);
+        }
+
+        nodes.Add(node);
+        return node;
+    }
+
+    /// <summary>Names the host a virtual path reaches, without its port, as the game does for UDP; null through a relay.</summary>
+    internal static string? SourceOf(TransportPath path) =>
+        path.Kind == TransportPathKind.Relayed || path.KeyBytes.Length != 6 ? null : Convert.ToHexString(path.KeyBytes, 0, 4);
+
+    /// <summary>Names the network a virtual path comes from: its four address bytes as an IPv4 address, never the port; null through a relay.</summary>
+    internal static byte[]? NetworkOf(TransportPath path)
+    {
+        var key = path.KeyBytes;
+        return path.Kind == TransportPathKind.Relayed || key.Length != 6 ? null : new byte[] { 4, key[0], key[1], key[2], key[3] };
+    }
+
+    /// <summary>Gets how many nodes are attached now; retired ones no longer count.</summary>
+    internal int NodeCount => nodes.Count;
+
+    /// <summary>
+    /// Takes a node off the network at <paramref name="atMicros"/>, the way a network thread disposes its stack once a
+    /// stop's grace period ends: the stack is disposed, which wipes its keys, and datagrams still on their way to it are
+    /// lost. Until then the node keeps running, so graceful closes still go out.
+    /// </summary>
+    internal void Retire(VirtualNode node, long atMicros)
+    {
+        if (node.Removed || retiring.Exists(entry => ReferenceEquals(entry.Node, node))) return;
+        retiring.Add((node, Math.Max(atMicros, Now)));
+    }
+
+    /// <summary>Adds an attachment. Nodes are polled in the order added, so one that feeds others, like signaling, goes first.</summary>
+    internal VirtualNode AddAttachment(string name, IVirtualAttachment attachment)
+    {
+        var node = new VirtualNode(name, ++nodeCount, null, null, attachment: attachment);
+        nodes.Add(node);
+        return node;
+    }
+
+    /// <summary>Gets the path a node uses to reach <paramref name="target"/>: its address, as the I/O layer would key it.</summary>
+    internal static TransportPath PathTo(VirtualNode target, TransportPathKind kind = TransportPathKind.Direct) =>
+        new(target.AddressOf(kind), kind);
+
+    /// <summary>Sends bytes from a node as if its socket had, through the same conditions as endpoint traffic.</summary>
+    internal void Inject(VirtualNode from, VirtualNode to, byte[] bytes, TransportPathKind kind = TransportPathKind.Direct) =>
+        Schedule(from, to, kind, (byte[])bytes.Clone());
+
+    /// <summary>Cuts or restores both directions between two nodes. Datagrams already in flight still arrive.</summary>
+    internal void Partition(VirtualNode left, VirtualNode right, bool cut)
+    {
+        if (cut)
+        {
+            partitions.Add((left, right));
+            partitions.Add((right, left));
+        }
+        else
+        {
+            partitions.Remove((left, right));
+            partitions.Remove((right, left));
+        }
+    }
+
+    internal void RunFor(long micros) => RunUntil(Now + micros);
+
+    /// <summary>Delivers datagrams and runs timers in time order until <paramref name="time"/>.</summary>
+    internal void RunUntil(long time)
+    {
+        while (true)
+        {
+            Settle();
+            var next = NextEvent();
+            if (next > time) break;
+            Now = Advance(next);
+        }
+
+        Now = Math.Max(Now, time);
+        Settle();
+    }
+
+    /// <summary>Runs until <paramref name="condition"/> holds, checking after every event; false if time ran out first.</summary>
+    internal bool RunUntil(Func<bool> condition, long maximumMicros)
+    {
+        var deadline = Now + maximumMicros;
+        while (true)
+        {
+            Settle();
+            if (condition()) return true;
+
+            // The condition may read frames or queue sends, as an application would; endpoints answer at once.
+            Settle();
+            var next = NextEvent();
+            if (next > deadline) return false;
+            Now = Advance(next);
+        }
+    }
+
+    /// <summary>
+    /// Gets the time to move to. A timer already due right after a poll is a busy loop: it is counted, the clock
+    /// creeps forward a microsecond, and a long streak fails the test rather than crawling through virtual time.
+    /// </summary>
+    private long Advance(long next)
+    {
+        if (next > Now)
+        {
+            spinStreak = 0;
+            return next;
+        }
+
+        Spins++;
+        if (++spinStreak > SpinLimit) throw new InvalidOperationException("An endpoint keeps reporting a timer that is already due, so it would never sleep.");
+        return Now + 1;
+    }
+
+    /// <summary>Gets a hash of every datagram sent so far, with its time, sender and receiver.</summary>
+    internal string TranscriptHash() => Convert.ToHexString(transcript.GetCurrentHash());
+
+    private VirtualNode Add(string name, TransportEndpoint? endpoint)
+    {
+        var node = new VirtualNode(name, ++nodeCount, endpoint);
+        nodes.Add(node);
+        return node;
+    }
+
+    private void Settle()
+    {
+        RetireDue();
+        while (inFlight.Count > 0 && inFlight[0].DeliverAt <= Now)
+        {
+            var datagram = inFlight[0];
+            inFlight.RemoveAt(0);
+            var to = datagram.To;
+            if (to.Removed)
+            {
+                Lost++;
+                continue;
+            }
+
+            Delivered++;
+            if (to.Attachment != null) to.Attachment.Receive(datagram.Source, datagram.Destination!, datagram.Bytes, Now);
+            else if (to.Stack != null) to.Stack.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
+            else if (to.Endpoint != null) to.Endpoint.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
+            else to.Inbox.Enqueue((datagram.From, datagram.Bytes));
+        }
+
+        foreach (var node in nodes)
+        {
+            if (node.Attachment != null)
+            {
+                node.Attachment.Poll(Now);
+                while (node.Attachment.TryDequeue(out var source, out var destination, out var datagram)) Dispatch(node, source, destination, datagram);
+                continue;
+            }
+
+            if (node.Endpoint == null) continue;
+            if (node.Stack != null) node.Stack.Poll(Now);
+            else node.Endpoint.Poll(Now);
+            while (TryDequeue(node, out var outgoing))
+            {
+                var bytes = new byte[outgoing.Length];
+                Buffer.BlockCopy(outgoing.Buffer, 0, bytes, 0, outgoing.Length);
+                var (target, kind) = Resolve(outgoing.Path.KeyBytes);
+                node.Endpoint.Release(outgoing);
+                Observe?.Invoke(node, target, bytes);
+                ObservePath?.Invoke(node, outgoing.Path, bytes);
+                if (target == null || (Unreachable?.Invoke(node, outgoing.Path) ?? false)) Lost++;
+                else Schedule(node, target, kind, bytes);
+            }
+        }
+    }
+
+    /// <summary>Routes an attachment's datagram: the router decides the receiver and what it sees, or loses it.</summary>
+    private void Dispatch(VirtualNode from, TransportPath? source, TransportPath destination, byte[] bytes)
+    {
+        ObservePath?.Invoke(from, destination, bytes);
+        var route = Router?.Route(from, source, destination, Now);
+        Observe?.Invoke(from, route?.To, bytes);
+        if (route == null)
+        {
+            Lost++;
+            return;
+        }
+
+        Schedule(from, route.Value.To, route.Value.Source, route.Value.Destination, bytes);
+    }
+
+    private static bool TryDequeue(VirtualNode node, out OutgoingDatagram datagram) =>
+        node.Stack != null ? node.Stack.TryDequeueDatagram(out datagram) : node.Endpoint!.TryDequeueDatagram(out datagram);
+
+    /// <summary>Finds the node and kind an address belongs to; an address a rebinding retired belongs to nobody.</summary>
+    private (VirtualNode? Node, TransportPathKind Kind) Resolve(byte[] key)
+    {
+        foreach (var node in nodes)
+        {
+            foreach (var kind in Kinds)
+            {
+                if (node.Owns(key, kind)) return (node, kind);
+            }
+        }
+
+        return (null, TransportPathKind.Direct);
+    }
+
+    private void RetireDue()
+    {
+        for (var index = retiring.Count - 1; index >= 0; index--)
+        {
+            var (node, at) = retiring[index];
+            if (at > Now) continue;
+            retiring.RemoveAt(index);
+            node.Removed = true;
+            nodes.Remove(node);
+            node.Stack?.Dispose();
+        }
+    }
+
+    private long NextEvent()
+    {
+        var next = inFlight.Count > 0 ? inFlight[0].DeliverAt : long.MaxValue;
+        foreach (var (_, at) in retiring) next = Math.Min(next, at);
+        foreach (var node in nodes)
+        {
+            if (node.Attachment != null) next = Math.Min(next, node.Attachment.NextTimeoutMicros());
+            else if (node.Stack != null) next = Math.Min(next, node.Stack.NextTimeoutMicros());
+            else if (node.Endpoint != null) next = Math.Min(next, node.Endpoint.NextTimeoutMicros());
+        }
+
+        return next;
+    }
+
+    /// <summary>The receiver sees the sender's address of the same kind, as it stands when the datagram leaves.</summary>
+    private void Schedule(VirtualNode from, VirtualNode to, TransportPathKind kind, byte[] bytes) =>
+        Schedule(from, to, new TransportPath(from.AddressOf(kind), kind), null, bytes);
+
+    private void Schedule(VirtualNode from, VirtualNode to, TransportPath source, TransportPath? destination, byte[] bytes)
+    {
+        if (bytes.Length > MaximumDatagramBytes) throw new InvalidOperationException("A datagram exceeded " + MaximumDatagramBytes + " bytes.");
+        Sent++;
+        transcript.AppendData(BitConverter.GetBytes(Now));
+        transcript.AppendData(new[] { from.Address[3], to.Address[3], (byte)source.Kind });
+        transcript.AppendData(BitConverter.GetBytes(bytes.Length));
+        transcript.AppendData(bytes);
+        var lost = random.NextDouble() < Conditions.LossRate;
+        var copies = random.NextDouble() < Conditions.DuplicateRate ? 2 : 1;
+        if (lost || to.Removed || partitions.Contains((from, to)) || (Drop?.Invoke(from, to, bytes) ?? false))
+        {
+            Lost++;
+            return;
+        }
+
+        if (copies == 2) Duplicated++;
+        for (var copy = 0; copy < copies; copy++)
+        {
+            var jitter = Conditions.JitterMicros > 0 ? random.NextInt64(0, Conditions.JitterMicros + 1) : 0;
+            Insert(new InFlight(Now + Math.Max(1, Conditions.LatencyMicros) + jitter, ++ordinal, from, to, source, destination, bytes));
+        }
+    }
+
+    private void Insert(InFlight datagram)
+    {
+        var index = inFlight.Count;
+        while (index > 0 && inFlight[index - 1].DeliverAt > datagram.DeliverAt) index--;
+        inFlight.Insert(index, datagram);
+    }
+
+    private sealed record InFlight(long DeliverAt, long Ordinal, VirtualNode From, VirtualNode To, TransportPath Source, TransportPath? Destination, byte[] Bytes);
+}

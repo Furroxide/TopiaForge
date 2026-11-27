@@ -9,6 +9,7 @@ extension _TopiaForgeCheckCommands on _TopiaForgeCli {
 
   Future<int> _check(List<String> args) async {
     return switch (args.firstOrNull) {
+      'world' => _checkWorld(args.skip(1).toList()),
       'project' => _checkProject(
         _option(args, '--project') ?? args.skip(1).firstOrNull,
       ),
@@ -81,7 +82,10 @@ extension _TopiaForgeCheckCommands on _TopiaForgeCli {
       final sizeMb = (package.byteLength / (1024 * 1024)).toStringAsFixed(1);
       stdout.writeln('sha256=${package.sha256Hex} ($sizeMb MB)');
     }
-    final issues = manifest.validate();
+    final issues = [
+      ...manifest.validate(),
+      ...developerRepository.manifestFeatures.validate(manifest),
+    ];
     _printIssues(issues);
     var failed = issues.any((issue) => issue.isBlocking);
     if (package != null) {

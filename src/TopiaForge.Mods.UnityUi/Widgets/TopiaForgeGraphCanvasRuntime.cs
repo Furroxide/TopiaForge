@@ -14,9 +14,11 @@ namespace TopiaForge.Mods.UnityUi
         private readonly GameObject go;
         private readonly Image fill;
         private readonly Image ring;
+        private readonly TopiaForgeRoundedImage headerFill;
         private readonly TextMeshProUGUI title;
         private readonly TextMeshProUGUI subtitle;
         private readonly Button button;
+        private readonly TopiaForgeControlFocus? focus;
         private readonly TopiaForgeGraphNodeDrag drag;
         private readonly List<TopiaForgeGraphPortView> portViews = new List<TopiaForgeGraphPortView>();
         private UiGraphNode node = null!;
@@ -35,30 +37,34 @@ namespace TopiaForge.Mods.UnityUi
             fill = go.AddComponent<Image>();
             fill.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Control);
             fill.type = Image.Type.Sliced;
+            // The shell still receives node drags across its full area.
             fill.raycastTarget = true;
-            button = go.AddComponent<Button>();
-            button.targetGraphic = fill;
-            button.onClick.AddListener(Select);
 
             ring = CreateImage(go.transform, "Ring", TopiaForgeSprites.Ring(
                 TopiaForgeRadius.Control,
                 TopiaForgeTokens.BorderStandard));
 
-            title = CreateLabel(go.transform, "Title", TopiaForgeTextStyle.Heading, TextAlignmentOptions.TopLeft);
-            SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(-20f, 24f));
-            title.margin = new Vector4(10f, 0f, 10f, 0f);
+            var header = new GameObject("Header", typeof(RectTransform));
+            header.transform.SetParent(go.transform, false);
+            SetControlBox((RectTransform)header.transform, UiGraphControlGeometry.Header);
+            headerFill = AddControlFill(header);
+            button = header.AddComponent<Button>();
+            button.targetGraphic = headerFill;
+            button.onClick.AddListener(Select);
+            header.AddComponent<TopiaForgeGraphFocusRelay>().Attach(owner);
 
-            subtitle = CreateLabel(go.transform, "Subtitle", TopiaForgeTextStyle.Caption, TextAlignmentOptions.TopLeft);
-            SetRect(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0.5f, 1f), new Vector2(0f, -32f), new Vector2(-20f, 20f));
-            subtitle.margin = new Vector4(10f, 0f, 10f, 0f);
+            title = CreateLabel(header.transform, "Title", TopiaForgeTextStyle.Label, TextAlignmentOptions.TopLeft);
+            SetHeaderLabel(title.rectTransform, UiGraphControlGeometry.TitleTop, UiGraphControlGeometry.TitleHeight);
+            subtitle = CreateLabel(header.transform, "Subtitle", TopiaForgeTextStyle.Caption, TextAlignmentOptions.TopLeft);
+            SetHeaderLabel(subtitle.rectTransform, UiGraphControlGeometry.SubtitleTop, UiGraphControlGeometry.SubtitleHeight);
 
             drag = go.AddComponent<TopiaForgeGraphNodeDrag>();
             drag.Bind(owner, string.Empty);
+            focus = TopiaForgeControlFocus.Install(owner, button);
         }
 
         public RectTransform Rect { get; }
+        internal Selectable FocusControl => button;
         public string NodeId => node != null ? node.Id : string.Empty;
         public bool Enabled => node != null && node.Enabled;
         public bool Active => go.activeSelf;
@@ -71,7 +77,7 @@ namespace TopiaForge.Mods.UnityUi
             graphPosition = new Vector2(value.Position.X, value.Position.Y);
             title.text = value.Title;
             subtitle.text = string.IsNullOrEmpty(value.Subtitle) ? value.Type : value.Subtitle;
-            Rect.sizeDelta = new Vector2(TopiaForgeGraphCanvas.NodeWidth, TopiaForgeGraphCanvas.HeightFor(value));
+            Rect.sizeDelta = new Vector2(UiGraphControlGeometry.NodeWidth, UiGraphControlGeometry.NodeHeight(value));
             drag.Bind(owner, value.Id);
 
             while (portViews.Count < value.Ports.Count)
@@ -107,13 +113,36 @@ namespace TopiaForge.Mods.UnityUi
             if (!Active || node == null) return;
             var interactive = canvasEnabled && node.Enabled;
             button.interactable = interactive;
-            fill.color = interactive ? theme.Surface : theme.Tint;
-            ring.color = selected ? theme.FocusRing : owner.ToneColor(theme, node.Tone);
-            title.color = interactive ? theme.Text : theme.TextFaint;
-            subtitle.color = interactive ? theme.TextMuted : theme.TextFaint;
+            var role = UiControlPaint.GraphNodeBackground(interactive, selected);
+            focus?.SetBackdrop(theme, role);
+            headerFill.SetShape(theme.Descriptor?.Shape.Control);
+            TopiaForgeTypography.ApplyControlText(title, theme, TopiaForgeTextStyle.Label, owner.Host.EffectiveUiScale);
+            TopiaForgeTypography.ApplyControlText(subtitle, theme, TopiaForgeTextStyle.Caption, owner.Host.EffectiveUiScale);
+            if (theme.FieldPaint(role, node.Tone, interactive) is { } paint)
+            {
+                button.colors = paint.ResolvedStates(button.colors);
+                fill.color = paint.Fill;
+                headerFill.color = paint.Fill;
+                title.color = paint.Content;
+                subtitle.color = paint.Content;
+                ring.color = selected ? theme.FocusRing : theme.BoundaryOn(UiPaintRole.Sunken);
+            }
+            else
+            {
+                fill.color = interactive ? theme.Surface : theme.Tint;
+                headerFill.color = fill.color;
+                title.color = interactive ? theme.Text : theme.TextFaint;
+                subtitle.color = interactive ? theme.TextMuted : theme.TextFaint;
+                ring.color = selected ? theme.FocusRing : owner.ToneColor(theme, node.Tone);
+            }
+
+            var border = theme.HighContrast ? 3 : TopiaForgeTokens.BorderStandard;
+            if (selected) border++;
+            ring.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Control, border);
             foreach (var port in portViews)
             {
-                port.ApplyTheme(theme, interactive, pendingNode && string.Equals(port.PortId, pendingPortId, StringComparison.Ordinal));
+                port.ApplyTheme(theme, interactive, role,
+                    pendingNode && string.Equals(port.PortId, pendingPortId, StringComparison.Ordinal));
             }
         }
 
@@ -131,7 +160,16 @@ namespace TopiaForge.Mods.UnityUi
             return image;
         }
 
-        private static TextMeshProUGUI CreateLabel(
+        internal static TopiaForgeRoundedImage AddControlFill(GameObject control)
+        {
+            var image = control.AddComponent<TopiaForgeRoundedImage>();
+            image.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Control);
+            image.type = Image.Type.Sliced;
+            image.raycastTarget = true;
+            return image;
+        }
+
+        internal static TextMeshProUGUI CreateLabel(
             Transform parent,
             string name,
             TopiaForgeTextStyle style,
@@ -143,6 +181,7 @@ namespace TopiaForge.Mods.UnityUi
             label.fontSize = TopiaForgeTokens.SizeOf(style);
             label.alignment = alignment;
             label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
             label.raycastTarget = false;
             var font = TopiaForgeFonts.For(style);
             if (font != null) label.font = font;
@@ -150,95 +189,23 @@ namespace TopiaForge.Mods.UnityUi
             return label;
         }
 
-        private static void SetRect(
-            RectTransform rect,
-            Vector2 anchorMin,
-            Vector2 anchorMax,
-            Vector2 pivot,
-            Vector2 position,
-            Vector2 size)
+        private static void SetHeaderLabel(RectTransform rect, float top, float height)
         {
-            rect.anchorMin = anchorMin;
-            rect.anchorMax = anchorMax;
-            rect.pivot = pivot;
-            rect.anchoredPosition = position;
-            rect.sizeDelta = size;
-        }
-    }
-
-    internal sealed class TopiaForgeGraphPortView
-    {
-        private readonly TopiaForgeGraphCanvas owner;
-        private readonly GameObject go;
-        private readonly Image hit;
-        private readonly Image indicator;
-        private readonly TextMeshProUGUI label;
-        private readonly Button button;
-        private string nodeId = string.Empty;
-        private UiGraphPort port = null!;
-
-        public TopiaForgeGraphPortView(TopiaForgeGraphCanvas owner, RectTransform parent)
-        {
-            this.owner = owner;
-            go = new GameObject("Port", typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            Rect = (RectTransform)go.transform;
-            hit = go.AddComponent<Image>();
-            hit.color = Color.clear;
-            hit.raycastTarget = true;
-            button = go.AddComponent<Button>();
-            button.targetGraphic = hit;
-            button.onClick.AddListener(Select);
-
-            var indicatorGo = new GameObject("Indicator", typeof(RectTransform));
-            indicatorGo.transform.SetParent(go.transform, false);
-            indicator = indicatorGo.AddComponent<Image>();
-            indicator.sprite = TopiaForgeSprites.Circle();
-            indicator.raycastTarget = false;
-
-            var labelGo = new GameObject("Label", typeof(RectTransform));
-            labelGo.transform.SetParent(go.transform, false);
-            label = TopiaForgeTmp.Create(labelGo);
-            label.fontSize = TopiaForgeTokens.CaptionSize;
-            label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.raycastTarget = false;
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, -top);
+            rect.sizeDelta = new Vector2(-2f * UiGraphControlGeometry.HeaderLabelInset, height);
         }
 
-        public RectTransform Rect { get; }
-        public string PortId => port != null ? port.Id : string.Empty;
-
-        public void Bind(string ownerNodeId, UiGraphPort value, int row)
+        internal static void SetControlBox(RectTransform rect, (float X, float Y, float Width, float Height) box)
         {
-            nodeId = ownerNodeId;
-            port = value;
-            label.text = value.Required ? value.Label + " *" : value.Label;
-            var input = value.Direction == UiGraphPortDirection.Input;
-            Rect.anchorMin = new Vector2(input ? 0f : 1f, 1f);
-            Rect.anchorMax = Rect.anchorMin;
-            Rect.pivot = new Vector2(input ? 0f : 1f, 1f);
-            Rect.anchoredPosition = new Vector2(input ? 8f : -8f, -58f - row * TopiaForgeGraphCanvas.PortRowHeight);
-            Rect.sizeDelta = new Vector2(96f, TopiaForgeGraphCanvas.PortRowHeight);
-            label.alignment = input ? TextAlignmentOptions.Left : TextAlignmentOptions.Right;
-            TopiaForgeAnchors.Stretch(label.rectTransform, input ? 14f : 0f, 0f, input ? 0f : 14f, 0f);
-            var dotRect = indicator.rectTransform;
-            dotRect.anchorMin = new Vector2(input ? 0f : 1f, 0.5f);
-            dotRect.anchorMax = dotRect.anchorMin;
-            dotRect.pivot = new Vector2(input ? 0f : 1f, 0.5f);
-            dotRect.anchoredPosition = Vector2.zero;
-            dotRect.sizeDelta = new Vector2(9f, 9f);
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = rect.anchorMin;
+            rect.pivot = rect.anchorMin;
+            rect.anchoredPosition = new Vector2(box.X, -box.Y);
+            rect.sizeDelta = new Vector2(box.Width, box.Height);
         }
-
-        public void SetActive(bool value) => go.SetActive(value);
-
-        public void ApplyTheme(TopiaForgeResolvedTheme theme, bool enabled, bool pending)
-        {
-            if (!go.activeSelf || port == null) return;
-            button.interactable = enabled;
-            label.color = enabled ? theme.TextMuted : theme.TextFaint;
-            indicator.color = pending ? theme.FocusRing : enabled ? theme.Primary : theme.TextFaint;
-        }
-
-        private void Select() => owner.HandlePortSelected(nodeId, port);
     }
 
     internal sealed class TopiaForgeGraphEdgeView
@@ -279,6 +246,15 @@ namespace TopiaForge.Mods.UnityUi
 
         public void Bind(UiGraphEdge value) => edge = value;
         public void SetActive(bool value) => go.SetActive(value);
+
+        internal void SetDirectPickingOnly(bool pointerOnly)
+        {
+            var navigation = button.navigation;
+            var mode = pointerOnly ? Navigation.Mode.None : Navigation.Mode.Automatic;
+            if (navigation.mode == mode) return;
+            navigation.mode = mode;
+            button.navigation = navigation;
+        }
 
         public void SetGeometry(Vector2 start, Vector2 end)
         {
@@ -350,7 +326,9 @@ namespace TopiaForge.Mods.UnityUi
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (!eventData.dragging) owner?.HandleCanvasSelected();
+            var target = eventData.pointerPressRaycast.gameObject;
+            if (!eventData.dragging && (target == null || target.GetComponentInParent<TopiaForgeGraphNodeDrag>() == null))
+                owner?.HandleCanvasSelected();
         }
     }
 }

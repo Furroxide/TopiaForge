@@ -19,6 +19,10 @@ namespace TopiaForge.Mods.UnityUi
         Grip,
         /// <summary>Selects the warning option.</summary>
         Warning,
+        /// <summary>Selects the microphone option (voice and talk indicators).</summary>
+        Microphone,
+        /// <summary>Selects the struck-through microphone option (muted voice).</summary>
+        MicrophoneOff,
     }
 
     /// <summary>
@@ -28,7 +32,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeIconRaster
     {
-        private readonly struct Segment
+        internal readonly struct Segment
         {
             public readonly float X1;
             public readonly float Y1;
@@ -81,6 +85,21 @@ namespace TopiaForge.Mods.UnityUi
             new Segment(0.08f, 0.14f, 0.50f, 0.88f),
         };
 
+        private static readonly Segment[] WarningBang = { new Segment(0.50f, 0.66f, 0.50f, 0.40f) };
+
+        private static readonly Segment MicrophoneBody = new Segment(0.50f, 0.52f, 0.50f, 0.72f);
+
+        private static readonly Segment[] MicrophoneStand =
+        {
+            new Segment(0.50f, 0.33f, 0.50f, 0.20f),
+            new Segment(0.36f, 0.18f, 0.64f, 0.18f),
+        };
+
+        private static readonly Segment[] MicrophoneSlash =
+        {
+            new Segment(0.18f, 0.86f, 0.82f, 0.14f),
+        };
+
         /// <summary>Coverage in [0, 1] for a pixel center in a size×size icon tile.</summary>
         public static float Coverage(TopiaForgeIcon icon, float px, float py, int size)
         {
@@ -124,14 +143,33 @@ namespace TopiaForge.Mods.UnityUi
                 case TopiaForgeIcon.Warning:
                     {
                         var triangle = Strokes(WarningTriangle, x, y, stroke);
-                        var bang = Strokes(new[] { new Segment(0.50f, 0.66f, 0.50f, 0.40f) }, x, y, stroke * 1.1f);
+                        var bang = Strokes(WarningBang, x, y, stroke * 1.1f);
                         var dot = Disc(x, y, 0.50f, 0.28f, 0.045f, stroke);
                         return Math.Max(triangle, Math.Max(bang, dot));
+                    }
+
+                case TopiaForgeIcon.Microphone:
+                    return Microphone(x, y, stroke);
+
+                case TopiaForgeIcon.MicrophoneOff:
+                    {
+                        // The slash cuts a gap through the microphone so it reads at small sizes.
+                        var slash = Strokes(MicrophoneSlash, x, y, stroke);
+                        var gap = Strokes(MicrophoneSlash, x, y, stroke * 1.8f);
+                        return Math.Max(Microphone(x, y, stroke) * (1f - gap), slash);
                     }
 
                 default:
                     return 0f;
             }
+        }
+
+        private static float Microphone(float x, float y, float stroke)
+        {
+            var body = Clamp01((stroke - (DistanceToSegment(x, y, MicrophoneBody) - 0.10f)) / stroke);
+            var holder = y <= 0.58f ? RingDisc(x, y, 0.50f, 0.58f, 0.25f, stroke) : 0f;
+            var stand = Strokes(MicrophoneStand, x, y, stroke);
+            return Math.Max(body, Math.Max(holder, stand));
         }
 
         private static float Strokes(Segment[] segments, float x, float y, float strokeRadius)
@@ -158,7 +196,7 @@ namespace TopiaForge.Mods.UnityUi
             return Clamp01((stroke * 0.5f - dist) / (stroke * 0.5f) * 1.5f);
         }
 
-        private static float DistanceToSegment(float px, float py, Segment segment)
+        internal static float DistanceToSegment(float px, float py, Segment segment)
         {
             var vx = segment.X2 - segment.X1;
             var vy = segment.Y2 - segment.Y1;
@@ -169,12 +207,12 @@ namespace TopiaForge.Mods.UnityUi
             return Length(wx - (t * vx), wy - (t * vy));
         }
 
-        private static float Length(float x, float y)
+        internal static float Length(float x, float y)
         {
             return (float)Math.Sqrt((x * x) + (y * y));
         }
 
-        private static float Clamp01(float value)
+        internal static float Clamp01(float value)
         {
             return value < 0f ? 0f : value > 1f ? 1f : value;
         }

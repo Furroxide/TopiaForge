@@ -25,14 +25,21 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/starlight": "0.41.3",
-    "astro": "7.1.5",
-    "sharp": "0.35.3"
+    "@astrojs/starlight": "0.41.7",
+    "astro": "7.4.7",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
-    "@astrojs/check": "0.9.9",
+    "@astrojs/check": "0.9.10",
     "pagefind": "1.5.2",
     "typescript": "6.0.3",
     "yaml": "2.9.0"
+  },
+  "overrides": {
+    "fast-uri": ">=3.1.9 <4",
+    "postcss-selector-parser": ">=6.1.5 <7",
+    "vite": ">=8.3.5 <9",
+    "zod": ">=4.6.7 <5",
+    "undici": ">=8.12.2 <9"
   }
 }

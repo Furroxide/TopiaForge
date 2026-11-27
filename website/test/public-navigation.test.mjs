@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { pages } from '../scripts/docs/catalog.mjs';
+import { pages, routeForOutput } from '../scripts/docs/catalog.mjs';
+import { LocalDocumentationLinkRewriter } from '../scripts/docs/local-links.mjs';
+import { checkMarkdownLinks } from '../scripts/lib/markdown-links.mjs';
 
 const configPath = fileURLToPath(new URL('../astro.config.mjs', import.meta.url));
 const configSource = readFileSync(configPath, 'utf8');
@@ -13,8 +16,129 @@ test('creator guides are published and discoverable in the public sidebar', () =
     pages.map((page) => [page.sourcePath, page.outputPath]),
   );
 
-  assert.equal(routesBySource.get('docs/CreatorTools.md'), 'guides/creator-tools.md');
+  // The standalone Creator Tools guide went with its package; Sandbox owns the workbench.
+  assert.equal(routesBySource.get('docs/CreatorTools.md'), undefined);
   assert.equal(routesBySource.get('docs/Sandbox.md'), 'guides/sandbox.md');
-  assert.match(configSource, /slug: 'guides\/creator-tools'/u);
+  assert.doesNotMatch(configSource, /slug: 'guides\/creator-tools'/u);
   assert.match(configSource, /slug: 'guides\/sandbox'/u);
+});
+
+test('saved map guidance is published and discoverable for players', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]));
+  const route = sourceToRoute.get('docs/CreatorCloud.md');
+  assert.equal(route, '/guides/saved-published-maps/');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const source = readFileSync(new URL('../../docs/MapWorlds.md', import.meta.url), 'utf8');
+  assert.ok(links.rewrite('docs/MapWorlds.md', source).includes(`](${route})`));
+  assert.deepEqual(failures, []);
+  assert.match(configSource, /label: 'Play',[\s\S]*?slug: 'guides\/saved-published-maps'/u);
+});
+
+test('map world guidance connects manifest and diagnostics links to the author sidebar', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  const route = sourceToRoute.get('docs/MapWorlds.md');
+  assert.equal(route, '/guides/map-worlds/');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  for (const source of ['docs/ManifestV6.md', 'docs/Diagnostics.md']) {
+    const content = readFileSync(new URL(`../../${source}`, import.meta.url), 'utf8');
+    assert.ok(content.includes('(MapWorlds.md)'), source);
+    assert.ok(links.rewrite(source, content).includes(`](${route})`), source);
+  }
+  assert.deepEqual(failures, []);
+  const authorGuides = /label: 'Build mods',\s*items: \[([\s\S]*?)\],/u.exec(configSource);
+  assert.ok(authorGuides?.[1].includes(`slug: '${route.slice(1, -1)}'`),
+    'map world guide is discoverable in the author sidebar');
+});
+
+test('Players guide publication connects incoming links and the author sidebar', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const preparation = spawnSync(
+    process.execPath,
+    ['website/scripts/prepare-docs.mjs', '--check'],
+    { cwd: repositoryRoot, encoding: 'utf8' },
+  );
+  assert.ifError(preparation.error);
+  assert.equal(preparation.status, 0, preparation.stdout + preparation.stderr);
+
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  const route = sourceToRoute.get('docs/Players.md');
+  assert.equal(route, '/guides/players/');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  for (const source of ['docs/Multiplayer.md', 'docs/TestingMods.md']) {
+    const content = readFileSync(new URL(`../../${source}`, import.meta.url), 'utf8');
+    assert.ok(content.includes('[Act on players](Players.md)'), source);
+    assert.ok(links.rewrite(source, content).includes(`[Act on players](${route})`), source);
+  }
+  assert.deepEqual(failures, []);
+
+  const authorGuides = /label: 'Build mods',\s*items: \[([\s\S]*?)\],/u.exec(configSource);
+  assert.ok(authorGuides, 'author guide sidebar exists');
+  assert.ok(authorGuides[1].includes(`slug: '${route.slice(1, -1)}'`),
+    'Players guide is discoverable in the author sidebar');
+});
+
+test('UI guide keeps its internal presentation reference outside the public catalog', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  assert.equal(sourceToRoute.get('docs/UiKit.md'), '/guides/ui/');
+  assert.equal(sourceToRoute.has('docs/internal/MultiplayerRuntimeIntegration.md'), false);
+  const content = readFileSync(new URL('../../docs/UiKit.md', import.meta.url), 'utf8');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const rewritten = links.rewrite('docs/UiKit.md', content);
+  assert.deepEqual(failures, []);
+  const reference = /\[presentation routing\]\(https:\/\/github\.com\/Furroxide\/TopiaForge\/blob\/[a-f0-9]{40}\/docs\/internal\/MultiplayerRuntimeIntegration\.md#scoreboard-seam-and-later-presentation\)/u;
+  assert.match(content, reference);
+  assert.match(rewritten, reference);
+});
+
+test('private per-player author guidance links resolve without publishing runtime internals', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  assert.equal(sourceToRoute.get('docs/Multiplayer.md'), '/guides/multiplayer/');
+  assert.equal(sourceToRoute.has('docs/internal/MultiplayerPrivateState.md'), false);
+  const sourcePath = 'docs/Multiplayer.md';
+  const content = readFileSync(new URL(`../../${sourcePath}`, import.meta.url), 'utf8');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const rewritten = links.rewrite(sourcePath, content);
+  assert.deepEqual(failures, []);
+  assert.deepEqual(checkMarkdownLinks({ repositoryRoot, sourcePaths: [sourcePath] }), []);
+  assert.match(rewritten, /\[private delivery\]\(#private-per-player-delivery\)/u);
+  assert.match(content, /^## Private per-player delivery$/mu);
+  assert.doesNotMatch(content, /IInternalSystemChannel|## Engine wire channel|## Runtime consumer channel/u);
+});
+
+
+test('participant appearance guide publishes its source and incoming link in the author sidebar', () => {
+  const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const sourceToRoute = new Map(
+    pages.map((page) => [page.sourcePath, routeForOutput(page.outputPath)]),
+  );
+  const route = sourceToRoute.get('docs/ParticipantAppearance.md');
+  assert.equal(route, '/guides/participant-appearance/');
+  const failures = [];
+  const links = new LocalDocumentationLinkRewriter(repositoryRoot, sourceToRoute, failures);
+  const source = readFileSync(new URL('../../docs/Multiplayer.md', import.meta.url), 'utf8');
+  assert.ok(source.includes('(ParticipantAppearance.md)'));
+  assert.ok(links.rewrite('docs/Multiplayer.md', source).includes(`](${route})`));
+  const guide = readFileSync(new URL('../../docs/ParticipantAppearance.md', import.meta.url), 'utf8');
+  links.rewrite('docs/ParticipantAppearance.md', guide);
+  assert.deepEqual(failures, []);
+  const authorGuides = /label: 'Build mods',\s*items: \[([\s\S]*?)\],/u.exec(configSource);
+  assert.ok(authorGuides?.[1].includes(`slug: '${route.slice(1, -1)}'`),
+    'participant appearance is discoverable in the author sidebar');
 });

@@ -16,7 +16,9 @@ and CI stop after installation. The complete command surface is:
 
 ```text
 topiaforge dev [--project path] [--configuration name] [--game-dir path]
-               [--launch|--no-launch] [--tail|--no-tail]
+               [--launch|--no-launch] [--tail|--no-tail] [--profile id]
+               [--target id [--world id] [--transition mode] | --main-menu]
+               [--no-wait | --wait-seconds 1..300] [--peers 2..8]
 ```
 
 Use `--project` outside the mod directory, `--configuration` for a bounded MSBuild configuration
@@ -28,7 +30,7 @@ The V1 development loop performs these stages in order:
 
 1. Seed the release-local SDK source and restore exact package/lock state.
 2. Build the mod with the pinned project-local .NET SDK.
-3. Run the generated test project.
+3. Synchronize the multiplayer contract lock, when declared, then run the generated test project.
 4. Pack a deterministic `.topiaforgemod` archive.
 5. Validate the manifest, managed entry assembly, package layout, and integrity.
 6. Install the validated package into the selected Robotopia development profile.
@@ -40,16 +42,95 @@ Validation is metadata-only: the release-carried validator does not load or exec
 rejects malformed PE files, wrong assembly identities/target frameworks, invalid entry types or
 constructors, incompatible SDK references, unsafe exported APIs, and bundled loader-owned SDK files.
 
+## Choose and confirm the launch
+
+Home and Setup select a manifest-declared launch target from the effective installed
+profile. Registry metadata cannot make a target launchable. For a development run,
+pass the target explicitly; the choice applies only to that run:
+
+```sh
+topiaforge dev --launch --target example.my-mod.play
+topiaforge launch --profile default --target example.my-mod.play
+topiaforge launch --main-menu
+```
+
+Without an override, launch uses the selected profile's versioned choice. An
+unavailable legacy choice stays visible and requires explicit repair; it never
+silently becomes Free Play or another mode. `--main-menu` overrides remembered
+autoload. Safe Mode always requests main-menu with no packages loaded.
+
+`--world` and `--transition` require `--target` and its policy's permission.
+Transition values are `scene-replacement` and `additive-arena`. `world link --world`
+selects an actual bundle-world declaration when the package is ambiguous;
+`world play --target <id>` carries that target through build, installation and
+preflight. A package ID is not a world or target ID.
+
+For `launch`, `restart`, `world play`, and the launch stage of `dev`, the CLI waits
+up to 30 seconds for a matching runtime acknowledgement by default. Exit 0 confirms
+Running for a target or Idle for main-menu; exit 1 reports blocked or failed startup;
+exit 3 means runtime confirmation is unavailable. Use `--wait-seconds` to choose a
+1–300 second deadline. Explicit `--no-wait` returns process-start status and labels
+the session unconfirmed. Ctrl+C stops waiting with exit 130 without terminating the
+game. Process creation alone never certifies gameplay. `dev --no-launch` can return
+0 after development work without starting or confirming a session.
+
+A competing launch is Busy. `restart` preflights the replacement before stopping
+anything and requires a process generation owned by the current launcher instance;
+a new CLI invocation does not acquire another process's ownership from its name.
+Close an unowned game yourself before launching the replacement. On Linux, configure
+the full path to the Wine/Proton executable; detached startup without a verified
+creation receipt cannot enable owned restart.
+
+## Local multiplayer peers
+
+From a built TopiaForge checkout, `topiaforge dev --peers 2 --target example.my-mod.play`
+prepares a private game overlay and launcher profile for each peer. Use a declared
+multiplayer target or a profile that already selects one. Peer 0 hosts on an automatic
+port; the others join its verified descriptor over `127.0.0.1`. Discovery, Internet
+services, router forwarding, voice and package serving are disabled for this loop.
+
+The command currently requires Windows, where original process creation receipts
+allow owned teardown. Linux and macOS refuse before preparation or process creation;
+their process ownership and native acceptance remain pending. The overlay helper
+uses Linux symlinks and macOS APFS clones for future platform qualification.
+Windows copies the executable and Unity player and junctions the large data and Mono
+directories. Each peer has its own
+BepInEx, launcher data and `-logFile` destination. Windowed arguments request 2560x1440;
+Robotopia may override them through its native preferences, which this command does
+not edit. Linux/Proton data-root conversion and macOS clone behavior still need platform
+verification. Native game preferences remain shared by the operating system.
+
+`--peers` explicitly launches even with redirected output and cannot combine with
+`--no-launch` or `--no-wait`. `--no-tail` hides streaming output but still reports a crash
+with its last log lines. Ctrl+C stops every process owned by the run before cleanup.
+An unconfirmed process, including a started process with no receipt, keeps its directory
+for manual recovery. A refused peer launch writes its full error to that peer's own
+launcher log, and the run keeps its `dev-instances` folder so the log stays readable;
+delete the folder after reading it. Failed or cancelled startup outcomes stop waiting immediately,
+and Ctrl+C cancels a pending descriptor fetch. Cleanup accepts only
+the unchanged, owned run below `dev-instances`, removing directory links first.
+The stages print elapsed milliseconds; initial host and join confirmation each allow
+two minutes. The source installation is never installed into by this peer command.
+
 ## Generated project state
 
 `global.json` pins the supported .NET SDK. `packages.lock.json` pins NuGet resolution and
 `topiaforge.sdk.lock.json` records the SDK package set. `topiaforge.dev.props` is generated by
 restore and is intentionally untracked; projects never depend on the CLI extraction directory.
 
+After NuGet restores, `topiaforge restore` reads each project's lock file. Every SDK package must be
+resolved at the SDK's version. When something outside the pinned `PackageReference` changes that
+version, such as a `Directory.Build.targets` item, the restore fails with
+[TF1102](Diagnostics.md#tf1102), and `topiaforge pack` refuses to pack.
+
 Run `topiaforge restore` after adding a module or dependency. Commit `packages.lock.json` and
 `topiaforge.sdk.lock.json` so CI and another developer restore the same contract versions. A
 multiplayer project also commits generator-owned `topiaforge.multiplayer.lock.json`; refresh it
 with `topiaforge mod sync multiplayer` after restore and whenever its multiplayer contract changes.
+The lock records only generated contract descriptors. Locks written before lock `schemaVersion` 3 also
+recorded the mod's protocol version, which turned every protocol bump into a content mismatch even inside a
+declared `peerVersionRange`; `topiaforge pack` rejects them with that explanation, and one
+`topiaforge mod sync multiplayer` rewrites them.
 
 ## Stage failures
 

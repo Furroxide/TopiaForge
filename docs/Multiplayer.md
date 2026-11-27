@@ -5,18 +5,22 @@ description: Build and deterministically test server-canonical TopiaForge mods f
 
 # Multiplayer API preview
 
-TopiaForge 1.0 remains standalone-only. `TopiaForge.Mods.Multiplayer` 1.0 freezes the future-facing public contract,
-generated wire format, real-game loopback provider, and deterministic multi-peer test rig before a supported live
-transport exists. Ordinary V5 mods keep standalone behavior when `multiplayer` is omitted; multiplayer support is an explicit
-module and manifest opt-in, not a claim that arbitrary local mutations can be synchronized safely.
+TopiaForge does not offer live multiplayer to players yet. Live sessions on a LAN or at a direct address already run,
+hosted and joined from the game's MULTIPLAYER tab, behind a developer switch that stays until a release turns live play
+on, as [How sessions work](#how-sessions-work) explains. `TopiaForge.Mods.Multiplayer` already freezes the public
+contract, the generated wire format, the session engine that runs solo play in the game, and a deterministic multi-peer
+test rig. A V6 mod that omits `multiplayer` is shared implicitly: admission requires the identical package on every
+peer, and `"mode": "standalone"` keeps a mod out of sessions. Replicated state, commands, and objects remain an explicit
+module opt-in, not a claim that arbitrary local mutations can be synchronized safely.
 
-`IMultiplayerSession` is a stable owner-scoped facade, not one match object. Bind the generated contract once for the
-mod lifetime. Its registrations survive sequential sessions; `Snapshot.Id` changes and `CurrentSessionToken` cancels
-when a match is replaced, while a new session starts from each replicated state's immutable declared default.
+`IMultiplayerSession` is a stable owner-scoped facade, not one match object. TopiaForge binds a mod's generated contract
+to it once, before `OnLoad`, for the mod's whole lifetime. Its registrations survive sequential sessions; `Snapshot.Id`
+changes and `CurrentSessionToken` cancels when a match is replaced, while a new session starts from each replicated
+state's immutable declared default.
 
 The architecture preserves the normal TopiaForge boundary: one BepInEx runtime sits behind Unity-free, owner-scoped
 contracts, deterministic launcher/profile tooling, and optional specialist modules. Multiplayer identities and roles
-therefore live in this module, not on `IModContext`, `IEntity`, `PlayerSnapshot`, or `WorldSession`.
+therefore live in this module, not on `IModContext`, `IEntity`, `PlayerSnapshot`, or `IGamemodeSession`.
 
 ## Authority and sides
 
@@ -29,6 +33,23 @@ contains logical client and server sides in one process without running a comman
 exist. A headless dedicated server has no local participant, input, UI, or ordinary audio. Process-local entity IDs,
 scene instance IDs, files, configuration, clock samples, and local player state never become network identities.
 
+## Moving physical bodies
+
+A shared player tool can use the existing `Context.Entities.AcquireMotion(entity)` lease. In a live session the
+runtime requests ownership, streams accepted motion, and ends the lease if another player wins. GravityGun uses this
+path unchanged. Throwing keeps a one-second simulation window after disposal, then returns the body's position and
+velocities to the host; another player may catch it during that window. Native held-item pickups use the same rules.
+
+Offline behavior stays local. Raw Unity writes outside the SDK lease cannot be attributed automatically to a player.
+Remote range uses the host's last validated presence position, never the position claimed in a motion packet. A player
+with no validated pose yet, a stale pose, or a lost link cannot acquire a remote body until a fresh pose is accepted.
+The first pose must be near the running world's actual readiness spawn or land on a placement the host requested.
+World and scene restarts clear old positions; reconnects retain validation history and movement allowances. If no
+trusted spawn or placement is available, remote presence and motion wait for one. This includes native levels running
+outside a world session. Authors using world providers need no extra spawn or networking calls.
+The motion limits and integration notes are maintainer-internal, in the "Motion ownership" section of
+`docs/internal/MultiplayerRuntimeIntegration.md`.
+
 ## Add the module
 
 ```sh
@@ -37,7 +58,7 @@ topiaforge restore
 topiaforge mod sync multiplayer
 ```
 
-This adds the stable contract, source generator, provider dependency, Manifest V5 metadata, and generated contract
+This adds the stable contract, source generator, provider dependency, Manifest V6 metadata, and generated contract
 lock. Resolve the provider through the existing extension boundary:
 
 ```csharp
@@ -46,6 +67,16 @@ var multiplayer = Context.RequireMultiplayer();
 
 Do not add sockets, Unity Netcode types, raw RPC numbers, transport objects, or separate client/server assemblies to a
 mod. The same class and generated contract run on the appropriate logical side.
+
+To start a new mod from a working contract instead, scaffold the `multiplayer` template:
+
+```sh
+topiaforge new mod example.counter --template multiplayer --name "Counter" --author "You" --license AGPL-3.0-or-later
+```
+
+It shares a host-owned count through one replicated state and one owner-predicted command with explicit rate and
+payload limits, and its tests play two peers, a late joiner, a new session and solo play on the test rig. Run
+`topiaforge restore` and then `topiaforge mod sync multiplayer` before you pack it.
 
 ## Generated authoring model
 
@@ -65,10 +96,7 @@ public partial class ScoreMod : TopiaForgeMod
 
     protected override void OnLoad()
     {
-        var binding = BindMultiplayer(Context.RequireMultiplayer());
-        if (!binding.TryGetValue(out var lease))
-            throw new InvalidOperationException(binding.ErrorMessage);
-        Context.Lifetime.Track(lease);
+        // The generated contract is already bound; there is nothing to wire up here.
     }
 
     [MultiplayerCommand("add-score", Prediction = PredictionMode.Owner)]
@@ -94,14 +122,35 @@ public partial class ScoreMod : TopiaForgeMod
 }
 ```
 
+TopiaForge binds the generated contract after it attaches `Context` and before `OnLoad` runs, so a contract needs no
+binding code. A mod that still calls `BindMultiplayer` for the same session gets a harmless success; mods compiled
+before automatic binding keep binding themselves. The session itself, for its `Snapshot` and its players, is the one the
+mod's own `Context.RequireMultiplayer()` returns, the same session the contract is bound to. Keep it in a field from
+`OnLoad` rather than resolving it every frame.
+
+To run code once per session, implement `partial void OnMultiplayerSessionStarted(MultiplayerSessionSnapshot
+snapshot)`, `OnMultiplayerSessionEnded(MultiplayerSessionSnapshot snapshot)`, or both. Started runs on the first
+`Ready` snapshot of each session. Ended runs with the last snapshot seen for it when it ends or another session
+replaces it. Both run on every peer, so check `snapshot.HasWorldAuthority` before spawning canonical objects. Contracts
+without either hook carry no session tracking at all.
+
+Each presentation event also gets `Emit...To` and `Publish...To`, which take a `PresentationTarget` such as
+`PresentationTarget.Only(player)` or `PresentationTarget.AllExcept(player)`.
+
 Ordinary commands receive the transport-authenticated `SenderId`; they must validate authorization against canonical
 session state. Only replicated-object handlers receive `ReplicatedObjectCommandContext`, whose `TargetObjectId` and
 `SenderOwnsTarget` are computed by the provider for the exact canonical object being mutated.
 
 Unsupported native or polymorphic payloads, recursive graphs, unbounded strings/arrays, invalid handler signatures,
 duplicate IDs, and generated proxy-name collisions fail compilation. Owner-predicted command and object handlers also
-fail compilation when they touch process-local context/services, mutate arbitrary fields, hide work behind author
-helpers/getters/constructors, or use random/clock APIs. Refresh the checked-in contract lock after changing a contract:
+fail compilation when they touch process-local context/services or events, mutate arbitrary fields, hand `this` to a
+helper, hide work behind getters or constructors, call a method the generator cannot read (another assembly's, or a
+virtual or async one), or use random/clock APIs. They may read their request, their state, their locals and arrays, copy
+and resize arrays, and call the mod's own methods, whose bodies answer to the same rules, so per-player state needs no
+host-only fallback. `command.CreateRandom()` is the prediction-safe source of random numbers. A warning flags a handler
+without prediction that drives local UI, input, player, audio, or Unity state, because only the host would see it. Each
+code is explained in the [diagnostics reference](Diagnostics.md#multiplayer-contract-diagnostics). Refresh the
+checked-in contract lock after changing a contract:
 
 ```sh
 topiaforge mod sync multiplayer
@@ -110,6 +159,54 @@ topiaforge mod sync multiplayer
 The command builds the mod, reads generator-owned metadata, and atomically writes the canonical wire IDs and schema
 hashes. `topiaforge pack` independently rebuilds and refuses a missing, stale, or edited lock, so protocol changes are
 reviewable without making authors maintain hashes by hand.
+
+## Submit a command and read its answer
+
+Each command gets a `Submit...` method, named after its handler. It submits one command and hands the host's answer
+to a callback:
+
+```csharp
+private void AddFive() =>
+    SubmitAddScore(new AddScoreRequest { Amount = 5 }, answer =>
+    {
+        if (!answer.Result.Succeeded && answer.Result.ErrorCode != ModErrorCode.Cancelled)
+            Context.Ui.ShowToast("The host refused: " + answer.Result.ErrorMessage, UiTone.Warning);
+    });
+```
+
+The answer, a `MultiplayerCommandConfirmation<T>`, follows these rules:
+
+- It runs once, on the main thread. Where this process holds world authority, solo play included, the host answers
+  its own player before `Submit...` returns. A client's answer runs in the frame that brings the host's result, a
+  round trip later.
+- It acts for whoever's action submitted the command: the answer to a player's press counts as that player's own
+  action, as the code after an `await` does (see [The player's own actions](#the-players-own-actions)).
+- It never runs once the mod stops. To tie it to a shorter scope, pass that scope's token, such as a gamemode
+  session's `Context.Lifetime.StoppingToken`. Cancelling the token also withdraws the submission.
+- A session that ends or is replaced, or a connection that drops, answers a waiting submission with `Cancelled`.
+- A callback that throws is logged, and the session carries on.
+- Nothing polls, so a mod with nothing in flight pays nothing per frame. Pass no callback when the answer adds
+  nothing, for example when replicated state already shows the result.
+
+`Submit...Async` returns the same confirmation as a task, for tests. Game code uses `Submit...` instead: waiting on
+the task blocks the very frame its answer needs (TF1008), and an awaited continuation can run after the mod stops.
+
+## Bandwidth budget
+
+A contract's declared client-to-server ceiling is the sum of `MaximumPerSecond` x `MaximumPayloadBytes` across its
+commands and replicated objects. TopiaForge budgets **256 kbit/s (32 KiB/s) per connection in each direction**, with a
+short burst allowance reserved for join, reconnect, and session-replacement snapshots. `TFMP014` warns when a
+contract's declared client-to-server total exceeds that budget. It is a warning, not an error: the attribute defaults
+(`MaximumPerSecond = 30`, `MaximumPayloadBytes = 16 KiB`) are permissive placeholders, and most contracts want far
+less than either. Declare the rate and payload your commands actually need.
+
+The budget is not part of the wire format. It is never encoded, never included in a schema digest, and never written
+to a contract lock, so tightening a declaration to satisfy `TFMP014` changes lock identity only through the
+`MaximumPerSecond` and `MaximumPayloadBytes` values you changed.
+
+The other direction is not checked. `[ReplicatedState]` and `[PresentationEvent]` declare no rate, and no contract
+declaration expresses participant fan-out, so a provider - not the generator - owns the server-to-client ceiling.
+Keep replicated state small and presentation events infrequent; the compiler cannot tell you when you have not.
 
 The generator also owns a wire-format revision that is embedded in every schema digest, descriptor, and contract-lock
 entry. Authors never set or copy it. Any change to the generated encoder's byte layout must bump this revision and the
@@ -131,6 +228,12 @@ invariants that generated code normally supplies.
 ## State, objects, commands, and presentation
 
 - `ReplicatedState<T>` is persistent for the current session and included in snapshots for late join/reconnect.
+  `Update` hands its updater a detached copy of the current value, so the updater may change that copy in place and
+  return it.
+- `PerPlayerState<T>` (SDK 0.2.0) uses `[ReplicatedState]` to declare a private field. The host assigns
+  `Set(player.Id, value)`; a client can `Get` only its own value and observe local changes with `SubscribeChanged`.
+  Private baselines and deltas go only to their player. See [private delivery](#private-per-player-delivery)
+  for defaults, bounds, reconnects, and transactions.
 - `[ReplicatedObject]` turns one transactional `(context, state, input)` handler into a registered wire type plus typed
   `Spawn...Object`, `TryGet...Object`, `Get...Objects`, and `Subscribe...Objects` proxies. Clients reconstruct objects
   through their own generated codecs and handlers; snapshots never carry server delegates.
@@ -142,34 +245,364 @@ invariants that generated code normally supplies.
   the generated bounded codec, while only presentation-capable peers attach the local handler; and
 - `MultiplayerSessionSnapshot` exposes readiness, participants, tick, session seed, logical sides, and process kind.
 
+Every handler the session or a contract calls runs on the game's main thread: session and state changes, presentation
+events, tick handlers and command confirmations. None of them may block. The session's `SubscribeChanged` runs at every
+network tick, because the snapshot's `Tick` advances, so a handler that redraws a HUD or window from the snapshot should
+first compare what it shows. A replicated state's `SubscribeChanged` runs only when the state is updated, never for a
+tick alone, and an update that writes the same value again runs it too.
+
+## Private per-player delivery
+
+`PerPlayerState<T>` (SDK 0.2.0) uses the existing contract generator and
+`[ReplicatedState("id")]` declaration. The runtime binds it automatically, just as
+it binds shared state. A field has a non-secret default and one value per admitted
+player. The host calls `Set(player.Id, value)`; participant code calls
+`Get(session.Players.Local.Id)` and observes `SubscribeChanged` for its own changes.
+Reads, writes and notifications use codec-detached copies. No author serialization,
+audience filtering, reconnect messages or frame polling is needed.
+
+```csharp
+[ReplicatedState("card")]
+private PerPlayerState<Card> card = new(new Card());
+
+public sealed class Card
+{
+    [NetworkBound(96)]
+    public string Text { get; set; } = "";
+}
+
+// In authoritative code, after the player is admitted:
+card.Set(player.Id, new Card { Text = "Your private assignment" });
+```
+
+The default is part of the mod assembly and must never contain a secret. A client
+receives only its own assigned value; it cannot read another player's value or
+write any value. A host can read and assign admitted players, including players
+retained during reconnect grace. Callers must check the returned operation result.
+Private state is not an anti-cheat boundary against the host or trusted in-process
+mods. Do not put private data in a shared DTO, command response to another player,
+or broadcast presentation event.
+
+### Bounds and lifetime
+
+- Generated codecs retain their normal DTO restrictions. Private codecs are limited to 16 KiB, and delivery must be
+  coalesced. `MaximumUpdatesPerSecond` is supported; a new baseline bypasses that rate limit.
+- At most 64 private fields can be registered across mods. Changing a field between shared and private changes its
+  contract digest; existing shared contracts keep their digests and namespaced IDs.
+- Host writes join the canonical transaction: failure rolls them back. Client prediction cannot write private state.
+  Local notifications run after commit and never report another player's changes.
+- Reconnect within grace keeps host values but starts a new baseline. Expiring a participant removes its private
+  values. Session replacement or end clears values; disposing the binding resets the remote value to its declared
+  default. Rebinding starts from the frozen default.
+- Until its first private baseline arrives, a client reads its declared default. Subscribe to changes to refresh local
+  presentation. Shared-session Ready does not promise that private presentation has already arrived.
+- A provider without private-state support fails binding as `Unavailable`, without a shared-state fallback.
+
+## Session contract for live play
+
+The contract also carries what live sessions need. It is additive, so existing mods compile and load unchanged.
+
+- `command.CreateRandom(salt)` returns a `DeterministicRandom` (xoshiro256** seeded through SplitMix64) built from
+  the session seed, the authenticated sender, and the sender-scoped `command.Sequence`. A predicted handler and the
+  server's canonical run draw identical values; never seed from `Tick` or wall-clock time. The sequence of values is
+  frozen for protocol major version 1.
+- `PresentationTarget` adds `Only(participant)` and `AllExcept(participant)` to the `Everyone`, `Sender`, and
+  `Others` audiences, both for events emitted from a command and for direct `PublishPresentation` calls.
+- `SubscribeTick` delivers canonical fixed steps on the main thread, only where this process holds world authority:
+  the host, or single-player play.
+- `IReplicatedObject.Apply` changes an object's state transactionally from server code outside an input handler,
+  such as a tick subscription.
+- `[ReplicatedState]` and `[ReplicatedObject]` accept `Delivery` (`Coalesced` by default, or `Immediate`) and
+  `MaximumUpdatesPerSecond` (zero uses the provider's snapshot rate).
+- `session.Players` is an `IPlayerDirectory` of `IPlayer` handles. Each handle carries identity, host status, and the
+  player's key, which is stable on one host and unlinkable across hosts. Replicated position, aim and health, the
+  `Damage`, `Heal` and `Teleport` actions, per-player `Input` and `Ui`, scoreboard columns, and join and leave
+  subscriptions run through the Players runtime. A departed handle permanently reports `NotFound`, even if another
+  host reuses its id. Single-player play has exactly one player, so player-aware code needs no separate path.
+  See [Act on players](Players.md) for targeted windows, input, scores and tests.
+- Participants report `IsHost`, a bucketed `Quality`, `PingMilliseconds` rounded to 10 ms, and `PlayerKey`.
+  Snapshots report `HostParticipantId`, `TryGetParticipant`, a `Reconnecting` state, and an `EndReason` once ended.
+
+The test rig runs the session engine, so ticks, sequences, seeds, targeted events, and `Apply` behave there as they
+will in a live session. The provider runs the same engine in solo sessions, with player actions bound to the game's
+services. The standalone rig has no game services; use `FakePlayerDirectory` to test player-aware mod logic.
+
+## How sessions work
+
+A mod binds once and keeps the same `IMultiplayerSession` for as long as it runs. Sessions come and go underneath it,
+and the snapshot says which one is current, whether this process holds world authority, and who is playing.
+
+- **Solo play.** The game starts in a solo session. This process holds world authority, its player is the host and the
+  only participant, and the snapshot is `Ready` from the start. Commands run once, inline, and their confirmations
+  report `WasPredicted` as false. A command's presentation events reach the player before its confirmation does.
+- **Hosting.** Opening the game to others promotes the running solo session in place. The session id, every replicated
+  value and every object stay as they are, and a player who joins receives them. The host keeps world authority, and
+  its player stays the host participant. When hosting stops, every other player's session ends and the host plays on
+  alone in the same session.
+- **Joining.** Joining another host replaces this process's session with the host's. Nothing changes until the
+  connection to the host is up, so a join that fails leaves solo play as it was. Once the link is up the snapshot names
+  a placeholder session and `HasWorldAuthority` is false; it takes the host's own session id when the host accepts the
+  join. The state goes from `Connecting` through `Synchronizing` to `Ready`, which it reaches only once all the host's
+  values and objects have arrived. A participant id names a player only on the host that gave it, so the snapshot lists
+  nobody until the host's own list arrives, which it does before `Ready`.
+- **Following the host's world.** A joined player's game loads and runs the world the host is in, with no code from you:
+  the host's world session under the host's session id, so whatever reads the world session sees the host's, and the
+  gamemode's participant controller runs for the player, as [gamemodes in a session](#gamemodes-in-a-session)
+  describes; the level the host is in outside a session; or the main menu. It follows the host into its next world, and
+  back again when the player's own game strays from it. The world is the host's: on a joined player a world session's
+  `StopAsync` and `RestartAsync`, and a launch, return `NotAuthoritative`, and returning to the main menu leaves the
+  session.
+- **What replicates.** What a contract declares: `[ReplicatedState]` values, `[ReplicatedObject]` objects, commands
+  with their confirmations, and presentation events, which reach players only once the host commits them. And, with no
+  code from you, the host's world: what the host spawns through the SDK, its custom-world content, and the scene props
+  it moves or removes, which a joining player receives before `Ready` and then follows. What a joined player spawns,
+  moves or removes goes through the host, which makes the change for everyone, as [the player's own
+  actions](#the-players-own-actions) describes. Every player sees the others too, as the game's own robots when the
+  RobotKit mod is loaded and as capsules in each player's colour otherwise, and the host places each joining player
+  beside its own; `TryGetAvatar` and `TryGetPose` name them for a mod, with no code to send anything. Unity objects,
+  files, configuration and a mod's own fields stay in their process.
+- **Session replacement.** Whenever a session gives way to another, a mod sees the same steps. `CurrentSessionToken` is
+  cancelled, every replicated value returns to its declared default, every object despawns with a notification, and
+  the snapshot names the new session. `OnMultiplayerSessionEnded` runs with the old session's last snapshot, then
+  `OnMultiplayerSessionStarted` runs with the new session's first `Ready` one. Joining, a host that restarts its
+  session, and leaving a joined session all take these steps; leaving, however it happens, lands in a fresh solo
+  session.
+- **Reconnecting.** When the connection to the host goes quiet, the snapshot reports `Reconnecting` and canonical
+  values hold still. A connection that recovers carries on. One that drops is tried again every two seconds for 30
+  seconds: meanwhile the snapshot reports `Connecting` and still lists the session's players, though none of them as
+  this process's own, and submissions still waiting for the host complete as cancelled. The host keeps a player's
+  place, participant id included, for 30 seconds after the connection drops, so a reconnect in that window resumes the
+  same session as the same player, with the host's current values, and the session hooks do not run. The participant
+  list is kept throughout, unless an attempt was lost after it reached the host but before the host's answer came back:
+  the host may have restarted meanwhile, so the snapshot then lists nobody until the host's own list arrives, before
+  `Ready`. A player who cannot get back in time returns to solo play.
+
+What a mod sees at each step:
+
+| Step | `State` | `HasWorldAuthority` | Session hooks |
+| --- | --- | --- | --- |
+| Solo play | `Ready` | Yes | Started, for the solo session |
+| Opening the session to others | `Ready` | Yes | None: the session goes on |
+| Another player joins this host | `Ready` | Yes | None: the participant list grows |
+| Joining another host | `Connecting`, `Synchronizing`, then `Ready` | No | Ended for the solo session, Started for the host's |
+| The connection to the host goes quiet | `Reconnecting` | No | None |
+| The connection drops and comes back in time | `Connecting`, `Synchronizing`, then `Ready` | No | None: the session goes on |
+| The host restarts its session | `Synchronizing`, then `Ready`; the host stays `Ready` | Unchanged | Ended, then Started |
+| Leaving, a kick or ban, the host stopping, or the reconnect window running out | `Ready`, in a new solo session | Yes | Ended for the host's session, Started for the solo one |
+
+Live sessions on a LAN or at a direct address already run in the provider, and the game's MULTIPLAYER tab hosts and
+joins them, behind a developer switch (`TOPIAFORGE_LIVE_MULTIPLAYER=1`) that stays until a release turns live play on.
+Without the switch the tab says that live multiplayer is switched off in this build. Internet play through invite codes
+and a relay also needs the TopiaForge service, and joining from the launcher is later work.
+
+## The player's own actions
+
+In a session, scripts run on the host and a player's own actions run where that player is. The runtime tells the two
+apart by itself, with no code or attribute from you, and in a live session it routes what your mod does on a joined
+player:
+
+- **A spawn on the player's action** appears at once, and the host makes it for everyone. Your mod keeps the same
+  handle, so it can move or remove the object later. If the host refuses it, because the player made too many at once,
+  already has as many as the host allows, or the object comes from a mod the host does not share, the object goes, its
+  handle is no longer alive, and the player sees a short message saying why.
+- **A spawn your scripts make**, such as one when a scene loads, stands for the host's own run of the same script, so
+  nothing appears twice. Make the same spawns in the same order on every machine: a spawn the host never makes goes
+  again after ten seconds, so the player sees the host's world.
+- **Moving or removing an object the player made** goes through the host, whatever code does it. Moving or removing
+  anything else on the player's action returns `NotAuthoritative`; your scripts doing so change nothing on a joined
+  player, because the host's own run of them makes that change for everyone.
+
+Offline and on the host nothing changes: every call takes effect at once, as it always has.
+
+- **What counts as the player's action:** your mod's Update and LateUpdate in a frame where one of its `Context.Input`
+  actions is pressed, released or held; a `Context.Ui` callback that the player's click, choice, typing or
+  confirmation raises; a command the player runs, or that such code runs; and a `Context.Interactions` handler.
+- **What keeps it:** everything that code awaits, the answer to a command it submits through a generated `Submit...`
+  method, and everything it schedules through `Context.Scheduler` (`NextFrame`, `After`, and each run of `Every`),
+  including what a background task it started hands back through `Context.Scheduler`.
+- **What never has it:** a timer your mod's scripted code scheduled, such as one scheduled at load; FixedUpdate; later
+  frames; other mods' code; and anything after the game starts or stops hosting, or joins or leaves a session.
+
+Code that looks like the player's action but counts as a script, with its fix:
+
+| If your code | It counts as a script because | Do this instead |
+| --- | --- | --- |
+| Reads input in FixedUpdate, or in a timer scheduled at load | Only Update and LateUpdate carry the frame's input | Read input in Update or LateUpdate; the build warns about a press read in FixedUpdate ([TF1009](Diagnostics.md#tf1009)) |
+| Polls a `PendingOperation<T>` in Update and acts when it completes | The frame it completes in usually has no input of yours | `await` the call in the code that started it, rather than polling; for a multiplayer command, hand the answer to its `Submit...` method |
+| Calls a service another mod published | The player's action belongs to your mod, so the other mod's code sees none | Run the other mod's command with `Context.Commands.TryExecute` |
+| Subscribes to Update from a click, to act for the player every frame | Frame subscribers are scripts | Schedule the work with `Context.Scheduler.Every` or `NextFrame` from the click |
+| Reads Unity's input or runs a Unity coroutine directly, as an `unsafe-native` mod can | The runtime sees neither | Use `Context.Input`, `Context.Scheduler` and `await` |
+
+One case goes the other way: firing a kit control's event from code, such as `Button.onClick.Invoke()`, counts as the
+player's click. Call your handler directly instead.
+
+A frame with active input counts as the player's for your whole Update and LateUpdate, so keep scripted work, such as a
+timed spawn, in a timer rather than in your input handling.
+
+## Gamemodes in a session
+
+A gamemode's server controller (`IGamemodeFactory.StartAsync`) runs where the session's server runs: in single
+player and on the host, never on a joined player. A gamemode that implements `IGamemodeParticipantFactory` also gets
+a participant controller in every player's own game, for that player's tools and HUD; on a joined player it is the
+only part of the gamemode that runs. [Custom worlds](CustomWorlds.md#give-every-player-a-controller-of-their-own)
+describes both.
+
+A controller may resolve the session from its own context, as in `participant.Context.RequireMultiplayer()`. Each
+context of a mod gets its own `IMultiplayerSession` over the mod's one set of registrations, and when a controller's
+scope ends, only what its session made ends with it: the objects it spawned leave every player's game, and its
+commands still waiting for the host complete as cancelled. The mod's own session, and everything it made, stay until
+the mod itself stops.
+
+Time is the shared world's too. Only the server controller on the host may freeze, slow or step it through
+[Chronos](Modules.md#chronos), with the time control it resolves from its session's `Context`; anywhere else, a
+participant controller and every part of a joined player included, those calls return `NotAuthoritative`, and joined
+players run at the host's time. A lease that loses that authority as the game opens to other players or joins a session
+ends, and `GameplayPause` then suspends only the player's own controls. In a session, Robotopia's pause menu shows the
+menu without pausing anyone's world.
+
+## What solo cannot tell you
+
+Solo play runs everything once, inline, in one process, with one player and no network. A mod can pass every solo test
+and still go wrong in a live session, because solo play never shows these:
+
+| Blind spot | What happens in a live session | How to see it |
+| --- | --- | --- |
+| Latency | A client's command confirms a round trip later, and its presentation events arrive with the confirmation, not before it. Code that waits on a confirmation waits that long. | Rig conditions with latency, or `WithDownstreamRate(10)` for the live snapshot rate |
+| Prediction rollbacks | An owner-predicted handler runs on the client first, then again on the host. When the host refuses it or reaches another result, the client's values roll back to the host's. | A rig client whose command the host refuses, or whose frames `rig.Network` holds back |
+| Authority on a client | A client holds no world authority. Spawning, despawning, `Apply` and updates outside a predicted handler return `NotAuthoritative`, and tick handlers do not run. Code that spawns whenever it loads spawns on every player's process. | A rig remote client, and a hook that checks `snapshot.HasWorldAuthority` |
+| Late join | A player who joins later receives every replicated value and object, but no presentation event published before it was `Ready`, and nothing a mod kept in its own fields. | `AddRemoteClient` after play has started |
+| Reconnects | A dropped connection cancels the submissions still waiting for the host, although the host may have run some of them, and the values come back from the host's snapshot. | `Interrupt` and `Resume`, `Disconnect` and `Reconnect` |
+| Session replacement | Values return to their defaults, objects despawn and tokens are cancelled, so handles and values kept from the old session go stale. | `StartNewSession` |
+| Several players | Commands from several players interleave, and every limit applies to each sender. A handler must check canonical state rather than assume it. | Several rig clients |
+
+The [test rig](#test-before-transport) shows each of these deterministically, in a unit test, on the same session
+engine the provider runs. To see them in the game, two machines on one LAN can host and join each other with the
+developer switch. Running several copies of the game on one machine needs a separate folder for each copy;
+[`topiaforge dev --peers 2`](CliDevLoop.md#local-multiplayer-peers) prepares private copies and joins them into one local session.
+
 ## Test before transport
 
-`MultiplayerTestRig` in `TopiaForge.Mods.Testing` supplies standalone, remote-client, listen-server, and headless
-dedicated-server roles. It can drive deterministic latency, loss, duplication, and reordering; late joins and
-reconnects; accepted/rejected prediction; rollback/replay; ownership; and stale input. A session becomes `Ready` only
-after its canonical snapshot is installed. `Disconnect(client)` cancels that client's pending work and updates
-participant connectivity; `Reconnect(client)` installs an exact canonical state/object snapshot before returning to
-`Ready`, so tests can cover ownership release and despawns that occurred while the client was offline. Transient
-presentation events are dropped before `Ready`, deduplicated under reliable retries, and scoped to one connection
-generation. `StartNewSession(id)` exercises the stable-facade contract: registrations remain active, the old session
-token cancels, replicated state resets to its declared default, old objects/subscriptions retire, and connected
-clients receive the replacement snapshot before `Ready`.
+`MultiplayerTestRig` in `TopiaForge.Mods.Testing` runs the same session engine as the provider, connected by a
+deterministic virtual transport instead of sockets. It supplies standalone, remote-client, listen-server, and headless
+dedicated-server roles. The virtual transport models the live session channel, which is reliable and ordered: a
+delayed, lost, or duplicated frame holds later frames behind it rather than letting them overtake it.
 
-Use the real-game loopback provider for ordinary Robotopia smoke tests. It executes server-canonical work once in the
-standalone process and exercises generated serialization and registration without claiming that a live network is
-present.
+- **Conditions.** `MultiplayerNetworkConditions` sets latency and cadences of loss, duplication, and delay.
+  `WithDownstreamRate` adds the live 10 Hz coalescing, and `WithBandwidth` limits each link's byte rate.
+- **Scripted faults.** `rig.Network` holds and releases frames, partitions a client, and stalls a process. It can
+  also lose a frame for good, which breaks the connection, or replay one, which the channel discards.
+- **Connections.** `Disconnect(client)` cancels that client's pending work and releases the objects it owned.
+  `Reconnect(client)` installs an exact canonical snapshot before `Ready`, so tests can cover despawns that happened
+  while the client was offline. `Interrupt` and `Resume` take a client through `Reconnecting`, and `Kick` ends its
+  session. `Kick` and `StartNewSession` throw if called inside a command or tick handler, before they change anything.
+- **Sessions.** `StartNewSession(id)` keeps registrations and subscriptions and cancels the old session token. It also
+  resets replicated state to its declared default, despawns old objects, and resynchronizes connected clients before
+  `Ready`.
+- **Accounting.** `Traffic(node)` reports the bytes and frames a node sent and received.
+  `CreateOwnerSession(node, modId)` adds a second mod's session to a node.
+- **Mods.** Register a node's `Session` with a `FakeModContext`'s `Extensions`, and `ModLifecycleRunner` binds the mod's
+  generated contract to it as the game does: after the context is attached, so session hooks may read it, and before
+  `OnLoad`. The binding ends with the mod's lifetime, so a test writes no binding code.
+
+A session becomes `Ready` only after its canonical snapshot is installed. A client receives presentation events only
+after it acknowledges `Ready`, so an event published while it synchronizes is dropped, never delivered late.
+
+Use the real-game provider for ordinary smoke tests in Robotopia. It hosts a solo session: the local player is the
+host, canonical work runs once and inline, and a command's events are presented before its confirmation is observed.
+It exercises generated serialization and registration without claiming that a live network is present.
 
 Two build-checked first-party examples keep the intended author experience honest:
 
 - `samples/multiplayer/TopiaForge.Multiplayer.CounterSample` covers snapshot state, owner-predicted commands,
   canonical rejection, typed submission, and accepted presentation events.
 - `samples/multiplayer/TopiaForge.Multiplayer.DroneSample` covers generated replicated-object type registration,
-  typed spawning/discovery, bounded state/input codecs, and predictive ownership.
+  typed spawning/discovery, bounded state/input codecs, and predictive ownership. It spawns its drone from
+  `OnMultiplayerSessionStarted`, and only when the snapshot holds world authority, so each session the process hosts
+  gets one drone and a joining player spawns none.
+
+## Gamemode communication groups
+
+`TopiaForge.Mods.Multiplayer` 0.2.0 lets a gamemode server control who receives voice and text chat.
+The host authorizes each delivery, including its own microphone and chat display. Clients send no audience or group
+claims. This API does not expose audio samples, transcripts, network addresses or other players' private messages.
+
+Call `session.Context.RouteCommunications(policy)` from the server controller. It returns an
+`OperationResult<ICommunicationRouting>`. Keep the successful handle and call `SetPolicy` when membership or the phase
+changes. Each policy atomically replaces the complete audience. The context owns the handle automatically; disposing
+it early restores ordinary routing. Participant controllers, world owners and ordinary mod contexts cannot acquire it.
+Only one handle may be active. Without a multiplayer provider, acquisition returns `Unavailable`.
+Check acquisition and update results; do not continue as though a rejected policy took effect.
+
+```csharp
+// Assign these participant ids from the server's player directory and authoritative game state.
+var members = new[]
+{
+    new CommunicationMember(firstPlayer.Id, 1),
+    new CommunicationMember(secondPlayer.Id, 1),
+    new CommunicationMember(observer.Id, 2),
+};
+var policy = new CommunicationPolicy(members, new[]
+{
+    new CommunicationRoute(1, 1, maximumDistance: 15),
+    new CommunicationRoute(1, 2), // observers hear active players globally
+    new CommunicationRoute(2, 2), // observers speak only to observers
+});
+var opened = session.Context.RouteCommunications(policy);
+if (opened.TryGetValue(out var routing))
+{
+    // During a discussion, active players hear one another regardless of distance.
+    var updated = routing.SetPolicy(new CommunicationPolicy(members, new[]
+    {
+        new CommunicationRoute(1, 1),
+        new CommunicationRoute(1, 2),
+        new CommunicationRoute(2, 2),
+    }));
+    // Check updated.Succeeded and surface a failure through the gamemode UI.
+}
+```
+
+Groups are opaque integers 1–16. A player belongs to one group; the host decides membership from its own game state,
+including alive/dead transitions. Rules are directed: allowing 1 → 2 does not allow 2 → 1. Missing players and missing
+routes are denied. An empty route list silences everyone, including the host. For a private team, assign a group and
+allow only its self-route. Update membership for joining players before they can communicate under the policy.
+
+The same rules govern chat and voice. Chat echoes also require a route to the sender's own group; private messages are
+not appended to an unauthorized host's chat display. The host process remains trusted and necessarily receives client
+uplinks to authorize them. This is audience isolation from other players, not encryption against the host.
+
+Zero maximum distance means global delivery. Positive distances up to 1,000 metres require fresh, validated positions
+in the current host world. Missing, stale or invalid positions deny proximity delivery. Global voice remains audible
+beyond ordinary voice attenuation distance.
+Proximity voice keeps the existing positional fade (full volume within 3 m, silent beyond 40 m); the policy distance
+is an authorization ceiling, not an audio-volume control. Chat uses the same distance ceiling without attenuation.
+
+Policies copy their input lists and reject duplicate members, duplicate routes, invalid groups and invalid distances.
+Each holds at most 64 members and 256 routes. Existing voice rate/bitrate limits, automatic moderation, listener mutes,
+chat throttles, payload bounds and per-recipient backpressure remain effective. A policy grants no microphone consent.
+
+Session replacement retires the handle and discards held voice and inbox frames. Reusing the old handle returns
+`Cancelled`; disposing it cannot remove a newer handle. Disconnected or unready players cannot send or receive through
+the policy. A reconnect within the same session retains membership when the host retains that participant id.
+Stopping the gamemode restores ordinary routing. Already authorized traffic in transport or playback buffers cannot
+be recalled by a policy update; it drains within the existing bounded queues.
+
+Games using this API require TopiaForge 0.2.0 on every participant. Group assignments and route lists never travel
+to clients or diagnostics. Ordinary sessions keep their existing behavior.
+
+## Participant appearance
+
+The host can change participant plastic, metal, accessories, nameplates and powered-down cosmetic poses through
+`IPlayer.Appearance`. Scoped leases restore the underlying presentation automatically, and presence handles late
+joiners and reconnects. See [Participant appearance](ParticipantAppearance.md) for the contract and examples.
 
 ## Security boundary
 
+Gamemode server controllers can apply [host-enforced communication groups](#gamemode-communication-groups) to
+voice and chat: proximity, private teams, observer groups and global discussions share one bounded policy. The runtime
+owns relay authorization, validated positions and scope cleanup; ordinary sessions keep their existing behavior.
+
 Every client command is bounded and rate-limited by the provider and revalidated by the server. Matching package or
 content hashes is compatibility and integrity evidence, not anti-cheat. TopiaForge mods remain trusted in-process
-code. Live transport, dedicated Robotopia hosting, redistribution, and a genuinely headless Robotopia build remain a
-later provider milestone and require the evidence in the
-[multiplayer hosting feasibility gate](MultiplayerHostingFeasibility.md).
+code. Live transport exists behind the developer switch and still needs public-release qualification. Dedicated
+Robotopia hosting, game redistribution and a genuinely headless Robotopia build remain unsupported; their separate
+requirements are in the [multiplayer hosting feasibility gate](MultiplayerHostingFeasibility.md).

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -11,9 +12,10 @@ namespace TopiaForge.Mods.UnityUi
     /// Brand dropdown over TMP_Dropdown, template built entirely at runtime: control
     /// chip with chevron, paper list with SelectedTint rows and a check mark.
     /// </summary>
-    public sealed class TopiaForgeDropdown : TopiaForgeWidget, ITopiaForgeThemeAware
+    public sealed partial class TopiaForgeDropdown : TopiaForgeWidget, ITopiaForgeThemeAware
     {
         private readonly TopiaForgeTmpDropdown dropdown;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage chevron;
@@ -22,6 +24,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly UImage itemBackground;
         private readonly UImage checkmark;
         private readonly TextMeshProUGUI itemLabel;
+        private readonly Toggle itemToggle;
 
         internal TopiaForgeDropdown(TopiaForgeContainer parent, IReadOnlyList<string> options, int selected, Action<int> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Dropdown"))
@@ -78,22 +81,22 @@ namespace TopiaForge.Mods.UnityUi
             contentRect.anchorMin = new Vector2(0f, 1f);
             contentRect.anchorMax = new Vector2(1f, 1f);
             contentRect.pivot = new Vector2(0.5f, 1f);
-            contentRect.sizeDelta = new Vector2(0f, 30f);
+            contentRect.sizeDelta = new Vector2(0f, TopiaForgeTokens.ControlHeight);
 
             var itemGo = new GameObject("Item", typeof(RectTransform));
             itemGo.transform.SetParent(contentGo.transform, false);
             var itemRect = (RectTransform)itemGo.transform;
             itemRect.anchorMin = new Vector2(0f, 0.5f);
             itemRect.anchorMax = new Vector2(1f, 0.5f);
-            itemRect.sizeDelta = new Vector2(0f, 30f);
-            var itemToggle = itemGo.AddComponent<Toggle>();
+            itemRect.sizeDelta = new Vector2(0f, TopiaForgeTokens.ControlHeight);
+            itemToggle = itemGo.AddComponent<Toggle>();
 
             var itemBgGo = new GameObject("Item Background", typeof(RectTransform));
             itemBgGo.transform.SetParent(itemGo.transform, false);
             itemBackground = itemBgGo.AddComponent<UImage>();
             itemBackground.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Chip);
             itemBackground.type = UImage.Type.Sliced;
-            TopiaForgeAnchors.Stretch((RectTransform)itemBgGo.transform, 2f, 1f, 2f, 1f);
+            TopiaForgeAnchors.Stretch((RectTransform)itemBgGo.transform);
 
             var checkGo = new GameObject("Item Checkmark", typeof(RectTransform));
             checkGo.transform.SetParent(itemGo.transform, false);
@@ -104,13 +107,13 @@ namespace TopiaForge.Mods.UnityUi
             checkRect.anchorMin = new Vector2(0f, 0.5f);
             checkRect.anchorMax = new Vector2(0f, 0.5f);
             checkRect.pivot = new Vector2(0f, 0.5f);
-            checkRect.anchoredPosition = new Vector2(8f, 0f);
+            checkRect.anchoredPosition = new Vector2(16f, 0f);
             checkRect.sizeDelta = new Vector2(14f, 14f);
 
             var itemLabelGo = new GameObject("Item Label", typeof(RectTransform));
             itemLabelGo.transform.SetParent(itemGo.transform, false);
             itemLabel = CreateTmp(itemLabelGo);
-            TopiaForgeAnchors.Stretch((RectTransform)itemLabelGo.transform, 28f, 2f, 8f, 2f);
+            TopiaForgeAnchors.Stretch((RectTransform)itemLabelGo.transform, 36f, 2f, 8f, 2f);
 
             itemToggle.targetGraphic = itemBackground;
             itemToggle.graphic = checkmark;
@@ -119,12 +122,15 @@ namespace TopiaForge.Mods.UnityUi
             templateScroll.viewport = viewportRect;
             templateScroll.content = contentRect;
             templateScroll.horizontal = false;
+            templateScroll.vertical = true;
+            // Match ordinary kit scroll views: the Unity default moves only one pixel per wheel unit.
+            templateScroll.scrollSensitivity = 28f;
             templateScroll.movementType = ScrollRect.MovementType.Clamped;
             templateGo.SetActive(false);
 
             dropdown = Go.AddComponent<TopiaForgeTmpDropdown>();
-            dropdown.ConfigureSortingOrders(PopupOrders.Blocker, PopupOrders.List);
             dropdown.targetGraphic = fill;
+            cues = TopiaForgeControlCues.Install(dropdown, Rect);
             dropdown.template = templateRect;
             dropdown.captionText = caption;
             dropdown.itemText = itemLabel;
@@ -136,7 +142,7 @@ namespace TopiaForge.Mods.UnityUi
 
             dropdown.SetValueWithoutNotify(selected);
             dropdown.RefreshShownValue();
-            dropdown.onValueChanged.AddListener(next => TopiaForgeCallbacks.Invoke(onChanged, next, "Dropdown change"));
+            dropdown.onValueChanged.AddListener(next => TopiaForgeCallbacks.Player(Host.OwnerId, onChanged, next, "Dropdown change"));
 
             this.FixedHeight(TopiaForgeTokens.ControlHeight);
             ApplyTheme(Theme);
@@ -160,7 +166,9 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Sets whether the dropdown accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
+            if (dropdown.interactable == enabled) return;
             dropdown.interactable = enabled;
+            ApplyTheme(Theme);
         }
 
         /// <summary>
@@ -185,14 +193,31 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
-            fill.color = theme.SurfaceSunken;
+            TopiaForgeTypography.ApplyControlText(caption, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
+            TopiaForgeTypography.ApplyControlText(itemLabel, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
+            var enabled = dropdown.interactable;
+            var field = theme.FieldPaint(UiPaintRole.Sunken, UiTone.Neutral, enabled);
+            var item = theme.FieldPaint(UiPaintRole.Selected, UiTone.Neutral, enabled: true);
+            if (field is { } fieldPaint) dropdown.colors = WithLabelTints(fieldPaint, dropdown.colors);
+            if (item is { } itemPaint) itemToggle.colors = WithLabelTints(itemPaint, itemToggle.colors);
+            fill.color = field?.Fill ?? theme.SurfaceSunken;
             ring.color = theme.Outline;
-            chevron.color = theme.TextMuted;
-            caption.color = theme.Text;
+            chevron.color = field?.Content ?? theme.TextMuted;
+            caption.color = field?.Content ?? theme.Text;
             templateFill.color = theme.Surface;
-            itemBackground.color = theme.SelectedTint;
-            checkmark.color = theme.Primary;
-            itemLabel.color = theme.Text;
+            itemBackground.color = item?.Fill ?? theme.SelectedTint;
+            checkmark.color = item?.Content ?? theme.Primary;
+            itemLabel.color = item?.Content ?? theme.Text;
+            var shape = (theme.Descriptor ?? UiThemePackParser.Default).Shape;
+            cues.Apply(fill.color, caption.color, shape.Control, theme.HighContrast);
+            dropdown.ConfigureItemCues(shape.Small, theme.HighContrast);
+        }
+
+        private static ColorBlock WithLabelTints(TopiaForgeFillPaint paint, ColorBlock colors)
+        {
+            colors.normalColor = Color.white;
+            colors.disabledColor = Color.white;
+            return paint.Tinted(colors);
         }
 
         private TextMeshProUGUI CreateTmp(GameObject go)
@@ -222,60 +247,5 @@ namespace TopiaForge.Mods.UnityUi
             return image;
         }
 
-        /// <summary>
-        /// TMP_Dropdown.Show() hardcodes the popup list canvas to sortingOrder 30000 and the blocker to
-        /// 29999 — both BELOW every kit band (windows start at <see cref="TopiaForgeLayerBands.DefaultWindowBase"/>),
-        /// so the opened list rendered invisibly behind its own window and clicks appeared to do nothing.
-        /// Re-band both canvases to just under the toast band: above all windows and modals (so the popup
-        /// is always visible and its blocker eats outside-clicks first), below toasts and the debug overlay.
-        /// CreateBlocker runs at the end of Show(), after the list canvas exists, so it is the one hook
-        /// where both canvases can be corrected.
-        /// </summary>
-        private sealed class TopiaForgeTmpDropdown : TMP_Dropdown
-        {
-            private GameObject? list;
-            private int blockerSortingOrder;
-            private int listSortingOrder;
-
-            public void ConfigureSortingOrders(int blockerOrder, int listOrder)
-            {
-                blockerSortingOrder = blockerOrder;
-                listSortingOrder = listOrder;
-            }
-
-            protected override GameObject CreateDropdownList(GameObject template)
-            {
-                list = base.CreateDropdownList(template);
-                return list;
-            }
-
-            protected override GameObject CreateBlocker(Canvas rootCanvas)
-            {
-                var blocker = base.CreateBlocker(rootCanvas);
-                var listCanvas = list != null ? list.GetComponent<Canvas>() : null;
-                if (listCanvas != null)
-                {
-                    listCanvas.overrideSorting = true;
-                    TopiaForgeLayers.AssignAllocatedOrder(listCanvas, listSortingOrder);
-                }
-
-                var blockerCanvas = blocker.GetComponent<Canvas>();
-                if (blockerCanvas != null)
-                {
-                    blockerCanvas.overrideSorting = true;
-                    TopiaForgeLayers.AssignAllocatedOrder(blockerCanvas, blockerSortingOrder);
-                }
-
-                return blocker;
-            }
-        }
-
-        private static class PopupOrders
-        {
-            // TMP allows only one dropdown blocker at a time, so every dropdown can safely share one
-            // process-wide allocator-owned pair rather than leaking two band slots per widget rebuild.
-            public static readonly int Blocker = TopiaForgeLayers.Allocate(TopiaForgeLayerBand.Modal, "dropdown-blocker");
-            public static readonly int List = TopiaForgeLayers.Allocate(TopiaForgeLayerBand.Modal, "dropdown-list");
-        }
     }
 }

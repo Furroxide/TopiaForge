@@ -9,6 +9,8 @@ class MainFlutterWindow: NSWindow {
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    SessionLinkChannel.shared.attach(
+      binaryMessenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
   }

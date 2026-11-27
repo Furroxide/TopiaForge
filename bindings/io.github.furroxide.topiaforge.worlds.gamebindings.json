@@ -1,67 +1,57 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "modId": "io.github.furroxide.topiaforge.worlds",
   "modName": "TopiaForge Worlds",
   "bindings": [
     {
-      "id": "worlds.type.globalAssetsMap",
+      "id": "worlds.type.UgcImportHostConfig",
       "kind": "Type",
       "assembly": "GameCode",
-      "declaringType": "GlobalAssetsMap",
+      "declaringType": "UgcImportHostConfig",
       "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Reading curated level entry points from game's level-select menu",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:42"
+      "criticality": "Critical",
+      "feature": "Owned local world import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs"
     },
     {
-      "id": "worlds.type.loadSceneOnTriggerEnter",
+      "id": "worlds.type.UgcImportHostSceneController",
       "kind": "Type",
       "assembly": "GameCode",
-      "declaringType": "LoadSceneOnTriggerEnter",
+      "declaringType": "UgcImportHostSceneController",
       "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Scene loading dispatch mechanism",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:43"
+      "criticality": "Critical",
+      "feature": "Owned local world import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs"
     },
     {
-      "id": "worlds.type.sceneUtil",
+      "id": "worlds.type.UgcExportLoader",
       "kind": "Type",
       "assembly": "GameCode",
-      "declaringType": "SceneUtil",
+      "declaringType": "UgcExportLoader",
       "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Scene loading by name without checkpoint asset",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:44"
+      "criticality": "Critical",
+      "feature": "Owned local world import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs"
     },
     {
-      "id": "worlds.type.ugcImportPlayBootstrap",
+      "id": "worlds.type.UgcImportFileIndex",
       "kind": "Type",
       "assembly": "GameCode",
-      "declaringType": "UgcImportPlayBootstrap",
+      "declaringType": "UgcImportFileIndex",
       "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Sandbox player prefab resolution and spawn position queries",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:45"
+      "criticality": "Critical",
+      "feature": "Owned local world import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs"
     },
     {
-      "id": "worlds.type.ugcPlayLaunchRequest",
+      "id": "worlds.type.UgcExportProject",
       "kind": "Type",
       "assembly": "GameCode",
-      "declaringType": "UgcPlayLaunchRequest",
+      "declaringType": "UgcExportProject",
       "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Suppressing UGC import in sandbox mode",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:46"
-    },
-    {
-      "id": "worlds.type.ugcPlayLauncherLastRun",
-      "kind": "Type",
-      "assembly": "GameCode",
-      "declaringType": "UgcPlayLauncherLastRun",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Suppressing UGC import in sandbox mode",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:47"
+      "criticality": "Critical",
+      "feature": "Owned local world import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs"
     },
     {
       "id": "worlds.type.playerController",
@@ -69,356 +59,1412 @@
       "assembly": "GameCode",
       "declaringType": "PlayerController",
       "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Checking if player is currently spawned",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:48"
-    },
-    {
-      "id": "worlds.prop.globalAssetsMap.levelEntryPoints",
-      "kind": "Property",
-      "assembly": "GameCode",
-      "declaringType": "GlobalAssetsMap",
-      "member": "LevelEntryPoints",
-      "matchMode": "StaticFullName",
       "criticality": "Degraded",
-      "feature": "Reading curated level entry points from game's level-select menu",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:57",
-      "returnType": ""
+      "feature": "Session pause menu",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.NativeUi.cs"
     },
     {
-      "id": "worlds.field.levelEntryPoints.entries",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "LevelEntryPoints",
-      "member": "entries",
-      "matchMode": "DynamicInstance",
-      "criticality": "Degraded",
-      "feature": "Reading curated level entry points from game's level-select menu",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:63",
-      "returnType": ""
-    },
-    {
-      "id": "worlds.field.levelEntry.checkpointAsset",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "LevelEntry",
-      "member": "checkpointAsset",
-      "matchMode": "Uncheckable",
-      "criticality": "Degraded",
-      "feature": "Reading checkpoint asset from level entry",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:79",
-      "returnType": ""
-    },
-    {
-      "id": "worlds.prop.checkpointAsset.sceneName.read",
-      "kind": "Property",
-      "assembly": "GameCode",
-      "declaringType": "CheckpointAsset",
-      "member": "SceneName",
-      "matchMode": "DynamicInstance",
-      "criticality": "Degraded",
-      "feature": "Reading scene name from checkpoint asset",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:85",
-      "returnType": "System.String"
-    },
-    {
-      "id": "worlds.field.levelEntry.displayName",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "LevelEntry",
-      "member": "displayName",
-      "matchMode": "Uncheckable",
-      "criticality": "Degraded",
-      "feature": "Reading display name from level entry",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:91",
-      "returnType": "System.String"
-    },
-    {
-      "id": "worlds.field.levelEntry.description",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "LevelEntry",
-      "member": "description",
-      "matchMode": "Uncheckable",
-      "criticality": "Degraded",
-      "feature": "Reading description from level entry",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:92",
-      "returnType": "System.String"
-    },
-    {
-      "id": "worlds.prop.checkpointAsset.sceneName.launch",
-      "kind": "Property",
-      "assembly": "GameCode",
-      "declaringType": "CheckpointAsset",
-      "member": "SceneName",
-      "matchMode": "DynamicInstance",
-      "criticality": "Critical",
-      "feature": "Launching a level via checkpoint asset",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:123",
-      "returnType": "System.String"
-    },
-    {
-      "id": "worlds.method.loadSceneOnTriggerEnter.loadSceneImpl",
+      "id": "worlds.pause.player",
       "kind": "Method",
       "assembly": "GameCode",
-      "declaringType": "LoadSceneOnTriggerEnter",
-      "member": "LoadSceneImpl",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Session pause menu",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.NativeUi.cs",
+      "member": "FindPlayer",
+      "returnType": "PlayerController",
+      "exactParameters": true,
+      "isStatic": true,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.pause.instance",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Session pause menu",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.NativeUi.cs",
+      "member": "_instance",
+      "returnType": "PlayerController",
+      "isStatic": true
+    },
+    {
+      "id": "worlds.pause.ui",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Session pause menu",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.NativeUi.cs",
+      "member": "pauseUI",
+      "returnType": "GlobalButtonRoles",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.pause.exit",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Session pause menu",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.cs",
+      "member": "ExitPause",
+      "returnType": "System.Void",
+      "exactParameters": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.import.defaultFolder",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
       "matchMode": "StaticFullName",
       "criticality": "Critical",
-      "feature": "Launching a level via the game's async loader",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:130",
-      "parameters": [
-        {
-          "type": "System.Boolean",
-          "constrained": false
-        },
-        {
-          "type": "System.Object",
-          "constrained": false
-        }
-      ],
-      "returnType": ""
+      "feature": "Local world folder discovery",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "GetDefaultImportFolderPath",
+      "returnType": "System.String",
+      "exactParameters": true,
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0
     },
     {
-      "id": "worlds.type.uniTaskExtensions",
-      "kind": "Type",
-      "assembly": "Cysharp.Threading.Tasks",
-      "declaringType": "Cysharp.Threading.Tasks.UniTaskExtensions",
-      "matchMode": "Uncheckable",
-      "criticality": "Optional",
-      "feature": "Converting UniTask to Task for continuation-based observation",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:192"
-    },
-    {
-      "id": "worlds.method.uniTaskExtensions.asTask",
-      "kind": "Method",
-      "assembly": "Cysharp.Threading.Tasks",
-      "declaringType": "Cysharp.Threading.Tasks.UniTaskExtensions",
-      "member": "AsTask",
-      "matchMode": "Uncheckable",
-      "criticality": "Optional",
-      "feature": "Converting UniTask to Task for continuation-based observation",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:193",
-      "parameters": [
-        {
-          "type": "Cysharp.Threading.Tasks.UniTask",
-          "constrained": true
-        }
-      ],
-      "returnType": "System.Threading.Tasks.Task"
-    },
-    {
-      "id": "worlds.method.uniTask.getAwaiter",
-      "kind": "Method",
-      "assembly": "Cysharp.Threading.Tasks",
-      "declaringType": "Cysharp.Threading.Tasks.UniTask",
-      "member": "GetAwaiter",
-      "matchMode": "Uncheckable",
-      "criticality": "Optional",
-      "feature": "Fallback observation of UniTask via awaiter contract",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:210",
-      "parameters": [],
-      "returnType": ""
-    },
-    {
-      "id": "worlds.method.uniTaskAwaiter.getResult",
-      "kind": "Method",
-      "assembly": "Cysharp.Threading.Tasks",
-      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
-      "member": "GetResult",
-      "matchMode": "Uncheckable",
-      "criticality": "Optional",
-      "feature": "Fallback observation of UniTask result or exception",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:218",
-      "parameters": [],
-      "returnType": ""
-    },
-    {
-      "id": "worlds.prop.uniTaskAwaiter.isCompleted",
-      "kind": "Property",
-      "assembly": "Cysharp.Threading.Tasks",
-      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
-      "member": "IsCompleted",
-      "matchMode": "Uncheckable",
-      "criticality": "Optional",
-      "feature": "Checking if UniTask awaiter is already completed",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:242",
-      "returnType": "System.Boolean"
-    },
-    {
-      "id": "worlds.method.uniTaskAwaiter.onCompleted",
-      "kind": "Method",
-      "assembly": "Cysharp.Threading.Tasks",
-      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
-      "member": "OnCompleted",
-      "matchMode": "Uncheckable",
-      "criticality": "Optional",
-      "feature": "Registering continuation for UniTask completion",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:250",
-      "parameters": [
-        {
-          "type": "System.Action",
-          "constrained": true
-        }
-      ],
-      "returnType": ""
-    },
-    {
-      "id": "worlds.method.uniTaskAwaiter.unsafeOnCompleted",
-      "kind": "Method",
-      "assembly": "Cysharp.Threading.Tasks",
-      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
-      "member": "UnsafeOnCompleted",
-      "matchMode": "Uncheckable",
-      "criticality": "Optional",
-      "feature": "Registering continuation for UniTask completion (unsafe variant)",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:251",
-      "parameters": [
-        {
-          "type": "System.Action",
-          "constrained": true
-        }
-      ],
-      "returnType": ""
-    },
-    {
-      "id": "worlds.method.sceneUtil.loadScene",
+      "id": "worlds.import.scan",
       "kind": "Method",
       "assembly": "GameCode",
-      "declaringType": "SceneUtil",
-      "member": "LoadScene",
+      "declaringType": "UgcImportFileIndex",
       "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Loading scene by name without checkpoint asset",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:288",
+      "criticality": "Critical",
+      "feature": "Local world file discovery",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "Scan",
+      "returnType": "System.Collections.Generic.List<UgcImportFileRecord>",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.import.validate",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Local world validation",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "TryLoadProject",
+      "returnType": "System.Boolean",
+      "exactParameters": true,
       "parameters": [
         {
           "type": "System.String",
           "constrained": true
         },
         {
+          "type": "UgcExportProject&",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.import.projectName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Local world discovery",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "name",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.file.path",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Local world discovery",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "path",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.file.fileName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Local world discovery",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "fileName",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.file.projectName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Local world discovery",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "projectName",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.file.loadError",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Local world discovery",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs",
+      "member": "loadError",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.host.SceneRoot",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "SceneRoot",
+      "returnType": "UgcSceneRoot",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.import.host.RuntimeAssetConfig",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "RuntimeAssetConfig",
+      "returnType": "UgcRuntimeAssetConfig",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.import.host.ImportProject",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "ImportProject",
+      "returnType": "UgcExportScene",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UgcExportProject",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UgcImportReport",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.import.type.UgcImportReport",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs"
+    },
+    {
+      "id": "worlds.import.UgcImportReport..ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "isPublic": true,
+      "exactParameters": true,
+      "parameters": [],
+      "member": ".ctor"
+    },
+    {
+      "id": "worlds.import.UgcImportReport.Problems",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Native import problem summary",
+      "sourceRef": "mods/Shared/UgcImportProblems.cs",
+      "member": "Problems",
+      "returnType": "System.Collections.Generic.IReadOnlyList<UgcImportProblem>",
+      "requireReadable": true,
+      "isPublic": true,
+      "isStatic": false,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.import.host.ConfigureRuntimeImportFolder",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Owned native import transaction",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "ConfigureRuntimeImportFolder",
+      "returnType": "System.Void",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.import.activeRoot",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneRoot",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native imported root ownership",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "ActiveImportRoot",
+      "returnType": "UnityEngine.Transform",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.import.discardRoot",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneRoot",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native imported root cleanup",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "DiscardSceneRebuild",
+      "returnType": "System.Void",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UnityEngine.Transform",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.import.override",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Scoped local import asset overrides",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "SetRuntimeOverride",
+      "returnType": "System.Void",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        },
+        {
+          "type": "System.Nullable<UnityEngine.Vector3>",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.import.overrideSnapshot",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore native import asset overrides",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
+      "member": "runtimeOverrides",
+      "returnType": "System.Collections.Generic.Dictionary<System.String, UgcRuntimeAssetConfig+RuntimeOverride>",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.selection.importFolderOverride",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore exact native host selection",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "importFolderOverride",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.selection.selectedExportFilePath",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore exact native host selection",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "selectedExportFilePath",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.selection.selectedSceneId",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore exact native host selection",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "selectedSceneId",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.selection.runtimeImportFolderOverride",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore exact native host selection",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "runtimeImportFolderOverride",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.selection.config",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore exact native host selection",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "config",
+      "returnType": "UgcImportHostConfig",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.import.config.ImportFolderOverride",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore shared native import configuration",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "ImportFolderOverride",
+      "returnType": "System.String",
+      "isStatic": false,
+      "requireReadable": true,
+      "requireWritable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.import.config.SelectedExportFilePath",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore shared native import configuration",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "SelectedExportFilePath",
+      "returnType": "System.String",
+      "isStatic": false,
+      "requireReadable": true,
+      "requireWritable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.import.config.SelectedSceneId",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Restore shared native import configuration",
+      "sourceRef": "mods/TopiaForge.Worlds/NativeImportSelection.cs",
+      "member": "SelectedSceneId",
+      "returnType": "System.String",
+      "isStatic": false,
+      "requireReadable": true,
+      "requireWritable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.placement.player",
+      "kind": "Type",
+      "declaringType": "PlayerController",
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native world player placement",
+      "sourceRef": "mods/Shared/NativePlayerTeleport.cs"
+    },
+    {
+      "id": "worlds.placement.controller",
+      "kind": "Property",
+      "declaringType": "PlayerController",
+      "member": "FPSController",
+      "returnType": "FirstPersonController",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0,
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native world player placement",
+      "sourceRef": "mods/Shared/NativePlayerTeleport.cs"
+    },
+    {
+      "id": "worlds.placement.teleport",
+      "kind": "Method",
+      "declaringType": "FirstPersonController",
+      "member": "TeleportTo",
+      "returnType": "System.Void",
+      "isPublic": true,
+      "isStatic": false,
+      "exactParameters": true,
+      "genericArity": 0,
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "System.Nullable<UnityEngine.Quaternion>",
+          "constrained": true
+        }
+      ],
+      "assembly": "GameCode",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Native world player placement",
+      "sourceRef": "mods/Shared/NativePlayerTeleport.cs"
+    },
+    {
+      "id": "worlds.map.UgcPublishedProjectLoader",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcPublishedProjectLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Map.cs"
+    },
+    {
+      "id": "worlds.map.UgcPublishedProjectLoader.ProductionMapsBaseUrl",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPublishedProjectLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "ProductionMapsBaseUrl",
+      "returnType": "System.String",
+      "isPublic": false,
+      "isStatic": true
+    },
+    {
+      "id": "worlds.map.UgcPublishedProjectLoader.TryResolveManifestUrl",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcPublishedProjectLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "TryResolveManifestUrl",
+      "returnType": "System.Boolean",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.map.UgcExportLoader.LoadProjectFromBytes",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Map.cs",
+      "member": "LoadProjectFromBytes",
+      "returnType": "UgcExportProject",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.Byte[]",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.map.UgcExportProject.ResolveScene",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Map.cs",
+      "member": "ResolveScene",
+      "returnType": "UgcExportScene",
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.map.UgcExportScene.id",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Map.cs",
+      "member": "id",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": false
+    },
+    {
+      "id": "worlds.map.UgcImportedEntity",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportedEntity",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs"
+    },
+    {
+      "id": "worlds.map.UgcSceneSpawnLocation",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneSpawnLocation",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs"
+    },
+    {
+      "id": "worlds.map.UgcImportPlayBootstrap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportPlayBootstrap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs"
+    },
+    {
+      "id": "worlds.map.UgcRuntimeSpawnPointFactory",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeSpawnPointFactory",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs"
+    },
+    {
+      "id": "worlds.map.UgcImportedEntity.EntityId",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportedEntity",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs",
+      "member": "EntityId",
+      "returnType": "System.String",
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.map.UgcImportPlayBootstrap.playerPrefab",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportPlayBootstrap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs",
+      "member": "playerPrefab",
+      "returnType": "UnityEngine.GameObject",
+      "isPublic": false,
+      "isStatic": false
+    },
+    {
+      "id": "worlds.map.UgcRuntimeSpawnPointFactory.CreateOrUpdateSpawnPoint",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeSpawnPointFactory",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeSpawn.cs",
+      "member": "CreateOrUpdateSpawnPoint",
+      "returnType": "Checkpoint",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.Quaternion",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.Transform",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.map.UgcCatalogLoreLoader",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcCatalogLoreLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs"
+    },
+    {
+      "id": "worlds.map.UgcCatalogLoreLoader..ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcCatalogLoreLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": ".ctor",
+      "isPublic": true,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UgcRuntimeAssetConfig",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.map.UgcCatalogLoreLoader.AddMissingLoreAsync",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcCatalogLoreLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "AddMissingLoreAsync",
+      "returnType": "Cysharp.Threading.Tasks.UniTask",
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UgcExportProject",
+          "constrained": true
+        },
+        {
+          "type": "UgcImportReport",
+          "constrained": true
+        },
+        {
           "type": "System.Threading.CancellationToken",
           "constrained": true
         }
-      ],
-      "returnType": ""
+      ]
     },
     {
-      "id": "worlds.method.playerController.findPlayer",
+      "id": "worlds.map.UgcCatalogLoreLoader.ValidateLinkCatalogUrl",
       "kind": "Method",
       "assembly": "GameCode",
-      "declaringType": "PlayerController",
-      "member": "FindPlayer",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Checking if player is currently spawned",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:332",
-      "parameters": [],
-      "returnType": "PlayerController"
-    },
-    {
-      "id": "worlds.field.playerController.instance",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "PlayerController",
-      "member": "_instance",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Resolving the live player for pause-menu interception",
-      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.cs:196",
-      "returnType": "PlayerController"
-    },
-    {
-      "id": "worlds.field.playerController.pauseUI",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "PlayerController",
-      "member": "pauseUI",
+      "declaringType": "UgcCatalogLoreLoader",
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
-      "feature": "Rewiring the vanilla pause menu while a world session is active",
-      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.cs:166",
-      "returnType": ""
-    },
-    {
-      "id": "worlds.method.playerController.exitPause",
-      "kind": "Method",
-      "assembly": "GameCode",
-      "declaringType": "PlayerController",
-      "member": "ExitPause",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Closing the vanilla pause menu after a gamemode pause action runs",
-      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.cs:392",
-      "parameters": [],
-      "returnType": "System.Void"
-    },
-    {
-      "id": "worlds.prop.ugcImportPlayBootstrap.runtimePlayerPrefab",
-      "kind": "Property",
-      "assembly": "GameCode",
-      "declaringType": "UgcImportPlayBootstrap",
-      "member": "RuntimePlayerPrefab",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Resolving sandbox player prefab for fallback spawning",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:353",
-      "returnType": "UnityEngine.GameObject"
-    },
-    {
-      "id": "worlds.field.ugcLastRun.mode",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "UgcPlayLauncherLastRun",
-      "member": "Mode",
-      "matchMode": "ValueContract",
-      "criticality": "Optional",
-      "feature": "Suppressing UGC import in sandbox mode",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:417",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "ValidateLinkCatalogUrl",
       "returnType": "System.String",
-      "contractValue": "SelectedFile"
-    },
-    {
-      "id": "worlds.field.ugcLastRun.importFolderPath",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "UgcPlayLauncherLastRun",
-      "member": "ImportFolderPath",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Suppressing UGC import in sandbox mode",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:418",
-      "returnType": "System.String"
-    },
-    {
-      "id": "worlds.field.ugcLastRun.selectedExportFilePath",
-      "kind": "Field",
-      "assembly": "GameCode",
-      "declaringType": "UgcPlayLauncherLastRun",
-      "member": "SelectedExportFilePath",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Suppressing UGC import in sandbox mode",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:419",
-      "returnType": "System.String"
-    },
-    {
-      "id": "worlds.method.ugcPlayLaunchRequest.create",
-      "kind": "Method",
-      "assembly": "GameCode",
-      "declaringType": "UgcPlayLaunchRequest",
-      "member": "Create",
-      "matchMode": "StaticFullName",
-      "criticality": "Optional",
-      "feature": "Suppressing UGC import in sandbox mode",
-      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:421",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
       "parameters": [
         {
-          "type": "UgcPlayLauncherLastRun",
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.map.UgcRuntimeAssetConfig.CatalogBaseUrl",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Map world loading",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "CatalogBaseUrl",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.map.UgcPlayLaunchRequest.Current",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLaunchRequest",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Map catalog address from the launch request",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "Current",
+      "returnType": "UgcPlayLaunchRequest",
+      "isPublic": true,
+      "isStatic": true,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.map.UgcPlayLaunchRequest.CatalogUrl",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLaunchRequest",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Map catalog address from the launch request",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapLorePreparation.cs",
+      "member": "CatalogUrl",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.authored.UgcVector3Value",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcVector3Value",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map coordinates",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs"
+    },
+    {
+      "id": "worlds.authored.UgcRotationValue",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationValue",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map coordinates",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs"
+    },
+    {
+      "id": "worlds.authored.UgcRotationHelper",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationHelper",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map coordinates",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs"
+    },
+    {
+      "id": "worlds.authored.UgcVector3Value..ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcVector3Value",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "isPublic": true,
+      "exactParameters": true,
+      "parameters": [],
+      "member": ".ctor"
+    },
+    {
+      "id": "worlds.authored.UgcVector3Value.x",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcVector3Value",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "System.Single",
+      "isPublic": true,
+      "isStatic": false,
+      "member": "x"
+    },
+    {
+      "id": "worlds.authored.UgcVector3Value.y",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcVector3Value",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "System.Single",
+      "isPublic": true,
+      "isStatic": false,
+      "member": "y"
+    },
+    {
+      "id": "worlds.authored.UgcVector3Value.z",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcVector3Value",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "System.Single",
+      "isPublic": true,
+      "isStatic": false,
+      "member": "z"
+    },
+    {
+      "id": "worlds.authored.UgcRotationValue..ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationValue",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "isPublic": true,
+      "exactParameters": true,
+      "parameters": [],
+      "member": ".ctor"
+    },
+    {
+      "id": "worlds.authored.UgcRotationValue.w",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationValue",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "System.Nullable<System.Single>",
+      "isPublic": true,
+      "isStatic": false,
+      "member": "w"
+    },
+    {
+      "id": "worlds.authored.UgcRotationValue.x",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationValue",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "System.Single",
+      "isPublic": true,
+      "isStatic": false,
+      "member": "x"
+    },
+    {
+      "id": "worlds.authored.UgcRotationValue.y",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationValue",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "System.Single",
+      "isPublic": true,
+      "isStatic": false,
+      "member": "y"
+    },
+    {
+      "id": "worlds.authored.UgcRotationValue.z",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationValue",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "System.Single",
+      "isPublic": true,
+      "isStatic": false,
+      "member": "z"
+    },
+    {
+      "id": "worlds.authored.UgcVector3Value.ToUnityPosition",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcVector3Value",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "UnityEngine.Vector3",
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [],
+      "member": "ToUnityPosition"
+    },
+    {
+      "id": "worlds.authored.UgcRotationHelper.ToUnityQuaternion",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRotationHelper",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeCoordinates.cs",
+      "returnType": "UnityEngine.Quaternion",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UgcRotationValue",
           "constrained": true
         }
       ],
-      "returnType": ""
+      "member": "ToUnityQuaternion"
+    },
+    {
+      "id": "worlds.authored.UgcImportedEntity.SourceAssetId",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportedEntity",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeIndex.cs",
+      "returnType": "System.String",
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0,
+      "member": "SourceAssetId"
+    },
+    {
+      "id": "worlds.authored.UgcImportedEntity.UnresolvedAsset",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportedEntity",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authored map indexing",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/MapNativeIndex.cs",
+      "returnType": "System.Boolean",
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0,
+      "member": "UnresolvedAsset"
+    },
+    {
+      "id": "worlds.view.type.UgcEnvironmentPrefabMap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcSceneEnvironmentApplier",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneEnvironmentApplier",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcSceneEnvironmentInstance",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneEnvironmentInstance",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcEnvironmentPrefabMap.Entry",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap+Entry",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.type.UgcImportedVisualRoot",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportedVisualRoot",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeViewHiding.cs"
+    },
+    {
+      "id": "worlds.view.host.environment-map",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "EnvironmentPrefabMap",
+      "returnType": "UgcEnvironmentPrefabMap"
+    },
+    {
+      "id": "worlds.view.map.entries",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "entries",
+      "returnType": "UgcEnvironmentPrefabMap+Entry[]",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.view.entry.key",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap+Entry",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "presetKey",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.view.map.lookup",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcEnvironmentPrefabMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "TryGetPrefab",
+      "returnType": "System.Boolean",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject&",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.view.environment.apply",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcSceneEnvironmentApplier",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "Apply",
+      "returnType": "System.Void",
+      "parameters": [
+        {
+          "type": "UgcExportScene",
+          "constrained": true
+        },
+        {
+          "type": "UgcEnvironmentPrefabMap",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.Transform",
+          "constrained": true
+        },
+        {
+          "type": "UgcImportReport",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.Object",
+          "constrained": true
+        }
+      ],
+      "exactParameters": true,
+      "isStatic": true,
+      "genericArity": 0
+    },
+    {
+      "id": "worlds.view.type.UgcImportReport",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs"
+    },
+    {
+      "id": "worlds.view.UgcImportReport..ctor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "isPublic": true,
+      "exactParameters": true,
+      "parameters": [],
+      "member": ".ctor"
+    },
+    {
+      "id": "worlds.view.UgcImportReport.Problems",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportReport",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Native environment problem summary",
+      "sourceRef": "mods/Shared/UgcImportProblems.cs",
+      "member": "Problems",
+      "returnType": "System.Collections.Generic.IReadOnlyList<UgcImportProblem>",
+      "requireReadable": true,
+      "isPublic": true,
+      "isStatic": false,
+      "indexParameterCount": 0
+    },
+    {
+      "id": "worlds.view.scene.environment",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "member": "environment",
+      "returnType": "System.String",
+      "isStatic": false
+    },
+    {
+      "id": "worlds.view.scene.constructor",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Single-player world view",
+      "sourceRef": "mods/TopiaForge.Worlds/View/NativeMapViewSource.cs",
+      "parameters": [],
+      "exactParameters": true
+    },
+    {
+      "id": "worlds.map.UgcPublishedProjectLoader.ManifestFileName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPublishedProjectLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map manifest protocol",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "ManifestFileName",
+      "returnType": "System.String",
+      "isPublic": false,
+      "isStatic": true
+    },
+    {
+      "id": "worlds.map.UgcPublishedProjectLoader.ReadProjectUrl",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcPublishedProjectLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Map manifest protocol",
+      "sourceRef": "mods/TopiaForge.Worlds/Maps/NativePublishedMapBindings.cs",
+      "member": "ReadProjectUrl",
+      "returnType": "System.String",
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0,
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
     }
   ]
 }

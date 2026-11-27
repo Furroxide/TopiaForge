@@ -26,17 +26,23 @@ namespace TopiaForge.ModManager.Core
             }
 
             var errors = new List<string>();
+            manifest.AdmittedUi = null;
             var synchronizedFiles = manifest.Multiplayer?.SynchronizedFiles ?? new List<string>();
-            if (manifest.SchemaVersion != ModManifest.CurrentSchemaVersion ||
-                !string.Equals(
-                    manifest.Multiplayer?.Mode,
-                    ModMultiplayerMetadata.SessionMode,
-                    StringComparison.Ordinal))
-            {
-                return errors;
-            }
+            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion)) return errors;
+            var requiredFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+            var maps = (manifest.Contributions?.Worlds ?? new List<ModWorldDeclaration>())
+                .Where(world => world.Content?.Kind == ModWorldContent.MapKind).ToList();
+            if (maps.Count > 0 && (!VersionUtil.TryGetMinimum(manifest.SupportedLoaderVersionRange, out var minimum, out _)
+                || minimum == null || !VersionUtil.IsAtLeast(minimum, "0.2.0")))
+                errors.Add("TFPKG180: map world content needs TopiaForge 0.2.0 or newer. Raise supportedLoaderVersionRange.");
+            foreach (var world in maps)
+                if (world.Content!.File != null) requiredFiles[world.Content.File] = "map world file";
+            var isSession = manifest.Multiplayer?.Mode == ModMultiplayerMetadata.SessionMode;
+            if (isSession)
+                foreach (var file in synchronizedFiles.Take(ModMultiplayerMetadata.MaxSynchronizedFiles + 1))
+                    requiredFiles[file] = "multiplayer.synchronizedFiles entry";
 
-            if (!synchronizedFiles.Contains(
+            if (isSession && !synchronizedFiles.Contains(
                     ModMultiplayerMetadata.ContractLockFileName,
                     StringComparer.Ordinal))
             {
@@ -46,9 +52,10 @@ namespace TopiaForge.ModManager.Core
             }
 
             var hashes = manifest.Hashes ?? new Dictionary<string, string>();
-            foreach (var rawPath in synchronizedFiles.Take(ModMultiplayerMetadata.MaxSynchronizedFiles + 1))
+            foreach (var required in requiredFiles)
             {
-                if (!PortablePackagePath.TryValidate(rawPath, out var portablePath, out _, out _))
+                var label = required.Value;
+                if (!PortablePackagePath.TryValidate(required.Key, out var portablePath, out _, out _))
                 {
                     // ManifestValidator owns the actionable path diagnostic.
                     continue;
@@ -58,7 +65,7 @@ namespace TopiaForge.ModManager.Core
                     string.IsNullOrWhiteSpace(expectedDigest))
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' is missing its pack-time SHA-256 in hashes.");
                     continue;
                 }
@@ -66,7 +73,7 @@ namespace TopiaForge.ModManager.Core
                 if (!TryResolveOrdinaryFile(packageRoot, portablePath, out var fullPath, out var pathError))
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' is not an ordinary package file (" + pathError + ").");
                     continue;
                 }
@@ -79,7 +86,7 @@ namespace TopiaForge.ModManager.Core
                 catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' could not be hashed (" + exception.Message + ").");
                     continue;
                 }
@@ -87,15 +94,30 @@ namespace TopiaForge.ModManager.Core
                 if (!string.Equals(actualDigest, expectedDigest, StringComparison.OrdinalIgnoreCase))
                 {
                     errors.Add(
-                        "multiplayer.synchronizedFiles entry '" + portablePath +
+                        label + " '" + portablePath +
                         "' does not match its pack-time SHA-256.");
                 }
+            }
+
+            if (manifest.Ui != null)
+            {
+                var ui = UiThemePackage.Read(packageRoot, manifest);
+                if (!ui.TryGetValue(out var catalogue)) errors.Add(ui.ErrorMessage);
+                else if (errors.Count == 0) manifest.AdmittedUi = catalogue;
             }
 
             return errors;
         }
 
-        private static bool TryResolveOrdinaryFile(
+        /// <summary>Checks packaged UI definitions without inspecting the mod's managed assembly.</summary>
+        public static IReadOnlyList<string> ValidateUiThemes(string packageRoot, ModManifest manifest)
+        {
+            if (manifest.Ui == null) return Array.Empty<string>();
+            var result = UiThemePackage.Read(packageRoot, manifest);
+            return result.Succeeded ? Array.Empty<string>() : new[] { result.ErrorMessage };
+        }
+
+        internal static bool TryResolveOrdinaryFile(
             string packageRoot,
             string portablePath,
             out string fullPath,
@@ -105,40 +127,12 @@ namespace TopiaForge.ModManager.Core
             error = string.Empty;
             try
             {
-                var root = Path.GetFullPath(packageRoot);
-                var rootAttributes = File.GetAttributes(root);
-                if ((rootAttributes & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Device)) !=
-                    FileAttributes.Directory)
-                {
-                    error = "package root is not an ordinary directory";
-                    return false;
-                }
-
-                var current = root;
-                var segments = portablePath.Split('/');
-                for (var index = 0; index < segments.Length; index++)
-                {
-                    current = PathSafety.CombineRelativeChild(current, segments[index]);
-                    var attributes = File.GetAttributes(current);
-                    if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Device)) != 0)
-                    {
-                        error = "path contains a link or special entry";
-                        return false;
-                    }
-
-                    var isLast = index == segments.Length - 1;
-                    if (isLast == ((attributes & FileAttributes.Directory) != 0))
-                    {
-                        error = isLast ? "path names a directory" : "parent path is not a directory";
-                        return false;
-                    }
-                }
-
-                fullPath = current;
+                fullPath = PathSafety.RequireOrdinaryPackageFile(packageRoot, portablePath);
                 return true;
             }
             catch (Exception exception) when (
                 exception is IOException ||
+                exception is InvalidDataException ||
                 exception is UnauthorizedAccessException ||
                 exception is ArgumentException ||
                 exception is InvalidOperationException ||

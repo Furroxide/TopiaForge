@@ -85,13 +85,13 @@ namespace TopiaForge.Mods.Internal
                 catch (Exception reportingFailure)
                 {
                     FallbackToConsole(
-                        "TopiaForge event subscriber failed ('" + subscriberFailure.Message
-                        + "') and its error reporter also failed ('" + reportingFailure.Message + "').");
+                        "TopiaForge event subscriber failed (" + subscriberFailure.GetType().Name
+                        + ") and its error reporter also failed (" + reportingFailure.GetType().Name + ").");
                     return;
                 }
             }
 
-            FallbackToConsole("TopiaForge event subscriber failed: " + subscriberFailure.Message);
+            FallbackToConsole("TopiaForge event subscriber failed: " + subscriberFailure.GetType().Name);
         }
 
         private static void FallbackToConsole(string message)

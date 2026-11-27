@@ -46,21 +46,15 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
     return restored;
   }
 
-  Future<void> _restoreNuGetPackages(String root, SdkReferencePack sdk) async {
-    final projects =
-        Directory(root)
-            .listSync(recursive: true, followLinks: false)
-            .whereType<File>()
-            .where((file) => p.extension(file.path).toLowerCase() == '.csproj')
-            .where(
-              (file) =>
-                  !p.split(file.path).contains('unity-companion') &&
-                  !p.split(file.path).contains('obj') &&
-                  !p.split(file.path).contains('bin'),
-            )
-            .toList()
-          ..sort((left, right) => left.path.compareTo(right.path));
-    if (projects.isEmpty) return;
+  /// Restores every mod project under [root] with NuGet, then checks what
+  /// each lock file says NuGet resolved against the SDK pin
+  /// ([_checkRestoredSdkPackages]); the issues are that check's.
+  Future<List<LauncherIssue>> _restoreNuGetPackages(
+    String root,
+    SdkReferencePack sdk,
+  ) async {
+    final projects = _sdkPinnedProjects(root);
+    if (projects.isEmpty) return const [];
     if (!sdk.feed.existsSync()) {
       throw StateError(
         'TF1002: The cached TopiaForge NuGet source is missing. Run '
@@ -69,16 +63,18 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
       );
     }
     final dotnet = await _dotnetSdkResolver(Directory(root));
+    final snapshots = <String, NuGetLockFileSnapshot>{};
     for (final project in projects) {
+      snapshots[project.path] = NuGetLockFileSnapshot.of(project);
       final restore = await runBoundedProcess(
         dotnet.executable,
-        [
+        _boundedDeveloperDotnetArguments([
           'restore',
           project.path,
           '--use-lock-file',
           '--force-evaluate',
           '--nologo',
-        ],
+        ]),
         workingDirectory: root,
         timeout: const Duration(minutes: 5),
         maxStdoutBytes: 8 * 1024 * 1024,
@@ -92,15 +88,8 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
           'See https://docs.topiaforge.dev/diagnostics/TF1003',
         );
       }
-      final lock = File(p.join(project.parent.path, 'packages.lock.json'));
-      if (!lock.existsSync()) {
-        throw StateError(
-          'TF1004: NuGet did not create ${lock.path}. Ensure the project keeps '
-          'RestorePackagesWithLockFile enabled. '
-          'See https://docs.topiaforge.dev/diagnostics/TF1004',
-        );
-      }
     }
+    return _checkRestoredSdkPackages(root, sdk, projects, snapshots);
   }
 
   SdkReferencePack? _loadCachedSdkPack(_DeveloperSdkLock lock) {
@@ -202,7 +191,17 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
     return version;
   }
 
-  Future<SdkReferencePack?> _buildSourceSdkPack({
+  Future<SdkReferencePack?> _buildSourceSdkPack({String? requiredVersion}) {
+    if (!Directory(p.join(_repositoryRoot.path, 'src')).existsSync()) {
+      return Future.value();
+    }
+    return withSourceSdkBuildLock(
+      _repositoryRoot,
+      () => _buildOwnedSourceSdkPack(requiredVersion: requiredVersion),
+    );
+  }
+
+  Future<SdkReferencePack?> _buildOwnedSourceSdkPack({
     String? requiredVersion,
   }) async {
     final projects = _sourceSdkProjects();
@@ -221,16 +220,16 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
     if (missing.isNotEmpty) {
       final dotnet = await _dotnetSdkResolver(_repositoryRoot);
       for (final project in missing) {
-        final build = await runBoundedProcess(
+        final build = await runOwnedSourceSdkBuild(
           dotnet.executable,
-          [
+          _boundedDeveloperDotnetArguments([
             'build',
             project.projectFile.path,
             '-c',
             'Release',
             '-p:GenerateDocumentationFile=true',
             if (!project.isAnalyzer) '-p:ProduceReferenceAssembly=true',
-          ],
+          ]),
           workingDirectory: _repositoryRoot.path,
           timeout: const Duration(minutes: 5),
           maxStdoutBytes: 8 * 1024 * 1024,
@@ -334,9 +333,7 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
           label: 'SDK project',
         ),
       );
-      final targetFramework = RegExp(
-        r'<TargetFramework>\s*([^<]+?)\s*</TargetFramework>',
-      ).firstMatch(text)?.group(1);
+      final targetFramework = firstElementText(text, 'TargetFramework');
       if (targetFramework == null) {
         throw StateError('$name does not declare a TargetFramework.');
       }
@@ -371,10 +368,8 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
       ),
     );
     for (final property in const ['PackageVersion', 'Version']) {
-      final match = RegExp(
-        '<$property>\\s*([^<]+?)\\s*</$property>',
-      ).firstMatch(text);
-      if (match != null) return match.group(1)!.trim();
+      final version = firstElementText(text, property);
+      if (version != null) return version.trim();
     }
     throw StateError('SDK project has no Version or PackageVersion.');
   }

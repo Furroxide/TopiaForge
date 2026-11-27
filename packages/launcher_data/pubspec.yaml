@@ -1,13 +1,14 @@
 name: launcher_data
 description: Local filesystem repositories for the TopiaForge standalone launcher.
-version: 1.0.0-rc.1
+version: 0.2.0
 publish_to: none
 
 environment:
   sdk: ^3.11.1
 
 dependencies:
-  archive: ^4.0.7
+  # ZIP readers explicitly propagate decoding failures; payloads stay deferred.
+  archive: ^4.6.0
   crypto: ^3.0.6
   cryptography: ^2.9.0
   launcher_domain:

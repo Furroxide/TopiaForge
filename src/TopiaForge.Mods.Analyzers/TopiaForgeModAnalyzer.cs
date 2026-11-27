@@ -11,7 +11,7 @@ namespace TopiaForge.Mods.Analyzers
 {
     /// <summary>Enforces the safe V1 authoring boundary and keeps source dependencies aligned with the manifest.</summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
-    public sealed class TopiaForgeModAnalyzer : DiagnosticAnalyzer
+    public sealed partial class TopiaForgeModAnalyzer : DiagnosticAnalyzer
     {
         private const string Category = "TopiaForge";
         private const string DocsRoot = "https://docs.topiaforge.dev/diagnostics/";
@@ -76,14 +76,19 @@ namespace TopiaForge.Mods.Analyzers
             helpLinkUri: DocsRoot + "TF1007",
             customTags: new[] { WellKnownDiagnosticTags.CompilationEnd });
 
+        /// <summary>Names the generated method a TF1008 fix calls instead, when the blocked task is a generated command's.</summary>
+        internal const string AnsweredSubmitProperty = "TopiaForge.AnsweredSubmit";
+
+        private const string PollRemedy = "await the task instead, or drive the work with PendingOperation<T> and poll it from your per-frame update";
+
         private static readonly DiagnosticDescriptor BlockingWaitOnSdkTask = new DiagnosticDescriptor(
             "TF1008",
             "Blocking wait on an SDK task",
-            "'{0}' blocks the calling thread. TopiaForge SDK tasks complete on the game's main thread, so waiting on one from that thread stops the engine's update pump and hangs the game; drive the work with PendingOperation<T> and poll it from your per-frame update.",
+            "'{0}' blocks the calling thread. TopiaForge SDK tasks complete on the game's main thread, so waiting on one from that thread stops the engine's update pump and hangs the game; {1}.",
             Category,
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Mod code polls asynchronous SDK work from its per-frame update instead of waiting on it.",
+            description: "Mod code never waits on asynchronous SDK work: a multiplayer command's answer comes back to a callback, and other work is awaited, or polled from the per-frame update. In multiplayer, a command's answer and the code after an await keep a player's own action, while a result polled in a later frame counts as a script.",
             helpLinkUri: DocsRoot + "TF1008");
 
         private static readonly ImmutableDictionary<string, ModuleRequirement> ModuleAssemblies =
@@ -122,7 +127,14 @@ namespace TopiaForge.Mods.Analyzers
                 ObsoletePreV1Api,
                 MissingRequiredCapability,
                 LoaderOwnedUiReference,
-                BlockingWaitOnSdkTask);
+                BlockingWaitOnSdkTask,
+                InputEdgeInFixedUpdate,
+                SdkVersionRequired,
+                InvalidMapWorld,
+                MapWorldRequired,
+                MissingSurveyEntity,
+                ParticipantViewChange,
+                UnknownEnvironmentPreset);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -130,9 +142,10 @@ namespace TopiaForge.Mods.Analyzers
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.EnableConcurrentExecution();
             context.RegisterCompilationStartAction(StartCompilation);
+            context.RegisterCompilationAction(AnalyzeMapWorlds);
         }
 
-        private static void StartCompilation(CompilationStartAnalysisContext context)
+        private void StartCompilation(CompilationStartAnalysisContext context)
         {
             // Test code may legitimately wait on a task: it is not running inside the game loop.
             if (HasBooleanBuildProperty(
@@ -149,6 +162,12 @@ namespace TopiaForge.Mods.Analyzers
             context.RegisterSyntaxNodeAction(
                 AnalyzeBlockingWait,
                 SyntaxKind.SimpleMemberAccessExpression);
+
+            // FixedUpdate's timing is the game loop's too, whichever profile the mod builds with.
+            RegisterFixedUpdateInput(context);
+            RegisterVersionGates(context);
+            RegisterAuthoredMaps(context);
+            RegisterWorldView(context);
 
             if (HasBooleanBuildProperty(
                     context.Options.AnalyzerConfigOptionsProvider,
@@ -209,10 +228,16 @@ namespace TopiaForge.Mods.Analyzers
                 return;
             }
 
+            var remedy = BlockingWaitRemedies.Find(access, context.SemanticModel, context.CancellationToken, out var answeredSubmit);
+            var properties = answeredSubmit == null
+                ? ImmutableDictionary<string, string?>.Empty
+                : ImmutableDictionary<string, string?>.Empty.Add(AnsweredSubmitProperty, answeredSubmit);
             context.ReportDiagnostic(Diagnostic.Create(
                 BlockingWaitOnSdkTask,
                 access.GetLocation(),
-                access.ToString().Trim()));
+                properties,
+                access.ToString().Trim(),
+                remedy ?? PollRemedy));
         }
 
         private static bool IsBlockingTaskMember(ISymbol symbol, string name)

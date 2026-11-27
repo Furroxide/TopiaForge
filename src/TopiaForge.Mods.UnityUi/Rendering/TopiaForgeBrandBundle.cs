@@ -15,8 +15,14 @@ namespace TopiaForge.Mods.UnityUi
     public static class TopiaForgeBrandBundle
     {
         private const string ResourceName = "TopiaForge.Mods.UnityUi.topiaforge-ui.bundle";
-        private const string BodyName = "TopiaForge Body SDF";
+
+        // Quicksand Medium (500): body, label and caption text.
+        private const string BodyName = "TopiaForge Body Medium SDF";
+
+        // Quicksand Light (300), the variable font's default instance: headings and numerals.
+        private const string HeadingName = "TopiaForge Body SDF";
         private const string DisplayName = "TopiaForge Display SDF";
+        private const string MonoName = "TopiaForge Mono SDF";
 
         private static bool attempted;
         private static AssetBundle? bundle;
@@ -25,12 +31,13 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets whether the embedded brand asset bundle is loaded.</summary>
         public static bool IsLoaded => bundle != null;
 
-        /// <summary>Gets or sets body font.</summary>
+        /// <summary>Gets the small-text face, Quicksand Medium: body, label and caption text.</summary>
         public static TMP_FontAsset? BodyFont { get; private set; }
-        /// <summary>Gets or sets bold font.</summary>
-        public static TMP_FontAsset? BoldFont { get; private set; }
+        /// <summary>Gets the face for Quicksand text larger than body text, Quicksand Light: headings and numerals.</summary>
+        public static TMP_FontAsset? HeadingFont { get; private set; }
         /// <summary>Gets or sets display font.</summary>
         public static TMP_FontAsset? DisplayFont { get; private set; }
+        internal static TMP_FontAsset? MonoFont { get; private set; }
 
         /// <summary>Attempts the embedded-bundle load once; subsequent calls are free.</summary>
         public static bool TryLoad()
@@ -60,15 +67,16 @@ namespace TopiaForge.Mods.UnityUi
                 }
 
                 BodyFont = bundle.LoadAsset<TMP_FontAsset>(BodyName);
-                BoldFont = BodyFont;
+                HeadingFont = bundle.LoadAsset<TMP_FontAsset>(HeadingName);
                 DisplayFont = bundle.LoadAsset<TMP_FontAsset>(DisplayName);
+                MonoFont = bundle.LoadAsset<TMP_FontAsset>(MonoName);
 
                 var provenance = bundle.LoadAsset<TextAsset>("UiBundleManifest");
                 TopiaForgeLog.Info("Brand bundle loaded" + (provenance != null ? ": " + Condense(provenance.text) : "."));
 
-                if (BodyFont == null || DisplayFont == null)
+                if (BodyFont == null || HeadingFont == null || DisplayFont == null || MonoFont == null)
                 {
-                    TopiaForgeLog.Warn("Brand bundle is missing expected font assets (" + BodyName + ", " + DisplayName + "); font fallback tiers will fill the gaps.");
+                    TopiaForgeLog.Warn("Brand bundle is missing an expected body, heading, display or mono face. Font fallbacks are active.");
                 }
 
                 return true;
@@ -98,8 +106,9 @@ namespace TopiaForge.Mods.UnityUi
             bundleStream?.Dispose();
             bundleStream = null;
             BodyFont = null;
-            BoldFont = null;
+            HeadingFont = null;
             DisplayFont = null;
+            MonoFont = null;
         }
 
         private static string Condense(string json)

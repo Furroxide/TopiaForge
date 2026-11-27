@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static readonly byte[] ContractLockContent =
             System.Text.Encoding.UTF8.GetBytes(
-                "{\"schemaVersion\":2,\"protocolVersion\":\"1.0.0\",\"contracts\":[]}");
+                "{\"schemaVersion\":3,\"contracts\":[]}");
 
         public static void Run(string root)
         {

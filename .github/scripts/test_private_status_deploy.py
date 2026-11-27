@@ -47,6 +47,7 @@ class PrivateStatusDeployTests(unittest.TestCase):
         for head, head_repo, accepted in [
             ("cloudflare/deploy-host-main", "Furroxide/TopiaForge", True),
             ("release/0.2.0", "Furroxide/TopiaForge", True),
+            ("service/production-multiplayer", "Furroxide/TopiaForge", False),
             ("unrelated/main-change", "Furroxide/TopiaForge", False),
             ("cloudflare/deploy-host-main", "fork/TopiaForge", False),
         ]:
@@ -72,8 +73,8 @@ class PrivateStatusDeployTests(unittest.TestCase):
         self.assertIn("docs/internal/CloudflareDeploymentHost.md", scope)
         self.assertIn("test -f .github/workflows/deploy-private-status-source.yml", scope)
         self.assertIn("github.head_ref != 'cloudflare/deploy-host-main'", POLICY)
-        self.assertEqual(CI.count("PINNED_STABLE_BASELINE:"), 3)
-        self.assertEqual(CI.count("github.head_ref == 'cloudflare/deploy-host-main'"), 3)
+        self.assertEqual(CI.count("PINNED_STABLE_BASELINE:"), 4)
+        self.assertEqual(CI.count("github.head_ref == 'cloudflare/deploy-host-main'"), 4)
         self.assertIn("python3 .github/scripts/test_private_status_deploy.py", CI)
 
     def test_scoped_main_branch_rejects_client_file_changes(self):

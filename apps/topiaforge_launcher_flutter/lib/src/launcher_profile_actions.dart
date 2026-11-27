@@ -5,12 +5,12 @@ extension LauncherProfileActions on LauncherBloc {
     ProfileSelected event,
     Emitter<LauncherState> emit,
   ) async {
-    await _repository.saveProfiles(state.profiles, event.profileId);
-    emit(
-      state.copyWith(
-        selectedProfileId: event.profileId,
-        statusMessage: 'Profile selected.',
-      ),
+    if (!state.profiles.any((profile) => profile.id == event.profileId)) return;
+    await _persistProfiles(
+      state.profiles,
+      event.profileId,
+      emit,
+      'Profile selected.',
     );
   }
 
@@ -18,31 +18,15 @@ extension LauncherProfileActions on LauncherBloc {
     ProfileLaunchRequested event,
     Emitter<LauncherState> emit,
   ) async {
-    final install = state.gameInstall;
-    LauncherProfile? profile;
-    for (final candidate in state.profiles) {
-      if (candidate.id == event.profileId) {
-        profile = candidate;
-        break;
-      }
-    }
-    if (install == null || profile == null) {
-      return;
-    }
-    final selected = profile;
-    await _repository.saveProfiles(state.profiles, event.profileId);
-    emit(state.copyWith(selectedProfileId: event.profileId));
-    await _guard(emit, 'Launched TopiaForge.', () async {
-      final launchInstall = await _repairRuntimeBeforeLaunchIfNeeded(
-        emit,
-        install,
-      );
-      if (launchInstall == null) {
-        return;
-      }
-      final result = await _repository.launch(launchInstall, selected);
-      emit(_launchResultState(result));
-    });
+    if (!state.profiles.any((profile) => profile.id == event.profileId)) return;
+    final saved = await _persistProfiles(
+      state.profiles,
+      event.profileId,
+      emit,
+      'Profile selected.',
+    );
+    if (!saved) return;
+    await _launchSelectedProfile(emit, restart: false);
   }
 
   Future<void> _onProfileCreated(
@@ -64,14 +48,7 @@ extension LauncherProfileActions on LauncherBloc {
         },
       ),
     ];
-    await _repository.saveProfiles(profiles, id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: id,
-        statusMessage: 'Created profile.',
-      ),
-    );
+    await _persistProfiles(profiles, id, emit, 'Created profile.');
   }
 
   Future<void> _onSelectedProfileDuplicated(
@@ -79,19 +56,14 @@ extension LauncherProfileActions on LauncherBloc {
     Emitter<LauncherState> emit,
   ) async {
     final selected = state.selectedProfile;
-    if (selected == null) {
-      return;
-    }
+    if (selected == null) return;
     final id = 'profile-${DateTime.now().millisecondsSinceEpoch}';
     final copy = selected.copyWith(id: id, name: '${selected.name} Copy');
-    final profiles = [...state.profiles, copy];
-    await _repository.saveProfiles(profiles, id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: id,
-        statusMessage: 'Duplicated profile.',
-      ),
+    await _persistProfiles(
+      [...state.profiles, copy],
+      id,
+      emit,
+      'Duplicated profile.',
     );
   }
 
@@ -106,13 +78,11 @@ extension LauncherProfileActions on LauncherBloc {
     final profiles = state.profiles
         .where((profile) => profile.id != state.selectedProfileId)
         .toList();
-    await _repository.saveProfiles(profiles, profiles.first.id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: profiles.first.id,
-        statusMessage: 'Deleted profile.',
-      ),
+    await _persistProfiles(
+      profiles,
+      profiles.first.id,
+      emit,
+      'Deleted profile.',
     );
   }
 
@@ -121,25 +91,17 @@ extension LauncherProfileActions on LauncherBloc {
     Emitter<LauncherState> emit,
   ) async {
     final selected = state.selectedProfile;
-    if (selected == null) {
-      return;
-    }
-    final updated = selected.copyWith(
-      launchSettings: selected.launchSettings.copyWith(safeMode: event.enabled),
-    );
-    final profiles = [
-      for (final profile in state.profiles)
-        if (profile.id == updated.id) updated else profile,
-    ];
-    await _repository.saveProfiles(profiles, updated.id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: updated.id,
-        statusMessage: event.enabled
-            ? 'Safe mode enabled.'
-            : 'Safe mode disabled.',
+    if (selected == null) return;
+    await _saveUpdatedProfile(
+      selected.copyWith(
+        launchSettings: selected.launchSettings.copyWith(
+          safeMode: event.enabled,
+        ),
       ),
+      emit,
+      event.enabled
+          ? 'Safe mode enabled; launch will open the main menu.'
+          : 'Safe mode disabled.',
     );
   }
 
@@ -279,14 +241,7 @@ extension LauncherProfileActions on LauncherBloc {
       for (final profile in state.profiles)
         if (profile.id == updated.id) updated else profile,
     ];
-    await _repository.saveProfiles(profiles, updated.id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: updated.id,
-        statusMessage: message,
-      ),
-    );
+    await _persistProfiles(profiles, updated.id, emit, message);
   }
 }
 

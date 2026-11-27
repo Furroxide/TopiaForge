@@ -9,7 +9,7 @@ namespace TopiaForge.RobotKit
     // stuck, and drives the walk animation. This class is a thin driver around that native walk plus the visual
     // and combat overrides a mod typically needs; everything else (collision, grounding, slopes, separation) is
     // owned by the native LocomotionController.
-    internal sealed class RobotAgent : IRobotAgent, INativeEntityAdapter
+    internal sealed partial class RobotAgent : IRobotAgent, INativeEntityAdapter
     {
         private enum Intent
         {
@@ -18,9 +18,6 @@ namespace TopiaForge.RobotKit
             Chase
         }
 
-        private const float ReachedEpsilon = 0.1f;
-        // Hysteresis so a target hovering on the stop-distance boundary does not flip-flop between walk and idle.
-        private const float ReachHysteresis = 0.5f;
         // Minimum seconds between native walk (re)starts, so an unreachable target does not pathfind every frame.
         // Mirrors the native WalkSession.REPATH_INTERVAL.
         private const float WalkRetryCooldown = 0.25f;
@@ -58,6 +55,7 @@ namespace TopiaForge.RobotKit
         private float stopDistance;
         private RobotGait gait;
         private RobotInteractionOptions interaction;
+        private string? bodyOnly;
 
         private Behaviour? nativeSpeakable;
         private bool nativeSpeakableResolved;
@@ -103,6 +101,8 @@ namespace TopiaForge.RobotKit
         // path). To Autonomous: clear mod intents and best-effort wake the native brain back up.
         public OperationResult<bool> SetBrainMode(RobotBrainMode mode)
         {
+            if (replicaAnimation != null && mode != RobotBrainMode.Dormant) return ReplicaRefusal();
+            if (bodyOnly != null && mode != RobotBrainMode.Dormant) return OperationResult<bool>.Failure(ModErrorCode.Unavailable, bodyOnly);
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
@@ -122,16 +122,17 @@ namespace TopiaForge.RobotKit
             GameReflection.ApplyBrainMode(go, mode, nativeBrainSnapshot, logger);
             return OperationResult<bool>.Success(true);
         }
-        public bool IsMoving => isMoving;
-        public bool HasReachedTarget => hasReachedTarget;
+        public bool IsMoving => ReplicaState?.IsMoving ?? isMoving;
+        public bool HasReachedTarget => ReplicaState?.HasReachedTarget ?? hasReachedTarget;
 
-        public float MoveSpeed => moveSpeed;
-        public float TurnSpeed => turnSpeed;
-        public float StopDistance => stopDistance;
-        public RobotGait Gait => gait;
+        public float MoveSpeed => ReplicaState?.MoveSpeed ?? moveSpeed;
+        public float TurnSpeed => ReplicaState?.TurnSpeed ?? turnSpeed;
+        public float StopDistance => ReplicaState?.StopDistance ?? stopDistance;
+        public RobotGait Gait => ReplicaState?.Gait ?? gait;
 
         public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings)
         {
+            if (replicaAnimation != null) return ReplicaRefusal();
             if (settings == null)
             {
                 throw new System.ArgumentNullException(nameof(settings));
@@ -142,9 +143,15 @@ namespace TopiaForge.RobotKit
                 return Unavailable("The robot is no longer alive.");
             }
 
+            var nextStopDistance = Mathf.Max(0f, settings.StopDistance);
+            if (nextStopDistance != stopDistance || settings.Gait != gait)
+            {
+                CancelWalk();
+                hasReachedTarget = false;
+            }
             moveSpeed = Mathf.Max(0f, settings.MoveSpeed);
             turnSpeed = Mathf.Max(0f, settings.TurnSpeed);
-            stopDistance = Mathf.Max(0f, settings.StopDistance);
+            stopDistance = nextStopDistance;
             gait = settings.Gait;
             ApplySpeeds();
             return OperationResult<bool>.Success(true);
@@ -152,27 +159,32 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<bool> MoveTo(Vec3 position)
         {
+            if (replicaAnimation != null) return ReplicaRefusal();
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
             }
 
             var target = new Vector3(position.X, position.Y, position.Z);
-            if (intent != Intent.MoveTo || (moveToPosition - target).sqrMagnitude > 0.04f)
+            if (intent != Intent.MoveTo || (moveToPosition - target).sqrMagnitude > 0f)
             {
                 CancelWalk();
+                hasReachedTarget = false;
             }
 
             intent = Intent.MoveTo;
             moveToPosition = target;
             chaseTarget = null;
-            hasReachedTarget = false;
             return OperationResult<bool>.Success(true);
         }
 
         public OperationResult<bool> Chase(IEntity targetEntity)
         {
-            var target = (targetEntity as INativeEntityAdapter)?.NativeGameObject;
+            if (replicaAnimation != null) return ReplicaRefusal();
+            // RobotKit's own robots and player, or any entity the runtime made over a native object, such as another
+            // player's avatar in a multiplayer session.
+            var target = (targetEntity as INativeEntityAdapter)?.NativeGameObject
+                ?? (targetEntity as TopiaForge.Mods.Internal.IInternalNativeObjectEntity)?.NativeObject as GameObject;
             if (target == null)
             {
                 return OperationResult<bool>.Failure(
@@ -278,6 +290,9 @@ namespace TopiaForge.RobotKit
 
         public OperationResult<bool> SetInteraction(RobotInteractionOptions options)
         {
+            if (replicaAnimation != null && (options.NativeTalkMode != RobotNativeTalkMode.Disabled || options.CustomInteraction != null)) return ReplicaRefusal();
+            if (bodyOnly != null && options?.NativeTalkMode == RobotNativeTalkMode.Enabled)
+                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, bodyOnly);
             if (!IsAlive)
             {
                 return Unavailable("The robot is no longer alive.");
@@ -349,12 +364,13 @@ namespace TopiaForge.RobotKit
             }
 
             despawned = true;
+            ReleaseSpeech();
             // Release the walk now: there will be no later Step to drain it, so cancel + dispose the CTS here.
             ReleaseWalk();
             ResetInteractionOverrides();
             if (go != null)
             {
-                UnityEngine.Object.Destroy(go);
+                RobotComposedLifetime.DestroyActor(go);
             }
 
             return OperationResult<bool>.Success(true);
@@ -367,6 +383,16 @@ namespace TopiaForge.RobotKit
 
         private static OperationResult<bool> Unavailable(string message) =>
             OperationResult<bool>.Failure(ModErrorCode.InvalidState, message);
+
+        internal bool BodyOnly => bodyOnly != null;
+
+        // A body-only robot has no prepared native character: it stays Dormant, and native talk stays off.
+        // Called before activation, so the default talk policy never reaches the native prompt.
+        internal void RestrictToBody()
+        {
+            bodyOnly = RobotComposedReferences.BodyOnly;
+            if (interaction.CustomInteraction == null) interaction = RobotInteractionOptions.DisableNativeTalk();
+        }
 
         // Apply spawn-request speed overrides once the robot is live (the LocomotionController exists by then).
         public void OnActivated()
@@ -381,6 +407,11 @@ namespace TopiaForge.RobotKit
         // harvest its completion. The native LocomotionController owns the actual motion between calls.
         public void Step()
         {
+            if (replicaAnimation != null)
+            {
+                AnimateReplica();
+                return;
+            }
             if (despawned || go == null)
             {
                 return;
@@ -401,8 +432,9 @@ namespace TopiaForge.RobotKit
 
             // Drain a finished (or cancelled) walk before considering a new one, then start a short cooldown so an
             // unreachable target (which fails almost instantly) does not trigger a fresh native pathfind every frame.
-            if (pendingWalkAwaiter != null &&
-                LocomotionBridge.PollWalk(pendingWalkAwaiter) == LocomotionBridge.WalkPoll.Done)
+            var completion = pendingWalkAwaiter == null ? NativeWalkCompletion.Result.Pending
+                : LocomotionBridge.PollWalk(pendingWalkAwaiter, walkCts?.IsCancellationRequested == true);
+            if (pendingWalkAwaiter != null && completion != NativeWalkCompletion.Result.Pending)
             {
                 pendingWalkAwaiter = null;
                 walkCts?.Dispose();
@@ -426,21 +458,7 @@ namespace TopiaForge.RobotKit
             var position = transform.position;
             var flat = new Vector3(targetPosition.x - position.x, 0f, targetPosition.z - position.z);
             var distance = flat.magnitude;
-            var reachThreshold = Mathf.Max(ReachedEpsilon, stopDistance);
-
-            // Hysteresis: once arrived, stay "reached" until the target pulls clearly away again, so a target
-            // hovering on the boundary does not flip-flop the robot between walking and idle.
-            if (hasReachedTarget)
-            {
-                if (distance > reachThreshold + ReachHysteresis)
-                {
-                    hasReachedTarget = false;
-                }
-            }
-            else if (distance <= reachThreshold)
-            {
-                hasReachedTarget = true;
-            }
+            hasReachedTarget = NativeWalkCompletion.HasArrived(hasReachedTarget, distance, stopDistance, completion);
 
             if (hasReachedTarget)
             {
@@ -505,7 +523,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (System.Exception ex)
                 {
-                    logger.Debug("RobotKit native walk cancellation failed: " + ex.Message);
+                    logger.Debug("RobotKit native walk cancellation failed: " + RobotKitLog.ExceptionType(ex));
                 }
             }
         }
@@ -528,7 +546,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (System.Exception ex)
                 {
-                    logger.Debug("RobotKit native walk cleanup cancellation failed: " + ex.Message);
+                    logger.Debug("RobotKit native walk cleanup cancellation failed: " + RobotKitLog.ExceptionType(ex));
                 }
 
                 walkCts.Dispose();

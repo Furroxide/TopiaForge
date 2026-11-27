@@ -1,12 +1,17 @@
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("TopiaForge.ModManager")]
+[assembly: InternalsVisibleTo("TopiaForge.ModManager.Core")]
+[assembly: InternalsVisibleTo("TopiaForge.Mods.UnityUi")]
 [assembly: InternalsVisibleTo("TopiaForge.ModManager.Tests")]
+[assembly: InternalsVisibleTo("TopiaForge.ModRuntime.Tests")]
 [assembly: InternalsVisibleTo("TopiaForge.Mods.Testing")]
+[assembly: InternalsVisibleTo("TopiaForge.Mods.Worlds")]
 [assembly: InternalsVisibleTo("TopiaForge.Multiplayer")]
 [assembly: InternalsVisibleTo("TopiaForge.Chronos")]
 [assembly: InternalsVisibleTo("TopiaForge.CreatorContent")]
 [assembly: InternalsVisibleTo("TopiaForge.Prompts")]
 [assembly: InternalsVisibleTo("TopiaForge.RobotKit")]
-[assembly: InternalsVisibleTo("TopiaForge.UgcLiveSync")]
+[assembly: InternalsVisibleTo("TopiaForge.Mods.RobotKit")]
 [assembly: InternalsVisibleTo("TopiaForge.Worlds")]
+[assembly: InternalsVisibleTo("TopiaForge.Mods.Multiplayer.Tests")]

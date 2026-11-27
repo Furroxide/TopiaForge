@@ -7,10 +7,10 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.Worlds</AssemblyName>
     <RootNamespace>TopiaForge.Worlds</RootNamespace>
-    <Version>1.0.0-rc.1</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
     <!-- Genuinely native, and a loader-owned provider: this mod drives UnityEngine and HDRP directly
          and renders through TopiaForgeUi, so the safe-API rules (TF1001/TF1007) do not apply.
          Main-thread rules still do - opting out of the safe profile does not leave the game loop. The
@@ -30,7 +30,9 @@
   <!-- Shared clean-room game-reflection helpers (source-linked so the request shape lives in one place). -->
   <ItemGroup>
     <Compile Include="..\Shared\UgcNoOpLaunchRequest.cs" Link="Shared\UgcNoOpLaunchRequest.cs" />
+    <Compile Include="..\Shared\NativePlayerTeleport.cs" Link="Shared\NativePlayerTeleport.cs" />
     <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
+    <Compile Include="..\Shared\UgcImportProblems.cs" Link="Shared\UgcImportProblems.cs" />
     <Compile Remove="SceneClaimMatcher.cs" />
   </ItemGroup>
 

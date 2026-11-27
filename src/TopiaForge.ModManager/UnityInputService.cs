@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using TopiaForge.Mods;
+using TopiaForge.Mods.UnityUi;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -58,7 +59,6 @@ namespace TopiaForge.ModManager
             }
             catch (ObjectDisposedException)
             {
-                action.Dispose();
                 return OperationResult<IInputAction>.Failure(
                     ModErrorCode.Cancelled,
                     "The mod stopped before its input action could be registered.");
@@ -110,6 +110,39 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal UnityInputAction? FindUiAction(string ownerModId, string actionName) =>
+            FindUiActionByKey(ownerModId + ":" + actionName, actionName);
+
+        internal UnityInputAction? FindUiActionByKey(string key, string actionName)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            lock (sync)
+            {
+                return actions.TryGetValue(key, out var action) &&
+                    string.Equals(action.Name, actionName, StringComparison.Ordinal) ? action : null;
+            }
+        }
+
+        internal string? GetUiBindingConflict(IInputAction boundAction, InputBinding binding)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            lock (sync)
+            {
+                string? firstKey = null;
+                UnityInputAction? firstAction = null;
+                foreach (var candidate in actions)
+                {
+                    if (ReferenceEquals(candidate.Value, boundAction) || !ContainsControl(candidate.Value.Bindings, binding)) continue;
+                    if (firstKey == null || string.CompareOrdinal(candidate.Key, firstKey) < 0)
+                    {
+                        firstKey = candidate.Key;
+                        firstAction = candidate.Value;
+                    }
+                }
+                return firstAction?.Definition.DisplayName;
+            }
+        }
+
         public IReadOnlyList<InputConflict> GetConflicts(string ownerModId)
         {
             UnityMainThreadGuard.AssertCurrent();
@@ -154,6 +187,13 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal bool IsBoundByOther(string ownerModId, InputBinding candidate)
+        {
+            foreach (var action in actions.Values)
+                if (action.OwnerModId != ownerModId && ContainsControl(action.Bindings, candidate)) return true;
+            return false;
+        }
+
         private static bool ContainsControl(IReadOnlyList<InputBinding> bindings, InputBinding candidate)
         {
             for (var index = 0; index < bindings.Count; index++)
@@ -179,11 +219,29 @@ namespace TopiaForge.ModManager
                 actions.Values.CopyTo(snapshot, 0);
             }
 
-            var uiFocused = IsUiFocused;
+            var focus = UiFocus();
             foreach (var action in snapshot)
             {
-                action.Sample(uiFocused);
+                action.Sample(focus);
             }
+        }
+
+        /// <summary>
+        /// What the UI holds this frame, for actions that yield to it (InputActionYield): the TopiaForge surfaces' claims, a
+        /// surface holding the focus outright, one of the game's own text fields with the keyboard, and the pointer over UI.
+        /// A game control that is merely selected holds nothing: Unity keeps the game's menu panel selected after a click into
+        /// it, through the level that follows. A control a closed window left selected counts for nothing either.
+        /// </summary>
+        private static UiInputFocus UiFocus()
+        {
+            var events = EventSystem.current;
+            var selected = events != null ? events.currentSelectedGameObject : null;
+            return new UiInputFocus(
+                TopiaForgeDismissStack.Claims,
+                TopiaForgeDismissStack.HoldsFocus || TopiaForgeInputOwnership.KitTextFieldHasKeyboard(),
+                TopiaForgeGameTextFocus.Current.HasKeyboard(selected),
+                events != null && events.IsPointerOverGameObject(),
+                TopiaForgeNavigateAction.Bindings);
         }
 
         public void Dispose()
@@ -222,10 +280,18 @@ namespace TopiaForge.ModManager
 
         internal sealed class UnityInputAction : IInputAction
         {
+            private const int NotTakeable = -1;
+            private const int TakeableBack = -2;
+            private const int TakeableSubmit = -3;
+            private const int TakeableLeftStick = -4;
+            private const int TakeableRightStick = -5;
+
             private UnityInputRegistry? owner;
             private readonly string key;
             private readonly InputActionDefinition definition;
             private IReadOnlyList<InputBinding> bindings;
+            private InputPressOwner[] owners;
+            private int[] takeable;
             private float value;
             private bool held;
             private bool pressed;
@@ -244,10 +310,13 @@ namespace TopiaForge.ModManager
                 OwnerModId = ownerModId;
                 this.definition = definition;
                 bindings = CopyBindings(definition.DefaultBindings).AsReadOnly();
+                owners = new InputPressOwner[bindings.Count];
+                takeable = Takeable(bindings);
             }
 
             public string OwnerModId { get; }
             public string Name => definition.Name;
+            internal InputActionDefinition Definition => definition;
             public IReadOnlyList<InputBinding> Bindings => bindings;
             public float Value => value;
             public bool IsHeld => held;
@@ -259,16 +328,18 @@ namespace TopiaForge.ModManager
                 lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
             }
 
-            public void Sample(bool uiFocused)
+            public void Sample(UiInputFocus focus)
             {
                 if (owner == null)
                 {
                     return;
                 }
 
+                // A binding yields only to UI that holds its control, so a mod's own key still works over its window, and a
+                // press keeps the owner it began with until it is released.
                 var previous = held;
-                value = definition.SuppressWhileUiFocused && uiFocused ? 0f : ReadBindings(bindings);
-                held = Math.Abs(value) > 0.0001f;
+                value = ReadBindings(definition.SuppressWhileUiFocused, focus);
+                held = Math.Abs(value) > InputActionYield.ReleasedBelow;
                 pressed = held && !previous;
                 released = !held && previous;
             }
@@ -287,14 +358,16 @@ namespace TopiaForge.ModManager
                 }
 
                 var copy = CopyBindings(newBindings);
+                bindings = copy.AsReadOnly();
+                owners = new InputPressOwner[copy.Count];
+                takeable = Takeable(copy);
                 if (copy.Count == 0)
                 {
-                    return OperationResult<bool>.Failure(
-                        ModErrorCode.InvalidArgument,
-                        "At least one input binding is required.");
+                    value = 0f;
+                    held = false;
+                    pressed = false;
+                    released = false;
                 }
-
-                bindings = copy.AsReadOnly();
                 return OperationResult<bool>.Success(true);
             }
 
@@ -335,15 +408,68 @@ namespace TopiaForge.ModManager
                 Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
 
-            private static float ReadBindings(IReadOnlyList<InputBinding> bindings)
+            private float ReadBindings(bool yielding, UiInputFocus focus)
             {
                 var value = 0f;
                 for (var index = 0; index < bindings.Count; index++)
                 {
-                    value += ReadBinding(bindings[index]);
+                    // Who a press belongs to is decided as it begins: the UI that holds its control, or a press TopiaForge
+                    // took from the game, keeps it until its release, however the claims change meanwhile.
+                    var binding = bindings[index];
+                    var captured = TopiaForgeBindingCaptureInput.Capturing || TopiaForgeBindingCaptureInput.Took(binding);
+                    value += InputActionYield.Read(ref owners[index], binding, ReadBinding(binding), focus, yielding || captured,
+                        captured || (yielding && TakenByTopiaForge(index)));
                 }
 
                 return Mathf.Clamp(value, -1f, 1f);
+            }
+
+            // Whether TopiaForge took this binding's press from the game and still holds it.
+            private bool TakenByTopiaForge(int index)
+            {
+                var control = takeable[index];
+                if (control >= 0)
+                {
+                    return TopiaForgeInputOwnership.KeyTaken(control);
+                }
+
+                if (control == TakeableLeftStick || control == TakeableRightStick)
+                {
+                    return TopiaForgeInputOwnership.StickTaken(control == TakeableRightStick);
+                }
+
+                return control != NotTakeable && TopiaForgeInputOwnership.PadButtonTaken(control == TakeableBack);
+            }
+
+            // What TopiaForge's filter can take of each binding: a key's number, a controller's B, A or stick, or nothing.
+            private static int[] Takeable(IReadOnlyList<InputBinding> source)
+            {
+                var result = new int[source.Count];
+                for (var index = 0; index < source.Count; index++)
+                {
+                    var binding = source[index];
+                    result[index] = binding.Kind == InputBindingKind.Key ? TopiaForgeInputOwnership.KeyNumber(binding.Control)
+                        : binding.Kind == InputBindingKind.GamepadAxis ? TakeableStick(binding.Control)
+                        : binding.Kind != InputBindingKind.GamepadButton ? NotTakeable
+                        : string.Equals(binding.Control, nameof(InputGamepadButton.East), StringComparison.OrdinalIgnoreCase) ? TakeableBack
+                        : string.Equals(binding.Control, nameof(InputGamepadButton.South), StringComparison.OrdinalIgnoreCase) ? TakeableSubmit
+                        : NotTakeable;
+                }
+
+                return result;
+            }
+
+            private static int TakeableStick(string control)
+            {
+                if (string.Equals(control, nameof(InputGamepadAxis.LeftX), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(control, nameof(InputGamepadAxis.LeftY), StringComparison.OrdinalIgnoreCase))
+                {
+                    return TakeableLeftStick;
+                }
+
+                return string.Equals(control, nameof(InputGamepadAxis.RightX), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(control, nameof(InputGamepadAxis.RightY), StringComparison.OrdinalIgnoreCase)
+                    ? TakeableRightStick : NotTakeable;
             }
 
             private static List<InputBinding> CopyBindings(IEnumerable<InputBinding> source)
@@ -384,7 +510,7 @@ namespace TopiaForge.ModManager
                                     : 0f;
                         case InputBindingKind.GamepadAxis:
                             return Enum.TryParse(binding.Control, true, out InputGamepadAxis gamepadAxis)
-                                ? Input.GetAxisRaw(GamepadAxisName(gamepadAxis)) * binding.Scale
+                                ? UnityGamepadAxes.Read(gamepadAxis) * binding.Scale
                                 : 0f;
                         default:
                             return 0f;
@@ -442,19 +568,6 @@ namespace TopiaForge.ModManager
                 }
             }
 
-            private static string GamepadAxisName(InputGamepadAxis axis)
-            {
-                switch (axis)
-                {
-                    case InputGamepadAxis.LeftX: return "Horizontal";
-                    case InputGamepadAxis.LeftY: return "Vertical";
-                    case InputGamepadAxis.RightX: return "RightStickHorizontal";
-                    case InputGamepadAxis.RightY: return "RightStickVertical";
-                    case InputGamepadAxis.LeftTrigger: return "LeftTrigger";
-                    case InputGamepadAxis.RightTrigger: return "RightTrigger";
-                    default: return string.Empty;
-                }
-            }
         }
     }
 }

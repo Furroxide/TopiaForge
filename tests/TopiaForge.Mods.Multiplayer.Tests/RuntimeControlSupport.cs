@@ -1,0 +1,451 @@
+extern alias provider;
+
+using System.Diagnostics;
+using TopiaForge.ModManager;
+using TopiaForge.ModManager.Core;
+using TopiaForge.Mods.Internal;
+using provider::TopiaForge.Multiplayer.Network;
+using Control = provider::TopiaForge.Multiplayer.InternalControl;
+using Provider = provider::TopiaForge.Multiplayer.MultiplayerProvider;
+using RoutedDiagnostics = provider::TopiaForge.Multiplayer.RoutedDiagnostics;
+using RuntimeContent = provider::TopiaForge.Multiplayer.RuntimeContent;
+
+namespace TopiaForge.Mods.Multiplayer.Tests;
+
+/// <summary>One package a test peer runs, with the archive hash its install receipt records.</summary>
+internal sealed record PackageSpec(string Id, string Version, string Sha256, string? Mode = null, string? Presence = null)
+{
+    internal const string LockFile = ModMultiplayerMetadata.ContractLockFileName;
+
+    /// <summary>Gets whether the package is installed with a receipt; without one, the runtime hashes its files.</summary>
+    internal bool Receipted { get; init; } = true;
+
+    /// <summary>The same package copied in by hand: identical files on every peer, and no install receipt.</summary>
+    internal PackageSpec WithoutReceipt() => this with { Receipted = false };
+
+    /// <summary>A mod without a multiplayer block, shared implicitly.</summary>
+    internal static PackageSpec Implicit(string id, string version, char hash) => new(id, version, new string(hash, 64));
+
+    /// <summary>A session mod with the canonical contract lock as its synchronized file.</summary>
+    internal static PackageSpec Session(string id, string version, char hash, string presence = "required") =>
+        new(id, version, new string(hash, 64), ModMultiplayerMetadata.SessionMode, presence);
+
+    internal static PackageSpec Local(string id, string version, char hash) => new(id, version, new string(hash, 64), ModMultiplayerMetadata.ClientLocalMode);
+
+    internal static PackageSpec Standalone(string id, string version, char hash) => new(id, version, new string(hash, 64), ModMultiplayerMetadata.StandaloneMode);
+
+    internal ModManifest ToManifest()
+    {
+        var manifest = new ModManifest { SchemaVersion = 6, Id = Id, Name = DisplayName, Version = Version };
+        if (Mode == null) return manifest;
+        manifest.Multiplayer = new ModMultiplayerMetadata { Mode = Mode };
+        if (Mode != ModMultiplayerMetadata.SessionMode) return manifest;
+        manifest.Multiplayer.Presence = Presence ?? ModMultiplayerMetadata.RequiredPresence;
+        manifest.Multiplayer.Protocol = new ModMultiplayerProtocol { Version = "1.0.0", PeerVersionRange = ">=1.0.0 <2.0.0" };
+        manifest.Multiplayer.SynchronizedFiles = new List<string> { LockFile };
+        manifest.Hashes[LockFile] = new string(Sha256[0] == 'f' ? 'e' : 'f', 64);
+        return manifest;
+    }
+
+    /// <summary>Gets the name players see in problems: the id's last part, capitalised.</summary>
+    internal string DisplayName
+    {
+        get
+        {
+            var last = Id.Substring(Id.LastIndexOf('.') + 1);
+            return char.ToUpperInvariant(last[0]) + last.Substring(1);
+        }
+    }
+
+    /// <summary>
+    /// Writes the installed package: a folder with an install receipt naming its archive's hash or, for a package copied in
+    /// by hand, a file whose bytes follow from the package alone, so every peer hashes it alike.
+    /// </summary>
+    internal string Install(string root)
+    {
+        var folder = Path.Combine(root, Id + "-" + Version + "-" + Sha256.Substring(0, 8));
+        Directory.CreateDirectory(folder);
+        if (!Receipted)
+        {
+            File.WriteAllText(Path.Combine(folder, "Mod.dll"), Id + " " + Version + " " + Sha256);
+            return folder;
+        }
+
+        JsonUtil.SaveFile(Path.Combine(folder, PackageInstallReceipt.FileName), new PackageInstallReceipt
+        {
+            ModId = Id,
+            Version = Version,
+            SourceFile = Id + ".topiaforgemod",
+            SourceSha256 = Sha256,
+            InstalledAtUtc = "2026-10-14T00:00:00.0000000Z"
+        });
+        return folder;
+    }
+}
+
+/// <summary>Records what the runtime host logs.</summary>
+internal sealed class RecordingMultiplayerLog : IMultiplayerLog
+{
+    internal List<string> Lines { get; } = new();
+
+    public void Info(string message) => Lines.Add("info: " + message);
+
+    public void Warn(string message) => Lines.Add("warn: " + message);
+
+    public void Error(string message) => Lines.Add("error: " + message);
+}
+
+/// <summary>Records what a mod logger writes.</summary>
+internal sealed class RecordingModLogger : IModLogger
+{
+    internal List<string> Lines { get; } = new();
+
+    public void Debug(string message) => Lines.Add("debug: " + message);
+
+    public void Info(string message) => Lines.Add("info: " + message);
+
+    public void Warn(string message) => Lines.Add("warn: " + message);
+
+    public void Error(string message) => Lines.Add("error: " + message);
+
+    public void Error(Exception exception, string message) => Lines.Add("error: " + message + " " + exception);
+}
+
+/// <summary>A game engine's background setting, recorded.</summary>
+internal sealed class RecordingPlatform : IMultiplayerPlatform
+{
+    internal List<bool> Changes { get; } = new();
+
+    private bool value = true;
+
+    public bool RunInBackground
+    {
+        get => value;
+        set
+        {
+            this.value = value;
+            Changes.Add(value);
+        }
+    }
+}
+
+/// <summary>
+/// A runtime that presents its real content but skips its own check of the host's packages, as a modified game could:
+/// only the host's admission then stands between it and the session.
+/// </summary>
+internal sealed class UncheckedRuntimeHost : IInternalMultiplayerRuntimeHost
+{
+    private readonly MultiplayerRuntimeHost inner;
+
+    internal UncheckedRuntimeHost(MultiplayerRuntimeHost inner, int uiContractVersion = InternalUiPresentationContract.LegacyVersion)
+    {
+        this.inner = inner;
+        UiContractVersion = uiContractVersion;
+    }
+
+    public string GameBuild => inner.GameBuild;
+
+    public string RuntimeVersion => inner.RuntimeVersion;
+    public int UiContractVersion { get; }
+
+    public string DisplayName => inner.DisplayName;
+
+    public IReadOnlyList<InternalContentDescriptor> LocalContent => inner.LocalContent;
+
+    public InternalContentReadiness ContentReadiness => inner.ContentReadiness;
+
+    public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) => inner.EvaluateAdmission(offer);
+
+    public InternalContentVerdict CheckHostContent(IReadOnlyList<InternalHostPackage> hostPackages) => InternalContentVerdict.Admitted;
+
+    public void SetRunInBackground(bool enabled) => inner.SetRunInBackground(enabled);
+
+    public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic) => inner.ReportDiagnostic(diagnostic);
+
+    public string? ServiceOrigin => inner.ServiceOrigin;
+}
+
+/// <summary>
+/// One peer as the game composes it: the provider with live sessions on the deterministic network, its internal
+/// control, and ModManager's runtime host and composition root attached to it. With voice, the provider runs voice chat
+/// and its voice worker steps at the end of each frame on the network's clock, never on a thread of its own.
+/// </summary>
+internal sealed class ControlPeer
+{
+    private readonly VirtualDatagramNetwork network;
+
+    internal ControlPeer(
+        string name,
+        VirtualDatagramNetwork network,
+        SteppedResolver resolver,
+        string packageRoot,
+        IReadOnlyList<PackageSpec> packages,
+        bool live = true,
+        LiveJoinTimings? timings = null,
+        string gameBuild = "2545",
+        IMultiplayerWorkScheduler? contentScheduler = null,
+        bool voice = false,
+        MemoryDataFiles? files = null)
+    {
+        Name = name;
+        this.network = network;
+        Files = files ?? new MemoryDataFiles();
+        Factory = new SteppedNetworkFactory(network, name);
+        Content = new RuntimeContent(gameBuild, "0.2.0");
+        var diagnostics = new RoutedDiagnostics(null);
+        var setup = live ? new LiveSessionsSetup(Files, Content) { Factory = Factory, Resolver = resolver, JoinTimings = timings } : null;
+        if (setup != null && voice)
+        {
+            setup.Voice = true;
+            setup.VoiceWorkerThread = false;
+        }
+
+        Provider = new Provider(LiveRig.ProviderId, diagnostics, () => network.Now, setup);
+        SteppedVoice = setup != null && voice;
+        Control = new Control(Provider, Content, diagnostics);
+
+        // Packages are identified inline unless a test holds the work back, as a worker thread that has not finished would.
+        Runtime = new MultiplayerRuntimeHost(gameBuild, "0.2.0", Log, Platform, contentScheduler ?? MultiplayerWorkSchedulers.Inline);
+        foreach (var package in packages) Runtime.Inventory.Add(package.ToManifest(), package.Install(Path.Combine(packageRoot, name)));
+        Composition = new MultiplayerRuntime(() => Control, Runtime, Log);
+    }
+
+    internal string Name { get; }
+    internal SteppedNetworkFactory Factory { get; }
+    internal RuntimeContent Content { get; }
+
+    /// <summary>Gets the peer's data folder, which holds its identity; a restarted process reads the one its last run wrote.</summary>
+    internal MemoryDataFiles Files { get; }
+    internal Provider Provider { get; }
+    internal Control Control { get; }
+    internal MultiplayerRuntimeHost Runtime { get; }
+    internal MultiplayerRuntime Composition { get; }
+    internal RecordingMultiplayerLog Log { get; } = new();
+    internal RecordingPlatform Platform { get; } = new();
+
+    /// <summary>Gets the provider's session as a consuming mod sees it.</summary>
+    internal IMultiplayerSession Session => Provider;
+
+    /// <summary>Gets the runtime a test attached in place of the composed one, if any.</summary>
+    internal IInternalMultiplayerRuntimeHost? Replacement { get; private set; }
+
+    /// <summary>Gets or sets what runs where the mods' Update would, between the pump and the flush, such as a microphone.</summary>
+    internal Action? ModsUpdate { get; set; }
+
+    /// <summary>Gets or sets what runs once the frame and the voice worker's step are done, such as the audio thread's reads.</summary>
+    internal Action? AfterFrame { get; set; }
+
+    /// <summary>Attaches <paramref name="runtime"/> to the control in place of the composed runtime; frames then pump the control directly.</summary>
+    internal void UseRuntime(IInternalMultiplayerRuntimeHost runtime)
+    {
+        Composition.Disconnect();
+        if (!Control.AttachRuntime(runtime)) throw new InvalidOperationException("Assertion failed: the replacement runtime attaches");
+        Replacement = runtime;
+    }
+
+    /// <summary>Runs one frame the way ModRuntime does: the composition root around an empty mod update.</summary>
+    internal void Frame()
+    {
+        if (Replacement != null)
+        {
+            Control.Pump();
+            ModsUpdate?.Invoke();
+            Control.Flush();
+        }
+        else
+        {
+            Composition.BeforeModsUpdate(0.016f);
+            ModsUpdate?.Invoke();
+            Composition.AfterModsUpdate(0.016f);
+            Composition.BeforeModsLateUpdate(new GameTimeSample(GameLoopPhase.Late, 0.016f, 0.016f, 0d, 0));
+        }
+
+        if (SteppedVoice) Provider.Voice!.Worker.Step(network.Now);
+        AfterFrame?.Invoke();
+    }
+
+    /// <summary>Gets whether this peer runs voice chat, its worker stepping in its frame rather than on a thread.</summary>
+    internal bool SteppedVoice { get; }
+
+    internal ParticipantId IdOf(string displayName) =>
+        Session.Snapshot.Participants.Single(participant => participant.DisplayName == displayName).Id;
+
+    internal IInternalJoinTarget Target(string text = "host.test:27250")
+    {
+        if (!Control.TryCreateJoinTarget(text, out var target)) throw new InvalidOperationException("Assertion failed: the target parses");
+        return target!;
+    }
+}
+
+/// <summary>A listen host and joining peers on one deterministic network, each composed as the game composes it.</summary>
+internal sealed class ControlRig : IDisposable
+{
+    private readonly string packageRoot = Directory.CreateTempSubdirectory("TopiaForgeControlRig-").FullName;
+
+    internal ControlRig(int seed, params PackageSpec[] hostPackages)
+        : this(seed, "2545", hostPackages)
+    {
+    }
+
+    /// <summary>Creates a rig whose host announces <paramref name="hostBuild"/>, as a host on another build, or a hostile one, would.</summary>
+    internal ControlRig(int seed, string hostBuild, params PackageSpec[] hostPackages)
+        : this(seed, hostBuild, voice: false, hostPackages)
+    {
+    }
+
+    private ControlRig(int seed, string hostBuild, bool voice, PackageSpec[] hostPackages)
+    {
+        Voice = voice;
+        Network = new VirtualDatagramNetwork(seed);
+        Host = Add("host", hostPackages, hostBuild);
+        Resolver.Host = () => Host.Provider.Live!.Host?.Descriptor is { } descriptor && Host.Factory.Networks.Count > 0
+            ? (Host.Factory.Networks[^1].Node, descriptor)
+            : null;
+    }
+
+    /// <summary>Creates a rig whose peers run voice chat, each voice worker stepping in its peer's frame.</summary>
+    internal static ControlRig WithVoice(int seed, params PackageSpec[] hostPackages) => new(seed, "2545", voice: true, hostPackages);
+
+    /// <summary>Gets whether every peer runs voice chat.</summary>
+    internal bool Voice { get; }
+
+    internal VirtualDatagramNetwork Network { get; }
+    internal SteppedResolver Resolver { get; } = new();
+    internal ControlPeer Host { get; private set; }
+    internal List<ControlPeer> Peers { get; } = new();
+
+    /// <summary>Gets or sets the cumulative real-time bound for background work in each run.</summary>
+    internal TimeSpan BackgroundWorkBound { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Replaces the host's process with a new one under the same identity, bound to the same address and port, as a game
+    /// that crashed and started again: the old process is never pumped again and leaves the network at once, saying
+    /// goodbye to nobody, and the new one is composed fresh, hosting nothing yet. A crashed process is never disposed.
+    /// </summary>
+    internal ControlPeer RestartHost(params PackageSpec[] packages)
+    {
+        var crashed = Host;
+        var node = crashed.Factory.Networks[^1].Node;
+        Network.Retire(node, Network.Now);
+        Network.RunFor(1);
+        var restarted = new ControlPeer("host", Network, Resolver, packageRoot, packages, timings: Timings, contentScheduler: ContentScheduler, voice: Voice, files: crashed.Files);
+        restarted.Factory.Replaces = node;
+        if (!restarted.Composition.Connect()) throw new InvalidOperationException("Assertion failed: the runtime attaches to the restarted host");
+        Host = restarted;
+        return restarted;
+    }
+
+    /// <summary>Gets the folder the peers' installed packages live in, for a peer a test composes itself.</summary>
+    internal string PackageRoot => packageRoot;
+
+    /// <summary>Gets or sets how long the peers added from now on wait for their host; null uses the production waits.</summary>
+    internal LiveJoinTimings? Timings { get; set; }
+
+    /// <summary>Gets or sets where the peers added from now on identify their packages; null identifies them inline.</summary>
+    internal IMultiplayerWorkScheduler? ContentScheduler { get; set; }
+
+    internal ControlPeer AddPeer(string name, params PackageSpec[] packages) => Add(name, packages, "2545");
+
+    /// <summary>
+    /// Runs the network and every peer's frame until <paramref name="condition"/> holds or virtual time runs out, a frame
+    /// every <paramref name="frameMicros"/>; minutes of virtual time run at a coarser frame. Identity loads, password keys
+    /// and saves finish on other threads: before virtual time moves on, the run waits for them in real time, so they land
+    /// at the next frame however slow the machine is.
+    /// </summary>
+    internal bool Run(Func<bool> condition, long maximumMicros = 10_000_000, long frameMicros = 5_000)
+    {
+        var deadline = Network.Now + maximumMicros;
+        var waiting = new Stopwatch();
+        var spins = 0;
+        while (Network.Now < deadline)
+        {
+            Host.Frame();
+            foreach (var peer in Peers) peer.Frame();
+            if (condition()) return true;
+            AwaitBackgroundWork(waiting);
+
+            // Anything else a frame starts on another thread still gets a moment of real time, as it always has.
+            if (++spins % 20 == 0) Thread.Sleep(1);
+            Network.RunFor(frameMicros);
+        }
+
+        return condition();
+    }
+
+    /// <summary>
+    /// Waits in real time, without moving virtual time, until no peer has work running on other threads, as the live rig
+    /// does. A save that a test's gate holds is left alone, since only the test can release it.
+    /// </summary>
+    private void AwaitBackgroundWork(Stopwatch waiting)
+    {
+        waiting.Start();
+        try
+        {
+            while (true)
+            {
+                var pending = new BackgroundWorkWait();
+                foreach (var peer in Peers.Prepend(Host))
+                {
+                    if (peer.Provider.Live is { } live) pending.Add(peer.Name, live.PendingBackgroundWork(saves: peer.Files.HeldWrites == 0));
+                }
+
+                if (pending.Count == 0) return;
+                pending.Wait(waiting, BackgroundWorkBound);
+            }
+        }
+        finally
+        {
+            waiting.Stop();
+        }
+    }
+
+    /// <summary>Opens the host's session through the SPI and waits until it serves.</summary>
+    internal void StartHosting(InternalHostSettings settings)
+    {
+        var started = Host.Control.StartHosting(settings);
+        if (!started.Succeeded) throw new InvalidOperationException("Assertion failed: hosting starts (" + started.ErrorMessage + ")");
+        if (!Run(() => Host.Control.GetStatus().HostPhase == InternalHostPhase.Hosting)) throw new InvalidOperationException("Assertion failed: the host serves");
+    }
+
+    /// <summary>Joins <paramref name="peer"/> through the SPI and waits for the session.</summary>
+    internal void JoinAndWait(ControlPeer peer, InternalJoinSettings? settings = null)
+    {
+        var joined = peer.Control.Join(peer.Target(), settings ?? new InternalJoinSettings());
+        if (!joined.Succeeded) throw new InvalidOperationException("Assertion failed: the join starts (" + joined.ErrorMessage + ")");
+        if (!Run(() => peer.Control.GetStatus().JoinPhase == InternalJoinPhase.InSession))
+        {
+            var status = peer.Control.GetStatus();
+            throw new InvalidOperationException("Assertion failed: " + peer.Name + " joins (" + status.JoinPhase + ", " + status.JoinFailure + ": " + status.JoinDetail + ")");
+        }
+    }
+
+    public void Dispose()
+    {
+        foreach (var peer in Peers)
+        {
+            peer.Composition.Disconnect();
+            peer.Control.Dispose();
+            peer.Provider.Dispose();
+        }
+
+        Host.Composition.Disconnect();
+        Host.Control.Dispose();
+        Host.Provider.Dispose();
+        try
+        {
+            Directory.Delete(packageRoot, true);
+        }
+        catch (IOException)
+        {
+            // A temporary folder that cannot go now goes with the machine's next clean-up.
+        }
+    }
+
+    private ControlPeer Add(string name, PackageSpec[] packages, string gameBuild)
+    {
+        var peer = new ControlPeer(name, Network, Resolver, packageRoot, packages, timings: Timings, gameBuild: gameBuild, contentScheduler: ContentScheduler, voice: Voice);
+        if (!peer.Composition.Connect()) throw new InvalidOperationException("Assertion failed: the runtime attaches to " + name);
+        if (name != "host") Peers.Add(peer);
+        return peer;
+    }
+}

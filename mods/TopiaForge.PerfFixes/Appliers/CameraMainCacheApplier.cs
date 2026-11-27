@@ -46,8 +46,10 @@ namespace TopiaForge.PerfFixes.Appliers
                 return;
             }
 
+            // The prefix writes the out camera and the bool result, so it binds exactly that signature.
             var prefix = PatchUtil.Own(typeof(CameraMainCacheApplier), nameof(TryGetMainCameraPrefix));
-            if (PatchUtil.TryPatchPrefix(harmony, logger, "CameraUtils", "TryGetMainCamera", null, prefix))
+            var signature = new[] { typeof(Camera).MakeByRefType() };
+            if (PatchUtil.TryPatchPrefix(harmony, logger, "CameraUtils", "TryGetMainCamera", signature, prefix))
             {
                 active = true;
                 logger.Info("PerfFixes: Camera.main is now resolved once per frame.");

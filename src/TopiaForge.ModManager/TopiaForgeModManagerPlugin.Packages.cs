@@ -89,6 +89,14 @@ namespace TopiaForge.ModManager
 
         private void LogExcludedPackages()
         {
+            var serverContent = registry.LastServerContent;
+            if (serverContent.Frozen)
+            {
+                managerLogger.Warn("The list of mods installed for servers could not be used (" + serverContent.Problem
+                    + "), so this start loads only the version of each mod that loaded before. Start the game from the"
+                    + " TopiaForge launcher once to repair the list.");
+            }
+
             foreach (var package in packages)
             {
                 if (!package.IsValid)
@@ -108,13 +116,13 @@ namespace TopiaForge.ModManager
         public void RefreshPackages(bool saveState)
         {
             var scanState = state;
-            if (launchProfile != null)
+            if (startupSelection.Requested != null || startupSelection.SafeMode || startupSelection.QuarantinedPackageId.Length != 0)
             {
-                scanState = launchProfile.CreateEffectiveState(state);
+                scanState = startupSelection.CreateEffectiveState(state);
                 // Seed state entries for package directories missing from the
                 // current state file, then reapply the exact profile policy.
                 registry.Scan(paths, scanState, validationContext);
-                launchProfile.ApplyTo(scanState);
+                startupSelection.ApplyTo(scanState);
             }
 
             packages = registry.Scan(paths, scanState, validationContext);
@@ -127,6 +135,7 @@ namespace TopiaForge.ModManager
 
         public string InstallPackage(string packagePath)
         {
+            if (!CanSaveState) return StatePersistenceError;
             var result = packageInstaller.Install(
                 packagePath,
                 paths,
@@ -147,6 +156,7 @@ namespace TopiaForge.ModManager
 
         public string InstallInboxPackages()
         {
+            if (!CanSaveState) return StatePersistenceError;
             var results = packageInstaller.InstallInbox(
                 paths,
                 state,
@@ -186,6 +196,7 @@ namespace TopiaForge.ModManager
 
         public string ToggleEnabled(string id)
         {
+            if (!CanSaveState) return StatePersistenceError;
             var mod = state.Find(id);
             if (mod == null)
             {
@@ -207,6 +218,7 @@ namespace TopiaForge.ModManager
 
         public string Uninstall(string id)
         {
+            if (!CanSaveState) return StatePersistenceError;
             var mod = state.Find(id);
             if (mod == null)
             {
@@ -272,7 +284,7 @@ namespace TopiaForge.ModManager
 
         public void SaveState()
         {
-            JsonUtil.SaveFile(paths.StateFile, state);
+            if (!stateStore.Save()) managerLogger.Warn(stateStore.Failure);
         }
     }
 }

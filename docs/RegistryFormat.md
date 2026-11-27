@@ -61,7 +61,9 @@ topiaforge add source "TopiaForge Registry" https://docs.topiaforge.dev/registry
           "version": "…",
           "downloadUrl": "…",
           "packageSha256": "…",
-          "changelog": "…"
+          "changelog": "…",
+          "manifest": { "…": "that version's topiaforge.mod.json, for the newest 20 older versions" },
+          "packageBytes": 123456
         }
       ]
     }
@@ -77,6 +79,10 @@ Rules:
 - `packageSha256`: 64 lowercase hex characters — the SHA-256 of the **exact hosted bytes**. Installs verify
   it, so the hosted file must never change (publish a new version instead).
 - `origin`: `first-party` or `community`.
+- `history` rows are older versions, newest first. The newest 20 of them also inline their `manifest` and, for
+  first-party packages, their archive size in `packageBytes`, so a launcher can install the exact version a
+  multiplayer server runs. A community entry's own `packageBytes` is kept on every row. Both members are additive:
+  a launcher that ignores history ignores them too.
 
 ## Entry files (submission tooling; official intake closed)
 
@@ -121,6 +127,10 @@ topiaforge registry index --dir packages --output site/registry
   packages are hosted elsewhere).
 - `--include-prerelease` includes pre-release versions; `--entries <dir>` merges entry files in;
   `--changelogs <dir>` picks up per-mod changelogs (the official CI uses both).
+- `--history-manifests <n>` sets how many of each mod's newest older versions inline their manifest: 20 by default,
+  0 to 1000. Zero writes history rows with only their version, URL and SHA-256.
+- The index stays within the 16 MiB a launcher reads: the builder refuses to write a larger one. Lower
+  `--history-manifests` or split the registry if it does.
 - Upload the output (plus the `.topiaforgemod` files, unless `--base-url` points elsewhere) and share the
   index URL. Players add it as a package source (see above).
 
@@ -130,6 +140,10 @@ For quick local testing, skip the index entirely and point a source at the folde
 
 - Registry mods **dedupe to one entry per id** across all sources — the highest version wins; on a version
   tie the bundled local source is kept.
+- A `history` row with an inlined manifest is an **exact-version candidate**: dependency installs and multiplayer joins
+  can use that exact `id@version@sha256`, but it never becomes a catalog entry of its own, and a current entry for the
+  same version always wins. A row whose manifest names another mod or version, or whose URL or hash fails the source's
+  checks, is skipped without failing the source.
 - Remote installs **require the sha256 up front** and verify the downloaded bytes; downloads cap at
   **512 MB**.
 - A failing source degrades gracefully — the launcher shows per-source status and the other sources keep

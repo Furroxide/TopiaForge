@@ -29,11 +29,11 @@ namespace TopiaForge.Mods.UnityUi
             set => Set(ref highContrast, value);
         }
 
-        /// <summary>Accessibility: global UI scale in [0.75, 1.5], applied via canvas reference resolution.</summary>
+        /// <summary>Gets or sets the global UI scale from 0.75 to 2.0, applied through the canvas reference resolution.</summary>
         public static float UiScale
         {
             get => uiScale;
-            set => Set(ref uiScale, Clamp(value, 0.75f, 1.5f));
+            set => Set(ref uiScale, Clamp(value, 0.75f, 2f));
         }
 
         /// <summary>Accessibility: disables transitions, pulses, and punches entirely.</summary>

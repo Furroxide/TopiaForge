@@ -1,4 +1,6 @@
 using System;
+using TopiaForge.ModManager.Sessions;
+using TopiaForge.ModManager.Voice;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine;
 
@@ -9,7 +11,9 @@ namespace TopiaForge.ModManager
     /// full-screen card with a nav rail, per-tab content inside scroll views, toasts
     /// for action results, a destructive-confirm modal for removal, ESC-close via the
     /// kit dismiss stack, and cursor handling via the kit lease.
-    /// Public surface (Toggle/Show/ShowGamemodes/Tick/Dispose) is unchanged.
+    /// Tabs are found by name (<see cref="ManagerTabLookup"/>), never by their place in the rail.
+    /// The multiplayer presenter ticks every frame, overlay open or not, so a join is followed while the player plays, and
+    /// voice chat after it, so push-to-talk works while the overlay is closed.
     /// </summary>
     internal sealed class ManagerOverlay : ITopiaForgeDismissable
     {
@@ -17,23 +21,55 @@ namespace TopiaForge.ModManager
         private readonly ManagerFileLogger logger;
         private readonly ManagerUiState uiState = new ManagerUiState();
         private readonly TopiaForgeCursorLease cursorLease = new TopiaForgeCursorLease();
+        private readonly MultiplayerSessionsPresenter multiplayer;
+        private readonly MultiplayerFrameGuard multiplayerGuard;
+        private readonly MultiplayerOverlayFrame multiplayerFrame;
+        private readonly InSessionOverlay inSession;
+        private readonly NametagOverlay nametags;
         private UiHost? host;
         private GameObject? root;
         private TopiaForgePanel? shell;
         private TopiaForgeTabs? nav;
         private TopiaForgeLabel? statusLabel;
         private TopiaForgeContainer? content;
+        private MultiplayerSessionsUi? multiplayerUi;
+        private MultiplayerVoiceChat? voiceChat;
         private IManagerTab[] tabs = Array.Empty<IManagerTab>();
+        private string[] titles = Array.Empty<string>();
         private int selectedTab;
-        private string status = "Trusted local mode: install only packages you explicitly trust. C# mods execute code.";
+        private bool connectingShown;
+        private readonly ManagerStatus status = new ManagerStatus();
 
         public ManagerOverlay(TopiaForgeModManagerPlugin plugin, ManagerFileLogger logger)
         {
             this.plugin = plugin;
             this.logger = logger;
+
+            // Nothing the multiplayer interface throws may reach Unity's frame, where the game's crash reporter takes it:
+            // its stages run through this guard, which logs each failure once, redacted, and lets the frame run on.
+            multiplayerGuard = new MultiplayerFrameGuard(message => logger.Error(message));
+            multiplayer = new MultiplayerSessionsPresenter(
+                new PluginMultiplayerEnvironment(plugin, multiplayerGuard),
+                new FileMultiplayerSettingsStore(plugin.Paths.Data),
+                MultiplayerWorkSchedulers.Background, plugin.ExecuteChatCommand);
+            inSession = new InSessionOverlay(plugin, multiplayer, () =>
+            {
+                multiplayer.SelectTab(MultiplayerSubTab.Session);
+                ShowMultiplayer();
+            });
+            nametags = new NametagOverlay(() => plugin.Nametags,
+                () => ScoreboardNametagFeed.IsVisible(plugin.Multiplayer?.Control, plugin.Gameplay?.UiGameplay.IsGameplay == true));
+            multiplayerFrame = new MultiplayerOverlayFrame(multiplayerGuard, multiplayer, TickMultiplayerOutside, TickLiveTab, TickVoiceChat, nametags.Tick);
+            multiplayerGuard.Run(MultiplayerOverlayFrame.StartStage, multiplayer.Start);
+
+            // Voice chat that cannot start leaves VOICE saying so; the rest of the overlay runs on without it.
+            multiplayerGuard.Run(MultiplayerOverlayFrame.VoiceStartStage, StartVoiceChat);
         }
 
-        TopiaForgeLayerBand ITopiaForgeDismissable.Band => TopiaForgeLayerBand.Window;
+        /// <summary>Gets whether the multiplayer provider is loaded, so the main menu offers MULTIPLAYER.</summary>
+        public bool HasMultiplayer => plugin.Multiplayer?.Control != null;
+
+        TopiaForgeLayerBand ITopiaForgeDismissable.Band => TopiaForgeLayerPriority.Manager;
 
         void ITopiaForgeDismissable.Dismiss()
         {
@@ -56,21 +92,40 @@ namespace TopiaForge.ModManager
 
         public void Show()
         {
-            OpenAt(1); // Installed
+            OpenAt(ManagerTabLookup.Installed);
         }
 
         public void ShowGamemodes()
         {
-            OpenAt(0);
+            OpenAt(ManagerTabLookup.Gamemodes);
+        }
+
+        public void ShowMultiplayer()
+        {
+            OpenAt(ManagerTabLookup.Multiplayer);
         }
 
         public void Tick()
         {
-            // ESC and cursor are handled by the kit (dismiss stack + per-frame lease).
+            // ESC and cursor are handled by the kit (dismiss stack + per-frame lease). The multiplayer stages run through
+            // their guard, so none of them can break this frame or the plugin's.
+            multiplayerFrame.Tick(Time.unscaledDeltaTime);
+            if (status.Tick(Time.unscaledDeltaTime)) statusLabel?.SetText(status.Text);
         }
 
         public void Dispose()
         {
+            // A pending menu callback must not keep a destroyed tab's controls alive.
+            foreach (var tab in tabs) if (tab is GamemodesTab menu) menu.OnHidden();
+            multiplayerGuard.Run(MultiplayerOverlayFrame.VoiceTeardownStage, StopVoiceChat);
+            multiplayerGuard.Run(MultiplayerOverlayFrame.TeardownStage, () =>
+            {
+                nametags.Dispose();
+                multiplayerUi?.Close();
+                inSession.Dispose();
+                multiplayer.OnHidden();
+                multiplayer.Stop();
+            });
             cursorLease.Release();
             TopiaForgeDismissStack.Remove(this);
             host?.Dispose();
@@ -78,17 +133,64 @@ namespace TopiaForge.ModManager
             root = null;
         }
 
-        private void OpenAt(int tabIndex)
+        private void OpenAt(string tabName)
         {
             if (root == null)
             {
                 Build();
             }
 
+            var tabIndex = ManagerTabLookup.IndexOf(titles, tabName);
+            if (tabIndex < 0) tabIndex = 0;
+            if (tabIndex != selectedTab) HideLiveTab();
             selectedTab = tabIndex;
             nav?.Select(tabIndex);
             SetOpen(true);
             RefreshContent();
+        }
+
+        /// <summary>
+        /// Shows the multiplayer prompts, toasts and connecting overlay. Before the overlay is built only the toasts show, until
+        /// a question or a join needs the screen, as a session the launcher asked for does before the player opened anything:
+        /// the overlay is then built, closed, for its prompts and its connecting overlay.
+        /// </summary>
+        private void TickMultiplayerOutside()
+        {
+            inSession.Tick();
+            if (multiplayerUi == null && (multiplayer.PendingPrompt != null || multiplayer.Connecting.IsVisible)) Build();
+            if (multiplayerUi != null) multiplayerUi.Tick();
+            else MultiplayerSessionsUi.ShowNotices(multiplayer);
+        }
+
+        /// <summary>Hands the screen to a join's connecting overlay once it shows, and ticks the live tab while the overlay shows.</summary>
+        private void TickLiveTab()
+        {
+            var connecting = multiplayer.Connecting.IsVisible;
+            if (connecting && !connectingShown && root != null && root.activeSelf) Close();
+            connectingShown = connecting;
+            if (root != null && root.activeSelf && tabs[selectedTab] is IManagerLiveTab live) live.Tick();
+        }
+
+        /// <summary>Tells a live tab it no longer shows, as when the overlay closes or another tab is chosen.</summary>
+        private void HideLiveTab()
+        {
+            if (selectedTab < tabs.Length && tabs[selectedTab] is IManagerLiveTab live) live.OnHidden();
+        }
+
+        private void StartVoiceChat()
+        {
+            var created = new MultiplayerVoiceChat(plugin);
+            voiceChat = created;
+            created.Start();
+        }
+
+        private void TickVoiceChat(float deltaTime) => voiceChat?.Tick(deltaTime);
+
+        private void StopVoiceChat()
+        {
+            var stopping = voiceChat;
+            voiceChat = null;
+            stopping?.Dispose();
         }
 
         private void Build()
@@ -102,7 +204,8 @@ namespace TopiaForge.ModManager
                 LogError = message => logger.Error(message),
             });
 
-            var layer = host.Layer("overlay", TopiaForgeLayerBand.Window, TopiaForgeScheme.Paper, interactive: true, persistent: true);
+            var layer = host.KitLayer("overlay", TopiaForgeLayerPriority.Manager, TopiaForgeScheme.Paper,
+                interactive: true, persistent: true);
             root = layer.Go;
             // The menu-button injector's canvas scan excludes this exact name.
             root.name = "TopiaForgeModManagerOverlay";
@@ -131,20 +234,23 @@ namespace TopiaForge.ModManager
             tabs = new IManagerTab[]
             {
                 new GamemodesTab(),
+                new MultiplayerTab(multiplayer, multiplayerGuard, voiceChat?.Screen),
                 new InstalledTab(uiState),
                 new PackagesTab(uiState),
                 new SettingsTab(),
                 new LogsTab(),
             };
-            var labels = new string[tabs.Length];
+            titles = new string[tabs.Length];
             for (var index = 0; index < tabs.Length; index++)
             {
-                labels[index] = tabs[index].Title;
+                titles[index] = tabs[index].Title;
             }
 
-            nav = rail.NavRail(labels);
+            ManagerTabLookup.RequireDistinct(titles);
+            nav = rail.NavRail(titles);
             nav.OnSelected(index =>
             {
+                if (index != selectedTab) HideLiveTab();
                 selectedTab = index;
                 RefreshContent();
             });
@@ -154,12 +260,13 @@ namespace TopiaForge.ModManager
             // ---- main area ----
             var main = body.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
             main.Flex(1f, 1f);
-            statusLabel = main.Label(status, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning);
+            statusLabel = main.Label(status.Text, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning);
             statusLabel.FixedHeight(30f);
             var contentPanel = main.Panel(TopiaForgePanelStyle.Sunken);
             contentPanel.Flex(1f, 1f);
             content = contentPanel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
             content.Stretch();
+            multiplayerUi = new MultiplayerSessionsUi(host, multiplayer);
 
             root.SetActive(false);
         }
@@ -175,14 +282,14 @@ namespace TopiaForge.ModManager
             // cannot leave destroyed widgets, callbacks, or tweens registered for the rest of the process.
             host.Clear(content);
 
-            statusLabel?.SetText(status);
+            statusLabel?.SetText(status.Text);
             var context = new ManagerTabContext(plugin, host, RunAction, SetStatus, RefreshContent, Close);
             tabs[selectedTab].Build(content, context);
         }
 
         private void SetStatus(string message)
         {
-            status = message;
+            status.Set(message);
             statusLabel?.SetText(message);
         }
 
@@ -226,7 +333,8 @@ namespace TopiaForge.ModManager
             cursorLease.SetActive(open);
             if (open)
             {
-                TopiaForgeDismissStack.Push(this);
+                // While it shows, the overlay keeps the game's menu navigation from reaching the menu beneath it.
+                TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.Navigation, root);
                 if (shell != null)
                 {
                     TopiaForgeMotion.WindowIn(shell);
@@ -235,6 +343,7 @@ namespace TopiaForge.ModManager
             else
             {
                 TopiaForgeDismissStack.Remove(this);
+                HideLiveTab();
             }
         }
     }

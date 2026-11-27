@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 
@@ -6,11 +7,26 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ModManifest
     {
-        /// <summary>The immutable schema selector for the TopiaForge 1.0 manifest contract.</summary>
+        /// <summary>The legacy schema selector retained until manifest V5 retirement.</summary>
         public const int ManifestV5SchemaVersion = 5;
 
+        /// <summary>
+        /// The schema that declares <c>contributions</c>: worlds, gamemodes and launch targets as
+        /// separate things, each with an implementation owner, rather than V5's display-only
+        /// <c>worldGamemodes</c> list.
+        /// </summary>
+        public const int ManifestV6SchemaVersion = 6;
+
         /// <summary>The newest schema emitted by current tooling. Older supported readers must not depend on this.</summary>
-        public const int CurrentSchemaVersion = ManifestV5SchemaVersion;
+        public const int CurrentSchemaVersion = ManifestV6SchemaVersion;
+
+        /// <summary>
+        /// Whether a version has a reader at all. Every version gate routes through here, so admitting
+        /// a new schema cannot leave one of them behind still testing for a single version. A gate that
+        /// silently stops applying is worse than one that rejects.
+        /// </summary>
+        public static bool IsSupportedSchemaVersion(int schemaVersion) =>
+            schemaVersion == ManifestV6SchemaVersion;
 
         [DataMember(Name = "$schema", EmitDefaultValue = false)]
         public string SchemaUrl { get; set; } = string.Empty;
@@ -147,22 +163,69 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "apiAssemblies")]
         public List<string> ApiAssemblies { get; set; } = new List<string>();
 
-        [DataMember(Name = "worldGamemodes")]
-        public List<ModGamemode> WorldGamemodes { get; set; } = new List<ModGamemode>();
+        /// <summary>
+        /// The worlds, gamemodes and launch targets this package declares.
+        /// </summary>
+        [DataMember(Name = "contributions", EmitDefaultValue = false)]
+        public ModContributions? Contributions { get; set; }
 
         [DataMember(Name = "multiplayer", EmitDefaultValue = false)]
         public ModMultiplayerMetadata? Multiplayer { get; set; }
 
+        /// <summary>The package-local UI theme catalogue, when declared.</summary>
+        [DataMember(Name = "ui", EmitDefaultValue = false)]
+        public ModUiCatalogue? Ui { get; set; }
+
+        [IgnoreDataMember]
+        internal AdmittedUiCatalogue? AdmittedUi { get; set; }
+
         /// <summary>
-        /// True when this manifest opts into the versioned multiplayer contract.
+        /// True when this manifest carries an explicit multiplayer block.
         /// </summary>
         [IgnoreDataMember]
         public bool DeclaresMultiplayer =>
-            SchemaVersion == ManifestV5SchemaVersion && Multiplayer != null;
+            IsSupportedSchemaVersion(SchemaVersion) && Multiplayer != null;
 
-        /// <summary>True for manifests that may only be admitted to a standalone session.</summary>
+        /// <summary>
+        /// True when the manifest has no multiplayer block. Such a mod is shared implicitly: every peer must
+        /// enable the identical package.
+        /// </summary>
         [IgnoreDataMember]
-        public bool IsStandaloneOnly => !DeclaresMultiplayer;
+        public bool IsImplicitlyShared =>
+            IsSupportedSchemaVersion(SchemaVersion) && Multiplayer == null;
+
+        /// <summary>True for manifests that explicitly refuse every multiplayer session.</summary>
+        [IgnoreDataMember]
+        public bool IsStandaloneOnly =>
+            DeclaresMultiplayer &&
+            string.Equals(Multiplayer!.Mode, ModMultiplayerMetadata.StandaloneMode, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Gets how this mod takes part in multiplayer sessions, or null when the schema is unsupported or the
+        /// declared mode is unknown.
+        /// </summary>
+        [IgnoreDataMember]
+        public ModMultiplayerEffectiveMode? EffectiveMultiplayerMode
+        {
+            get
+            {
+                if (!IsSupportedSchemaVersion(SchemaVersion)) return null;
+                if (Multiplayer == null) return ModMultiplayerEffectiveMode.ImplicitShared;
+                switch (Multiplayer.Mode)
+                {
+                    case ModMultiplayerMetadata.SessionMode:
+                        return ModMultiplayerEffectiveMode.Session;
+                    case ModMultiplayerMetadata.ClientLocalMode:
+                        return ModMultiplayerEffectiveMode.ClientLocal;
+                    case ModMultiplayerMetadata.ServerOnlyMode:
+                        return ModMultiplayerEffectiveMode.ServerOnly;
+                    case ModMultiplayerMetadata.StandaloneMode:
+                        return ModMultiplayerEffectiveMode.Standalone;
+                    default:
+                        return null;
+                }
+            }
+        }
 
         [DataMember(Name = "vpmDependencies", EmitDefaultValue = false)]
         private Dictionary<string, string>? UnsupportedVpmDependencies { get; set; }
@@ -191,6 +254,9 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "packageHashes", EmitDefaultValue = false)]
         private Dictionary<string, string>? UnsupportedPackageHashes { get; set; }
 
+        [DataMember(Name = "worldGamemodes", EmitDefaultValue = false)]
+        private List<object>? UnsupportedWorldGamemodes { get; set; }
+
         [DataMember(Name = "gamemodes", EmitDefaultValue = false)]
         private List<object>? UnsupportedGamemodes { get; set; }
 
@@ -215,11 +281,31 @@ namespace TopiaForge.ModManager.Core
             if (UnsupportedSdkVersionRange != null) yield return "sdkVersionRange";
             if (UnsupportedPackageHashes != null) yield return "packageHashes";
             if (UnsupportedGamemodes != null) yield return "gamemodes";
+            if (UnsupportedWorldGamemodes != null) yield return "worldGamemodes";
             if (UnsupportedLegacyFolders != null) yield return "legacyFolders";
             if (UnsupportedLegacyFiles != null) yield return "legacyFiles";
             if (UnsupportedLegacyPackages != null) yield return "legacyPackages";
         }
 
+    }
+
+    /// <summary>How one mod takes part in multiplayer sessions once its manifest is read.</summary>
+    public enum ModMultiplayerEffectiveMode
+    {
+        /// <summary>No multiplayer block: required on every peer as the identical package.</summary>
+        ImplicitShared = 0,
+
+        /// <summary>A declared session mod negotiated by presence, protocol, and synchronized files.</summary>
+        Session = 1,
+
+        /// <summary>Runs only on the peer that enables it and is never required of others.</summary>
+        ClientLocal = 2,
+
+        /// <summary>Runs only on the logical server.</summary>
+        ServerOnly = 3,
+
+        /// <summary>Refuses every multiplayer session.</summary>
+        Standalone = 4
     }
 
     /// <summary>Transport-neutral multiplayer admission metadata introduced by manifest schema V5.</summary>
@@ -229,6 +315,7 @@ namespace TopiaForge.ModManager.Core
         public const string ClientLocalMode = "client-local";
         public const string ServerOnlyMode = "server-only";
         public const string SessionMode = "session";
+        public const string StandaloneMode = "standalone";
         public const string RequiredPresence = "required";
         public const string OptionalPresence = "optional";
         public const string ContractLockFileName = "topiaforge.multiplayer.lock.json";
@@ -370,16 +457,4 @@ namespace TopiaForge.ModManager.Core
         public string Reason { get; set; } = string.Empty;
     }
 
-    [DataContract]
-    public sealed class ModGamemode
-    {
-        [DataMember(Name = "id", IsRequired = true)]
-        public string Id { get; set; } = string.Empty;
-
-        [DataMember(Name = "name", IsRequired = true)]
-        public string Name { get; set; } = string.Empty;
-
-        [DataMember(Name = "description")]
-        public string Description { get; set; } = string.Empty;
-    }
 }

@@ -1,0 +1,112 @@
+[
+  {
+    "name": "empty library",
+    "json": "{\"schemaVersion\":1,\"sources\":[]}",
+    "valid": true
+  },
+  {
+    "name": "one published scene",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"}]}",
+    "valid": true
+  },
+  {
+    "name": "different scenes",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"},{\"map\":\"example-map\",\"scene\":\"workshop\",\"name\":\"Courtyard\"}]}",
+    "valid": true
+  },
+  {
+    "name": "case-sensitive map ids",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"Example\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"},{\"map\":\"example\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"}]}",
+    "valid": true
+  },
+  {
+    "name": "maximum ids",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\",\"scene\":\"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\",\"name\":\"NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN\"}]}",
+    "valid": true
+  },
+  {
+    "name": "duplicate source",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"},{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"}]}",
+    "valid": false
+  },
+  {
+    "name": "URL instead of canonical id",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"https://robotopia.gg/map/example/\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"}]}",
+    "valid": false
+  },
+  {
+    "name": "live document rejected",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"automerge:example\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"}]}",
+    "valid": false
+  },
+  {
+    "name": "map id length",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\",\"scene\":\"courtyard\",\"name\":\"Courtyard\"}]}",
+    "valid": false
+  },
+  {
+    "name": "scene length",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\",\"name\":\"Courtyard\"}]}",
+    "valid": false
+  },
+  {
+    "name": "name length",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\"}]}",
+    "valid": false
+  },
+  {
+    "name": "name control",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\"Map\\nPrivate\"}]}",
+    "valid": false
+  },
+  {
+    "name": "empty name",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\" \"}]}",
+    "valid": false
+  },
+  {
+    "name": "scene traversal",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"../other\",\"name\":\"Courtyard\"}]}",
+    "valid": false
+  },
+  {
+    "name": "unknown source field",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":\"courtyard\",\"name\":\"Courtyard\",\"token\":\"synthetic\"}]}",
+    "valid": false
+  },
+  {
+    "name": "unknown document field",
+    "json": "{\"schemaVersion\":1,\"sources\":[],\"token\":\"synthetic\"}",
+    "valid": false
+  },
+  {
+    "name": "wrong version",
+    "json": "{\"schemaVersion\":2,\"sources\":[]}",
+    "valid": false
+  },
+  {
+    "name": "missing version",
+    "json": "{\"sources\":[]}",
+    "valid": false
+  },
+  {
+    "name": "wrong field type",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"example-map\",\"scene\":1,\"name\":\"Courtyard\"}]}",
+    "valid": false
+  },
+  {
+    "name": "duplicate property",
+    "json": "{\"schemaVersion\":1,\"schemaVersion\":1,\"sources\":[]}",
+    "valid": false
+  },
+  {
+    "name": "unpaired surrogate",
+    "json": "{\"schemaVersion\":1,\"sources\":[{\"map\":\"m\",\"scene\":\"s\",\"name\":\"\\ud800\"}]}",
+    "valid": false
+  },
+  {
+    "name": "trailing data",
+    "json": "{\"schemaVersion\":1,\"sources\":[]}true",
+    "valid": false
+  }
+]

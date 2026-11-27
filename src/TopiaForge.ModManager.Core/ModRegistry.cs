@@ -19,6 +19,24 @@ namespace TopiaForge.ModManager.Core
             ManagerState state,
             ManifestValidationContext validationContext)
         {
+            return Scan(paths, state, validationContext, null);
+        }
+
+        /// <summary>
+        /// What the last scan made of the record of server content, so the manager can say when it failed closed.
+        /// </summary>
+        internal ServerContentSelection LastServerContent { get; private set; } = ServerContentSelection.None;
+
+        /// <summary>
+        /// Scans with <paramref name="serverContent"/> in place of the record beside the manager state, which a null
+        /// reads. A version the record keeps for server profiles is selected only by an exact pin.
+        /// </summary>
+        internal IReadOnlyList<ModPackage> Scan(
+            ManagerPaths paths,
+            ManagerState state,
+            ManifestValidationContext validationContext,
+            ServerContentSelection? serverContent)
+        {
             if (validationContext == null)
             {
                 throw new ArgumentNullException(nameof(validationContext));
@@ -26,6 +44,8 @@ namespace TopiaForge.ModManager.Core
 
             paths.EnsureCreated();
             state.Normalize();
+            var content = serverContent ?? ServerContentSelection.Load(paths);
+            LastServerContent = content;
             state.Mods.RemoveAll(mod => !paths.TryGetPackageIdPath(mod.Id, out _));
             var candidates = new List<ScannedCandidate>();
 
@@ -109,11 +129,13 @@ namespace TopiaForge.ModManager.Core
             var groups = candidates
                 .GroupBy(candidate => candidate.DirectoryId, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(group => CreateSelectionGroup(group.Key, group.ToList(), state))
+                .Select(group => CreateSelectionGroup(group.Key, group.ToList(), state, content))
+                .Where(group => group != null)
+                .Select(group => group!)
                 .ToList();
             var selections = SelectCompatibleCandidates(groups);
             return selections
-                .Select(selection => MaterializeSelection(selection, state))
+                .Select(selection => MaterializeSelection(selection, state, content))
                 .OrderBy(p => p.Manifest?.Name ?? p.PackagePath, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(p => p.PackagePath, StringComparer.Ordinal)
                 .ToList();
@@ -148,10 +170,17 @@ namespace TopiaForge.ModManager.Core
             return true;
         }
 
-        private static SelectionGroup CreateSelectionGroup(
+        /// <summary>
+        /// The versions one mod folder offers. An exact pin takes its version, whatever it is. Unpinned selection, the
+        /// player's own play, never takes a version the record of server content keeps for server profiles; a mod with
+        /// nothing else installed offers nothing. While the record cannot be trusted it takes only the version the
+        /// manager state already names, and a mod with no manager record does not load.
+        /// </summary>
+        private static SelectionGroup? CreateSelectionGroup(
             string directoryId,
             List<ScannedCandidate> candidates,
-            ManagerState state)
+            ManagerState state,
+            ServerContentSelection serverContent)
         {
             var selectedState = state.Find(directoryId);
             if (selectedState != null && selectedState.VersionPinned)
@@ -169,6 +198,44 @@ namespace TopiaForge.ModManager.Core
                     selectedState,
                     new[] { selected },
                     pinned: true);
+            }
+
+            candidates = candidates
+                .Where(candidate => !serverContent.Withholds(
+                    directoryId,
+                    Path.GetFileName(candidate.PackagePath),
+                    candidate.PackagePath))
+                .ToList();
+            if (candidates.Count == 0)
+            {
+                return null;
+            }
+
+            if (serverContent.Frozen)
+            {
+                var recorded = selectedState?.Version ?? string.Empty;
+                var kept = candidates
+                    .Where(candidate => string.Equals(
+                        Path.GetFileName(candidate.PackagePath),
+                        recorded,
+                        StringComparison.Ordinal))
+                    .ToList();
+                if (kept.Count == 0)
+                {
+                    if (selectedState != null && (!selectedState.Enabled || selectedState.UninstallPending))
+                    {
+                        return null;
+                    }
+
+                    var folder = Path.GetDirectoryName(candidates[0].PackagePath) ?? candidates[0].PackagePath;
+                    return new SelectionGroup(
+                        directoryId,
+                        selectedState,
+                        new[] { ScannedCandidate.Invalid(directoryId, folder, FrozenMessage(selectedState)) },
+                        pinned: false);
+                }
+
+                candidates = kept;
             }
 
             var options = candidates
@@ -190,6 +257,14 @@ namespace TopiaForge.ModManager.Core
 
             return new SelectionGroup(directoryId, selectedState, options, pinned: false);
         }
+
+        private static string FrozenMessage(InstalledModState? recorded) =>
+            "TopiaForge could not use its list of the mods installed for servers (BepInEx/TopiaForge/"
+            + ServerContentRecord.FileName + "), so this start loads only the version of each mod that loaded before."
+            + (recorded == null || recorded.Version.Length == 0
+                ? " This mod did not load before."
+                : " Version " + recorded.Version + " of this mod, which loaded before, is not installed.")
+            + " Start the game from the TopiaForge launcher once to repair the list.";
 
         private static IReadOnlyList<CandidateSelection> SelectCompatibleCandidates(
             IReadOnlyList<SelectionGroup> groups)
@@ -358,7 +433,10 @@ namespace TopiaForge.ModManager.Core
             return reason + suffix;
         }
 
-        private static ModPackage MaterializeSelection(CandidateSelection selection, ManagerState state)
+        private static ModPackage MaterializeSelection(
+            CandidateSelection selection,
+            ManagerState state,
+            ServerContentSelection serverContent)
         {
             var selected = selection.Candidate;
             if (selected.Manifest == null)
@@ -371,9 +449,11 @@ namespace TopiaForge.ModManager.Core
             {
                 if (modState == null)
                 {
+                    // A join records a mod new to the player disabled; if that record is gone, it stays disabled.
                     modState = state.Upsert(
                         selected.Manifest,
-                        enabled: ModActivationPolicy.IsEnabledByDefault(selected.Manifest),
+                        enabled: ModActivationPolicy.IsEnabledByDefault(selected.Manifest)
+                            && !serverContent.StartsDisabled(selected.Manifest.Id),
                         restartRequired: true);
                 }
                 else if (!modState.VersionPinned)

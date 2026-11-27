@@ -26,6 +26,7 @@ final class LiveAcceptanceEvidence {
     required this.requiredLogMarker,
     required this.requiredLogMarkerObserved,
     required this.succeeded,
+    required this.isolation,
   });
 
   final DateTime startedAtUtc;
@@ -50,8 +51,12 @@ final class LiveAcceptanceEvidence {
   final bool requiredLogMarkerObserved;
   final bool succeeded;
 
+  /// Private evidence: contains OS identity and paths, never a public attachment.
+  final Map<String, Object?> isolation;
+
   Map<String, Object?> toJson() => {
-    'schemaVersion': 2,
+    'schemaVersion': 3,
+    'isolation': isolation,
     'startedAtUtc': startedAtUtc.toUtc().toIso8601String(),
     'completedAtUtc': completedAtUtc.toUtc().toIso8601String(),
     'gameDirectory': gameDirectory,
@@ -84,6 +89,8 @@ final class LiveAcceptanceEvidence {
 
 LiveAcceptanceEvidence buildLiveAcceptanceEvidence({
   required LiveAcceptanceOptions options,
+  required Map<String, Object?> isolationEvidence,
+  required String isolatedGameDirectory,
   required DateTime startedAtUtc,
   required DateTime completedAtUtc,
   required String packagePath,
@@ -123,7 +130,8 @@ LiveAcceptanceEvidence buildLiveAcceptanceEvidence({
   return LiveAcceptanceEvidence(
     startedAtUtc: startedAtUtc,
     completedAtUtc: completedAtUtc,
-    gameDirectory: options.gameDirectory,
+    gameDirectory: isolatedGameDirectory,
+    isolation: Map.unmodifiable(isolationEvidence),
     packagePath: packagePath,
     requiredCases: List.unmodifiable(requiredCases),
     passedCases: List.unmodifiable(passed),

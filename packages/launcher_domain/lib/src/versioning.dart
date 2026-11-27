@@ -14,8 +14,8 @@ final _rangeCoreComponentPattern = RegExp(r'^(0|[1-9][0-9]*)$');
 ///
 /// The game launcher publishes monotonically increasing integer build ids,
 /// while mod compatibility ranges use SemVer. TopiaForge reserves the
-/// `0.0.<build>` namespace for that bridge, so build `2309` is represented as
-/// `0.0.2309` everywhere a manifest range is evaluated.
+/// `0.0.<build>` namespace for that bridge, so build `2409` is represented as
+/// `0.0.2409` everywhere a manifest range is evaluated.
 abstract final class RobotopiaGameVersion {
   static const int maxBuildId = 2147483647;
 
@@ -296,6 +296,18 @@ class VersionRange {
     }
 
     return true;
+  }
+
+  /// Whether [version] lies above this range's upper bound, as a game update
+  /// ahead of a mod's supported builds does.
+  bool isAboveMaximum(String version) {
+    final parsed = SemanticVersion.tryParse(version);
+    final maximum = max;
+    if (parsed == null || maximum == null) {
+      return false;
+    }
+    final comparison = parsed.compareTo(maximum);
+    return comparison > 0 || (comparison == 0 && !includeMax);
   }
 
   static VersionRange parse(String? input) {

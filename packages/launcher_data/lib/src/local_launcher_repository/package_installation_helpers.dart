@@ -16,6 +16,8 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
   ) async {
     final normalized = sources.isEmpty ? _defaultPackageSources() : sources;
     _validatePackageSources(normalized);
+    // A save never writes over sources that could not be read just now.
+    await recoverAtomicBackupIfMissing(_sourcesFile, label: 'Package sources');
     await _writeJsonFileAtomic(
       _sourcesFile,
       {
@@ -48,7 +50,10 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       packagePath,
       expectedSha256: expectedSha256,
     );
-    final installed = await _loadInstalledMods(currentInstall);
+    final installed = await _loadInstalledMods(
+      currentInstall,
+      reconcileRestartRequirements: false,
+    );
     final sources = await _loadPackageSources();
     final registryMods = await _loadRegistryCandidates(installed, sources);
     return _dependencyPlanner.previewInstall(
@@ -75,6 +80,22 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
     String expectedSha256 = '',
     String sourceId = '',
     String rootSourceKind = '',
+  }) => _withPackageCacheLock(
+    () => _installPackageLocked(
+      packagePath,
+      install,
+      expectedSha256: expectedSha256,
+      sourceId: sourceId,
+      rootSourceKind: rootSourceKind,
+    ),
+  );
+
+  Future<List<InstalledMod>> _installPackageLocked(
+    String packagePath,
+    GameInstall install, {
+    String expectedSha256 = '',
+    String sourceId = '',
+    String rootSourceKind = '',
   }) async {
     final currentInstall = await _validateGameDirectory(install.path);
     if (!currentInstall.canLaunch) {
@@ -86,7 +107,10 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       packagePath,
       expectedSha256: expectedSha256,
     );
-    final installed = await _loadInstalledMods(currentInstall);
+    final installed = await _loadInstalledMods(
+      currentInstall,
+      reconcileRestartRequirements: false,
+    );
     final sources = await _loadPackageSources();
     final registryMods = await _loadRegistryCandidates(installed, sources);
     final plan = _dependencyPlanner.previewInstall(
@@ -163,6 +187,7 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
     };
     final staged = <_StagedPackageInstall>[];
     var stateSaved = false;
+    var rollbackComplete = true;
     try {
       for (final action in plan.installActions) {
         if (action.enableOnly) {
@@ -195,6 +220,9 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
           preserveExistingEnabled: action.root,
         );
       }
+      for (final verified in verifiedPackages.values) {
+        await _cacheLocalPackage(verified, commitInstall);
+      }
       for (var index = 0; index < staged.length; index++) {
         staged[index].commit();
         final hook = _packageInstallCommitHook;
@@ -214,6 +242,7 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
         }
       }
       if (rollbackError != null) {
+        rollbackComplete = false;
         Error.throwWithStackTrace(
           StateError(
             'Package install failed ($error), and rollback was incomplete '
@@ -227,25 +256,40 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       for (final install in staged) {
         install.clean(stateSaved: stateSaved);
       }
+      if (rollbackComplete) await _pruneLocalPackageCache(commitInstall);
     }
     await _appendLauncherLogBestEffort(
       'Installed ${plan.installActions.length} package(s) for ${package.manifest.id} from $packagePath.',
     );
-    return _loadInstalledMods(commitInstall);
+    // Do not reconcile here. Reconciliation retires requirements left by an
+    // *earlier* session; the one this commit just wrote is the current truth.
+    // Letting a process probe erase it would also make the install receipt in
+    // state.json depend on whether the game happened to be running, which the
+    // release scaffold validator reads as a receipt that does not match policy.
+    // The next snapshot load retires it if nothing is alive to restart.
+    return _loadInstalledMods(
+      commitInstall,
+      reconcileRestartRequirements: false,
+    );
   }
 
+  /// Stages [package] for [install] in a transaction folder of its own,
+  /// beneath [transactionParent] when given (a join keeps all of its
+  /// packages in one folder it can sweep), else in manager staging.
   Future<_StagedPackageInstall> _stagePackageInstall(
     _PackageReadResult package,
     GameInstall install, {
     required String source,
+    Directory? transactionParent,
   }) async {
     if (!ModManifest.isValidId(package.manifest.id)) {
       throw StateError('Unsafe package id: ${package.manifest.id}.');
     }
     final packagesRoot = _packagesRoot(install);
-    final transactionRoot = (_managerStaging(
-      install,
-    )..createSync(recursive: true)).createTempSync('launcher-install-');
+    final transactionRoot =
+        (transactionParent ?? _managerStaging(install)
+              ..createSync(recursive: true))
+            .createTempSync('launcher-install-');
     final target = Directory(
       p.join(packagesRoot.path, package.manifest.id, package.manifest.version),
     );

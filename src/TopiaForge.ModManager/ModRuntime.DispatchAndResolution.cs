@@ -17,6 +17,9 @@ namespace TopiaForge.ModManager
             bool publishDetailedLoadEvent)
         {
             RefreshRuntimeCapabilities();
+            var lifecycle = new SceneLifecycleEvent(sceneInstanceId, scene.SceneName,
+                SceneLifecyclePhase.Activated, scene.Mode, isActive: true);
+            PublishSessionSceneLifecycle(lifecycle);
             var count = loadedMods.Count;
             for (var index = 0; index < count && index < loadedMods.Count; index++)
             {
@@ -30,12 +33,7 @@ namespace TopiaForge.ModManager
                     {
                         loaded.Context.RaiseSceneActivated(scene);
                     }
-                    loaded.Context.RaiseSceneLifecycle(new SceneLifecycleEvent(
-                        sceneInstanceId,
-                        scene.SceneName,
-                        SceneLifecyclePhase.Activated,
-                        scene.Mode,
-                        isActive: true));
+                    loaded.Context.RaiseSceneLifecycle(lifecycle);
                     sceneFailureLogged.Remove(loaded.Manifest.Id);
                 }
                 catch (Exception ex)
@@ -50,17 +48,20 @@ namespace TopiaForge.ModManager
 
         private void DispatchSceneUnloadedCore(SceneLifecycleEvent scene)
         {
+            NetworkSceneUnloaded(scene.SceneInstanceId);
             DispatchSceneLifecycleCore(scene, "SceneUnloaded");
         }
 
         private void DispatchInitialBackgroundSceneCore(SceneLifecycleEvent scene)
         {
+            NetworkSceneLoaded(scene.SceneInstanceId);
             DispatchSceneLifecycleCore(scene, "InitialSceneLoaded");
         }
 
         private void DispatchSceneLifecycleCore(SceneLifecycleEvent scene, string phase)
         {
             RefreshRuntimeCapabilities();
+            PublishSessionSceneLifecycle(scene);
             var count = loadedMods.Count;
             for (var index = 0; index < count && index < loadedMods.Count; index++)
             {
@@ -82,6 +83,18 @@ namespace TopiaForge.ModManager
             RefreshRuntimeCapabilities();
         }
 
+        private void PublishSessionSceneLifecycle(SceneLifecycleEvent scene)
+        {
+            if (scene.IsActive && scene.Phase != SceneLifecyclePhase.Unloaded) followedScene.Activated(scene.SceneName, scene.SceneInstanceId);
+            if (!(sessionShutdown is IRuntimeSessionSceneObserver observer)) return;
+            try { observer.OnSceneLifecycle(scene); }
+            catch (Exception exception)
+            {
+                try { logger.Error(exception, "Session scene-policy observation failed."); }
+                catch { /* Independent package scene delivery must still proceed. */ }
+            }
+        }
+
         private void DispatchFixedUpdate(GameTimeSample sample)
         {
             UnityMainThreadGuard.AssertCurrent();
@@ -95,6 +108,9 @@ namespace TopiaForge.ModManager
         private void DispatchLateUpdate(GameTimeSample sample)
         {
             UnityMainThreadGuard.AssertCurrent();
+
+            // Replicas move to where a joined player should see them before any mod reads them.
+            multiplayer.BeforeModsLateUpdate(sample);
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {

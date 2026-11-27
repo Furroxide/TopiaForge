@@ -1,8 +1,0 @@
-{
-  "name": "TopiaForge.UgcCompanion.Editor",
-  "rootNamespace": "TopiaForge.UgcCompanion.Editor",
-  "references": ["TopiaForge.UgcCompanion.Runtime"],
-  "includePlatforms": ["Editor"],
-  "excludePlatforms": [],
-  "autoReferenced": true
-}

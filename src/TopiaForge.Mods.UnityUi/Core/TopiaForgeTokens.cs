@@ -1,6 +1,6 @@
 namespace TopiaForge.Mods.UnityUi
 {
-    /// <summary>Text roles mapped to size + font family (Audiowide display, Quicksand body).</summary>
+    /// <summary>Text roles mapped to a size and a face (see <see cref="TopiaForgeTokens.FaceOf"/>).</summary>
     public enum TopiaForgeTextStyle
     {
         /// <summary>Selects the display option.</summary>
@@ -19,6 +19,31 @@ namespace TopiaForge.Mods.UnityUi
         Numeral,
         /// <summary>Selects the banner option.</summary>
         Banner,
+        /// <summary>Selects the monospaced option.</summary>
+        Mono,
+    }
+
+    /// <summary>
+    /// The font faces the type scale draws with. <see cref="TopiaForgeTokens.FaceOf"/> gives every
+    /// <see cref="TopiaForgeTextStyle"/> its face, so no widget or consumer picks a weight itself.
+    /// </summary>
+    public enum TopiaForgeFace
+    {
+        /// <summary>
+        /// Small text: body, label and caption styles, and any style at body size or smaller. Quicksand
+        /// Medium (500): at 12 to 14 px its stems are about a pixel wide, where Light's are half a pixel and
+        /// the dot of an i blurs into its stem.
+        /// </summary>
+        Text,
+
+        /// <summary>Quicksand styles larger than body text, headings and numerals: Quicksand Light (300).</summary>
+        Heading,
+
+        /// <summary>Display, title and banner styles: Audiowide.</summary>
+        Display,
+
+        /// <summary>Monospaced labels: JetBrains Mono NL Regular.</summary>
+        Mono,
     }
 
     /// <summary>Spacing steps used for gaps and padding.</summary>
@@ -66,29 +91,31 @@ namespace TopiaForge.Mods.UnityUi
     {
         // Type scale (font size per TopiaForgeTextStyle).
         /// <summary>The display size design-token value.</summary>
-        public const int DisplaySize = 26;
+        public const int DisplaySize = 40;
         /// <summary>The title size design-token value.</summary>
-        public const int TitleSize = 22;
+        public const int TitleSize = 30;
         /// <summary>The heading size design-token value.</summary>
-        public const int HeadingSize = 16;
+        public const int HeadingSize = 24;
         /// <summary>The body size design-token value.</summary>
-        public const int BodySize = 14;
+        public const int BodySize = 20;
         /// <summary>The label size design-token value.</summary>
-        public const int LabelSize = 13;
+        public const int LabelSize = 18;
         /// <summary>The caption size design-token value.</summary>
-        public const int CaptionSize = 12;
+        public const int CaptionSize = 18;
         /// <summary>The numeral size design-token value.</summary>
-        public const int NumeralSize = 28;
+        public const int NumeralSize = 32;
         /// <summary>The banner size design-token value.</summary>
-        public const int BannerSize = 42;
+        public const int BannerSize = 56;
+        /// <summary>The monospaced reference text size.</summary>
+        public const int MonoSize = 18;
 
         // Layout.
         /// <summary>The safe margin design-token value.</summary>
         public const float SafeMargin = 18f;
         /// <summary>The control sm height design-token value.</summary>
-        public const float ControlSmHeight = 30f;
+        public const float ControlSmHeight = 40f;
         /// <summary>The control height design-token value.</summary>
-        public const float ControlHeight = 38f;
+        public const float ControlHeight = 40f;
         /// <summary>The control lg height design-token value.</summary>
         public const float ControlLgHeight = 46f;
         /// <summary>The title bar height design-token value.</summary>
@@ -97,6 +124,8 @@ namespace TopiaForge.Mods.UnityUi
         public const float ListRowHeight = 38f;
         /// <summary>The max content width design-token value.</summary>
         public const float MaxContentWidth = 1600f;
+        /// <summary>The space a scroll view keeps beside its content for the scroll bar.</summary>
+        public const float ScrollGutter = 12f;
 
         // Borders.
         /// <summary>The border hairline design-token value.</summary>
@@ -143,6 +172,7 @@ namespace TopiaForge.Mods.UnityUi
                 TopiaForgeTextStyle.Caption => CaptionSize,
                 TopiaForgeTextStyle.Numeral => NumeralSize,
                 TopiaForgeTextStyle.Banner => BannerSize,
+                TopiaForgeTextStyle.Mono => MonoSize,
                 _ => BodySize,
             };
         }
@@ -153,7 +183,32 @@ namespace TopiaForge.Mods.UnityUi
             return style == TopiaForgeTextStyle.Display || style == TopiaForgeTextStyle.Title || style == TopiaForgeTextStyle.Banner;
         }
 
-        /// <summary>True for styles rendered with the bold Quicksand face.</summary>
+        /// <summary>
+        /// The face a style is drawn with: Audiowide for display styles, Quicksand Light for the Quicksand
+        /// styles larger than body text, and Quicksand Medium for everything else. A new style is small
+        /// text, and gets the Medium face, unless it is listed here.
+        /// </summary>
+        public static TopiaForgeFace FaceOf(TopiaForgeTextStyle style)
+        {
+            if (style == TopiaForgeTextStyle.Mono)
+            {
+                return TopiaForgeFace.Mono;
+            }
+
+            if (IsDisplay(style) || style == TopiaForgeTextStyle.Numeral)
+            {
+                return TopiaForgeFace.Display;
+            }
+
+            return style == TopiaForgeTextStyle.Heading
+                ? TopiaForgeFace.Heading
+                : TopiaForgeFace.Text;
+        }
+
+        /// <summary>
+        /// True for styles drawn bold. No bold face ships, so they are drawn with TextMesh Pro's faux bold
+        /// over the face <see cref="FaceOf"/> gives them.
+        /// </summary>
         public static bool IsBold(TopiaForgeTextStyle style)
         {
             return style == TopiaForgeTextStyle.Heading || style == TopiaForgeTextStyle.Label || style == TopiaForgeTextStyle.Numeral;

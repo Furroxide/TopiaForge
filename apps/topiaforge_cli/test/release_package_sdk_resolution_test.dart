@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
+import 'package:topiaforge/src/release_dart_runtime_packages.dart';
 import 'package:topiaforge/src/release_package_builder.dart';
 import 'package:topiaforge/src/release_package_io.dart';
 import 'package:topiaforge/src/release_package_models.dart';
@@ -59,7 +60,8 @@ void main() {
     final runner = _RecordingProcessRunner(
       availableCommands: {'dart'},
       onRun: (call) async {
-        if (call.executable == 'dart' && call.arguments.contains('compile')) {
+        if (call.executable == 'dart.bat' &&
+            call.arguments.contains('compile')) {
           _writeCompiledCli(call.arguments);
         }
       },
@@ -76,7 +78,7 @@ void main() {
     ).build();
 
     final dartCalls = runner.calls
-        .where((call) => call.executable == 'dart')
+        .where((call) => call.executable == 'dart.bat')
         .toList();
     expect(dartCalls, hasLength(2));
     expect(dartCalls.first.arguments, ['pub', 'get', '--enforce-lockfile']);
@@ -142,7 +144,12 @@ void main() {
     final flutterCall = runner.calls.singleWhere(
       (call) => call.executable == localFlutter,
     );
-    expect(flutterCall.arguments, ['build', 'windows', '--release']);
+    expect(flutterCall.arguments, [
+      'build',
+      'windows',
+      '--release',
+      '--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp-staging.topiaforge.dev',
+    ]);
   });
 
   test(
@@ -165,6 +172,66 @@ void main() {
       );
     },
   );
+
+  group('Dart CLI licence bundle', () {
+    late Directory repo;
+    late String bundle;
+
+    setUp(() {
+      repo = Directory(p.join(temp.path, 'notice-repo'))..createSync();
+      _writeReleaseNoticeFixtures(repo);
+      bundle = p.join(temp.path, 'payload', 'third_party', 'dart', 'LICENSES');
+    });
+
+    void copyNotices() => ReleasePackageNoticeWriter(
+      repositoryRoot: repo.path,
+      fileOps: const ReleaseFileOps(),
+    ).copyDartCliNotices(p.join(temp.path, 'payload'));
+
+    String fixturePath(String package, String file) => p.join(
+      repo.path,
+      'apps',
+      'topiaforge_cli',
+      '.dart_tool',
+      'notice-fixtures',
+      package,
+      file,
+    );
+
+    test('carries every recorded supplementary notice', () {
+      copyNotices();
+      for (final name in dartCliLicenseNames) {
+        expect(File(p.join(bundle, name)).existsSync(), isTrue, reason: name);
+      }
+      expect(
+        File(p.join(bundle, 'quiver-NOTICE')).readAsStringSync(),
+        'quiver fixture NOTICE',
+      );
+      expect(
+        File(p.join(bundle, 'archive-LICENSE-other.md')).readAsStringSync(),
+        'archive fixture LICENSE-other.md',
+      );
+    });
+
+    test('refuses a notice file the release does not record', () {
+      File(fixturePath('async', 'NOTICE')).writeAsStringSync('unrecorded');
+      expect(
+        copyNotices,
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('async carries licence or notice files [NOTICE]'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses a recorded notice the package no longer carries', () {
+      File(fixturePath('quiver', 'NOTICE')).deleteSync();
+      expect(copyNotices, throwsA(isA<StateError>()));
+    });
+  });
 }
 
 final _throwsSetupGuidance = throwsA(
@@ -252,6 +319,7 @@ Directory _writeFixtureRepo(Directory temp) {
     'TopiaForge.ModPackageValidator.deps.json',
     'TopiaForge.ModPackageValidator.runtimeconfig.json',
     'TopiaForge.ModManager.Core.dll',
+    'TopiaForge.Mods.Abstractions.dll',
   ]) {
     _writeFile(repo, [
       'src',
@@ -305,6 +373,16 @@ void _writeReleaseNoticeFixtures(Directory repo) {
       name,
       'pubspec.yaml',
     ], 'name: $name\nversion: 1.0.0\n');
+    for (final file in dartCliSupplementaryNotices[name] ?? const <String>[]) {
+      _writeFile(repo, [
+        'apps',
+        'topiaforge_cli',
+        '.dart_tool',
+        'notice-fixtures',
+        name,
+        file,
+      ], '$name fixture $file');
+    }
     packages.add({
       'name': name,
       'rootUri': 'notice-fixtures/$name/',
@@ -383,6 +461,13 @@ class _RecordingProcessRunner extends ReleaseProcessRunner {
   @override
   Future<bool> commandExists(String executable) async =>
       availableCommands.contains(executable);
+
+  /// Production resolves a PATH hit to a launchable path rather than returning
+  /// the bare name, which on Windows is what makes the difference between
+  /// running flutter.bat and failing to run the extensionless script beside it.
+  @override
+  Future<String?> resolveCommand(String executable) async =>
+      availableCommands.contains(executable) ? '$executable.bat' : null;
 
   @override
   Future<void> runChecked(

@@ -14,7 +14,7 @@ namespace TopiaForge.ModManager.Core
         private static readonly HashSet<string> KnownCapabilities = new HashSet<string>(StringComparer.Ordinal)
         {
             "asset-bundles", "filesystem", "filesystem-watch", "harmony-patch", "hud", "input",
-            "navigation", "network", "microphone", "particles", "physics", "physics-settings",
+            "navigation", "network", "microphone", "particles", "peer-network", "physics", "physics-settings",
             "player-control", "player-token", "prompt-overrides", "quality-settings", "remote-ai",
             "render-settings", "robot-spawning", "scene-management", "speech-to-text", "time",
             "ugc-livesync", "unsafe-native", "world-service"
@@ -54,17 +54,17 @@ namespace TopiaForge.ModManager.Core
 
             var errors = new List<string>();
 
-            if (manifest.SchemaVersion == 4)
+            if (manifest.SchemaVersion == 4 || manifest.SchemaVersion == ModManifest.ManifestV5SchemaVersion)
             {
                 errors.Add(
-                    "schemaVersion 4 was retired before TopiaForge 1.0; migrate this manifest to " +
-                    "schemaVersion 5 with 'topiaforge migrate-manifest --project <path>'. " +
-                    "The multiplayer field is optional for standalone-only mods.");
+                    "schemaVersion " + manifest.SchemaVersion + " was retired before TopiaForge 1.0; migrate this manifest to " +
+                    "schemaVersion 6 with 'topiaforge migrate-manifest --project <path>'. " +
+                    "Without a multiplayer field the mod is shared with every peer.");
                 return errors;
             }
-            else if (manifest.SchemaVersion != ModManifest.ManifestV5SchemaVersion)
+            else if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
-                errors.Add("schemaVersion must be 5.");
+                errors.Add("schemaVersion must be 6.");
                 return errors;
             }
 
@@ -149,19 +149,29 @@ namespace TopiaForge.ModManager.Core
 
             ValidateGameCompatibility(manifest.SupportedGameVersionRange, context, errors);
 
+            var updates = new List<(string Version, bool Inclusive)>();
             ValidateCompatibilityRange(
                 manifest.SupportedLoaderVersionRange,
                 "supportedLoaderVersionRange",
                 "loader",
                 context.LoaderVersion,
-                errors);
+                errors, updates);
 
             ValidateCompatibilityRange(
                 manifest.SupportedSdkVersionRange,
                 "supportedSdkVersionRange",
                 "SDK",
                 context.SdkVersion,
-                errors);
+                errors, updates);
+
+            if (updates.Count > 0)
+            {
+                var required = updates[0];
+                foreach (var update in updates.Skip(1))
+                    if (!VersionUtil.IsAtLeast(required.Version, update.Version)
+                        || (VersionUtil.IsAtLeast(update.Version, required.Version) && !update.Inclusive)) required = update;
+                errors.Add(FormatUpdateRequired(required.Version, required.Inclusive));
+            }
 
             ValidateStringLength(manifest.Category, "category", 0, 64, required: false, errors);
             ValidateStringLength(manifest.Homepage, "homepage", 0, 2048, required: false, errors);
@@ -184,7 +194,7 @@ namespace TopiaForge.ModManager.Core
             ValidateStringList(manifest.Tags, "tags", 64, 1, 64, validatePaths: false, errors);
             ValidateStringList(manifest.Screenshots, "screenshots", 32, 1, 1024, validatePaths: true, errors);
             ValidateHashes(manifest.Hashes, errors);
-            ValidateWorldGamemodes(manifest.WorldGamemodes, errors);
+            ManifestContributionValidator.Validate(manifest, errors);
             ValidateBuiltWith(manifest.BuiltWith, errors);
             ValidateMultiplayer(manifest, errors);
 
@@ -193,7 +203,7 @@ namespace TopiaForge.ModManager.Core
 
         private static void ValidateMultiplayer(ModManifest manifest, List<string> errors)
         {
-            if (manifest.SchemaVersion != ModManifest.CurrentSchemaVersion)
+            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
                 return;
             }
@@ -204,21 +214,10 @@ namespace TopiaForge.ModManager.Core
                 return;
             }
 
-            var isClientLocal = string.Equals(
-                multiplayer.Mode,
-                ModMultiplayerMetadata.ClientLocalMode,
-                StringComparison.Ordinal);
-            var isServerOnly = string.Equals(
-                multiplayer.Mode,
-                ModMultiplayerMetadata.ServerOnlyMode,
-                StringComparison.Ordinal);
-            var isSession = string.Equals(
-                multiplayer.Mode,
-                ModMultiplayerMetadata.SessionMode,
-                StringComparison.Ordinal);
-            if (!isClientLocal && !isServerOnly && !isSession)
+            var isSession = manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.Session;
+            if (manifest.EffectiveMultiplayerMode == null)
             {
-                errors.Add("multiplayer.mode must be client-local, server-only, or session.");
+                errors.Add("multiplayer.mode must be client-local, server-only, session, or standalone.");
             }
 
             if (!isSession)
@@ -351,7 +350,7 @@ namespace TopiaForge.ModManager.Core
             string fieldName,
             string componentName,
             string actualVersion,
-            List<string> errors)
+            List<string> errors, ICollection<(string Version, bool Inclusive)> updates)
         {
             ValidateStringLength(range, fieldName, 1, 256, required: true, errors);
             if (string.IsNullOrWhiteSpace(range))
@@ -366,9 +365,34 @@ namespace TopiaForge.ModManager.Core
             }
             else if (!VersionUtil.AllowsRange(actualVersion, range))
             {
-                errors.Add(fieldName + " does not include " + componentName + " " + actualVersion + ".");
+                // Below either floor, the player's next step is the same, so it is said once.
+                var update = UpdateRequiredError(range, actualVersion);
+                if (update == null)
+                    errors.Add(fieldName + " does not include " + componentName + " " + actualVersion + ".");
+                else if (VersionUtil.TryGetMinimum(range, out var minimum, out var inclusive))
+                    updates.Add((minimum!, inclusive));
             }
         }
+
+        /// <summary>Rechecks the loader range before package code is loaded.</summary>
+        public static string? LoaderCompatibilityError(string range, string actualVersion)
+        {
+            if (VersionUtil.AllowsRange(actualVersion, range)) return null;
+            return UpdateRequiredError(range, actualVersion)
+                ?? "supportedLoaderVersionRange does not include loader " + actualVersion + ".";
+        }
+
+        private static string? UpdateRequiredError(string range, string actualVersion)
+        {
+            if (!VersionUtil.TryGetMinimum(range, out var minimum, out var inclusive) || minimum == null
+                || (VersionUtil.IsAtLeast(actualVersion, minimum) && (inclusive || !VersionUtil.IsAtLeast(minimum, actualVersion))))
+                return null;
+            return FormatUpdateRequired(minimum, inclusive);
+        }
+
+        private static string FormatUpdateRequired(string minimum, bool inclusive) => inclusive
+                ? "This mod needs TopiaForge " + minimum + " or newer; update TopiaForge."
+                : "This mod needs a TopiaForge newer than " + minimum + "; update TopiaForge.";
 
         private static void ValidateLicenseFiles(
             IEnumerable<string>? paths,
@@ -557,39 +581,6 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        private static void ValidateWorldGamemodes(IEnumerable<ModGamemode>? values, List<string> errors)
-        {
-            var entries = (values ?? Array.Empty<ModGamemode>()).ToList();
-            ValidateCount(entries, "worldGamemodes", 64, errors);
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var gamemode in entries)
-            {
-                if (!IsValidId(gamemode.Id))
-                {
-                    errors.Add("worldGamemodes id '" + gamemode.Id + "' must use the safe mod id format.");
-                }
-                else if (!seen.Add(gamemode.Id))
-                {
-                    errors.Add("worldGamemodes contains duplicate id '" + gamemode.Id + "'.");
-                }
-
-                ValidateStringLength(
-                    gamemode.Name,
-                    "worldGamemodes name for '" + gamemode.Id + "'",
-                    1,
-                    128,
-                    required: true,
-                    errors);
-                ValidateStringLength(
-                    gamemode.Description,
-                    "worldGamemodes description for '" + gamemode.Id + "'",
-                    0,
-                    1024,
-                    required: false,
-                    errors);
-            }
-        }
-
         private static void ValidateStringList(
             IEnumerable<string>? values,
             string fieldName,
@@ -726,6 +717,19 @@ namespace TopiaForge.ModManager.Core
             {
                 errors.Add(fieldName + " cannot contain more than " + maximum + " entries.");
             }
+        }
+
+        internal static bool IsRetiredEcosystemId(string id)
+        {
+            foreach (var prefix in RetiredEcosystemIdPrefixes)
+            {
+                if (id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         internal static bool IsValidId(string? id)

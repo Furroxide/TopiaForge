@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "anchors": [
+    {
+      "key": "id",
+      "entityId": "entry",
+      "required": true
+    },
+    {
+      "key": "renamed",
+      "entityId": "crate",
+      "required": true,
+      "name": "Old crate",
+      "modelId": "kit/box",
+      "editorPosition": {
+        "x": 30,
+        "y": 2,
+        "z": 3
+      }
+    },
+    {
+      "key": "near",
+      "entityId": "oldcrate",
+      "required": true,
+      "name": "Supply crate",
+      "modelId": "kit/box",
+      "editorPosition": {
+        "x": 11.5,
+        "y": 2,
+        "z": 3
+      }
+    },
+    {
+      "key": "far",
+      "entityId": "oldfar",
+      "required": true,
+      "name": "Supply crate",
+      "modelId": "kit/box",
+      "editorPosition": {
+        "x": 10,
+        "y": 2,
+        "z": 3
+      }
+    },
+    {
+      "key": "ambiguous",
+      "entityId": "oldconsole",
+      "required": true,
+      "name": "Console",
+      "modelId": "kit/console",
+      "editorPosition": {
+        "x": 4.2,
+        "y": 2,
+        "z": 3
+      }
+    },
+    {
+      "key": "wrong-model",
+      "entityId": "oldgate",
+      "required": true,
+      "name": "Console",
+      "modelId": "kit/console",
+      "editorPosition": {
+        "x": 20,
+        "y": 2,
+        "z": 3
+      }
+    },
+    {
+      "key": "optional",
+      "entityId": "absent",
+      "required": false
+    },
+    {
+      "key": "wide",
+      "entityId": "widecrate",
+      "required": true,
+      "name": "Supply crate",
+      "modelId": "kit/box",
+      "editorPosition": {
+        "x": 10,
+        "y": 2,
+        "z": 3
+      },
+      "positionTolerance": 2
+    }
+  ]
+}

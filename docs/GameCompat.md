@@ -3,7 +3,7 @@
 Safe TopiaForge consumer mods don't compile against `GameCode.dll` and use the V1 SDK instead. Loader-owned
 adapters, specialist providers, and explicitly allowlisted advanced mods still need a bounded native integration
 layer. Those implementations may resolve Robotopia symbols by name — for example `Type.GetType("RobotBody, GameCode")`,
-`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 219 declared bindings across the current
+`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 379 declared bindings across nine current
 native implementations. When a Robotopia update renames, removes, re-signs, or **re-orders** one of those symbols, a
 guarded binding can otherwise fail quietly. This subsystem turns that runtime drift into a loud, offline,
 reviewable signal while keeping native details out of consumer mods.
@@ -15,7 +15,7 @@ It is deliberately **separate from `SdkSurfaceTests`**, which only guards the SD
 
 | Piece | Path | What it is |
 | --- | --- | --- |
-| Binding manifests | `bindings/<mod-id>.gamebindings.json` | One per provider or advanced mod that has native Robotopia bindings. Safe SDK-only consumers deliberately have none. |
+| Binding manifests | `bindings/<mod-id>.gamebindings.json` | One per loader, provider or advanced mod that has native Robotopia bindings. Safe SDK-only consumers deliberately have none. |
 | Surface library | `src/TopiaForge.GameCompat.Surface` | Unity-free, GameCode-free core: manifest + snapshot models, canonical JSON, and the pure differ. Referenced by the extractor **and** the test harness. |
 | Extractor tool | `src/TopiaForge.GameCompat.Extractor` | net10.0 console tool. Reads the real `GameCode.dll` via `MetadataLoadContext` (metadata only — no Unity, no code execution) and produces/verifies a surface snapshot. |
 | Surface baseline | `baselines/gamecode.surface.baseline.json` | The checked-in, known-good snapshot of the exact Robotopia surface the mods use, captured from a real install. |
@@ -28,14 +28,15 @@ verified offline. Green-washing an unverifiable binding is worse than not having
 
 | `matchMode` | Runtime pattern | What the tool checks |
 | --- | --- | --- |
-| `StaticFullName` | `Type.GetType("X, GameCode")`, then a member on that type | Full: type + member + signature exist. |
-| `SimpleNameWalk` | `IsNamed`/`FindComponent` matching `Type.Name` up the base chain | Some type with that simple name still exists (cannot prove *which*). |
+| `StaticFullName` | `Type.GetType("X, GameCode")`, then a member on that type | The type, member, and declared signature/access constraints exist. |
+| `SimpleNameWalk` | `IsNamed`/`FindComponent` matching `Type.Name` up the base chain | Each matching type is captured; a member binding must resolve on a matching candidate (cannot prove which instance is used). |
 | `PredicateOverload` | `GetMethods().First(m => m.Name==… && arity && some params)` | An overload matches the *pinned* parameter positions (unconstrained ones ignored, exactly like the runtime predicate). |
 | `DynamicInstance` | member off a runtime `instance.GetType()` | Soft signal: the declaring type is author-*inferred*, so a miss is a **warning**, never a hard failure. |
 | `ValueContract` | a magic string written into a Robotopia field (`Mode = "SelectedFile"`) | If the field is an enum, the token is still a valid member; otherwise recorded as an uncheckable contract. |
 | `Uncheckable` | dynamically-built type strings, invoke-only contracts | Nothing — but it is **counted** so coverage is honest. |
 
 Enum bindings come in two flavours:
+
 - `Enum.Parse(type, "Standby")` resolves by **name** → omit `expectedOrdinal`; only the name's presence is checked.
 - `Enum.ToObject(type, (int)modEnum)` resolves by **ordinal** → set `expectedOrdinal`; the differ asserts the Robotopia
   enum still has that member **at that ordinal**. This is the crux of ordinal-drift: a reordered enum silently
@@ -43,6 +44,43 @@ Enum bindings come in two flavours:
 
 `criticality` (`critical` / `degraded` / `optional`) drives severity: a broken **critical** binding is an Error
 (fails the gate and `verify`), **degraded** is a Warning, **optional** is Info.
+
+## Strict metadata contracts (schema 3)
+
+Binding manifests and surface snapshots use `schemaVersion: 3`. Readers reject schemas 1 and 2; old extractors
+must not consume a new contract while silently ignoring its constraints. The launcher compatibility command
+delegates to this extractor; its report format and the release build pin remain unchanged.
+
+Use `exactParameters: true` for an exact callable signature, including zero arguments. Omitting it with an empty
+parameter list retains the older name-only lookup semantics. Set `genericArity: 0` for a non-generic method.
+`isPublic` and `isStatic` are optional booleans: an explicit `false` is a constraint, while absence leaves that
+access dimension unconstrained. Property bindings can require readable/writable accessors with
+`requireReadable` and `requireWritable`; visibility applies to each required accessor. Set `indexParameterCount: 0`
+for a non-indexed property such as `IsCompleted`. Exact callable or access constraints also retain full,
+case-sensitive parameter/return type identities, including generic arguments.
+All constraints must hold on the same overload. Strict field/property mismatches follow their declared
+criticality; older unconstrained type hints remain advisory.
+
+The active Manager bindings cover checkpoint and scene loads, player readiness, the exact public no-argument
+import-suppression constructor, the supported UniTask awaiter shape, and the native systems a joined player turns
+off: robot brains (`LLMAgent` and its `llmDisabled` field), locomotion and spawners. Those four are degraded rather
+than critical, since a missing one leaves that system running on joined players instead of failing the game. The
+behaviour tree and path follower the network world also turns off are matched by name up the base chain, and
+neither is a GameCode type. Presence adds seven more degraded ones, for what it reads and moves of the local player:
+the camera's rotation, the first-person controller with its crouch, eyes and teleport, and the held item; a missing
+one leaves players unseen or unplaced rather than failing the game. RobotKit declares the two optional members its
+avatar bodies read, the robot's animator and its walk parameter. Worlds bindings cover native import
+selection, overrides, owned import roots, and cleanup. Manager sources and actual source-linked files such as
+`mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
+retains the requested external types' own members and full nested generic type shapes.
+
+The build 2640 metadata capture contains 92 types and 15 simple-name lookups. Offline metadata verification
+resolves 379 bindings, classifies 11 as explicitly uncheckable, and reports no indeterminate bindings, errors or
+warnings; the Worlds catalog lore loader is bound to its build 2640 shape (see
+[Build 2640 capture](#build-2640-capture)). All 57 Manager and 93 Worlds bindings are verifiable. The uncheckable
+entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
+`audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
+scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
 
 ## Why the offline gate is not circular
 
@@ -74,14 +112,44 @@ brand-new Robotopia update; the offline gate cannot, because CI has no DLL.
 dotnet run --project src/TopiaForge.GameCompat.Extractor -- verify
 
 # offline source-vs-manifest drift check (no DLL): every "X, GameCode" literal must be a declared binding
-dotnet run --project src/TopiaForge.GameCompat.Extractor -- audit
+dotnet run --project src/TopiaForge.GameCompat.Extractor -- audit --strict
 
 # snapshot the current surface to a file
 dotnet run --project src/TopiaForge.GameCompat.Extractor -- extract --out surface.json
 ```
 
 Managed-dir resolution order: `--managed <dir>`, `$RobotopiaManagedDir`, `$RobotopiaGameDir\Robotopia_Data\Managed`,
-then the default launcher install path.
+the default launcher install path, then, on Windows, `<game_dir>\Robotopia\Robotopia_Data\Managed` when the
+official launcher's `launcher-config.json` records that it moved the game to `game_dir`.
+
+## Bumping the pinned build
+
+A Robotopia build bump touches about fifty files: the pin metadata and its zero-padded archive names, the
+release policy id, every mod manifest's game range, the scaffolder default, runtime version constants,
+acceptance metadata, several build-locked test fixtures and guards, and the documents that state the supported
+build. Doing that by hand is how a site gets missed.
+
+```
+topiaforge compat bump --build <id>   --windows-sha256 <hex> --mac-sha256 <hex>   --files-manifest-sha256 <hex> --file-count <n> --game-exe-sha256 <hex>   [--dry-run]
+```
+
+The hashes are not derivable from the repository, so they are supplied explicitly. Take the Windows and Mac
+archive SHA-256 values from the public `latest-build.json`. Take the other three from an official install of
+the new build: the SHA-256 and entry count of the `filelist.json` beside the `Robotopia` game folder, and the
+SHA-256 of `Robotopia\Robotopia.exe`. For a default install that manifest is
+`%LOCALAPPDATA%\Tomato Cake\launcher\filelist.json`. After the official launcher moves the game it is
+`<game_dir>\filelist.json`, and a `filelist.json` left behind in `%LOCALAPPDATA%\Tomato Cake\launcher`
+describes an earlier build; never measure from it. `tools/release/verify-robotopia-install.ps1` cannot read
+them in advance, because it verifies an install against the current pin; run it after the bump to confirm the
+new pin.
+Everything else is derived from the new build id.
+
+Afterwards the command **re-scans every file it owns for the old build id** and fails if any remains, so a
+half-bumped tree is reported rather than committed. It also lists every other tracked file that still names
+the old build, outside `docs/internal/`: history, observations of how that build behaved and sample values
+may stay, while a pin-bound site belongs in its target list. Two things it deliberately does not do: it never
+touches `bindings/` or the baseline (that is the reviewed ritual below), and it does not move the SDK-only
+range ceiling, which is a judgement call about how far ahead to trust an unverified build.
 
 ## The baseline-refresh ritual (after an intentional Robotopia adaptation)
 
@@ -105,7 +173,7 @@ allowlisted advanced mod genuinely needs a new native binding:
 1. Add the `Type.GetType`/`GetMethod`/… call inside that native implementation boundary.
 2. Add a binding to that mod's `bindings/<mod-id>.gamebindings.json` (pick the right `matchMode`, `criticality`,
    and — for callable members — the parameter discriminator).
-3. Run `gamecompat audit` — it fails if a `", GameCode"` literal has no matching manifest binding, so you can't
+3. Run `gamecompat audit --strict` — it fails if a `", GameCode"` literal has no matching manifest binding, so you can't
    forget. (Genuinely-dynamic bindings the scanner can't see go in `bindings/<mod-id>.audit-allow.json`.)
 4. Refresh the baseline (ritual above) so the new binding has a known-good entry.
 
@@ -117,5 +185,59 @@ allowlisted advanced mod genuinely needs a new native binding:
 - `MetadataLoadContext` reads metadata only; it cannot prove a constructor is actually invocable beyond
   shape/accessibility, and cannot follow a runtime `SampleAt()→Sample→Hit` chain. Those are declared explicitly by
   the manifest author, not machine-derived.
+- Snapshots record parameter types, not parameter names. A Harmony hook that binds a target argument by name
+  (PerfFixes' `camera` and `collision`, the Performance Sentry `options`) breaks on a rename that `verify` cannot
+  see, so those names are compared against the new build by hand at each bump. On build 2640 they are unchanged:
+  `camera` on `CameraUtils.TryGetMainCamera`, `collision` on `CollisionEventProxy.OnCollisionEnter` and
+  `OnCollisionExit`, and `options` on `SentryRuntimeConfiguration.Configure`.
+- The audit requires a declaration for every `"X, GameCode"` type literal, but not for every member name. A member
+  looked up by name on a captured type is covered by the full surface diff, not by `verify`, until it is declared.
 - The live check needs both a Robotopia installation and this tool present, so for most end users the update-time signal
   arrives through the launcher (see the launcher Diagnostics integration), not the raw CLI.
+
+
+### Build 2640 capture
+
+The baseline is one complete capture of the official build 2640 Windows archive's managed assemblies, taken at
+`2026-11-15T18:09:38.4755714Z`, GameCode MVID `161054ac-25a4-4892-ba9b-0174d7ba4b30`, canonical surface hash
+`118173ef8ce781cfe6cfd728c23b913fccb8aae5e2e702069de432852983f248`. It replaces the build 2597 baseline and its
+separately captured composition extension; both remain in history.
+
+Against build 2597 the captured types changed as follows. `OvertoneVoiceAsset` is gone; `TTSVoiceAsset`,
+`TTSPhonemizerAsset` and `UgcImportReport` are new captures. Members changed on `AgentHead`, `LLMAgent`,
+`PlayerController`, `RobotBodyComposer`, `UgcCatalogLoreLoader`, `UgcExportLoader`, `UgcExportProject`,
+`UgcImportHostSceneController`, `UgcImportPlayBootstrap`, `UgcPlayLaunchRequest`, `UgcPlayLauncherLastRun`,
+`UgcPublishedProjectLoader`, `UgcSceneBuilder`, `UgcSceneEnvironmentApplier` and `UgcVoiceMap`. The ones
+TopiaForge reaches:
+
+- `TTSVoiceAsset` keeps the model, configuration, FMOD event and speed multiplier, drops the ten punctuation break
+  times and adds a `phonemizer` (`TTSPhonemizerAsset`, with model, tokenizer and dictionary text assets). The
+  RobotKit voice fingerprint is version 2 over all of those inputs, the phonemizer's assets included.
+- `UgcSceneBuilder`'s constructor, `UgcImportHostSceneController.ImportProject` and
+  `UgcSceneEnvironmentApplier.Apply` gained a caller-owned `UgcImportReport`. RobotKit and Worlds pass a fresh report
+  per call and log a fixed-text count of its `Problems`; the entries themselves can name files or assets, so they
+  are never logged.
+- `UgcCatalogLoreLoader`'s constructor now also takes a non-nullable `linkCatalogUrl` with no default value, and
+  `AddMissingLoreAsync(UgcExportProject, UgcImportReport, CancellationToken)` returns a plain `UniTask`. Metadata
+  does not show which value native map play passes. The loader still has a single `catalogBaseUrl` field, which
+  build 2597 filled from `UgcRuntimeAssetConfig.CatalogBaseUrl`. Worlds map lore preparation binds the 2640 shape: it
+  passes the current `UgcPlayLaunchRequest.CatalogUrl` when it is set, otherwise the asset configuration's
+  `CatalogBaseUrl`, and only a value the game's own `ValidateLinkCatalogUrl` accepts. Without one it fails closed. It
+  passes a fresh report, logs a fixed-text count of its problems and logs which source supplied the address, never
+  the address. In a TopiaForge session the current launch request is usually the empty bootstrap request TopiaForge
+  queued itself, so the asset configuration normally supplies it. Unlike 2597's exception result, the plain
+  `UniTask` may complete although some lore could not be fetched; that shows only as a problem count. Whether the
+  address is right is still to confirm in the game, by seeing the lore itself (`COMPAT-2640-LORE` under
+  P2-COMPAT-01 in the launch blockers).
+- Nothing binds the other changes. `UgcExportProject` gained `imports`, `packages`, `prefabScenes` and `ugcId`;
+  `UgcExportLoader` and `UgcPublishedProjectLoader` gained raw-project parsing and download helpers;
+  `UgcPlayLaunchRequest` and `UgcPlayLauncherLastRun` gained `CatalogUrl`, and the request also `FailureMessage`
+  and `CreateFailed`; `UgcImportPlayBootstrap` gained a player hold until the world loads, a startup-problem path
+  and a load report. The no-op launch request TopiaForge creates leaves `CatalogUrl` unset; whether the bootstrap
+  accepts that is still to confirm in the game (`COMPAT-2640-BOOTSTRAP`).
+
+The composition dependencies remain Critical metadata contracts, including the private
+`CollectReferencedAssetUris` signature. It does not inspect method bodies or establish native startup,
+builder behavior, material interpretation or cleanup acceptance. Field snapshots capture type, visibility and
+static shape, not constant values or constness; the composition binder additionally requires its two native
+material-field symbols to be literal strings before reading them.

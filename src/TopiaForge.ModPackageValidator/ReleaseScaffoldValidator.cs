@@ -525,12 +525,42 @@ public static class ReleaseScaffoldValidator
             installedMultiplayer.Protocol?.PeerVersionRange ?? string.Empty,
             installedManifestPath,
             failures);
-        if (!(sourceMultiplayer.SynchronizedFiles ?? new List<string>()).SequenceEqual(
+        if (!PackedSynchronizedFiles(sourceMultiplayer).SequenceEqual(
                 installedMultiplayer.SynchronizedFiles ?? new List<string>(),
                 StringComparer.Ordinal))
         {
             failures.Add(installedManifestPath + ": multiplayer.synchronizedFiles differs from scaffold");
         }
+    }
+
+    /// <summary>
+    /// The synchronized files a packed copy of the scaffold declares. As <c>topiaforge pack</c> does, a session mod
+    /// also synchronizes its generated contract lock: an entry that names the lock in another letter case takes the
+    /// canonical spelling, and otherwise the lock is appended, so a source manifest never has to list it. Where the
+    /// two runtimes fold a character's case differently, the lists differ and the check fails closed.
+    /// </summary>
+    private static List<string> PackedSynchronizedFiles(ModMultiplayerMetadata source)
+    {
+        var files = new List<string>(source.SynchronizedFiles ?? new List<string>());
+        if (!string.Equals(source.Mode, ModMultiplayerMetadata.SessionMode, StringComparison.Ordinal))
+        {
+            return files;
+        }
+
+        var declaredLock = files.FindIndex(path => string.Equals(
+            path.ToLowerInvariant(),
+            ModMultiplayerMetadata.ContractLockFileName,
+            StringComparison.Ordinal));
+        if (declaredLock >= 0)
+        {
+            files[declaredLock] = ModMultiplayerMetadata.ContractLockFileName;
+        }
+        else
+        {
+            files.Add(ModMultiplayerMetadata.ContractLockFileName);
+        }
+
+        return files;
     }
 
     private static void VerifyReceiptSource(

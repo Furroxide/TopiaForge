@@ -6,6 +6,24 @@
     "category": "DevTool",
     "description": "TopiaForgeUi window mod for Robotopia.",
     "tags": ["ui"],
-    "capabilities": ["hud", "input"]
+    "capabilities": ["hud", "input"],
+    "ui": {
+      "schema": 1,
+      "default": "survival",
+      "themes": [
+        {
+          "id": "survival",
+          "definition": "ui/themes/survival.json"
+        },
+        {
+          "id": "controls-preview",
+          "definition": "ui/themes/controls-preview.json"
+        },
+        {
+          "id": "preview-art",
+          "definition": "ui/themes/preview-art.json"
+        }
+      ]
+    }
   }
 }

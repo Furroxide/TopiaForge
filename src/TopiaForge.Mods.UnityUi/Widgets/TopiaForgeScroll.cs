@@ -25,7 +25,7 @@ namespace TopiaForge.Mods.UnityUi
             viewportImage.color = Color.clear;
             viewportImage.raycastTarget = true; // catches scroll wheel over empty space
             var viewportRect = (RectTransform)viewportGo.transform;
-            TopiaForgeAnchors.Stretch(viewportRect, 0f, 0f, 12f, 0f);
+            TopiaForgeAnchors.Stretch(viewportRect, 0f, 0f, TopiaForgeTokens.ScrollGutter, 0f);
 
             // Content column.
             var contentGo = new GameObject("Content", typeof(RectTransform));

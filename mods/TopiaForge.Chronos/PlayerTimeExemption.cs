@@ -11,8 +11,10 @@ namespace TopiaForge.Chronos
     // every other mod's control lease. Verified from the GameCode decompile: the player is
     // PlayerController.FindPlayer().FPSController (a FirstPersonController); move uses private groundSpeed/airSpeed
     // and is scaled by Time.* (so 1/scale compensates), while LOOK reads raw per-frame mouse delta × mouseSensitivity
-    // with no dt — already full-speed at any timeScale, so it needs no compensation. Everything is guarded: if a
-    // member can't be resolved (build drift), the op degrades to a no-op and logs once, never throws.
+    // with no dt — already full-speed at any timeScale, so it needs no compensation. That look observation predates
+    // build 2545, which removed mouseSensitivity and reads look through an Input System action; it is not yet
+    // re-checked natively. Everything is guarded: if a member can't be resolved (build drift), the op degrades to a
+    // no-op and logs once, never throws.
     internal sealed class PlayerTimeExemption
     {
         private const float ExemptScaleFloor = 0.05f; // bound the speed-up so a near-zero scale can't divide to absurd
@@ -165,7 +167,8 @@ namespace TopiaForge.Chronos
                     return;
                 }
 
-                findPlayer = playerControllerType.GetMethod("FindPlayer", BindingFlags.Public | BindingFlags.Static);
+                findPlayer = playerControllerType.GetMethod(
+                    "FindPlayer", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
                 fpsControllerProp = playerControllerType.GetProperty("FPSController", BindingFlags.Public | BindingFlags.Instance);
                 groundSpeedField = fpsType.GetField("groundSpeed", BindingFlags.NonPublic | BindingFlags.Instance);
                 airSpeedField = fpsType.GetField("airSpeed", BindingFlags.NonPublic | BindingFlags.Instance);

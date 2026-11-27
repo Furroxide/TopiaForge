@@ -87,7 +87,9 @@ _PackageInspection _inspectPackage(String packagePath) {
     maxBytes: 2 * 1024 * 1024,
     label: 'Live acceptance package manifest',
   );
-  final decoded = jsonDecode(utf8.decode(manifestBytes, allowMalformed: false));
+  final manifestText = utf8.decode(manifestBytes, allowMalformed: false);
+  rejectDuplicateJsonProperties(manifestText, label: 'topiaforge.mod.json');
+  final decoded = jsonDecode(manifestText);
   if (decoded is! Map ||
       decoded['name'] is! String ||
       decoded['entryAssembly'] is! String) {
@@ -101,7 +103,7 @@ _PackageInspection _inspectPackage(String packagePath) {
   void addPath(Object? value) {
     if (value is! String ||
         value.isEmpty ||
-        value.length > 512 ||
+        value.length > 1024 ||
         value.contains(r'\') ||
         value.startsWith('/') ||
         value.endsWith('/') ||
@@ -134,6 +136,21 @@ _PackageInspection _inspectPackage(String packagePath) {
       }
       for (final path in synchronizedFiles) {
         addPath(path);
+      }
+    }
+  }
+  final contributions = decoded['contributions'];
+  if (contributions is Map && contributions['worlds'] is List) {
+    final worlds = contributions['worlds'] as List;
+    if (worlds.length > 64) {
+      throw StateError('package world inventory is invalid');
+    }
+    for (final world in worlds) {
+      if (world is Map && world['content'] is Map) {
+        final content = world['content'] as Map;
+        if (content['kind'] == 'map' && content.containsKey('file')) {
+          addPath(content['file']);
+        }
       }
     }
   }

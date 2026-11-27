@@ -1,6 +1,6 @@
 using System;
 using TopiaForge.Mods;
-using UnityEngine;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Chronos
 {
@@ -12,7 +12,10 @@ namespace TopiaForge.Chronos
         /// <inheritdoc />
         protected override void OnLoad()
         {
-            service = new TimeControlService(Context.Identity.Id, Context.Logger, Context.LocalPlayer);
+            // The runtime's seam gives Chronos the game's clock, the realm and the session's time; a context without one
+            // is single player on Unity's own clock.
+            var replication = (Context as IInternalReplicationContext)?.Replication;
+            service = new TimeControlService(Context.Identity.Id, Context.Logger, Context.LocalPlayer, replication);
             Context.Lifetime.Track(service);
             var registration = Context.Extensions.Register<ITimeControlService>(service);
             if (!registration.Succeeded)
@@ -25,7 +28,11 @@ namespace TopiaForge.Chronos
             Context.Logger.Info("TopiaForge Chronos loaded; time-control extension registered.");
         }
 
-        private void OnUpdate(float deltaTime) => service?.Tick(Time.unscaledDeltaTime);
+        private void OnUpdate(float deltaTime)
+        {
+            var current = service;
+            current?.Tick(current.ControlDeltaTime);
+        }
 
         private void OnSceneLoaded(SceneLoadEvent scene)
         {

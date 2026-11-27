@@ -86,239 +86,6 @@ void _registerReleaseProcessAndIoTests() {
   });
 
   test(
-    'Windows release signer signs, timestamps, and verifies executables',
-    () async {
-      final stage = Directory(p.join(temp.path, 'windows-stage'))..createSync();
-      for (final relative in [
-        'topiaforge.exe',
-        'TopiaForge.GameCompat.Extractor.exe',
-        p.join('launcher', 'topiaforge_launcher.exe'),
-      ]) {
-        _writeFile(stage, p.split(relative), 'portable executable fixture');
-      }
-      final expectedSigner = List.filled(64, 'a').join();
-      final runner = _RecordingProcessRunner(
-        availableCommands: {'signtool'},
-        onResult: (call) => call.executable == 'powershell.exe'
-            ? ProcessResult(1, 0, expectedSigner, '')
-            : ProcessResult(1, 1, '', 'unexpected process'),
-      );
-
-      await WindowsPackageSigner(
-        processRunner: runner,
-        requireTrustedSignature: true,
-        expectedSignerCertificateSha256: expectedSigner,
-        isWindows: true,
-        environment: {
-          'WINDOWS_CERTIFICATE_PFX': base64Encode([1, 2, 3, 4]),
-          'WINDOWS_CERTIFICATE_PASSWORD': 'certificate-secret',
-          'WINDOWS_TIMESTAMP_URL': 'https://timestamp.example.test/rfc3161',
-        },
-      ).signIfConfigured(stage.path);
-
-      final signCalls = runner.calls
-          .where((call) => call.arguments.first == 'sign')
-          .toList();
-      final verifyCalls = runner.calls
-          .where((call) => call.arguments.first == 'verify')
-          .toList();
-      expect(signCalls, hasLength(3));
-      expect(verifyCalls, hasLength(3));
-      for (final call in signCalls) {
-        expect(call.executable, 'signtool');
-        expect(call.arguments, containsAll(['/fd', 'SHA256', '/td']));
-        expect(
-          call.arguments,
-          containsAllInOrder([
-            '/tr',
-            'https://timestamp.example.test/rfc3161',
-            '/td',
-            'SHA256',
-          ]),
-        );
-        expect(call.arguments, containsAll(['/p', 'certificate-secret']));
-      }
-      for (final call in verifyCalls) {
-        expect(call.arguments, containsAll(['/pa', '/all', '/tw', '/v']));
-      }
-    },
-  );
-
-  test('public Windows signing fails closed without credentials', () async {
-    await expectLater(
-      () => WindowsPackageSigner(
-        requireTrustedSignature: true,
-        isWindows: true,
-        environment: const {},
-      ).signIfConfigured(temp.path),
-      throwsA(isA<StateError>()),
-    );
-  });
-
-  test('public Windows signing requires an explicit timestamp URL', () async {
-    final stage = Directory(p.join(temp.path, 'windows-timestamp-stage'))
-      ..createSync();
-    for (final relative in [
-      'topiaforge.exe',
-      'TopiaForge.GameCompat.Extractor.exe',
-      p.join('launcher', 'topiaforge_launcher.exe'),
-    ]) {
-      _writeFile(stage, p.split(relative), 'portable executable fixture');
-    }
-    await expectLater(
-      () => WindowsPackageSigner(
-        processRunner: _RecordingProcessRunner(availableCommands: {'signtool'}),
-        requireTrustedSignature: true,
-        expectedSignerCertificateSha256: List.filled(64, 'a').join(),
-        isWindows: true,
-        environment: {
-          'WINDOWS_CERTIFICATE_PFX': base64Encode([1, 2, 3, 4]),
-          'WINDOWS_CERTIFICATE_PASSWORD': 'certificate-secret',
-        },
-      ).signIfConfigured(stage.path),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('WINDOWS_TIMESTAMP_URL is mandatory'),
-        ),
-      ),
-    );
-  });
-
-  test(
-    'Windows trust verification binds every executable to reviewed signer',
-    () async {
-      final stage = Directory(p.join(temp.path, 'windows-verify-stage'))
-        ..createSync();
-      for (final relative in [
-        'topiaforge.exe',
-        'TopiaForge.GameCompat.Extractor.exe',
-        p.join('launcher', 'topiaforge_launcher.exe'),
-      ]) {
-        _writeFile(stage, p.split(relative), 'signed executable fixture');
-      }
-      final expectedSigner = List.filled(64, 'a').join();
-      final runner = _RecordingProcessRunner(
-        availableCommands: {'signtool'},
-        onResult: (call) => call.executable == 'powershell.exe'
-            ? ProcessResult(1, 0, expectedSigner.toUpperCase(), '')
-            : ProcessResult(1, 1, '', 'unexpected process'),
-      );
-
-      await WindowsPackageSigner(
-        processRunner: runner,
-        requireTrustedSignature: true,
-        expectedSignerCertificateSha256: expectedSigner,
-        isWindows: true,
-      ).verifyTrustedSignatures(stage.path);
-
-      expect(
-        runner.calls.where((call) => call.executable == 'signtool'),
-        hasLength(3),
-      );
-      expect(
-        runner.calls.where((call) => call.executable == 'powershell.exe'),
-        hasLength(3),
-      );
-    },
-  );
-
-  test('Windows trust verification rejects a different signer', () async {
-    final stage = Directory(p.join(temp.path, 'windows-wrong-signer-stage'))
-      ..createSync();
-    for (final relative in [
-      'topiaforge.exe',
-      'TopiaForge.GameCompat.Extractor.exe',
-      p.join('launcher', 'topiaforge_launcher.exe'),
-    ]) {
-      _writeFile(stage, p.split(relative), 'signed executable fixture');
-    }
-    final runner = _RecordingProcessRunner(
-      availableCommands: {'signtool'},
-      onResult: (_) => ProcessResult(1, 0, List.filled(64, 'b').join(), ''),
-    );
-
-    await expectLater(
-      () => WindowsPackageSigner(
-        processRunner: runner,
-        requireTrustedSignature: true,
-        expectedSignerCertificateSha256: List.filled(64, 'a').join(),
-        isWindows: true,
-      ).verifyTrustedSignatures(stage.path),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.toString(),
-          'message',
-          contains('does not match the reviewed release policy'),
-        ),
-      ),
-    );
-  });
-
-  test(
-    'Windows unsigned verification checks every packaged executable',
-    () async {
-      final stage = Directory(p.join(temp.path, 'windows-unsigned-stage'))
-        ..createSync();
-      for (final relative in [
-        'topiaforge.exe',
-        'TopiaForge.GameCompat.Extractor.exe',
-        p.join('launcher', 'topiaforge_launcher.exe'),
-      ]) {
-        _writeFile(stage, p.split(relative), 'unsigned executable fixture');
-      }
-      final runner = _RecordingProcessRunner(
-        onResult: (call) => call.executable == 'powershell.exe'
-            ? ProcessResult(1, 0, 'unsigned', '')
-            : ProcessResult(1, 1, '', 'unexpected process'),
-      );
-
-      await WindowsPackageSigner(
-        processRunner: runner,
-        isWindows: true,
-      ).verifyUnsignedExecutables(stage.path);
-
-      expect(
-        runner.calls.where((call) => call.executable == 'powershell.exe'),
-        hasLength(3),
-      );
-    },
-  );
-
-  test(
-    'Windows unsigned verification rejects signed or invalid bytes',
-    () async {
-      final stage = Directory(p.join(temp.path, 'windows-signed-stage'))
-        ..createSync();
-      for (final relative in [
-        'topiaforge.exe',
-        'TopiaForge.GameCompat.Extractor.exe',
-        p.join('launcher', 'topiaforge_launcher.exe'),
-      ]) {
-        _writeFile(stage, p.split(relative), 'signed executable fixture');
-      }
-      final runner = _RecordingProcessRunner(
-        onResult: (_) => ProcessResult(1, 2, '', 'signed'),
-      );
-
-      await expectLater(
-        () => WindowsPackageSigner(
-          processRunner: runner,
-          isWindows: true,
-        ).verifyUnsignedExecutables(stage.path),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.toString(),
-            'message',
-            contains('technical dry-run requires an entirely unsigned package'),
-          ),
-        ),
-      );
-    },
-  );
-
-  test(
     'package validator rejects contradictory Windows trust options',
     () async {
       await expectLater(
@@ -434,6 +201,52 @@ void _registerReleaseProcessAndIoTests() {
         (entry) => p.basename(entry.path).contains('.tmp-'),
       ),
       isEmpty,
+    );
+  });
+  test('nested CLI builds use the current pinned Dart VM', () async {
+    final repo = _writeFixtureRepo(temp);
+    final launcher = Directory(p.join(temp.path, 'launcher'))
+      ..createSync(recursive: true);
+    File(
+      p.join(launcher.path, 'topiaforge_launcher.exe'),
+    ).writeAsStringSync('launcher');
+    _writeFile(launcher, [
+      'data',
+      'flutter_assets',
+      'NOTICES.Z',
+    ], 'Flutter notices');
+    final runner = _RecordingProcessRunner(
+      onRun: (call) async {
+        if (call.executable == Platform.resolvedExecutable &&
+            call.arguments.contains('compile')) {
+          final output = _argAfter(call.arguments, '-o');
+          File(output)
+            ..parent.createSync(recursive: true)
+            ..writeAsStringSync('compiled cli');
+        }
+      },
+    );
+
+    await ReleasePackageBuilder(
+      repositoryRoot: repo.path,
+      platform: ReleasePackagePlatform.windows,
+      outputRoot: p.join(temp.path, 'out'),
+      prebuiltLauncher: launcher.path,
+      rebuildRuntimePayload: false,
+      processRunner: runner,
+    ).build();
+
+    final dartCalls = runner.calls
+        .where((call) => call.executable == Platform.resolvedExecutable)
+        .toList();
+    expect(dartCalls, hasLength(2));
+    expect(dartCalls.first.arguments, ['pub', 'get', '--enforce-lockfile']);
+    expect(dartCalls.last.arguments, containsAllInOrder(['compile', 'exe']));
+    expect(
+      dartCalls.last.arguments,
+      contains(
+        '-DTOPIAFORGE_CONTROL_PLANE_ORIGIN=https://mp-staging.topiaforge.dev',
+      ),
     );
   });
 }

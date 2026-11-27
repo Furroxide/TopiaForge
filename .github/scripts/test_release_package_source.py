@@ -80,7 +80,7 @@ class ReleasePackageSourceTests(unittest.TestCase):
         ci_baselines = re.findall(
             r"(?m)^          PINNED_STABLE_BASELINE: (.+)$", workflow("ci.yml")
         )
-        self.assertEqual(3, len(ci_baselines))
+        self.assertEqual(4, len(ci_baselines))
         for expression in ci_baselines:
             self.assertIn("github.head_ref == 'maintenance/main-governance'", expression)
             self.assertNotIn("github.head_ref == 'release/", expression)

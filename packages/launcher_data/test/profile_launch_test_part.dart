@@ -8,6 +8,37 @@ void _registerProfileLaunchTests({
 }) {
   group('profile launch isolation', () {
     test(
+      'resolves a relative data root before changing child directory',
+      () async {
+        final folder = Directory.current.createTempSync('profile cache Sam é-');
+        addTearDown(() => folder.deleteSync(recursive: true));
+        final relativeRoot = Directory(p.relative(folder.path));
+        expect(p.isAbsolute(relativeRoot.path), isFalse);
+        late GameProcessRequest request;
+        final prepared = await _prepareProfileLaunchRepository(
+          dataRoot: relativeRoot,
+          repositoryRoot: repositoryRoot(),
+          gameRoot: gameRoot(),
+          starter: (value) async {
+            request = value;
+            return 4242;
+          },
+        );
+
+        final result = await prepared.$1.launch(
+          prepared.$2,
+          LauncherProfile(id: 'relative-cache', name: 'Relative cache'),
+        );
+
+        expect(result.started, isTrue);
+        expect(request.workingDirectory, isNot(Directory.current.path));
+        final inherited = request.environment['TOPIAFORGE_DATA_ROOT'];
+        expect(inherited, folder.absolute.path);
+        expect(p.isAbsolute(inherited!), isTrue);
+      },
+    );
+
+    test(
       'revalidates the exact selected version against the live game build',
       () async {
         File(
@@ -44,7 +75,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'old-version',
             name: 'Old Version',
             enabledMods: {'versioned.mod'},
@@ -71,7 +102,7 @@ void _registerProfileLaunchTests({
           starter: (value) async {
             request = value;
             launchFilePath = value
-                .environment[ProfileLaunchConfiguration.environmentVariable]!;
+                .environment[ProfileLaunchConfigurationV4.environmentVariable]!;
             launchJson =
                 jsonDecode(File(launchFilePath).readAsStringSync())
                     as Map<String, Object?>;
@@ -98,7 +129,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'isolated',
             name: 'Isolated',
             enabledMods: {'alpha.mod'},
@@ -115,7 +146,11 @@ void _registerProfileLaunchTests({
         expect(request.arguments, contains('--profile-test'));
         expect(request.environment['TOPIAFORGE_PROFILE_TEST'], 'isolated');
         expect(
-          request.environment[ProfileLaunchConfiguration.environmentVariable],
+          request.environment['TOPIAFORGE_DATA_ROOT'],
+          dataRoot().absolute.path,
+        );
+        expect(
+          request.environment[ProfileLaunchConfigurationV4.environmentVariable],
           launchFilePath,
         );
         if (!Platform.isWindows) {
@@ -141,7 +176,7 @@ void _registerProfileLaunchTests({
           starter: (request) async {
             processStarted = true;
             final path = request
-                .environment[ProfileLaunchConfiguration.environmentVariable]!;
+                .environment[ProfileLaunchConfigurationV4.environmentVariable]!;
             File(path).deleteSync();
             return 17;
           },
@@ -155,7 +190,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'disabled-pin',
             name: 'Disabled Pin',
             enabledMods: {'alpha.mod'},
@@ -179,7 +214,7 @@ void _registerProfileLaunchTests({
           gameRoot: gameRoot(),
           starter: (request) async {
             final path = request
-                .environment[ProfileLaunchConfiguration.environmentVariable]!;
+                .environment[ProfileLaunchConfigurationV4.environmentVariable]!;
             launchJson =
                 jsonDecode(File(path).readAsStringSync())
                     as Map<String, Object?>;
@@ -198,7 +233,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'safe',
             name: 'Safe',
             enabledMods: {'missing.mod'},
@@ -227,7 +262,7 @@ void _registerProfileLaunchTests({
           gameRoot: gameRoot(),
           starter: (request) async {
             launchFilePath = request
-                .environment[ProfileLaunchConfiguration.environmentVariable]!;
+                .environment[ProfileLaunchConfigurationV4.environmentVariable]!;
             throw StateError('synthetic process failure');
           },
         );
@@ -256,7 +291,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'failure',
             name: 'Failure',
             enabledMods: {'alpha.mod'},
@@ -271,46 +306,50 @@ void _registerProfileLaunchTests({
       },
     );
 
-    test('profile environment cannot replace the one-shot contract', () async {
-      var processStarted = false;
-      final prepared = await _prepareProfileLaunchRepository(
-        dataRoot: dataRoot(),
-        repositoryRoot: repositoryRoot(),
-        gameRoot: gameRoot(),
-        starter: (_) async {
-          processStarted = true;
-          return 1;
-        },
-      );
+    for (final reservedKey in [
+      ProfileLaunchConfigurationV4.environmentVariable,
+      'TOPIAFORGE_DATA_ROOT',
+      'topiaforge_data_root',
+    ]) {
+      test('profile environment cannot replace $reservedKey', () async {
+        var processStarted = false;
+        final prepared = await _prepareProfileLaunchRepository(
+          dataRoot: dataRoot(),
+          repositoryRoot: repositoryRoot(),
+          gameRoot: gameRoot(),
+          starter: (_) async {
+            processStarted = true;
+            return 1;
+          },
+        );
 
-      final result = await prepared.$1.launch(
-        prepared.$2,
-        const LauncherProfile(
-          id: 'reserved-environment',
-          name: 'Reserved environment',
-          launchSettings: LaunchSettings(
-            environment: {
-              ProfileLaunchConfiguration.environmentVariable: 'forged.json',
-            },
+        final result = await prepared.$1.launch(
+          prepared.$2,
+          LauncherProfile(
+            id: 'reserved-environment',
+            name: 'Reserved environment',
+            launchSettings: LaunchSettings(
+              environment: {reservedKey: 'forged.json'},
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(result.started, isFalse);
-      expect(result.message, contains('cannot replace required variable'));
-      expect(processStarted, isFalse);
-      final staging = Directory(
-        p.join(gameRoot().path, 'BepInEx', 'TopiaForge', 'staging'),
-      );
-      expect(
-        staging.listSync().where(
-          (entry) => p.basename(entry.path).startsWith('launch-profile-'),
-        ),
-        isEmpty,
-      );
-    });
+        expect(result.started, isFalse);
+        expect(result.message, contains('cannot replace required variable'));
+        expect(processStarted, isFalse);
+        final staging = Directory(
+          p.join(gameRoot().path, 'BepInEx', 'TopiaForge', 'staging'),
+        );
+        expect(
+          staging.listSync().where(
+            (entry) => p.basename(entry.path).startsWith('launch-profile-'),
+          ),
+          isEmpty,
+        );
+      });
+    }
 
-    test('world selection write rejects retired in-memory ids', () async {
+    test('a retired world id fails the launch instead of starting the game', () async {
       var processStarted = false;
       final prepared = await _prepareProfileLaunchRepository(
         dataRoot: dataRoot(),
@@ -325,19 +364,29 @@ void _registerProfileLaunchTests({
           'robo'
           'topia.world.retired';
 
-      await expectLater(
-        prepared.$1.launch(
-          prepared.$2,
-          LauncherProfile(
-            id: 'retired-world',
-            name: 'Retired world',
-            worldSelection: WorldSelection(worldId: retired),
-          ),
+      // The id is validated while the launch profile is built, and a bad one now surfaces as a failed
+      // launch the launcher can show rather than an exception it has to survive.
+      final result = await prepared.$1.launch(
+        prepared.$2,
+        LauncherProfile(
+          id: 'retired-world',
+          name: 'Retired world',
+          launchSelection: LaunchSelection.unresolvedLegacy({
+            'worldSelection': {
+              'worldId': retired,
+              'gamemodeId': 'io.github.furroxide.topiaforge.worlds.sandbox',
+              'loadMode': 'additiveArena',
+              'launchIntoGamemode': true,
+            },
+          }),
         ),
-        throwsFormatException,
       );
 
+      expect(result.started, isFalse);
+      expect(result.message, contains('selection'));
       expect(processStarted, isFalse);
+      // The launcher no longer writes the Worlds mod's config at all: that shared document is what
+      // silently swallowed every selection. The mod owns it; the launch profile carries the choice.
       expect(
         File(
           p.join(
@@ -358,15 +407,30 @@ Future<(LocalLauncherRepository, GameInstall)> _prepareProfileLaunchRepository({
   required Directory dataRoot,
   required Directory repositoryRoot,
   required Directory gameRoot,
-  required GameProcessStarter starter,
+  GameProcessStarter? starter,
+  GameProcessCreator? creator,
+  GameRunningProbe? probe,
+  GameProcessIdentityReader? identityReader,
+  GameProcessLiveness? liveness,
+  GameProcessStopper? stopper,
+  // A restart asks the owned game to quit and waits; these fakes never quit,
+  // so the waits are instant.
+  OwnedGameQuitPolicy quit = const OwnedGameQuitPolicy(pause: _noPause),
 }) async {
   final repository = LocalLauncherRepository(
     dataRoot: dataRoot.path,
     repositoryRoot: repositoryRoot.path,
     knownGamePath: gameRoot.path,
     gameProcessStarter: starter,
+    gameProcessCreator: creator,
+    gameRunningProbe: probe ?? (_) async => false,
+    gameProcessIdentityReader: identityReader,
+    gameProcessLiveness: liveness,
+    gameProcessStopper: stopper,
+    ownedGameQuit: quit,
     packageMetadataValidator: _acceptPackageMetadata,
   );
+  addTearDown(repository.dispose);
   var install = await repository.selectGameDirectory(gameRoot.path);
   final repair = await repository.installOrRepairRuntime(install);
   expect(repair.ok, isTrue);
@@ -375,7 +439,7 @@ Future<(LocalLauncherRepository, GameInstall)> _prepareProfileLaunchRepository({
   final settingsFile = File(p.join(dataRoot.path, 'settings.json'));
   final settings =
       jsonDecode(settingsFile.readAsStringSync()) as Map<String, Object?>;
-  settings['wineCommand'] = 'synthetic-wine';
+  settings['wineCommand'] = Platform.resolvedExecutable;
   settingsFile.writeAsStringSync(jsonEncode(settings));
   return (repository, install);
 }

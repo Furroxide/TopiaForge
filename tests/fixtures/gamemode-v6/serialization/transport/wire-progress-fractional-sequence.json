@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-fractional-sequence",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec fractional sequence",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "request-01",
+    "sequence": 0.5,
+    "phase": "loading-world",
+    "nativeBusy": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

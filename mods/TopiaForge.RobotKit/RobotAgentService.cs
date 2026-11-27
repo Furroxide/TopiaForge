@@ -15,11 +15,13 @@ namespace TopiaForge.RobotKit
     internal sealed partial class RobotAgentService :
         IRobotAgentService,
         IRobotPlayerEntitySource,
-        IOwnerBoundExtensionFactory,
+        IOwnerContextBoundExtensionFactory,
         IDisposable
     {
         private readonly IModLogger logger;
         private readonly RobotPrefabResolver prefabResolver;
+        private readonly Func<WorldSessionSnapshot?>? world;
+        internal RobotReplication? Replication { get; set; }
         private readonly List<RobotAgent> agents = new List<RobotAgent>();
         private readonly Dictionary<string, RobotAgent> agentsById =
             new Dictionary<string, RobotAgent>(StringComparer.Ordinal);
@@ -41,14 +43,15 @@ namespace TopiaForge.RobotKit
         private bool loggedSpawnMode;
         private bool disposed;
 
-        public RobotAgentService(IModLogger logger)
+        public RobotAgentService(IModLogger logger, Func<WorldSessionSnapshot?>? world = null)
         {
             this.logger = logger;
+            this.world = world;
             RobotKitDiagnostics.Configure(logger);
             prefabResolver = new RobotPrefabResolver(logger);
         }
 
-        public bool IsAvailable => !disposed && LocomotionBridge.LocomotionAvailable() && ResolveCachedPrefab() != null;
+        public bool IsAvailable => !disposed && LocomotionBridge.LocomotionAvailable() && ResolveCachedCatalog()?.Count > 0;
 
         public bool IsNavigationAvailable => LocomotionBridge.NavAvailable();
 
@@ -114,7 +117,11 @@ namespace TopiaForge.RobotKit
             return null;
         }
 
-        public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request)
+        public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request) => SpawnNative(request, false);
+
+        internal static bool IsBodyOnly(IRobotAgent agent) => agent is RobotAgent { BodyOnly: true };
+
+        internal OperationResult<IRobotAgent> SpawnNative(RobotAgentSpawnRequest request, bool replica)
         {
             if (request == null)
             {
@@ -128,12 +135,26 @@ namespace TopiaForge.RobotKit
                     "RobotKit has been disposed.");
             }
 
-            var prefab = ResolvePrefabForType(request.RobotTypeId);
-            if (prefab == null)
+            var candidate = RobotPrefabSelection.Select(ResolveCachedCatalog(), request.RobotTypeId, item => item.Id);
+            if (candidate == null)
             {
+                // A missing composed character carries its fixed discovery reason, for the author and the player.
+                // A body-only offer is not why the type is missing now, so it never explains an absence.
+                var reason = string.Equals(request.RobotTypeId, RobotComposedReferences.MunicipalId, StringComparison.OrdinalIgnoreCase)
+                    ? RobotKitDiagnostics.LastComposedDiscovery(world) : null;
+                if (reason == RobotComposedRefusal.CharacterUnprepared) reason = null;
                 return OperationResult<IRobotAgent>.Failure(
                     ModErrorCode.Unavailable,
-                    "No spawnable robot prefab is available in this scene.");
+                    string.IsNullOrWhiteSpace(request.RobotTypeId)
+                        ? "No spawnable robot prefab is available in this scene."
+                        : "The requested robot type is unavailable in this scene."
+                            + (reason is { } code ? " " + RobotComposedReferences.Explain(code) : string.Empty));
+            }
+
+            // The default talk policy is turned off quietly; an explicit talk distance is a request that cannot be met.
+            if (candidate.BodyOnly && (request.BrainMode != RobotBrainMode.Dormant || request.Interaction.NativeTalkDistance > 0f))
+            {
+                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, RobotComposedReferences.BodyOnly);
             }
 
             EnsureRoots();
@@ -158,42 +179,66 @@ namespace TopiaForge.RobotKit
             // Instantiate under the inactive incubator so no native Awake/OnEnable fires before the brain is
             // configured, set the requested brain mode while inactive, then reparent to the live root and activate
             // as a fully native (but mod-driven) robot.
-            var clone = UnityEngine.Object.Instantiate(prefab, position, rotation, incubator.transform);
-            clone.SetActive(false);
-            clone.name = request.Name ?? "RobotKit Agent";
-
-            // Capture the brain's pristine state before any dormant writes, so a later SetBrainMode(Autonomous)
-            // can restore what the prefab shipped with.
-            var brainSnapshot = GameReflection.CaptureBrainState(clone);
-            GameReflection.ConfigureBrain(clone, request.BrainMode, logger);
-            EnsureKinematicRoot(clone);
-            var agentId = NextId();
-            // Reuse a marker if a resolver ever hands us an already-marked clone; two anchors on one object make
-            // interface-based GetComponent selection ambiguous. The new clone begins a new entity lifetime/id.
-            var identityAnchor = clone.GetComponent<RobotAgentEntityIdentityAnchor>()
-                ?? clone.AddComponent<RobotAgentEntityIdentityAnchor>();
-            identityAnchor.Initialize(agentId);
-            var agent = new RobotAgent(agentId, clone, request, logger, brainSnapshot);
-
-            clone.transform.SetParent(root.transform, true);
-            clone.SetActive(true);
-            agent.OnActivated();
-            if (request.Scale != 1f)
+            GameObject? clone = null;
+            RobotAgent? agent = null;
+            try
             {
-                agent.SetScale(request.Scale);
-            }
+                clone = candidate.Create(incubator.transform);
+                clone.SetActive(false);
+                clone.transform.SetPositionAndRotation(position, rotation);
+                clone.name = request.Name ?? "RobotKit Agent";
 
-            if (request.Tint is { } tint)
+                // Capture the brain's pristine state before any dormant writes, so a later SetBrainMode(Autonomous)
+                // can restore what the prefab shipped with.
+                var brainSnapshot = GameReflection.CaptureBrainState(clone);
+                GameReflection.ConfigureBrain(clone, request.BrainMode, logger);
+                EnsureKinematicRoot(clone);
+                var agentId = NextId();
+                // Reuse a marker if a resolver ever hands us an already-marked clone; two anchors on one object make
+                // interface-based GetComponent selection ambiguous. The new clone begins a new entity lifetime/id.
+                var identityAnchor = clone.GetComponent<RobotAgentEntityIdentityAnchor>()
+                    ?? clone.AddComponent<RobotAgentEntityIdentityAnchor>();
+                identityAnchor.Initialize(agentId);
+                agent = new RobotAgent(agentId, clone, request, logger, brainSnapshot);
+                if (candidate.BodyOnly) agent.RestrictToBody();
+
+                agent.RegisterSpeech();
+                if (replica) Quieten(clone, cosmetic: false);
+                RobotComposedLifetime.Activate(clone, root.transform);
+                agent.OnActivated();
+                if (replica) agent.MakeReplica(ResolveAnimator(clone), ResolveWalkParameter());
+                if (request.Scale != 1f)
+                {
+                    agent.SetScale(request.Scale);
+                }
+
+                if (request.Tint is { } tint)
+                {
+                    agent.SetTint(tint);
+                }
+
+                agents.Add(agent);
+                agentsById.Add(agent.Id, agent);
+                activeDirty = true;
+
+                LogSpawnModeOnce();
+                return OperationResult<IRobotAgent>.Success(agent);
+            }
+            catch (Exception ex)
             {
-                agent.SetTint(tint);
+                if (agent != null)
+                {
+                    agents.Remove(agent);
+                    agentsById.Remove(agent.Id);
+                    activeDirty = true;
+                    agent.Despawn();
+                }
+                else if (clone != null) RobotComposedLifetime.DestroyActor(clone);
+                if (ex is RobotComposedContextUnverifiedException)
+                    return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, "The requested composed robot's native context could not be verified.");
+                RobotKitDiagnostics.ReportOnce("robot native construction", ex);
+                return OperationResult<IRobotAgent>.Failure(ModErrorCode.Unavailable, "The requested robot could not be constructed in this scene.");
             }
-
-            agents.Add(agent);
-            agentsById.Add(agent.Id, agent);
-            activeDirty = true;
-
-            LogSpawnModeOnce();
-            return OperationResult<IRobotAgent>.Success(agent);
         }
 
         public bool TryGetPlayerPosition(out Vec3 position)
@@ -291,17 +336,14 @@ namespace TopiaForge.RobotKit
             return search.Completion;
         }
 
-        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
-            Type contractType,
-            string ownerModId,
-            IModLifetime lifetime)
+        object IOwnerContextBoundExtensionFactory.CreateOwnerFacade(Type contractType, IModContext context)
         {
             if (contractType != typeof(IRobotAgentService))
             {
                 throw new ArgumentException("Unsupported RobotKit agent extension contract.", nameof(contractType));
             }
 
-            return new OwnerFacade(this, lifetime);
+            return new OwnerFacade(this, context);
         }
 
         // The designer-tuned PathFindSettings read off the spawnable robot prefab's LocomotionController (cached for
@@ -336,6 +378,9 @@ namespace TopiaForge.RobotKit
             {
                 if (!agents[index].IsAlive)
                 {
+                    // Detach managed speech state while native death retains ownership of the corpse.
+                    agents[index].ReleaseSpeech();
+                    Replication?.Forget(agents[index].Id);
                     agentsById.Remove(agents[index].Id);
                     agents.RemoveAt(index);
                     activeDirty = true;
@@ -351,7 +396,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger.Debug("RobotKit agent step failed: " + ex.Message);
+                    logger.Debug("RobotKit agent step failed: " + RobotKitLog.ExceptionType(ex));
                 }
             }
 
@@ -366,7 +411,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception ex)
                 {
-                    logger.Debug("RobotKit spawn search step failed: " + ex.Message);
+                    logger.Debug("RobotKit spawn search step failed: " + RobotKitLog.ExceptionType(ex));
                     search.Cancel();
                 }
 
@@ -382,6 +427,7 @@ namespace TopiaForge.RobotKit
         public void OnSceneChanged()
         {
             ClearAgents();
+            Replication?.Clear();
             CancelSearches();
             LocomotionBridge.ResetSceneCache();
             cachedCatalog = null;
@@ -402,6 +448,7 @@ namespace TopiaForge.RobotKit
 
             disposed = true;
             ClearAgents();
+            Replication?.Clear();
             CancelSearches();
             if (root != null)
             {

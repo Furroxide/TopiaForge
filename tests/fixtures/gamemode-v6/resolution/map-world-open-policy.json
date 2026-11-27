@@ -1,0 +1,149 @@
+{
+  "id": "map-world-open-policy",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "A static map world resolves through the open policy.",
+  "profile": {
+    "packages": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.worlds",
+          "displayName": "worlds",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": []
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      },
+      {
+        "id": "io.github.furroxide.topiaforge.fixture",
+        "version": "1.0.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.fixture",
+          "displayName": "Contract Fixture",
+          "version": "1.0.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "io.github.furroxide.topiaforge.fixture.arena",
+                "name": "Arena",
+                "content": {
+                  "kind": "map",
+                  "map": "ExampleMap_01"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "io.github.furroxide.topiaforge.fixture.survival",
+                "name": "Survival",
+                "implementation": {
+                  "type": "Fixture.SurvivalGamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "io.github.furroxide.topiaforge.fixture.play",
+                "title": "Play",
+                "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+                "world": {
+                  "policy": "open",
+                  "default": "io.github.furroxide.topiaforge.fixture.arena",
+                  "allowPlayerOverride": true
+                },
+                "sortKey": 0
+              }
+            ]
+          },
+          "dependencies": {
+            "io.github.furroxide.topiaforge.worlds": "*"
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      }
+    ]
+  },
+  "request": {
+    "targetId": "io.github.furroxide.topiaforge.fixture.play"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "io.github.furroxide.topiaforge.fixture.play",
+        "gamemodeId": "io.github.furroxide.topiaforge.fixture.survival",
+        "worldId": "io.github.furroxide.topiaforge.fixture.arena",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "io.github.furroxide.topiaforge.fixture.play"
+        },
+        "packages": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture",
+            "version": "1.0.0"
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.worlds",
+            "version": "0.1.0"
+          }
+        ],
+        "digest": "6272aec57aec52e3"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "io.github.furroxide.topiaforge.fixture.play",
+        "gamemodeId": "io.github.furroxide.topiaforge.fixture.survival",
+        "worldId": "io.github.furroxide.topiaforge.fixture.arena",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "io.github.furroxide.topiaforge.fixture.play"
+        },
+        "packages": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture",
+            "version": "1.0.0"
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.worlds",
+            "version": "0.1.0"
+          }
+        ],
+        "digest": "6272aec57aec52e3"
+      }
+    }
+  }
+}

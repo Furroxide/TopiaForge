@@ -1,0 +1,22 @@
+{
+  "id": "multiplayer",
+  "label": "Multiplayer mod",
+  "description": "A host-owned count every player shares, with explicit command rate and payload limits and multiplayer rig tests.",
+  "manifestDefaults": {
+    "category": "Gameplay",
+    "description": "A count every player in a session shares, kept by the host.",
+    "tags": ["multiplayer"],
+    "capabilities": ["hud", "input"],
+    "dependencies": {
+      "io.github.furroxide.topiaforge.multiplayer": "{{SDK_VERSION}}"
+    },
+    "multiplayer": {
+      "mode": "session",
+      "presence": "required",
+      "protocol": {
+        "version": "1.0.0",
+        "peerVersionRange": ">=1.0.0 <2.0.0"
+      }
+    }
+  }
+}

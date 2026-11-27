@@ -37,11 +37,25 @@ param(
     [string]$UnityPath,
 
     [Parameter(Mandatory = $true)]
-    [string]$GameDirectory
+    [string]$GameDirectory,
+
+    [Parameter(Mandatory = $true)]
+    [string]$AcceptanceIsolationRecord,
+
+    [switch]$ProductionStable
 )
+
+. (Join-Path $PSScriptRoot "acceptance-isolation.ps1")
+. (Join-Path $PSScriptRoot "tomato-cake-launcher-state.ps1")
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$AcceptanceIsolationRecord = [System.IO.Path]::GetFullPath($AcceptanceIsolationRecord)
+if ($ProductionStable -and $Version.Contains('-')) {
+    throw "Production multiplayer requires a stable release version."
+}
+$multiplayerEnvironment = if ($ProductionStable) { "production" } else { "staging" }
+$multiplayerBuildOptions = if ($ProductionStable) { @() } else { @("--build-only") }
 
 function Invoke-Checked {
     param(
@@ -50,17 +64,35 @@ function Invoke-Checked {
         [Parameter()]
         [string[]]$Arguments = @(),
         [Parameter()]
-        [string]$WorkingDirectory = $RepositoryRoot
+        [string]$WorkingDirectory = $RepositoryRoot,
+        [Parameter()]
+        [string]$NativePathGuard = ""
     )
 
+    $guardApplied = $false
+    $previousImport = $null
     Push-Location $WorkingDirectory
     try {
+        if (-not [string]::IsNullOrEmpty($NativePathGuard)) {
+            $previousImport = [Environment]::GetEnvironmentVariable("ForceImportBeforeCppTargets", "Process")
+            if (-not [string]::IsNullOrEmpty($previousImport)) {
+                throw "A native C++ import override is already configured; use a clean build environment."
+            }
+            if (-not (Test-Path -LiteralPath $NativePathGuard -PathType Leaf)) {
+                throw "The native path guard is missing."
+            }
+            [Environment]::SetEnvironmentVariable("ForceImportBeforeCppTargets", $NativePathGuard, "Process")
+            $guardApplied = $true
+        }
         & $FilePath @Arguments
         if ($LASTEXITCODE -ne 0) {
             throw "'$FilePath' failed with exit code $LASTEXITCODE."
         }
     }
     finally {
+        if ($guardApplied) {
+            [Environment]::SetEnvironmentVariable("ForceImportBeforeCppTargets", $previousImport, "Process")
+        }
         Pop-Location
     }
 }
@@ -159,45 +191,6 @@ function Get-Sha256FromUtf8 {
     ).ToLowerInvariant()
 }
 
-function Get-RobotopiaInstalledBuildId {
-    param([Parameter(Mandatory = $true)][string]$GameRoot)
-    $resolvedGameRoot = [System.IO.Path]::GetFullPath($GameRoot).TrimEnd("\", "/")
-    $candidates = [System.Collections.Generic.List[string]]::new()
-    $candidates.Add((Join-Path $resolvedGameRoot "installed-build.json"))
-    if ((Split-Path -Leaf $resolvedGameRoot).Equals(
-            "Robotopia",
-            [System.StringComparison]::OrdinalIgnoreCase
-        )) {
-        $candidates.Add((Join-Path (Split-Path -Parent $resolvedGameRoot) `
-                    "installed-build.json"))
-    }
-    foreach ($candidate in $candidates) {
-        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
-            continue
-        }
-        $length = (Get-Item -LiteralPath $candidate).Length
-        if ($length -le 0 -or $length -gt 4096) {
-            throw "Robotopia installed-build.json is invalid."
-        }
-        try {
-            $metadata = Get-Content -LiteralPath $candidate -Raw |
-                ConvertFrom-Json
-            if ($metadata.PSObject.Properties.Name -notcontains "id") {
-                throw "missing id"
-            }
-            $idText = [string]$metadata.id
-            if ($idText -notmatch "^[1-9][0-9]*$") {
-                throw "invalid id"
-            }
-            return [int]$idText
-        }
-        catch {
-            throw "Robotopia installed-build.json is invalid."
-        }
-    }
-    throw "Robotopia installed-build.json is missing."
-}
-
 function Clear-OwnedDirectory {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -261,10 +254,13 @@ function Remove-OwnedProjectDirectory {
     }
 }
 
+$isolationRecordHash = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
 $repository = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $canonical = (Resolve-Path -LiteralPath $CanonicalArchive).Path
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 $privateEvidenceRoot = [System.IO.Path]::GetFullPath($PrivateEvidenceDirectory)
+Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
+    -OutputDirectories @($output, $privateEvidenceRoot)
 if ($output -eq $repository -or
     $repository.StartsWith($output.TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar,
         [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -286,7 +282,6 @@ if ($privateEvidenceRoot.Equals(
     )) {
     throw "Private Windows evidence must not overlap the public asset directory."
 }
-New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 $head = (& git -C $repository rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $head -ne $SourceSha) {
@@ -310,39 +305,72 @@ if ($policy.versioning.productVersion -ne $Version) {
     throw "The requested version does not match release-policy.json."
 }
 $windowsCertificatePin = ""
-if ($policy.signingIdentities.PSObject.Properties.Name -contains
-    "windowsCertificateSha256") {
-    $windowsCertificatePin =
-        [string]$policy.signingIdentities.windowsCertificateSha256
+if ($null -ne $policy.signingIdentities.PSObject.Properties["windowsCertificateSha256"]) {
+    $pinValue = $policy.signingIdentities.windowsCertificateSha256
+    if ($pinValue -isnot [string] -or [string]::IsNullOrEmpty($pinValue)) {
+        throw "Windows signing certificate pin must be a nonempty string when present."
+    }
+    $windowsCertificatePin = $pinValue
 }
 $hasWindowsCertificatePin =
-    $windowsCertificatePin -cmatch "^(?!0{64}$)[0-9a-f]{64}$"
+    $windowsCertificatePin -cmatch "\A(?!0{64}\z)[0-9a-f]{64}\z"
 if ($policy.publication.PSObject.Properties.Name -contains
     "codeSigningException") {
     throw "Production Windows builds forbid every code-signing exception."
 }
-if (-not $hasWindowsCertificatePin) {
+$windowsDistribution = "signed"
+if ($null -ne $policy.signingIdentities.PSObject.Properties["windowsDistribution"]) {
+    $modeValue = $policy.signingIdentities.windowsDistribution
+    if ($modeValue -isnot [string] -or [string]::IsNullOrEmpty($modeValue)) {
+        throw "Windows distribution mode must be a nonempty string when present."
+    }
+    $windowsDistribution = $modeValue
+}
+if ($windowsDistribution -cne "signed" -and $windowsDistribution -cne "unsigned") {
+    throw "Unknown Windows distribution mode '$windowsDistribution'; expected 'signed' or 'unsigned'."
+}
+if ($windowsDistribution -ceq "unsigned") {
+    if (-not [string]::IsNullOrEmpty($windowsCertificatePin)) {
+        throw "An unsigned Windows distribution must not also pin a signing certificate."
+    }
+    # Match the Dart SemVer reader, including metadata and numeric identifier rules.
+    $prereleaseIdentifier = '(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+    $unsignedVersionPattern = '\A0\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-' +
+        $prereleaseIdentifier + '(?:\.' + $prereleaseIdentifier + ')*)?' +
+        '(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z'
+    if ($policy.versioning.productVersion -isnot [string] -or
+        $policy.versioning.productVersion -cnotmatch $unsignedVersionPattern) {
+        throw "An unsigned Windows distribution is only allowed for a 0.x version."
+    }
+}
+if ($windowsDistribution -ceq "signed" -and -not $hasWindowsCertificatePin) {
     throw "release-policy.json must pin the reviewed Windows signing certificate."
 }
-foreach ($name in @(
-        "WINDOWS_CERTIFICATE_PFX",
-        "WINDOWS_CERTIFICATE_PASSWORD",
-        "WINDOWS_TIMESTAMP_URL"
-    )) {
-    if ([string]::IsNullOrWhiteSpace(
-            [Environment]::GetEnvironmentVariable($name)
+if ($windowsDistribution -ceq "signed") {
+    foreach ($name in @(
+            "WINDOWS_CERTIFICATE_PFX",
+            "WINDOWS_CERTIFICATE_PASSWORD",
+            "WINDOWS_TIMESTAMP_URL"
         )) {
-        throw "$name is mandatory for a production Windows build."
+        if ([string]::IsNullOrWhiteSpace(
+                [Environment]::GetEnvironmentVariable($name)
+            )) {
+            throw "$name is mandatory for a production Windows build."
+        }
     }
 }
 if ((Get-Sha256 $canonical) -ne $CanonicalArchiveSha256) {
     throw "The canonical ecosystem transport archive digest does not match."
 }
+New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 $flutterCommand = Get-Command $FlutterPath -CommandType Application -ErrorAction SilentlyContinue |
     Select-Object -First 1
 $dartCommand = Get-Command $DartPath -CommandType Application -ErrorAction SilentlyContinue |
     Select-Object -First 1
+if ($null -eq (Get-Command python -CommandType Application -ErrorAction SilentlyContinue)) {
+    throw "Python 3 is required for the multiplayer service build check."
+}
 if ($null -eq $flutterCommand -or $null -eq $dartCommand) {
     throw "The pinned Dart and Flutter command paths must resolve to applications."
 }
@@ -436,11 +464,16 @@ Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
     -Arguments @("clean")
 Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
     -Arguments @("pub", "get", "--enforce-lockfile")
-Invoke-Checked -FilePath $flutter -WorkingDirectory $launcherProject `
-    -Arguments @(
+$launcherMultiplayerArguments = @(
+        (Join-Path $repository "tools/multiplayer-build.py"),
+        "--environment", $multiplayerEnvironment) + $multiplayerBuildOptions + @("--executable", $flutter, "--",
         "build", "windows", "--release",
         "--dart-define=TOPIAFORGE_PRODUCT_VERSION=$Version"
     )
+# The inherited C++ hook reaches the runner, Flutter and generated plugin projects.
+Invoke-Checked -FilePath "python" -WorkingDirectory $launcherProject `
+    -NativePathGuard (Join-Path $PSScriptRoot "windows-native-path-guard.targets") `
+    -Arguments $launcherMultiplayerArguments
 $launcherBuild = Join-Path $launcherProject "build/windows/x64/runner/Release"
 if (-not (Test-Path -LiteralPath $launcherBuild -PathType Container)) {
     $launcherBuild = Join-Path $launcherProject "build/windows/runner/Release"
@@ -484,15 +517,20 @@ Remove-OwnedProjectDirectory -Path (Join-Path $cliProject ".dart_tool") `
     -ProjectRoot $cliProject -ExpectedName ".dart_tool"
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments @("pub", "get", "--enforce-lockfile")
-Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
-    -Arguments @("compile", "exe", "bin/topiaforge.dart", "-o", $compiledCli)
+$cliMultiplayerArguments = @((Join-Path $repository "tools/multiplayer-build.py"),
+        "--environment", $multiplayerEnvironment) + $multiplayerBuildOptions + @("--kind", "dart", "--executable", $dart, "--",
+        "compile", "exe", "bin/topiaforge.dart", "-o", $compiledCli)
+Invoke-Checked -FilePath "python" -WorkingDirectory $cliProject `
+    -Arguments $cliMultiplayerArguments
 $buildPackageArguments = @(
     "run", "bin/topiaforge.dart", "release", "build-package",
     "--platform", "windows", "--output", $output, "--configuration", "Release",
     "--prebuilt-launcher", $launcherDirectory, "--prebuilt-cli", $compiledCli,
     "--prebuilt-dist", $canonicalDirectory
 )
-$buildPackageArguments += "--require-windows-signing"
+if ($windowsDistribution -ceq "signed") {
+    $buildPackageArguments += "--require-windows-signing"
+}
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments $buildPackageArguments
 $archive = Join-Path $output "TopiaForge-windows-x64.zip"
@@ -503,10 +541,17 @@ $testPackageArguments = @(
     "--expected-canonical-ecosystem-sha256", $CanonicalEcosystemSha256,
     "--canonical-assets", $canonicalDirectory
 )
-$testPackageArguments += @(
-    "--require-windows-signature",
-    "--expected-windows-signer-sha256", $windowsCertificatePin
-)
+if ($windowsDistribution -ceq "unsigned") {
+    # Prove the artifacts really are unsigned rather than accidentally signed by
+    # stray credentials in the environment.
+    $testPackageArguments += "--require-windows-unsigned"
+}
+else {
+    $testPackageArguments += @(
+        "--require-windows-signature",
+        "--expected-windows-signer-sha256", $windowsCertificatePin
+    )
+}
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments $testPackageArguments
 Invoke-PackagedLauncherHealthCheck -ArchivePath $archive `
@@ -607,6 +652,7 @@ $gameEvidence = Join-Path $acceptanceDirectory "robotopia"
 Invoke-Checked -FilePath $packagedCli -WorkingDirectory $repository -Arguments @(
     "acceptance", "run",
     "--game-dir", $GameDirectory, "--output", $gameEvidence,
+    "--isolation-record", $AcceptanceIsolationRecord,
     "--timeout-seconds", "1800", "--dev-cli", $packagedCli,
     "--dev-project", $journeyProject, "--required-loaded-package", $journeyId,
     "--required-log-marker", $marker, "--all"
@@ -615,9 +661,14 @@ $gameEvidenceFile = Join-Path $gameEvidence "acceptance-result.json"
 if (-not (Test-Path -LiteralPath $gameEvidenceFile -PathType Leaf)) {
     throw "Robotopia acceptance did not produce its bounded result."
 }
+$null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord `
+    -ExpectedSha256 $isolationRecordHash
+$isolation = Get-VerifiedReleaseAcceptanceIsolation -EvidencePath $gameEvidenceFile `
+    -IsolationRecordPath $AcceptanceIsolationRecord -CliPath $packagedCli `
+    -WorkingDirectory $repository
 $gameAcceptance = Get-Content -LiteralPath $gameEvidenceFile -Raw |
     ConvertFrom-Json
-if ($gameAcceptance.schemaVersion -ne 2 -or
+if ($gameAcceptance.schemaVersion -ne 3 -or
     [string]$gameAcceptance.acceptanceChallenge -cnotmatch
         "^[0-9a-f]{64}$" -or
     [string]$gameAcceptance.acceptancePackageReceipt.sourceSha256 -cnotmatch
@@ -628,8 +679,7 @@ if ($gameAcceptance.schemaVersion -ne 2 -or
     @($gameAcceptance.requiredLoadedPackageReceipt.criticalFiles).Count -lt 1) {
     throw "Robotopia acceptance did not bind its challenge and exact package receipts."
 }
-$lastRunPath = Join-Path $GameDirectory `
-    "BepInEx/TopiaForge/logs/last-run.json"
+$lastRunPath = Join-Path ([string]$isolation.managerRoot) "logs/last-run.json"
 if (-not (Test-Path -LiteralPath $lastRunPath -PathType Leaf)) {
     throw "Robotopia acceptance last-run evidence is missing."
 }
@@ -678,6 +728,33 @@ if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace($finalTrackedChang
     throw "The Windows release build changed tracked source files."
 }
 
+# The validation record has to state what this build actually did. Leaving the
+# Authenticode claim unconditional meant an unsigned build produced a handoff
+# asserting a signature it never carried -- worse than an absent field, because
+# it is an affirmative false provenance claim.
+$signingStateValue = if ($windowsDistribution -ceq "unsigned") {
+    "unsigned"
+}
+else {
+    "authenticode-timestamped"
+}
+$validationChecks = [System.Collections.Generic.List[string]]::new()
+$validationChecks.AddRange([string[]]@(
+        "archive-smoke",
+        "embedded-cli",
+        "packaged-launcher-health",
+        "canonical-ecosystem"
+    ))
+if ($windowsDistribution -cne "unsigned") {
+    $validationChecks.Add("authenticode")
+}
+$validationChecks.AddRange([string[]]@(
+        "unity-reproducibility",
+        "unity-lifecycle",
+        "official-game-bytes",
+        "robotopia-acceptance"
+    ))
+
 $validation = [ordered]@{
     schema = "release-local-validation-v1"
     platform = "windows"
@@ -686,7 +763,7 @@ $validation = [ordered]@{
     archiveSha256 = Get-Sha256 $archive
     canonicalEcosystemSha256 = $CanonicalEcosystemSha256
     canonicalArchiveSha256 = $CanonicalArchiveSha256
-    signingState = "authenticode-timestamped"
+    signingState = $signingStateValue
     platformToolchains = [ordered]@{
         node = $measuredNode
         msvc = $measuredMsvc
@@ -697,17 +774,7 @@ $validation = [ordered]@{
     gameFilesManifestSha256 = [string]$officialInstallBefore.filesManifestSha256
     gameFilesVerified = [Int64]$officialInstallBefore.filesVerified
     gameExecutableSha256 = [string]$officialInstallBefore.gameExecutableSha256
-    checks = @(
-        "archive-smoke",
-        "embedded-cli",
-        "packaged-launcher-health",
-        "canonical-ecosystem",
-        "authenticode",
-        "unity-reproducibility",
-        "unity-lifecycle",
-        "official-game-bytes",
-        "robotopia-acceptance"
-    )
+    checks = @($validationChecks.ToArray())
     evidenceSha256 = [ordered]@{
         unity = Get-Sha256 $unityEvidence
         robotopia = Get-Sha256 $gameEvidenceFile

@@ -1,6 +1,6 @@
 part of '../local_launcher_repository.dart';
 
-const _profileFormatVersion = 2;
+const _profileFormatVersion = 3;
 const _profileExportSuffix = '.topiaforgeprofile.json';
 const _packageSourceFormatVersion = 2;
 
@@ -12,48 +12,15 @@ void _requireProfileExportPath(String path) {
   }
 }
 
-LauncherProfile _requireValidLauncherProfile(LauncherProfile profile) {
-  ProfileLaunchConfiguration.fromProfile(profile);
-  return profile;
-}
-
 extension _StorageHelpers on LocalLauncherRepository {
-  Future<List<LauncherProfile>> _loadProfiles() async {
-    await _recoverAtomicBackupIfMissing(_profilesFile);
-    if (!_profilesFile.existsSync()) {
-      final defaults = [LauncherProfile.defaultProfile()];
-      await saveProfiles(defaults, defaults.first.id);
-      return defaults;
-    }
-
-    final decoded = await _readJsonFileBounded(
-      _profilesFile,
-      maxBytes: _maxProfilesBytes,
-      label: 'Launcher profiles',
-    );
-    if (decoded is! Map || decoded['schemaVersion'] != _profileFormatVersion) {
-      throw const FormatException(
-        'Launcher profiles must use TopiaForge schemaVersion 2.',
-      );
-    }
-    final profiles = decoded['profiles'] as List?;
-    final result = profiles == null
-        ? <LauncherProfile>[]
-        : profiles
-              .whereType<Map>()
-              .map(
-                (item) => LauncherProfile.fromJson(
-                  item.map((key, value) => MapEntry(key.toString(), value)),
-                ),
-              )
-              .map(_requireValidLauncherProfile)
-              .toList();
-    return result.isEmpty ? [LauncherProfile.defaultProfile()] : result;
-  }
+  Future<List<LauncherProfile>> _loadProfiles() => _loadVersionedProfiles();
 
   Future<List<PackageSource>> _loadPackageSources() async {
-    await _recoverAtomicBackupIfMissing(_sourcesFile);
-    if (!_sourcesFile.existsSync()) {
+    if (await recoverAtomicBackupIfMissing(
+          _sourcesFile,
+          label: 'Package sources',
+        ) ==
+        AtomicFileState.missing) {
       return _defaultPackageSources();
     }
 
@@ -122,8 +89,11 @@ extension _StorageHelpers on LocalLauncherRepository {
   }
 
   Future<Map<String, Object?>> _loadSettings() async {
-    await _recoverAtomicBackupIfMissing(_settingsFile);
-    if (!_settingsFile.existsSync()) {
+    if (await recoverAtomicBackupIfMissing(
+          _settingsFile,
+          label: 'Launcher settings',
+        ) ==
+        AtomicFileState.missing) {
       return <String, Object?>{};
     }
 
@@ -160,7 +130,24 @@ extension _StorageHelpers on LocalLauncherRepository {
     );
   }
 
+  /// Puts back the launcher log that a rotation stopped part way moved
+  /// aside, and once per repository sweeps what stopped rotations left beside
+  /// a log that is there. The log holds no player state, so a backup that
+  /// cannot be moved just now never stops logging: it waits for a later look,
+  /// or for the sweep once it is old.
+  void _tidyLauncherLog() {
+    try {
+      recoverAtomicBackupIfMissingSync(_launcherLogFile, label: 'Launcher log');
+    } on FileSystemException {
+      // Logging goes on in a new log.
+    }
+    if (_launcherLogSwept) return;
+    _launcherLogSwept = true;
+    sweepAtomicLeftovers(_launcherLogFile, backups: true);
+  }
+
   Future<String> _readLauncherLog({int maxLines = 200}) async {
+    _tidyLauncherLog();
     final type = FileSystemEntity.typeSync(
       _launcherLogFile.path,
       followLinks: false,
@@ -186,6 +173,7 @@ extension _StorageHelpers on LocalLauncherRepository {
     await previous;
     try {
       await _launcherLogFile.parent.create(recursive: true);
+      _tidyLauncherLog();
       final type = FileSystemEntity.typeSync(
         _launcherLogFile.path,
         followLinks: false,
@@ -219,143 +207,13 @@ extension _StorageHelpers on LocalLauncherRepository {
       completion.complete();
     }
   }
-
-  Future<WorldCatalog> _loadWorldCatalog(
-    GameInstall install,
-    List<InstalledMod> installedMods,
-    List<RegistryMod> registryMods,
-  ) async {
-    final file = File(
-      p.join(_managerData(install).path, 'topiaforge.worlds', 'catalog.json'),
-    );
-    WorldCatalog catalog;
-    if (!file.existsSync()) {
-      catalog = WorldCatalog.fallback();
-    } else {
-      try {
-        final decoded = await _readJsonFileBounded(
-          file,
-          maxBytes: _maxWorldCatalogBytes,
-          label: 'World catalog',
-        );
-        catalog = WorldCatalog.fromJson(decoded as Map<String, Object?>);
-      } on Object catch (error) {
-        await _appendLauncherLogBestEffort('World catalog read failed: $error');
-        catalog = WorldCatalog.fallback();
-      }
-    }
-
-    return _mergeManifestGamemodes(catalog, installedMods, registryMods);
-  }
-
-  WorldCatalog _mergeManifestGamemodes(
-    WorldCatalog catalog,
-    List<InstalledMod> installedMods,
-    List<RegistryMod> registryMods,
-  ) {
-    final gamemodes = [...catalog.gamemodes];
-    final seen = {for (final gamemode in gamemodes) gamemode.id.toLowerCase()};
-    final installedIds = {
-      for (final mod in installedMods.where((mod) => mod.enabled))
-        mod.id.toLowerCase(),
-    };
-
-    for (final mod in installedMods.where((mod) => mod.enabled)) {
-      for (final gamemode in mod.manifest?.worldGamemodes ?? const []) {
-        if (ModManifest.isValidId(gamemode.id) &&
-            gamemode.name.trim().isNotEmpty &&
-            seen.add(gamemode.id.toLowerCase())) {
-          gamemodes.add(gamemode);
-        }
-      }
-    }
-
-    for (final mod in registryMods.where(
-      (mod) => installedIds.contains(mod.manifest.id.toLowerCase()),
-    )) {
-      for (final gamemode in mod.manifest.worldGamemodes) {
-        if (ModManifest.isValidId(gamemode.id) &&
-            gamemode.name.trim().isNotEmpty &&
-            seen.add(gamemode.id.toLowerCase())) {
-          gamemodes.add(gamemode);
-        }
-      }
-    }
-
-    return WorldCatalog(worlds: catalog.worlds, gamemodes: gamemodes);
-  }
-
-  Future<void> _writeWorldSelection(
-    GameInstall install,
-    WorldSelection selection,
-  ) async {
-    WorldSelection.fromJson(selection.toJson());
-    final file = File(
-      p.join(_managerConfig(install).path, 'topiaforge.worlds.json'),
-    );
-    var existing = <String, Object?>{};
-    if (await file.exists()) {
-      try {
-        final decoded = jsonDecode(
-          utf8.decode(
-            await _readLauncherFileBounded(file, _maxWorldConfigBytes),
-          ),
-        );
-        if (decoded is Map<String, Object?>) {
-          existing = decoded;
-        } else {
-          await _appendLauncherLogBestEffort(
-            'World config was not a JSON object; replacing it.',
-          );
-        }
-      } on FormatException catch (error) {
-        await _appendLauncherLogBestEffort(
-          'World config was malformed and will be replaced: $error',
-        );
-      }
-    }
-    await _writeJsonFileAtomic(file, selection.mergeRuntimeConfig(existing));
-  }
-}
-
-Future<void> _recoverAtomicBackupIfMissing(File file) async {
-  if (await file.exists() || !await file.parent.exists()) {
-    return;
-  }
-  final prefix = '${p.basename(file.path)}.';
-  final candidates =
-      file.parent.listSync(followLinks: false).whereType<File>().where((
-        candidate,
-      ) {
-        final name = p.basename(candidate.path);
-        return name.startsWith(prefix) && name.endsWith('.bak');
-      }).toList()..sort(
-        (left, right) =>
-            right.statSync().modified.compareTo(left.statSync().modified),
-      );
-  for (final backup in candidates) {
-    if (FileSystemEntity.typeSync(backup.path, followLinks: false) !=
-        FileSystemEntityType.file) {
-      continue;
-    }
-    try {
-      await backup.rename(file.path);
-      for (final stale in candidates.where(
-        (candidate) => candidate != backup,
-      )) {
-        await _deleteFileBestEffort(stale);
-      }
-      return;
-    } on FileSystemException {
-      // Try the next intact backup if this one vanished or was locked.
-    }
-  }
 }
 
 Future<Object?> _readJsonFileBounded(
   File file, {
   required int maxBytes,
   required String label,
+  bool preserveNumbers = false,
 }) async {
   final type = FileSystemEntity.typeSync(file.path, followLinks: false);
   if (type == FileSystemEntityType.link) {
@@ -365,13 +223,18 @@ Future<Object?> _readJsonFileBounded(
     throw StateError('$label does not exist: ${file.path}');
   }
   try {
-    return jsonDecode(
-      utf8.decode(await _readLauncherFileBounded(file, maxBytes)),
-    );
+    final text = utf8.decode(await _readLauncherFileBounded(file, maxBytes));
+    return preserveNumbers
+        ? decodeJsonPreservingValues(text, label: '$label at ${file.path}')
+        : jsonDecode(text);
   } on StateError {
     rethrow;
   } on Object catch (error) {
-    throw FormatException('$label is not valid JSON: $error');
+    throw FormatException(
+      preserveNumbers
+          ? '$label could not be preserved safely: $error'
+          : '$label is not valid JSON: $error',
+    );
   }
 }
 
@@ -410,7 +273,6 @@ List<String> _tailStatic(List<String> lines, int maxLines) {
 const _maxSettingsBytes = 1024 * 1024;
 const _maxProfilesBytes = 4 * 1024 * 1024;
 const _maxPackageSourcesBytes = 1024 * 1024;
-const _maxWorldCatalogBytes = 16 * 1024 * 1024;
 const _maxLauncherLogReadBytes = 4 * 1024 * 1024;
 const _maxLauncherLogBytes = 8 * 1024 * 1024;
 const _maxLauncherLogMessageCharacters = 4096;
@@ -419,7 +281,7 @@ String _sanitizeLauncherLogMessage(String message) {
   final singleLine = message.replaceAll(RegExp(r'[\u0000-\u001f\u007f]+'), ' ');
   return singleLine.length <= _maxLauncherLogMessageCharacters
       ? singleLine
-      : '${singleLine.substring(0, _maxLauncherLogMessageCharacters)}…';
+      : '${singleLine.substring(0, _maxLauncherLogMessageCharacters)}\u2026';
 }
 
 Future<void> _writeJsonFileAtomic(
@@ -436,53 +298,10 @@ Future<void> _writeJsonFileAtomic(
   await _writeFileBytesAtomic(file, bytes);
 }
 
-Future<void> _writeFileBytesAtomic(File file, List<int> contents) async {
-  await file.parent.create(recursive: true);
-  final targetType = FileSystemEntity.typeSync(file.path, followLinks: false);
-  if (targetType == FileSystemEntityType.link) {
-    throw StateError('Refusing to replace symbolic link: ${file.path}');
-  }
-  if (targetType != FileSystemEntityType.notFound &&
-      targetType != FileSystemEntityType.file) {
-    throw StateError('Expected a regular file: ${file.path}');
-  }
-  final token = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-  final temp = File('${file.path}.$token.tmp');
-  final backup = File('${file.path}.$token.bak');
-  var committed = false;
-  try {
-    await temp.writeAsBytes(contents, flush: true);
-    try {
-      await temp.rename(file.path);
-      committed = true;
-      return;
-    } on FileSystemException {
-      if (!await file.exists()) {
-        rethrow;
-      }
-    }
-
-    await file.rename(backup.path);
-    try {
-      await temp.rename(file.path);
-      committed = true;
-    } on Object {
-      if (!await file.exists() && await backup.exists()) {
-        await backup.rename(file.path);
-      }
-      rethrow;
-    }
-  } finally {
-    // Once the live file has been replaced, cleanup must not make callers
-    // treat the committed write as a failure. In particular, Windows uses the
-    // backup-swap branch and antivirus/file indexing can briefly retain the
-    // old file.
-    await _deleteFileBestEffort(temp);
-    if (committed) {
-      await _deleteFileBestEffort(backup);
-    }
-  }
-}
+/// Saves [contents] to [file] through the shared atomic writer, whose
+/// leftovers [recoverAtomicBackupIfMissing] puts back.
+Future<void> _writeFileBytesAtomic(File file, List<int> contents) =>
+    writeFileBytesAtomic(file, contents);
 
 Future<void> _deleteFileBestEffort(File file) async {
   try {

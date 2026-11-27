@@ -5,10 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 namespace TopiaForge.Mods.Analyzers
 {
-    internal sealed class ManifestSnapshot
+    internal sealed partial class ManifestSnapshot
     {
         private const int MaximumManifestCharacters = 1024 * 1024;
         private readonly ImmutableHashSet<string> capabilities;
@@ -17,14 +18,36 @@ namespace TopiaForge.Mods.Analyzers
         private ManifestSnapshot(
             string packageId,
             IEnumerable<string> capabilities,
-            IEnumerable<string> dependencies)
+            IEnumerable<string> dependencies,
+            string loaderRange = "*", string sdkRange = "*",
+            TextSpan loaderSpan = default, TextSpan sdkSpan = default, bool exists = true, bool hasDuplicateKeys = false)
         {
             PackageId = packageId;
             this.capabilities = capabilities.ToImmutableHashSet(StringComparer.Ordinal);
             this.dependencies = dependencies.ToImmutableHashSet(StringComparer.Ordinal);
+            LoaderRange = loaderRange;
+            SdkRange = sdkRange;
+            LoaderSpan = loaderSpan;
+            SdkSpan = sdkSpan;
+            Exists = exists;
+            HasDuplicateKeys = hasDuplicateKeys;
         }
 
+        /// <summary>Whether the project has a topiaforge.mod.json at all, readable or not.</summary>
+        public bool Exists { get; }
         public string PackageId { get; }
+        public string LoaderRange { get; }
+        public string SdkRange { get; }
+        public TextSpan LoaderSpan { get; }
+        public TextSpan SdkSpan { get; }
+
+        /// <summary>
+        /// Whether a top-level key repeats. Pack and load reject such a manifest with their own message; the other
+        /// rules still read it, but nothing edits it, because no single occurrence is the one to change.
+        /// </summary>
+        public bool HasDuplicateKeys { get; }
+
+        internal static ManifestSnapshot Parse(string json) => new ManifestParser(json).Parse();
 
         public static ManifestSnapshot Read(
             ImmutableArray<AdditionalText> files,
@@ -34,10 +57,15 @@ namespace TopiaForge.Mods.Analyzers
                 Path.GetFileName(item.Path),
                 "topiaforge.mod.json",
                 StringComparison.OrdinalIgnoreCase));
-            var json = file?.GetText(cancellationToken)?.ToString();
+            if (file == null)
+            {
+                return Empty(exists: false);
+            }
+
+            var json = file.GetText(cancellationToken)?.ToString();
             if (json == null || string.IsNullOrWhiteSpace(json) || json.Length > MaximumManifestCharacters)
             {
-                return Empty();
+                return Empty(exists: true);
             }
 
             try
@@ -46,7 +74,7 @@ namespace TopiaForge.Mods.Analyzers
             }
             catch (FormatException)
             {
-                return Empty();
+                return Empty(exists: true);
             }
         }
 
@@ -56,10 +84,10 @@ namespace TopiaForge.Mods.Analyzers
 
         public bool IsPackage(string packageId) => string.Equals(PackageId, packageId, StringComparison.Ordinal);
 
-        private static ManifestSnapshot Empty() =>
-            new ManifestSnapshot(string.Empty, Array.Empty<string>(), Array.Empty<string>());
+        private static ManifestSnapshot Empty(bool exists) =>
+            new ManifestSnapshot(string.Empty, Array.Empty<string>(), Array.Empty<string>(), exists: exists);
 
-        private sealed class ManifestParser
+        private sealed partial class ManifestParser
         {
             private const int MaximumDepth = 64;
             private const int MaximumTrackedEntries = 4096;
@@ -68,6 +96,9 @@ namespace TopiaForge.Mods.Analyzers
             private readonly HashSet<string> dependencies = new HashSet<string>(StringComparer.Ordinal);
             private int position;
             private string packageId = string.Empty;
+            private string loaderRange = "*", sdkRange = "*";
+            private TextSpan loaderSpan, sdkSpan;
+            private bool hasDuplicateKeys;
 
             public ManifestParser(string json)
             {
@@ -77,15 +108,25 @@ namespace TopiaForge.Mods.Analyzers
             public ManifestSnapshot Parse()
             {
                 Expect('{');
+                var seen = new HashSet<string>(StringComparer.Ordinal);
                 if (!TryConsume('}'))
                 {
                     while (true)
                     {
                         var propertyName = ReadString();
+                        if (!seen.Add(propertyName)) hasDuplicateKeys = true;
                         Expect(':');
                         if (string.Equals(propertyName, "name", StringComparison.Ordinal))
                         {
                             ReadPackageId();
+                        }
+                        else if (propertyName == "supportedLoaderVersionRange")
+                        {
+                            loaderRange = ReadRange(out loaderSpan);
+                        }
+                        else if (propertyName == "supportedSdkVersionRange")
+                        {
+                            sdkRange = ReadRange(out sdkSpan);
                         }
                         else if (string.Equals(propertyName, "capabilities", StringComparison.Ordinal))
                         {
@@ -94,7 +135,11 @@ namespace TopiaForge.Mods.Analyzers
                         else if (string.Equals(propertyName, "dependencies", StringComparison.Ordinal)
                             || string.Equals(propertyName, "optionalDependencies", StringComparison.Ordinal))
                         {
-                            ReadDependencyMap();
+                            ReadDependencyMap(propertyName == "dependencies");
+                        }
+                        else if (propertyName == "contributions")
+                        {
+                            ReadContributions();
                         }
                         else
                         {
@@ -116,7 +161,31 @@ namespace TopiaForge.Mods.Analyzers
                     throw InvalidJson();
                 }
 
-                return new ManifestSnapshot(packageId, capabilities, dependencies);
+                return new ManifestSnapshot(packageId, capabilities, dependencies,
+                    loaderRange, sdkRange, loaderSpan, sdkSpan, hasDuplicateKeys: hasDuplicateKeys)
+                {
+                    MapWorlds = mapWorlds.ToImmutableArray(),
+                    RequiredWorlds = requiredWorlds,
+                    DependencyInsertion = dependencyInsertion,
+                    DependencyCount = dependencyCount,
+                    RootInsertion = json.LastIndexOf('}')
+                };
+            }
+
+            // A range that is not a string is invalid, which pack and load report; TF1010 then sees no floor.
+            private string ReadRange(out TextSpan span)
+            {
+                span = default;
+                if (Peek() != '"')
+                {
+                    SkipValue(1);
+                    return "*";
+                }
+
+                var start = position;
+                var value = ReadString();
+                span = TextSpan.FromBounds(start, position);
+                return value;
             }
 
             private void ReadPackageId()
@@ -170,23 +239,28 @@ namespace TopiaForge.Mods.Analyzers
                 }
             }
 
-            private void ReadDependencyMap()
+            private void ReadDependencyMap(bool required)
             {
                 SkipWhitespace();
                 if (!TryConsume('{'))
                 {
+                    if (required) hasDuplicateKeys = true; // Do not offer an insertion beside a malformed existing property.
                     SkipValue(1);
                     return;
                 }
 
                 if (TryConsume('}'))
                 {
+                    if (required) dependencyInsertion = position - 1;
                     return;
                 }
 
+                var seenDependencies = new HashSet<string>(StringComparer.Ordinal);
                 while (true)
                 {
                     var dependencyId = ReadString();
+                    if (!seenDependencies.Add(dependencyId)) hasDuplicateKeys = true;
+                    if (required) { dependencyCount++; if (dependencyId == WorldsDependency) requiredWorlds = true; }
                     if (dependencies.Count < MaximumTrackedEntries)
                     {
                         dependencies.Add(dependencyId);
@@ -196,6 +270,7 @@ namespace TopiaForge.Mods.Analyzers
                     SkipValue(2);
                     if (TryConsume('}'))
                     {
+                        if (required) dependencyInsertion = position - 1;
                         return;
                     }
 

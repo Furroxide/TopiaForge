@@ -1,75 +1,109 @@
-using System.Collections.Generic;
+using System;
+using UnityEngine;
 
 namespace TopiaForge.Mods.UnityUi
 {
-    /// <summary>A surface Escape can dismiss (windows, modals).</summary>
-    public interface ITopiaForgeDismissable
-    {
-        /// <summary>Gets band.</summary>
-        TopiaForgeLayerBand Band { get; }
-
-        /// <summary>Dismisses the active UI element.</summary>
-        void Dismiss();
-    }
-
     /// <summary>
-    /// The Escape-close stack: one Escape press dismisses only the top-most visible
-    /// surface — modals beat windows, later registrations beat earlier ones. The game
-    /// still sees the key (documented limitation: BepInEx UI cannot consume input
-    /// before the game).
+    /// A Back press targets the topmost visible surface. Loader trust prompts take priority, followed by the highest band
+    /// and the latest registration. TopiaForge holds any Escape or controller B press it takes through release.
+    /// A non-dismissible gameplay overlay at the top can pass a new keyboard Escape to the game's pause action. While
+    /// they are on the stack, surfaces also take what they claim from the game: kit modals, fullscreen tools and the manager
+    /// overlay take menu navigation, a window takes it while one of its controls is selected, and a key capture takes the
+    /// keyboard (see TopiaForgeInputOwnership). Unity's legacy input cannot be filtered, so code reading it still sees the key.
     /// </summary>
     public static class TopiaForgeDismissStack
     {
-        private static readonly List<ITopiaForgeDismissable> Entries = new List<ITopiaForgeDismissable>();
+        private static readonly TopiaForgeDismissOrder Order =
+            new TopiaForgeDismissOrder(TopiaForgeInputOwnership.IsLiveRoot, TopiaForgeInputOwnership.HoldsSelection,
+                entry => entry is TopiaForgeModalInstance { IsTrust: true });
 
         /// <summary>Gets count.</summary>
-        public static int Count => Entries.Count;
+        public static int Count => Order.Count;
 
-        /// <summary>Pushes a dismissible layer and returns its ownership token.</summary>
+        /// <summary>Pushes a dismissible surface; while it is on the stack, Back is TopiaForge's.</summary>
         public static void Push(ITopiaForgeDismissable entry)
         {
-            if (!Entries.Contains(entry))
-            {
-                Entries.Add(entry);
-                TopiaForgeRuntime.Ensure();
-            }
+            Push(entry, TopiaForgeInputClaim.Back, null);
         }
 
         /// <summary>Removes the specified state entry.</summary>
         public static void Remove(ITopiaForgeDismissable entry)
         {
-            Entries.Remove(entry);
+            Order.Remove(entry);
         }
 
-        /// <summary>Picks the entry to dismiss: highest band wins, then latest pushed.</summary>
+        /// <summary>Gets the topmost entry in trust, band and registration order.</summary>
         public static ITopiaForgeDismissable? Top()
         {
-            ITopiaForgeDismissable? top = null;
-            for (var index = 0; index < Entries.Count; index++)
-            {
-                var entry = Entries[index];
-                if (top == null || entry.Band >= top.Band)
-                {
-                    top = entry;
-                }
-            }
-
-            return top;
+            return Order.Top();
         }
+
+        /// <summary>
+        /// Pushes a surface showing in <paramref name="root"/> that also takes <paramref name="claim"/> from the game while it
+        /// is on the stack. Once the root is destroyed or hidden, the surface takes nothing and is never dismissed.
+        /// </summary>
+        internal static void Push(ITopiaForgeDismissable entry, TopiaForgeInputClaim claim, GameObject? root)
+            => Push(entry, claim, root, removesOnBack: true);
+
+        internal static void Push(ITopiaForgeDismissable entry, TopiaForgeInputClaim claim, GameObject? root, bool removesOnBack)
+        {
+            if (Order.Push(entry, claim, root, removesOnBack))
+            {
+                TopiaForgeRuntime.Ensure();
+            }
+            if (TopiaForgeLayerPriority.Rank(entry.Band) > TopiaForgeLayerPriority.Rank(TopiaForgeLayerPriority.Overlay))
+                TopiaForgeOverlayStack.RefreshCoveredFocus();
+        }
+
+        /// <summary>Gets what the surfaces on the stack take from the game now.</summary>
+        internal static TopiaForgeInputClaim Claims => Order.Claims();
+
+        /// <summary>Gets the root of the topmost surface if it takes navigation now, or null.</summary>
+        internal static GameObject? FocusRoot => Order.FocusRoot() as GameObject;
+
+        /// <summary>Gets whether a surface holds the focus outright: the manager overlay, a modal, a fullscreen tool or a key capture.</summary>
+        internal static bool HoldsFocus => Order.HoldsFocus();
 
         internal static void TickEscape()
         {
-            if (Entries.Count == 0 || !TopiaForgeInput.EscapePressedThisFrame())
+            // Every frame, the stack empty or not: a key still held when a surface opens never counts as a press. The surface
+            // leaves the stack before it closes, so one that throws as it closes has still given Back up.
+            var top = Order.TakeOnBack(TopiaForgeInput.BackHeld(), TopiaForgeInput.BackPressedThisFrame());
+            if (top == null)
             {
                 return;
             }
 
-            Top()?.Dismiss();
+            // The player's Escape dismisses the surface as that surface's owner's action.
+            using (TopiaForgeIntent.PlayerAction(OwnerOf(top)))
+            {
+                try
+                {
+                    top.Dismiss();
+                }
+                catch (Exception exception)
+                {
+                    TopiaForgeLog.Error(exception, "A TopiaForge surface failed to close on Back.");
+                }
+            }
+        }
+
+        private static string? OwnerOf(ITopiaForgeDismissable entry)
+        {
+            switch (entry)
+            {
+                case TopiaForgeWidget widget:
+                    return widget.Host.OwnerId;
+                case TopiaForgeModalInstance modal:
+                    return modal.OwnerId;
+                default:
+                    return null;
+            }
         }
 
         internal static void Reset()
         {
-            Entries.Clear();
+            Order.Clear();
         }
     }
 }

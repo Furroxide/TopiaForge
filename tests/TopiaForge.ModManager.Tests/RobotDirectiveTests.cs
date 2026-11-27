@@ -271,7 +271,7 @@ namespace TopiaForge.ModManager.Tests
             return new FakeModContext(new ModIdentity(
                 "io.github.furroxide.topiaforge.opposite-day",
                 "Opposite Day",
-                SemanticVersion.Parse("1.0.0-rc.1")));
+                SemanticVersion.Parse("0.1.0-rc.1")));
         }
 
         private static void AssertLoadFails(ModLifecycleRunner runner, string message)

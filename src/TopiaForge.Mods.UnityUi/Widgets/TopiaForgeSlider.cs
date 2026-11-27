@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -7,21 +8,33 @@ namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
     /// Labeled slider skinning uGUI's Slider with brand chrome: tinted rounded track,
-    /// accent fill, circular handle. Shows a live value readout.
+    /// accent fill, circular handle. The handle is the accent on Paper, where a white one
+    /// vanished on the light track, and white on the HUD's dark one. Shows a live value readout.
     /// </summary>
     public sealed class TopiaForgeSlider : TopiaForgeWidget, ITopiaForgeThemeAware
     {
-        private readonly Slider slider;
+        private readonly TopiaForgeSliderInput slider;
+        private readonly TopiaForgeControlCues cues;
         private readonly UImage track;
         private readonly UImage fill;
         private readonly UImage handle;
+        private readonly RectTransform fillArea;
         private readonly TMPro.TextMeshProUGUI label;
         private readonly TMPro.TextMeshProUGUI valueLabel;
+        private readonly float minimum;
+        private readonly float maximum;
         private float lastShownValue = float.NaN;
+        private int divisions;
+        private UiValueFormat? valueFormat;
+        private bool applyingRange;
+        private bool declarative;
+        private UiPaintRole backdrop = UiPaintRole.Surface;
 
         internal TopiaForgeSlider(TopiaForgeContainer parent, string text, float min, float max, float initial, Action<float> onChanged)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Slider"))
         {
+            minimum = min;
+            maximum = max;
             TopiaForgeLayout.ApplyRow(Go, TopiaForgeGap.Sm, TopiaForgeGap.None);
             this.FixedHeight(TopiaForgeTokens.ControlSmHeight);
 
@@ -35,7 +48,11 @@ namespace TopiaForge.Mods.UnityUi
             sliderGo.transform.SetParent(Go.transform, false);
             var bodyLayout = sliderGo.AddComponent<LayoutElement>();
             bodyLayout.flexibleWidth = 1f;
-            bodyLayout.minHeight = 20f;
+            bodyLayout.minWidth = TopiaForgeTokens.ControlSmHeight;
+            bodyLayout.minHeight = TopiaForgeTokens.ControlSmHeight;
+            var hitArea = sliderGo.AddComponent<UImage>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
 
             var trackGo = new GameObject("Track", typeof(RectTransform));
             trackGo.transform.SetParent(sliderGo.transform, false);
@@ -46,14 +63,15 @@ namespace TopiaForge.Mods.UnityUi
             var trackRect = (RectTransform)trackGo.transform;
             trackRect.anchorMin = new Vector2(0f, 0.5f);
             trackRect.anchorMax = new Vector2(1f, 0.5f);
-            trackRect.sizeDelta = new Vector2(0f, 8f);
+            trackRect.offsetMin = new Vector2(UiControlPaint.CompactCueGutter, -4f);
+            trackRect.offsetMax = new Vector2(0f, 4f);
 
             var fillAreaGo = new GameObject("FillArea", typeof(RectTransform));
             fillAreaGo.transform.SetParent(sliderGo.transform, false);
-            var fillArea = (RectTransform)fillAreaGo.transform;
+            fillArea = (RectTransform)fillAreaGo.transform;
             fillArea.anchorMin = new Vector2(0f, 0.5f);
             fillArea.anchorMax = new Vector2(1f, 0.5f);
-            fillArea.offsetMin = new Vector2(6f, -4f);
+            fillArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter + 6f, -4f);
             fillArea.offsetMax = new Vector2(-6f, 4f);
 
             var fillGo = new GameObject("Fill", typeof(RectTransform));
@@ -75,7 +93,7 @@ namespace TopiaForge.Mods.UnityUi
             var handleArea = (RectTransform)handleAreaGo.transform;
             handleArea.anchorMin = new Vector2(0f, 0.5f);
             handleArea.anchorMax = new Vector2(1f, 0.5f);
-            handleArea.offsetMin = new Vector2(8f, 0f);
+            handleArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter + 8f, 0f);
             handleArea.offsetMax = new Vector2(-8f, 0f);
 
             var handleGo = new GameObject("Handle", typeof(RectTransform));
@@ -85,7 +103,7 @@ namespace TopiaForge.Mods.UnityUi
             var handleRect = (RectTransform)handleGo.transform;
             handleRect.sizeDelta = new Vector2(16f, 16f);
 
-            slider = sliderGo.AddComponent<Slider>();
+            slider = sliderGo.AddComponent<TopiaForgeSliderInput>();
             slider.fillRect = (RectTransform)fillGo.transform;
             slider.handleRect = handleRect;
             slider.targetGraphic = handle;
@@ -93,6 +111,7 @@ namespace TopiaForge.Mods.UnityUi
             slider.minValue = min;
             slider.maxValue = max;
             slider.value = initial;
+            cues = TopiaForgeControlCues.Install(slider, (RectTransform)sliderGo.transform, compact: true);
 
             valueLabel = CreateText("Value", FormatValue(initial), TopiaForgeTokens.CaptionSize);
             var valueLayout = valueLabel.gameObject.AddComponent<LayoutElement>();
@@ -102,47 +121,106 @@ namespace TopiaForge.Mods.UnityUi
 
             slider.onValueChanged.AddListener(next =>
             {
-                UpdateValueLabel(next);
-                TopiaForgeCallbacks.Invoke(onChanged, next, "Slider change");
+                if (applyingRange) return;
+                var value = FromPosition(next);
+                UpdateValueLabel(value);
+                TopiaForgeCallbacks.Player(Host.OwnerId, onChanged, value, "Slider change");
             });
 
             ApplyTheme(Theme);
         }
 
         /// <summary>Gets value.</summary>
-        public float Value => slider.value;
+        public float Value => FromPosition(slider.value);
 
         /// <summary>Dirty-checked programmatic update (does NOT fire onChanged).</summary>
         public void SetValue(float next)
         {
-            if (Mathf.Approximately(slider.value, next))
+            if (divisions != 0) next = UiSliderSteps.Snap(Mathf.Clamp(next, minimum, maximum), minimum, maximum, divisions);
+            if (Mathf.Approximately(Value, next))
             {
                 return;
             }
 
-            slider.SetValueWithoutNotify(next);
+            slider.SetValueWithoutNotify(divisions == 0 ? next : UiSliderSteps.Index(next, minimum, maximum, divisions));
             UpdateValueLabel(next);
         }
 
         /// <summary>Sets whether the slider accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
+            if (slider.interactable == enabled) return;
             slider.interactable = enabled;
+            ApplyTheme(Theme);
+        }
+
+        internal void UseDeclarativePaint(bool enabled, int steps = 0, UiValueFormat? format = null)
+        {
+            declarative = true;
+            var initial = Value;
+            divisions = steps;
+            valueFormat = format;
+            slider.UsePercentSteps = steps == 0;
+            if (steps != 0)
+            {
+                // Unity's whole-number slider moves one index per keyboard or controller action.
+                applyingRange = true;
+                try
+                {
+                    slider.wholeNumbers = true;
+                    slider.minValue = 0f;
+                    slider.maxValue = steps;
+                    slider.SetValueWithoutNotify(UiSliderSteps.Index(initial, minimum, maximum, divisions));
+                }
+                finally { applyingRange = false; }
+            }
+            lastShownValue = float.NaN;
+            UpdateValueLabel(Value);
+            slider.targetGraphic = track;
+            handle.raycastTarget = false;
+            fillArea.offsetMin = new Vector2(UiControlPaint.CompactCueGutter, -4f);
+            fillArea.offsetMax = new Vector2(-16f, 4f);
+            slider.interactable = enabled;
+            ApplyTheme(Theme);
+        }
+
+        internal void SetBackdrop(UiPaintRole role)
+        {
+            if (backdrop == role) return;
+            backdrop = role;
+            ApplyTheme(Theme);
         }
 
         /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
-            track.color = theme.SurfaceSunken;
-            fill.color = theme.Accent;
-            handle.color = theme.OnPrimary;
-            label.color = theme.Text;
-            valueLabel.color = theme.TextMuted;
+            TopiaForgeTypography.ApplyControlText(label, theme, TopiaForgeTextStyle.Body, Host.EffectiveUiScale);
+            TopiaForgeTypography.ApplyControlText(valueLabel, theme, TopiaForgeTextStyle.Caption, Host.EffectiveUiScale);
+            if (declarative && theme.SliderPaint(Scheme == TopiaForgeScheme.Hud, slider.interactable) is { } resolved)
+            {
+                slider.colors = resolved.Track.ResolvedStates(slider.colors);
+                track.color = resolved.Track.Fill;
+                fill.color = resolved.Fill;
+                handle.color = resolved.Track.Content;
+                label.color = theme.ForegroundOn(backdrop, slider.interactable ? UiTone.Neutral : UiTone.Muted);
+                valueLabel.color = theme.ForegroundOn(backdrop, UiTone.Muted);
+            }
+            else
+            {
+                track.color = theme.SurfaceSunken;
+                fill.color = theme.Accent;
+                handle.color = theme.SliderHandle;
+                label.color = theme.ForegroundOn(backdrop, slider.interactable ? UiTone.Neutral : UiTone.Muted);
+                valueLabel.color = theme.ForegroundOn(backdrop, UiTone.Muted);
+            }
+
+            cues.Apply(slider.targetGraphic.color, label.color,
+                theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control, theme.HighContrast);
         }
 
         private void UpdateValueLabel(float next)
         {
-            if (!float.IsNaN(lastShownValue) && Mathf.Abs(lastShownValue - next) < 0.005f)
+            if (lastShownValue == next || (valueFormat == null && Mathf.Abs(lastShownValue - next) < 0.005f))
             {
                 return;
             }
@@ -151,10 +229,10 @@ namespace TopiaForge.Mods.UnityUi
             valueLabel.text = FormatValue(next);
         }
 
-        private static string FormatValue(float value)
-        {
-            return value.ToString("0.##");
-        }
+        private float FromPosition(float position) => divisions == 0 ? position :
+            UiSliderSteps.At((int)position, minimum, maximum, divisions);
+
+        private string FormatValue(float value) => valueFormat?.Readout(value, minimum, maximum) ?? value.ToString("0.##");
 
         private TMPro.TextMeshProUGUI CreateText(string name, string text, int size)
         {

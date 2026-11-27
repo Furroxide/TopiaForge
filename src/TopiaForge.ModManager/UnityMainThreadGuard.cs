@@ -20,6 +20,16 @@ namespace TopiaForge.ModManager
             }
         }
 
+        /// <summary>Gets whether the calling thread is the game thread TopiaForge captured; false before one is captured.</summary>
+        public static bool IsCurrent
+        {
+            get
+            {
+                var expected = Volatile.Read(ref mainThreadId);
+                return expected != 0 && Thread.CurrentThread.ManagedThreadId == expected;
+            }
+        }
+
         public static void AssertCurrent([CallerMemberName] string operation = "SDK operation")
         {
             var expected = Volatile.Read(ref mainThreadId);

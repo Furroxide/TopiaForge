@@ -6,7 +6,7 @@ description: Run fast lifecycle tests with TopiaForge.Mods.Testing and NUnit.
 # Test a mod
 
 Every V1 scaffold includes a small NUnit project that references `TopiaForge.Mods.Testing` version
-`1.0.0-rc.1`. The testing library is runner-neutral, so an existing project may use another test runner.
+`0.2.0`. The testing library is runner-neutral, so an existing project may use another test runner.
 Tests run without a Robotopia installation or a Unity editor.
 
 ## Arrange, load, drive, unload
@@ -35,21 +35,52 @@ dotnet test --configuration Release
 - `FakeInputService` drives named actions and transition states.
 - `DeterministicGameTime` and `DeterministicModScheduler` advance only when the test asks.
 - `FakeSceneService`, `FakeLocalPlayerService`, `FakeEntityService`, and `FakePhysicsService` control gameplay state.
+- `FakePlayerDirectory` starts with one solo player and adds remote players with the runtime's permanent handle
+  retirement rules. It captures targeted UI and scores, simulates per-player input, and keeps what join and leave
+  handlers threw in `CallbackErrors`; see [Act on players](Players.md).
 - `FakeAssetService`, `FakeAudioService`, and `FakeUiService` expose active handles and captured requests;
   `FakeUiSurface` also finds controls by id, invokes form/list/graph interactions, captures state and
   dismissal, and isolates callback failures.
 - `FakeInteractionService` and `FakeItemService` cover interactables and held-item flows.
-- `FakeExtensionService` registers Creator Content, RobotKit, Worlds, Chronos, Prompts, UGC,
-  multiplayer, or custom providers.
+- `FakeExtensionService` registers Creator Content, RobotKit, Worlds, Chronos, Prompts,
+  multiplayer, or custom providers. With a multiplayer session registered, `ModLifecycleRunner` binds a
+  mod's generated contract to it as the game does, after the context is attached and before `OnLoad`.
 - `FakeRobotKit` covers agents, objectives, controlled brain queries, conversations, and voice input.
 - `FakeCreatorContentService`, `FakeCreatorMutationSafetyService`,
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover authenticated catalog
   registrations, owned spawns, exclusive temporary edits, fail-closed persistence isolation, and
   local event-project validation/storage.
-- `FakeWorldGamemodeService`, `FakeTimeControlService`, `FakePromptOverrideRegistry`, and
-  `FakeUgcLiveSyncService` provide deterministic specialist-module behavior and leak-observable handles;
-  use `TryGetWorldContent` to exercise a registered custom-world factory without an engine installation.
+- `FakeGamemodeSession` supplies prepared world identity and bound operations to a real factory, and
+  `FakeGamemodeParticipantSession` does the same for a participant controller.
+  `FakeWorldSessionService` publishes explicit phase snapshots; notifications do not start a mode.
+  `FakeLocalWorldService` models session-bound import and owned prefab overrides.
+- `GamemodeSessionRunner` starts and stops a real gamemode factory by the runtime's own rules, as
+  `GamemodeSessionRole.SinglePlayer`, `Host` or `Client`: the server controller first where the server runs,
+  then the player's participant controller, which is all a joined player starts. Failures end the session
+  as they do in the game, and stopping disposes the participant before the server. The server and the
+  participant each get a `FakeModContext` of their own, as their scopes do in the game. As in the game, a
+  participant controller's context refuses `Physics.AddBlocker` in every role: place blockers from the server.
+- `FakeTimeControlService` and `FakePromptOverrideRegistry` provide deterministic specialist-module
+  behavior and leak-observable handles.
 - `ControlledOperation<T>` lets a test choose when asynchronous work completes, fails, or cancels.
+
+## Check engine-facing thread access
+
+Use `FakeModContext.CreateWithThreadChecks()` when a test needs to reject worker calls to entity and UI
+service entry points with `TFSDK100`. Ordinary contexts and standalone services remain permissive. The
+factory captures the creating thread for the five `IEntityService` operations and the UI service's
+accessibility update, surface/modal/toast creation, clock and label access. Fixture helpers, returned
+handles and other services keep their existing behavior; this is not full scoped-lifetime parity.
+A stopped strict context's transform read returns `false` and identity. Other operations retain their
+existing fake stopping behavior: `SetTransform` and `Destroy` do not reproduce the scoped runtime's
+early `Cancelled` result.
+
+Drive strict contexts from their creating thread. Workers may queue `Context.Scheduler.NextFrame` work;
+finish queuing before advancing the fake frame. Concurrent registration and frame driving are unsupported.
+The factory supplies no synchronization context, automatic pump or continuation dispatch.
+`GamemodeSessionRunner` also supplies no runtime host dispatcher: a participant may start on a worker
+after an asynchronous server start. Keep its default contexts for asynchronous runner tests, and exercise
+thread checks in tests whose calls and completions you explicitly drive on the creating thread.
 
 ## Test failure paths
 

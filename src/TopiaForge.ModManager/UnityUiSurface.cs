@@ -1,51 +1,81 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace TopiaForge.ModManager
 {
     internal sealed partial class OwnerUiService
     {
-        private sealed class UnityUiSurface : IUiSurface, IUiSurfaceDismissalSource
+        private sealed partial class UnityUiSurface : IUiSurface, IUiSurfaceDismissalSource, IPresentationSurfaceState
         {
+            private static readonly OperationResult<bool> ContentApplied = OperationResult<bool>.Success(true);
+
             private TopiaForgeWidget? widget;
             private TopiaForgeWindow? window;
             private TopiaForgeFullscreenTool? fullscreen;
+            private TopiaForgeOverlay? overlay;
+            private readonly UiOverlayContentKind? overlayKind;
             private TopiaForgeLabel? body;
             private TopiaForgeContainer? compositionParent;
+            private readonly ScrollRect? outerScroll;
             private TopiaForgeContainer? compositionRoot;
+            private UnityUiLayoutRenderer? layoutRenderer;
+            private UiSurfaceInputContext? inputContext;
+            private TopiaForgeContainer? layoutFallback;
+            private UiThemeDescriptor? declaredTheme;
+            private bool remoteComposition;
+            private int bodyVersion;
+            private int artworkVersion;
+            private string? sentBody;
+            private UiSurfaceArtwork? artwork;
             private IReadOnlyDictionary<string, TopiaForgeGraphCanvas> retainedGraphs =
                 new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);
             private readonly IModLifetime lifetime;
+            private readonly IModLogger logger;
             private readonly UiCallbackGate callbacks;
-            private Action<string>? releaseId;
+            private readonly UiSurfacePresence presence;
+            private Action<UnityUiSurface>? release;
             private Action? nativeClosed;
             private IDisposable? lifetimeLease;
-            private int visible;
+            private UiNode? admitted;
+            private ContentStamp committedStamp;
+            private UnityUiHudPlacement? placement;
+            private int dockHandle;
             private int disposed;
 
             private UnityUiSurface(
                 string id,
+                GameObject canvasRoot,
                 TopiaForgeWidget widget,
                 TopiaForgeWindow? window,
                 TopiaForgeFullscreenTool? fullscreen,
                 TopiaForgeLabel body,
                 TopiaForgeContainer compositionParent,
+                UiSurfacePresence presence,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release,
+                TopiaForgeOverlay? overlay = null,
+                UiOverlayContentKind? overlayKind = null)
             {
                 Id = id;
+                CanvasRoot = canvasRoot;
                 this.widget = widget;
                 this.window = window;
                 this.fullscreen = fullscreen;
+                this.overlay = overlay;
+                this.overlayKind = overlayKind;
                 this.body = body;
                 this.compositionParent = compositionParent;
+                outerScroll = window != null || fullscreen != null
+                    ? compositionParent.Go.GetComponentInParent<ScrollRect>(includeInactive: true) : null;
+                this.presence = presence;
                 this.lifetime = lifetime;
-                this.releaseId = releaseId;
+                this.logger = logger;
+                this.release = release;
                 callbacks = new UiCallbackGate(lifetime, logger);
                 if (window != null)
                 {
@@ -57,12 +87,30 @@ namespace TopiaForge.ModManager
                     nativeClosed = HandleNativeClosed;
                     fullscreen.Closed += nativeClosed;
                 }
+                else if (overlay != null)
+                {
+                    nativeClosed = HandleNativeClosed;
+                    overlay.Closed += nativeClosed;
+                }
             }
 
             public string Id { get; }
-            public bool IsVisible => Volatile.Read(ref visible) != 0 && widget != null;
+
+            /// <summary>Gets the kit canvas the surface draws on, by which a canvas destroyed outside TopiaForge is matched.</summary>
+            internal GameObject CanvasRoot { get; }
+
+            /// <summary>Gets whether the surface is a HUD that hides outside gameplay.</summary>
+            internal bool FollowsGameplay => presence.FollowsGameplay;
+
+            internal bool IsAuthoredOverlay => overlayKind.HasValue && !remoteComposition;
+
+            public bool IsVisible => presence.IsVisible;
+
+            bool IPresentationSurfaceState.IsAlive => presence.IsLive;
 
             public event Action? Dismissed;
+
+            internal void AttachInput(UiSurfaceInputContext context) => inputContext = context;
 
             public static UnityUiSurface ForWindow(
                 string id,
@@ -71,9 +119,10 @@ namespace TopiaForge.ModManager
                 TopiaForgeContainer compositionParent,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release)
             {
-                return new UnityUiSurface(id, window, window, null, body, compositionParent, lifetime, logger, releaseId);
+                return new UnityUiSurface(id, window.CanvasRoot, window, window, null, body, compositionParent,
+                    new UiSurfacePresence(followsGameplay: false, gameplay: true), lifetime, logger, release);
             }
 
             public static UnityUiSurface ForFullscreen(
@@ -83,30 +132,38 @@ namespace TopiaForge.ModManager
                 TopiaForgeContainer compositionParent,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release)
             {
-                return new UnityUiSurface(
-                    id,
-                    fullscreen,
-                    null,
-                    fullscreen,
-                    body,
-                    compositionParent,
-                    lifetime,
-                    logger,
-                    releaseId);
+                return new UnityUiSurface(id, fullscreen.CanvasRoot, fullscreen, null, fullscreen, body, compositionParent,
+                    new UiSurfacePresence(followsGameplay: false, gameplay: true), lifetime, logger, release);
             }
 
-            public static UnityUiSurface ForWidget(
+            public static UnityUiSurface ForHud(
                 string id,
-                TopiaForgeWidget widget,
+                TopiaForgeHudLayer layer,
                 TopiaForgeLabel body,
                 TopiaForgeContainer compositionParent,
+                bool followsGameplay,
+                bool gameplay,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release)
             {
-                return new UnityUiSurface(id, widget, null, null, body, compositionParent, lifetime, logger, releaseId);
+                return new UnityUiSurface(id, layer.Go, layer, null, null, body, compositionParent,
+                    new UiSurfacePresence(followsGameplay, gameplay), lifetime, logger, release);
+            }
+
+            public static UnityUiSurface ForOverlay(
+                string id,
+                TopiaForgeOverlay overlay,
+                TopiaForgeLabel body,
+                UiOverlayContentKind contentKind,
+                IModLifetime lifetime,
+                IModLogger logger,
+                Action<UnityUiSurface> release)
+            {
+                return new UnityUiSurface(id, overlay.CanvasRoot, overlay, null, null, body, overlay.Content,
+                    new UiSurfacePresence(followsGameplay: false, gameplay: true), lifetime, logger, release, overlay, contentKind);
             }
 
             public void AttachLifetimeLease(IDisposable lease)
@@ -114,66 +171,50 @@ namespace TopiaForge.ModManager
                 lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
             }
 
-            public void Show()
+            /// <summary>Docks the HUD's panel through the process-wide placement, which stacks HUDs sharing a corner.</summary>
+            public void AttachDock(UnityUiHudPlacement hudPlacement, int handle, TopiaForgeLabel title, string titleText)
             {
-                UnityMainThreadGuard.AssertCurrent();
-                var current = widget ?? throw new ObjectDisposedException(nameof(UnityUiSurface));
-                if (Interlocked.Exchange(ref visible, 1) != 0)
-                {
-                    return;
-                }
-
-                if (window != null)
-                {
-                    window.Show();
-                }
-                else if (fullscreen != null)
-                {
-                    fullscreen.Show();
-                }
-                else
-                {
-                    current.SetVisible(true);
-                }
-            }
-
-            public void Hide()
-            {
-                UnityMainThreadGuard.AssertCurrent();
-                var current = widget ?? throw new ObjectDisposedException(nameof(UnityUiSurface));
-                if (Interlocked.Exchange(ref visible, 0) == 0)
-                {
-                    return;
-                }
-
-                if (window != null)
-                {
-                    window.Close();
-                }
-                else if (fullscreen != null)
-                {
-                    fullscreen.Close();
-                }
-                else
-                {
-                    current.SetVisible(false);
-                }
-
-                RaiseDismissed();
+                placement = hudPlacement;
+                dockHandle = handle;
+                hudTitle = title;
+                hudTitleText = titleText;
+                ObserveLayout();
             }
 
             public void SetBody(string value)
             {
                 UnityMainThreadGuard.AssertCurrent();
                 var label = body ?? throw new ObjectDisposedException(nameof(UnityUiSurface));
-                label.SetText(value ?? string.Empty);
+                if (presence.IsLost)
+                {
+                    return;
+                }
+
+                var next = value ?? string.Empty;
+                if (string.Equals(sentBody, next, StringComparison.Ordinal)) return;
+                label.SetText(next);
+                if (placement != null) label.SetShown(next.Length != 0 && layoutFallback == null);
+                sentBody = next;
+                bodyVersion++;
             }
 
             public OperationResult<bool> SetContent(UiNode content)
             {
+                var result = SetComposition(content, declaredTheme, remoteComposition);
+                if (result.Succeeded) ObserveGalleryCommit(null);
+                return result;
+            }
+
+            partial void ObserveGalleryCommit(UiWireEnvelope? envelope);
+
+            private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor, bool remote,
+                Action<TopiaForgeContainer>? prepareTheme = null, Func<UiNode, UiSurfaceArtwork?>? prepareArtwork = null,
+                UiSurfaceInputContext? prepareInput = null)
+            {
                 UnityMainThreadGuard.AssertCurrent();
                 if (content == null) throw new ArgumentNullException(nameof(content));
                 var parent = compositionParent;
+                var view = widget;
                 if (lifetime.IsStopping)
                 {
                     return OperationResult<bool>.Failure(
@@ -181,7 +222,12 @@ namespace TopiaForge.ModManager
                         "The mod UI surface is stopping.");
                 }
 
-                if (parent == null || widget == null)
+                if (presence.IsLost)
+                {
+                    return OperationResult<bool>.Failure(ModErrorCode.InvalidState, LostMessage);
+                }
+
+                if (parent == null || view == null)
                 {
                     return OperationResult<bool>.Failure(
                         ModErrorCode.InvalidState,
@@ -190,110 +236,169 @@ namespace TopiaForge.ModManager
 
                 TopiaForgeContainer? next = null;
                 UiGraphRetentionTransaction? graphTransaction = null;
+                UnityUiLayoutRenderer? nextLayout = null;
+                UiSurfaceArtwork? nextArtwork = null;
+                var needsImageNoticeRoom = false;
+                var scopedInput = prepareInput ?? inputContext;
+                ContentStamp stamp;
                 try
                 {
-                    UiComposition.Validate(content);
+                    overlay?.RefreshViewport();
+                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, artworkVersion, placement?.DockVersion ?? 0,
+                        OuterScrollViewport, overlay?.ViewportRevision ?? 0);
+                    var retained = ReferenceEquals(content, admitted);
+                    if (retained && prepareTheme == null && ReferenceEquals(scopedInput, inputContext))
+                    {
+                        if (layoutRenderer?.RefreshKeyGlyphs() == true || !committedStamp.Matches(stamp))
+                        {
+                            RefreshRetainedComposition(compositionRoot!, stamp.ClockEpoch);
+                            committedStamp = stamp;
+                        }
+                        return ContentApplied;
+                    }
+
+                    if (overlay != null)
+                    {
+                        var admission = UiOverlayAdmission.Check(content, overlay.Dismissible, overlayKind);
+                        if (!admission.Succeeded)
+                            return OperationResult<bool>.Failure(admission.ErrorCode, admission.ErrorMessage);
+                    }
+                    else
+                    {
+                        UiComposition.Validate(content);
+                        if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
+                            return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
+                    }
+                    if (!remote && !retained) scopedInput?.Validate(content);
+                    if (!retained) UiClockBinding.Check(content, stamp.ClockEpoch);
+                    nextArtwork = prepareArtwork == null ? PrepareArtwork(content) : prepareArtwork(content);
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
+                    next.SetShown(false);
+                    prepareTheme?.Invoke(next);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
-                    RenderNode(content, next, callbacks, graphTransaction);
+                    var area = MeasureContentArea(parent, view);
+                    nextLayout = UnityUiLayoutRenderer.Stage(content, next, area,
+                        descriptor ?? (remote ? null : UiThemePackParser.Default), callbacks, graphTransaction, nextArtwork,
+                        layoutRenderer, RefreshTabbedPage, scopedInput);
+                    needsImageNoticeRoom = nextLayout.UnavailableImagePath != null && !CanShowImageNotice(next, area);
+                    if (!remote && needsImageNoticeRoom)
+                        throw new ArgumentException("The image unavailable notice cannot fit this surface at " + nextLayout.UnavailableImagePath + ".");
+                    graphTransaction.Transfer(next);
+                    if (!retained) UiClockBinding.Commit(content, stamp.ClockEpoch);
                 }
                 catch (ArgumentException exception)
                 {
                     var cleanup = RollbackFailedRender(graphTransaction, parent, next);
+                    RetireArtwork(nextArtwork);
                     return OperationResult<bool>.Failure(
-                        ModErrorCode.InvalidArgument,
+                        exception is UiImageNotDeclaredException ? ModErrorCode.NotFound : ModErrorCode.InvalidArgument,
                         exception.Message + cleanup);
                 }
                 catch (Exception exception)
                 {
                     var cleanup = RollbackFailedRender(graphTransaction, parent, next);
+                    RetireArtwork(nextArtwork);
                     return OperationResult<bool>.Failure(
                         ModErrorCode.External,
                         "TopiaForgeUi could not render the composition: " + exception.Message + cleanup);
                 }
 
                 var previous = compositionRoot;
+                var previousArtwork = artwork;
                 compositionRoot = next;
+                artwork = nextArtwork;
+                layoutRenderer = nextLayout;
+                admitted = content;
+                declaredTheme = descriptor;
+                remoteComposition = remote;
+                inputContext = scopedInput;
+                committedStamp = stamp;
                 retainedGraphs = graphTransaction!.Commit();
+                ShowCompositionLayout(next!, needsImageNoticeRoom, allowAlternateImageNotice: remote);
+                ObserveLayout();
+                try { SyncGraphConnections(); }
+                catch (Exception exception)
+                {
+                    try { logger.Error(exception, "TopiaForgeUi could not refresh the graph Connections controls."); }
+                    catch { }
+                }
                 try
                 {
                     previous?.Destroy();
                 }
                 catch (Exception exception)
                 {
-                    return OperationResult<bool>.Failure(
-                        ModErrorCode.External,
-                        "TopiaForgeUi replaced the composition, but could not clean up stale UI: " +
-                        exception.Message);
+                    // Admission has committed. Retire the stale view without reporting a failed update.
+                    try { previous?.SetShown(false); }
+                    catch { }
+                    try { logger.Error(exception, "TopiaForgeUi could not destroy a replaced composition."); }
+                    catch { }
                 }
+                finally { RetireArtwork(previousArtwork); }
+                overlay?.CompositionChanged();
 
-                return OperationResult<bool>.Success(true);
+                RestoreOuterScrollOffset();
+                return ContentApplied;
             }
 
-            public void Dispose()
+            partial void SyncGraphConnections();
+            partial void ResetGraphConnections(bool retire);
+            partial void SuspendGraphConnections();
+
+            private void RefreshRetainedComposition(TopiaForgeContainer root, string clockEpoch)
             {
-                UnityMainThreadGuard.AssertCurrent();
-                if (Interlocked.Exchange(ref disposed, 1) != 0)
+                UpdateRetainedLayout(root);
+                LayoutRebuilder.MarkLayoutForRebuild(root.Rect);
+                if (!string.Equals(committedStamp.ClockEpoch, clockEpoch, StringComparison.Ordinal))
                 {
-                    return;
-                }
-
-                Interlocked.Exchange(ref visible, 0);
-                callbacks.Close();
-                compositionRoot = null;
-                compositionParent = null;
-                retainedGraphs = new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);
-                body = null;
-                var currentWindow = window;
-                var currentFullscreen = fullscreen;
-                var closed = Interlocked.Exchange(ref nativeClosed, null);
-                if (currentWindow != null && closed != null)
-                {
-                    currentWindow.Closed -= closed;
-                }
-                else if (currentFullscreen != null && closed != null)
-                {
-                    currentFullscreen.Closed -= closed;
-                }
-
-                window = null;
-                fullscreen = null;
-                Dismissed = null;
-                var currentWidget = Interlocked.Exchange(ref widget, null);
-                var release = Interlocked.Exchange(ref releaseId, null);
-                var lease = Interlocked.Exchange(ref lifetimeLease, null);
-                try
-                {
-                    currentWidget?.Destroy();
-                }
-                finally
-                {
-                    try
+                    foreach (var countdown in root.Go.GetComponentsInChildren<UiCountdownDriver>(includeInactive: true))
                     {
-                        release?.Invoke(Id);
-                    }
-                    finally
-                    {
-                        lease?.Dispose();
+                        countdown.Refresh();
                     }
                 }
             }
 
-            private void HandleNativeClosed()
+            private readonly struct ContentStamp
             {
-                if (Interlocked.Exchange(ref visible, 0) != 0)
-                {
-                    RaiseDismissed();
-                }
-            }
+                private readonly TopiaForgeResolvedTheme theme;
+                private readonly int screenWidth;
+                private readonly int screenHeight;
+                private readonly float width;
+                private readonly float height;
+                private readonly int bodyVersion;
+                private readonly int dockVersion;
+                private readonly int artworkVersion;
+                private readonly Rect outerScrollViewport;
+                private readonly int overlayViewportRevision;
 
-            private void RaiseDismissed()
-            {
-                var handlers = Dismissed;
-                if (handlers != null)
+                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int artworkVersion,
+                    int dockVersion, Rect outerScrollViewport, int overlayViewportRevision)
                 {
-                    callbacks.Invoke(handlers, "surface '" + Id + "' dismissal");
+                    ClockEpoch = clockEpoch;
+                    this.bodyVersion = bodyVersion;
+                    this.artworkVersion = artworkVersion;
+                    this.dockVersion = dockVersion;
+                    this.outerScrollViewport = outerScrollViewport;
+                    this.overlayViewportRevision = overlayViewportRevision;
+                    theme = view.ResolvedTheme;
+                    screenWidth = Screen.width;
+                    screenHeight = Screen.height;
+                    var rect = view.Rect.rect;
+                    width = rect.width;
+                    height = rect.height;
                 }
+
+                internal string ClockEpoch { get; }
+
+                internal bool Matches(in ContentStamp other) =>
+                    string.Equals(ClockEpoch, other.ClockEpoch, StringComparison.Ordinal)
+                    && ReferenceEquals(theme, other.theme)
+                    && screenWidth == other.screenWidth && screenHeight == other.screenHeight
+                    && width.Equals(other.width) && height.Equals(other.height) && bodyVersion == other.bodyVersion
+                    && overlayViewportRevision == other.overlayViewportRevision
+                    && artworkVersion == other.artworkVersion && dockVersion == other.dockVersion
+                    && outerScrollViewport.width.Equals(other.outerScrollViewport.width)
+                    && outerScrollViewport.height.Equals(other.outerScrollViewport.height);
             }
 
             private static string RollbackFailedRender(

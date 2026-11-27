@@ -5,7 +5,7 @@ using TopiaForge.Multiplayer.DroneSample;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
-internal static class MultiplayerRigTests
+internal static partial class MultiplayerRigTests
 {
     private static readonly JsonTestCodec<CounterValue> CounterCodec = new();
     private static readonly JsonTestCodec<AddRequest> RequestCodec = new();
@@ -101,31 +101,6 @@ internal static class MultiplayerRigTests
         Assert(serverState.Value.Value == 2, "rejected prediction never mutates canonical state");
     }
 
-    internal static void ReorderedInputRejectsStaleAndReplays()
-    {
-        using var rig = MultiplayerTestRig.CreateDedicatedServer(
-            new MultiplayerNetworkConditions(reorderEvery: 2));
-        var serverState = RegisterState(rig.Server.Session, "score", 0);
-        var client = rig.AddRemoteClient("owner");
-        var clientState = RegisterState(client.Session, "score", 0);
-        rig.Flush(); // Synchronization is packet one; command packet two is deliberately delayed.
-        RegisterAddCommand(rig.Server.Session, serverState, rejectLarge: false);
-        RegisterAddCommand(client.Session, clientState, rejectLarge: false);
-
-        var first = client.Session.SubmitAsync(AddCommandType, new AddRequest(100));
-        var second = client.Session.SubmitAsync(AddCommandType, new AddRequest(3));
-        Assert(clientState.Value.Value == 103, "both pending inputs are predicted in order");
-        rig.Flush();
-
-        var firstResult = first.GetAwaiter().GetResult();
-        var secondResult = second.GetAwaiter().GetResult();
-        Assert(!firstResult.Result.Succeeded && firstResult.Result.ErrorCode == ModErrorCode.Conflict,
-            "late lower sequence is rejected as stale");
-        Assert(secondResult.Result.Succeeded, "newer input is accepted");
-        Assert(serverState.Value.Value == 3, "server applies only accepted input");
-        Assert(clientState.Value.Value == 3, "rollback/replay converges after out-of-order confirmations");
-    }
-
     internal static void OwnerPredictionAndOwnershipTransfer()
     {
         using var rig = MultiplayerTestRig.CreateDedicatedServer();
@@ -157,153 +132,6 @@ internal static class MultiplayerRigTests
         Assert(firstObject.State.Value == 5, "former owner prediction rolls back");
         Assert(firstObject.OwnerId.HasValue && firstObject.OwnerId.Value.Equals(second.ParticipantId!.Value),
             "ownership converges");
-    }
-
-    internal static void ObjectInputRejectsStaleAfterReordering()
-    {
-        using var rig = MultiplayerTestRig.CreateDedicatedServer(
-            new MultiplayerNetworkConditions(reorderEvery: 3));
-        var client = rig.AddRemoteClient("owner");
-        RegisterObjectType(rig.Server.Session);
-        RegisterObjectType(client.Session);
-        rig.Flush(); // packet one
-        var spawned = rig.Server.Session.SpawnObject(CounterObjectType, new CounterValue(0), client.ParticipantId);
-        var serverObject = Require(spawned, "spawn object for stale-input test");
-        rig.Flush(); // packet two
-        var clientObject = rig.GetObject<CounterValue, AddRequest>(client, serverObject.Id);
-        var first = clientObject.SubmitInputAsync(new AddRequest(1)); // packet three delayed
-        var second = clientObject.SubmitInputAsync(new AddRequest(2));
-        Assert(clientObject.State.Value == 3, "pending object inputs predict in order");
-        rig.Flush();
-        Assert(!first.GetAwaiter().GetResult().Result.Succeeded, "stale object input rejected");
-        Assert(second.GetAwaiter().GetResult().Result.Succeeded, "newer object input accepted");
-        Assert(serverObject.State.Value == 2 && clientObject.State.Value == 2, "object rollback/replay converges");
-    }
-
-    internal static void ReorderedObjectConfirmationsDoNotDoubleApplyPrediction()
-    {
-        using var rig = MultiplayerTestRig.CreateDedicatedServer(
-            new MultiplayerNetworkConditions(reorderEvery: 5));
-        var serverSideState = RegisterState(rig.Server.Session, "response-order-state", 0);
-        var client = rig.AddRemoteClient("response-order-owner");
-        var clientSideState = RegisterState(client.Session, "response-order-state", 0);
-        var objectType = new ReplicatedObjectType<CounterValue, AddRequest>("response-order-object");
-        Require(
-            rig.Server.Session.RegisterObjectType(new ReplicatedObjectTypeDefinition<CounterValue, AddRequest>(
-                objectType,
-                CounterCodec,
-                RequestCodec,
-                (_, state, input) =>
-                {
-                    var updated = serverSideState.Update(current => OperationResult<CounterValue>.Success(
-                        new CounterValue(current.Value + input.Amount)));
-                    return updated.Succeeded
-                        ? OperationResult<CounterValue>.Success(new CounterValue(state.Value + input.Amount))
-                        : OperationResult<CounterValue>.Failure(updated.ErrorCode, updated.ErrorMessage);
-                },
-                PredictionMode.Owner)),
-            "register canonical response-order object");
-        Require(
-            client.Session.RegisterObjectType(new ReplicatedObjectTypeDefinition<CounterValue, AddRequest>(
-                objectType,
-                CounterCodec,
-                RequestCodec,
-                (_, state, input) =>
-                {
-                    var updated = clientSideState.Update(current => OperationResult<CounterValue>.Success(
-                        new CounterValue(current.Value + input.Amount)));
-                    return updated.Succeeded
-                        ? OperationResult<CounterValue>.Success(new CounterValue(state.Value + input.Amount))
-                        : OperationResult<CounterValue>.Failure(updated.ErrorCode, updated.ErrorMessage);
-                },
-                PredictionMode.Owner)),
-            "register predicted response-order object");
-        rig.Flush(); // synchronization is packet one
-
-        var serverObject = Require(
-            rig.Server.Session.SpawnObject(objectType, new CounterValue(0), client.ParticipantId),
-            "spawn response-order object");
-        rig.Flush(); // spawn is packet two
-        var clientObject = rig.GetObject<CounterValue, AddRequest>(client, serverObject.Id);
-        var first = clientObject.SubmitInputAsync(new AddRequest(1)); // request packet three
-        var second = clientObject.SubmitInputAsync(new AddRequest(2)); // request packet four
-        Assert(clientObject.State.Value == 3 && clientSideState.Value.Value == 3,
-            "both object transactions predict before either confirmation");
-
-        rig.Advance(); // both requests execute canonically; response packet five is delayed
-        rig.Advance(); // response packet six confirms the second input first
-        Assert(!first.IsCompleted && second.IsCompleted,
-            "the deterministic transport delivers the higher confirmation first");
-        Assert(clientObject.State.Value == 3 && clientSideState.Value.Value == 3,
-            "the cumulative confirmation does not replay an already-incorporated lower prediction");
-
-        rig.Advance();
-        Assert(first.GetAwaiter().GetResult().Result.Succeeded &&
-               second.GetAwaiter().GetResult().Result.Succeeded &&
-               serverObject.State.Value == 3 && clientObject.State.Value == 3 &&
-               serverSideState.Value.Value == 3 && clientSideState.Value.Value == 3,
-            "the delayed lower confirmation remains idempotent across object and related state");
-    }
-
-    internal static void ObjectTombstonesDominateDelayedSpawnAndChangeSnapshots()
-    {
-        using (var rig = MultiplayerTestRig.CreateDedicatedServer(
-                   new MultiplayerNetworkConditions(reorderEvery: 2)))
-        {
-            var client = rig.AddRemoteClient("delayed-spawn-observer");
-            RegisterObjectType(rig.Server.Session);
-            RegisterObjectType(client.Session);
-            rig.Flush(); // synchronization is packet one
-            var changes = new List<ReplicatedObjectChange<CounterValue, AddRequest>>();
-            using var subscription = client.Session.SubscribeObjects(CounterObjectType, changes.Add);
-
-            var serverObject = Require(
-                rig.Server.Session.SpawnObject(CounterObjectType, new CounterValue(4), client.ParticipantId),
-                "spawn object whose packet is delayed"); // packet two is delayed
-            Assert(rig.Server.Session.DespawnObject(serverObject.Id).Succeeded,
-                "despawn before the delayed spawn packet arrives"); // packet three arrives first
-
-            rig.Advance();
-            Assert(client.Session.GetObjects(CounterObjectType).Count == 0,
-                "an early tombstone records absence before spawn discovery");
-            rig.Advance();
-            Assert(client.Session.GetObjects(CounterObjectType).Count == 0 && changes.Count == 0,
-                "a delayed spawn snapshot cannot resurrect a tombstoned network id");
-        }
-
-        using (var rig = MultiplayerTestRig.CreateDedicatedServer(
-                   new MultiplayerNetworkConditions(reorderEvery: 3)))
-        {
-            var client = rig.AddRemoteClient("delayed-change-observer");
-            RegisterObjectType(rig.Server.Session);
-            RegisterObjectType(client.Session);
-            rig.Flush(); // synchronization is packet one
-            var serverObject = Require(
-                rig.Server.Session.SpawnObject(CounterObjectType, new CounterValue(7), client.ParticipantId),
-                "spawn object before delayed change test"); // packet two arrives normally
-            rig.Flush();
-            var clientObject = rig.GetObject<CounterValue, AddRequest>(client, serverObject.Id);
-            var changes = new List<ReplicatedObjectChange<CounterValue, AddRequest>>();
-            using var subscription = client.Session.SubscribeObjects(CounterObjectType, changes.Add);
-
-            Assert(serverObject.TransferOwnership(null).Succeeded,
-                "schedule a canonical change packet"); // packet three is delayed
-            Assert(rig.Server.Session.DespawnObject(serverObject.Id).Succeeded,
-                "schedule a tombstone after the delayed change"); // packet four arrives first
-
-            rig.Advance();
-            var changesAfterTombstone = changes.Count;
-            Assert(!clientObject.IsSpawned && client.Session.GetObjects(CounterObjectType).Count == 0 &&
-                   changesAfterTombstone > 0 && changes[^1].Kind == ReplicatedObjectChangeKind.Despawned,
-                "the tombstone retires the existing handle before the delayed change " +
-                "(spawned=" + clientObject.IsSpawned +
-                ", objects=" + client.Session.GetObjects(CounterObjectType).Count +
-                ", changes=" + changes.Count + ")");
-            rig.Advance();
-            Assert(!clientObject.IsSpawned && client.Session.GetObjects(CounterObjectType).Count == 0 &&
-                   changes.Count == changesAfterTombstone,
-                "a delayed change snapshot cannot recreate a tombstoned object");
-        }
     }
 
     internal static void LateJoinAndReconnectSnapshotPrecedesReady()
@@ -938,11 +766,11 @@ internal static class MultiplayerRigTests
             "reuse generated object registration in replacement session");
         Assert(second.Result.Succeeded && state.Value.Value == 2 && newObject.IsSpawned,
             "command and object registrations survive without duplicate author registration");
-        Assert(objectNotifications == 1,
-            "object discovery subscriptions owned by the old session do not leak into its replacement");
+        Assert(objectNotifications == 3,
+            "object subscriptions survive replacement: they see the old object despawn and the new one spawn");
         Assert(facade.PublishPresentation(AcceptedEventType, new TestEvent("new-session")).Succeeded &&
-               presentationCount == 0,
-            "standalone presentation remains transport-scheduled until the deterministic rig advances");
+               presentationCount == 1,
+            "the host's own player sees a published event at the settle point of the publishing call");
         rig.Flush();
         Assert(presentationCount == 1,
             "presentation registration is reapplied to the replacement session");

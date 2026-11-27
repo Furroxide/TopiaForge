@@ -1,8 +1,14 @@
 part of 'widget_test.dart';
 
+Finder _devScrollable() => find
+    .descendant(
+      of: find.byKey(const Key('developer-scroll')),
+      matching: find.byType(Scrollable),
+    )
+    .first;
+
 extension _FakeDeveloperWorkspace on _FakeDeveloperRepository {
-  DeveloperWorkspace _workspace([UgcLiveSyncSettings? settings]) {
-    final liveSync = settings ?? initialUgcSettings;
+  DeveloperWorkspace _workspace() {
     return DeveloperWorkspace(
       projectRoot: '/tmp/creator',
       generatedPropsPath: '/tmp/creator/topiaforge.dev.props',
@@ -11,7 +17,7 @@ extension _FakeDeveloperWorkspace on _FakeDeveloperRepository {
               schemaVersion: 2,
               id: 'creator.mod',
               name: 'Creator Mod',
-              unityCompanion: UnityCompanionSettings(liveSync: liveSync),
+              unityCompanion: const UnityCompanionSettings(),
             )
           : null,
       lock: hasProject

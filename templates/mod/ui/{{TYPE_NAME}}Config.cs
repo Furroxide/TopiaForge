@@ -22,11 +22,12 @@ namespace {{ASSEMBLY_NAME}}
                             "ToggleKey cannot be empty.");
                     }
 
-                    return string.Equals(value.ToggleKey, "F8", StringComparison.OrdinalIgnoreCase) ||
+                    return string.Equals(value.ToggleKey, "F5", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(value.ToggleKey, "F8", StringComparison.OrdinalIgnoreCase) ||
                            string.Equals(value.ToggleKey, "F10", StringComparison.OrdinalIgnoreCase)
                         ? OperationResult<bool>.Failure(
                             ModErrorCode.InvalidArgument,
-                            "F8 and F10 are reserved by TopiaForge; choose another key.")
+                            "F5, F8 and F10 are reserved by TopiaForge. Choose another key.")
                         : OperationResult<bool>.Success(true);
                 });
     }

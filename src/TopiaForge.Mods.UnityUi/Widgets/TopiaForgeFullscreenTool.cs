@@ -1,5 +1,6 @@
 using System;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -28,6 +29,7 @@ namespace TopiaForge.Mods.UnityUi
             : base(host, layerRoot.Scheme, layerRoot.CreateChildGameObject("FullscreenTool"))
         {
             canvasRoot = layerRoot.Go;
+            TopiaForgeEventSystems.Track(canvasRoot.GetComponent<GraphicRaycaster>(), Go);
             TopiaForgeAnchors.Stretch(Rect, TopiaForgeTokens.SafeMargin, TopiaForgeTokens.SafeMargin,
                 TopiaForgeTokens.SafeMargin, TopiaForgeTokens.SafeMargin);
 
@@ -55,6 +57,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeLayout.ApplyRow(titleBarGo, TopiaForgeGap.Sm, TopiaForgeGap.None);
 
             var titleBar = new TopiaForgeContainer(Host, Scheme, titleBarGo);
+            TitleBar = titleBar;
             var titleGo = titleBar.CreateChildGameObject("Title");
             titleLabel = TopiaForgeTmp.Create(titleGo);
             titleLabel.fontSize = TopiaForgeTokens.TitleSize;
@@ -69,7 +72,8 @@ namespace TopiaForge.Mods.UnityUi
             labelLayout.flexibleWidth = 1f;
             labelLayout.minHeight = TopiaForgeTokens.ControlLgHeight;
 
-            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
+            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost)
+                .Fixed(TopiaForgeTokens.ControlHeight, TopiaForgeTokens.ControlHeight).SetBackdrop(UiPaintRole.Raised);
 
             Content = Column(TopiaForgeGap.Md, TopiaForgeGap.Lg).Flex(1f, 1f);
             focusScope = Go.AddComponent<TopiaForgeFocusScope>();
@@ -81,6 +85,7 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Gets the content container below the title bar.</summary>
         public TopiaForgeContainer Content { get; }
+        internal TopiaForgeContainer TitleBar { get; }
 
         /// <summary>Gets whether the tool is open.</summary>
         public bool IsOpen => open;
@@ -114,7 +119,7 @@ namespace TopiaForge.Mods.UnityUi
             backdrop.gameObject.SetActive(true);
             Go.SetActive(true);
             cursorLease.Acquire();
-            TopiaForgeDismissStack.Push(this);
+            TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.Navigation, Go);
             focusScope.Activate();
             TopiaForgeMotion.WindowIn(this);
         }
@@ -153,7 +158,8 @@ namespace TopiaForge.Mods.UnityUi
             fill.color = theme.Surface;
             ring.color = theme.OutlineStrong;
             titleBarFill.color = theme.SurfaceAlt;
-            titleLabel.color = theme.Text;
+            titleLabel.color = theme.ForegroundOn(UiPaintRole.Raised);
+            TopiaForgeTypography.ApplyControlText(titleLabel, theme, TopiaForgeTextStyle.Heading, Host.EffectiveUiScale);
         }
 
         internal GameObject CanvasRoot => canvasRoot;
@@ -169,6 +175,20 @@ namespace TopiaForge.Mods.UnityUi
             open = false;
             closing = false;
             Closed = null;
+        }
+
+        /// <summary>
+        /// The tool's canvas was destroyed outside the kit: let go of the cursor and the Escape stack as teardown does, and
+        /// return its Closed handlers if the tool was showing.
+        /// </summary>
+        internal Action? Lose()
+        {
+            var wasShowing = open && !tornDown;
+            var closed = Closed;
+            Teardown();
+            // The host reports the lost canvas before invoking these captured callbacks. SDK surfaces must already
+            // know they cannot reopen, even when a dismissal handler calls Show or creates a replacement surface.
+            return wasShowing ? closed : null;
         }
 
         private void ThrowIfTornDown()
@@ -220,13 +240,13 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             active = true;
-            first?.Select();
+            if (!HigherOverlayOwnsInput()) first?.Select();
         }
 
         public void Deactivate()
         {
             active = false;
-            if (previous != null && previous.activeInHierarchy)
+            if (!HigherOverlayOwnsInput() && previous != null && previous.activeInHierarchy)
             {
                 EventSystem.current?.SetSelectedGameObject(previous);
             }
@@ -237,12 +257,16 @@ namespace TopiaForge.Mods.UnityUi
 
         private void Update()
         {
-            if (!active || root == null || first == null) return;
+            if (!active || root == null || first == null || HigherOverlayOwnsInput()) return;
             var current = EventSystem.current?.currentSelectedGameObject;
             if (current == null || current.transform != root && !current.transform.IsChildOf(root))
             {
                 first.Select();
             }
         }
+
+        private static bool HigherOverlayOwnsInput() => TopiaForgeOverlayStack.OwnsInput ||
+            TopiaForgeDismissStack.Top() is { } higher &&
+            TopiaForgeLayerPriority.Rank(higher.Band) > TopiaForgeLayerPriority.Rank(TopiaForgeLayerBand.Window);
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using TMPro;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
@@ -17,11 +18,14 @@ namespace TopiaForge.Mods.UnityUi
     {
         private readonly UImage shadow;
         private readonly GameObject canvasRoot;
+        private readonly RectTransform canvasRect;
+        private readonly Vector2 designedSize;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage titleBarFill;
         private readonly TextMeshProUGUI titleLabel;
         private readonly TopiaForgeCursorLease cursorLease = new TopiaForgeCursorLease();
+        private readonly TopiaForgeWindowDeferredClamp deferredClamp;
         private readonly string persistKey;
         private readonly bool autoHeight;
         private bool open;
@@ -32,6 +36,9 @@ namespace TopiaForge.Mods.UnityUi
             : base(host, layerRoot.Scheme, layerRoot.CreateChildGameObject("Window"))
         {
             canvasRoot = layerRoot.Go;
+            TopiaForgeEventSystems.Track(canvasRoot.GetComponent<GraphicRaycaster>(), Go);
+            canvasRect = layerRoot.Rect;
+            designedSize = new Vector2(width, height);
             persistKey = "win:" + id;
             autoHeight = height <= 0f;
 
@@ -69,6 +76,7 @@ namespace TopiaForge.Mods.UnityUi
             drag.Window = this;
 
             var titleBar = new TopiaForgeContainer(Host, Scheme, titleBarGo);
+            TitleBar = titleBar;
             var titleGo = titleBar.CreateChildGameObject("Title");
             titleLabel = TopiaForgeTmp.Create(titleGo);
             titleLabel.fontSize = TopiaForgeTokens.TitleSize;
@@ -91,7 +99,8 @@ namespace TopiaForge.Mods.UnityUi
             titleLayout.minHeight = TopiaForgeTokens.TitleBarHeight;
             titleLabel.margin = new Vector4(16f, 0f, 0f, 0f);
 
-            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
+            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost)
+                .Fixed(TopiaForgeTokens.ControlHeight, TopiaForgeTokens.ControlHeight).SetBackdrop(UiPaintRole.Raised);
 
             // Content area.
             Content = Column(TopiaForgeGap.Md, TopiaForgeGap.Lg);
@@ -101,6 +110,11 @@ namespace TopiaForge.Mods.UnityUi
             var focus = Go.AddComponent<TopiaForgeWindowFocus>();
             focus.Window = this;
 
+            deferredClamp = Go.AddComponent<TopiaForgeWindowDeferredClamp>();
+            deferredClamp.Window = this;
+            deferredClamp.enabled = false;
+            canvasRoot.AddComponent<TopiaForgeWindowCanvasResize>().Window = this;
+
             RestoreRect();
             TopiaForgeWindowRegistry.Register(this);
             Go.SetActive(false);
@@ -109,6 +123,7 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Window body — add content here.</summary>
         public TopiaForgeContainer Content { get; }
+        internal TopiaForgeContainer TitleBar { get; }
 
         /// <summary>Gets whether the window is open.</summary>
         public bool IsOpen => open;
@@ -134,19 +149,24 @@ namespace TopiaForge.Mods.UnityUi
         public void Show()
         {
             ThrowIfTornDown();
-            if (open)
+            if (open && !closing)
             {
                 BringToFront();
                 return;
             }
 
+            // Shown again during its close fade, the window stays: stopping the fade keeps its end from hiding it.
+            if (closing) TopiaForgeTween.Cancel(this);
             open = true;
             closing = false;
             Go.SetActive(true);
-            ClampToScreen();
+
+            // A canvas built this frame is 0x0 until Unity's next canvas update, so the clamp
+            // then waits for the first frame the canvas has a size.
+            deferredClamp.enabled = !TryClampToScreen();
             TopiaForgeMotion.WindowIn(this);
             cursorLease.Acquire();
-            TopiaForgeDismissStack.Push(this);
+            TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.NavigationWhileSelected, Go);
             BringToFront();
         }
 
@@ -217,6 +237,20 @@ namespace TopiaForge.Mods.UnityUi
             Closed = null;
         }
 
+        /// <summary>
+        /// The window's canvas was destroyed outside the kit, by a scene, the game or another mod: let go of the cursor, the
+        /// Escape stack and the window order as teardown does, and return its Closed handlers if it was showing.
+        /// </summary>
+        internal Action? Lose()
+        {
+            var wasShowing = open && !tornDown;
+            var closed = Closed;
+            Teardown();
+            // The host reports the lost canvas before invoking these captured callbacks. SDK surfaces must already
+            // know they cannot reopen, even when a dismissal handler calls Show or creates a replacement surface.
+            return wasShowing ? closed : null;
+        }
+
         private void ThrowIfTornDown()
         {
             if (tornDown)
@@ -244,9 +278,12 @@ namespace TopiaForge.Mods.UnityUi
         internal void HandleDragEnd()
         {
             var (rect, canvasSize) = CanvasSpaceRect();
-            var snapped = TopiaForgeWindowMath.SnapToEdges(rect, canvasSize.x, canvasSize.y);
-            var clamped = TopiaForgeWindowMath.ClampToScreen(snapped, canvasSize.x, canvasSize.y);
-            ApplyCanvasSpaceRect(clamped, canvasSize);
+            if (TopiaForgeWindowMath.HasViewport(canvasSize.x, canvasSize.y))
+            {
+                var snapped = TopiaForgeWindowMath.SnapToEdges(rect, canvasSize.x, canvasSize.y);
+                ApplyCanvasSpaceRect(TopiaForgeWindowMath.ClampToScreen(snapped, canvasSize.x, canvasSize.y), canvasSize);
+            }
+
             PersistRect();
         }
 
@@ -257,26 +294,42 @@ namespace TopiaForge.Mods.UnityUi
             ring.color = theme.OutlineStrong;
             shadow.color = theme.ShadowStrong;
             titleBarFill.color = theme.SurfaceAlt;
-            titleLabel.color = theme.Text;
+            titleLabel.color = theme.ForegroundOn(UiPaintRole.Raised);
+            TopiaForgeTypography.ApplyControlText(titleLabel, theme, TopiaForgeTextStyle.Heading, Host.EffectiveUiScale);
         }
 
-        private void ClampToScreen()
+        /// <summary>Runs the clamp that Show deferred; true once no clamp is left to run.</summary>
+        internal bool FinishDeferredClamp()
+        {
+            return tornDown || !open || closing || TryClampToScreen();
+        }
+
+        /// <summary>Its canvas changed size, as a new resolution or UI scale does: re-places an open window next frame.</summary>
+        internal void ArmClamp()
+        {
+            if (!tornDown && open && !closing) deferredClamp.enabled = true;
+        }
+
+        private bool TryClampToScreen()
         {
             var (rect, canvasSize) = CanvasSpaceRect();
-            var (w, h) = TopiaForgeWindowMath.ClampSize(rect.Width, rect.Height, canvasSize.x, canvasSize.y, 240f, 120f);
-            var clamped = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(rect.X, rect.Y, w, h), canvasSize.x, canvasSize.y);
-            ApplyCanvasSpaceRect(clamped, canvasSize);
+            if (!TopiaForgeWindowMath.TryPlace(rect, designedSize.x, designedSize.y, autoHeight, canvasSize.x, canvasSize.y, out var placed))
+            {
+                return false;
+            }
+
+            ApplyCanvasSpaceRect(placed, canvasSize);
+            return true;
         }
 
         private (TopiaForgeRect Rect, Vector2 CanvasSize) CanvasSpaceRect()
         {
-            var canvas = OwnCanvas;
-            var canvasRect = canvas != null ? ((RectTransform)canvas.transform).rect.size : new Vector2(TopiaForgeTokens.ReferenceWidth, TopiaForgeTokens.ReferenceHeight);
+            var canvasSize = canvasRect.rect.size;
             var size = Rect.rect.size;
             var position = Rect.anchoredPosition;
-            var x = position.x + (canvasRect.x / 2f) - (size.x / 2f);
-            var y = position.y + (canvasRect.y / 2f) - (size.y / 2f);
-            return (new TopiaForgeRect(x, y, size.x, size.y), canvasRect);
+            var x = position.x + (canvasSize.x / 2f) - (size.x / 2f);
+            var y = position.y + (canvasSize.y / 2f) - (size.y / 2f);
+            return (new TopiaForgeRect(x, y, size.x, size.y), canvasSize);
         }
 
         private void ApplyCanvasSpaceRect(TopiaForgeRect rect, Vector2 canvasSize)
@@ -311,21 +364,19 @@ namespace TopiaForge.Mods.UnityUi
                 return;
             }
 
+            // Only the position comes back: Show caps the designed size to the screen, so a persisted
+            // size would be a cap from some earlier screen.
             var parts = value.Split(';');
             if (parts.Length != 4
                 || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
                 || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
-                || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var w)
-                || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var h))
+                || !float.IsFinite(x)
+                || !float.IsFinite(y))
             {
                 return;
             }
 
             Rect.anchoredPosition = new Vector2(x, y);
-            if (!autoHeight && w > 0f && h > 0f)
-            {
-                Rect.sizeDelta = new Vector2(w, h);
-            }
         }
 
         private UImage CreateDecor(string name, Sprite sprite, bool raycast)

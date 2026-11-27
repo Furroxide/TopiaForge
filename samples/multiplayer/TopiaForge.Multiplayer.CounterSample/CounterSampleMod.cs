@@ -1,4 +1,3 @@
-using System;
 using TopiaForge.Mods;
 
 namespace TopiaForge.Multiplayer.CounterSample
@@ -15,16 +14,12 @@ namespace TopiaForge.Multiplayer.CounterSample
         public int LastPresentedValue { get; private set; }
 
         /// <inheritdoc/>
+        /// <remarks>
+        /// TopiaForge binds the generated contract before this runs, so there is no binding code to write.
+        /// </remarks>
         protected override void OnLoad()
         {
-            var binding = BindMultiplayer(Context.RequireMultiplayer());
-            if (!binding.TryGetValue(out var lease))
-            {
-                throw new InvalidOperationException(binding.ErrorMessage);
-            }
-
-            Context.Lifetime.Track(lease);
-            Context.Logger.Info("Multiplayer counter sample registered its generated contract.");
+            Context.Logger.Info("Multiplayer counter sample is ready; its generated contract was bound automatically.");
         }
 
         [MultiplayerCommand(

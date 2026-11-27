@@ -57,8 +57,11 @@ jobs:
 
       - name: Install managed-reference archive dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
@@ -79,22 +82,28 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
           latest=()
           if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
           dotnet run --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
             -c Release -- --source public "${latest[@]}"
 
-      - name: Verify formatting
-        run: |
-          dotnet restore TopiaForge.slnx
-          dotnet format TopiaForge.slnx --verify-no-changes --no-restore
+      - name: Restore solution
+        run: dotnet restore TopiaForge.slnx
 
       - name: Build solution
         run: dotnet build TopiaForge.slnx -c Release --no-restore
 
-      - name: Audit 12 SDK packages and run all 7 C# harnesses
+      - name: Restore pinned Dart dependencies for generated runtime acceptance
+        working-directory: apps/topiaforge_cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart --version 2>&1 | grep -F 'Dart SDK version: 3.12.2 '
+          dart pub get --enforce-lockfile
+
+      - name: Audit 11 SDK packages and run all 7 C# harnesses
         shell: bash
         run: bash tools/verify-csharp-release-surface.sh
 
@@ -125,17 +134,90 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Formatting needs nothing the build produces, so it runs beside csharp-tests instead of ahead of its build.
+  csharp-format:
+    name: Verify C# formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Install managed-reference archive dependency
+        run: |
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
+
+      - name: Resolve Robotopia refs cache key
+        id: refs-cache
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
+
+      - name: Restore Robotopia managed refs
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        run: |
+          latest=()
+          if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
+          dotnet run --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
+            -c Release -- --source public "${latest[@]}"
+
+      - name: Verify formatting
+        run: |
+          dotnet restore TopiaForge.slnx
+          dotnet format TopiaForge.slnx --verify-no-changes --no-restore
+
   dart-tests:
     name: Analyze and test Dart packages
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ${{ matrix.os }}
+    # Windows legs pay a cold managed-refs download the first time their
+    # OS-scoped cache key is populated, which does not fit in 20 minutes.
+    timeout-minutes: 30
+    defaults:
+      run:
+        # Windows runners default to pwsh; every step body here is bash.
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        package:
-          - packages/launcher_domain
-          - packages/launcher_data
-          - apps/topiaforge_cli
+        # Explicit legs rather than a package x os product. Only
+        # packages/launcher_data has Windows-only code paths worth a 2x-billed
+        # runner: multiplayer_contract_lock.dart sets runInShell for .bat/.cmd
+        # dotnet shims, and its test writes a .cmd/.ps1 fake dotnet there.
+        # packages/launcher_domain is pure Dart with no process spawning, and
+        # apps/topiaforge_cli would need the whole solution built on Windows.
+        include:
+          - package: packages/launcher_domain
+            os: ubuntu-latest
+          - package: packages/launcher_data
+            os: ubuntu-latest
+          - package: apps/topiaforge_cli
+            os: ubuntu-latest
+          - package: packages/launcher_data
+            os: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -155,10 +237,22 @@ jobs:
           dotnet-version: "10.0.301"
 
       - name: Install managed-reference archive dependency
-        if: matrix.package != 'packages/launcher_domain'
+        if: matrix.package != 'packages/launcher_domain' && runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
+
+      - name: Install Windows managed-reference archive dependency
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Get-Command 7z -ErrorAction SilentlyContinue) -and
+              !(Test-Path -LiteralPath (Join-Path $env:ProgramFiles "7-Zip/7z.exe"))) {
+            choco install 7zip -y --no-progress
+          }
 
       - name: Resolve Robotopia refs cache key
         if: matrix.package != 'packages/launcher_domain'
@@ -182,7 +276,7 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
           latest=()
           if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
@@ -214,13 +308,16 @@ jobs:
           dotnet build src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj -c Release --nologo
           dotnet build tests/TopiaForge.ValidTestMod/TopiaForge.ValidTestMod.csproj -c Release --nologo
 
+      # package:test runs one suite per two processors by default; run one per processor.
       - name: Test
         working-directory: ${{ matrix.package }}
-        run: dart test
+        run: dart test --concurrency="$(nproc)"
 
   flutter-tests:
     name: Analyze and test Flutter packages
-    runs-on: ubuntu-latest
+    # Pinned because the GLib helper's fallback package source names the noble suites. The pin does not fix the
+    # runners' failures to resolve the Ubuntu mirror names; the helper's signed fallback mirror handles those.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -240,6 +337,11 @@ jobs:
           flutter analyze
           flutter test
 
+      # The launcher's Linux application-id tests compile linux/runner/data_root_id.cc against GLib, and skip
+      # themselves without its headers.
+      - name: Install GLib headers for the Linux runner tests
+        run: bash .github/scripts/prepare-linux-runner-dependencies.sh
+
       - name: Analyze and test launcher
         working-directory: apps/topiaforge_launcher_flutter
         run: |
@@ -247,38 +349,6 @@ jobs:
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
-
-  sidecar-checks:
-    name: Validate UGC Automerge sidecar
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          lfs: true
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24.16.0"
-          cache: npm
-          cache-dependency-path: tools/ugc-automerge-sidecar/package-lock.json
-
-      - name: Restore and check sidecar
-        working-directory: tools/ugc-automerge-sidecar
-        run: |
-          node -e 'process.exit(process.versions.node === "24.16.0" ? 0 : 1)'
-          npm ci --ignore-scripts --no-audit --no-fund
-          find . -path ./node_modules -prune -o -name '*.mjs' -print0 |
-            xargs -0 -n1 node --check
-          npm test
-          npm ls --omit=dev
-          npm audit --omit=dev --audit-level=moderate
-          output="$(node index.mjs --check)"
-          echo "$output"
-          grep -F "deps        : installed" <<< "$output"
 
   repository-audits:
     name: Validate workflows and repository file hygiene
@@ -309,18 +379,67 @@ jobs:
       - name: Test generated-payload residue scanning
         run: python3 .github/scripts/test_check_topiaforge_residue.py
 
+      - name: Require every redistributed asset to be accounted for
+        run: python3 .github/scripts/check_asset_licence_coverage.py
+
+      - name: Test asset licence coverage audit
+        run: python3 .github/scripts/test_check_asset_licence_coverage.py
+
+      - name: Keep the trademark notice identical across surfaces
+        run: python3 .github/scripts/check_trademark_notice.py
+
+      - name: Test trademark notice audit
+        run: python3 .github/scripts/test_check_trademark_notice.py
+
+      - name: Keep the counts README.md states true
+        run: python3 .github/scripts/check_readme_counts.py
+
+      - name: Test README count audit
+        run: python3 .github/scripts/test_check_readme_counts.py
+
+      # Use the diagram builder's dependency outside the tree scanned below.
+      - name: Set up the README diagram audit environment
+        run: |
+          python3 -m venv "$RUNNER_TEMP/readme-diagrams"
+          "$RUNNER_TEMP/readme-diagrams/bin/python" -m pip install \
+            --no-input --disable-pip-version-check "Pillow==12.2.0"
+
+      - name: Keep the README diagrams and their descriptions in sync
+        run: '"$RUNNER_TEMP/readme-diagrams/bin/python" .github/scripts/check_readme_diagrams.py'
+
+      - name: Test README diagram audit
+        run: '"$RUNNER_TEMP/readme-diagrams/bin/python" .github/scripts/test_check_readme_diagrams.py'
+
+      - name: Keep the gamemode contract fixture index closed over its fixtures
+        run: python3 .github/scripts/check_fixture_index.py
+
+      - name: Test fixture index audit
+        run: python3 .github/scripts/test_check_fixture_index.py
+
       - name: Test pinned Flutter setup
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
 
+      - name: Test Linux runner dependency acquisition
+        run: python3 .github/scripts/test_prepare_linux_runner_dependencies.py
+
+      - name: Test executable workflow source trust
+        run: python3 .github/scripts/test_workflow_source_trust.py
+
+      - name: Test incoming commit DCO and release source policy
+        run: python3 .github/scripts/test_pr_policy.py
+
+      - name: Test required CI and Pages completion gates
+        run: python3 .github/scripts/test_ci_validation.py
+
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
 
+      - name: Test multiplayer build configuration
+        run: python3 tools/test_multiplayer_build.py
+
       - name: Test main governance pull request scope
         run: python3 .github/scripts/test_main_governance_scope.py
-
-      - name: Test incoming commit certification policy
-        run: python3 .github/scripts/test_pr_policy.py
 
       - name: Test required release package source boundary
         run: python3 .github/scripts/test_release_package_source.py
@@ -334,7 +453,9 @@ jobs:
           bash tools/test-verify-release-candidate.sh
           bash tools/test-verify-release-governance.sh
           pwsh -NoProfile -File tools/release/test-verify-robotopia-install.ps1
+          pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
           pwsh -NoProfile -File tools/release/test-handoff-signature.ps1
+          pwsh -NoProfile -File tools/release/test-windows-signing-policy.ps1
 
       - name: Test release tag and draft publication safety
         run: |
@@ -405,15 +526,56 @@ jobs:
           expected=$'feat: exercise hook\n\nCo-authored-by: Human Developer <human@example.invalid>'
           test "$(<"$message")" = "$expected"
 
+      # The analyzer preparation script needs Python 3.12 or newer
+      # (TemporaryDirectory(delete=False)) and curl 8.4 or newer (the streamed
+      # size limit); the runner image has both. A cached archive that fails its
+      # size or SHA-256 check fails this job closed and is never replaced here.
+      # Recover by deleting that cache entry, then re-run:
+      #   gh cache delete psscriptanalyzer-<SHA256 in prepare_psscriptanalyzer.py>
+      - name: Test analyzer archive preparation
+        run: python3 .github/scripts/test_prepare_psscriptanalyzer.py
+
+      - name: Resolve analyzer cache key
+        id: analyzer-cache
+        run: python3 .github/scripts/prepare_psscriptanalyzer.py --runner-temp "$RUNNER_TEMP" --output "$GITHUB_OUTPUT" --cache-info
+
+      - name: Restore analyzer archive
+        id: restore-analyzer
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.analyzer-cache.outputs.archive }}
+          key: ${{ steps.analyzer-cache.outputs.key }}
+
+      - name: Verify and extract analyzer archive
+        id: analyzer
+        env:
+          ANALYZER_CACHE_HIT: ${{ steps.restore-analyzer.outputs.cache-hit }}
+        run: |
+          python3 .github/scripts/prepare_psscriptanalyzer.py --runner-temp "$RUNNER_TEMP" \
+            --output "$GITHUB_OUTPUT" --cache-hit "$ANALYZER_CACHE_HIT"
+
+      - name: Verify analyzer pass and fail behavior
+        env:
+          ANALYZER_MANIFEST: ${{ steps.analyzer.outputs.manifest }}
+          ANALYZER_VERSION: ${{ steps.analyzer.outputs.version }}
+        run: python3 .github/scripts/test_prepare_psscriptanalyzer.py AnalyzerInvocationTests
+
+      - name: Save verified analyzer archive
+        if: steps.restore-analyzer.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.analyzer-cache.outputs.archive }}
+          key: ${{ steps.analyzer-cache.outputs.key }}
+
       - name: Analyze PowerShell safety and correctness
         shell: pwsh
+        env:
+          ANALYZER_MANIFEST: ${{ steps.analyzer.outputs.manifest }}
+          ANALYZER_VERSION: ${{ steps.analyzer.outputs.version }}
         run: |
-          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 `
-            -Repository PSGallery -Scope CurrentUser -Force
-          $findings = @(Invoke-ScriptAnalyzer -Path tools -Recurse `
-            -Settings .github/PSScriptAnalyzerSettings.psd1)
-          $findings | Format-Table -AutoSize
-          if ($findings.Count -ne 0) { exit 1 }
+          & ./.github/scripts/Invoke-RepositoryScriptAnalysis.ps1 `
+            -Manifest $env:ANALYZER_MANIFEST -ExpectedVersion $env:ANALYZER_VERSION
+          exit $LASTEXITCODE
 
       - name: Reject conflict markers and oversized Dart sources
         shell: bash
@@ -442,9 +604,30 @@ jobs:
       - name: Verify local Markdown links and anchors
         run: node website/scripts/check-markdown-links.mjs
 
+  # The release helper runs on the administrator's Windows workstation, where it
+  # validates paths, reads %LOCALAPPDATA% and refuses junctions. The Ubuntu audit
+  # job above covers only the helper's POSIX branch.
+  release-helpers-windows:
+    name: Test release helpers on Windows
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Test the Tomato Cake launcher state helper
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
+
+      - name: Test multiplayer build configuration on Windows
+        run: python tools/test_multiplayer_build.py
+
+  # CI-triggered Pages publishing waits for a successful complete CI run through deploy-pages.yml.
+  # This documentation check needs no outputs from C# or the release scaffolds, so it starts at once.
   docs:
     name: Build guides, C# and Dart references, and search
-    needs: [csharp-tests, template-matrix]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -473,8 +656,11 @@ jobs:
 
       - name: Install managed-reference archive dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          # The image ships 7-Zip; only reach the package mirrors when it is missing.
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
@@ -497,9 +683,10 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'service/production-multiplayer' || github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
-          $latest = if ($env:PINNED_STABLE_BASELINE -eq 'true') { @() } else { @('--require-latest') }
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
           dotnet run `
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
             -c Release -- --source public @latest
@@ -548,7 +735,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        template: [minimal, gameplay, gamemode, service, ui, asset, world]
+        template: [minimal, gameplay, gamemode, service, ui, asset, world, multiplayer]
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -610,6 +797,13 @@ jobs:
           "$relocated_cli" check scaffold "$project" \
             --forbid "$extracted" --forbid "$GITHUB_WORKSPACE"
 
+          # A multiplayer scaffold ships the empty contract lock that
+          # `topiaforge mod add multiplayer` writes. Generate it from the built
+          # contract, as an author does after restore, so pack can verify it.
+          if [ -f "$project/topiaforge.multiplayer.lock.json" ]; then
+            "$relocated_cli" mod sync multiplayer --project "$project"
+          fi
+
           entry=$(find "$project" -maxdepth 1 -name '*.csproj' -print -quit)
           test -n "$entry"
           dotnet build "$entry" -c Release --no-restore --nologo
@@ -630,10 +824,11 @@ jobs:
     if: always()
     needs:
       - csharp-tests
+      - csharp-format
       - dart-tests
       - flutter-tests
-      - sidecar-checks
       - repository-audits
+      - release-helpers-windows
       - docs
       - template-matrix
     runs-on: ubuntu-latest
@@ -642,14 +837,15 @@ jobs:
       - name: Enforce all validation jobs
         env:
           CSHARP: ${{ needs.csharp-tests.result }}
+          CSHARP_FORMAT: ${{ needs.csharp-format.result }}
           DART: ${{ needs.dart-tests.result }}
           FLUTTER: ${{ needs.flutter-tests.result }}
-          SIDECAR: ${{ needs.sidecar-checks.result }}
           REPOSITORY: ${{ needs.repository-audits.result }}
+          RELEASE_HELPERS_WINDOWS: ${{ needs.release-helpers-windows.result }}
           DOCS: ${{ needs.docs.result }}
           TEMPLATES: ${{ needs.template-matrix.result }}
         run: |
           set -euo pipefail
-          for result in "$CSHARP" "$DART" "$FLUTTER" "$SIDECAR" "$REPOSITORY" "$DOCS" "$TEMPLATES"; do
+          for result in "$CSHARP" "$CSHARP_FORMAT" "$DART" "$FLUTTER" "$REPOSITORY" "$RELEASE_HELPERS_WINDOWS" "$DOCS" "$TEMPLATES"; do
             test "$result" = success
           done

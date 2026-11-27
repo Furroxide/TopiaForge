@@ -16,6 +16,7 @@ player; they do not sandbox, mediate, or grant that behavior. Install only packa
 | Capability | Meaning |
 | --- | --- |
 | `network` | Opens outbound network connections. |
+| `peer-network` | Can expose the player's network address to other players through direct multiplayer connections. |
 | `remote-ai` | Sends inputs to a remote inference service and consumes its response. |
 | `player-token` | Reads the player's Robotopia authentication token for an explicitly enabled integration. |
 | `microphone` | Captures audio from a local microphone after an explicit player action. |
@@ -28,30 +29,100 @@ capability, because mods run with the Robotopia process's authority.
 The launcher must show the package source, package SHA-256, arbitrary-code warning, and the aggregate capabilities of
 the selected package and required dependencies before install or update. A capability is not consent by itself.
 
+## Developer reachability diagnostic
+
+The optional launcher reachability probe is outbound network activity. A run sends STUN UDP datagrams to configured
+measurement servers and their advertised alternate measurement endpoints. Those servers see the request's source IP
+address and port; their operators may retain that metadata. Keeping addresses out of TopiaForge's observation and
+report models does not prevent this exposure or establish the servers' retention practices.
+
+The probe defaults off, has no built-in server list, and requires developer mode, a saved opt-in, and an explicit
+**Run probe** action. The developer pane discloses source IP address and port exposure before opt-in. The resulting
+classification stays local: there is no aggregate-upload path, and `ReachabilityProbePolicy.reportingApproved`
+remains `false` even if sharing consent is saved. These gates restrict activation; they do not approve collection.
+
+This is launcher behavior, so a mod's `network` capability is neither its authorization nor a substitute for launcher
+disclosure. P0-PRIV-01 remains blocking. Public release requires the responsible owners to approve accurate probe
+and server-operator disclosure, retention information, and consent requirements. This engineering description does
+not record that approval or add a server destination.
+
+## Peer address exposure in player-hosted sessions
+
+Status: implemented for development, not qualified for public release. The provider contains authenticated live
+transport, LAN/direct sessions, Internet signaling and relay paths, and voice chat. Live sessions remain off unless
+`TOPIAFORGE_LIVE_MULTIPLAYER=1` is explicitly set; voice has its own player opt-in. The supported development model is
+a player-hosted listen server. [Hosting qualification](MultiplayerHostingFeasibility.md) distinguishes that
+implementation from unsupported dedicated/headless hosting and the remaining release evidence.
+
+**The fact.** A direct peer-to-peer connection reveals each participant's IP address to the participants it connects
+to. In a player-hosted session that means the host's address is visible to every participant, and every participant's
+address is visible to the host. In a mesh it means every participant sees every other. An IP address is coarse
+location data and a durable handle on a person's home connection.
+
+Internet sessions use the configured TopiaForge control plane for discovery, invites, signaling and relay
+credentials. A relay-only path withholds direct candidates locally and filters them in signaling. Without a configured
+service, Internet invite/relay operations are unavailable; there is no silent direct fallback. Service and relay
+operators can observe connection metadata. The code's address-handling safeguards do not establish those operators'
+retention practices or qualify a deployment.
+
+### Decision
+
+1. **Direct connect is never a silent default.** A player must be told, before joining or hosting, that a direct
+   session reveals their address to the other participants. Consent to play is not consent to be addressable.
+2. **Relay-only remains available as a player choice.** Hide my IP defaults on. A player who declines a direct
+   connection keeps that setting; an unavailable relay produces a refusal instead of silently exposing an address.
+   Relay-only is honored regardless of its operating cost.
+3. **Observed addresses never reach mod code.** `docs/Multiplayer.md` already establishes that process-local identity
+   never becomes network identity. The inverse holds with equal force: peer addresses, candidate addresses, and any
+   transport-observed endpoint are never exposed to mods, never placed in `MultiplayerSessionSnapshot`, and never
+   written to logs, diagnostic bundles, or crash reports. TopiaForge mods are trusted in-process code, so anything a
+   mod can read is effectively public.
+4. **The canonical label is `peer-network`.** It is recognized by the current and V6 schemas, C# manifest validator
+   and Dart manifest constants. `network` describes outbound networking; `peer-network` separately discloses possible
+   address exposure to players. The Multiplayer provider declares both, plus `microphone` for its voice path.
+5. **Approved wording and release qualification are separate evidence.** The exact multiplayer address/voice wording
+   is recorded in `docs/internal/MultiplayerPrivacyText.md`, approved on 2026-10-14, with the developer-mode package
+   consent added on 2026-10-26. This change does not revise that wording. It does not supply the backend authorization,
+   retention/training disclosures or remaining microphone/native acceptance evidence required below.
+
+Implementation checks live in `NatPrivacyTests`, `InternetFailureTests`, the session privacy/voice tests and the
+control-plane privacy/signaling tests. These cover source behavior and synthetic transports; they do not replace
+exact-candidate native qualification or approval of operator disclosures.
+
+The transport vendor selection and operating assumptions are maintainer-internal:
+`docs/internal/MultiplayerTransportOptions.md`.
+
+
 ## First-party remote services
 
-RobotKit contains optional integrations with Robotopia's RoboAPI backend. The built-in origin is
-`https://api.tomatocake.dev/v1`; a development override is accepted only when it is an absolute HTTPS origin without
-credentials, query, or fragment. Redirects are disabled.
+RobotKit contains optional integrations with Robotopia's RoboAPI backend. The built-in root is
+`https://api.tomatocake.dev/v1`. Every build accepts an explicit `ROBOAPI_BACKEND_ROOT` only if it is an
+absolute HTTPS root with a host and without credentials, query, or fragment. The selected root receives the
+player's bearer token on enabled requests. An invalid override disables remote AI and speech-to-text.
+The client disables redirects.
 
-**What happens with the features off.** The launcher and loader probe provider availability on every mod load and
-scene change so the Diagnostics surface can report why a capability is unavailable. For RobotKit that probe tests
-whether the credential file exists and enumerates microphone device names. It does **not** read, parse, or retain the
-token value, and it does not open an audio stream — parsing happens only on the request path, which is behind the
-consumer opt-in. With every consumer feature off, no request is sent, no token value is loaded, and no audio is
-captured.
+**What happens with the features off.** The loader refreshes capability availability at mod and scene lifecycle
+events, about once per second, and when a mod asks for availability. RobotKit checks for the credential file
+when the backend is enabled and enumerates microphone device names even when the backend is disabled.
+The probe checks local availability only. RobotKit reads the token and opens audio capture on the respective
+opt-in paths. Its voice availability log records a generic status.
 
 | Feature | Data sent | Destination | Authentication | Activation and fallback |
 | --- | --- | --- | --- | --- |
-| Structured robot-brain query | Mod-authored prompt, structured field descriptions, current facts, and a usage label | `/agent/check3` | Bearer value read from the player's bounded `robo_token.json`, plus a random per-session identifier | First-party live-brain features default off. When explicitly enabled, each request is bounded, cancellable, and time-limited. Missing token, offline, timeout, rejection, or malformed output returns an unavailable result; deterministic gameplay must continue. |
-| Multi-turn robot conversation | The current player line, a compact transcript of earlier turns, mod-authored system framing, structured decision options, and current facts | `/agent/check3` | Same as above | First-party conversation features default off. Consumers must treat model text as untrusted presentation and use only validated, closed-set decisions for game state. Failure falls back to deterministic behavior. |
+| Structured robot-brain query | Mod-authored prompt, structured fields and allowed decisions, current facts, a usage label, model identifier `llama-3.3-70b`, success description, reasoning flag, and bounded temperature | `/agent/check3` | Bearer value read from the player's bounded `robo_token.json`, plus a random per-session identifier | First-party live-brain features default off. When explicitly enabled, each request is bounded, cancellable, and time-limited. Missing token, offline, timeout, rejection, or malformed output returns an unavailable result; deterministic gameplay must continue. |
+| Multi-turn robot conversation | The current player line, compact transcript, system framing, decision options, and current facts. Sandbox programming chat also includes the creator-entered persona name, instructions, reply guidance, and project persona facts. | `/agent/check3` | Same as above | First-party conversation features default off. Consumers must treat model text as untrusted presentation and use only validated, closed-set decisions for game state. Failure falls back to deterministic behavior. |
 | Push-to-talk transcription | Gzip-compressed 16 kHz mono PCM audio, capped at 2 MiB after compression | `/agent/stt` | Same as above | First-party voice input defaults off. Capture begins only after the player enables the feature and performs the documented push-to-talk action. Cancel, missing microphone/token, offline, timeout, or rejection produces no transcript and falls back to typed input. |
 
 Opposite Day and other prompt consumers can register the shared global robot directive through TopiaForge Prompts.
 When such a consumer is enabled, RobotKit adds that fixed mod-authored text to an already-enabled structured brain or
-conversation request. This creates no additional request, token read, microphone access, endpoint, or logging. The
-direct consumer declares `remote-ai` and `prompt-overrides`; the launcher still presents the aggregate capabilities of
-it and its dependencies.
+conversation request. The direct consumer declares `remote-ai` and `prompt-overrides`; the launcher presents
+the aggregate capabilities of that consumer and its dependencies. Prompts can also append up to 1,800 characters to
+the game's own autonomous planning requests (`RoboAPI.Agent.PlanRequest`) while a consumer is enabled.
+That path uses the game's client independently of RobotKit's opt-ins.
+
+Sandbox's **Preview personality** action writes the creator-entered persona name, instructions, and temperature to
+the selected robot through the game's native personality API. Any planning request that follows uses the game's client.
+This project cannot inspect the content of those native requests.
 
 The client limits token-file reads to 32 KiB, brain responses to 256 KiB, transcription responses to 64 KiB, and
 transcription request bodies to 2 MiB. It does not follow HTTP redirects. Authentication tokens and session headers
@@ -86,3 +157,13 @@ Before enabling any first-party remote feature for public release, retain eviden
 
 Until those checks and approvals are complete, remote AI and microphone/STT remain opt-in and off by default, and
 the initial release recommendation remains **NO-SHIP**.
+
+## Public multiplayer activity
+
+The launcher, the CLI and the game tell a host this before a public Internet session starts:
+
+> Public sessions count toward rough activity numbers on the TopiaForge status page. The numbers move in steps of
+> 5 sessions and 10 players, appear only once those minimums are reached, and are shown at least 15 minutes late.
+> Invite-only and local network sessions are never counted. The numbers are kept for 90 days.
+
+Choosing invite-only excludes a session from these public statistics. This choice does not alter Hide my IP or the separately approved address and voice notices. Activity leases use the public host's stable server ID internally for deduplication; expired leases and tombstones are scheduled for cleanup 180 seconds after their last update. Alarm execution may occur later; expired leases are excluded from totals regardless of cleanup timing. No addresses, invites, descriptors or player identities enter the activity pipeline.

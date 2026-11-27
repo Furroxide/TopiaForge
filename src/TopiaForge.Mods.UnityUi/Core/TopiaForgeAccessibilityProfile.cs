@@ -20,7 +20,7 @@ namespace TopiaForge.Mods.UnityUi
             float motionIntensity = 1f)
         {
             HighContrast = highContrast;
-            UiScale = ClampFinite(uiScale, 0.75f, 1.5f, 1f);
+            UiScale = ClampFinite(uiScale, 0.75f, 2f, 1f);
             ReducedMotion = reducedMotion;
             MotionIntensity = ClampFinite(motionIntensity, 0f, 2f, 1f);
         }
@@ -47,7 +47,7 @@ namespace TopiaForge.Mods.UnityUi
             var reduced = globalReducedMotion || ReducedMotion;
             return new TopiaForgeEffectiveAccessibility(
                 globalHighContrast || HighContrast,
-                ClampFinite(globalUiScale * UiScale, 0.75f, 1.5f, 1f),
+                ClampFinite(globalUiScale * UiScale, 0.75f, 2f, 1f),
                 reduced,
                 reduced
                     ? 0f

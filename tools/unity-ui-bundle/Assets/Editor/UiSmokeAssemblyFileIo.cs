@@ -3,7 +3,7 @@ using System.IO;
 
 namespace TopiaForge
 {
-    /// <summary>Bounded, regular-file assembly reads for the exact-editor lifecycle smoke.</summary>
+    /// <summary>Bounded, stable reads of regular files for the editor smoke and UI asset authoring.</summary>
     internal static class UiSmokeAssemblyFileIo
     {
         private const int BufferBytes = 64 * 1024;

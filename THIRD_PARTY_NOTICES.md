@@ -1,5 +1,17 @@
 # Third Party Notices
 
+## Trademarks and affiliation
+
+This file ships inside the release archive, so it states the notice for readers who never see the
+repository. The canonical wording is [TRADEMARKS.md](TRADEMARKS.md).
+
+TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or
+endorsed by Tomato Cake or the Robotopia development team, and is not otherwise affiliated with
+them. "Robotopia" and "Tomato Cake" are the property of their respective owners and are used here
+only to identify the game this toolkit works with.
+
+## Bundled runtimes and assets
+
 This repository bundles BepInEx 5.4.23.5 binary runtime files under
 `third_party/BepInEx/win_x64_5.4.23.5` and `third_party/BepInEx/macos_universal_5.4.23.5` for local Robotopia
 loader installation.
@@ -26,22 +38,131 @@ RoboPatch was used only as behavior prior art for clean-room compatibility plann
 
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
 
-TopiaForge launcher UI bundles Robotopia web brand assets from `https://robotopia.gg/` and local
-TopiaForge artwork for offline launcher theming.
+TopiaForge launcher UI bundles CC0 pixel artwork for offline launcher theming. These three files
+replaced Robotopia web brand assets taken from `https://robotopia.gg/` that carried no
+redistribution grant. The launcher carries the replacement assets originally reviewed in PR #128.
 
-- Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, and `sheriff.webp`
-- Source: `https://robotopia.gg/`
-- Rights basis: **unresolved.** These files originate from Robotopia's own web brand assets and no
-  redistribution licence has been identified. Permission has been requested from Tomato Cake. Until a
-  written grant is recorded here, these three files have no distributable rights basis and block
-  `P0-IP-01`. If permission is declined or not received, they must be removed or replaced.
-- Local changes: filenames were normalized for launcher packaging.
+- Files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
+  `packages/launcher_ui/assets/brand/baby-stitch.webp`, and
+  `packages/launcher_ui/assets/brand/sheriff.webp`
+- Artist: **GrafxKid**, via OpenGameArt.
+- License: **CC0 1.0 Universal (public domain dedication)**. No attribution is required and no
+  share-alike term applies, so these files raise no compatibility question against this project's
+  AGPL-3.0-or-later grant. The attribution below is recorded as provenance, not as an obligation.
+- Sources and upstream SHA-256:
+  - `topiaforge-city-header.webp` from *City Mega Pack*,
+    `https://opengameart.org/content/city-mega-pack`, upstream file `SHIPPING_DOCKS_AREA.png`
+    (SHA-256 `984030543b9f7fcf0197c07eba9ad4f8768cb8f705e3ee1673fa7f685ae65b00`).
+  - `baby-stitch.webp` and `sheriff.webp` from *Gum Bot sprites*,
+    `https://opengameart.org/content/gum-bot-sprites`, upstream file `Gum Bot sprites.png`
+    (SHA-256 `8ed4706fd6a339b31d951a7b78e5ce56c1bd95c9bbcb7763dfddb4161570060f`).
+- Local changes:
+  - `topiaforge-city-header.webp`: cropped from `SHIPPING_DOCKS_AREA.png` at `(64, 768)-(832, 1056)`
+    to 768x288, then the plain sky band was repeated upward by 144 rows to reach 768x432 (16:9).
+    No repainting or recolouring.
+  - `baby-stitch.webp`: the 32x32 cell at row 1, column 1 of `Gum Bot sprites.png`, keyed from its
+    flat `#F5BAFE` sheet background to binary alpha and trimmed to its bounding box (14x18).
+  - `sheriff.webp`: the same, for the cell at row 1, column 2 (16x18).
+  - All three re-encoded as lossless WebP. Filenames are unchanged because
+    `TopiaForgeBrandAssets.cityHeader`, `.babyStitch` and `.sheriff` in
+    `packages/launcher_ui/lib/src/launcher_theme.dart` refer to them by name.
+- Installed SHA-256: `topiaforge-city-header.webp`
+  `a3f642ad8ef8b817b96257df670d0d5773fb40ead5da7ebf4699d84022d940dd`; `baby-stitch.webp`
+  `36328e54cb9c7382b06ba81ed568e6b1553f8a3791735afd792d4a0daadb2978`; `sheriff.webp`
+  `dc488ee07c3244356c707882cdeb5c3b4f2943c109edad0996cd444887d90378`.
+- The two character sprites are pixel art drawn on a small grid and are rendered with
+  `FilterQuality.none`, matching `packages/launcher_ui/lib/src/pixel_robot.dart`.
+
+## Vendored source
+
+The multiplayer provider compiles a subset of the BouncyCastle C# cryptography library into
+`TopiaForge.Multiplayer.dll`. It supplies X25519, Ed25519 and ChaCha20-Poly1305, which Mono's class library lacks.
+It ships as source under a renamed internal namespace, not as a bundled assembly, so it cannot collide with another
+BouncyCastle in the game; Mono has no binding redirects to settle such a conflict.
+
+- Project: BouncyCastle C# (bc-csharp)
+- Version/tag: 2.7.0 (`release-2.7.0`, commit `4007498b13582d90ee1eda5d9920c324428b98b3`)
+- Upstream: https://github.com/bcgit/bc-csharp/tree/release-2.7.0/crypto/src
+- License: MIT
+- Location: 40 files under `mods/TopiaForge.Multiplayer/ThirdParty/BouncyCastle/`, mirroring `crypto/src/`.
+- Local changes:
+  - Every file has a renamed namespace, internal top-level types and LF line endings.
+  - Every file compiles BouncyCastle's own netstandard2.0 code paths.
+  - Eight files drop members that need types left out of the subset (`SecureRandom`, `BigInteger`, `Nat512`).
+  - Three files gain an internal `Wipe` that zeroes key material once the provider is done with it.
+- Full change list: `mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md`, which ships in the provider package. It
+  lists every change, with each file's upstream blob hash.
+- License text: `mods/TopiaForge.Multiplayer/ThirdParty/BouncyCastle/LICENSE.md`
+
+The provider also compiles a subset of Concentus, a C# port of the Opus voice codec (libopus 1.1.2, fixed point) and
+of the Speex resampler, for voice chat. It ships the same way: as source under a renamed internal namespace.
+
+- Project: Concentus (lostromb/concentus)
+- Version: 2.2.2, whose NuGet package metadata names commit `6c2328dc19044601e33a9c11628b8d60e1f3011c`
+- Upstream: https://github.com/lostromb/concentus/tree/6c2328dc19044601e33a9c11628b8d60e1f3011c/CSharp/Concentus
+- License: BSD-3-Clause, in two texts: the Opus licence for the codec and the Speex licence for the resampler
+- Location: 122 files under `mods/TopiaForge.Multiplayer/ThirdParty/Concentus/`, mirroring `CSharp/Concentus/`.
+- Local changes:
+  - Every file has a renamed namespace, internal top-level types and LF line endings.
+  - Native-library interop, the multistream codec and other unneeded files are left out, with one unused import of
+    the interop namespace.
+  - Three files lose their `System.Numerics.Vector<T>` paths, which the game's Mono cannot load.
+  - Two files define `PARITY`, as upstream's project does for every build.
+  - One file fixes an upstream defect that made every discontinuous-transmission packet throw.
+- Full change list, and every copyright line the files carry: `mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md`.
+- License text: `mods/TopiaForge.Multiplayer/ThirdParty/Concentus/LICENSE`
+
+## First-party binary and generated assets
+
+These ship in the release archive, are not third-party redistribution, and are recorded here so the
+inventory covers every non-source file a user receives rather than only the ones with licence texts.
+
+- `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle` and
+  `mods/TopiaForge.Worlds/AssetBundles/topiaforge-representative-world.bundle` are compiled from this
+  repository's own Unity sources with editor `6000.0.23f1`. Each carries a sibling
+  `*.manifest.json` recording the editor version, the contained asset paths, and a SHA-256, and release
+  validation rebuilds them twice and compares bytes. A compiled AssetBundle is opaque to inspection, so
+  that reproducible rebuild is what establishes the contents, not a reading of the file. The UI bundle
+  bakes in glyph data derived from the OFL fonts noted below; those notices apply to it. It was
+  regenerated on 2026-10-18 with editor `6000.0.23f1` on a Windows host, when it gained the Quicksand
+  Medium SDF (`tools/unity-ui-bundle/Assets/FontAssets/TopiaForge Body Medium SDF.asset`) for small text;
+  the regenerated bundle's SHA-256 is
+  `9a88235dc00312efe1c2c71e3f100fb512dca8a18901551ffe93e19b21f6b458`.
+- The UI Gallery and settings template each include a package-local preview artwork bundle at
+  `mods/TopiaForge.UiGallery/ui/art/preview.bundle` and `templates/mod/ui/ui/art/preview.bundle`.
+  The source sprites are `tools/unity-ui-bundle/Assets/UiResourceSamples/PreviewCard.png` and
+  `tools/unity-ui-bundle/Assets/UiResourceSamples/PreviewMark.png`. The repository's deterministic
+  `tools/unity-ui-bundle/make_ui_resource_samples.py` recipe builds the sprites. The Gallery and
+  template each carry the CC0 1.0 notice and a receipt for their own compiled bundle.
+  The paired multiplayer acceptance fixture also carries a CC0 1.0 notice and a receipt for
+  `tests/TopiaForge.MultiplayerAcceptanceMod/ui/art/preview.bundle`.
+- `templates/TopiaForge.UnityWorldTemplate/Assets/HDRPDefaultResources/*.asset` are Unity YAML
+  configuration assets authored by this project. They hold settings values and reference HDRP script
+  GUIDs; the HDRP package itself is resolved by the consumer's Unity and is not redistributed here.
 
 The TopiaForge pixel-art wordmark, icon, generated platform icon variants, and the drawn pixel-art robot
 in `packages/launcher_ui/lib/src/pixel_robot.dart` are first-party project assets, not Robotopia-derived
 third-party artwork. The robot replaced a previously bundled `robot.webp` taken from the Robotopia web
 bundle; it is defined as a checked-in pixel grid rather than a raster file so its provenance is
 unambiguous.
+
+Those marks are the following files. They are listed by path because a prose description cannot be
+checked, and this section claims to cover every non-source file a user receives:
+
+- `packages/launcher_ui/assets/brand/topiaforge-icon.png` and
+  `packages/launcher_ui/assets/brand/topiaforge-wordmark.png` — the source marks. Clean pixel art with
+  six opaque colours and no anti-aliasing, which is what lets `assets/readme/source/pixel_marks.py`
+  convert them to exact SVG paths for the repository homepage.
+- `apps/topiaforge_launcher_flutter/assets/brand/topiaforge-app-icon.png` and
+  `apps/topiaforge_launcher_flutter/snap/gui/topiaforge.png` — the launcher application icon.
+- `apps/topiaforge_launcher_flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset` — the same icon at
+  the eight sizes macOS requires. Generated from the mark above, not drawn separately.
+- `apps/topiaforge_launcher_flutter/windows/runner/resources/app_icon.ico` — the same icon at eight
+  sizes from 16 to 256 pixels, embedded into the Windows launcher executable by `Runner.rc`.
+  `icons_launcher` generates it from `topiaforge-app-icon.png`; the five sizes it shares with the macOS
+  set are pixel-identical to those files.
+- `website/public/favicon.png` and `website/src/assets/topiaforge-wordmark.png` — the documentation
+  site's copies of the same marks.
 
 TopiaForge bundles the Quicksand font for body typography in the launcher UI and Unity brand bundle.
 
@@ -60,6 +181,32 @@ TopiaForge bundles the Quicksand font for body typography in the launcher UI and
   byte-identical to upstream, so both bundled copies were replaced with the Google Fonts release
   above to give the font a verifiable first-hand provenance.
 
+  The Unity UI bundle source also carries one static instance of that release, which the kit draws
+  small text with:
+
+  - File: `tools/unity-ui-bundle/Assets/Fonts/TopiaForgeBody-Medium.ttf`
+  - Instance: Medium, `wght` 500, of the upstream variable font above (SHA-256
+    `39c9b64223561f56aaff6062a6f04063c4fc86809ad6768722c06614d977e1cc`).
+  - Made with: `tools/unity-ui-bundle/make_body_medium_font.py`, which runs fontTools 4.65.0's
+    `varLib.instancer` at `wght` 500 and keeps the source's timestamps, so the output is reproducible
+    byte for byte (fontTools 4.67.0 writes the same bytes).
+  - Local changes: it is a Modified Version under the OFL. The licence reserves the name "Quicksand", so
+    its font names read "TopiaForge Body Medium" (family "TopiaForge Body", style "Medium"). The STAT
+    table and the variation name records, which only a variable font uses, are removed. The copyright
+    notice, the licence fields, the designer credits, the glyph set and the vertical metrics are
+    unchanged; the outlines and advance widths are those of the `wght` 500 instance.
+  - SHA-256: `56ecf4637ddf31058616e7a469ce0705b2a031a7a5b8b9cddc0639b32e09c717`
+  - License: SIL Open Font License 1.1, the same text as the variable font's.
+
+  Its SDF derivative,
+  `tools/unity-ui-bundle/Assets/FontAssets/TopiaForge Body Medium SDF.asset`, is baked with the same
+  atlas settings and character set as the Light SDF beside it, and ships in
+  `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle`.
+
+The Light face's `TopiaForge Body SDF.asset` uses that same upstream Quicksand variable font.
+The reviewed rebake retains its asset identity, face metrics and atlas pixels and corrects
+93 glyph indices to match the upstream font.
+
 TopiaForge bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
 
 - Project: Audiowide
@@ -70,6 +217,15 @@ TopiaForge bundles the Audiowide font for display typography in the launcher UI 
 - Local changes: none known; filename was normalized for launcher and Unity packaging.
 - SHA-256: `c7c0f2b0f6fad8c623e31772ce79f94a4edb9321ffce9fce978ea892d20ae730`
 
+TopiaForge uses JetBrains Mono NL Regular v2.304 for monospaced text in the Unity UI kit.
+
+- [JetBrains Mono v2.304 release](https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304)
+- Release archive SHA-256: `6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf`
+- Unmodified `fonts/ttf/JetBrainsMonoNL-Regular.ttf` SHA-256: `fb3b2575d7b0657359707993288f12a7360344d39387bb26050e276d61f6bd2a`
+- SIL Open Font License 1.1 notice `OFL.txt` SHA-256: `30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad`
+- The utility source and notice live under `tools/unity-ui-bundle/Assets/Fonts`. The embedded bundle uses the
+  baked `TopiaForge Mono SDF` asset. The original OFL notice accompanies the distributed bundle.
+
 TopiaForge redistributes Unity's TextMesh Pro essential resources inside the Unity UI bundle source at
 `tools/unity-ui-bundle/Assets/TextMesh Pro`, and the release archives carry that directory. The set
 comprises shaders, materials, style sheets, line-breaking data, and the Liberation Sans font.
@@ -79,7 +235,11 @@ comprises shaders, materials, style sheets, line-breaking data, and the Liberati
 - License: distributed under the Unity Companion License as part of the Unity Editor package.
 - Local changes: the EmojiOne sprite sheet and its sprite asset were removed because their bundled
   attribution granted no redistribution right; the TMP default sprite asset is cleared and emoji
-  support disabled accordingly.
+  support disabled accordingly. Since 2026-10-18,
+  `tools/unity-ui-bundle/Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader`, the shader the UI bundle
+  compiles in, omits its `#pragma enable_d3d11_debug_symbols` line: on a Windows build host that
+  directive compiled the shader unoptimized, with debug data that recorded absolute paths into the
+  editor installation.
 
 - Project: Liberation Sans
 - Bundled at: `tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans.ttf`
@@ -95,11 +255,12 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 | Component | Pinned release resolution | License |
 | --- | --- | --- |
 | Dart SDK | 3.12.2 | BSD-3-Clause |
-| archive | 4.0.9 | MIT |
+| archive | 4.6.0 | MIT AND BSD-3-Clause AND bzip2-1.0.6 AND Zlib |
 | async | 2.13.1 | BSD-3-Clause |
 | boolean_selector | 2.1.2 | BSD-3-Clause |
 | collection | 1.19.1 | BSD-3-Clause |
 | crypto | 3.0.7 | BSD-3-Clause |
+| cryptography | 2.9.0 | Apache-2.0 |
 | ffi | 2.2.0 | BSD-3-Clause |
 | http | 1.6.0 | BSD-3-Clause |
 | http_parser | 4.1.2 | BSD-3-Clause |
@@ -122,6 +283,13 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 | uri | 1.0.0 | BSD-3-Clause |
 | web | 1.1.1 | BSD-3-Clause |
 
+Some packages carry further licence or notice files, which packaging copies into the same bundle as
+`<package>-<file>`. `archive` carries `LICENSE-other.md`: the notices of the zlib.js (MIT), JZLib (BSD-3-Clause),
+bzip2 (bzip2-1.0.6), zlib-ng (Zlib), Zstandard and xxh64 (BSD-3-Clause) code it incorporates.
+`quiver` carries an Apache-2.0 `NOTICE` and a
+`PATENTS` grant, and `uri` carries a `PATENTS` grant. Packaging fails if a package carries such a file the release
+does not record.
+
 The Flutter 3.44.6 launcher embeds Flutter, Dart, plugins, and package dependencies. Flutter generates the complete
 `flutter_assets/NOTICES.Z` notice bundle during each platform build; release validation requires that bundle inside
 the shipped launcher.
@@ -142,10 +310,19 @@ Both signed NuGet packages declare MIT and record dotnet/dotnet commit
 `901ca941248413c79832d2fdbd709da0c4386353`. Release packaging verifies the
 exact netstandard2.0 DLL and notice hashes, then emits their license, notices,
 and machine-readable provenance under `third_party/dotnet/runtime-loader`.
-Robotopia build 2309 supplies the referenced `System.Memory`, `System.Buffers`,
+Robotopia build 2640 supplies the referenced `System.Memory`, `System.Buffers`,
 and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
 identities and hashes are validated but their proprietary game copies are not
 redistributed.
+
+The loader's licence texts are installed beside its assemblies, in a `licenses`
+folder wherever they are placed: the payload's
+`src/TopiaForge.ModManager/bin/Release/netstandard2.1`, the Windows archive-root
+`BepInEx/plugins/TopiaForge.ModManager`, and the same plugin folder in the game
+when the launcher installs or repairs the runtime. The folder holds the project
+`LICENSE`, this file, the Quicksand, Audiowide and JetBrains Mono OFL texts for the glyph data
+inside `TopiaForge.Mods.UnityUi.dll`, and the MIT licence and third-party
+notices of each System package above.
 
 The CLI's publication gate includes a generated identifier allowlist from SPDX License List Data 3.28.0.
 

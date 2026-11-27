@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.RobotKit
 {
@@ -7,10 +8,11 @@ namespace TopiaForge.RobotKit
     // that come up native (body, animation, native locomotion) and are driven by the game's own pathing — then
     // override only the behaviour and visuals they need, without re-deriving the GameCode reflection themselves.
     // Mirrors the TopiaForge.Worlds lifecycle discipline.
-    public sealed class RobotKitMod : TopiaForgeMod
+    public sealed partial class RobotKitMod : TopiaForgeMod
     {
         private IModLogger? logger;
         private RobotAgentService? service;
+        private RobotBodyService? bodies;
         private RobotBrainQueryService? brainService;
         private RobotConversationService? conversationService;
         private PlayerDialogueInputService? dialogueInputService;
@@ -26,8 +28,19 @@ namespace TopiaForge.RobotKit
         {
             logger = Context.Logger;
 
-            service = new RobotAgentService(logger);
+            NativeRobotSpeech.Install(Context);
+            // Resolve the dependency once. Context-bound Current creates ownership wrappers, so cache its
+            // committed notifications instead of re-reading it per actor/frame.
+            var sessions = Context.TryGetExtension<IWorldSessionService>(out var worlds) ? worlds : null;
+            var robotWorld = new RobotWorldObservation(sessions, () => service?.InvalidateComposedDiscovery());
+            service = new RobotAgentService(logger, () => robotWorld.Current);
             Context.Lifetime.Track(service);
+            Context.Lifetime.Track(robotWorld);
+            OfferRobotReplication(service);
+            bodies = new RobotBodyService(service.CreatePersistentBody, Context as IInternalNativeEntityReadContext);
+            Context.Lifetime.Track(bodies);
+            OfferPersistentBodies(bodies);
+            RegisterExtension<IRobotBodyService>(bodies);
             brainService = new RobotBrainQueryService(logger, ResolvePromptRegistry);
             Context.Lifetime.Track(brainService);
             // The objective service resolves Reprogram courier recipients back to agent handles via the agent
@@ -39,7 +52,7 @@ namespace TopiaForge.RobotKit
                 null,
                 Context.Identity.Id);
             Context.Lifetime.Track(objectiveService);
-            dialogueInputService = new PlayerDialogueInputService(logger);
+            dialogueInputService = new PlayerDialogueInputService(logger, RobotDialogueMicrophone.For(Context));
             Context.Lifetime.Track(dialogueInputService);
             conversationService = new RobotConversationService(brainService, logger);
             Context.Lifetime.Track(conversationService);
@@ -51,6 +64,7 @@ namespace TopiaForge.RobotKit
             RegisterExtension<IPlayerDialogueInputService>(dialogueInputService);
             RegisterExtension<IRobotObjectiveService>(objectiveService);
             RegisterExtension<IRobotSceneEditorService>(sceneEditorService);
+            OfferAvatarBodies(service);
 
             Context.Events.SubscribeUpdate(OnUpdate);
             Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
@@ -125,6 +139,7 @@ namespace TopiaForge.RobotKit
             }
 
             // Consumers release handles before providers clear their underlying agents/queries.
+            RunLifecycle(() => bodies?.EndWorld(), "persistent body cleanup");
             RunLifecycle(() => sceneEditorService?.OnSceneChanged(), "scene editor cleanup");
             RunLifecycle(() => conversationService?.OnSceneChanged(), "conversation scene cleanup");
             RunLifecycle(() => dialogueInputService?.OnSceneChanged(), "dialogue scene cleanup");
@@ -137,8 +152,8 @@ namespace TopiaForge.RobotKit
         {
             if (!alreadyReported)
             {
-                logger?.Error(exception, "RobotKit " + component
-                    + " tick failed; other RobotKit services will continue.");
+                logger?.Error("RobotKit " + component
+                    + " tick failed; other RobotKit services will continue: " + RobotKitLog.ExceptionType(exception));
             }
 
             alreadyReported = true;
@@ -152,7 +167,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger?.Error(exception, "RobotKit failed during " + operation + ".");
+                logger?.Error("RobotKit failed during " + operation + ": " + RobotKitLog.ExceptionType(exception));
             }
         }
 
@@ -163,6 +178,16 @@ namespace TopiaForge.RobotKit
             {
                 throw new InvalidOperationException(registration.ErrorMessage);
             }
+        }
+
+        // In a multiplayer session other players appear as the game's own robots: the runtime asks RobotKit for a dormant
+        // body for each avatar. A runtime without the seam, such as a test host, keeps its capsules.
+        private void OfferAvatarBodies(RobotAgentService agents)
+        {
+            var replication = (Context as Mods.Internal.IInternalReplicationContext)?.Replication;
+            if (replication == null) return;
+            var offered = replication.RegisterAvatarBodyFactory(new RobotCosmeticBodies(agents));
+            if (!offered.Succeeded) logger?.Warn("RobotKit could not offer robot bodies for players' avatars: " + offered.ErrorMessage);
         }
 
         private IPromptOverrideRegistry? ResolvePromptRegistry()

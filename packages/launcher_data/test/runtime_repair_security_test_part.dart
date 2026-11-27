@@ -159,4 +159,252 @@ void _registerRuntimeRepairSecurityTests({
       expect(transaction.existsSync(), isFalse);
     },
   );
+
+  test('runtime repair rolls back with the journal an interrupted save moved '
+      'aside', () async {
+    final (:target, :transaction, :journal) = _interruptedRuntimeCommit(
+      gameRoot(),
+    );
+    journal.renameSync('${journal.path}.4242-1760520615100000.bak');
+    Directory(
+      p.join(repositoryRoot().path, 'third_party', 'BepInEx'),
+    ).deleteSync(recursive: true);
+    final install = await repository().selectGameDirectory(gameRoot().path);
+
+    final report = await repository().installOrRepairRuntime(install);
+
+    expect(report.ok, isFalse);
+    expect(target.readAsStringSync(), 'original proxy');
+    expect(transaction.existsSync(), isFalse);
+  });
+
+  test(
+    'runtime repair keeps every backup while the journal an interrupted save '
+    'moved aside is held',
+    () async {
+      final (:target, :transaction, :journal) = _interruptedRuntimeCommit(
+        gameRoot(),
+      );
+      final moved = journal.renameSync(
+        '${journal.path}.4242-1760520615100000.bak',
+      );
+      Directory(
+        p.join(repositoryRoot().path, 'third_party', 'BepInEx'),
+      ).deleteSync(recursive: true);
+      final install = await repository().selectGameDirectory(gameRoot().path);
+      final release = await holdInPlace(moved);
+      if (release == null) return;
+
+      final report = await repository().installOrRepairRuntime(install);
+
+      expect(report.ok, isFalse);
+      expect(target.readAsStringSync(), 'partially installed proxy');
+      expect(
+        File(p.join(transaction.path, 'backups', '0.bak')).existsSync(),
+        isTrue,
+        reason: "The game's original file waits there.",
+      );
+      expect(
+        report.issues.map((issue) => issue.message).join(' '),
+        contains('Runtime repair journal could not be read just now'),
+      );
+      await release();
+
+      // Free again, the journal is put back and the original restored.
+      expect((await repository().installOrRepairRuntime(install)).ok, isFalse);
+      expect(target.readAsStringSync(), 'original proxy');
+      expect(transaction.existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'recovery leaves unrelated directories outside its operations intact',
+    () async {
+      final (:transaction, :journal, target: _) = _interruptedRuntimeCommit(
+        gameRoot(),
+      );
+      final unrelated = Directory(p.join(gameRoot().path, 'unrelated'))
+        ..createSync();
+      final data = jsonDecode(journal.readAsStringSync()) as Map;
+      data['createdDirectories'] = ['unrelated'];
+      journal.writeAsStringSync(jsonEncode(data));
+      final install = await repository().selectGameDirectory(gameRoot().path);
+
+      final report = await repository().installOrRepairRuntime(install);
+
+      expect(report.ok, isFalse);
+      expect(unrelated.existsSync(), isTrue);
+      expect(transaction.existsSync(), isTrue);
+    },
+  );
+
+  File installedNotice(String fileName) => File(
+    p.join(
+      gameRoot().path,
+      'BepInEx',
+      'plugins',
+      'TopiaForge.ModManager',
+      topiaForgeRuntimeLoaderNoticeDirectory,
+      fileName,
+    ),
+  );
+  // Commit order is the bundle, then the assemblies, then their notices, so
+  // failing on the final operation fails after every notice has landed.
+  int runtimeOperations() =>
+      Directory(
+        p.join(
+          repositoryRoot().path,
+          'third_party',
+          'BepInEx',
+          'win_x64_5.4.23.5',
+        ),
+      ).listSync(recursive: true).whereType<File>().length +
+      topiaForgeRuntimeLoaderDlls.length +
+      topiaForgeRuntimeLoaderNotices.length;
+  LocalLauncherRepository failingOnLastOperation({void Function()? before}) {
+    final operations = runtimeOperations();
+    final failing = LocalLauncherRepository(
+      dataRoot: p.join(repositoryRoot().parent.path, 'late-failure-data'),
+      repositoryRoot: repositoryRoot().path,
+      knownGamePath: gameRoot().path,
+      runtimeRepairCommitHook: (committed) {
+        if (committed == operations) {
+          before?.call();
+          throw StateError('injected late commit failure');
+        }
+      },
+    );
+    addTearDown(failing.dispose);
+    return failing;
+  }
+
+  test('a failed first install leaves no file or folder behind', () async {
+    List<String> gameTree() => [
+      for (final entity in gameRoot().listSync(
+        recursive: true,
+        followLinks: false,
+      ))
+        // The repair lock persists by design; it is not runtime content.
+        if (p.basename(entity.path) != '.topiaforge-runtime-repair.lock')
+          p.relative(entity.path, from: gameRoot().path),
+    ]..sort();
+    final before = gameTree();
+    var noticesLanded = false;
+    final failing = failingOnLastOperation(
+      before: () => noticesLanded = topiaForgeRuntimeLoaderNotices.every(
+        (notice) => installedNotice(notice.fileName).existsSync(),
+      ),
+    );
+    final install = await failing.selectGameDirectory(gameRoot().path);
+
+    final report = await failing.installOrRepairRuntime(install);
+
+    expect(report.ok, isFalse);
+    expect(noticesLanded, isTrue);
+    expect(gameTree(), before);
+  });
+
+  test('a failed repair restores the notices it replaced', () async {
+    for (final notice in topiaForgeRuntimeLoaderNotices) {
+      installedNotice(notice.fileName)
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('previous ${notice.fileName}');
+    }
+    final failing = failingOnLastOperation();
+    final install = await failing.selectGameDirectory(gameRoot().path);
+
+    final report = await failing.installOrRepairRuntime(install);
+
+    expect(report.ok, isFalse);
+    for (final notice in topiaForgeRuntimeLoaderNotices) {
+      expect(
+        installedNotice(notice.fileName).readAsStringSync(),
+        'previous ${notice.fileName}',
+      );
+    }
+    expect(
+      Directory(
+        p.join(gameRoot().path, '.topiaforge-runtime-transaction'),
+      ).existsSync(),
+      isFalse,
+    );
+  });
+
+  test(
+    'recovery removes an interrupted notice and the folders it created',
+    () async {
+      final notice = installedNotice('LICENSE')
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('partially installed notice');
+      final transaction = Directory(
+        p.join(gameRoot().path, '.topiaforge-runtime-transaction'),
+      )..createSync();
+      File(p.join(transaction.path, 'journal.json')).writeAsStringSync(
+        jsonEncode({
+          'formatVersion': 2,
+          'status': 'committing',
+          'operations': [
+            {
+              'relativePath':
+                  'BepInEx/plugins/TopiaForge.ModManager/licenses/LICENSE',
+              'phase': 'installed',
+              'hadOriginal': false,
+            },
+          ],
+          'createdDirectories': [
+            'BepInEx',
+            'BepInEx/plugins',
+            'BepInEx/plugins/TopiaForge.ModManager',
+            'BepInEx/plugins/TopiaForge.ModManager/licenses',
+          ],
+        }),
+      );
+      // Without a bundled runtime the repair stops right after recovery.
+      Directory(
+        p.join(repositoryRoot().path, 'third_party', 'BepInEx'),
+      ).deleteSync(recursive: true);
+      final install = await repository().selectGameDirectory(gameRoot().path);
+
+      final report = await repository().installOrRepairRuntime(install);
+
+      expect(report.ok, isFalse);
+      expect(notice.existsSync(), isFalse);
+      expect(
+        Directory(p.join(gameRoot().path, 'BepInEx')).existsSync(),
+        isFalse,
+      );
+      expect(transaction.existsSync(), isFalse);
+    },
+  );
+}
+
+/// A runtime repair stopped after installing `winhttp.dll` over the game's
+/// own, whose original waits in the transaction's backups.
+({File target, Directory transaction, File journal}) _interruptedRuntimeCommit(
+  Directory gameRoot,
+) {
+  final target = File(p.join(gameRoot.path, 'winhttp.dll'))
+    ..writeAsStringSync('original proxy');
+  final transaction = Directory(
+    p.join(gameRoot.path, '.topiaforge-runtime-transaction'),
+  );
+  final backup = File(p.join(transaction.path, 'backups', '0.bak'));
+  backup.parent.createSync(recursive: true);
+  target.renameSync(backup.path);
+  target.writeAsStringSync('partially installed proxy');
+  final journal = File(p.join(transaction.path, 'journal.json'))
+    ..writeAsStringSync(
+      jsonEncode({
+        'formatVersion': 2,
+        'status': 'committing',
+        'operations': [
+          {
+            'relativePath': 'winhttp.dll',
+            'phase': 'installed',
+            'hadOriginal': true,
+          },
+        ],
+      }),
+    );
+  return (target: target, transaction: transaction, journal: journal);
 }

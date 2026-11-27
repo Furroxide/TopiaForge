@@ -1,0 +1,31 @@
+{
+  "id": "a-gamemode-without-participants-is-unchanged",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A gamemode that implements only IGamemodeFactory starts and stops its server controller exactly as before.",
+  "scenario": {
+    "role": "single-player",
+    "factory": "server-only",
+    "serverStart": "succeeds",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "succeeded",
+          "code": "none",
+          "message": ""
+        },
+        "calls": [
+          "server.start",
+          "server.stop"
+        ],
+        "stop": "succeeded"
+      }
+    }
+  }
+}

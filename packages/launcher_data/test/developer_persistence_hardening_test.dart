@@ -33,7 +33,13 @@ void main() {
     final projectFile = File(
       p.join(workspace.projectRoot, 'topiaforge.project.json'),
     );
+    // What an earlier developer tool's save left when it stopped between its
+    // two moves: the old file as `<name>.bak`, and the new one, never moved
+    // in, as its temporary file.
     final backup = await projectFile.rename('${projectFile.path}.bak');
+    File(
+      '${projectFile.path}.4242-1760520615100000.tmp',
+    ).writeAsStringSync('{"unfinished": true}');
 
     final recovered = await repository.loadDeveloperWorkspace(
       projectPath: workspace.projectRoot,

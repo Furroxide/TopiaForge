@@ -1,0 +1,32 @@
+{
+  "id": "a-participant-that-fails-without-a-reason-says-the-session-failed",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A participant that fails without a reason ends the session in the game's own words, said to be the participant's.",
+  "scenario": {
+    "role": "host",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "fails-without-reason",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "unavailable",
+          "message": "The gamemode's participant controller failed to start: The session operation failed."
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "server.stop"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

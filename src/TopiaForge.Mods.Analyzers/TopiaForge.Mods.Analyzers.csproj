@@ -3,28 +3,36 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>TopiaForge.Mods.Analyzers</AssemblyName>
     <RootNamespace>TopiaForge.Mods.Analyzers</RootNamespace>
-    <Version>1.0.0-rc.1</Version>
-    <PackageVersion>1.0.0-rc.1</PackageVersion>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <Version>0.2.0</Version>
+    <PackageVersion>0.2.0</PackageVersion>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
     <Description>Build-time safety and manifest diagnostics for TopiaForge V1 mods.</Description>
     <PackageId>TopiaForge.Mods.Analyzers</PackageId>
     <Authors>TopiaForge</Authors>
     <PackageTags>topiaforge;modding;analyzers;devex</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);TOPIAFORGE_ANALYZER</DefineConstants>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- RS1038: the TF1008 code fix references the workspace assemblies, which only the IDE loads. The compiler
+         instantiates the analyzer type alone, and that type references compiler assemblies only. -->
+    <NoWarn>$(NoWarn);RS1038</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../TopiaForge.ModManager.Core/VersionUtil.cs" Link="VersionUtil.cs" />
+    <Compile Include="../TopiaForge.Mods.Worlds/Internal/MapJson.cs" Link="MapJson.cs" />
     <!-- Roslyn supplies these assemblies at analyzer load time. Keep them compile-only. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0"
+                      PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0"
                       PrivateAssets="all" />
   </ItemGroup>
 

@@ -7,10 +7,10 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.UiGallery</AssemblyName>
     <RootNamespace>TopiaForge.UiGallery</RootNamespace>
-    <Version>1.0.0-rc.1</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
     <!-- Opted out solely for the loader-owned TopiaForgeUi reference below, which TF1007 forbids to
          ordinary mods and which no capability excuses. This project has no UnityEngine, GameCode, or
          Harmony reference at all - it is the internal QA gallery, not a native mod. The opt-out is
@@ -25,6 +25,13 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Analyzers\TopiaForge.Mods.Analyzers.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- The manager's in-game multiplayer screens, compiled in so the SESSIONS page shows the real views over fake data:
+       the screens' contracts, which name no multiplayer SPI type, and the views, which use the kit and nothing else. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Screens\*.cs" Link="Sessions\Screens\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Overlay\Multiplayer\*.cs" Link="Sessions\Views\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.targets" />

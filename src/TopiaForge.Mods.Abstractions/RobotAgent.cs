@@ -30,7 +30,9 @@ namespace TopiaForge.Mods
         /// Switches the robot's brain mode at runtime. To <see cref="RobotBrainMode.Dormant"/>: the native
         /// LLM brain and behaviour tree are suppressed and mod movement intents take over — the way to
         /// reprogram/override an autonomous robot. To <see cref="RobotBrainMode.Autonomous"/>: mod intents are
-        /// cleared and the native brain is best-effort woken back up. Idempotent; never throws.
+        /// cleared and the native brain is best-effort woken back up. Idempotent; never throws. A robot whose type is
+        /// offered body-only has no native brain to wake: Autonomous returns <see cref="ModErrorCode.Unavailable"/>
+        /// with the reason.
         /// </summary>
         OperationResult<bool> SetBrainMode(RobotBrainMode mode);
 
@@ -39,7 +41,10 @@ namespace TopiaForge.Mods
 
         /// <summary>
         /// <c>true</c> when the most recent <see cref="MoveTo"/>/<see cref="Chase"/> intent is satisfied — the
-        /// robot is within <see cref="StopDistance"/> of its target.
+        /// native walk completed successfully, or the robot is within the horizontal stop distance
+        /// (at least 0.1 metres). Native path sampling may finish just outside that distance. Cancellation,
+        /// ignored results and faults do not signal arrival. Arrival releases when the target moves more
+        /// than 0.5 metres beyond the stop threshold.
         /// </summary>
         bool HasReachedTarget { get; }
 
@@ -53,7 +58,7 @@ namespace TopiaForge.Mods
         /// <summary>Optional best-effort override of the native turn speed in degrees per second; <c>0</c> keeps the prefab default.</summary>
         float TurnSpeed { get; }
 
-        /// <summary>How close (metres) to the target counts as arrived; the native walk stops there.</summary>
+        /// <summary>Requested native stop distance in metres; path sampling can complete slightly outside it.</summary>
         float StopDistance { get; }
 
         /// <summary>Which native speed tier the robot moves at (walk/run/sprint).</summary>
@@ -90,7 +95,8 @@ namespace TopiaForge.Mods
         /// <summary>
         /// Updates how the player can interact with this robot: native talk, disabled native talk, a native talk
         /// distance override, or a custom synchronous callback. Custom interactions take precedence over native
-        /// talk while installed.
+        /// talk while installed. A robot whose type is offered body-only has no native talk: enabling it returns
+        /// <see cref="ModErrorCode.Unavailable"/> with the reason.
         /// </summary>
         OperationResult<bool> SetInteraction(RobotInteractionOptions options);
 

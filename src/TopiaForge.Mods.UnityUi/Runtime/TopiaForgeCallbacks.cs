@@ -90,6 +90,63 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>
+        /// Dispatches what the player's own input on a control <paramref name="ownerId"/> owns runs, inside the scope of that
+        /// player's action (<see cref="TopiaForgeIntent"/>): a click, a confirm, a chosen or typed value, a selection.
+        /// </summary>
+        public static void Player(string? ownerId, Action? handlers, string description)
+        {
+            if (handlers == null)
+            {
+                return;
+            }
+
+            using (TopiaForgeIntent.PlayerAction(ownerId))
+            {
+                Invoke(handlers, description);
+            }
+        }
+
+        public static void Player<T>(string? ownerId, Action<T>? handlers, T value, string description)
+        {
+            if (handlers == null)
+            {
+                return;
+            }
+
+            using (TopiaForgeIntent.PlayerAction(ownerId))
+            {
+                Invoke(handlers, value, description);
+            }
+        }
+
+        public static void Player<T1, T2>(string? ownerId, Action<T1, T2>? handlers, T1 first, T2 second, string description)
+        {
+            if (handlers == null)
+            {
+                return;
+            }
+
+            using (TopiaForgeIntent.PlayerAction(ownerId))
+            {
+                Invoke(handlers, first, second, description);
+            }
+        }
+
+        /// <summary>Runs a completion the kit deferred, such as an animation's, with the intent captured where it began.</summary>
+        public static void Resume(object? captured, Action? handlers, string description)
+        {
+            if (handlers == null)
+            {
+                return;
+            }
+
+            using (TopiaForgeIntent.Resume(captured))
+            {
+                Invoke(handlers, description);
+            }
+        }
+
         private static void Report(string description, Exception exception)
         {
             try

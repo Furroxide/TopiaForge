@@ -180,73 +180,25 @@ void _writeDeveloperTextAtomic(File target, String content) {
   _writeDeveloperBytesAtomic(target, utf8.encode(content));
 }
 
+/// Puts [target] back from the backup an interrupted save left, by the rule
+/// the launcher's own files follow ([recoverAtomicBackupIfMissingSync]): only
+/// names a save gives its backups count, and a `<name>.bak` that an earlier
+/// developer tool's interrupted save left only beside that save's temporary
+/// file. A `<name>.bak` the author keeps is never put back or deleted.
 void _recoverDeveloperAtomicBackupIfMissing(File target) {
-  final backup = File('${target.path}.bak');
-  final backupType = FileSystemEntity.typeSync(backup.path, followLinks: false);
-  if (backupType == FileSystemEntityType.notFound) {
-    return;
-  }
-  if (backupType != FileSystemEntityType.file) {
-    throw StateError('Invalid atomic-write backup: ${backup.path}');
-  }
-
-  final targetType = FileSystemEntity.typeSync(target.path, followLinks: false);
-  if (targetType == FileSystemEntityType.notFound) {
-    backup.renameSync(target.path);
-    return;
-  }
-  if (targetType != FileSystemEntityType.file) {
-    throw StateError('Expected a regular file: ${target.path}');
-  }
-  backup.deleteSync();
+  recoverAtomicBackupIfMissingSync(
+    target,
+    label: p.basename(target.path),
+    readLegacyBackup: true,
+  );
 }
 
+/// Saves [bytes] to [target] through the shared atomic writer, once any
+/// interrupted save of it is put back.
 void _writeDeveloperBytesAtomic(File target, List<int> bytes) {
   target.parent.createSync(recursive: true);
   _recoverDeveloperAtomicBackupIfMissing(target);
-  final targetType = FileSystemEntity.typeSync(target.path, followLinks: false);
-  if (targetType == FileSystemEntityType.link) {
-    throw StateError('Refusing to replace symbolic link: ${target.path}');
-  }
-  if (targetType != FileSystemEntityType.notFound &&
-      targetType != FileSystemEntityType.file) {
-    throw StateError('Expected a regular file: ${target.path}');
-  }
-  final token = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-  final temp = File('${target.path}.$token.tmp');
-  final backup = File('${target.path}.bak');
-  var backedUp = false;
-  try {
-    temp.writeAsBytesSync(bytes, flush: true);
-    if (targetType == FileSystemEntityType.file) {
-      target.renameSync(backup.path);
-      backedUp = true;
-    }
-    temp.renameSync(target.path);
-    if (backedUp && backup.existsSync()) {
-      try {
-        backup.deleteSync();
-      } on FileSystemException {
-        // The target was committed; a stale backup is safe to clean later.
-      }
-    }
-  } on Object {
-    if (!target.existsSync() && backedUp && backup.existsSync()) {
-      backup.renameSync(target.path);
-    }
-    rethrow;
-  } finally {
-    if (temp.existsSync()) {
-      temp.deleteSync();
-    }
-    if (backup.existsSync() && target.existsSync()) {
-      try {
-        backup.deleteSync();
-      } on FileSystemException {
-        // The target remains complete even if backup cleanup is deferred.
-      }
-    }
-  }
+  writeFileBytesAtomicSync(target, bytes);
 }
 
 class _DeveloperFileSnapshot {

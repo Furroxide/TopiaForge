@@ -64,6 +64,12 @@ namespace TopiaForge.Mods.UnityUi
             return new TopiaForgeFloaterLayer(World, poolSize, speechBubbles: true);
         }
 
+        /// <summary>Persistent, pooled name tags that follow world anchors (world-projected).</summary>
+        public TopiaForgeNametagLayer Nametags(int capacity = 16)
+        {
+            return new TopiaForgeNametagLayer(World, capacity);
+        }
+
         /// <summary>Center transient banner with the punch-hold-fade timeline.</summary>
         public TopiaForgeBanner Banner()
         {

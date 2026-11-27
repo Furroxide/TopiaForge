@@ -31,6 +31,11 @@ namespace TopiaForge.Mods.UnityUi
             public float Elapsed;
             public TopiaForgeEase Ease;
             public Action? OnDone;
+            public bool SkipAtZeroIntensity;
+            public UiHost? AccessibilityHost;
+
+            // The intent the code that began the tween acted on: its completion runs with it (TopiaForgeIntent).
+            public object? Intent;
         }
 
         private const int Capacity = 96;
@@ -43,28 +48,42 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Animates this element to the requested opacity.</summary>
         public static void FadeTo(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutQuad, Action? onDone = null)
+            => FadeTo(target, from, to, duration, ease, onDone, skipAtZeroIntensity: false);
+
+        internal static void FadeTo(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease,
+            Action? onDone, bool skipAtZeroIntensity, UiHost? accessibilityHost = null)
         {
             target.EnsureCanvasGroup().alpha = from;
-            Start(target, Channel.Alpha, from, to, duration, ease, onDone);
+            Start(target, Channel.Alpha, from, to, duration, ease, onDone, skipAtZeroIntensity, accessibilityHost);
         }
 
         /// <summary>Animates this element to the requested scale.</summary>
         public static void ScaleTo(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutCubic, Action? onDone = null)
+            => ScaleTo(target, from, to, duration, ease, onDone, skipAtZeroIntensity: false);
+
+        internal static void ScaleTo(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease,
+            Action? onDone, bool skipAtZeroIntensity)
         {
             target.Rect.localScale = new Vector3(from, from, 1f);
-            Start(target, Channel.ScaleUniform, from, to, duration, ease, onDone);
+            Start(target, Channel.ScaleUniform, from, to, duration, ease, onDone, skipAtZeroIntensity);
         }
 
         /// <summary>Animates this element along the horizontal axis.</summary>
         public static void MoveX(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutCubic, Action? onDone = null)
-        {
-            Start(target, Channel.OffsetX, from, to, duration, ease, onDone);
-        }
+            => Start(target, Channel.OffsetX, from, to, duration, ease, onDone);
+
+        internal static void MoveX(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease,
+            UiHost? accessibilityHost) =>
+            Start(target, Channel.OffsetX, from, to, duration, ease, null, skipAtZeroIntensity: true, accessibilityHost);
 
         /// <summary>Animates this element along the vertical axis.</summary>
         public static void MoveY(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutCubic, Action? onDone = null)
+            => MoveY(target, from, to, duration, ease, onDone, skipAtZeroIntensity: false);
+
+        internal static void MoveY(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease,
+            Action? onDone, bool skipAtZeroIntensity, UiHost? accessibilityHost = null)
         {
-            Start(target, Channel.OffsetY, from, to, duration, ease, onDone);
+            Start(target, Channel.OffsetY, from, to, duration, ease, onDone, skipAtZeroIntensity, accessibilityHost);
         }
 
         /// <summary>Cancels every tween on a widget (end values are NOT applied).</summary>
@@ -74,9 +93,7 @@ namespace TopiaForge.Mods.UnityUi
             {
                 if (Pool[index].Active && ReferenceEquals(Pool[index].Target, target))
                 {
-                    Pool[index].Active = false;
-                    Pool[index].OnDone = null;
-                    ActiveCount--;
+                    Release(index);
                 }
             }
         }
@@ -97,23 +114,20 @@ namespace TopiaForge.Mods.UnityUi
 
                 if (Pool[index].Target.Go == null)
                 {
-                    Pool[index].Active = false;
-                    Pool[index].OnDone = null;
-                    ActiveCount--;
+                    Release(index);
                     continue;
                 }
 
-                if (Pool[index].Target.Host.EffectiveReducedMotion)
+                if (MotionDisabled(Pool[index].AccessibilityHost ?? Pool[index].Target.Host, Pool[index].SkipAtZeroIntensity))
                 {
                     var target = Pool[index].Target;
                     var kind = Pool[index].Kind;
                     var endValue = Pool[index].To;
                     var onDone = Pool[index].OnDone;
-                    Pool[index].Active = false;
-                    Pool[index].OnDone = null;
-                    ActiveCount--;
+                    var intent = Pool[index].Intent;
+                    Release(index);
                     Apply(target, kind, endValue);
-                    TopiaForgeCallbacks.Invoke(onDone, "Tween completion");
+                    TopiaForgeCallbacks.Resume(intent, onDone, "Tween completion");
                     continue;
                 }
 
@@ -126,10 +140,9 @@ namespace TopiaForge.Mods.UnityUi
                 if (t >= 1f)
                 {
                     var onDone = Pool[index].OnDone;
-                    Pool[index].Active = false;
-                    Pool[index].OnDone = null;
-                    ActiveCount--;
-                    TopiaForgeCallbacks.Invoke(onDone, "Tween completion");
+                    var intent = Pool[index].Intent;
+                    Release(index);
+                    TopiaForgeCallbacks.Resume(intent, onDone, "Tween completion");
                 }
             }
         }
@@ -142,11 +155,21 @@ namespace TopiaForge.Mods.UnityUi
             ActiveCount = 0;
         }
 
-        private static void Start(TopiaForgeWidget target, Channel kind, float from, float to, float duration, TopiaForgeEase ease, Action? onDone)
+        private static void Release(int index)
+        {
+            Pool[index] = default;
+            ActiveCount--;
+        }
+
+        private static bool MotionDisabled(UiHost host, bool skipAtZeroIntensity) =>
+            host.EffectiveReducedMotion || (skipAtZeroIntensity && host.EffectiveMotion <= 0f);
+
+        private static void Start(TopiaForgeWidget target, Channel kind, float from, float to, float duration,
+            TopiaForgeEase ease, Action? onDone, bool skipAtZeroIntensity = false, UiHost? accessibilityHost = null)
         {
             TopiaForgeRuntime.Ensure();
 
-            if (target.Host.EffectiveReducedMotion || duration <= 0f)
+            if (MotionDisabled(accessibilityHost ?? target.Host, skipAtZeroIntensity) || duration <= 0f)
             {
                 Apply(target, kind, to);
                 TopiaForgeCallbacks.Invoke(onDone, "Tween completion");
@@ -163,7 +186,10 @@ namespace TopiaForge.Mods.UnityUi
                     Pool[index].Duration = duration;
                     Pool[index].Elapsed = 0f;
                     Pool[index].Ease = ease;
+                    Pool[index].SkipAtZeroIntensity = skipAtZeroIntensity;
+                    Pool[index].AccessibilityHost = accessibilityHost;
                     Pool[index].OnDone = onDone;
+                    Pool[index].Intent = onDone == null ? null : TopiaForgeIntent.Capture();
                     return;
                 }
             }
@@ -182,7 +208,10 @@ namespace TopiaForge.Mods.UnityUi
                         Duration = duration,
                         Elapsed = 0f,
                         Ease = ease,
+                        SkipAtZeroIntensity = skipAtZeroIntensity,
+                        AccessibilityHost = accessibilityHost,
                         OnDone = onDone,
+                        Intent = onDone == null ? null : TopiaForgeIntent.Capture(),
                     };
                     highWater = Math.Max(highWater, index + 1);
                     ActiveCount++;

@@ -14,7 +14,7 @@ void _validateManifestMultiplayer(
     );
   }
 
-  if (manifest.schemaVersion != 5) return;
+  if (!ModManifest.isSupportedSchemaVersion(manifest.schemaVersion)) return;
 
   final multiplayer = manifest.multiplayer;
   if (!manifest.multiplayerIsPresent || multiplayer == null) {
@@ -23,7 +23,9 @@ void _validateManifestMultiplayer(
 
   final mode = multiplayer.mode;
   if (mode == null) {
-    error('multiplayer.mode must be client-local, server-only, or session.');
+    error(
+      'multiplayer.mode must be client-local, server-only, session, or standalone.',
+    );
     return;
   }
 

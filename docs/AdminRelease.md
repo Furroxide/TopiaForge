@@ -1,5 +1,10 @@
 # Admin-orchestrated release
 
+The initial release target is [0.2.0-rc.1](../release/notes/v0.2.0-rc.1.md), with catalog status
+blocked. It requires an explicit distribution mode, approvals for the current version and native evidence
+bound to the exact candidate. Earlier release evidence remains historical.
+
+
 Production archives are built only on maintainer-controlled machines. GitHub
 Actions verifies the exact staged bytes, attests what it verified, creates the
 signed update metadata, and publishes after approval of the protected
@@ -8,69 +13,130 @@ signed update metadata, and publishes after approval of the protected
 The entry point is:
 
 ```powershell
-./tools/release-admin.ps1 preflight
-./tools/release-admin.ps1 build
+$releaseStateRoot = 'C:\QA\TopiaForge\release-state'
+$isolationRecord = 'C:\QA\TopiaForge\isolation.json'
+$sourceGameRoot = 'C:\QA\TopiaForge\source-game'
+./tools/release-admin.ps1 preflight -StateRoot $releaseStateRoot -AcceptanceIsolationRecord $isolationRecord -GameDirectory $sourceGameRoot
+./tools/release-admin.ps1 build -StateRoot $releaseStateRoot -AcceptanceIsolationRecord $isolationRecord -GameDirectory $sourceGameRoot
 ```
 
-**`build` is expected to stop on its first pass**, and this is by design rather
-than a failure. The Creator evidence descriptor is bound to the Windows archive
-by digest, so it cannot be produced until `build` has created that archive.
-`build` therefore runs to `platforms-built`, retains everything, and then stops
-at the Creator-evidence check with "Builds are retained; provide
--WindowsCreatorEvidence and run resume."
+`build` contains a mandatory interactive window: the live `TF-ACCEPT`
+acceptance run needs roughly 30 minutes at the keyboard with a gamepad and
+microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
 
-Note also that `build` contains a mandatory interactive window: the live
-`TF-ACCEPT` acceptance run needs roughly 30 minutes at the keyboard with a
-gamepad and microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
-
-At that point run the Creator session, convert its result, and continue:
+A successful build stops at `built`. Prepare and review the detached candidate
+decision and acceptance records described below, then continue explicitly:
 
 ```powershell
-topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
-
-./tools/release/new-windows-creator-evidence.ps1 `
-  -AcceptanceResult <result.json> -StateDirectory <output>/state `
-  -CaseEvidenceDirectory <case artifacts> -SourceSha <sha> -Version 1.0.0-rc.1 `
-  -WindowsArchive .release-local\1.0.0-rc.1\assets\TopiaForge-windows-x64.zip `
-  -CanonicalEcosystemSha256 <sha> `
-  -OutputBundle C:\release-qa\windows-creator-evidence.zip `
-  -OutputDescriptor C:\release-qa\windows-creator-evidence.json
-
-./tools/release-admin.ps1 resume `
-  -WindowsCreatorEvidence C:\release-qa\windows-creator-evidence.json `
-  -WindowsCreatorEvidenceBundle C:\release-qa\windows-creator-evidence.zip
-./tools/release-admin.ps1 stage
-./tools/release-admin.ps1 dispatch
+./tools/release-admin.ps1 qualify -StateRoot $releaseStateRoot
+./tools/release-admin.ps1 stage -StateRoot $releaseStateRoot
+./tools/release-admin.ps1 dispatch -StateRoot $releaseStateRoot
 ```
 
-`resume` continues from the durable local state and `all` runs every remaining
-phase. Passing the two evidence flags to `build` or `all` up front works only
-when a valid descriptor for that exact archive already exists — on a fresh
-candidate it will not, so expect the two-step sequence above.
-Add `-Rehearsal` to `all` for a verified, non-publishing two-platform
-rehearsal. Local state and raw evidence live under `.release-local/`, which is
-ignored by Git.
+The durable phases are `preflight → platforms-built → built → accepted → staged
+→ dispatch-requested → published`. `resume` and `all` continue only through
+already authorized phases: both stop at `built` with instructions to run
+`qualify`. Neither command grants acceptance. Add `-Rehearsal` to `all` for a
+verified, non-publishing rehearsal of every platform in `artifactPolicy`. A
+rehearsal can never qualify, create a tag, stage assets, or dispatch publication.
+Local state and raw evidence live under `<StateRoot>/<version>/`. The default
+`.release-local/` is ignored by Git, but cannot supply isolated acceptance output
+when the checkout is inside the normal user's profile. Use the same explicit
+external `-StateRoot` for every phase, including `resume`. Provision and restrict
+access to the example paths before using them; the example does not create a QA
+account or approve its layout.
 
 Each canonical ecosystem pass runs in its own detached clean worktree. The
 SHA-256 of the normalized, sorted tree manifest is the ecosystem identity; the
 single tar sent to WSL has a separate transport digest. Every
 platform validation summary binds both values.
 
-The machine-readable ship decision is
-`release/release-readiness.json`. It is read from the exact target commit,
-validated against the schema from that same commit, and bound into the BOM by
-digest and gate summary. It carries one entry for each of the twelve
-release-fatal gates in [`LaunchBlockers.md`](LaunchBlockers.md), so no gate that
-can stop a release is tracked only in prose. Every P0 gate must be `approved`.
-Each P1 gate must be either `approved` or `accepted-risk` with an allowed RC1
-scope and evidence identifier. A blocked, missing, malformed, working-tree-only, or wrong-version
-decision stops preflight, staging, and the protected finalizer. The catalog
-must remain `blocked` until the reviewed decision is committed. The CLI treats
-the `evidenceIds` as manually reviewed attestation references: it validates
-their exact syntax, uniqueness, gate binding, and exact-commit digest, but does
-not resolve an external evidence registry or prove reviewer identity. Evidence
-existence and reviewer authorization are therefore part of the protected
-`release` environment's final human approval.
+## Private build and exact candidate qualification
+
+Preflight invokes `release validate-prerequisites --version <version>
+--target-sha <final-main-sha>`. It reads `release/release-readiness.json` and its
+schema from that exact commit. All twelve gates remain represented. The four
+blocking non-game gates (`P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01`)
+must already be approved. Only `P0-GAME-01` may await the candidate's live
+acceptance. Success means `eligible-for-private-build`; it is not a ship
+approval. Advisory gates retain their recorded enforcement and reporting rules.
+
+The source catalog's `ready` status approves only the reviewed platform, package
+and version inventory. It does not supply those four review records or certify
+unbuilt archives. Exact payload checks and final acceptance remain mandatory.
+
+Obtain the final source through the policy-approved same-repository release PR
+into `main`. Preserve its two-parent merge and required hosted checks; freeze
+the final `main` merge SHA, not the release-branch head. Local `main` must remain
+clean and exactly equal to `origin/main`. Moving that source invalidates the
+candidate even when a later commit has the same tree.
+
+`build` still requires the actual SDK, authored-world and live-game checks
+before sealing its validated handoff. Run live acceptance in an isolated Windows
+user/session or virtual machine that isolates Unity's persistent data and does
+not access the normal user's data. A separate BepInEx profile alone is
+insufficient. Pass the already approved private provisioning record through
+`-AcceptanceIsolationRecord`; it is forwarded to the packaged CLI's
+`--isolation-record`. Preflight freezes its exact path and bytes; resume cannot replace that input.
+Keep the record outside all output/evidence directories that the build clears.
+Linked output directories and linked existing ancestors are rejected before cleanup.
+The record identifies a separate QA game installation, launcher/output roots and
+measured primary-token/known-folder identity. The build/acceptance process must already be
+in that isolated Windows user/session or VM. Its provisioning `outputRoot` must
+exactly equal `<StateRoot>/<version>/evidence/windows/robotopia`. Authenticated
+preflight may run as the release operator, followed by the frozen-state build in
+the QA session and qualification/publication back in the operator session. Use
+the same controlled checkout and state paths; do not copy GitHub credentials
+into the QA profile. Pass `-GameDirectory` explicitly at preflight: it must name
+the verified source installation in the record's `sourceGameRoot`, accessible to
+both sessions and separate from the record's admitted QA `gameRoot`. Its frozen
+path persists across sessions; omitting it selects the installation the official
+launcher runs for the operator: `<game_dir>\Robotopia` when its
+`launcher-config.json` records a move, otherwise
+`%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`. For a moved game the build id
+comes from the `installed-build.json` that stays in
+`%LOCALAPPDATA%\Tomato Cake\launcher`, which applies only when `-GameDirectory`
+is exactly that `<game_dir>\Robotopia`. Missing provisioning fails closed;
+no tool creates a user account or imports normal-player saves automatically.
+
+The private schema-3 `acceptance-result.json` retains the actual acknowledgement
+and byte hashes of both the provisioning record and runtime acknowledgement,
+plus confirmed owned-process exit. Its `gameDirectory` names the admitted QA
+installation; last-run evidence comes from that installation. Public candidate
+acceptance records carry only the isolation kind and reviewed proof digest,
+not usernames, paths, SID or the raw acknowledgement. Once those exact bytes and private
+evidence exist, place these reviewed, schema-valid records in the candidate's
+assets directory (`<StateRoot>/<version>/assets`):
+
+- `release-candidate-readiness-v1.json`: the detached final decision, bound to
+  the frozen source and tracked contracts. Only the game gate may supersede its
+  tracked base decision; the other gates retain their reviewed values.
+- `release-candidate-acceptance-v1.json`: the actual acceptance evidence for that
+  same candidate, with the required cases and reviewer references. Keep raw
+  logs, personal paths, credentials and other private evidence outside public
+  assets. Do not fabricate passing cases or approval references.
+
+Use the schemas from the frozen commit. `qualify` invokes
+`release validate-readiness --version <version> --target-sha <final-main-sha>
+--assets <assets-directory>`. The validator binds the decision, acceptance,
+handoff, sorted payload names/sizes/SHA-256 values, and exact tracked readiness,
+schemas, policy and catalog. It must return `ready`. The administrator tool then
+atomically records the complete normalized assessment and its hashes in
+`accepted` state. An interrupted write preserves the preceding state; retrying
+the same qualification is safe and does not rewrite an existing acceptance.
+
+`stage`, `dispatch` and `resume` revalidate that frozen assessment, source,
+receipts and handoff. Changed payloads, evidence, decision, contract or source
+fail closed. Accepted bytes cannot be rebuilt or repacked through `build`.
+Keep superseded candidates for diagnosis; prepare a new candidate and obtain
+fresh acceptance when any bound input changes. Publication metadata is derived
+from the qualified inventory afterward; it is not part of its own payload hash
+inputs.
+
+Machine validation checks evidence structure and binding. It does not prove a
+reviewer's identity or permission to approve. Actual reviewer authorization,
+evidence inspection and the protected `release` environment approval remain
+human responsibilities.
 
 ## Admin Windows machine
 
@@ -87,8 +153,8 @@ The checkout must be a clean `main` exactly equal to `origin/main`. Configure:
 - .NET `10.0.301`, Flutter `3.44.6`, Dart `3.12.2`, Node `24.18.0`,
   Unity `6000.0.23f1`, MSVC `14.51.36231`, Windows SDK
   `10.0.26100.0`, Python 3.11 or newer, Git LFS, 7-Zip, tar, `jq`, `bash`
-  (Git for Windows), WSL, and GitHub CLI;
-- an activated local Unity license and the Robotopia build-2309 installation.
+  (Git for Windows), and GitHub CLI;
+- an activated local Unity license and the Robotopia build-2640 installation.
 
 On Windows systems where `python` resolves to the nonfunctional Microsoft
 Store alias, set `TOPIAFORGE_PYTHON` (or pass `-PythonPath`) to an absolute,
@@ -106,7 +172,79 @@ directory is prepended to `PATH` for the shell verifiers only. Install it with:
 winget install jqlang.jq
 ```
 
-RC1 and every later production release require Authenticode. Before freezing
+## Build from a neutral root
+
+Compilers record where they ran. Roslyn writes the absolute PDB path into every
+assembly's CodeView debug directory, and the Dart AOT snapshot records a
+`file:///` URI for each library outside a `package:` root. A build run straight
+from `C:\Users\<account>\...` therefore ships the administrator's account name
+and folder layout inside the binaries, where nothing in the package listing
+shows it. That contradicts the rule in `ReleaseOperations.md` that usernames,
+hostnames, and local paths stay off GitHub.
+
+Two mechanisms keep it out, and `release test-package` fails the package if
+either is missed:
+
+- **.NET** needs nothing extra. `Directory.Build.props` sets `PathMap` for every
+  project, so assemblies record `/_/...` from any checkout. It is deliberately
+  unconditional rather than tied to `$(CI)`, because release packages are built
+  on this workstation and never by CI.
+- **Dart and Flutter** have no equivalent switch. `dart compile exe -S` strips
+  debugging information but leaves the library URIs, and Flutter's
+  `--split-debug-info` does not remove them at all. The only fix is to compile
+  from a path that names nobody. Map the checkout to a spare drive letter
+  first — `subst` needs no elevation and copies nothing:
+
+```powershell
+subst T: C:\path\to\TopiaForge
+Push-Location                         # remember where you were, so a failure still returns here
+try {
+    Set-Location T:\apps\topiaforge_launcher_flutter
+    flutter clean                     # stale C:-path objects otherwise fail MSB8028
+    flutter build windows --release --dart-define=TOPIAFORGE_PRODUCT_VERSION=<version>
+    Set-Location T:\apps\topiaforge_cli
+    dart compile exe bin/topiaforge.dart -o <staging>\topiaforge.exe
+}
+finally {
+    Pop-Location                      # leave T: before removing it, or the shell is stranded
+    subst T: /D
+}
+```
+
+`flutter clean` is not optional: a `build/` directory left from a `C:`-path
+build makes MSBuild fail with `MSB8028` about shared intermediate directories,
+and the reported error names neither the drive letter nor the cause.
+
+The Linux builder already satisfies this — it checks out at
+`/root/topiaforge-build`, which identifies no account.
+
+## Signed or unsigned distribution
+
+`signingIdentities.windowsDistribution` in `release/release-policy.json` records
+which one this candidate is. The key is optional and its absence means `signed`,
+so a certificate that simply went missing can never be read as a decision to
+ship without one — shipping unsigned has to be written down.
+
+`unsigned` is accepted on the `0.x` line, including stable releases, only when no
+certificate is pinned; `release validate-policy` rejects a policy that carries both.
+This distribution scope was extended on 2026-11-16. The checked-in policy records
+`windowsDistribution: unsigned`; `1.0` and later still require signing. Release notes
+must disclose the unsigned executables and possible Windows publisher or SmartScreen
+warnings. Earlier construction repairs and their revision-specific verification are in
+[`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
+No candidate is qualified. Building the exact frozen payloads, isolated live
+acceptance and remaining gate approvals are still required.
+
+The validator, handoff and qualification contracts require verified unsigned
+executable evidence in this mode. Both the detached CMS asset and its decision
+digest must be absent, while handoff, qualification and payload digests remain
+mandatory. Missing signing credentials never select this mode automatically.
+Ed25519 update signing, candidate qualification and protected publication approval
+remain required in either mode. Windows may show an unrecognized-publisher or
+SmartScreen warning for unsigned artifacts; this is not a verified publisher claim.
+
+The following certificate requirements apply when the policy selects `signed`
+(including when the optional distribution field is absent). Before freezing
 the release commit, pin the reviewed leaf certificate SHA-256 in
 `signingIdentities.windowsCertificateSha256` and supply
 `WINDOWS_CERTIFICATE_PFX`, `WINDOWS_CERTIFICATE_PASSWORD`, and an HTTPS
@@ -145,17 +283,14 @@ GitHub CLI token for the audit secret.
 The preflight opens the exact Unity project in batch mode to prove that the
 local activation is usable. It never needs Unity email/password credentials.
 
-> **Out of `1.0.0-rc.1`.** Linux is descoped from RC1 and returns in `1.0.0-rc.2`, so
-> everything from here to the end of *Same-host WSL2/WSLg Proton evidence* is inert for
-> this candidate. `release-admin.ps1` reads `release/release-policy.json` and skips the
-> WSL build, the Proton acceptance, and their preflight checks whenever
-> `TopiaForge-linux-x64.zip` is absent from `platformArchives`; re-adding it turns the
-> whole path back on unchanged. The instructions are retained for rc.2.
+> **Scope for `0.2.0-rc.1`.** The Windows x64 candidate skips the WSL build, Proton acceptance and
+> their preflight checks because `TopiaForge-linux-x64.zip` is absent from `platformArchives`.
+> The Linux and Proton material below is retained for reference. A future Linux release needs
+> its own policy, isolation and native acceptance.
 >
-> Note for rc.2: WSL2 on this host cannot reach a GPU Vulkan implementation. NVIDIA
-> ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, so only
-> software lavapipe is available, while Robotopia's Direct3D 12 renderer needs Vulkan
-> through VKD3D. A venue that provides real Vulkan is required before Linux acceptance
+> In the recorded WSL2 test, the builder could only reach software Vulkan through lavapipe.
+> Robotopia's Direct3D 12 renderer needs Vulkan through VKD3D. A venue that provides
+> hardware Vulkan is required before Linux acceptance
 > can be recorded; if it is not this Windows workstation, the `wsl2-wslg` execution
 > environment in the evidence contract and the WSL-driven collection below must be
 > reworked first.
@@ -202,11 +337,12 @@ The deterministic procedure is:
    bare depot download does not produce one.
 2. Before using it, read `steamapps/appmanifest_3658110.acf` and confirm every
    value in the table above.
-3. Run the preflight from inside the WSL distribution. It checks the same values,
-   plus the WSL2/WSLg environment, without launching the game:
+3. Use the version of the Linux candidate under test for `$version`. Run the preflight from
+   inside the WSL distribution. It checks the same values and the WSL2/WSLg environment
+   without launching the game:
 
 ```bash
-tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 1.0.0-rc.1 --game-dir "$gameDir" --game-build-id 2309 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
+tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version "$version" --game-dir "$gameDir" --game-build-id 2640 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
 ```
 
 If Steam has moved `Proton 10.0` to a newer build, the appmanifest will carry a
@@ -253,70 +389,6 @@ macOS packaging remains source-tested as future-platform capability, but RC1
 has no macOS archive, remote builder, Apple identity, notarization step, or
 macOS handoff manifest.
 
-## Windows Creator evidence
-
-The scripted Windows run verifies the installed build-2309 marker, Unity
-lifecycle, canonical live markers, and packaged `new mod` to `dev` journey.
-The nine interactive Creator workbench cases cannot be inferred from those
-markers, screenshots, artifact-directory presence, a manually supplied cycle
-number, or two identical arbitrary files. They require an authorized
-interactive build-2309 session driven by the acceptance harness.
-
-### Producing the evidence
-
-Run the harness from the frozen candidate checkout, then perform the nine
-workbench workflows in-game while it tails the manager log:
-
-```
-topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
-```
-
-The harness issues an unpredictable 64-hex one-run challenge and writes it into
-the CreatorTools config before launch. `CreatorAcceptanceRecorder` is inert
-unless that challenge is present, so an ordinary play session cannot emit
-evidence. Each case emits `TF-CREATOR|PASS|<challenge>|<case>` only when every
-required workbench transition was actually observed; a case whose transitions
-did not all occur simply never passes. The harness digests the real
-`player_data.json.gz` save document before and after End Session — decompressed
-first, because a gzip header embeds an mtime that would otherwise read as a
-change — and digests the checkpoint cursor and `<id>_reached` flags separately.
-
-Convert the resulting `creator-acceptance-result.json` and retained state
-pre-images into the release descriptor and bundle:
-
-```
-tools/release/new-windows-creator-evidence.ps1 -AcceptanceResult <result.json> `
-  -StateDirectory <output>/state -CaseEvidenceDirectory <case artifacts> `
-  -SourceSha <sha> -Version <version> -WindowsArchive <zip> `
-  -CanonicalEcosystemSha256 <sha> -OutputBundle <bundle> -OutputDescriptor <json>
-```
-
-The generator derives every claim from the acceptance result rather than from
-artifact presence, and refuses any result that is incomplete, short of the
-required cycles, or shows changed save or checkpoint bytes.
-
-### What the release validator enforces
-
-`release-admin.ps1` accepts only `release-windows-creator-evidence-v2` and
-re-derives the embedded acceptance result's claims rather than trusting the
-public descriptor. A descriptor is rejected unless it binds:
-
-- the challenge and exact `lastRunSessionId`;
-- the CreatorTools package `sourceSha256` and ordered critical-file receipts;
-- the `acceptanceResultSha256` of the acceptance result embedded in the bundle;
-- the source SHA, version, Windows archive digest/size, canonical ecosystem
-  digest, Robotopia build, and exact case-inventory digest;
-- typed per-case evidence produced by the native action, not file presence;
-- the measured lifecycle cycle count and unchanged before/after save and
-  checkpoint receipts from that same session.
-
-The bundle additionally carries the declared persistence layout, so a future
-game build that relocates or renames its persisted state fails closed instead of
-silently reporting "unchanged". `tools/test-release-admin.ps1` fails the run if
-spoofed-challenge, spoofed-session, spoofed-result-digest, wrong-package-receipt,
-replayed prior-run, missing-case, extra-case, short-cycle, mutated-save, or
-mutated-checkpoint evidence is accepted.
-
 ## Same-host WSL2/WSLg Proton evidence
 
 The orchestrator, rather than an imported external descriptor, runs the exact
@@ -333,7 +405,7 @@ The generated descriptor is deterministic JSON and binds at least:
 ```json
 {
   "schema": "release-proton-evidence-v1",
-  "version": "1.0.0-rc.1",
+  "version": "<linux-candidate-version>",
   "targetSha": "0123456789abcdef0123456789abcdef01234567",
   "platform": "linux-proton",
   "executionEnvironment": "wsl2-wslg",
@@ -341,7 +413,7 @@ The generated descriptor is deterministic JSON and binds at least:
   "archiveSha256": "64-lowercase-hex",
   "archiveSize": 123456,
   "canonicalEcosystemSha256": "64-lowercase-hex",
-  "gameBuildId": 2309,
+  "gameBuildId": 2640,
   "protonVersion": "10.0-4",
   "protonRuntimeSha256": "64-lowercase-hex",
   "wineDllOverrides": "winhttp=n,b",
@@ -362,22 +434,23 @@ evidence bundle bytes match the descriptor. Do not put usernames, hostnames,
 paths, timestamps,
 credentials, or raw game logs in the deterministic descriptor. Both QA bundles
 remain private local evidence; only their scrubbed digests enter the public
-handoff. This is intentionally recorded as same-host, non-independent RC1
-evidence.
+handoff. Record evidence from this runner as same-host and non-independent if it is
+used for a future Linux release.
 
 ## Staging and publication
 
-Only a fully verified local build can enter `stage`. That phase creates or
+Only an `accepted` candidate can first enter `stage`. That phase creates or
 verifies the signed annotated version tag, creates or resumes the exact draft
-release, and uploads all catalog assets plus the two platform manifests, the
-aggregate handoff manifest, and its detached
-`release-handoff-v1.json.p7s` CMS signature.
+release, and uploads the strict allowlist: catalog assets, the platform
+manifests required by policy, the aggregate handoff, both detached candidate
+qualification records, and `release-handoff-v1.json.p7s` only for a signed
+Windows distribution.
 The release author and every draft asset uploader must be the governance-pinned
 `furroxide` user at immutable actor ID `221987073`; matching a mutable login
 without the actor ID and `User` type is insufficient.
 Existing assets are downloaded and byte-compared; replacement is forbidden.
 An interrupted draft upload reported by GitHub as `state=starter` is the sole
-exception: while the durable phase is still `built`, the orchestrator deletes
+exception: while the durable phase is still `accepted`, the orchestrator deletes
 that exact asset ID and retries it. An `uploaded` byte mismatch always fails
 closed.
 
@@ -407,19 +480,21 @@ run. If it completed with `failure` or `cancelled`, `resume` uses GitHub's
 rerun operation on the same run ID and verifies the rerun; it does not create
 a second workflow-dispatch run. After approval, GitHub rechecks live release
 governance, then verifies the tag, source, exact workflow/run/job provenance
-for every required hosted check, draft, pinned CMS handoff signature, exact
-timestamped Windows trust state, and QA evidence; generates update metadata, BOM,
+for every required hosted check, draft, detached qualification, declared Windows trust state (including the
+pinned timestamped CMS and Authenticode signatures when signed), and QA evidence; generates update metadata, BOM,
 SBOM, and checksums; creates a custom verifier attestation; publishes
 automatically; and re-verifies the immutable release. Governance and candidate
 identity are checked again immediately before publication.
 The generated metadata names are the only assets permitted to identify
 `github-actions[bot]` (actor ID `41898282`, type `Bot`) as uploader. If GitHub
 returns performing-App metadata, it must identify GitHub Actions integration
-ID `15368`. Catalog bytes, handoff manifests, and any local detached handoff
-signature must continue to identify the pinned human staging principal.
-Each hosted platform-verification record includes both the handoff digest and
-the exact detached-P7S digest. The protected finalizer rehashes both draft
-assets and rejects evidence from any other signature bytes.
+ID `15368`. Catalog bytes, handoff manifests, both detached candidate qualification records,
+and any local detached handoff signature must continue to identify the pinned
+human staging principal. Each hosted platform-verification record binds the
+handoff and qualification digests. Signed distributions additionally bind the
+exact detached-P7S digest; unsigned distributions explicitly omit that signature.
+The protected finalizer rehashes the declared draft assets and rejects changed
+qualification or trust evidence.
 
 GitHub does not support conditional requests for unsafe `PATCH` operations
 unless an endpoint explicitly documents them, and the release-update endpoint

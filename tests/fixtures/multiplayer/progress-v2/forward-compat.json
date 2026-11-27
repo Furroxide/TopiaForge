@@ -1,0 +1,751 @@
+{
+  "schema": 1,
+  "valid": [
+    {
+      "id": "join-failure",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-empty",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-spaces",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\" new reason \",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-escaped",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"private-\\\"quote\\\"\\\\path\\n203.0.113.77\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-long",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-canonical",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-no-detail",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-world",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-admission",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"admission\":{\"code\":\"other\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"admission\":{\"code\":\"other\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-end",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-empty",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-spaces",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\" new reason \",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-escaped",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"private-\\\"quote\\\"\\\\path\\n203.0.113.77\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-long",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-canonical",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-no-detail",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-world",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-cleanup-failed",
+      "text": "{\"blocks\":[],\"error\":{\"code\":\"external\",\"message\":\"Cleanup failed.\"},\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"error\":{\"code\":\"external\",\"message\":\"Cleanup failed.\"},\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-empty",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-spaces",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\" new reason \",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-escaped",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"private-\\\"quote\\\"\\\\path\\n203.0.113.77\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-long",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-canonical",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-no-detail",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-world",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-end",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-empty",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-spaces",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\" new reason \",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-escaped",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"private-\\\"quote\\\"\\\\path\\n203.0.113.77\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-long",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-canonical",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-no-detail",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-world",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"succeeded\"}",
+      "expected": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"last-world\",\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-cleanup-failed",
+      "text": "{\"blocks\":[],\"error\":{\"code\":\"external\",\"message\":\"Cleanup failed.\"},\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"error\":{\"code\":\"external\",\"message\":\"Cleanup failed.\"},\"kind\":\"session\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"endReason\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-receiving",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"synchronizing\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"receiving-world\",\"status\":\"failed\"}",
+      "expected": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"The multiplayer session could not continue. Try again; if it keeps failing, update TopiaForge.\",\"failure\":\"other\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"synchronizing\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"sessionId\":\"receiving-world\",\"status\":\"failed\"}"
+    }
+  ],
+  "invalid": [
+    {
+      "id": "join-failure-succeeded",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-failure-cancelled",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"cancelled\"}"
+    },
+    {
+      "id": "join-failure-reason-null",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":null,\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-reason-number",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":7,\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-reason-bool",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":false,\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-reason-array",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":[],\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-reason-object",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":{},\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-detail-null",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":null,\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-detail-number",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":7,\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-detail-empty",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-detail-control",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"bad\\ntext\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-detail-padded",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\" padded\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-detail-long",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-detail-noncharacter",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"bad￿\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-role",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"spectator\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-intentId",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"../private\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-serverId",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"bad\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-address",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"address\":\"future-private-203.0.113.77:47819\",\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-port",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"port\":27250,\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-password",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"password\":\"fixture-secret\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-schemaVersion",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":3,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-requestId",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"../private\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-sequence",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":-1,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-status",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"finished\"}"
+    },
+    {
+      "id": "join-failure-phase",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"future\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-kind",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"future\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-admission-code",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"admission\":{\"code\":\"future\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-duplicate",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"timeout\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-duplicate-escaped",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"r\\u006fle\":\"join\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-truncated",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\""
+    },
+    {
+      "id": "join-failure-trailing",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}future-private-203.0.113.77:47819"
+    },
+    {
+      "id": "join-failure-mixed-reasons",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-wrong-role-reason",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"port-in-use\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-failure-wrong-command",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "join-end-reason-null",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":null,\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-reason-number",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":7,\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-reason-bool",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":false,\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-reason-array",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":[],\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-reason-object",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":{},\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-detail-null",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":null,\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-detail-number",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":7,\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-detail-empty",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-detail-control",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"bad\\ntext\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-detail-padded",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\" padded\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-detail-long",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-detail-noncharacter",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"bad￿\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-role",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"spectator\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-intentId",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"../private\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-serverId",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"bad\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-address",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"address\":\"future-private-203.0.113.77:47819\",\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-port",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"port\":27250,\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-password",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"password\":\"fixture-secret\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-schemaVersion",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":3,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-requestId",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"../private\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-sequence",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":-1,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-status",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"finished\"}"
+    },
+    {
+      "id": "join-end-phase",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"future\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-kind",
+      "text": "{\"blocks\":[],\"kind\":\"future\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-admission",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"admission\":{\"code\":\"other\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-admission-code",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"admission\":{\"code\":\"future\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-duplicate",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"timeout\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-duplicate-escaped",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"r\\u006fle\":\"join\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-truncated",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\""
+    },
+    {
+      "id": "join-end-trailing",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}future-private-203.0.113.77:47819"
+    },
+    {
+      "id": "join-end-mixed-reasons",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-terminal-phase",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"running\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-terminal-command",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "join-end-terminal-status",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-succeeded",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-failure-cancelled",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"cancelled\"}"
+    },
+    {
+      "id": "host-failure-reason-null",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":null,\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-reason-number",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":7,\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-reason-bool",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":false,\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-reason-array",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":[],\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-reason-object",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":{},\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-detail-null",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":null,\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-detail-number",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":7,\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-detail-empty",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-detail-control",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"bad\\ntext\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-detail-padded",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\" padded\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-detail-long",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-detail-noncharacter",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"bad￿\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-role",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"spectator\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-intentId",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"../private\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-serverId",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"bad\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-address",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"address\":\"future-private-203.0.113.77:47819\",\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-port",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"port\":27250,\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-password",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"password\":\"fixture-secret\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-schemaVersion",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":3,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-requestId",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"../private\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-sequence",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":-1,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-status",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"finished\"}"
+    },
+    {
+      "id": "host-failure-phase",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"future\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-kind",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"future\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-admission",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"admission\":{\"code\":\"other\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-admission-code",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"admission\":{\"code\":\"future\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-duplicate",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"timeout\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-duplicate-escaped",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"r\\u006fle\":\"join\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-truncated",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\""
+    },
+    {
+      "id": "host-failure-trailing",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}future-private-203.0.113.77:47819"
+    },
+    {
+      "id": "host-failure-mixed-reasons",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-wrong-role-reason",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"timeout\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-wrong-command",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-connecting",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-failure-synchronizing",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"synchronizing\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "host-end-reason-null",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":null,\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-reason-number",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":7,\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-reason-bool",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":false,\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-reason-array",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":[],\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-reason-object",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":{},\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-detail-null",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":null,\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-detail-number",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":7,\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-detail-empty",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-detail-control",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"bad\\ntext\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-detail-padded",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\" padded\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-detail-long",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-detail-noncharacter",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"bad￿\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-role",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"spectator\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-intentId",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"../private\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-serverId",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"bad\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-address",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"address\":\"future-private-203.0.113.77:47819\",\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-port",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"port\":27250,\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-password",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"password\":\"fixture-secret\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-schemaVersion",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":3,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-requestId",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"../private\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-sequence",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":-1,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-status",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"finished\"}"
+    },
+    {
+      "id": "host-end-phase",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"future\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-kind",
+      "text": "{\"blocks\":[],\"kind\":\"future\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-admission",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"admission\":{\"code\":\"other\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-admission-code",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"admission\":{\"code\":\"future\",\"problems\":[\"Check the installed mods.\"]},\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-duplicate",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"timeout\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-duplicate-escaped",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"r\\u006fle\":\"join\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-truncated",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\""
+    },
+    {
+      "id": "host-end-trailing",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}future-private-203.0.113.77:47819"
+    },
+    {
+      "id": "host-end-mixed-reasons",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"failure\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-terminal-phase",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"running\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-terminal-command",
+      "text": "{\"blocks\":[],\"command\":\"host-session\",\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"succeeded\"}"
+    },
+    {
+      "id": "host-end-terminal-status",
+      "text": "{\"blocks\":[],\"kind\":\"session\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"endReason\":\"future-private-203.0.113.77:47819\",\"intentId\":\"compat-intent\",\"role\":\"host\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"idle\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    },
+    {
+      "id": "malformed-private-field",
+      "text": "{\"future-private-203.0.113.77:47819\":}"
+    },
+    {
+      "id": "malformed-private-string",
+      "text": "{\"blocks\":[],\"command\":\"join-session\",\"kind\":\"launch\",\"multiplayer\":{\"detail\":\"Private provider detail at https://secret.example.org/session?token=fixture-secret\",\"failure\":\"future-private-203.0.113.77:47819\\q\",\"intentId\":\"compat-intent\",\"role\":\"join\",\"serverId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"phase\":\"connecting\",\"requestId\":\"compat-request\",\"schemaVersion\":2,\"sequence\":4,\"status\":\"failed\"}"
+    }
+  ]
+}

@@ -11,7 +11,11 @@ namespace TopiaForge.Mods.UnityUi
     {
         public static void ApplyColumn(GameObject go, TopiaForgeGap gap, TopiaForgeGap padding, bool expandChildWidth = true)
         {
-            var layout = TopiaForgeComponents.GetOrAdd<VerticalLayoutGroup>(go);
+            ConfigureColumn(TopiaForgeComponents.GetOrAdd<VerticalLayoutGroup>(go), gap, padding, expandChildWidth);
+        }
+
+        internal static void ConfigureColumn(VerticalLayoutGroup layout, TopiaForgeGap gap, TopiaForgeGap padding, bool expandChildWidth = true)
+        {
             layout.spacing = (int)gap;
             var pad = (int)padding;
             layout.padding = new RectOffset(pad, pad, pad, pad);

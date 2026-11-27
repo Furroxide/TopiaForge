@@ -1,0 +1,92 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using TopiaForge.ModManager.Core;
+using TopiaForge.Mods;
+
+namespace TopiaForge.ModManager
+{
+    internal sealed partial class GamemodeSessionOrchestrator
+    {
+        private async Task CleanupAsync(SessionRecord record, bool retainLease = false, bool replacementReserved = false)
+        {
+            if (record.TerminalPublished) return;
+            CancelRecord(record);
+            if (record.Reservation != null)
+            {
+                var reservation = record.Reservation;
+                record.Reservation = null;
+                try { await reservation.CloseAsync(); } catch (Exception error) { record.Errors.Add(error); }
+            }
+            else if (!replacementReserved)
+            {
+                try { await native.WaitForIdleAsync(); } catch (Exception error) { record.Errors.Add(error); }
+            }
+            // Native asset callbacks retain their controller/content dependencies until their final cleanup.
+            foreach (var scope in record.Scopes.Values)
+            {
+                try { await scope.DrainNativeWorkAsync(); } catch (Exception error) { record.Errors.Add(error); }
+            }
+            // Clear owned references before invoking extension code; reentrancy cannot dispose them twice.
+            // Controllers stop in the reverse of the order they started: the player's participant controller, then the
+            // server controller. Each disposer is attempted whatever the one before it did.
+            var resources = new IDisposable?[] { record.ParticipantController, record.Controller, record.Factory as IDisposable }
+                .Concat(record.ContentResources.AsEnumerable().Reverse())
+                .Concat(new IDisposable?[] { record.Instance, record.Provider as IDisposable }).ToArray();
+            record.ContentResources.Clear();
+            record.ParticipantController = null;
+            record.Controller = null;
+            record.Factory = null;
+            record.Instance = null;
+            record.Provider = null;
+            var disposed = new List<IDisposable>();
+            foreach (var resource in resources)
+            {
+                if (resource == null || disposed.Any(previous => ReferenceEquals(previous, resource))) continue;
+                disposed.Add(resource);
+                TryCleanup(record, resource.Dispose);
+            }
+            foreach (var scope in record.Scopes.Values.Reverse())
+            {
+                try { await scope.CloseAsync(); } catch (Exception error) { record.Errors.Add(error); }
+            }
+            TryCleanup(record, record.CallerCancellation.Dispose);
+            TryCleanup(record, record.Cancellation.Dispose);
+            record.Scopes.Clear();
+            record.Slots.Clear();
+            if (ReferenceEquals(current, record)) current = null;
+            Commit(record, SessionPhase.Idle);
+            record.TerminalPublished = true;
+            foreach (var error in record.Errors) Report(error, record.Follow != null);
+            var result = record.Errors.Count == 0 ? OperationResult<bool>.Success(true)
+                : OperationResult<bool>.Failure(ModErrorCode.External, Message(string.Join("; ", record.Errors.SelectMany(CleanupMessages).Distinct(StringComparer.Ordinal))));
+            if (record.Follow != null && !result.Succeeded)
+                result = OperationResult<bool>.Failure(result.ErrorCode, SessionFollower.Scrub(result.ErrorMessage));
+            if (ReportsToLauncher(record))
+                Publish(Outcome, new LaunchOutcome("session", record.Identity.RequestId, NextSequence(), "idle",
+                    result.Succeeded ? (record.ReachedRunning ? "succeeded" : "cancelled") : "failed", Array.Empty<LaunchBlock>(), record.Identity.SessionId,
+                    error: result.Succeeded ? null : new LaunchExecutionError("external", result.ErrorMessage)));
+            if (!retainLease) lifecycle.Release(record.Lease);
+            record.Stopped.TrySetResult(result);
+        }
+
+        private static IEnumerable<string> CleanupMessages(Exception error)
+        {
+            if (error is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions)
+                    foreach (var message in CleanupMessages(inner)) yield return message;
+                yield break;
+            }
+            yield return error.Message;
+            if (error.InnerException != null)
+                foreach (var message in CleanupMessages(error.InnerException)) yield return message;
+        }
+
+        private static void TryCleanup(SessionRecord record, Action cleanup)
+        {
+            try { cleanup(); } catch (Exception error) { record.Errors.Add(error); }
+        }
+    }
+}

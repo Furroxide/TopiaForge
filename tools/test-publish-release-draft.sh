@@ -2,11 +2,29 @@
 set -euo pipefail
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-publisher="$script_dir/publish-release-draft.sh"
-fetcher="$script_dir/fetch-release-assets.sh"
 fake_gh="$script_dir/test-support/fake-gh-release.sh"
 temp_root=$(mktemp -d)
 trap 'rm -rf "$temp_root"' EXIT
+
+publisher_root="$temp_root/publisher-repo"
+mkdir -p "$publisher_root/tools" "$publisher_root/release" "$publisher_root/.github" \
+  "$publisher_root/apps/topiaforge_cli/bin"
+for script in publish-release-draft.sh fetch-release-assets.sh verify-release-tag.sh; do
+  cp "$script_dir/$script" "$publisher_root/tools/"
+done
+if [[ -f $script_dir/release-asset-policy.sh ]]; then
+  cp "$script_dir/release-asset-policy.sh" "$publisher_root/tools/"
+fi
+cp "$script_dir/../.github/repository-governance.json" "$publisher_root/.github/"
+jq '.signingIdentities = {}' "$script_dir/../release/release-policy.json" \
+  >"$publisher_root/release/release-policy.json"
+jq -n '{releases: ["0.1.0-rc.1", "1.0.2"] | map({version: .,
+  artifacts: ["TopiaForge-windows-x64.zip", "example.topiaforgemod"]})}' \
+  >"$publisher_root/release/catalog.json"
+printf '// Synthetic validator, intercepted by fake Dart.\n' \
+  >"$publisher_root/apps/topiaforge_cli/bin/topiaforge.dart"
+publisher="$publisher_root/tools/publish-release-draft.sh"
+fetcher="$publisher_root/tools/fetch-release-assets.sh"
 
 git init --quiet --bare "$temp_root/remote.git"
 git init --quiet "$temp_root/work"
@@ -18,24 +36,34 @@ wrong_sha=$(git -C "$temp_root/work" rev-parse HEAD)
 git -C "$temp_root/work" commit --quiet --allow-empty -m release
 target_sha=$(git -C "$temp_root/work" rev-parse HEAD)
 git -C "$temp_root/work" push --quiet origin HEAD:refs/heads/main
-git -C "$temp_root/work" tag -a v1.0.0-rc.1 "$target_sha" -m v1.0.0-rc.1
+git -C "$temp_root/work" tag -a v0.1.0-rc.1 "$target_sha" -m v0.1.0-rc.1
 git -C "$temp_root/work" tag -a v1.0.1-rc.1 "$wrong_sha" -m v1.0.1-rc.1
 git -C "$temp_root/work" tag -a v1.0.2 "$target_sha" -m v1.0.2
 git -C "$temp_root/work" push --quiet origin \
-  refs/tags/v1.0.0-rc.1 refs/tags/v1.0.1-rc.1 refs/tags/v1.0.2
+  refs/tags/v0.1.0-rc.1 refs/tags/v1.0.1-rc.1 refs/tags/v1.0.2
 
 mkdir -p "$temp_root/bin" "$temp_root/assets" "$temp_root/state"
 cp "$fake_gh" "$temp_root/bin/gh"
+cat >"$temp_root/bin/dart" <<'DART'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$FAKE_GH_STATE/qualification-calls"
+[[ ${FAKE_QUALIFICATION_INVALID:-false} != true ]] || exit 1
+qualification_count=$(wc -l <"$FAKE_GH_STATE/qualification-calls" | tr -d ' ')
+[[ $qualification_count != "${FAKE_QUALIFICATION_REJECT_AT:-never}" ]] || exit 1
+[[ $* == *'release validate-readiness'* && $* == *'--assets '* ]] || exit 1
+DART
+chmod +x "$temp_root/bin/dart"
 printf 'release notes\n' >"$temp_root/notes.md"
 printf '{"distributable":true,"blockingReasons":[]}\n' \
   >"$temp_root/assets/release-bom.json"
 printf '{"spdxVersion":"SPDX-2.3"}\n' \
   >"$temp_root/assets/release-sbom.spdx.json"
-printf '{"version":"1.0.0-rc.1"}\n' \
+printf '{"version":"0.1.0-rc.1"}\n' \
   >"$temp_root/assets/topiaforge-update-v1.json"
 printf 'update-signature\n' \
   >"$temp_root/assets/topiaforge-update-v1.json.sig"
-for platform in windows-x64 linux-x64; do
+for platform in windows-x64; do
   printf '{"schema":"release-platform-bundle-v1","platform":"%s"}\n' \
     "$platform" \
     >"$temp_root/assets/release-platform-bundle-v1-$platform.json"
@@ -45,7 +73,6 @@ printf '{"schema":"release-handoff-v1"}\n' \
 printf 'detached-cms-signature\n' \
   >"$temp_root/assets/release-handoff-v1.json.p7s"
 printf 'windows archive\n' >"$temp_root/assets/TopiaForge-windows-x64.zip"
-printf 'linux archive\n' >"$temp_root/assets/TopiaForge-linux-x64.zip"
 printf 'canonical mod\n' >"$temp_root/assets/example.topiaforgemod"
 checksum_temp="$temp_root/SHA256SUMS.tmp"
 (
@@ -88,8 +115,8 @@ run_fetcher() {
   local destination=$1
   (
     cd "$temp_root/work"
-    bash "$fetcher" owner/repo v1.0.0-rc.1 "$target_sha" \
-      "TopiaForge 1.0.0-rc.1" "$temp_root/notes.md" "$destination" true
+    bash "$fetcher" owner/repo v0.1.0-rc.1 "$target_sha" \
+      "TopiaForge 0.1.0-rc.1" "$temp_root/notes.md" "$destination" true
   )
 }
 must_fail() {
@@ -103,8 +130,8 @@ reset_matching_release() {
     --arg body "$(<"$temp_root/notes.md")" \
     '{
       id:1,
-      tag_name:"v1.0.0-rc.1",
-      name:"TopiaForge 1.0.0-rc.1",
+      tag_name:"v0.1.0-rc.1",
+      name:"TopiaForge 0.1.0-rc.1",
       body:$body,
       draft:true,
       prerelease:true,
@@ -136,15 +163,39 @@ write_publish_uploader_fixture() {
     )' "$source" >"$destination"
 }
 
+# A direct publisher must refuse missing detached qualification before mutation.
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+test ! -e "$FAKE_GH_STATE/release.json"
+for name in release-candidate-readiness-v1.json release-candidate-acceptance-v1.json; do
+  printf '{"syntheticQualificationFixture":true}\n' >"$temp_root/assets/$name"
+  (cd "$temp_root/assets" && sha256sum "$name") >>"$temp_root/assets/SHA256SUMS"
+done
+sort -o "$temp_root/assets/SHA256SUMS" "$temp_root/assets/SHA256SUMS"
+expected_asset_count=$((expected_asset_count + 2))
+export FAKE_QUALIFICATION_INVALID=true
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+test ! -e "$FAKE_GH_STATE/release.json"
+unset FAKE_QUALIFICATION_INVALID
+for name in release-candidate-readiness-v1.json release-candidate-acceptance-v1.json; do
+  mv "$temp_root/assets/$name" "$temp_root/$name"
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+  test ! -e "$FAKE_GH_STATE/release.json"
+  mv "$temp_root/$name" "$temp_root/assets/$name"
+done
+printf 'not reviewed\n' >"$temp_root/assets/unreviewed-candidate.json"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+test ! -e "$FAKE_GH_STATE/release.json"
+rm "$temp_root/assets/unreviewed-candidate.json"
+
 # New draft: the POST omits target_commitish, so GitHub cannot synthesize a tag.
-must_fail run_publisher_with_flag v1.0.0-rc.1 "$target_sha" false
-run_publisher v1.0.0-rc.1 "$target_sha" >/dev/null
+must_fail run_publisher_with_flag v0.1.0-rc.1 "$target_sha" false
+run_publisher v0.1.0-rc.1 "$target_sha" >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$expected_asset_count"
 jq -e \
   '.draft == true and
    .immutable == false and
    .prerelease == true and
-   .tag_name == "v1.0.0-rc.1" and
+   .tag_name == "v0.1.0-rc.1" and
    (.target_commitish | not)' \
   "$FAKE_GH_STATE/release.json" >/dev/null
 
@@ -158,27 +209,27 @@ must_fail run_fetcher "$temp_root/human-generated-draft-fetch"
 jq '.author.login="other-admin"' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 mkdir "$temp_root/non-admin-fetch"
 must_fail run_fetcher "$temp_root/non-admin-fetch"
 reset_matching_release
 jq '.author.id=999' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 reset_matching_release
 
 # Every admin-staged asset is bound to the pinned login, actor ID, and type.
 cp "$FAKE_GH_STATE/assets.json" "$FAKE_GH_STATE/assets.identity-good.json"
 jq '.[0].uploader.id=999' "$FAKE_GH_STATE/assets.identity-good.json" \
   >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 mkdir "$temp_root/wrong-uploader-fetch"
 must_fail run_fetcher "$temp_root/wrong-uploader-fetch"
 cp "$FAKE_GH_STATE/assets.identity-good.json" "$FAKE_GH_STATE/assets.json"
 jq '.[0].uploader.type="Bot"' "$FAKE_GH_STATE/assets.identity-good.json" \
   >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 cp "$FAKE_GH_STATE/assets.identity-good.json" "$FAKE_GH_STATE/assets.json"
 
 if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
@@ -194,7 +245,7 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
     )
   ' "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   reset_matching_release
   jq '
     map(
@@ -205,13 +256,13 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
     )
   ' "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   reset_matching_release
   jq '[.[] | select(.name != "TopiaForge-windows-x64.zip")]' \
     "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
   uploads_before_missing_admin=$(<"$FAKE_GH_STATE/uploads")
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   test "$(<"$FAKE_GH_STATE/uploads")" = "$uploads_before_missing_admin"
   reset_matching_release
   jq '
@@ -224,7 +275,7 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
   ' "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
   uploads_before_admin_starter=$(<"$FAKE_GH_STATE/uploads")
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   test "$(<"$FAKE_GH_STATE/uploads")" = "$uploads_before_admin_starter"
   jq -e '
     any(.[];
@@ -243,7 +294,7 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
   mv "$FAKE_GH_STATE/assets.tmp" "$FAKE_GH_STATE/assets.json"
   rm -f "$FAKE_GH_STATE/asset-content/$missing_generated_id"
   export FAKE_GH_UPLOAD_PRINCIPAL=workflow
-  run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+  run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
   unset FAKE_GH_UPLOAD_PRINCIPAL
   jq '
     map(
@@ -260,14 +311,14 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
 fi
 
 # Exact draft rerun is a no-op.
-run_publisher v1.0.0-rc.1 "$target_sha" >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$expected_asset_count"
 
 # A partial starter upload is deleted and resumed with the exact local bytes.
 jq '.[0] |= (.state="starter" | .digest=null | .size=0)' \
   "$FAKE_GH_STATE/assets.json" >"$FAKE_GH_STATE/assets.tmp"
 mv "$FAKE_GH_STATE/assets.tmp" "$FAKE_GH_STATE/assets.json"
-run_publisher v1.0.0-rc.1 "$target_sha" >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$((expected_asset_count + 1))"
 jq -e 'all(.[]; .state == "uploaded")' \
   "$FAKE_GH_STATE/assets.json" >/dev/null
@@ -276,7 +327,7 @@ jq -e 'all(.[]; .state == "uploaded")' \
 cp "$FAKE_GH_STATE/assets.json" "$FAKE_GH_STATE/assets.good.json"
 jq '.[0].digest="sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' \
   "$FAKE_GH_STATE/assets.good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 cp "$FAKE_GH_STATE/assets.good.json" "$FAKE_GH_STATE/assets.json"
 jq '. + [{
   id:999,
@@ -285,7 +336,7 @@ jq '. + [{
   digest:"sha256:0000000000000000000000000000000000000000000000000000000000000000",
   size:1
 }]' "$FAKE_GH_STATE/assets.good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 cp "$FAKE_GH_STATE/assets.good.json" "$FAKE_GH_STATE/assets.json"
 
 # Candidate and release metadata mismatches fail before publication.
@@ -293,30 +344,30 @@ reset_matching_release
 jq '.prerelease=false' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 reset_matching_release
 jq '.name="Wrong title"' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 reset_matching_release
 jq '.body="Wrong notes"' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 # Both a wrong target argument and an annotated tag at another commit fail.
 reset_matching_release
-must_fail run_publisher v1.0.0-rc.1 "$wrong_sha"
+must_fail run_publisher v0.1.0-rc.1 "$wrong_sha"
 must_fail run_publisher v1.0.1-rc.1 "$target_sha"
 
 # Final checksums must cover every public asset other than the checksum file.
 cp "$temp_root/assets/SHA256SUMS" "$temp_root/SHA256SUMS.good"
 grep -v 'release-handoff-v1.json$' \
   "$temp_root/SHA256SUMS.good" >"$temp_root/assets/SHA256SUMS"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 mv "$temp_root/SHA256SUMS.good" "$temp_root/assets/SHA256SUMS"
 
 # Publication is a single transition, requires immutable releases, and reruns
@@ -327,6 +378,45 @@ write_publish_uploader_fixture \
   "$FAKE_GH_STATE/assets.publish-good.json"
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
+# GitHub canonicalizes login casing independently of its stable actor IDs.
+# Exercise both the read-only fetcher and final publication transition.
+jq '.author.login="Furroxide"' "$FAKE_GH_STATE/release.json" >"$FAKE_GH_STATE/release.tmp"
+mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
+jq 'map(if .uploader.id == 221987073 then .uploader.login="FURROXIDE"
+  else .uploader.login="GitHub-Actions[bot]" end)' \
+  "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
+mkdir "$temp_root/canonical-login-fetch"
+identity_failures=0
+if ! run_fetcher "$temp_root/canonical-login-fetch" >/dev/null; then
+  echo "Fetcher rejected canonical GitHub login casing." >&2
+  identity_failures=$((identity_failures + 1))
+fi
+if ! run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null; then
+  echo "Publisher rejected canonical GitHub login casing." >&2
+  identity_failures=$((identity_failures + 1))
+fi
+[[ $identity_failures == 0 ]] || exit 1
+reset_matching_release
+cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
+
+# Requalification must run again after reconciliation, before draft:false.
+qualification_calls_before=$(wc -l <"$FAKE_GH_STATE/qualification-calls" | tr -d ' ')
+export FAKE_QUALIFICATION_REJECT_AT=$((qualification_calls_before + 2))
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
+jq -e '.draft == true' "$FAKE_GH_STATE/release.json" >/dev/null
+unset FAKE_QUALIFICATION_REJECT_AT
+
+# Detached qualification is always human-reviewed material, including resume.
+for name in release-candidate-readiness-v1.json release-candidate-acceptance-v1.json; do
+  jq --arg name "$name" 'map(if .name == $name then
+    .uploader = {login:"github-actions[bot]", id:41898282, type:"Bot"}
+    else . end)' "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
+  mkdir "$temp_root/wrong-qualification-uploader-$name"
+  must_fail run_fetcher "$temp_root/wrong-qualification-uploader-$name"
+done
+cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
+
 # A finalizer may upload every generated metadata asset and then stop before
 # the draft:false transition. The next run must accept the pinned Actions
 # uploader on that still-draft inventory, fetch the exact bytes, and publish
@@ -334,7 +424,7 @@ cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 mkdir "$temp_root/stranded-finalizer-fetch"
 run_fetcher "$temp_root/stranded-finalizer-fetch" >/dev/null
 uploads_before_stranded_resume=$(<"$FAKE_GH_STATE/uploads")
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 jq -e \
   '.draft == false and
    .immutable == true and
@@ -358,7 +448,7 @@ mkdir "$temp_root/stranded-finalizer-starter-fetch"
 run_fetcher "$temp_root/stranded-finalizer-starter-fetch" >/dev/null
 uploads_before_stranded_starter=$(<"$FAKE_GH_STATE/uploads")
 export FAKE_GH_UPLOAD_PRINCIPAL=workflow
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 unset FAKE_GH_UPLOAD_PRINCIPAL
 test "$(<"$FAKE_GH_STATE/uploads")" = \
   "$((uploads_before_stranded_starter + 1))"
@@ -372,7 +462,7 @@ cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
 rm -f "$FAKE_GH_STATE/asset-get-count"
 export FAKE_GH_MUTATE_ASSETS_ON_GET=3
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 unset FAKE_GH_MUTATE_ASSETS_ON_GET
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 rm -f "$FAKE_GH_STATE/asset-get-count"
@@ -387,7 +477,7 @@ jq '
     end
   )
 ' "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 mkdir "$temp_root/stranded-wrong-actions-actor-fetch"
 must_fail run_fetcher "$temp_root/stranded-wrong-actions-actor-fetch"
 reset_matching_release
@@ -399,13 +489,13 @@ jq '
     end
   )
 ' "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 mkdir "$temp_root/stranded-wrong-actions-app-fetch"
 must_fail run_fetcher "$temp_root/stranded-wrong-actions-app-fetch"
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 reset_matching_release
 uploads_before_publish=$(<"$FAKE_GH_STATE/uploads")
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 jq -e \
   '.draft == false and
    .immutable == true and
@@ -429,26 +519,26 @@ mkdir "$temp_root/wrong-workflow-uploader-fetch"
 must_fail run_fetcher "$temp_root/wrong-workflow-uploader-fetch"
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$uploads_before_publish"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 # Published-byte drift and non-immutable publication both fail closed.
 jq '.[0].size += 1' "$FAKE_GH_STATE/assets.json" \
   >"$FAKE_GH_STATE/assets.tmp"
 mv "$FAKE_GH_STATE/assets.tmp" "$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
 reset_matching_release
 export FAKE_GH_IMMUTABLE_ENABLED=false
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 jq -e '.draft == true' "$FAKE_GH_STATE/release.json" >/dev/null
 export FAKE_GH_IMMUTABLE_ENABLED=true
 
 reset_matching_release
 export FAKE_GH_PUBLISHED_IMMUTABLE=false
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 export FAKE_GH_PUBLISHED_IMMUTABLE=true
 
 # Stable releases retain an explicit false prerelease state.
@@ -463,5 +553,82 @@ jq -e \
    .prerelease == false and
    .tag_name == "v1.0.2"' \
   "$FAKE_GH_STATE/release.json" >/dev/null
+
+# An unsigned distribution has no certificate and therefore no detached CMS
+# handoff signature. The publisher used to demand release-handoff-v1.json.p7s
+# unconditionally, which is what made the hosted path reject an unsigned
+# candidate outright. Mirror the repository layout the script reads its policy
+# from, because both paths are derived from the script's own location.
+# See P0-WIN-01 in docs/LaunchBlockers.md.
+unsigned_root="$temp_root/unsigned-repo"
+mkdir -p "$unsigned_root/tools" "$unsigned_root/release" "$unsigned_root/.github" \
+  "$unsigned_root/apps/topiaforge_cli/bin"
+cp "$script_dir/publish-release-draft.sh" "$unsigned_root/tools/"
+cp "$script_dir/release-asset-policy.sh" "$unsigned_root/tools/"
+cp "$publisher_root/release/catalog.json" "$unsigned_root/release/"
+cp "$publisher_root/apps/topiaforge_cli/bin/topiaforge.dart" "$unsigned_root/apps/topiaforge_cli/bin/"
+cp "$script_dir/verify-release-tag.sh" "$unsigned_root/tools/"
+cp "$script_dir/../.github/repository-governance.json" "$unsigned_root/.github/"
+jq '.signingIdentities.windowsDistribution = "unsigned"' \
+  "$script_dir/../release/release-policy.json" \
+  >"$unsigned_root/release/release-policy.json"
+
+# The same asset set with the signature removed, which is what an unsigned build
+# actually produces.
+cp -r "$temp_root/assets" "$temp_root/unsigned-assets"
+rm -f "$temp_root/unsigned-assets/release-handoff-v1.json.p7s"
+unsigned_checksums="$temp_root/unsigned-assets/SHA256SUMS.tmp"
+(
+  cd "$temp_root/unsigned-assets"
+  rm -f SHA256SUMS
+  find . -mindepth 1 -maxdepth 1 -type f ! -name 'SHA256SUMS*' \
+    -printf '%f\n' | sort |
+    while IFS= read -r name; do
+      sha256sum "$name"
+    done
+) >"$unsigned_checksums"
+mv "$unsigned_checksums" "$temp_root/unsigned-assets/SHA256SUMS"
+
+run_unsigned_publisher() {
+  local publisher_path=$1
+  (
+    cd "$temp_root/work"
+    "$publisher_path" owner/repo v0.1.0-rc.1 "$target_sha" \
+      "TopiaForge 0.1.0-rc.1" "$temp_root/notes.md" \
+      "$temp_root/unsigned-assets" true draft
+  )
+}
+
+# Unsigned policy plus unsigned assets stages successfully.
+rm -f \
+  "$FAKE_GH_STATE/release.json" \
+  "$FAKE_GH_STATE/assets.json" \
+  "$FAKE_GH_STATE/uploads"
+rm -rf "$FAKE_GH_STATE/asset-content"
+run_unsigned_publisher "$unsigned_root/tools/publish-release-draft.sh" >/dev/null
+jq -e '.draft == true and .tag_name == "v0.1.0-rc.1"' \
+  "$FAKE_GH_STATE/release.json" >/dev/null
+# The signature must not be staged, or the published set would disagree with the
+# policy that produced it.
+test "$(
+  jq -r '[.[] | select(.name == "release-handoff-v1.json.p7s")] | length' \
+    "$FAKE_GH_STATE/assets.json"
+)" -eq 0
+
+# The requirement is still enforced in the other direction: the same asset set
+# under the default signed policy must fail for the missing signature. Without
+# this the change would read as "the signature is now optional".
+rm -f \
+  "$FAKE_GH_STATE/release.json" \
+  "$FAKE_GH_STATE/assets.json" \
+  "$FAKE_GH_STATE/uploads"
+rm -rf "$FAKE_GH_STATE/asset-content"
+must_fail run_unsigned_publisher "$publisher"
+
+# An unknown distribution mode is refused rather than silently treated as signed.
+jq '.signingIdentities.windowsDistribution = "sometimes"' \
+  "$script_dir/../release/release-policy.json" \
+  >"$unsigned_root/release/release-policy.json"
+must_fail run_unsigned_publisher "$unsigned_root/tools/publish-release-draft.sh"
 
 echo "Release staging, finalization, and immutable-rerun regression tests passed."

@@ -77,13 +77,31 @@ the loader-owned renderer.
 **Blocking wait on an SDK task.**
 
 The code calls `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()` on a task. Asynchronous SDK work —
-asset bundles, prefabs, custom-world content, scene loads — is driven by the game's own loader and
-completes on the main thread. Blocking that thread stops the frame loop that would have completed the
-task, so the task never finishes and the game hangs with no recovery but ending the process.
+asset bundles, prefabs, custom-world content, scene loads, multiplayer commands — is driven by the
+game's own frame loop and completes on the main thread. Blocking that thread stops the frame loop that
+would have completed the task, so the task never finishes and the game hangs with no recovery but
+ending the process.
 
-Use `PendingOperation<T>` — the SDK primitive for exactly this. It starts the work, polls it, and never
-waits. It also surfaces a result that arrives *after* you cancelled or timed out, so game objects the
-SDK still handed back are released on the main thread instead of leaking:
+For a multiplayer command, call the generated `Submit...` method instead of waiting on
+`Submit...Async`. It hands the host's answer to a callback on the main thread, never once the mod has
+stopped, and for the player whose action submitted the command, as the code after an `await` acts:
+
+```csharp
+SubmitAddScore(new AddScoreRequest { Amount = 5 }, answer =>
+{
+    if (!answer.Result.Succeeded) ShowRefusal(answer.Result.ErrorMessage);
+});
+```
+
+The message names the method to call, and the IDE's quick fix rewrites the wait for you: the
+statements that read the confirmation move into the callback. It offers no fix where moving them would
+change what they do, such as a `return` or an `await` after the wait, or a local they assign that code
+after them reads. See
+[Multiplayer](Multiplayer.md#submit-a-command-and-read-its-answer) for the answer's rules.
+
+For other SDK work, use `PendingOperation<T>` — the SDK primitive for exactly this. It starts the work,
+polls it, and never waits. It also surfaces a result that arrives *after* you cancelled or timed out, so
+game objects the SDK still handed back are released on the main thread instead of leaking:
 
 ```csharp
 private readonly PendingOperation<IAssetBundle> load = new PendingOperation<IAssetBundle>();
@@ -94,12 +112,12 @@ protected override void OnLoad()
     load.Begin(
         token => Context.Assets.LoadBundleAsync("content/level.bundle", token),
         Context.Lifetime.StoppingToken,
-        Context.Time.Frame.UnscaledTime);
+        (float)Context.Time.Frame.ElapsedTime);
 }
 
 private void OnUpdate(float deltaTime)
 {
-    switch (load.Poll(Context.Time.Frame.UnscaledTime, timeoutSeconds: 30f, out var result))
+    switch (load.Poll((float)Context.Time.Frame.ElapsedTime, timeoutSeconds: 30f, out var result))
     {
         case PendingOperationState.Completed when result.TryGetValue(out var bundle):
             Use(bundle);
@@ -114,13 +132,110 @@ private void OnUpdate(float deltaTime)
 }
 ```
 
+`Context.Time.Frame.ElapsedTime` counts unscaled seconds since TopiaForge's gameplay services started, so a
+paused or slowed game still times out; it is a `double`, and the operation's clock is a `float`.
+
 A hand-rolled `IsCompleted` poll is still accepted by this rule, but `PendingOperation<T>` is the
 supported shape: cancellation, timeout, late-result release, and restart-while-draining are all
 already handled and covered by tests.
 
+Awaiting the task never blocks, so `await` is fine too. In multiplayer it is the better choice for work
+that a player's own action starts, such as a click that loads a prefab and then spawns it: the code after
+the `await` keeps the player's action, while a result polled in a later Update counts as a script. See
+[The player's own actions](Multiplayer.md#the-players-own-actions).
+
 This rule applies to every mod project, including one that sets `TopiaForgeSafeProject` to `false`:
 opting into the unstable interop package does not move the code off the game loop. Test projects
 (`IsTestProject`) are exempt.
+
+### TF1009
+
+**Input edge read in FixedUpdate.**
+
+The code reads `WasPressed` or `WasReleased` in a handler passed to `SubscribeFixedUpdate`. The input
+service samples input once a frame, before Update, and an edge holds for that one frame. FixedUpdate
+runs zero or more times a frame on its own clock, so it misses presses when the game runs fast and
+repeats them when it runs slow. In multiplayer only a mod's Update and LateUpdate carry the player's
+input as the player's own action, so what the handler does counts as a script there.
+
+Act on the edge in Update or LateUpdate. When the response has to run in FixedUpdate, such as a force
+on the local player, note the press in Update and use it there:
+
+```csharp
+private IInputAction jump = null!;
+private bool jumpRequested;
+
+protected override void OnLoad()
+{
+    jump = Context.Input.RegisterAction(
+        new InputActionDefinition("jump", "Jump", new[] { InputBinding.Key("Space") })).Value!;
+    Context.Events.SubscribeUpdate(_ =>
+    {
+        if (jump.WasPressed) jumpRequested = true;
+    });
+    Context.Events.SubscribeFixedUpdate(_ =>
+    {
+        if (!jumpRequested) return;
+        jumpRequested = false;
+        ApplyJumpForce();
+    });
+}
+```
+
+Held input (`IsHeld`) and analog values (`Value`) hold for the whole frame, so reading them in
+FixedUpdate is fine and is not reported. Nor is an edge read in code the handler only hands on to run
+later, such as an Update or scene subscription or a `Context.Scheduler` callback, written in place,
+kept in a local or written as a local function, since that runs on the frame's own clock. A spawn, a
+transform change or a destroy that answers the press belongs in Update, where it counts as the player's
+own action.
+
+The rule follows a handler written in place or kept in a local first, a handler method wherever it is
+declared, and the local functions either one calls. It does not follow the handler into other methods
+it calls, or into a handler kept in a field. The rule is a warning, applies to every mod project like
+TF1008, and exempts test projects.
+
+### TF1010
+
+**SDK API needs a newer loader (error).**
+
+An API marked `[RequiresTopiaForge("0.2.0")]` needs a manifest whose
+`supportedLoaderVersionRange` has a lower bound of at least `0.2.0`. The diagnostic names the API,
+its required version and the admitted range. Raise that field and `supportedSdkVersionRange` to
+the releases the mod actually supports. SemVer prereleases sort before the corresponding release;
+`>=0.2.0-rc.1` still admits loaders older than `0.2.0`. An unbounded or unreadable floor cannot prove
+compatibility and reports the error when a marked API is used. Ordinary manifest validation still
+reports invalid or missing fields.
+
+The IDE fix updates both fields only when each is a simple `>=A <B` range and the required version
+stays below both ceilings. It preserves a stricter existing floor. Exact pins, wildcards, unbounded,
+reordered, repeated and other comparator shapes receive no fix; edit those intentionally. The fix
+does not widen a ceiling or invent missing fields. When the range's ceiling is below the API too, as
+in `>=0.1.0-rc.1 <0.2.0`, raising the floor alone would leave an empty range, so the message names
+both fields and bounds that admit the API, such as `">=0.2.0 <0.3.0"`.
+
+Checks read attributes from referenced assembly metadata, including a containing type's requirement.
+They cover method calls and method groups, helper bodies in this compilation, property reads and
+writes (including marked accessors, null-conditional assignments and attribute named arguments),
+indexers (including `?[]` and index initializers), events (checking the add or remove accessor actually
+used), fields and constants, constructors, attributes and their
+constant arguments, generic arguments and `nameof`. An override or an explicit interface
+implementation of a marked member is checked too, because it only runs on a loader that has the
+member. `nameof` and constant uses are intentionally checked even when they emit no runtime call: the
+declared SDK floor also describes source support. Documentation comments are not code, so a `cref`
+is not checked. Reflection, dynamic binding and the bodies of precompiled third-party helpers are not
+inspected; their authors must propagate their required loader floor. Generated source and test
+projects retain the analyzer's existing exemption. The check also applies to interop projects.
+
+A project without its own `topiaforge.mod.json`, such as a service mod's contracts project, has no
+floor to raise, so TF1010 does not run there. When such a library uses a newer API, raise the floor
+of the mod that ships it.
+
+Compiler-inserted calls without an explicit symbol reference, such as an omitted base-constructor
+initializer, operators, conversions and `foreach`/`await` protocols, are outside this syntax check,
+as is a method that implements a newer interface member implicitly, without naming it. Raise the
+manifest floor manually when relying on a newer member through one of these forms.
+
+SDK authors: see [how to mark additions](CompatibilityPolicy.md#version-gated-sdk-additions).
 
 ### TF1101
 
@@ -128,6 +243,151 @@ opting into the unstable interop package does not move the code off the game loo
 
 The explicitly unstable interop package requires Robotopia managed reference assemblies. Install
 Robotopia and run `topiaforge restore`, or remove the package and use the safe SDK.
+
+### TF1102
+
+**NuGet resolved another SDK version than the pin.**
+
+`topiaforge restore` and `topiaforge pack` pin each SDK `PackageReference` in a mod project to the SDK's
+version, then read the lock file that NuGet wrote. The lock file says which version NuGet resolved, or
+that it resolved none. When that differs from the pin, something outside the project's own item changed
+it, such as:
+
+- an `Update` or `Remove` item in a `Directory.Build.props` or `Directory.Build.targets` above the
+  project, which MSBuild imports by name alone;
+- a `PackageVersion` in a `Directory.Packages.props` above the project;
+- a property or item expression in the project, such as `Include="$(SdkId)"`;
+- another imported `.props` or `.targets` file, or a target that edits `PackageReference` items before
+  restore.
+
+The message names the package, both versions, and any of those three files above the project that names
+the package in plain text; otherwise it lists the causes above, those files first. Make that use the
+SDK's version, or remove it, then run `topiaforge restore` again. `topiaforge pack` packs nothing until
+the versions agree.
+
+### TF1103
+
+**No lock file to check.**
+
+`topiaforge restore` runs NuGet with lock files on. It reads the lock file where NuGet puts it: where
+`NuGetLockFilePath` says, as the restore records in `obj/project.assets.json`; otherwise where the
+project file itself declares `NuGetLockFilePath` in a plain `<PropertyGroup>`, as a literal path;
+otherwise `packages.<project name>.lock.json` when there is one; otherwise `packages.lock.json` beside the
+project. When none is there, it cannot be read, or the restore did not write it, which SDK versions NuGet
+resolved is unknown, so the restore fails. NuGet rewrites the lock file it uses on every restore, so one the
+restore left as it was is left from an earlier one, from before `NuGetLockFilePath` or `obj` moved, and it
+is never checked in place of the lock file NuGet wrote. The message names the files it looked for, or the
+one it found and why it is left over.
+
+Keep `RestorePackagesWithLockFile` on, as the templates set it, and run `topiaforge restore` again. If
+`NuGetLockFilePath` moves the lock file, keep the project's `obj` folder beside it, where the restore
+records that path, or declare `NuGetLockFilePath` in the project file itself as a literal path: the check
+does not evaluate MSBuild, so a path set in an imported file with `obj` moved elsewhere, or set through a
+property expression, cannot be followed. If an `obj` folder left beside the project from before it moved
+names an old path, delete that folder. If the project file declares `NuGetLockFilePath` but NuGet put the
+lock file elsewhere, a later setting, a condition or an import sets another path, or none: make the project
+file's declaration the one that applies.
+
+## Multiplayer contract diagnostics
+
+The multiplayer generator reports these while it builds a `[MultiplayerContract]`. Errors stop the build;
+warnings mark contracts that build but will behave badly in a session.
+
+### TFMP001
+
+**Multiplayer contract must be partial.**
+
+Mark the `[MultiplayerContract]` class `partial` and keep it top-level and non-generic; the generator adds the descriptor, codecs, binding, and typed proxies to it.
+
+### TFMP002
+
+**Invalid multiplayer command.**
+
+A `[MultiplayerCommand]` handler is a non-static, non-async, non-generic method shaped `OperationResult<TResponse> Handle(MultiplayerCommandContext command, TRequest request)`. The request and response are classes, and no parameter is `ref`, `in`, or `out`. Out-of-range settings report TFMP016 instead.
+
+### TFMP003
+
+**Unsupported multiplayer payload type.**
+
+Payloads are concrete classes with a compiler-generated parameterless constructor and deterministic primitive, enum, string, array, or nested payload members. Native Unity or game objects, interfaces, polymorphic and recursive graphs, and constructors or initializers with side effects are rejected.
+
+### TFMP004
+
+**Unbounded multiplayer payload.**
+
+Give every string and array member `[NetworkBound(maximum)]`, so the generated codec has a hard size limit. A bound the compiler cannot resolve, usually for want of `using TopiaForge.Mods;`, is the compiler's error to report, so it raises CS0246 and no TFMP004.
+
+### TFMP005
+
+**Predicted handler is nondeterministic.**
+
+An owner-predicted handler runs on the sender and again on the server, and both runs must agree. Draw random numbers from `command.CreateRandom()` and never read clocks, `System.Random`, or new GUIDs.
+
+### TFMP006
+
+**Predicted handler performs a process-local side effect.**
+
+An owner-predicted handler runs on the sender and again on the server, so it may only touch what both runs share. It may update generated replicated state, read its request, its state, its locals and arrays, copy and resize arrays with `Array.Copy`, `CopyTo`, `Clone` and `Array.Resize`, call this mod's own non-virtual methods, whose bodies answer to the same rules, and emit buffered presentation events. Move UI, audio, file, and service calls into a `[PresentationEvent]` handler, or set `Prediction = PredictionMode.None` when the presser can wait for the host. A virtual or async method, one from another assembly, a static constructor the call would run first, `new T()`, an interface's or overridable property, and an event are refused, because the generator cannot read what would run. So is handing `this` on to a helper, a local or a return value, which would let the helper reach the mod's fields. One expression reports once, at its outermost offending call.
+
+### TFMP007
+
+**Duplicate multiplayer wire id.**
+
+Every state, command, object, and event id in one contract must be unique.
+
+### TFMP008
+
+**Multiplayer payload exceeds its limit.**
+
+The generated codec can produce more bytes than `MaximumPayloadBytes` allows. Raise the limit or tighten the `[NetworkBound]` values it adds up from.
+
+### TFMP009
+
+**Invalid multiplayer wire id.**
+
+Ids are non-empty, contain no control characters, and stay at most 128 characters after the contract id prefix is added.
+
+### TFMP010
+
+**Invalid replicated object handler.**
+
+A `[ReplicatedObject]` handler is a non-async, non-generic method shaped `OperationResult<TState> Apply(ReplicatedObjectCommandContext command, TState state, TInput input)`, with class state and input types and no `ref`, `in`, or `out` parameters.
+
+### TFMP011
+
+**Multiplayer payload exceeds the transport limit.**
+
+Replicated state and presentation-event codecs must stay within the 1 MiB transport limit.
+
+### TFMP012
+
+**Generated multiplayer member name collision.**
+
+A declaration would generate a member, such as `Submit...`, `Submit...Async` or `Emit...To`, that already exists. Rename the handler or the conflicting member.
+
+### TFMP013
+
+**Multiplayer contract id is required.**
+
+Set `[MultiplayerContract(Id = "...")]`. The id is a permanent wire identity, so class and namespace names are never used.
+
+### TFMP014
+
+**Contract exceeds the per-connection inbound budget.**
+
+A warning: the declared worst-case client-to-server rate exceeds 32 KiB/s. Lower `MaximumPerSecond` or `MaximumPayloadBytes` to what the commands really need.
+
+### TFMP015
+
+**Server-only handler uses local presentation.**
+
+A warning: a handler with `Prediction = None` runs only on the session authority, so UI, input, local-player, audio, or Unity calls there affect the host rather than the player who acted. Publish a presentation event, or address the player through `IPlayer.Ui`.
+
+### TFMP016
+
+**Invalid multiplayer setting.**
+
+A setting is outside its range: `Prediction` is `None` or `Owner`, `MaximumPerSecond` is 1 to 1000, `MaximumPayloadBytes` is 64 to 1048576, `Delivery` is `Coalesced` or `Immediate`, and `MaximumUpdatesPerSecond` is 1 to 60, or 0 for the provider's snapshot rate.
 
 ## Runtime diagnostics
 
@@ -140,6 +400,11 @@ timings, compatibility decisions, outcomes, root exception chains, and recovery 
 receipts detect modified package bytes before execution. Startup recovery quarantines a mod only
 when the journal proves the process stopped inside that mod's load callback. Any other unclean exit
 uses one-shot safe mode without assigning blame; only an explicit clean-exit record skips recovery.
+Unity runs no frame once a quit starts destroying objects, so the manager holds the game's quit, for
+at most 10 seconds, while its teardown unloads every mod and writes that record. On the first quit
+request the manager moves its quit handler behind every handler subscribed until then, the game's own
+among them, so the game's own quit steps, its shutdown feedback page among them, run while every mod
+and patch is still in place. `manager.log` marks the request with `Quit requested.`
 
 ## Development-loop diagnostics
 
@@ -159,6 +424,12 @@ or SDK issue.
 
 **Build failed.** Fix the first compiler/analyzer diagnostic, then run `dotnet build --no-restore`.
 
+### TFDEV115
+
+The generated multiplayer contract could not be synchronized. Fix the multiplayer
+compiler diagnostics, rebuild, and rerun `dev`. Plain `dev` and `dev --peers` use the
+same schema-3 contract lock pipeline.
+
 ### TFDEV120
 
 **Tests failed.** Run `dotnet test --no-restore` for the complete test-host and assertion output.
@@ -177,10 +448,22 @@ manifest, managed assembly, or archive finding.
 **Install failed.** Pass `--game-dir <Robotopia folder>` or set `ROBOTOPIA_GAME_DIR`, then run
 `topiaforge doctor`.
 
+### TFDEV152
+
+Private development overlays could not be prepared. Repair the source installation
+and built runtime, check directory access, and retry. Existing source game data
+is shared through links and is never a cleanup target.
+
 ### TFDEV160
 
 **Launch failed.** Run `topiaforge doctor`, repair the runtime in the launcher, and retry with
 `--no-tail` while diagnosing.
+
+### TFDEV165
+
+A local development peer could not join. Check its package and world selection and
+the labeled peer logs, then restart the dev loop. The join uses the host's verified
+descriptor and never falls back to external discovery.
 
 ### TFDEV170
 
@@ -219,8 +502,55 @@ bundled-framework finding. Validation reads metadata only and never loads mod co
 ### TFPKG170
 
 **Downloaded package metadata differs from the manifest approved during planning.** Refresh the
-package source and retry. Source maintainers must publish immutable bytes whose canonical V5
+package source and retry. Source maintainers must publish immutable bytes whose canonical V6
 manifest exactly matches the indexed manifest; TopiaForge does not stage mismatched packages.
+
+### TF1011
+
+**Map world declaration is invalid.**
+
+Declare exactly one published map id or package-relative `.roboworld`, `.json` or
+`.json.gz` file, a required `io.github.furroxide.topiaforge.worlds` dependency, and
+only `scene-replacement` transitions. A file must be a project item copied to its
+declared package path; packing must include its SHA-256 in `hashes`. Scene ids use
+1–128 ASCII letters, digits, underscores or hyphens.
+
+The code fixes normalize a robotopia.gg map page link to its id or insert the
+required Worlds dependency. Ambiguous or malformed manifests need a manual edit.
+Use `topiaforge world add map <link-or-id>` and `topiaforge check world <link-or-id>`
+to author and verify declarations. See [Map worlds](MapWorlds.md).
+
+### TF1012
+
+**The gamemode needs a map world.** Its factory or controller reads `World.Map`
+or calls `RequireMap()`, but its launch targets select no declared map world.
+Run `topiaforge world add map <link>` and select the target that starts this mode.
+An unrelated map declaration does not satisfy this requirement. Open world pickers
+and external world declarations cannot be checked conclusively at build time.
+
+### TF1013
+
+**The entity id is absent from the matching survey.** Run
+`topiaforge world survey <world>` to refresh the snapshot under `obj/`. Check the
+anchor drift report before using `--update`. The code fix offers nearby ids, ranking
+an anchor's name and model first; choose the intended object yourself.
+
+The analyzer receives survey snapshots automatically and checks copied JSON anchors
+files. A snapshot for another map or scene is ignored; without a matching snapshot,
+this warning stays silent. Include anchors files as copied project items.
+
+### TFPKG180
+
+**Manifest feature needs a newer loader.**
+
+`topiaforge pack` and `topiaforge check package` compare each used manifest feature with the lower
+bound of `supportedLoaderVersionRange`. Raise that floor to the required release. The shared table
+is `ManifestFeatureRequirements.current` in
+`packages/launcher_domain/lib/src/manifest_feature_requirements.dart`. Its map-world row
+requires stable `0.2.0` for `content.kind: "map"`; prerelease lower bounds still admit
+older loaders and are refused. The native package validator enforces the same floor.
+This is a pre-release V6 amendment, so existing V6 manifests keep their schema number.
+An unknown content kind still fails schema validation. See [Map worlds](ManifestV6.md#map-worlds-pre-release-v6-amendment).
 
 ### TFINBOX100–TFINBOX130
 
@@ -235,3 +565,21 @@ processing remain in a `.topiaforge-consume-*` quarantine directory under the in
 still successful. Check that the launcher data `logs` directory is writable, is not a symbolic link,
 and has free disk space; the bounded fallback diagnostic is written to the launcher's standard error
 stream.
+
+### TF1014
+
+**Participant code changes an authoritative world view or places a blocker.** Move
+the change to the gamemode's server controller. The runtime refuses participant
+calls in single player too. The analyzer follows participant session parameters,
+participant controllers and calls to visible helpers. It cannot prove arbitrary
+reflection, dynamic dispatch or code in another assembly. Ordinary server calls
+remain valid. See [the world view](MapWorlds.md#the-world-view).
+
+### TF1015
+
+**A preset literal is absent from the verified game-build catalogue.** Choose one
+of the nearest keys offered by the code fix, or inspect
+`session.View().EnvironmentPresets` in the running game. The rule checks only SDK
+environment calls and constant strings. It stays silent for dynamic keys and
+while the shipped native catalogue is unverified. The pinned build's asset keys
+still need a native capture; none are inferred from type metadata or test data.

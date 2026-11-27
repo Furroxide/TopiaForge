@@ -47,6 +47,13 @@ namespace TopiaForge.ModManager.Core
             return LoadPersistent(path, fallback, ReadBoundedJsonObject, IsJsonObjectContentFailure);
         }
 
+        /// <summary>Parses preserved JSON inside the same bounded, backup-aware read transaction.</summary>
+        public static T LoadPersistentJsonObject<T>(string path, T fallback, Func<string, T> parse)
+        {
+            if (parse == null) throw new ArgumentNullException(nameof(parse));
+            return LoadPersistent(path, fallback, file => parse(ReadBoundedJsonObject(file)), IsJsonObjectContentFailure);
+        }
+
         private static T LoadPersistent<T>(
             string path,
             T fallback,
@@ -283,45 +290,50 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        private static string ReadBoundedJsonObject(string path)
+        internal static string ReadBoundedJsonObject(string path)
         {
             using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                if (input.Length > MaxPersistedFileBytes)
-                {
-                    throw new InvalidDataException(
-                        "JSON file exceeds the " + MaxPersistedFileBytes + " byte limit: " + path);
-                }
+                return ReadBoundedJsonObject(input, path);
+            }
+        }
 
-                using (var buffer = new MemoryStream((int)input.Length))
+        internal static string ReadBoundedJsonObject(Stream input, string path)
+        {
+            if (input.Length > MaxPersistedFileBytes)
+            {
+                throw new InvalidDataException(
+                    "JSON file exceeds the " + MaxPersistedFileBytes + " byte limit: " + path);
+            }
+
+            using (var buffer = new MemoryStream((int)input.Length))
+            {
+                var chunk = new byte[81920];
+                long total = 0;
+                int read;
+                while ((read = input.Read(chunk, 0, chunk.Length)) > 0)
                 {
-                    var chunk = new byte[81920];
-                    long total = 0;
-                    int read;
-                    while ((read = input.Read(chunk, 0, chunk.Length)) > 0)
+                    if (total > MaxPersistedFileBytes - read)
                     {
-                        if (total > MaxPersistedFileBytes - read)
-                        {
-                            throw new InvalidDataException(
-                                "JSON file grew beyond the " + MaxPersistedFileBytes + " byte limit: " + path);
-                        }
-
-                        buffer.Write(chunk, 0, read);
-                        total += read;
+                        throw new InvalidDataException(
+                            "JSON file grew beyond the " + MaxPersistedFileBytes + " byte limit: " + path);
                     }
 
-                    var json = StrictUtf8.GetString(
-                        buffer.GetBuffer(),
-                        0,
-                        checked((int)buffer.Length));
-                    if (json.Length > 0 && json[0] == '\uFEFF')
-                    {
-                        json = json.Substring(1);
-                    }
-
-                    JsonObjectMerge.ValidateObject(json);
-                    return json;
+                    buffer.Write(chunk, 0, read);
+                    total += read;
                 }
+
+                var json = StrictUtf8.GetString(
+                    buffer.GetBuffer(),
+                    0,
+                    checked((int)buffer.Length));
+                if (json.Length > 0 && json[0] == '\uFEFF')
+                {
+                    json = json.Substring(1);
+                }
+
+                JsonObjectMerge.ValidateObject(json);
+                return json;
             }
         }
 

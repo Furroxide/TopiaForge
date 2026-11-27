@@ -33,8 +33,14 @@ namespace TopiaForge.UiGallery
                 return;
             }
 
+            Context.Input.RegisterAction(Pages.ControlGalleryPages.Expedition());
+            Context.Input.RegisterAction(Pages.ControlGalleryPages.Ledger());
+            if (!Pages.ActionGalleryPages.RegisterActions(Context.Input))
+                Context.Logger.Warn("One or more Gallery action bindings could not be registered or cleared.");
+
             Context.Events.SubscribeUpdate(deltaTime =>
             {
+                gallery?.Tick(deltaTime);
                 if (toggleAction?.WasPressed != true || ui == null)
                 {
                     return;
@@ -42,7 +48,7 @@ namespace TopiaForge.UiGallery
 
                 if (gallery == null)
                 {
-                    gallery = new GalleryWindow(ui);
+                    gallery = new GalleryWindow(ui, Context);
                     galleryLifetime = Context.Lifetime.Track(gallery);
                 }
 

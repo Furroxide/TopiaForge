@@ -124,6 +124,40 @@ void main() {
     },
   );
 
+  test(
+    'Steam adapter reads an unclosed metadata string within 100 ms',
+    () async {
+      final root = Directory.systemTemp.createTempSync(
+        'topiaforge-steam-unclosed-',
+      );
+      addTearDown(() => root.deleteSync(recursive: true));
+      final steamApps = Directory(p.join(root.path, 'steamapps'))
+        ..createSync(recursive: true);
+      // An unclosed run of escaped quotes made the former pair pattern take
+      // seconds. Pairs before it must still be read.
+      final unclosed = '"${r'\"' * 20000}';
+      File(
+        p.join(steamApps.path, 'libraryfolders.vdf'),
+      ).writeAsStringSync(unclosed);
+      File(p.join(steamApps.path, 'appmanifest_7.acf')).writeAsStringSync(
+        '"AppState" { "name" "Robotopia" "installdir" "Robotopia" }\n$unclosed',
+      );
+      final adapter = SteamGameInstallDiscoveryAdapter(
+        environment: const {},
+        steamRoots: [root.path],
+      );
+
+      // The first pass compiles the adapter; the second is the one timed.
+      await adapter.discoverPaths();
+      final watch = Stopwatch()..start();
+      final paths = await adapter.discoverPaths();
+      watch.stop();
+
+      expect(paths, [p.join(steamApps.path, 'common', 'Robotopia')]);
+      expect(watch.elapsed, lessThan(const Duration(milliseconds: 100)));
+    },
+  );
+
   test('service validates, de-duplicates, and orders candidates', () async {
     final root = Directory.systemTemp.createTempSync('topiaforge-discovery-');
     addTearDown(() => root.deleteSync(recursive: true));

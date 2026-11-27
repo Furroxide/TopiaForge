@@ -1,12 +1,18 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.ModManager
 {
+    /// <summary>
+    /// The factory seam: the gameplay host makes each mod context's gameplay services. The context passes its network
+    /// profile in, so every service the host makes can know where its context runs, and wraps the entity, asset, item and
+    /// UI services it returns in the network decorators.
+    /// </summary>
     internal interface IGameplayContextFactory
     {
         GameplayContextServices Create(
@@ -14,7 +20,9 @@ namespace TopiaForge.ModManager
             string packagePath,
             string dataPath,
             IModLifetime lifetime,
-            IModLogger logger);
+            IModLogger logger,
+            ModNetProfile profile,
+            NativeTransitionAccessSlot? transitionAccess = null);
     }
 
     internal sealed class GameplayContextServices
@@ -33,7 +41,9 @@ namespace TopiaForge.ModManager
             IAudioService audio,
             IUiService ui,
             IUnityInteropService? unityInterop,
-            IInternalSceneTransitionService sceneTransitions)
+            IInternalSceneTransitionService sceneTransitions,
+            IInternalWorldRuntimeService? worldRuntime = null,
+            IInternalNativeSpeechHost? nativeSpeech = null)
         {
             Input = input;
             LocalPlayer = localPlayer;
@@ -49,6 +59,8 @@ namespace TopiaForge.ModManager
             Ui = ui;
             UnityInterop = unityInterop;
             SceneTransitions = sceneTransitions;
+            WorldRuntime = worldRuntime ?? UnavailableWorldRuntimeService.Instance;
+            NativeSpeech = nativeSpeech;
         }
 
         public IInputService Input { get; }
@@ -65,6 +77,8 @@ namespace TopiaForge.ModManager
         public IUiService Ui { get; }
         public IUnityInteropService? UnityInterop { get; }
         public IInternalSceneTransitionService SceneTransitions { get; }
+        public IInternalWorldRuntimeService WorldRuntime { get; }
+        public IInternalNativeSpeechHost? NativeSpeech { get; }
 
         public static GameplayContextServices Unavailable(IModLifetime lifetime)
         {
@@ -84,6 +98,16 @@ namespace TopiaForge.ModManager
                 unavailable,
                 null,
                 unavailable);
+        }
+
+        private sealed class UnavailableWorldRuntimeService : IInternalWorldRuntimeService
+        {
+            internal static readonly UnavailableWorldRuntimeService Instance = new UnavailableWorldRuntimeService();
+            public Task<OperationResult<System.Collections.Generic.IReadOnlyList<NativeWorldEntry>>> DiscoverAsync(
+                NativeWorldSource source, int maximumResults, CancellationToken token) => Task.FromResult(
+                    OperationResult<System.Collections.Generic.IReadOnlyList<NativeWorldEntry>>.Failure(ModErrorCode.Unavailable, "Native world discovery is unavailable in this host."));
+            public Task<OperationResult<IInternalWorldPreparation>> PrepareAsync(NativeWorldLoadRequest request, CancellationToken token) =>
+                Task.FromResult(OperationResult<IInternalWorldPreparation>.Failure(ModErrorCode.Unavailable, "Native world preparation is unavailable in this host."));
         }
 
         private sealed class UnavailableGameplayService :
@@ -108,6 +132,7 @@ namespace TopiaForge.ModManager
                 this.lifetime = lifetime;
             }
 
+            public bool IsBusy => false;
             public bool IsUiFocused => false;
             public GameTimeSample Frame => default;
             public GameTimeSample Fixed => default;
@@ -167,12 +192,17 @@ namespace TopiaForge.ModManager
                 return OperationResult<IPlayerControlLease>.Failure(ModErrorCode.Unavailable, "Player controls are unavailable in this host.");
             }
 
-            public OperationResult<IDisposable> Acquire(string sceneName, bool automatic, string reason)
+            public OperationResult<IInternalSceneTransitionLease> Acquire(string sceneName, bool automatic, string reason)
             {
-                return OperationResult<IDisposable>.Failure(
+                return OperationResult<IInternalSceneTransitionLease>.Failure(
                     ModErrorCode.Unavailable,
                     "Scene transitions are unavailable in this host.");
             }
+            public OperationResult<IInternalNativeSceneOperation> TryDispatch(
+                NativeSceneRequest request, IInternalNativeSceneDispatch dispatch,
+                CancellationToken callerToken = default) =>
+                OperationResult<IInternalNativeSceneOperation>.Failure(ModErrorCode.Unavailable, "Native scene transitions are unavailable.");
+
 
             public OperationResult<IEntityMotion> AcquireMotion(IEntity entity)
             {
@@ -219,6 +249,9 @@ namespace TopiaForge.ModManager
                 hit = null;
                 return false;
             }
+
+            public OperationResult<IBlocker> AddBlocker(BlockerRequest request) => OperationResult<IBlocker>.Failure(
+                ModErrorCode.Unavailable, "This host cannot create blockers. Run the mod in the game or use the testing physics service.");
 
             public System.Collections.Generic.IReadOnlyList<IEntity> Overlap(Bounds bounds, int maximumResults = 64)
             {

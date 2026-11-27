@@ -22,7 +22,6 @@ const topiaForgeSdkPackageIds = <String>{
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',
   'TopiaForge.Mods.Testing',
-  'TopiaForge.Mods.Ugc',
   'TopiaForge.Mods.Worlds',
 };
 
@@ -40,7 +39,6 @@ const topiaForgeTestingRuntimeSupportPackageIds = <String>{
   'TopiaForge.Mods.Multiplayer',
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',
-  'TopiaForge.Mods.Ugc',
   'TopiaForge.Mods.Worlds',
 };
 
