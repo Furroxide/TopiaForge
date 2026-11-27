@@ -115,8 +115,10 @@ jobs:
 
       - name: Install archive dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full unzip
+          if ! command -v 7z >/dev/null || ! command -v unzip >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full unzip
+          fi
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
@@ -251,11 +253,19 @@ jobs:
         with:
           sdk: "3.12.2"
 
+      - name: Prepare neutral Dart build root
+        shell: bash
+        run: bash .github/scripts/prepare-hosted-dart-build.sh
+
       - name: Build x64 CLI
-        working-directory: apps/topiaforge_cli
+        shell: bash
         run: |
+          set -euo pipefail
+          cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"
           dart pub get --enforce-lockfile
-          python ../../tools/multiplayer-build.py --environment staging --build-only --kind dart -- compile exe bin/topiaforge.dart -o "$RUNNER_TEMP/topiaforge-macos-x64"
+          output="$TOPIAFORGE_CI_BUILD_ROOT/../topiaforge-macos-x64"
+          python ../../tools/multiplayer-build.py --environment staging --build-only --kind dart -- compile exe bin/topiaforge.dart -o "$output"
+          cp "$output" "$RUNNER_TEMP/topiaforge-macos-x64"
           chmod +x "$RUNNER_TEMP/topiaforge-macos-x64"
 
       - name: Upload x64 CLI
@@ -310,8 +320,10 @@ jobs:
       - name: Install Linux archive dependencies
         if: matrix.platform == 'linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zip unzip p7zip-full
+          if ! command -v zip >/dev/null || ! command -v unzip >/dev/null || ! command -v 7z >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y zip unzip p7zip-full
+          fi
 
       - name: Install Windows archive dependencies
         if: matrix.platform == 'windows'
@@ -368,6 +380,11 @@ jobs:
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
             -c Release -- @latest
 
+      - name: Prepare neutral Dart build root
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: bash .github/scripts/prepare-hosted-dart-build.sh
+
       - name: Download macOS x64 CLI
         if: matrix.platform == 'macos'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -378,13 +395,15 @@ jobs:
       - name: Prepare architecture-dispatched macOS CLI
         if: matrix.platform == 'macos'
         shell: bash
-        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
+          cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"
           dart pub get --enforce-lockfile
           cli_dir="$RUNNER_TEMP/topiaforge-macos-cli"
           mkdir -p "$cli_dir"
-          python ../../tools/multiplayer-build.py --environment staging --build-only --kind dart -- compile exe bin/topiaforge.dart -o "$cli_dir/topiaforge-arm64"
+          output="$TOPIAFORGE_CI_BUILD_ROOT/../topiaforge-arm64"
+          python ../../tools/multiplayer-build.py --environment staging --build-only --kind dart -- compile exe bin/topiaforge.dart -o "$output"
+          cp "$output" "$cli_dir/topiaforge-arm64"
           cp "$RUNNER_TEMP/macos-x64-cli/topiaforge-macos-x64" \
             "$cli_dir/topiaforge-x64"
           chmod +x "$cli_dir/topiaforge-arm64" "$cli_dir/topiaforge-x64"
@@ -394,6 +413,17 @@ jobs:
           x64_help="$(arch -x86_64 "$cli_dir/topiaforge-x64" --help)"
           grep -Fq 'TopiaForge CLI' <<< "$arm_help"
           grep -Fq 'TopiaForge CLI' <<< "$x64_help"
+
+      - name: Build Linux CLI from the neutral root
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"
+          dart pub get --enforce-lockfile
+          output="$TOPIAFORGE_CI_BUILD_ROOT/../topiaforge-linux-x64"
+          python ../../tools/multiplayer-build.py --environment staging --build-only --kind dart -- compile exe bin/topiaforge.dart -o "$output"
+          cp "$output" "$RUNNER_TEMP/topiaforge-linux-x64"
 
       - name: Download launcher artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -455,6 +485,8 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
+          elif [ "${{ matrix.platform }}" = "linux" ]; then
+            args+=(--prebuilt-cli "$temp/topiaforge-linux-x64")
           fi
           dart run bin/topiaforge.dart "${args[@]}"
 
