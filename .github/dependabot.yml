@@ -58,19 +58,6 @@ updates:
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
 
-  - package-ecosystem: npm
-    directory: /services/control-plane
-    schedule:
-      interval: weekly
-    target-branch: dev
-    cooldown:
-      default-days: 14
-    commit-message:
-      prefix: deps
-    groups:
-      control-plane:
-        patterns: ["*"]
-
   - package-ecosystem: pub
     directory: /packages/launcher_domain
     schedule:
