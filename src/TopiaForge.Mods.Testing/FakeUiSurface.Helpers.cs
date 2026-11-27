@@ -63,7 +63,8 @@ namespace TopiaForge.Mods.Testing
                     return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                 if (!retained)
                 {
-                    var prepared = owner.PrepareImages(content, Receiver != null);
+                    if (!WireBounded && Receiver == null) owner.CheckLocalInput(content);
+                    var prepared = owner.PrepareImages(content, Receiver != null, wireBounded: WireBounded);
                     if (!prepared.TryGetValue(out var staged))
                         return OperationResult<bool>.Failure(prepared.ErrorCode, prepared.ErrorMessage);
                     images = staged;
@@ -91,26 +92,38 @@ namespace TopiaForge.Mods.Testing
             Images = images;
             owner.ImagesChanged();
             toggleValues.Clear();
+            checkboxValues.Clear();
             sliderValues.Clear();
             textValues.Clear();
             dropdownValues.Clear();
             listViewports.Clear();
             graphSelections.Clear();
             graphViewports.Clear();
-            CaptureState(content);
+            bindingWarnings.Clear();
+            HoverTooltip(null);
+            var previousTabs = tabSelections;
+            tabSelections = new Dictionary<string, UiTabSelection>(StringComparer.Ordinal);
+            CaptureState(content, previousTabs);
             RefreshGraphConnections();
             if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
             return FakeUiThemePackage.Success;
         }
 
-        private void CaptureState(UiNode? node)
+        private void CaptureState(UiNode? node, Dictionary<string, UiTabSelection>? previousTabs = null)
         {
             if (node == null) return;
             if (node is UiToggle toggle) toggleValues[toggle.Id!] = toggle.Value;
+            else if (node is UiCheckbox checkbox) checkboxValues[checkbox.Id!] = checkbox.Value;
             else if (node is UiSlider slider) sliderValues[slider.Id!] = slider.Value;
             else if (node is UiTextInput input) textValues[input.Id!] = input.Value;
             else if (node is UiDropdown dropdown) dropdownValues[dropdown.Id!] = dropdown.SelectedValue;
             else if (node is UiVirtualList list) RememberListViewport(list, list.SelectedItemId, ListIndex(list, list.SelectedItemId));
+            else if (node is UiTabs tabs)
+            {
+                var previous = default(UiTabSelection);
+                previousTabs?.TryGetValue(tabs.Id!, out previous);
+                tabSelections[tabs.Id!] = UiTabSelection.Restore(tabs, previous);
+            }
             else if (node is UiGraphCanvas graph)
             {
                 graphSelections[graph.Id!] = graph.SelectedNodeId;
@@ -118,7 +131,7 @@ namespace TopiaForge.Mods.Testing
             }
 
             var children = UiNodeChildren.Of(node);
-            for (var index = 0; index < children.Count; index++) CaptureState(children[index]);
+            for (var index = 0; index < children.Count; index++) CaptureState(children[index], previousTabs);
         }
 
         private static int ListIndex(UiVirtualList list, string? itemId)
@@ -139,7 +152,7 @@ namespace TopiaForge.Mods.Testing
 
         private bool CanInteract(string id)
         {
-            if (!UiLayoutTree.TryFind(Content, id, out _, out var disabled) || disabled) return false;
+            if (!UiLayoutTree.TryFindVisible(Content, id, ActiveTabIndex, out var disabled) || disabled) return false;
             try { return FakeUiTreeCapture.VerifyComposition(owner, this, Content, Images); }
             catch (UiLayoutException) { return false; }
         }

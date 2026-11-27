@@ -283,7 +283,7 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>An immutable labeled bounded slider description.</summary>
-    public sealed class UiSlider : UiNode
+    public sealed partial class UiSlider : UiNode
     {
         /// <summary>Creates a slider.</summary>
         public UiSlider(
@@ -337,7 +337,7 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>An immutable labeled text-input description.</summary>
-    public sealed class UiTextInput : UiNode
+    public sealed partial class UiTextInput : UiNode
     {
         /// <summary>Creates a text input.</summary>
         public UiTextInput(

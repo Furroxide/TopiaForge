@@ -10,18 +10,18 @@ namespace TopiaForge.ModManager
     {
         private readonly Dictionary<ParticipantId, TargetSequence> targetSequences = new Dictionary<ParticipantId, TargetSequence>();
 
-        private bool SupportsFoundationUi(ParticipantId participant) =>
+        private bool SupportsUiVersion(ParticipantId participant, int version) =>
             (runtime.Control?.UiContractVersionOf(participant) ?? InternalUiPresentationContract.LegacyVersion)
-                >= InternalUiPresentationContract.FoundationVersion;
+                >= version;
 
-        internal bool AllPeersSupportFoundationUi()
+        internal bool AllPeersSupportUiVersion(int version)
         {
             var snapshot = Snapshot;
             if (snapshot == null) return true;
             for (var index = 0; index < snapshot.Participants.Count; index++)
             {
                 var participant = snapshot.Participants[index];
-                if (!participant.IsLocal && participant.IsConnected && !SupportsFoundationUi(participant.Id)) return false;
+                if (!participant.IsLocal && participant.IsConnected && !SupportsUiVersion(participant.Id, version)) return false;
             }
 
             return true;
@@ -76,8 +76,9 @@ namespace TopiaForge.ModManager
             out UiWireEnvelope? envelope)
         {
             envelope = null;
-            if (theme == null && !UiWireCodec.NeedsEnvelope(content)) return UiPresentationTheme.Allowed;
-            if (stream == 0 || !SupportsFoundationUi(target)) return UiPresentationTheme.UnsupportedPeer;
+            var required = UiPresentationTheme.RequiredVersion(content, theme);
+            if (required == InternalUiPresentationContract.LegacyVersion) return UiPresentationTheme.Allowed;
+            if (stream == 0 || !SupportsUiVersion(target, required)) return UiPresentationTheme.UnsupportedVersion(required);
             if (!TryOutgoingUiDigest(context.Mod, requireSignedRoster: true, out var digest)) return UiPresentationTheme.UnadmittedPackage;
 
             var generation = FindTargetGeneration(context, target, stream);

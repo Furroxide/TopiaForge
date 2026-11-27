@@ -43,6 +43,8 @@ namespace TopiaForge.Mods.Testing
             RequestedStyleId = paint.RequestedStyleId;
             RequestedPaintRole = paint.RequestedPaintRole;
             EffectivePaintRole = paint.EffectivePaintRole;
+            State = content.State;
+            KeyLabel = content.KeyLabel;
             CornerRadiusPixels = paint.CornerRadius;
             BorderWidthPixels = paint.BorderWidth;
             ShadowOffsetXPixels = paint.ShadowX;
@@ -93,6 +95,12 @@ namespace TopiaForge.Mods.Testing
         public UiPaintRole? RequestedPaintRole { get; }
         /// <summary>Gets the effective paint role used for a badge or pip group.</summary>
         public UiPaintRole? EffectivePaintRole { get; }
+        /// <summary>Gets the resolved control state when the captured group exposes one.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public string? State { get; }
+        /// <summary>Gets the visible input binding label when the group represents an action.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public string? KeyLabel { get; }
         /// <summary>Gets the resolved ink as <c>#RRGGBB</c>, when applicable.</summary>
         public string? InkColor { get; }
         /// <summary>Gets the resolved fill as <c>#RRGGBB</c>, when applicable.</summary>
@@ -142,13 +150,15 @@ namespace TopiaForge.Mods.Testing
     internal readonly struct UiCaptureNodeContent
     {
         internal UiCaptureNodeContent(string text, string label, float textHeight, float expectedTextHeight,
-            UiCaptureNodeFlags flags)
+            UiCaptureNodeFlags flags, string? state = null, string? keyLabel = null)
         {
             Text = text;
             SemanticLabel = label;
             TextHeight = textHeight;
             ExpectedTextHeight = expectedTextHeight;
             Flags = flags;
+            State = state;
+            KeyLabel = keyLabel;
         }
 
         internal string Text { get; }
@@ -156,6 +166,11 @@ namespace TopiaForge.Mods.Testing
         internal float TextHeight { get; }
         internal float ExpectedTextHeight { get; }
         internal UiCaptureNodeFlags Flags { get; }
+        internal string? State { get; }
+        internal string? KeyLabel { get; }
+
+        internal UiCaptureNodeContent WithFlags(UiCaptureNodeFlags flags) =>
+            new UiCaptureNodeContent(Text, SemanticLabel, TextHeight, ExpectedTextHeight, flags, State, KeyLabel);
     }
 
     internal readonly struct UiCaptureNodePaint

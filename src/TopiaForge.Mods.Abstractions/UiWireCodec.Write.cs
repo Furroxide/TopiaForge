@@ -23,10 +23,10 @@ namespace TopiaForge.Mods
 
         private static bool WriteComposition(IUiWireWriter w, UiNode? node, string clockEpoch, bool retained, UiWireEnvelope? envelope)
         {
-            UiWireValidation.Validate(node, requireImageWireMetadata: true);
+            UiWireValidation.Validate(node, requireWireMetadata: true);
             if (!retained) UiClockBinding.Check(node, clockEpoch);
             if (envelope != null) WriteEnvelope(w, envelope);
-            else if (HasEnhancedNode(node)) throw new ArgumentException("The composition requires a version 2 UI envelope.");
+            else if (ContractVersionOf(node) > LegacyContractVersion) throw new ArgumentException("The composition requires a UI ownership envelope.");
 
             var hasCountdown = false;
             WriteNode(w, node, clockEpoch, retained, ref hasCountdown);
@@ -35,6 +35,12 @@ namespace TopiaForge.Mods
 
         private static void WriteNode(IUiWireWriter w, UiNode? node, string clockEpoch, bool retained, ref bool hasCountdown)
         {
+            var tag = ControlTag(node);
+            if (tag != 0)
+            {
+                WriteControlNode(w, node!, tag, clockEpoch, retained, ref hasCountdown);
+                return;
+            }
             if (node != null && IsEnhancedLayout(node))
             {
                 WriteLayoutNode(w, node, clockEpoch, retained, ref hasCountdown);
@@ -58,9 +64,9 @@ namespace TopiaForge.Mods
                 case UiToggle n:
                     w.WriteByte(7); Text(w, n.Id!); Text(w, n.Label); Flag(w, n.Value); Flag(w, n.Enabled); break;
                 case UiSlider n:
-                    w.WriteByte(8); Text(w, n.Id!); Text(w, n.Label); w.WriteSingle(n.Minimum); w.WriteSingle(n.Maximum); w.WriteSingle(n.Value); Flag(w, n.Enabled); break;
+                    w.WriteByte(8); WriteSliderFields(w, n); break;
                 case UiTextInput n:
-                    w.WriteByte(9); Text(w, n.Id!); Text(w, n.Label); Text(w, n.Value); Text(w, n.Placeholder); w.WriteVarUInt((ulong)n.MaximumLength); Flag(w, n.Enabled); break;
+                    w.WriteByte(9); WriteTextInputFields(w, n); break;
                 case UiDropdown n:
                     w.WriteByte(10); Text(w, n.Id!); Text(w, n.Label); Text(w, n.SelectedValue); Flag(w, n.Enabled); w.WriteVarUInt((ulong)n.Choices.Count);
                     for (var i = 0; i < n.Choices.Count; i++) { Text(w, n.Choices[i].Value); Text(w, n.Choices[i].Label); }
@@ -140,8 +146,18 @@ namespace TopiaForge.Mods
             {
                 case UiButton b when value.Length == 0: b.Activated(); return true;
                 case UiToggle t when value == "0" || value == "1": t.Changed(value == "1"); return true;
+                case UiCheckbox c when value == "0" || value == "1": c.Changed(value == "1"); return true;
+                case UiTabs tabs when tabs.Enabled:
+                    for (var index = 0; index < tabs.Tabs.Count; index++)
+                    {
+                        if (tabs.Tabs[index].Id != value) continue;
+                        tabs.Selected?.Invoke(value);
+                        return true;
+                    }
+                    return false;
                 case UiSlider s when float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) &&
-                    Finite(number) && number >= s.Minimum && number <= s.Maximum:
+                    Finite(number) && number >= s.Minimum && number <= s.Maximum &&
+                    UiSliderSteps.Snap(number, s.Minimum, s.Maximum, s.Divisions) == number:
                     s.Changed(number); return true;
                 case UiTextInput t when value.Length <= t.MaximumLength: t.Changed(value); return true;
                 case UiDropdown d:

@@ -35,7 +35,7 @@ namespace TopiaForge.ModManager
             runtime.PlayersReceive = players;
             runtime.PlayersSend = new SendStage(players);
             runtime.Host.ValidateSharedUiHosting = () => players.Presentation?.PrepareHosting() ?? OperationResult<bool>.Success(true);
-            runtime.Host.RequiresFoundationUi = () => players.Presentation?.RequiresFoundationUi == true;
+            runtime.Host.RequiredSharedUiVersion = () => players.Presentation?.RequiredUiVersion ?? InternalUiPresentationContract.LegacyVersion;
             runtime.AddObserver(players);
             return players;
         }

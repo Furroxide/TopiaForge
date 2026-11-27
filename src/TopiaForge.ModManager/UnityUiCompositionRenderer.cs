@@ -104,6 +104,16 @@ namespace TopiaForge.ModManager
                 return repaint + TopiaForgeControlFocus.Install(native, backdrop);
             }
 
+            if (node is UiCheckbox checkbox)
+            {
+                var native = parent.Checkbox(checkbox.Label, checkbox.Value,
+                    callbacks.Wrap(checkbox.Changed, "checkbox '" + checkbox.Id + "'"));
+                native.SetEnabled(checkbox.Enabled && !inheritedDisabled);
+                native.SetBackdrop(backdrop);
+                Action<UiPaintRole> repaint = native.SetBackdrop;
+                return repaint + TopiaForgeControlFocus.Install(native, backdrop);
+            }
+
             if (node is UiToggle toggle)
             {
                 var native = parent.Toggle(
@@ -124,7 +134,8 @@ namespace TopiaForge.ModManager
                     slider.Maximum,
                     slider.Value,
                     callbacks.Wrap(slider.Changed, "slider '" + slider.Id + "'"));
-                native.UseDeclarativePaint(slider.Enabled && !inheritedDisabled);
+                native.UseDeclarativePaint(slider.Enabled && !inheritedDisabled, slider.Divisions,
+                    slider.UsesExplicitFormat ? slider.Format : null);
                 native.SetBackdrop(backdrop);
                 Action<UiPaintRole> repaint = native.SetBackdrop;
                 return repaint + TopiaForgeControlFocus.Install(native, backdrop);
@@ -142,6 +153,13 @@ namespace TopiaForge.ModManager
                 native.SetCharacterLimit(input.MaximumLength);
                 native.SetEnabled(input.Enabled && !inheritedDisabled);
                 Action<UiPaintRole> repaint = label.SetBackdrop;
+                if (input.Error is { } error)
+                {
+                    native.SetValidationBackdrop(backdrop);
+                    native.SetError(true);
+                    repaint += native.SetValidationBackdrop;
+                    repaint += RenderValidationMessage(container, error, backdrop);
+                }
                 return repaint + TopiaForgeControlFocus.Install(native, backdrop);
             }
 

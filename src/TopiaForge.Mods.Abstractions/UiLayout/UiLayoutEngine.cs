@@ -53,6 +53,8 @@ namespace TopiaForge.Mods
                 case UiDivider divider: MeasureDivider(slot, divider, constraints); break;
                 case UiScroll scroll: MeasureScroll(slot, scroll, constraints); break;
                 case UiSplitPane split: MeasureSplit(slot, split, constraints); break;
+                case UiTabs tabs: MeasureTabs(slot, tabs, constraints); break;
+                case UiTooltip tooltip: MeasureTooltip(slot, tooltip, constraints); break;
                 case UiPositioned: throw LayoutError(slot, "Positioned requires a measured Stack parent.");
                 default: MeasureLeaf(slot, constraints); break;
             }
@@ -113,6 +115,16 @@ namespace TopiaForge.Mods
             var child = Measure(node, constraints, slot.Placement, 0);
             slot.Children = new[] { child };
             slot.Size = child.Size;
+        }
+
+        private void MeasureTooltip(Slot slot, UiTooltip tooltip, UiLayoutConstraints constraints)
+        {
+            MeasureSingle(slot, tooltip.Child, constraints);
+            if (UiLayoutTree.ContainsInteractive(tooltip.Child)) return;
+            const double minimumTarget = 40d;
+            if (constraints.MaxWidth < minimumTarget || constraints.MaxHeight < minimumTarget) throw Clipped(slot);
+            slot.Size = constraints.Fit(new UiLayoutExtent(Math.Max(minimumTarget, slot.Size.Width),
+                Math.Max(minimumTarget, slot.Size.Height)));
         }
 
         private void MeasurePadding(Slot slot, UiPadding node, UiLayoutConstraints constraints)

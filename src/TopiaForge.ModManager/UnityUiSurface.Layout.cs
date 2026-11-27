@@ -187,6 +187,11 @@ namespace TopiaForge.ModManager
                 ShowCompositionLayout(root, needsNoticeRoom, allowAlternateImageNotice: true);
             }
 
+            private void RefreshTabbedPage()
+            {
+                if (compositionRoot is { } root) UpdateRetainedLayout(root);
+            }
+
             private void ShowCompositionLayout(TopiaForgeContainer root, bool needsNoticeRoom, bool allowAlternateImageNotice)
             {
                 if (layoutRenderer?.UnavailableImagePath is string imagePath && compositionParent is { } parent)

@@ -17,13 +17,15 @@ namespace TopiaForge.Mods.UnityUi
         private const float TrackWidth = 40f;
         private const float TrackHeight = 22f;
         private const float ThumbSize = 16f;
+        private const float BoxSize = 24f;
 
         private readonly Toggle toggle;
         private readonly TopiaForgeControlCues cues;
         private readonly UImage track;
         private readonly UImage? thumb;
         private readonly UImage? box;
-        private readonly UImage? boxRing;
+        private readonly TopiaForgeRoundedImage boundary;
+        private readonly TopiaForgeRoundedImage? thumbBoundary;
         private readonly UImage? check;
         private readonly RectTransform? thumbRect;
         private readonly TMPro.TextMeshProUGUI label;
@@ -49,23 +51,17 @@ namespace TopiaForge.Mods.UnityUi
 
             if (checkbox)
             {
-                controlLayout.minWidth = TrackHeight;
-                controlLayout.preferredWidth = TrackHeight;
-                controlLayout.minHeight = TrackHeight;
-                controlLayout.preferredHeight = TrackHeight;
+                controlLayout.minWidth = BoxSize;
+                controlLayout.preferredWidth = BoxSize;
+                controlLayout.minHeight = BoxSize;
+                controlLayout.preferredHeight = BoxSize;
 
                 box = controlGo.AddComponent<UImage>();
                 box.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Chip);
                 box.type = UImage.Type.Sliced;
                 track = box;
 
-                var ringGo = new GameObject("Ring", typeof(RectTransform));
-                ringGo.transform.SetParent(controlGo.transform, false);
-                boxRing = ringGo.AddComponent<UImage>();
-                boxRing.sprite = TopiaForgeSprites.Ring(TopiaForgeRadius.Chip, TopiaForgeTokens.BorderStandard);
-                boxRing.type = UImage.Type.Sliced;
-                boxRing.raycastTarget = false;
-                TopiaForgeAnchors.Stretch((RectTransform)ringGo.transform);
+                boundary = CreateBoundary(controlGo.transform, "Control boundary");
 
                 var checkGo = new GameObject("Check", typeof(RectTransform));
                 checkGo.transform.SetParent(controlGo.transform, false);
@@ -75,7 +71,7 @@ namespace TopiaForge.Mods.UnityUi
                 var checkRect = (RectTransform)checkGo.transform;
                 checkRect.anchorMin = new Vector2(0.5f, 0.5f);
                 checkRect.anchorMax = new Vector2(0.5f, 0.5f);
-                checkRect.sizeDelta = new Vector2(16f, 16f);
+                checkRect.sizeDelta = new Vector2(18f, 18f);
             }
             else
             {
@@ -87,6 +83,7 @@ namespace TopiaForge.Mods.UnityUi
                 track = controlGo.AddComponent<UImage>();
                 track.sprite = TopiaForgeSprites.Fill(TopiaForgeRadius.Chip);
                 track.type = UImage.Type.Sliced;
+                boundary = CreateBoundary(controlGo.transform, "Control boundary");
 
                 var thumbGo = new GameObject("Thumb", typeof(RectTransform));
                 thumbGo.transform.SetParent(controlGo.transform, false);
@@ -98,6 +95,7 @@ namespace TopiaForge.Mods.UnityUi
                 thumbRect.anchorMax = new Vector2(0f, 0.5f);
                 thumbRect.pivot = new Vector2(0.5f, 0.5f);
                 thumbRect.sizeDelta = new Vector2(ThumbSize, ThumbSize);
+                thumbBoundary = CreateBoundary(thumbGo.transform, "Thumb boundary");
             }
 
             label = CreateLabel(text);
@@ -165,18 +163,22 @@ namespace TopiaForge.Mods.UnityUi
             var enabled = toggle.interactable;
             var colors = toggle.colors;
             if (theme.Descriptor != null) colors.disabledColor = Color.white;
+            var stroke = theme.HighContrast ? 3f : 2f;
+            var ink = theme.ToggleBoundary(backdrop, value, enabled);
+            boundary.SetShape(checkbox ? theme.Descriptor?.Shape.Small ?? 6f : TrackHeight / 2f, stroke);
+            boundary.color = ink;
+            if (thumbBoundary != null)
+            {
+                thumbBoundary.SetShape(ThumbSize / 2f, stroke);
+                thumbBoundary.color = ink;
+            }
+
             if (checkbox)
             {
                 // An unticked box draws nothing on its sunken fill, so it keeps uGUI's default tints.
                 var on = theme.Fill(TopiaForgeFillRole.ControlOn);
                 toggle.colors = value ? on.Tinted(colors) : DefaultTints(colors);
                 track.color = value && enabled ? on.Fill : theme.SurfaceSunken;
-                if (boxRing != null)
-                {
-                    boxRing.color = !enabled ? theme.ForegroundOn(backdrop, UiTone.Muted)
-                        : value ? on.Fill : theme.Outline;
-                }
-
                 if (check != null)
                 {
                     check.color = enabled ? on.Content : theme.DisabledInk;
@@ -200,6 +202,16 @@ namespace TopiaForge.Mods.UnityUi
             label.color = theme.ForegroundOn(backdrop, enabled ? UiTone.Neutral : UiTone.Muted);
             cues.Apply(track.color, label.color, theme.Descriptor?.Shape.Control ?? UiThemePackParser.Default.Shape.Control,
                 theme.HighContrast);
+        }
+
+        private static TopiaForgeRoundedImage CreateBoundary(Transform parent, string name)
+        {
+            var child = new GameObject(name, typeof(RectTransform));
+            child.transform.SetParent(parent, false);
+            var image = child.AddComponent<TopiaForgeRoundedImage>();
+            image.raycastTarget = false;
+            TopiaForgeAnchors.Stretch(image.rectTransform);
+            return image;
         }
 
         private static ColorBlock DefaultTints(ColorBlock block)

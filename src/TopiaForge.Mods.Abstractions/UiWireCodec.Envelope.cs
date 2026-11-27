@@ -47,32 +47,41 @@ namespace TopiaForge.Mods
         private const byte EnhancedProgressTag = 33;
         private const byte EnhancedCountdownTag = 34;
 
-        internal static bool NeedsEnvelope(UiNode? node)
+        internal const int LegacyContractVersion = 1;
+        internal const int FoundationContractVersion = 2;
+        internal const int ControlsContractVersion = 3;
+
+        internal static bool NeedsEnvelope(UiNode? node) => RequiredContractVersion(node) > LegacyContractVersion;
+
+        internal static int RequiredContractVersion(UiNode? node)
         {
             UiComposition.Validate(node);
-            return HasEnhancedNode(node);
+            return ContractVersionOf(node);
         }
 
-        private static bool HasEnhancedNode(UiNode? node)
+        private static int ContractVersionOf(UiNode? node)
         {
-            if (node == null) return false;
-            switch (node)
-            {
-                case UiText text:
-                    return EnhancedText(text.Style, text.Tone, text.Id);
-                case UiProgress progress:
-                    return EnhancedTone(progress.Tone);
-                case UiCountdown countdown:
-                    return EnhancedTone(countdown.Tone);
-                case UiIcon or UiImage or UiBadge or UiPips:
-                    return true;
-            }
+            if (node == null) return LegacyContractVersion;
+            if (ControlTag(node) != 0) return ControlsContractVersion;
 
-            if (IsEnhancedLayout(node)) return true;
+            var foundation = node switch
+            {
+                UiText text => EnhancedText(text.Style, text.Tone, text.Id),
+                UiProgress progress => EnhancedTone(progress.Tone),
+                UiCountdown countdown => EnhancedTone(countdown.Tone),
+                UiIcon or UiImage or UiBadge or UiPips => true,
+                _ => IsEnhancedLayout(node),
+            };
+
+            var required = foundation ? FoundationContractVersion : LegacyContractVersion;
             var children = UiNodeChildren.Of(node);
             for (var index = 0; index < children.Count; index++)
-                if (HasEnhancedNode(children[index])) return true;
-            return false;
+            {
+                required = Math.Max(required, ContractVersionOf(children[index]));
+                if (required == ControlsContractVersion) break;
+            }
+
+            return required;
         }
 
         private static bool EnhancedText(UiTextStyle style, UiTone tone, string? id) =>

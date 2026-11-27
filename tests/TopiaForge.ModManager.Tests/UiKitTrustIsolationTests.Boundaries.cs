@@ -15,6 +15,13 @@ namespace TopiaForge.ModManager.Tests
                     public static Color clear => default;
                     public static Color white => new(1, 1, 1, 1);
                 }
+                public readonly record struct Color32(byte r, byte g, byte b, byte a)
+                {
+                    public static explicit operator Color32(Color color) =>
+                        new Color32(Channel(color.r), Channel(color.g), Channel(color.b), Channel(color.a));
+
+                    private static byte Channel(float value) => (byte)MathF.Round(Math.Clamp(value, 0f, 1f) * 255f);
+                }
 
                 public readonly record struct Vector2(float x, float y)
                 {

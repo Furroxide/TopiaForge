@@ -34,6 +34,31 @@ namespace TopiaForge.Mods.UnityUi
         internal Color FocusOn(UiPaintRole role) => packScheme is { } scheme
             ? ToColor(Rgba(scheme.ResolveFocus(role))) : FocusRing;
 
+        internal Color ToggleBoundary(UiPaintRole backdrop, bool value, bool enabled)
+        {
+            if (packScheme is { } scheme) return ToColor(Rgba(UiControlPaint.ToggleBoundary(scheme, backdrop, value, enabled)));
+            var ink = RgbBytes(enabled && value ? Fill(TopiaForgeFillRole.ControlOn).Content : TextMuted);
+            var fill = RgbBytes(backdrop switch
+            {
+                UiPaintRole.Raised => SurfaceAlt,
+                UiPaintRole.Sunken => SurfaceSunken,
+                UiPaintRole.Selected => SelectedTint,
+                UiPaintRole.Primary => Primary,
+                UiPaintRole.Accent => Accent,
+                UiPaintRole.Success => Success,
+                UiPaintRole.Warning => Warning,
+                UiPaintRole.Danger => Danger,
+                _ => Surface,
+            });
+            return ToColor(Rgba(UiThemeColors.RepairForeground(ink, fill, 3d)));
+        }
+
+        private static UiThemeColor RgbBytes(Color color)
+        {
+            var bytes = (Color32)color;
+            return new UiThemeColor(bytes.r, bytes.g, bytes.b);
+        }
+
         internal Color ForegroundOn(UiPaintRole role, UiTone tone = UiTone.Neutral) => packScheme is { } scheme
             ? ToColor(Rgba(scheme.ResolveForeground(tone, role)))
             : TextToneColor(tone switch

@@ -137,14 +137,16 @@ internal sealed class UncheckedRuntimeHost : IInternalMultiplayerRuntimeHost
 {
     private readonly MultiplayerRuntimeHost inner;
 
-    internal UncheckedRuntimeHost(MultiplayerRuntimeHost inner)
+    internal UncheckedRuntimeHost(MultiplayerRuntimeHost inner, int uiContractVersion = InternalUiPresentationContract.LegacyVersion)
     {
         this.inner = inner;
+        UiContractVersion = uiContractVersion;
     }
 
     public string GameBuild => inner.GameBuild;
 
     public string RuntimeVersion => inner.RuntimeVersion;
+    public int UiContractVersion { get; }
 
     public string DisplayName => inner.DisplayName;
 

@@ -93,6 +93,7 @@ namespace TopiaForge.Mods.Testing
         }
 
         internal UiNode? Presentation { get; }
+        internal FakeUiImages WithPresentation(UiNode? presentation) => new FakeUiImages(presentation, items, packs);
         internal IReadOnlyList<FakeUiThemeRegistration> Packs => packs ?? (IReadOnlyList<FakeUiThemeRegistration>)Array.Empty<FakeUiThemeRegistration>();
         internal FakeUiImage this[UiImage image] => items![image];
         internal bool Uses(FakeUiThemeRegistration registration) => packs?.Contains(registration) == true;

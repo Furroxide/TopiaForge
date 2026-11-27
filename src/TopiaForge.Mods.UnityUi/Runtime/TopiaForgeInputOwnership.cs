@@ -144,6 +144,7 @@ namespace TopiaForge.Mods.UnityUi
 
             stopped = false;
             Gate.ForgetAll();
+            TopiaForgeBindingCaptureInput.Reset();
             TopiaForgeNavigateAction.Reset();
             selection = null;
             selectionText = null;
@@ -153,6 +154,7 @@ namespace TopiaForge.Mods.UnityUi
         internal static void ForgetHeld()
         {
             Gate.ForgetAll();
+            TopiaForgeBindingCaptureInput.Reset();
         }
 
         /// <summary>Gets whether a surface's root still exists and shows.</summary>
@@ -176,20 +178,14 @@ namespace TopiaForge.Mods.UnityUi
 
         private static void OnEvent(InputEventPtr eventPtr, InputDevice device)
         {
-            // A mouse, pen or touch event, and every event while nothing is claimed or held, passes at once.
-            var kind = device is Keyboard ? TopiaForgeInputDevice.Keyboard
-                : device is Gamepad ? TopiaForgeInputDevice.Gamepad
-                : TopiaForgeInputDevice.Other;
-            if (stopped || kind == TopiaForgeInputDevice.Other)
-            {
-                return;
-            }
+            if (stopped) return;
 
             try
             {
                 if (eventPtr.IsA<DeviceResetEvent>())
                 {
                     Gate.Forget(device.deviceId);
+                    TopiaForgeBindingCaptureInput.Forget(device.deviceId);
                     return;
                 }
 
@@ -197,6 +193,13 @@ namespace TopiaForge.Mods.UnityUi
                 {
                     return;
                 }
+
+                TopiaForgeBindingCaptureInput.Filter(eventPtr, device);
+                // Ordinary ownership covers keyboard and gamepad. A mouse event is only used by key binding capture.
+                var kind = device is Keyboard ? TopiaForgeInputDevice.Keyboard
+                    : device is Gamepad ? TopiaForgeInputDevice.Gamepad
+                    : TopiaForgeInputDevice.Other;
+                if (kind == TopiaForgeInputDevice.Other) return;
 
                 var claims = TopiaForgeDismissStack.Claims;
                 if (kind == TopiaForgeInputDevice.Keyboard && KitTextFieldHasKeyboard())
@@ -230,6 +233,7 @@ namespace TopiaForge.Mods.UnityUi
                 || change == InputDeviceChange.SoftReset || change == InputDeviceChange.HardReset)
             {
                 Gate.Forget(device.deviceId);
+                TopiaForgeBindingCaptureInput.Forget(device.deviceId);
             }
         }
 
@@ -377,6 +381,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             stopped = true;
             Gate.ForgetAll();
+            TopiaForgeBindingCaptureInput.Reset(failed: true);
 
             // Only the failure's type: an Input System message can carry a device's name, which can carry a person's.
             TopiaForgeLog.Error("TopiaForge stopped keeping keys from the game after a failure (" + exception.GetType().Name

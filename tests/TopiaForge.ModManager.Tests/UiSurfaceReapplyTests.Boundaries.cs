@@ -42,6 +42,7 @@ namespace TopiaForge.ModManager.Tests
                     public bool FailNextDestroy;
                     public bool FailNextGraphBind;
                     public readonly List<TopiaForgeGraphCanvas> Graphs = new();
+                    public readonly Dictionary<string, TopiaForgeButton> Buttons = new();
                 }
 
                 public class TopiaForgeWidget
@@ -127,14 +128,15 @@ namespace TopiaForge.ModManager.Tests
                         Host.Graphs.Add(canvas);
                         return canvas;
                     }
-                    public BoundaryControl Button(string label, Action action, TopiaForgeButtonStyle style)
+                    public TopiaForgeButton Button(string label, Action action, TopiaForgeButtonStyle style)
                     {
-                        var control = new BoundaryControl(Host);
-                        control.Rect.SetParent(Rect, false);
-                        return control;
+                        var button = new TopiaForgeButton(Host, CreateChildGameObject("Button"), action);
+                        Host.Buttons[label] = button;
+                        return button;
                     }
                     public BoundaryControl Toggle(string label, bool value, Action<bool> action) => new(Host);
                     public BoundaryControl Slider(string label, float min, float max, float value, Action<float> action) => new(Host);
+                    public BoundaryControl Checkbox(string label, bool value, Action<bool> action) => new(Host);
                     public BoundaryControl Input(string hint, string value, Action<string> action) => new(Host);
                     public BoundaryControl Dropdown(string[] labels, int selected, Action<int> action) => new(Host);
                     public TopiaForgeListView<T> ListView<T>(float rowHeight) => new();
@@ -187,12 +189,37 @@ namespace TopiaForge.ModManager.Tests
                     public TopiaForgeContainer Content { get; }
                     public BoundaryScroll FixedHeight(float height) => this;
                 }
-                public sealed class BoundaryControl : TopiaForgeWidget
+                public class BoundaryControl : TopiaForgeWidget
                 {
-                    public BoundaryControl(UiHost host) : base(host) { }
-                    public void SetEnabled(bool enabled) { }
-                    public void UseDeclarativePaint(bool enabled) { }
+                    public BoundaryControl(UiHost host, GameObject? go = null) : base(host, go) { }
+                    public virtual void SetEnabled(bool enabled) { }
+                    public void UseDeclarativePaint(bool enabled, int steps = 0, UiValueFormat? format = null) { }
                     public void SetCharacterLimit(int limit) { }
+                    public void SetValidationBackdrop(UiPaintRole role) { }
+                    public void SetError(bool error) { }
+                    internal void SetBackdrop(UiPaintRole role) { }
+                }
+                public sealed class TopiaForgeButton : BoundaryControl
+                {
+                    private readonly Action action;
+                    internal UnityEngine.UI.Selectable Button { get; }
+                    public TopiaForgeButton(UiHost host, GameObject go, Action action) : base(host, go)
+                    {
+                        this.action = action;
+                        Button = go.AddComponent<UnityEngine.UI.Selectable>();
+                    }
+                    public override void SetEnabled(bool enabled) => Button.interactable = enabled;
+                    internal void Click() { if (Button.interactable) action(); }
+                }
+                internal static class TopiaForgeScopedTooltip
+                {
+                    internal static void Install(TopiaForgeContainer container, string message, bool enabled, UiPaintRole role) { }
+                }
+                internal sealed class TopiaForgeInputBindingField
+                {
+                    internal TopiaForgeInputBindingField(TopiaForgeContainer container, UiKeyBindingField field, string owner,
+                        Func<(IInputAction Action, string DisplayName)?> resolve, Func<IInputAction, InputBinding, string?> conflict,
+                        bool enabled, UiPaintRole role) { }
                     internal void SetBackdrop(UiPaintRole role) { }
                 }
                 internal static class TopiaForgeControlFocus
@@ -263,6 +290,8 @@ namespace TopiaForge.ModManager.Tests
                     private readonly IModLifetime lifetime = new FakeModLifetime();
                     private readonly UiGameplayGate gameplay = new();
                     private static TopiaForgeTone ToNativeTone(UiTone tone) => (TopiaForgeTone)tone;
+                    private static Action<UiPaintRole> RenderValidationMessage(TopiaForgeContainer parent, string message,
+                        UiPaintRole role) => _ => { };
 
                     private sealed partial class UnityUiSurface
                     {
@@ -288,6 +317,7 @@ namespace TopiaForge.ModManager.Tests
                             string path, bool preferContentViewport, bool canMoveImageNotice) =>
                             throw new InvalidOperationException("The scroll fixture has no unavailable artwork.");
                         private void ObserveLayout() { }
+                        private void RefreshTabbedPage() { }
                         private void RemoveLayoutFallback()
                         {
                             layoutFallback?.Destroy();
@@ -312,6 +342,15 @@ namespace TopiaForge.ModManager.Tests
                             root.SetShown(false);
                             layoutFallback ??= parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
                         }
+                    }
+
+                    private sealed class UiSurfaceInputContext
+                    {
+                        internal UiSurfaceInputContext(object? registry, string ownerPackageId) => OwnerPackageId = ownerPackageId;
+                        internal string OwnerPackageId { get; }
+                        internal void Validate(UiNode? node) { }
+                        internal Func<(IInputAction Action, string DisplayName)?> Resolve(string name) => static () => null;
+                        internal string? Conflict(IInputAction action, InputBinding binding) => null;
                     }
 
                     private sealed partial class UnityUiLayoutRenderer

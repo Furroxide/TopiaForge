@@ -104,6 +104,10 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets whether the specified key was pressed during the current frame.</summary>
         public static bool WasPressedThisFrame(TopiaForgeKey key)
         {
+            var mapped = ToInputSystemKey(key);
+            if (TopiaForgeBindingCaptureInput.SuppressesHotkeys
+                || TopiaForgeBindingCaptureInput.HoldsKey((int)mapped)) return false;
+
             if (TopiaForgeInput.LegacyAvailable)
             {
                 return Input.GetKeyDown(ToKeyCode(key));
@@ -116,7 +120,6 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             // A press TopiaForge took from the game never reaches the device, so the kit reads it where it was taken.
-            var mapped = ToInputSystemKey(key);
             return mapped != InputSystemKey.None
                 && (keyboard[mapped].wasPressedThisFrame || TopiaForgeInputOwnership.KeyPressedThisFrame(mapped));
         }

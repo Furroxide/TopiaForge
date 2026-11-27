@@ -135,7 +135,7 @@ namespace TopiaForge.UiGallery
             if (previewKind == UiSurfaceKind.Window)
                 layoutPages.Button("Graph connections", () => ShowFoundation(FoundationPage.GraphConnections, previewKind));
             if (previewKind == UiSurfaceKind.Hud)
-                layoutPages.Button("Layout fit", () => ShowFoundation(FoundationLayoutPages.LayoutNotice()));
+                layoutPages.Button("Layout fit", () => ShowSafePreview(FoundationLayoutPages.LayoutNotice()));
 
             var artPages = column.Row(TopiaForgeGap.Sm);
             artPages.Button("Icons", () => ShowFoundation(FoundationPage.Icons, previewKind));
@@ -143,6 +143,16 @@ namespace TopiaForge.UiGallery
             artPages.Button("Badges and pips", () => ShowFoundation(FoundationPage.BadgesAndPips, previewKind));
             artPages.Button("Foundation integration", () => ShowFoundation(FoundationPage.FoundationIntegration, previewKind));
             artPages.Button("Trust and fallback", () => ShowFoundation(FoundationPage.TrustAndFallback, previewKind));
+
+            if (previewKind == UiSurfaceKind.Window)
+            {
+                var kitControls = column.Row(TopiaForgeGap.Sm);
+                kitControls.Button("Buttons", () => ShowControls(ControlGalleryPage.Buttons));
+                kitControls.Button("Inputs", () => ShowControls(ControlGalleryPage.Fields));
+                kitControls.Button("Selections", () => ShowControls(ControlGalleryPage.Selections));
+                kitControls.Button("Bindings", () => ShowControls(ControlGalleryPage.Bindings));
+                kitControls.Button("Help and tiles", () => ShowControls(ControlGalleryPage.HelpAndTiles));
+            }
 
             var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
@@ -177,9 +187,12 @@ namespace TopiaForge.UiGallery
         }
 
         private void ShowFoundation(FoundationPage page, UiSurfaceKind kind) =>
-            ShowFoundation(FoundationPages.CreateRequest(page, kind, report: ReportInteraction));
+            ShowSafePreview(FoundationPages.CreateRequest(page, kind, report: ReportInteraction));
 
-        private void ShowFoundation(UiSurfaceRequest request)
+        private void ShowControls(ControlGalleryPage page) =>
+            ShowSafePreview(ControlGalleryPages.Create(page, report: ReportInteraction));
+
+        private void ShowSafePreview(UiSurfaceRequest request)
         {
             var profile = ui.AccessibilityProfile;
             var applied = previewUi.ApplyAccessibility(new UiAccessibilityPreferences(

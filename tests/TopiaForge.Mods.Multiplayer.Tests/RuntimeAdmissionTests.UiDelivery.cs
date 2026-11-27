@@ -140,12 +140,16 @@ internal static partial class RuntimeAdmissionTests
         public void Dispose() { Directory?.Dispose(); lifetime.Dispose(); }
     }
 
-    private sealed class ThemeProbe : IUiService, IUiClockReceiver, IUiPresentationThemeSource, IRemoteUiReceiver, IRemoteThemedUiReceiver
+    private sealed class ThemeProbe : IUiService, IUiClockReceiver, IUiPresentationThemeSource, IRemoteUiReceiver,
+        IRemoteThemedUiReceiver, IUiInputDefaultsSource
     {
         private readonly FakeUiService ui;
         internal readonly Dictionary<string, ThemeSurfaceProbe> Surfaces = new(StringComparer.Ordinal);
+        internal readonly Dictionary<string, InputActionDefinition> InputDefinitions = new(StringComparer.Ordinal);
         internal readonly ArtCanvasRecorder? Art;
         internal bool FailNextRemoteShow;
+        internal bool RecordControlsAtBoundary;
+        internal string? LastCreateFailure;
 
         internal ThemeProbe(FakeModLifetime lifetime, bool author, AdmittedUiCatalogue? art = null)
         {
@@ -178,6 +182,16 @@ internal static partial class RuntimeAdmissionTests
         public void FollowClock(Func<double> clock, Func<string> epoch) => ((IUiClockReceiver)ui).FollowClock(clock, epoch);
         public OperationResult<bool> DescribePresentationTheme(UiSurfaceRequest request, out UiThemeDescriptor? theme) =>
             PresentationThemeScope!.TryDescribe(request.Theme, out theme) ? UiPresentationTheme.Allowed : UiPresentationTheme.UnknownTheme;
+        public bool TryGetUiInputDefaults(string actionName, out IReadOnlyList<InputBinding> defaults)
+        {
+            if (InputDefinitions.TryGetValue(actionName, out var definition))
+            {
+                defaults = definition.DefaultBindings;
+                return true;
+            }
+            defaults = Array.Empty<InputBinding>();
+            return false;
+        }
         public OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences) => ui.ApplyAccessibility(preferences);
         public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) =>
             Art?.Create(request, default) ?? ui.CreateSurface(request);
@@ -190,9 +204,16 @@ internal static partial class RuntimeAdmissionTests
         public OperationResult<IUiSurface> RemoteSurface(UiSurfaceRequest request, UiRemoteThemeSelection theme)
         {
             if (Art != null) return Art.Create(request, theme);
-            var created = ui.CreateSurface(request);
-            if (!created.TryGetValue(out var surface)) return created;
-            var wrapper = new ThemeSurfaceProbe(this, (FakeUiSurface)surface, theme, FailNextRemoteShow);
+            // This probe records the decoded tree at the receiver boundary. Control layout is exercised by the capture suite.
+            var canvasRequest = RecordControlsAtBoundary
+                ? new UiSurfaceRequest(request.Id, request.Title, request.Body, request.Kind, request.Width, request.Height) : request;
+            var created = ui.CreateSurface(canvasRequest);
+            if (!created.TryGetValue(out var surface))
+            {
+                LastCreateFailure = created.ErrorMessage;
+                return created;
+            }
+            var wrapper = new ThemeSurfaceProbe(this, (FakeUiSurface)surface, theme, request.Content, FailNextRemoteShow);
             FailNextRemoteShow = false;
             Surfaces.Add(request.Title, wrapper);
             return OperationResult<IUiSurface>.Success(wrapper);
@@ -205,9 +226,10 @@ internal static partial class RuntimeAdmissionTests
         private readonly bool failOnShow;
         internal readonly FakeUiSurface Surface;
         internal UiRemoteThemeSelection Theme;
+        internal UiNode? ReceivedContent;
 
-        internal ThemeSurfaceProbe(ThemeProbe owner, FakeUiSurface surface, UiRemoteThemeSelection theme, bool failOnShow)
-        { this.owner = owner; Surface = surface; Theme = theme; this.failOnShow = failOnShow; }
+        internal ThemeSurfaceProbe(ThemeProbe owner, FakeUiSurface surface, UiRemoteThemeSelection theme, UiNode? content, bool failOnShow)
+        { this.owner = owner; Surface = surface; Theme = theme; ReceivedContent = content; this.failOnShow = failOnShow; }
         public string Id => Surface.Id;
         public bool IsVisible => Surface.IsVisible;
         public event Action? Dismissed;
@@ -221,8 +243,8 @@ internal static partial class RuntimeAdmissionTests
         public OperationResult<bool> SetContent(UiNode content) => Surface.SetContent(content);
         public OperationResult<bool> SetRemotePresentation(UiNode? content, UiRemoteThemeSelection theme)
         {
-            var result = Surface.SetContent(content ?? new UiColumn());
-            if (result.Succeeded) Theme = theme;
+            var result = owner.RecordControlsAtBoundary ? UiPresentationTheme.Allowed : Surface.SetContent(content ?? new UiColumn());
+            if (result.Succeeded) { Theme = theme; ReceivedContent = content; }
             return result;
         }
 

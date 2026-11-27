@@ -34,6 +34,8 @@ namespace TopiaForge.Mods
             UiCard card => card.Header is UiNode header ? new UiNodeChildren(header, card.Child) : new UiNodeChildren(card.Child),
             UiScroll scroll => new UiNodeChildren(scroll.Content),
             UiSplitPane split => new UiNodeChildren(split.Primary, split.Secondary),
+            UiTabs tabs => new UiNodeChildren(tabs.Children),
+            UiTooltip tooltip => new UiNodeChildren(tooltip.Child),
             _ => default,
         };
 

@@ -24,10 +24,14 @@ namespace TopiaForge.ModManager
                         buttonFill, buttonFlags, Decoration(rect, buttonControl.targetGraphic));
                 case UiToggle toggle:
                     return Toggle(toggle, rect, path, backdrop);
+                case UiCheckbox checkbox:
+                    return Checkbox(checkbox, rect, path, backdrop);
                 case UiSlider slider:
                     return Slider(slider, rect, path, backdrop);
                 case UiTextInput input:
                     return Input(input, rect, path, backdrop);
+                case UiKeyBindingField binding:
+                    return CaptureBindingField(binding, rect, path, backdrop);
                 case UiDropdown dropdown:
                     return Dropdown(dropdown, rect, path, backdrop);
                 case UiVirtualList list:
@@ -82,6 +86,9 @@ namespace TopiaForge.ModManager
             var track = selectable?.targetGraphic;
             var thumb = Named<Image>(rect, "Thumb");
             if (selectable == null || track == null || thumb == null) return false;
+            if (!ToggleEdge(path + "/track/edge", track.rectTransform, "Control boundary", backdrop, out var trackInk) ||
+                !ToggleEdge(path + "/thumb/edge", thumb.rectTransform, "Thumb boundary", backdrop, out var thumbInk) ||
+                !trackInk.Equals(thumbInk)) return false;
             var trackFill = Over(track, backdrop);
             Add(path + "/track", null, "ToggleTrack", track.rectTransform, EmptyContent, new UiCaptureNodePaint(null, trackFill));
             var trackBounds = Bounds(track.rectTransform);
@@ -98,6 +105,41 @@ namespace TopiaForge.ModManager
                    ControlMarks(path, selectable, source.Label, trackFill, backdrop));
         }
 
+        private bool Checkbox(UiCheckbox source, RectTransform rect, string path, UiThemeColor? backdrop)
+        {
+            var selectable = rect.GetComponent<Toggle>();
+            var box = selectable?.targetGraphic;
+            var check = Named<Image>(rect, "Check");
+            if (selectable == null || box == null || check == null ||
+                !ToggleEdge(path + "/box/edge", box.rectTransform, "Control boundary", backdrop, out _)) return false;
+
+            var fill = Over(box, backdrop);
+            Add(path + "/box", null, "CheckboxBox", box.rectTransform, EmptyContent, new UiCaptureNodePaint(null, fill));
+            var flags = Flags(selectable) | ControlMarks(path, selectable, source.Label, fill, backdrop);
+            if (selectable.isOn)
+            {
+                flags |= UiCaptureNodeFlags.Selected;
+                var visible = check.isActiveAndEnabled && EffectiveColor(check).a > 0.01f;
+                var mark = flags | UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.RequiresNonColorCue;
+                Add(path + "/check", null, "CheckboxCheck", check.rectTransform,
+                    State(visible ? mark | UiCaptureNodeFlags.HasNonColorCue : mark, source.Label),
+                    new UiCaptureNodePaint(ToRgb(EffectiveColor(check)), fill));
+            }
+            HitAndFocus(path, selectable, source.Label, backdrop);
+            return Text(path, source.Id, nameof(UiCheckbox), Named<TMP_Text>(rect, "Label"), source.Label, UiTextStyle.Body,
+                backdrop, flags);
+        }
+
+        private bool ToggleEdge(string path, RectTransform target, string name, UiThemeColor? backdrop, out UiThemeColor ink)
+        {
+            ink = default;
+            var edge = target.Find(name)?.GetComponent<TopiaForgeRoundedImage>();
+            if (edge == null || !edge.isActiveAndEnabled || edge.ResolvedBorderWidth != (theme.HighContrast ? 3f : 2f)) return false;
+            ink = ToRgb(EffectiveColor(edge));
+            Add(path, null, "ToggleBoundary", edge.rectTransform, ArtEdge, ArtPaint(edge, backdrop));
+            return true;
+        }
+
         private bool Slider(UiSlider source, RectTransform rect, string path, UiThemeColor? backdrop)
         {
             var selectable = rect.GetComponentInChildren<Slider>(includeInactive: true);
@@ -105,6 +147,10 @@ namespace TopiaForge.ModManager
             var thumb = Named<Image>(rect, "Handle");
             if (selectable == null || track == null || thumb == null) return false;
             var trackFill = Over(track, backdrop);
+            var value = source.Divisions == 0 ? selectable.value :
+                UiSliderSteps.At((int)selectable.value, source.Minimum, source.Maximum, source.Divisions);
+            var presentation = source.UsesExplicitFormat ? source.Format.Readout(value, source.Minimum, source.Maximum) :
+                value.ToString("0.##", CultureInfo.CurrentCulture);
             var state = State(UiCaptureNodeFlags.SemanticMark | Flags(selectable), source.Label);
             Add(path + "/thumb", null, "SliderThumb", thumb.rectTransform, state,
                 new UiCaptureNodePaint(ToRgb(EffectiveColor(thumb)), trackFill), thumb.isActiveAndEnabled);
@@ -113,7 +159,7 @@ namespace TopiaForge.ModManager
             return Text(path, source.Id, nameof(UiSlider), Named<TMP_Text>(rect, "Label"), source.Label, UiTextStyle.Body,
                        backdrop, flags) &&
                 Text(path + "/value", null, "SliderValue", Named<TMP_Text>(rect, "Value"),
-                    selectable.value.ToString("0.##", CultureInfo.CurrentCulture), UiTextStyle.Caption, backdrop);
+                    presentation, UiTextStyle.Caption, backdrop);
         }
 
         private bool Input(UiTextInput source, RectTransform rect, string path, UiThemeColor? backdrop)
@@ -122,24 +168,44 @@ namespace TopiaForge.ModManager
             if (selectable == null || selectable.transform is not RectTransform fieldRect) return false;
             var fieldFill = Over(selectable.targetGraphic, backdrop);
             var flags = Flags(selectable) | ControlMarks(path, selectable, source.Label, fieldFill, backdrop);
+            var chrome = Decoration(fieldRect, selectable.targetGraphic);
+            var paint = new UiCaptureNodePaint(null, fieldFill, chrome.CornerRadius, chrome.BorderWidth, chrome.ShadowX, chrome.ShadowY);
             HitAndFocus(path, selectable, source.Label, backdrop);
             var nativeValue = selectable.text;
             if (source.Value.Length != 0 && nativeValue == source.Value)
             {
                 if (!Text(path + "/value", null, "FieldValue", selectable.textComponent, source.Value,
-                        UiTextStyle.Body, fieldFill, flags, nativeInputValue: nativeValue)) return false;
+                        UiTextStyle.Body, fieldFill, flags, paint, nativeInputValue: nativeValue)) return false;
             }
             else
             {
-                Add(path + "/value", null, "FieldValue", fieldRect, State(flags, source.Label),
-                    new UiCaptureNodePaint(null, fieldFill));
+                Add(path + "/value", null, "FieldValue", fieldRect, State(flags, source.Label), paint);
             }
 
             if (selectable.placeholder is TMP_Text placeholder && placeholder.isActiveAndEnabled &&
                 !Text(path + "/placeholder", null, "FieldPlaceholder", placeholder, source.Placeholder, UiTextStyle.Body, fieldFill))
                 return false;
+            if (source.Error is { } error && !InputError(rect, fieldRect, path, error, backdrop)) return false;
             return Text(path, source.Id, nameof(UiTextInput), Named<TMP_Text>(rect, "Label"), source.Label, UiTextStyle.Caption,
-                backdrop, flags);
+                backdrop, flags, state: source.Error == null ? null : "error",
+                semanticLabel: source.Error == null ? null : source.Label + ". " + source.Error);
+        }
+
+        private bool InputError(RectTransform rect, RectTransform field, string path, string message, UiThemeColor? backdrop)
+        {
+            var outline = field.Find("Ring")?.GetComponent<TopiaForgeRoundedImage>();
+            var glyph = Named<Image>(rect, "Validation glyph");
+            if (outline == null || !outline.isActiveAndEnabled || outline.ResolvedBorderWidth != 3f ||
+                glyph == null || !glyph.isActiveAndEnabled || glyph.sprite == null ||
+                glyph.sprite != TopiaForgeSprites.Glyph(UiGlyph.Warning))
+                return false;
+            Add(path + "/error-outline", null, "FieldErrorOutline", outline.rectTransform, ArtEdge,
+                new UiCaptureNodePaint(ToRgb(EffectiveColor(outline)), backdrop,
+                    borderWidth: outline.ResolvedBorderWidth * VerticalScale(outline.rectTransform)));
+            Add(path + "/error-glyph", null, "FieldErrorGlyph", glyph.rectTransform,
+                State(UiCaptureNodeFlags.SemanticMark | UiCaptureNodeFlags.HasNonColorCue, "Error"), ArtPaint(glyph, backdrop));
+            return Text(path + "/error", null, "FieldErrorMessage", Named<TMP_Text>(rect, "Validation message"), message,
+                UiTextStyle.Caption, backdrop);
         }
 
         private bool Dropdown(UiDropdown source, RectTransform rect, string path, UiThemeColor? backdrop)
@@ -151,7 +217,8 @@ namespace TopiaForge.ModManager
             return Text(path, source.Id, nameof(UiDropdown), Named<TMP_Text>(rect, "Label"), source.Label, UiTextStyle.Caption,
                        backdrop, flags) &&
                 Text(path + "/value", null, "FieldValue", selectable.captionText, source.Choices[selectable.value].Label,
-                    UiTextStyle.Body, Over(selectable.targetGraphic, backdrop), flags);
+                    UiTextStyle.Body, Over(selectable.targetGraphic, backdrop), flags) &&
+                CaptureDropdownPopup(source, selectable, path, backdrop);
         }
 
         private bool List(UiVirtualList source, RectTransform rect, string path, UiThemeColor? backdrop)

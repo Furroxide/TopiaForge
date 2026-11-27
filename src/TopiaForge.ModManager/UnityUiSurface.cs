@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager
             private readonly ScrollRect? outerScroll;
             private TopiaForgeContainer? compositionRoot;
             private UnityUiLayoutRenderer? layoutRenderer;
+            private UiSurfaceInputContext? inputContext;
             private TopiaForgeContainer? layoutFallback;
             private UiThemeDescriptor? declaredTheme;
             private bool remoteComposition;
@@ -95,6 +96,8 @@ namespace TopiaForge.ModManager
             bool IPresentationSurfaceState.IsAlive => presence.IsLive;
 
             public event Action? Dismissed;
+
+            internal void AttachInput(UiSurfaceInputContext context) => inputContext = context;
 
             public static UnityUiSurface ForWindow(
                 string id,
@@ -219,6 +222,7 @@ namespace TopiaForge.ModManager
                     }
 
                     UiComposition.Validate(content);
+                    if (!remote && !retained) inputContext?.Validate(content);
                     if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
                         return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
                     if (!retained) UiClockBinding.Check(content, stamp.ClockEpoch);
@@ -229,7 +233,8 @@ namespace TopiaForge.ModManager
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
                     var area = MeasureContentArea(parent, view);
                     nextLayout = UnityUiLayoutRenderer.Stage(content, next, area,
-                        descriptor ?? (remote ? null : UiThemePackParser.Default), callbacks, graphTransaction, nextArtwork);
+                        descriptor ?? (remote ? null : UiThemePackParser.Default), callbacks, graphTransaction, nextArtwork,
+                        layoutRenderer, RefreshTabbedPage, inputContext);
                     needsImageNoticeRoom = nextLayout.UnavailableImagePath != null && !CanShowImageNotice(next, area);
                     if (!remote && needsImageNoticeRoom)
                         throw new ArgumentException("The image unavailable notice cannot fit this surface at " + nextLayout.UnavailableImagePath + ".");

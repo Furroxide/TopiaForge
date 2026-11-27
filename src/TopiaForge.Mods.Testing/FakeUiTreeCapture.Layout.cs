@@ -130,6 +130,7 @@ namespace TopiaForge.Mods.Testing
             var backgrounds = new Dictionary<UiLayoutPlacement, UiPaintRole>(layout.Placements.Count);
             foreach (var placement in layout.Placements)
             {
+                if (!VisibleTabPage(placement)) continue;
                 backdrop = placement.Parent == null ? UiPaintRole.Surface : backgrounds[placement.Parent];
                 inheritedDisabled = placement.Disabled;
                 var node = placement.Node;
@@ -155,6 +156,15 @@ namespace TopiaForge.Mods.Testing
                 }
                 switch (node)
                 {
+                    case UiTabs:
+                        Add(path, node.Id, nameof(UiTabs), bounds, boundsClip, EmptyContent, default);
+                        break;
+                    case UiTooltip tooltip:
+                        PaintTooltip(tooltip, path, bounds, boundsClip);
+                        break;
+                    case UiButton tabButton when placement.Parent?.Node is UiTabs tabs && placement.ChildIndex >= tabs.Tabs.Count:
+                        PaintTab(tabs, tabButton, placement.ChildIndex - tabs.Tabs.Count, path, bounds, boundsClip);
+                        break;
                     case UiCard:
                     case UiBox:
                         PaintDecoration(placement, path, bounds, boundsClip);
@@ -182,6 +192,13 @@ namespace TopiaForge.Mods.Testing
 
                 backgrounds.Add(placement, backdrop);
             }
+        }
+
+        private bool VisibleTabPage(UiLayoutPlacement placement)
+        {
+            for (var page = placement.TabPage; page != null; page = page.Parent)
+                if (surface.ActiveTabIndex((UiTabs)page.Group.Node) != page.PageIndex) return false;
+            return true;
         }
 
         private void PaintDecoration(UiLayoutPlacement placement, string path, UiCaptureRect bounds, UiCaptureRect clip)

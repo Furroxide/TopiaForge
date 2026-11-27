@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             DefaultsAndContrastAreResolved();
+            ControlComponentsPreserveLegacyThemeIdentity();
             AuthoredContrastIsValidated();
             StateTintsPreserveTheReviewedTransitions();
             StrictJsonRejectsInvalidInputs();
@@ -54,6 +55,34 @@ namespace TopiaForge.ModManager.Tests
             Assert(authored.GetText(UiTextStyle.Mono).Font == "mono" && !authored.GetText(UiTextStyle.Mono).IsUppercase,
                 "Mono uses the kit mono face and preserves case.");
             Assert(authored.Shape.Resolve(UiThemeRadius.Pill, 91f, 31f) == 15.5f, "Pill resolves from the shorter extent.");
+        }
+
+        private static void ControlComponentsPreserveLegacyThemeIdentity()
+        {
+            var kit = UiThemePackParser.Default;
+            Assert(kit.MinimumWireVersion == UiWireCodec.FoundationContractVersion &&
+                Convert.ToHexString(kit.Digest.Span) == "4602CE2902CF9C95898AEA57EDFD9E9293DD563941CBF191240C299393D89E3A",
+                "Publishing resolved K2 component defaults preserves the v2 kit fingerprint.");
+            var button = kit.Components[UiThemeTarget.Button];
+            var input = kit.Components[UiThemeTarget.Input];
+            var tabs = kit.Components[UiThemeTarget.Tabs];
+            var tooltip = kit.Components[UiThemeTarget.Tooltip];
+            Assert(button.Radius == UiThemeRadius.Control && button.Border == UiThemeBorder.Standard && button.Shadow == UiThemeShadow.Small &&
+                input.Radius == UiThemeRadius.Medium && input.Border == UiThemeBorder.Standard && input.Shadow == UiThemeShadow.None &&
+                tabs.Radius == UiThemeRadius.Control && tabs.Border == UiThemeBorder.Standard && tabs.Shadow == UiThemeShadow.None &&
+                tooltip.Radius == UiThemeRadius.Medium && tooltip.Border == UiThemeBorder.Standard && tooltip.Shadow == UiThemeShadow.None,
+                "The published kit theme supplies the approved component shapes for controls.");
+            var inherited = Parse("{}");
+            Assert(inherited.MinimumWireVersion == UiWireCodec.FoundationContractVersion &&
+                inherited.Components[UiThemeTarget.Tooltip].Radius == UiThemeRadius.Medium,
+                "A K1 descriptor can resolve new local defaults without requiring v3 from a peer.");
+            var authored = Parse("""{"components":{"button":{"radius":"control","border":"standard","shadow":"small"}}}""");
+            var amended = Parse("""{"components":{"button":{"radius":"control","border":"strong","shadow":"small"}}}""");
+            Assert(authored.MinimumWireVersion == UiWireCodec.ControlsContractVersion &&
+                Convert.ToHexString(authored.Digest.Span) == "8D4F758BD5B93E55E285FBF0E4F4FC221945D60743F93F6D9C56A31F31F1F9D2" &&
+                !authored.Digest.Span.SequenceEqual(inherited.Digest.Span) &&
+                !authored.Digest.Span.SequenceEqual(amended.Digest.Span),
+                "An authored K2 component uses v3, and its effective style participates in the digest.");
         }
 
         private static void AuthoredContrastIsValidated()

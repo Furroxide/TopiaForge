@@ -167,6 +167,26 @@
       "radius": "small",
       "border": "none",
       "shadow": "none"
+    },
+    "button": {
+      "radius": "control",
+      "border": "standard",
+      "shadow": "small"
+    },
+    "input": {
+      "radius": "medium",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "tabs": {
+      "radius": "control",
+      "border": "standard",
+      "shadow": "none"
+    },
+    "tooltip": {
+      "radius": "medium",
+      "border": "standard",
+      "shadow": "none"
     }
   }
 }

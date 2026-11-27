@@ -17,13 +17,16 @@ namespace TopiaForge.ModManager.Tests
             const string native = "src/TopiaForge.ModManager/UiGalleryRecorder/";
             const string testing = "src/TopiaForge.Mods.Testing/";
             var recorder = Members(native + "UiGalleryNativeTree.cs", "Add", "Observe", "Clip", "PaddedMaskBounds", "Text",
-                "Bounds", "ScreenPoint", "VerticalScale", "AtPoints", "ClipContains", "State", "Observation");
+                "Bounds", "ScreenPoint", "VerticalScale", "AtPoints", "ClipContains", "State", "Named", "Observation");
             var controls = Members(native + "UiGalleryNativeTree.Controls.cs", "HitAndFocus", "Hit", "CanReceivePointer",
-                "HitGraphic", "HasRectangularRaycast", "Flags", "ObserveListSelection");
+                "HitGraphic", "HasRectangularRaycast", "Flags", "ObserveListSelection", "InputError");
+            var paint = Members(native + "UiGalleryNativeTree.Art.cs", "ArtPaint");
             var compilationSources = new[] { native + "UiGalleryCaptureClip.cs", testing + "UiCaptureViewport.cs",
-                testing + "UiCapturedNode.cs", testing + "UiTreeCapture.cs" }.Select(path => File.ReadAllText(Path.Combine(root, path)))
-                .Append(NativeCaptureBoundary.Replace("/* production recorder */", recorder + "\n" + controls))
-                .Append(NativeClipCases).Append(NativeScrollCases);
+                testing + "UiCapturedNode.cs", testing + "UiTreeCapture.cs",
+                "src/TopiaForge.ModManager/UnityUiCompositionRenderer.Validation.cs" }
+                .Select(path => File.ReadAllText(Path.Combine(root, path)))
+                .Append(NativeCaptureBoundary.Replace("/* production recorder */", recorder + "\n" + controls + "\n" + paint))
+                .Append(NativeClipCases).Append(NativeScrollCases).Append(NativeValidationCases);
             var options = new CSharpParseOptions(preprocessorSymbols: new[] { "TOPIAFORGE_NATIVE_CAPTURE" });
             var sources = compilationSources.Select(source => CSharpSyntaxTree.ParseText(source, options));
             var platform = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
@@ -149,6 +152,7 @@ namespace TopiaForge.ModManager.Tests
                         "A culled authored ring supplies no selection fact.");
 
                     ScrollAperturesMustRevealNativeGeometry(canvas, window);
+                    CaptureThePaintedValidationGlyph(canvas, window);
                 }
 
                 private static Canvas CanvasForFixture()
@@ -188,6 +192,7 @@ namespace TopiaForge.ModManager.Tests
             using TMPro;
             using TopiaForge.ModManager;
             using TopiaForge.Mods;
+            using TopiaForge.Mods.UnityUi;
             using UnityEngine;
             using UnityEngine.UI;
 
@@ -227,9 +232,12 @@ namespace TopiaForge.ModManager.Tests
                     }
                     private UiTreeCapture Result() => new UiTreeCapture(observations.Select(item => new UiCapturedNode(item.Path,
                         item.Id, item.Kind, item.Bounds, item.Content, item.Paint, "kit", false, item.Rendered, item.Clipped, false)).ToList(), false, 40);
+                    internal UiTreeCapture? ReadInputError(RectTransform rect, RectTransform field, string message) =>
+                        InputError(rect, field, "/field", message, new UiThemeColor(255, 255, 255)) ? Result() : null;
+
+                    private static readonly UiCaptureNodeContent ArtEdge = State(UiCaptureNodeFlags.Decorative | UiCaptureNodeFlags.BoundaryMark);
                     private static Graphic EffectiveColor(Graphic graphic) => graphic;
-                    private static UiThemeColor ToRgb(Graphic graphic) => new UiThemeColor(0, 0, 0);
-                    private static T? Named<T>(RectTransform rect, string name) where T : Component => null;
+                    private static UiThemeColor ToRgb(Graphic graphic) => graphic.color;
 
                     /* production recorder */
                 }
@@ -266,16 +274,48 @@ namespace TopiaForge.ModManager.Tests
                 }
                 internal sealed class Camera { }
                 internal static class RectTransformUtility { internal static Vector2 WorldToScreenPoint(Camera? camera, Vector3 point) => new(point.x, point.y); }
-                internal sealed class GameObject { internal bool activeInHierarchy = true; }
+                internal sealed class GameObject
+                {
+                    internal bool activeInHierarchy = true;
+                    internal string name = string.Empty;
+                    internal Transform transform = null!;
+
+                    internal GameObject() { }
+
+                    internal GameObject(string name, params Type[] components)
+                    {
+                        this.name = name;
+                        transform = new RectTransform(null, default, this);
+                    }
+
+                    internal T AddComponent<T>() where T : Component, new() => transform.Attach(new T());
+                    internal T? GetComponent<T>() where T : Component => transform.GetComponent<T>();
+                }
                 internal class Transform
                 {
                     private readonly List<Component> components = new();
-                    internal readonly Transform? parent;
-                    internal readonly GameObject gameObject = new();
-                    internal Transform(Transform? parent) { this.parent = parent; }
+                    private readonly List<Transform> children = new();
+                    internal Transform? parent { get; private set; }
+                    internal readonly GameObject gameObject;
+
+                    internal Transform(Transform? parent, GameObject? owner = null)
+                    {
+                        gameObject = owner ?? new GameObject();
+                        gameObject.transform = this;
+                        SetParent(parent, false);
+                    }
                     internal T Attach<T>(T value) where T : Component { value.transform = this; components.Add(value); return value; }
                     internal T? GetComponent<T>() where T : Component => components.OfType<T>().FirstOrDefault();
                     internal T[] GetComponents<T>() where T : Component => components.OfType<T>().ToArray();
+                    internal IEnumerable<T> GetComponentsInChildren<T>(bool includeInactive) where T : Component =>
+                        components.OfType<T>().Concat(children.SelectMany(child => child.GetComponentsInChildren<T>(includeInactive)));
+                    internal Transform? Find(string name) => children.FirstOrDefault(child => child.gameObject.name == name);
+                    internal void SetParent(Transform? next, bool worldPositionStays)
+                    {
+                        parent?.children.Remove(this);
+                        parent = next;
+                        parent?.children.Add(this);
+                    }
                     internal bool TryGetComponent<T>(out T value) where T : Component { value = GetComponent<T>()!; return value != null; }
                     internal bool IsChildOf(Transform? ancestor)
                     {
@@ -285,8 +325,11 @@ namespace TopiaForge.ModManager.Tests
                 }
                 internal sealed class RectTransform : Transform
                 {
-                    internal readonly UiCaptureRect bounds;
-                    internal RectTransform(Transform? parent, UiCaptureRect bounds) : base(parent) { this.bounds = bounds; }
+                    internal UiCaptureRect bounds;
+                    internal RectTransform(Transform? parent, UiCaptureRect bounds, GameObject? owner = null) : base(parent, owner)
+                    {
+                        this.bounds = bounds;
+                    }
                     internal Rect rect => new(0, 0, bounds.Width, bounds.Height);
                     internal Vector3 TransformPoint(Vector3 local) => new(bounds.X + local.x, 1080 - bounds.Bottom + local.y);
                     internal void GetWorldCorners(Vector3[] corners)
@@ -300,6 +343,7 @@ namespace TopiaForge.ModManager.Tests
                 internal class Component
                 {
                     internal Transform transform = null!;
+                    internal string name => transform.gameObject.name;
                     internal T? GetComponent<T>() where T : Component => transform.GetComponent<T>();
                     internal T[] GetComponents<T>() where T : Component => transform.GetComponents<T>();
                 }
@@ -328,12 +372,15 @@ namespace TopiaForge.ModManager.Tests
                     internal bool raycastTarget = true, allowsPointer = true;
                     internal int depth = 1;
                     internal float a;
+                    internal UiThemeColor color;
                     internal Vector2 LastPoint { get; private set; }
                     internal bool Raycast(Vector2 point, Camera? camera) { LastPoint = point; return allowsPointer; }
                 }
                 internal class Image : Graphic
                 {
                     internal float alphaHitTestMinimumThreshold;
+                    internal object? sprite;
+                    public Image() { }
                     internal Image(Canvas canvas) { this.canvas = canvas; }
                 }
                 internal sealed class TopiaForgeRoundedImage : Image
@@ -353,6 +400,7 @@ namespace TopiaForge.ModManager.Tests
                     internal FontStyles fontStyle;
                     internal readonly Font font = new();
                     internal float fontSize = 20;
+                    internal Vector4 margin;
                     internal readonly TextInfo textInfo = new();
                     internal void ForceMeshUpdate() { }
                 }

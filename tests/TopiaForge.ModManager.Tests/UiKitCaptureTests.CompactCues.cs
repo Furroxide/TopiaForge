@@ -18,15 +18,17 @@ namespace TopiaForge.ModManager.Tests
                  "hud":{"muted":"#404040","colors":{"primary":{"fill":"#010101","on":"#FFFFFF"},
                     "selected":{"fill":"#010101","on":"#FFFFFF"},"sunken":{"fill":"#010101","on":"#FFFFFF"}}}}
                 """;
-            Check(ui.AddThemeFixture(palette).Succeeded, "Admit black and near-black switch/slider pairs.");
+            Check(ui.AddThemeFixture(palette).Succeeded, "Admit black and near-black compact control pairs.");
             var toggleChanges = 0;
             var sliderChanges = 0;
-            using var surface = Make(ui, new UiSurfaceRequest("compact-control-cues", "Switch and slider cues", "",
+            using var surface = Make(ui, new UiSurfaceRequest("compact-control-cues", "Compact control cues", "",
                 width: 620f, height: 360f, content: new UiColumn(
                     new UiToggle("tracking", "Tracking", true, _ => toggleChanges++),
                     new UiSlider("range", "Range", 10f, 20f, 15f, _ => sliderChanges++),
+                    new UiCheckbox("check", "Annotations", true, _ => { }),
                     new UiToggle("locked-tracking", "Tracking locked", true, _ => toggleChanges++, enabled: false),
-                    new UiSlider("locked-range", "Range locked", 10f, 20f, 15f, _ => sliderChanges++, enabled: false)))
+                    new UiSlider("locked-range", "Range locked", 10f, 20f, 15f, _ => sliderChanges++, enabled: false),
+                    new UiCheckbox("locked-check", "Annotations locked", true, _ => { }, enabled: false)))
                 .WithTheme(new UiThemeRef("compact-controls")));
             ui.CompletePendingThemeRegistrations();
 
@@ -43,20 +45,20 @@ namespace TopiaForge.ModManager.Tests
                             var selected = Capture("Selected", hud);
                             var pressed = Capture("Pressed", hud);
                             var both = Capture("SelectedPressed", hud);
-                            foreach (var id in new[] { "tracking", "range" })
+                            foreach (var (id, body, mark) in new[] { ("tracking", "track", "thumb"), ("range", "track", "thumb"), ("check", "box", "check") })
                             {
                                 Check(HasPart(both, id, "selection") && HasPart(both, id, "press"),
-                                    "Each compact control shows both cues when the two active states collapse.");
+                                    "Each compact control, including the checkbox, shows both cues when the two active states collapse.");
                                 var hit = Part(rest, id, "hit");
-                                var track = Part(rest, id, "track");
+                                var track = Part(rest, id, body);
                                 var label = Find(rest, id);
                                 var bar = Part(both, id, "selection");
                                 var outline = Part(both, id, "press");
                                 var ring = Part(focus, id, "focus");
                                 var stroke = scale * (highContrast ? 3f : 2f);
                                 var minimum = highContrast ? 4.5f : 3f;
-                                Check(track.FillColor == (hud ? "#010101" : "#000000") && Part(hover, id, "track").FillColor == track.FillColor &&
-                                    Part(both, id, "track").FillColor == track.FillColor, "The authored rail has collapsed quantized tints.");
+                                Check(track.FillColor == (hud ? "#010101" : "#000000") && Part(hover, id, body).FillColor == track.FillColor &&
+                                    Part(both, id, body).FillColor == track.FillColor, "The compact control has collapsed quantized tints.");
                                 Check(!HasPart(rest, id, "selection") && !HasPart(rest, id, "press") &&
                                     HasPart(selected, id, "selection") && !HasPart(selected, id, "press") &&
                                     !HasPart(pressed, id, "selection") && HasPart(pressed, id, "press"),
@@ -70,16 +72,17 @@ namespace TopiaForge.ModManager.Tests
                                     outline.X + outline.Width <= track.X &&
                                     bar.X > outline.X + stroke && bar.X + bar.Width < outline.X + outline.Width - stroke,
                                     "The gutter reserves room for two separate cues without covering the track.");
-                                Check(Geometry(hit) == Geometry(Part(both, id, "hit")) && Geometry(track) == Geometry(Part(both, id, "track")) &&
+                                Check(Geometry(hit) == Geometry(Part(both, id, "hit")) && Geometry(track) == Geometry(Part(both, id, body)) &&
                                     hit.Width >= 40f * scale && hit.Height >= 40f * scale && ring.X + (2f * scale + stroke) == hit.X &&
-                                    Geometry(Part(rest, id, "thumb")) == Geometry(Part(both, id, "thumb")),
-                                    "The cue leaves the hit target, focus origin, rail and real value thumb stable.");
+                                    ring.Width == hit.Width + 2f * (2f * scale + stroke) &&
+                                    Geometry(Part(rest, id, mark)) == Geometry(Part(both, id, mark)),
+                                    "The cues preserve the hit target, full focus ring and value mark.");
                             }
-                            foreach (var id in new[] { "locked-tracking", "locked-range" })
+                            foreach (var (id, mark) in new[] { ("locked-tracking", "thumb"), ("locked-range", "thumb"), ("locked-check", "check") })
                             {
                                 Check(!HasPart(both, id, "selection") && !HasPart(both, id, "press") &&
-                                    Part(both, id, "thumb") is { Disabled: true } disabled && disabled.ContrastRatio >= (highContrast ? 7f : 4.5f),
-                                    "Disabled controls resolve their muted thumb at the disabled content threshold and show no input cues.");
+                                    Part(both, id, mark) is { Disabled: true } disabled && disabled.ContrastRatio >= (highContrast ? 7f : 4.5f),
+                                    "Disabled controls keep their value mark at the disabled contrast threshold and show no input cues.");
                             }
                             Check(both.CheckAccessibility().Count == 0, "Combined compact cue captures pass the accessibility checks.");
                         }
@@ -112,7 +115,7 @@ namespace TopiaForge.ModManager.Tests
                     !HasPart(kitPress, id, "selection") && !HasPart(kitPress, id, "press"),
                     "Ordinary Paper switch and slider keep their readable state tints without extra cues.");
             }
-            Console.WriteLine("Compact switch and slider cues passed at both schemes, scales, contrasts and motion profiles.");
+            Console.WriteLine("Compact switch, slider and checkbox cues passed at both schemes, scales, contrasts and motion profiles.");
 
             UiTreeCapture Capture(string state, bool hud) => CaptureForFixture(surface, Viewport, state, 0f, hud);
             static UiCapturedNode Find(UiTreeCapture capture, string id) => capture.Nodes.Single(row => row.Id == id);

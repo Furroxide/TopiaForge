@@ -23,6 +23,8 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/UnityUiGraphRetention.cs",
                 "src/TopiaForge.ModManager/UnityUiLayoutRenderer.cs",
                 "src/TopiaForge.ModManager/UnityUiLayoutRenderer.Leaves.cs",
+                "src/TopiaForge.ModManager/UnityUiLayoutRenderer.Tabs.cs",
+                "src/TopiaForge.ModManager/UnityUiLayoutDivider.cs",
                 "src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeGraphCanvas.Retention.cs",
                 "src/TopiaForge.ModManager/UnityUiWorldWidgets.cs",
                 "src/TopiaForge.ModManager/UnityMainThreadGuard.cs",
@@ -62,7 +64,7 @@ namespace TopiaForge.ModManager.Tests
             var probe = Assembly.Load(bytes.ToArray()).GetType("TopiaForge.ModManager.OwnerUiService", throwOnError: true)!;
             ((Action)probe.GetMethod("ProbeReapply", BindingFlags.Public | BindingFlags.Static)!
                 .CreateDelegate(typeof(Action)))();
-            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool, HUD and retained graph admission.");
+            Console.WriteLine("UiSurfaceReapplyTests passed for Window, FullscreenTool, HUD, retained graphs and local tab selection.");
         }
 
         private static string OuterScrollAdapter(string root)
@@ -102,6 +104,7 @@ namespace TopiaForge.ModManager.Tests
                         foreach (var kind in new[] { UiSurfaceKind.Window, UiSurfaceKind.FullscreenTool, UiSurfaceKind.Hud })
                             ProbeSurface(kind);
                         ProbeGraphAdmission();
+                        ProbeTabs();
                         ProbeArtworkAdmission();
                         ProbeArtworkRetries(remote: false, retryWhileDraining: false);
                         ProbeArtworkRetries(remote: true, retryWhileDraining: false);
@@ -175,6 +178,34 @@ namespace TopiaForge.ModManager.Tests
                             ReferenceEquals(retained, parent.Children.Single()) && parent.Rect.anchoredPosition.y == 170f &&
                             !surface.GraphConnectionsSuspended && scroll.MovementStops == 2 && logger.Errors == 0,
                             "The larger aperture restores the original native tree and its saved scroll offset.");
+                    }
+
+                    private static void ProbeTabs()
+                    {
+                        var host = new UiHost();
+                        var parent = new TopiaForgeContainer(host);
+                        using var lifetime = new FakeModLifetime();
+                        using var surface = UnityUiSurface.ForWindow("tabs", new TopiaForgeWindow(host),
+                            new TopiaForgeLabel(), parent, lifetime, new BoundaryLogger(), _ => { });
+                        var notified = "";
+                        UiTabs Tree(string selected) => new UiTabs("pages", new[]
+                        {
+                            new UiTab("first", "First", new UiText("Readiness")),
+                            new UiTab("second", "Second", new UiText("Map")),
+                        }, selected, id => notified = id);
+                        surface.Present();
+                        Require(surface.SetContent(Tree("first")).Succeeded, "The two native pages are admitted.");
+                        var pages = parent.Children.Single().Children.Single().Children;
+                        var first = pages[0];
+                        var second = pages[1];
+                        Require(first.Go.Shown && !second.Go.Shown, "Only the authored initial page is drawn.");
+                        host.Buttons["Second"].Click();
+                        Require(!first.Go.Shown && second.Go.Shown && ReferenceEquals(pages[0], first) &&
+                            ReferenceEquals(pages[1], second) && notified == "second",
+                            "Native tabs change immediately and retain both page instances before reporting the selection.");
+                        Require(surface.SetContent(Tree("first")).Succeeded &&
+                            parent.Children.Single().Children.Single().Children[1].Go.Shown,
+                            "An unchanged authored tab preserves the viewer's selection across a new native revision.");
                     }
 
                     private static void ProbeSurface(UiSurfaceKind kind)

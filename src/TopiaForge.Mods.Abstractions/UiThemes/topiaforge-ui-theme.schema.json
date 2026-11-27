@@ -122,6 +122,18 @@
         },
         "pips": {
           "$ref": "#/$defs/component"
+        },
+        "button": {
+          "$ref": "#/$defs/component"
+        },
+        "input": {
+          "$ref": "#/$defs/component"
+        },
+        "tabs": {
+          "$ref": "#/$defs/component"
+        },
+        "tooltip": {
+          "$ref": "#/$defs/component"
         }
       }
     },

@@ -160,6 +160,7 @@ namespace TopiaForge.Mods.Testing
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "The fake slider value is outside its range.");
             }
 
+            value = UiSliderSteps.Snap(value, slider.Minimum, slider.Maximum, slider.Divisions);
             sliderValues[id] = value;
             return Invoke(slider.Changed, value, "slider '" + id + "'");
         }

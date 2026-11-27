@@ -152,8 +152,9 @@ namespace TopiaForge.ModManager.Tests
         };
 
         private static GoldenCase CaptureCase(string caseId, FakeUiSurface surface, UiCaptureViewport viewport,
-            string state, bool? hudScheme, float offsetScale)
+            string state, bool? hudScheme, float offsetScale, Func<UiCapturedNode, object>? project = null)
         {
+            project ??= GoldenNode;
             using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             var first = CaptureForFixture(surface, viewport, state, 0f, hudScheme);
             var initialIssues = first.CheckAccessibility();
@@ -175,7 +176,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     if (node.IsRendered) rendered.Add(node.Path);
                 }
-                digest.AppendData(JsonSerializer.SerializeToUtf8Bytes(capture.Nodes.Select(GoldenNode), CaptureJson));
+                digest.AppendData(JsonSerializer.SerializeToUtf8Bytes(capture.Nodes.Select(project), CaptureJson));
                 snapshots++;
                 if (offset >= maxOffset) break;
             }

@@ -8,19 +8,19 @@ namespace TopiaForge.ModManager
     {
         private ulong lastPresentationGeneration;
 
-        internal bool RequiresFoundationUi
+        internal int RequiredUiVersion
         {
             get
             {
+                var required = UiPresentationTheme.LegacyVersion;
                 for (var index = 0; index < authoredHuds.Count; index++)
                 {
                     var hud = authoredHuds[index];
-                    if (hud.IsAlive && !hud.Context.Lifetime.IsStopping &&
-                        (hud.Theme != null || UiWireCodec.NeedsEnvelope(hud.PresentationContent)))
-                        return true;
+                    if (hud.IsAlive && !hud.Context.Lifetime.IsStopping)
+                        required = Math.Max(required, UiPresentationTheme.RequiredVersion(hud.PresentationContent, hud.Theme));
                 }
 
-                return false;
+                return required;
             }
         }
 
@@ -38,8 +38,9 @@ namespace TopiaForge.ModManager
             envelope = null;
             try
             {
-                if (theme == null && !UiWireCodec.NeedsEnvelope(content)) return UiPresentationTheme.Allowed;
-                if (Hosting && !players.AllPeersSupportFoundationUi()) return UiPresentationTheme.UnsupportedPeer;
+                var required = UiPresentationTheme.RequiredVersion(content, theme);
+                if (required == UiPresentationTheme.LegacyVersion) return UiPresentationTheme.Allowed;
+                if (Hosting && !players.AllPeersSupportUiVersion(required)) return UiPresentationTheme.UnsupportedVersion(required);
                 var owner = hud.Context.OwnerModId;
                 if (!players.TryOutgoingUiDigest(owner, requireSignedRoster: Hosting, out var digest))
                     return Hosting || preparingHost ? UiPresentationTheme.UnadmittedPackage : UiPresentationTheme.Allowed;
@@ -81,7 +82,7 @@ namespace TopiaForge.ModManager
 
         internal OperationResult<bool> PrepareHosting()
         {
-            if (!RequiresFoundationUi) return UiPresentationTheme.Allowed;
+            if (RequiredUiVersion == UiPresentationTheme.LegacyVersion) return UiPresentationTheme.Allowed;
             var result = StageThemes(null, null, preparingHost: true, out var themeChanges);
             if (!result.Succeeded) return result;
             CommitThemes(themeChanges);
@@ -103,7 +104,7 @@ namespace TopiaForge.ModManager
                 var theme = hud.Theme;
                 if (preparingHost)
                 {
-                    if (theme == null && !UiWireCodec.NeedsEnvelope(hud.PresentationContent)) continue;
+                    if (UiPresentationTheme.RequiredVersion(hud.PresentationContent, theme) == UiPresentationTheme.LegacyVersion) continue;
                 }
                 else
                 {

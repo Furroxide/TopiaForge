@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.Mods.UnityUi/Core/TopiaForgeInputClaim.cs",
                 "src/TopiaForge.Mods.UnityUi/Core/TopiaForgeNavigationBindings.cs",
                 "src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeInputOwnership.Gamepad.cs",
+                "src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeSliderInput.cs",
                 "tests/Shared/AllocationProbe.cs",
             }.Select(path => File.ReadAllText(Path.Combine(root, path))).Concat(new[] { Contract, Scenarios });
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
@@ -38,7 +39,7 @@ namespace TopiaForge.ModManager.Tests
 
             var probe = Assembly.Load(bytes.ToArray()).GetType("GamepadScenarios", throwOnError: true)!;
             var count = 0;
-            foreach (var name in new[] { "Axes", "Keyboard", "ScaleAndRebind", "MissingAndChangingPad", "YieldAndRelease", "WindowBindings", "TakenSticks", "IsolationAndReset", "NoAllocation" })
+            foreach (var name in new[] { "Axes", "Keyboard", "ScaleAndRebind", "MissingAndChangingPad", "YieldAndRelease", "WindowBindings", "TakenSticks", "IsolationAndReset", "NoAllocation", "UiConflictUsesDisplayName", "DeclarativeSliderMovesOnePercent" })
             {
                 ((Action)probe.GetMethod(name)!.CreateDelegate(typeof(Action)))();
                 count++;
@@ -68,11 +69,30 @@ namespace TopiaForge.ModManager.Tests
             }
             namespace UnityEngine.EventSystems
             {
+                public enum MoveDirection { Left, Right, Up, Down }
+                public sealed class AxisEventData { public MoveDirection moveDir; }
                 public class EventSystem
                 {
                     public static EventSystem? current;
                     public UnityEngine.GameObject? currentSelectedGameObject;
                     public bool IsPointerOverGameObject() => false;
+                }
+            }
+            namespace UnityEngine.UI
+            {
+                public class Slider
+                {
+                    public float minValue, maxValue;
+                    public bool interactable = true;
+                    public int BaseMoves;
+                    public object? LeftNeighbor;
+                    private float position;
+                    public float value { get => position; set => position = Math.Clamp(value, minValue, maxValue); }
+                    public bool IsActive() => true;
+                    public bool IsInteractable() => interactable;
+                    public object? FindSelectableOnLeft() => LeftNeighbor;
+                    public object? FindSelectableOnRight() => null;
+                    public virtual void OnMove(UnityEngine.EventSystems.AxisEventData data) => BaseMoves++;
                 }
             }
             namespace UnityEngine.InputSystem
@@ -96,6 +116,12 @@ namespace TopiaForge.ModManager.Tests
             {
                 internal static class TopiaForgeDismissStack { public static TopiaForgeInputClaim Claims; public static bool HoldsFocus; }
                 internal static class TopiaForgeNavigateAction { public static readonly TopiaForgeNavigationBindings Bindings = new(); }
+                // This raw-event boundary is exercised with the production filter in UiKitNativeBindingTests.
+                internal static class TopiaForgeBindingCaptureInput
+                {
+                    internal static bool Capturing => false;
+                    internal static bool Took(InputBinding binding) => false;
+                }
                 internal sealed class TopiaForgeGameTextFocus
                 {
                     public static readonly TopiaForgeGameTextFocus Current = new();

@@ -161,8 +161,19 @@ namespace TopiaForge.ModManager.Tests
                 UiKitCaptureTests.WriteArtGoldenManifest(args[1]);
                 return 0;
             }
+            if (args.Length == 2 && args[0] == "--write-ui-k2-controls-goldens")
+            {
+                UiKitCaptureTests.WriteControlGoldenManifest(args[1]);
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--ui-theme-wire") { UiThemeWireTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-k1-button-cues") { UiKitCaptureTests.VerifyButtonCues(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-k2-control-options")
+            {
+                UiControlOptionsTests.Run();
+                UiKitCaptureTests.VerifyControlGoldenManifest();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--ui-kit-adopters") { UiKitThemeConsumerTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-theme-assets")
             {

@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using TopiaForge.Mods;
 
 namespace TopiaForge.Mods
@@ -114,12 +113,8 @@ namespace TopiaForge.Mods
                 var label = Text(r);
                 if (type == 6) return new UiButton(id, label, () => reply(id, ""), (UiButtonStyle)Byte(r, 3), Byte(r, 1) != 0);
                 if (type == 7) return new UiToggle(id, label, Byte(r, 1) != 0, value => reply(id, value ? "1" : "0"), Byte(r, 1) != 0);
-                if (type == 8) return new UiSlider(id, label, Number(r), Number(r), Number(r), value => reply(id, value.ToString("R", CultureInfo.InvariantCulture)), Byte(r, 1) != 0);
-                if (type == 9)
-                {
-                    var value = Text(r); var placeholder = Text(r); var max = Count(4096); var enabled = Byte(r, 1) != 0;
-                    return new UiTextInput(id, label, value, text => reply(id, text), placeholder, max, enabled);
-                }
+                if (type == 8) return Slider(id, label, stepped: false);
+                if (type == 9) return TextInput(id, label, decorated: false);
                 var selectedValue = Text(r); var active = Byte(r, 1) != 0;
                 var choices = new UiChoice[Count(256)];
                 for (var i = 0; i < choices.Length; i++) choices[i] = new UiChoice(Text(r), Text(r));
@@ -129,6 +124,7 @@ namespace TopiaForge.Mods
             private UiNode EnhancedNode(byte type, int depth)
             {
                 if (!enhanced) throw Bad();
+                if (type >= CheckboxTag && type <= KeyBindingFieldTag) return ControlNode(type, depth);
                 if (type >= IconTag && type <= PipsTag) return ArtNode(type);
                 if (type != EnhancedTextTag && type != EnhancedProgressTag && type != EnhancedCountdownTag)
                     return LayoutNode(type, depth);

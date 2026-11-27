@@ -305,6 +305,7 @@ namespace TopiaForge.Mods.Internal
     {
         internal const int LegacyVersion = 1;
         internal const int FoundationVersion = 2;
+        internal const int ControlsVersion = 3;
 
         // Only a verified descriptor from this provider protocol line may request an extended content offer.
         internal static bool SupportsExtendedOffer(string protocolVersion) =>

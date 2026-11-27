@@ -1,3 +1,4 @@
+using System;
 using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
@@ -6,29 +7,43 @@ namespace {{ASSEMBLY_NAME}}
     public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
         internal const string ToggleActionName = "toggle-mod-window";
+        internal const string SettingsTabsId = "settings-tabs";
+        internal const string GeneralTabId = "general";
+        internal const string ControlsTabId = "controls";
+        internal const string AccessibilityTabId = "accessibility";
         internal const string GreetingInputId = "greeting";
-        internal const string NotificationsToggleId = "notifications";
+        internal const string NotificationsCheckboxId = "notifications";
         internal const string UiScaleSliderId = "ui-scale";
+        internal const string HighContrastToggleId = "high-contrast";
+        internal const string ReducedMotionToggleId = "reduced-motion";
+        internal const string MotionIntensitySliderId = "motion-intensity";
+        internal const string PanelBindingId = "panel-binding";
+        internal const string ResetBindingsId = "reset-bindings";
+        internal const string DoneButtonId = "done";
         internal const string ToneDropdownId = "tone";
         internal const string TopicListId = "topics";
         internal const string NotifyButtonId = "notify";
         internal const string PaletteHeadingId = "palette-heading";
         internal const string ThemePreviewToggleId = "theme-preview";
         internal const string SettingsGridId = "settings-categories";
-        internal const string SettingsSummaryId = "settings-summary";
         internal const string ContainImageId = "preview-contain";
         internal const string CoverImageId = "preview-cover";
         internal const string PreviewMarkId = "preview-mark";
         internal const string NotificationBadgeId = "notification-status";
 
+        private const float PageHeight = 356f;
+        private const float MinimumUiScale = 0.75f;
+        private const float MaximumUiScale = 2f;
+        private const int UiScaleDivisions = 5;
         private static readonly UiThemeRef PreviewTheme = new UiThemeRef("controls-preview");
         private static readonly UiImageRef PreviewCard = new UiImageRef("preview-art", "card");
         private static readonly UiImageRef PreviewMark = new UiImageRef("preview-art", "mark");
         private IUiSurface? window;
+        private IInputAction? panelAction;
+        private string selectedTab = GeneralTabId;
         private string greeting = "Hello from {{DISPLAY_NAME}}.";
         private string selectedTone = "neutral";
         private string selectedTopic = "getting-started";
-        private string toggleKeyLabel = string.Empty;
         private bool notificationsEnabled = true;
         private bool themePreview;
 
@@ -42,10 +57,9 @@ namespace {{ASSEMBLY_NAME}}
                 return;
             }
 
-            toggleKeyLabel = config.ToggleKey.ToString();
             var registration = Context.Input.RegisterAction(new InputActionDefinition(
                 ToggleActionName,
-                "Toggle {{DISPLAY_NAME}} window",
+                "Open this panel",
                 new[] { InputBinding.Key(config.ToggleKey) }));
             if (!registration.TryGetValue(out var toggleAction))
             {
@@ -54,6 +68,7 @@ namespace {{ASSEMBLY_NAME}}
                 return;
             }
 
+            panelAction = toggleAction;
             Context.Events.SubscribeUpdate(_ =>
             {
                 if (toggleAction.WasPressed)
@@ -72,11 +87,11 @@ namespace {{ASSEMBLY_NAME}}
             {
                 var created = Context.Ui.CreateSurface(new UiSurfaceRequest(
                     "{{MOD_ID}}.window",
-                    "{{DISPLAY_NAME}}",
-                    "Hello from {{DISPLAY_NAME}}. Edit this text and add your own actions next.",
+                    "{{DISPLAY_NAME}} settings",
+                    string.Empty,
                     UiSurfaceKind.Window,
-                    width: 560f,
-                    height: 520f,
+                    width: 1100f,
+                    height: 640f,
                     content: BuildContent()));
                 if (!created.TryGetValue(out window))
                 {
@@ -100,18 +115,45 @@ namespace {{ASSEMBLY_NAME}}
 
         private UiNode BuildContent()
         {
-            var appearance = new UiColumn(
-                new UiText("Appearance", UiTextStyle.Heading),
+            var tabs = new UiTabs(SettingsTabsId, new[]
+            {
+                new UiTab(GeneralTabId, "General", new UiScroll(BuildGeneral(), PageHeight)),
+                new UiTab(ControlsTabId, "Controls", new UiScroll(BuildControls(), PageHeight)),
+                new UiTab(AccessibilityTabId, "Accessibility", new UiScroll(BuildAccessibility(), PageHeight)),
+            }, selectedTab, selected: id => selectedTab = id, style: UiTabsStyle.Rail);
+            var reset = new UiTooltip(
+                new UiButton(ResetBindingsId, "Reset to defaults", ResetBindings, UiButtonStyle.Ghost),
+                "Restore the default key for Open this panel.");
+            var footer = new UiRow(new UiNode[]
+            {
+                reset,
+                new UiSpacer(),
+                new UiButton(DoneButtonId, "Done", () => window?.Hide()),
+            }, new UiFlexLayout(spacing: UiSpace.Lg));
+            return new UiColumn(tabs, new UiDivider(), footer);
+        }
+
+        private UiNode BuildGeneral()
+        {
+            var appearance = new UiCard(
                 new UiToggle(ThemePreviewToggleId, "Preview alternate palette", themePreview, ApplyThemePreview),
-                new UiSlider(UiScaleSliderId, "UI scale", 0.75f, 2f, Context.Ui.Accessibility.UiScale, ApplyUiScale));
+                header: new UiText("Appearance", UiTextStyle.Heading));
+            return new UiColumn(
+                new UiText("General", UiTextStyle.Title, UiTone.Primary, PaletteHeadingId),
+                new UiGrid(new UiNode[] { appearance, BuildNotificationPreview() }, minimumCellWidth: 300f,
+                    maximumColumns: 2, spacing: UiSpace.Lg, id: SettingsGridId));
+        }
+
+        private UiNode BuildControls()
+        {
             var notifications = new UiColumn(
                 new UiText("Notifications", UiTextStyle.Heading),
-                new UiTextInput(GreetingInputId, "Greeting", greeting, value =>
+                UiTextInput.WithDecoration(GreetingInputId, "Greeting", greeting, value =>
                 {
                     greeting = value;
                     UpdateStatus();
-                }, placeholder: "Write a greeting", maximumLength: 120),
-                new UiToggle(NotificationsToggleId, "Show notifications", notificationsEnabled, ApplyNotifications),
+                }, new UiInputDecoration("Write a greeting"), maximumLength: 120),
+                new UiCheckbox(NotificationsCheckboxId, "Show notifications", notificationsEnabled, ApplyNotifications),
                 new UiDropdown(ToneDropdownId, "Notification tone", new[]
                 {
                     new UiChoice("neutral", "Neutral"),
@@ -135,21 +177,52 @@ namespace {{ASSEMBLY_NAME}}
 
             var actions = new UiRow(new UiNode[]
             {
-                new UiExpanded(new UiButton(NotifyButtonId, "Show notification", ShowNotification), flex: 2),
-                new UiExpanded(new UiButton("hide", "Hide window", () => window?.Hide(), UiButtonStyle.Secondary)),
+                new UiExpanded(new UiButton(NotifyButtonId, "Show notification", ShowNotification)),
+                new UiSpacer(),
             }, new UiFlexLayout(spacing: UiSpace.Lg), id: "window-actions");
 
             return new UiColumn(
-                new UiText("Window settings", UiTextStyle.Title, UiTone.Primary, PaletteHeadingId),
-                BuildNotificationPreview(),
-                new UiGrid(new UiNode[] { appearance, notifications }, minimumCellWidth: 220f,
-                    maximumColumns: 2, spacing: UiSpace.Lg, id: SettingsGridId),
+                notifications,
                 new UiText("Topics", UiTextStyle.Heading),
                 topics,
-                actions,
-                new UiDivider(),
-                new UiText("Window toggle  " + toggleKeyLabel, UiTextStyle.Mono, UiTone.Muted, SettingsSummaryId));
+                actions);
         }
+
+        private UiNode BuildAccessibility()
+        {
+            var preferences = Context.Ui.Accessibility;
+            // Opening the panel must also accept a scale previously set by another control between our steps.
+            var stepSize = (MaximumUiScale - MinimumUiScale) / UiScaleDivisions;
+            var shownScale = MinimumUiScale +
+                (float)Math.Round((preferences.UiScale - MinimumUiScale) / stepSize, MidpointRounding.AwayFromZero) * stepSize;
+            var intensity = new UiSlider(MotionIntensitySliderId, "Motion intensity", 0f, 2f, preferences.MotionIntensity,
+                value => ApplyAccessibility(motionIntensity: value), divisions: 0, format: UiValueFormat.Number(1),
+                enabled: !preferences.ReducedMotion);
+            UiNode motion = preferences.ReducedMotion
+                ? new UiColumn(intensity, new UiText("Off while reduced motion is on.", UiTextStyle.Caption, UiTone.Muted))
+                : intensity;
+
+            return new UiColumn(
+                new UiText("Accessibility", UiTextStyle.Heading),
+                new UiSlider(UiScaleSliderId, "UI scale", MinimumUiScale, MaximumUiScale, shownScale,
+                    value => ApplyAccessibility(uiScale: value), divisions: UiScaleDivisions, format: UiValueFormat.Multiplier()),
+                AccessibilityToggle(HighContrastToggleId, "High contrast", preferences.HighContrast,
+                    value => ApplyAccessibility(highContrast: value), "Stronger text contrast and thicker outlines."),
+                AccessibilityToggle(ReducedMotionToggleId, "Reduced motion", preferences.ReducedMotion,
+                    value => ApplyAccessibility(reducedMotion: value), "Changes happen immediately without pulses or punches."),
+                motion,
+                new UiTooltip(new UiKeyBindingField(PanelBindingId, ToggleActionName, "Open this panel"),
+                    "F5, F8 and F10 belong to the workbench, gallery and manager."));
+        }
+
+        private static UiCard AccessibilityToggle(string id, string label, bool value,
+            Action<bool> changed, string help) =>
+            new UiCard(new UiRow(new UiNode[]
+            {
+                new UiExpanded(new UiToggle(id, label, value, changed)),
+                new UiExpanded(new UiText(help, UiTextStyle.Caption, UiTone.Muted)),
+            }, new UiFlexLayout(spacing: UiSpace.Sm, crossAxisAlignment: UiCrossAxisAlignment.Center)),
+                padding: new UiInsets(UiSpace.Sm));
 
         private UiNode BuildNotificationPreview()
         {
@@ -182,9 +255,7 @@ namespace {{ASSEMBLY_NAME}}
             if (notificationsEnabled == enabled) return;
             notificationsEnabled = enabled;
             UpdateStatus();
-            var updated = window?.SetContent(BuildContent());
-            if (updated is { Succeeded: false })
-                Context.Logger.Warn("The notification preview could not update: " + updated.ErrorMessage);
+            RefreshWindow();
         }
 
         private void ApplyThemePreview(bool enabled)
@@ -198,24 +269,41 @@ namespace {{ASSEMBLY_NAME}}
 
             Context.Logger.Warn(
                 "Theme preview could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
-            window?.SetContent(BuildContent());
+            RefreshWindow();
         }
 
-        private void ApplyUiScale(float scale)
+        private void ApplyAccessibility(bool? highContrast = null, float? uiScale = null,
+            bool? reducedMotion = null, float? motionIntensity = null)
         {
             var current = Context.Ui.Accessibility;
             var applied = Context.Ui.ApplyAccessibility(new UiAccessibilityPreferences(
-                current.HighContrast,
-                scale,
-                current.ReducedMotion,
-                current.MotionIntensity));
+                highContrast ?? current.HighContrast,
+                uiScale ?? current.UiScale,
+                reducedMotion ?? current.ReducedMotion,
+                motionIntensity ?? current.MotionIntensity));
             if (!applied.Succeeded)
             {
                 Context.Logger.Warn(
-                    "UI scale could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
+                    "Accessibility preferences could not be applied (" + applied.ErrorCode + "): " + applied.ErrorMessage);
             }
 
-            UpdateStatus();
+            // The active controls retain their values. Rebuild when the motion slider must change enabled state.
+            if (!applied.Succeeded || Context.Ui.Accessibility.ReducedMotion != current.ReducedMotion)
+                RefreshWindow();
+        }
+
+        private void ResetBindings()
+        {
+            var result = panelAction?.ResetBindings();
+            if (result is { Succeeded: false })
+                Context.Logger.Warn("The panel shortcut could not be reset: " + result.ErrorMessage);
+        }
+
+        private void RefreshWindow()
+        {
+            var updated = window?.SetContent(BuildContent());
+            if (updated is { Succeeded: false })
+                Context.Logger.Warn("Window settings could not update: " + updated.ErrorMessage);
         }
 
         private void ShowNotification()

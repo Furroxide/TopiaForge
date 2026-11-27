@@ -464,6 +464,7 @@ type public sealed class TopiaForge.Mods.Testing.FakePlayerDialogueInputService 
 
 type public sealed class TopiaForge.Mods.Testing.FakePlayerDirectory : System.Object, System.IDisposable, TopiaForge.Mods.IPlayerDirectory [requires-topiaforge="0.2.0"]
   constructor .ctor() [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.Testing.FakeModContext? authorContext) [requires-topiaforge="0.2.0"]
   method System.Boolean Remove(TopiaForge.Mods.ParticipantId id) [requires-topiaforge="0.2.0"]
   method System.Boolean TryGetScore(System.String columnId, TopiaForge.Mods.ParticipantId player, out System.String displayValue, out System.Int64 sortKey) [requires-topiaforge="0.2.0"]
   method System.Void AdvanceTick() [requires-topiaforge="0.2.0"]
@@ -716,6 +717,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, 
   method System.Void AddAssetFixture(TopiaForge.Mods.Testing.FakeUiAssetMetadata asset) [requires-topiaforge="0.2.0"]
   method System.Void CompletePendingThemeRegistrations() [requires-topiaforge="0.2.0"]
   method System.Void FailNextContentUpdate(System.String surfaceId, TopiaForge.Mods.ModErrorCode errorCode = 9 (External), System.String message = "The fake UI content update was rejected.")
+  method System.Void UseInput(TopiaForge.Mods.Testing.FakeInputService input) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeCatalogue(System.String manifestJson, System.Func<System.String, System.String> readFile) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeFixture(System.String definitionJson) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.Testing.UiTreeCapture Capture(System.String surfaceId, TopiaForge.Mods.Testing.UiCaptureViewport viewport) [requires-topiaforge="0.2.0"]
@@ -734,16 +736,20 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, 
 type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, System.IDisposable, TopiaForge.Mods.IUiSurface, TopiaForge.Mods.IUiSurfaceDismissalSource
   event System.Action? Dismissed { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
   method System.Boolean TryFindNode(System.String id, out TopiaForge.Mods.UiNode? node)
+  method System.Boolean TryGetCheckboxValue(System.String id, out System.Boolean value) [requires-topiaforge="0.2.0"]
   method System.Boolean TryGetCountdownSeconds(System.String id, out System.Int32 seconds) [requires-topiaforge="0.2.0"]
   method System.Boolean TryGetDropdownValue(System.String id, out System.String? value)
   method System.Boolean TryGetGraphViewport(System.String id, out TopiaForge.Mods.UiGraphViewport viewport)
   method System.Boolean TryGetSelectedGraphNode(System.String id, out System.String? nodeId)
   method System.Boolean TryGetSelectedListItem(System.String id, out System.String? itemId)
+  method System.Boolean TryGetSelectedTab(System.String id, out System.String? tabId) [requires-topiaforge="0.2.0"]
   method System.Boolean TryGetSliderValue(System.String id, out System.Single value)
   method System.Boolean TryGetTextValue(System.String id, out System.String? value)
   method System.Boolean TryGetToggleValue(System.String id, out System.Boolean value)
   method System.Void DismissFromPlayer() [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> ActivateButton(System.String id)
+  method TopiaForge.Mods.OperationResult<System.Boolean> CaptureBinding(System.String id, TopiaForge.Mods.InputBinding binding) [requires-topiaforge="0.2.0"]
+  method TopiaForge.Mods.OperationResult<System.Boolean> ChangeCheckbox(System.String id, System.Boolean value) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> ChangeDropdown(System.String id, System.String value)
   method TopiaForge.Mods.OperationResult<System.Boolean> ChangeGraphViewport(System.String id, TopiaForge.Mods.UiGraphViewport viewport)
   method TopiaForge.Mods.OperationResult<System.Boolean> ChangeSlider(System.String id, System.Single value)
@@ -754,6 +760,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, 
   method TopiaForge.Mods.OperationResult<System.Boolean> RemoveGraphConnection(System.String id, System.String edgeId)
   method TopiaForge.Mods.OperationResult<System.Boolean> SelectGraphNode(System.String id, System.String? nodeId)
   method TopiaForge.Mods.OperationResult<System.Boolean> SelectListItem(System.String id, System.String itemId)
+  method TopiaForge.Mods.OperationResult<System.Boolean> SelectTab(System.String id, System.String tabId) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.Testing.UiTreeCapture Capture(TopiaForge.Mods.Testing.UiCaptureViewport viewport) [requires-topiaforge="0.2.0"]
   method [virtual,final,newslot] System.Void Dispose()
   method [virtual,final,newslot] System.Void Hide()
@@ -1018,7 +1025,9 @@ type public sealed class TopiaForge.Mods.Testing.UiCapturedNode : System.Object 
   property System.String? FillColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? Id { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? InkColor { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? KeyLabel { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? RequestedStyleId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
+  property System.String? State { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
   property System.String? StyleId { get [requires-topiaforge="0.2.0"]; } [requires-topiaforge="0.2.0"]
 
 type public sealed class TopiaForge.Mods.Testing.UiTreeCapture : System.Object [requires-topiaforge="0.2.0"]

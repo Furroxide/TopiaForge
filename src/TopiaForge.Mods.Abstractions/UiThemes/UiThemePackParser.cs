@@ -9,7 +9,8 @@ namespace TopiaForge.Mods
         internal static readonly string[] PaintRoles = { "surface", "raised", "sunken", "selected", "primary", "accent", "success", "warning", "danger" };
         internal static readonly string[] ToneNames = { "neutral", "success", "warning", "danger", "muted", "primary", "accent" };
         internal static readonly string[] TextRoles = { "body", "heading", "caption", "banner", "display", "title", "label", "numeral", "mono" };
-        internal static readonly string[] Targets = { "card", "box", "badge", "pips" };
+        internal const int FoundationComponentCount = (int)UiThemeTarget.Button;
+        internal static readonly string[] Targets = { "card", "box", "badge", "pips", "button", "input", "tabs", "tooltip" };
         internal static readonly string[] Radii = { "none", "small", "medium", "control", "card", "pill" };
         internal static readonly string[] Borders = { "none", "thin", "standard", "strong" };
         internal static readonly string[] Shadows = { "none", "small", "card" };
@@ -77,9 +78,10 @@ namespace TopiaForge.Mods
             var hud = ParseScheme(pack.Object("hud"), defaults?.SelectScheme(hud: true, highContrast: false));
             var fonts = ParseFonts(pack, assets);
             var images = ParseImages(pack, assets);
+            var components = ParseComponents(pack.Object("components"), defaults, out var minimumWireVersion);
             var descriptor = new UiThemeDescriptor(id, paper, hud, ParseTypography(pack.Object("typography"), fonts, defaults),
                 ParseShape(pack.Object("shape"), defaults?.Shape), ParseMotion(pack.Object("motion"), defaults?.Motion),
-                ParseComponents(pack.Object("components"), defaults), ParseStyles(pack), images, fonts,
+                components, ParseStyles(pack), images, fonts, minimumWireVersion,
                 defaults?.Digest ?? ReadOnlyMemory<byte>.Empty);
             ValidateScheme(descriptor.SelectScheme(false, false), pack.At("paper"), 4.5f);
             ValidateScheme(descriptor.SelectScheme(true, false), pack.At("hud"), 4.5f);
@@ -221,19 +223,24 @@ namespace TopiaForge.Mods
             return new UiThemeMotion(fast, normal, slow, (UiThemeEase)ease);
         }
 
-        private static Dictionary<UiThemeTarget, UiThemeComponent> ParseComponents(UiThemeJsonObject value, UiThemeDescriptor? defaults)
+        private static Dictionary<UiThemeTarget, UiThemeComponent> ParseComponents(UiThemeJsonObject value, UiThemeDescriptor? defaults,
+            out int minimumWireVersion)
         {
             value.Allow(Targets);
+            minimumWireVersion = UiWireCodec.FoundationContractVersion;
             var components = new Dictionary<UiThemeTarget, UiThemeComponent>();
             for (var index = 0; index < Targets.Length; index++)
             {
                 var target = (UiThemeTarget)index;
                 var name = Targets[index];
-                if (defaults != null && !value.Has(name))
+                var authored = value.Has(name);
+                if (defaults != null && !authored)
                 {
                     components.Add(target, defaults.Components[target]);
                     continue;
                 }
+                if (defaults != null && index >= FoundationComponentCount)
+                    minimumWireVersion = UiWireCodec.ControlsContractVersion;
 
                 var component = value.Object(name);
                 component.Allow("radius", "border", "shadow");
@@ -253,6 +260,8 @@ namespace TopiaForge.Mods
                 style.Allow("id", "target", "radius", "border", "shadow", "fill");
                 var id = UiThemeData.Id(style.RequiredString("id"), style.At("id"));
                 var target = (UiThemeTarget)ReadEnum(style, "target", Targets);
+                if ((int)target >= FoundationComponentCount)
+                    throw UiThemeDataException.Invalid(style.At("target"), "This component does not support named styles.");
                 var fill = style.OptionalString("fill", nullable: true);
                 UiPaintRole? role = fill == null ? null : (UiPaintRole)EnumIndex(fill, style.At("fill"), PaintRoles);
                 var component = ParseComponent(style, requireComplete: false);

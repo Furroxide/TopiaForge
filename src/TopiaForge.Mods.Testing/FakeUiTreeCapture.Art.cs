@@ -77,7 +77,7 @@ namespace TopiaForge.Mods.Testing
         {
             foreach (var placement in layout.Placements)
             {
-                if (placement.Node is not UiImage { Decorative: false } image) continue;
+                if (!VisibleTabPage(placement) || placement.Node is not UiImage { Decorative: false } image) continue;
                 var art = images[image];
                 if (!art.IsReady && !PlaceholderFits(image,
                     ScreenRect(UiImageProjection.FixedBox(placement.Bounds, art.Width, art.Height), left, top)))
@@ -100,7 +100,7 @@ namespace TopiaForge.Mods.Testing
             if (nodes.Count > 2) nodes.RemoveRange(2, nodes.Count - 2);
             foreach (var placement in layout.Placements)
             {
-                if (placement.Node is not UiImage image) continue;
+                if (!VisibleTabPage(placement) || placement.Node is not UiImage image) continue;
                 var art = images[image];
                 if (art.IsReady) continue;
                 var bounds = ScreenRect(UiImageProjection.FixedBox(placement.Bounds, art.Width, art.Height), body.X, origin);

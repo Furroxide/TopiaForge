@@ -93,9 +93,24 @@ namespace TopiaForge.Mods.UnityUi
             float x,
             float y,
             TopiaForgeInputClaim claims,
-            int frame)
+            int frame) => device != TopiaForgeInputDevice.Other && TakePress(deviceId, device, control, role,
+                magnitude, before, x, y, TopiaForgeInputClaims.Cover(claims, role, device), frame);
+
+        // The binding capture uses a separate gate. It examines mouse controls as well and never feeds navigation.
+        internal bool TakeForBindingCapture(int deviceId, TopiaForgeInputDevice device, int control,
+            float magnitude, float before, bool capture, out bool began)
         {
-            if (device == TopiaForgeInputDevice.Other || control < 0 || control >= ControlsPerDevice)
+            var heldBefore = capture && IsTaken(deviceId, control);
+            var takenNow = TakePress(deviceId, device, control, TopiaForgeInputRole.Key,
+                magnitude, before, 0f, 0f, capture, NoFrame);
+            began = capture && takenNow && !heldBefore;
+            return takenNow;
+        }
+
+        private bool TakePress(int deviceId, TopiaForgeInputDevice device, int control, TopiaForgeInputRole role,
+            float magnitude, float before, float x, float y, bool claimCoversControl, int frame)
+        {
+            if (control < 0 || control >= ControlsPerDevice)
             {
                 return false;
             }
@@ -117,7 +132,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             // Only a fresh press a claim covers is taken: one already held passed to the game and stays the game's.
-            if (magnitude < PressThreshold || before >= PressThreshold || !TopiaForgeInputClaims.Cover(claims, role, device))
+            if (magnitude < PressThreshold || before >= PressThreshold || !claimCoversControl)
             {
                 return false;
             }

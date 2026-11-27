@@ -142,9 +142,10 @@ namespace TopiaForge.ModManager
         {
             var scope = (context.UiService as IUiPresentationThemeSource)?.PresentationThemeScope;
             var result = UiPresentationImages.Prepare(content, scope, theme, out presentation);
-            if (result.Succeeded && request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(presentation))
+            if (!result.Succeeded) return result;
+            if (request.Kind == UiSurfaceKind.Hud && UiComposition.ContainsInteractive(presentation))
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Put interactive controls in a window.");
-            return result;
+            return UiPresentationInputs.Prepare(context.UiService, presentation, out presentation);
         }
 
         private static ulong TargetRevision(RemoteUiSurface surface, string epoch, UiWireEnvelope? envelope, bool replacing)

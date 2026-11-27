@@ -87,10 +87,10 @@ namespace TopiaForge.ModManager
 
         public string RuntimeVersion { get; }
 
-        public int UiContractVersion => InternalUiPresentationContract.FoundationVersion;
+        public int UiContractVersion => InternalUiPresentationContract.ControlsVersion;
 
         internal Func<OperationResult<bool>>? ValidateSharedUiHosting { get; set; }
-        internal Func<bool>? RequiresFoundationUi { get; set; }
+        internal Func<int>? RequiredSharedUiVersion { get; set; }
 
         public OperationResult<bool> PrepareSharedUiForHosting() =>
             ValidateSharedUiHosting?.Invoke() ?? OperationResult<bool>.Success(true);
@@ -142,8 +142,9 @@ namespace TopiaForge.ModManager
         public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer)
         {
             if (offer == null) throw new ArgumentNullException(nameof(offer));
-            if (offer.UiContractVersion < InternalUiPresentationContract.FoundationVersion && RequiresFoundationUi?.Invoke() == true)
-                return InternalContentVerdict.Refused(new[] { UiPresentationTheme.RequiredRuntime });
+            var needed = RequiredSharedUiVersion?.Invoke() ?? InternalUiPresentationContract.LegacyVersion;
+            if (offer.UiContractVersion < needed)
+                return InternalContentVerdict.Refused(new[] { UiPresentationTheme.UnsupportedVersion(needed).ErrorMessage });
 
             var verdict = MultiplayerContentAdmission.Evaluate(GameBuild, inventory.AdmissionMods, offer);
             if (!verdict.IsAdmitted) return verdict;

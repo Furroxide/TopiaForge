@@ -14,6 +14,7 @@ namespace TopiaForge.Mods.UnityUi
     internal sealed class TopiaForgeLayerSlot : MonoBehaviour
     {
         internal GameObject? Root;
+        internal TopiaForgeLayerBand Band;
         private UiThemeDescriptor? descriptor;
         private Func<UiTextStyle, TMP_FontAsset?>? fonts;
         private TopiaForgeResolvedTheme? resolved;

@@ -23,6 +23,10 @@ namespace TopiaForge.ModManager
                     childRoot = body;
                     Add(path, fixture.Id, nameof(UiScroll), native, EmptyContent, default);
                     break;
+                case UiTabs tabs:
+                    return CaptureTabs(tabs, native, path, backdrop);
+                case UiTooltip tooltip:
+                    return CaptureTooltip(tooltip, native, path, backdrop);
                 case UiDivider:
                     var divider = native.Find("Divider")?.GetComponent<UnityUiLayoutDivider>();
                     if (divider == null) return false;
@@ -49,6 +53,45 @@ namespace TopiaForge.ModManager
                 if (childRoot.GetChild(start + index) is not RectTransform child ||
                     child.name != (children[index].Id ?? children[index].GetType().Name) ||
                     !Visit(children[index], child, ChildPath(path, index), backdrop)) return false;
+            return true;
+        }
+
+        private bool CaptureTabs(UiTabs tabs, RectTransform native, string path, UiThemeColor? backdrop)
+        {
+            var count = tabs.Tabs.Count;
+            if (native.childCount != count * 2) return false;
+            Add(path, tabs.Id, nameof(UiTabs), native, EmptyContent, default);
+            var selected = -1;
+            for (var index = 0; index < count; index++)
+            {
+                if (!native.GetChild(index).gameObject.activeSelf) continue;
+                if (selected >= 0) return false;
+                selected = index;
+            }
+            if (selected < 0 || native.GetChild(selected) is not RectTransform page ||
+                !Visit(tabs.Tabs[selected].Child, page, ChildPath(path, selected), backdrop)) return false;
+
+            for (var index = 0; index < count; index++)
+            {
+                if (native.GetChild(count + index) is not RectTransform view ||
+                    !SingleChild(view.Find("Widget"), out var widget) || widget!.GetComponent<Button>() is not { } button ||
+                    view.Find("Tab background")?.GetComponent<Graphic>() is not { } plate ||
+                    view.Find("Tab selection mark")?.GetComponent<Graphic>() is not { } mark) return false;
+                var marked = mark.isActiveAndEnabled && Bounds(mark.rectTransform).Width > 0f;
+                if (marked != (index == selected)) return false;
+                var tabPath = ChildPath(path, count + index);
+                var fill = Over(button.targetGraphic, marked ? Over(plate, backdrop) : backdrop);
+                var flags = Flags(button) | (marked ? UiCaptureNodeFlags.Selected | UiCaptureNodeFlags.RequiresNonColorCue |
+                    UiCaptureNodeFlags.HasNonColorCue : UiCaptureNodeFlags.None);
+                var start = observations.Count;
+                HitAndFocus(tabPath, button, tabs.Tabs[index].Label, backdrop);
+                if (!Text(tabPath, null, "Tab", Named<TMP_Text>(widget, "Label"), tabs.Tabs[index].Label, UiTextStyle.Label, fill,
+                    flags, marked ? Decoration(view, plate) : default))
+                    return false;
+                if (marked) Add(tabPath + "/selection", null, "TabSelection", mark.rectTransform,
+                    State(UiCaptureNodeFlags.SemanticMark), ArtPaint(mark, fill));
+                RegisterGroup(start);
+            }
             return true;
         }
 

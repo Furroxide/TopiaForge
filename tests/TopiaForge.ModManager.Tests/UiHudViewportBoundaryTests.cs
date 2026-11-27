@@ -196,6 +196,7 @@ namespace TopiaForge.ModManager.Tests
                 }
                 public sealed class UiHost
                 {
+                    public string OwnerId => "example.hud-probe";
                     public float EffectiveUiScale = 1f;
                     public Canvas Canvas { get; } = new Canvas();
                     public TopiaForgeHudLayer HudLayer(string id, bool persistent) => new TopiaForgeHudLayer(this);
@@ -280,13 +281,15 @@ namespace TopiaForge.ModManager.Tests
                 internal static class UnityMainThreadGuard { internal static void AssertCurrent() { } }
                 internal sealed class UiGameplayGate { internal bool IsGameplay => true; }
                 internal readonly record struct GalleryPreviewPalette(UiThemeDescriptor Descriptor, TopiaForgeScheme Scheme);
-                internal readonly record struct UiRemoteThemeSelection(object Envelope, ProbePackage? Package);
+                internal readonly record struct UiRemoteThemeSelection(UiWireEnvelope? Envelope, ProbePackage? Package);
+                internal sealed record UiSurfaceInputContext(object? Registry, string OwnerPackageId);
                 internal readonly record struct ProbePackage(ProbeManifest Manifest);
                 internal readonly record struct ProbeManifest(string Name, object? AdmittedUi = null);
                 internal static class UiThemeScope { internal static UiThemeDescriptor? Ready(UiThemeDescriptor? value) => value; }
                 internal sealed partial class OwnerUiService
                 {
                     private readonly UiHost host;
+                    private readonly object? uiInput = null;
                     private readonly UnityUiHudPlacement hudPlacement;
                     private readonly object? themeScope = null;
                     private readonly object themePackages = new object();
@@ -972,6 +975,7 @@ namespace TopiaForge.ModManager.Tests
                         internal void InitializeTheme(UiThemeRef? theme, bool remote, UiThemeDescriptor? descriptor,
                             object? scope, object packages, object? catalogue) { }
                         internal void SetClock(Func<double> clock, Func<string> epoch) { }
+                        internal void AttachInput(UiSurfaceInputContext input) { }
                         public OperationResult<bool> SetContent(UiNode content) => throw new NotSupportedException();
                         public void Show() => ShowNativeView();
                         public void Hide() => HideNativeView();

@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager.Tests
         private static extern FakeUiService CreateThemeScope(FakeUiService service, FakeModLifetime childLifetime);
 
         [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "CaptureForFixture")]
-        private static extern UiTreeCapture CaptureForFixture(FakeUiSurface surface, UiCaptureViewport viewport,
+        internal static extern UiTreeCapture CaptureForFixture(FakeUiSurface surface, UiCaptureViewport viewport,
             string state, float scrollOffset, bool? hudScheme);
 
         [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ThemeForWire")]

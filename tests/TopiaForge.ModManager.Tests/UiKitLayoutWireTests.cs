@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             MalformedLayoutFieldsAreRefused();
             DecoderCountsWrappersAndBothCardChildren();
             TargetedFramesCountLayoutBytesAndPreserveClockOnRefusal();
+            UiKitControlWireTests.Run();
             Console.WriteLine("K1 layout wire: tags, legacy bytes, bounded decoding, clocks and callbacks passed.");
         }
 

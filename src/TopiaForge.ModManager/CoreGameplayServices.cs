@@ -106,6 +106,7 @@ namespace TopiaForge.ModManager
                 runtimeOwnershipId + ":" + (transitionAccess?.OwnershipId ?? ownerModId));
             var ownerScheduler = new OwnerScheduler(lifetime, scheduler, logger);
             var ui = new OwnerUiService(ownerModId, dataPath, lifetime, logger, uiGameplay, hudPlacement, uiThemePackages);
+            ui.AttachUiInput(input);
             ui.AttachWorldWidgets(entities);
             ui.FollowClock(() => Math.Max(0, UnityEngine.Time.realtimeSinceStartupAsDouble - uiClockOrigin), () => uiClockEpoch);
             return new GameplayContextServices(

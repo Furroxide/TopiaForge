@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager
         private readonly List<(UiCaptureRect Bounds, bool Protected)> groups = new List<(UiCaptureRect, bool)>();
         private readonly List<UiGalleryFontFact> fonts = new List<UiGalleryFontFact>();
         private bool onlyUnavailableImages;
+        private string? dropdownChoicesPath;
 
         internal UiGalleryNativeTree(Canvas canvas, TopiaForgeResolvedTheme theme, TopiaForgeEffectiveAccessibility accessibility, bool fallback)
         {
@@ -75,9 +76,15 @@ namespace TopiaForge.ModManager
 
             var nodes = new List<UiCapturedNode>(observations.Count);
             foreach (var item in observations)
-                nodes.Add(new UiCapturedNode(item.Path, item.Id, item.Kind, item.Bounds, item.Content, item.Paint,
+            {
+                var content = item.Content;
+                if (dropdownChoicesPath != null && (content.Flags & UiCaptureNodeFlags.HitTarget) != 0 &&
+                    !item.Path.StartsWith(dropdownChoicesPath, StringComparison.Ordinal))
+                    content = content.WithFlags((content.Flags & ~UiCaptureNodeFlags.HitTarget) | UiCaptureNodeFlags.Disabled);
+                nodes.Add(new UiCapturedNode(item.Path, item.Id, item.Kind, item.Bounds, content, item.Paint,
                     item.KitPaint ? UiThemePackParser.Default.Id : Descriptor.Id,
                     fallback || item.LocalFallback, item.Rendered, item.Clipped, item.Occluded || (item.Group >= 0 && covered[item.Group])));
+            }
             return new UiTreeCapture(nodes, theme.HighContrast, 40f * PixelsPerUnit);
         }
 
@@ -103,7 +110,8 @@ namespace TopiaForge.ModManager
 
         private bool Text(string path, string? id, string kind, TMP_Text? label, string authored, UiTextStyle style,
             UiThemeColor? fill, UiCaptureNodeFlags flags = UiCaptureNodeFlags.None, UiCaptureNodePaint paint = default,
-            bool localFallback = false, bool kitPaint = false, string? nativeInputValue = null, string? semanticLabel = null)
+            bool localFallback = false, bool kitPaint = false, string? nativeInputValue = null, string? semanticLabel = null,
+            string? state = null, string? keyLabel = null)
         {
             if (label == null || label.font == null) return false;
             var role = (kitPaint ? UiThemePackParser.Default : Descriptor).GetText(style);
@@ -150,7 +158,7 @@ namespace TopiaForge.ModManager
                 (Mathf.Max(1f, Accessibility.UiScale) / Accessibility.UiScale);
             var clip = Clip(label.rectTransform, bounds, kind == nameof(UiText) ? Mathf.Max(height, readable) : null);
             if (noCharacters && clip.HasVisibleArea) return false;
-            var content = new UiCaptureNodeContent(text, semanticLabel ?? authored, height, readable, flags);
+            var content = new UiCaptureNodeContent(text, semanticLabel ?? authored, height, readable, flags, state, keyLabel);
             Observe(path, id, kind, bounds, clip, content, new UiCaptureNodePaint(
                 ToRgb(EffectiveColor(label)), fill, paint.CornerRadius, paint.BorderWidth, paint.ShadowX, paint.ShadowY),
                 visible: intended && !label.canvasRenderer.cull, intended: intended, contentClipped: clipped,
@@ -173,8 +181,7 @@ namespace TopiaForge.ModManager
             bool localFallback = false, bool kitPaint = false)
         {
             if (clip.ScrollClipped && !clip.FixedClipped && !contentClipped && (content.Flags & UiCaptureNodeFlags.FocusIndicator) == 0)
-                content = new UiCaptureNodeContent(content.Text, content.SemanticLabel, content.TextHeight,
-                    content.ExpectedTextHeight, content.Flags | UiCaptureNodeFlags.ScrollableClip);
+                content = content.WithFlags(content.Flags | UiCaptureNodeFlags.ScrollableClip);
             var rendered = visible && intended && clip.HasVisibleArea;
             observations.Add(new Observation(path, id, kind, bounds, clip.Visible, content, paint, rendered,
                 intended && (clip.AnyClipping || contentClipped), localFallback, kitPaint));

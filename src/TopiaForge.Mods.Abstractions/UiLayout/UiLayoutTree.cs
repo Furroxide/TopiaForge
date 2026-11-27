@@ -32,13 +32,15 @@ namespace TopiaForge.Mods
         }
 
         internal static bool IsInteractive(UiNode node) => node is UiButton or UiToggle or UiSlider or UiTextInput or
-            UiDropdown or UiVirtualList or UiGraphCanvas;
+            UiDropdown or UiVirtualList or UiGraphCanvas or UiCheckbox or UiTabs or UiTooltip or UiKeyBindingField;
 
         internal static bool IsDisabled(UiNode node) => node switch
         {
             UiCard card => card.Disabled,
             UiButton button => !button.Enabled,
             UiToggle toggle => !toggle.Enabled,
+            UiCheckbox checkbox => !checkbox.Enabled,
+            UiKeyBindingField field => !field.Enabled,
             UiSlider slider => !slider.Enabled,
             UiTextInput input => !input.Enabled,
             UiDropdown dropdown => !dropdown.Enabled,
@@ -48,9 +50,13 @@ namespace TopiaForge.Mods
         };
 
         internal static bool TryFind(UiNode? root, string id, out UiNode? node, out bool disabled) =>
-            TryFind(root, id, inheritedDisabled: false, out node, out disabled);
+            TryFind(root, id, inheritedDisabled: false, null, out node, out disabled);
 
-        private static bool TryFind(UiNode? node, string id, bool inheritedDisabled, out UiNode? match, out bool disabled)
+        internal static bool TryFindVisible(UiNode? root, string id, Func<UiTabs, int> activeTab, out bool disabled) =>
+            TryFind(root, id, inheritedDisabled: false, activeTab, out _, out disabled);
+
+        private static bool TryFind(UiNode? node, string id, bool inheritedDisabled, Func<UiTabs, int>? activeTab,
+            out UiNode? match, out bool disabled)
         {
             match = null;
             disabled = false;
@@ -63,10 +69,12 @@ namespace TopiaForge.Mods
                 return true;
             }
 
+            if (node is UiTabs tabs && activeTab != null)
+                return TryFind(tabs.Tabs[activeTab(tabs)].Child, id, inheritedDisabled, activeTab, out match, out disabled);
             var children = UiNodeChildren.Of(node);
             for (var index = 0; index < children.Count; index++)
             {
-                if (TryFind(children[index], id, inheritedDisabled, out match, out disabled)) return true;
+                if (TryFind(children[index], id, inheritedDisabled, activeTab, out match, out disabled)) return true;
             }
             return false;
         }
@@ -99,6 +107,8 @@ namespace TopiaForge.Mods
                 case UiText text: Text(text.Text, path); break;
                 case UiButton button: Text(button.Label, path); break;
                 case UiToggle toggle: Text(toggle.Label, path); break;
+                case UiCheckbox checkbox: Text(checkbox.Label, path); break;
+                case UiKeyBindingField key when key.Label != null: Text(key.Label, path); break;
                 case UiSlider slider: Text(slider.Label, path); break;
                 case UiTextInput input:
                     Text(input.Label, path);
