@@ -24,6 +24,13 @@ def checkout_steps(source):
 
 
 class ExecutableSourceTests(unittest.TestCase):
+    def test_control_plane_deploy_source_is_owned_by_status(self):
+        self.assertFalse((ROOT / "services" / "control-plane").exists())
+        self.assertFalse((WORKFLOWS / "control-plane.yml").exists())
+        self.assertTrue((WORKFLOWS / "deploy-private-status-source.yml").is_file())
+        dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertNotIn("directory: /services/control-plane", dependabot)
+
     def test_release_packages_cannot_select_an_arbitrary_revision(self):
         for name in ("release-package-build.yml", "flutter-launcher-builds.yml"):
             source = read_workflow(name)
@@ -124,50 +131,6 @@ class ExecutableSourceTests(unittest.TestCase):
                     timeout=10, check=False,
                 )
                 self.assertEqual(result.returncode == 0, passed, result.stderr)
-
-
-def workflow_jobs(source):
-    """Split a workflow into its top-level jobs, keyed by job id."""
-    jobs = source.split("\njobs:\n", 1)[1]
-    parts = re.split(r"(?m)^  ([a-z][a-z0-9-]*):\n", jobs)
-    return {parts[index]: parts[index + 1] for index in range(1, len(parts), 2)}
-
-
-class ControlPlaneValidationTests(unittest.TestCase):
-    """The retired workflow retains only credential-free source validation."""
-
-    def setUp(self):
-        self.source = read_workflow("control-plane.yml")
-        self.jobs = workflow_jobs(self.source)
-
-    def test_only_pull_requests_and_pushes_trigger_validation(self):
-        triggers = self.source.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-        self.assertIn("  pull_request:\n", triggers)
-        self.assertIn("  push:\n", triggers)
-        for forbidden in ("workflow_dispatch", "pull_request_target", "workflow_run"):
-            self.assertNotIn(forbidden, self.source)
-        self.assertEqual(set(self.jobs), {"test"})
-
-    def test_validation_preserves_tests_and_both_dry_runs(self):
-        test = self.jobs["test"]
-        self.assertIn("    name: Test and dry-run the control plane\n", test)
-        self.assertIn("npm test", test)
-        self.assertIn("node scripts/deployment-config.mjs", test)
-        deploy = "npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run"
-        for environment in ("staging", "production"):
-            self.assertIn(
-                f'{deploy} --outdir "$RUNNER_TEMP/control-plane-{environment}" --env {environment}',
-                test,
-            )
-        steps = checkout_steps(test)
-        self.assertEqual(len(steps), 1)
-        self.assertIn("persist-credentials: false", steps[0])
-
-    def test_validation_has_no_deployment_environment_or_credentials(self):
-        self.assertNotRegex(self.source, r"(?m)^    environment:")
-        self.assertNotIn("secrets.", self.source)
-        self.assertNotIn("CLOUDFLARE_API_TOKEN", self.source)
-        self.assertNotIn("CLOUDFLARE_ACCOUNT_ID", self.source)
 
 
 if __name__ == "__main__":
