@@ -116,7 +116,12 @@ namespace TopiaForge.ModManager
                 var assets = RemoteAssets(catalogue);
                 var changingTheme = !usesRemoteTheme || !ReferenceEquals(descriptor, declaredTheme) ||
                     !ReferenceEquals(assets, remoteAcquisitions);
-                if (!changingTheme) return SetComposition(content ?? EmptyContent, descriptor, remote: true);
+                if (!changingTheme)
+                {
+                    var committed = SetComposition(content ?? EmptyContent, descriptor, remote: true);
+                    if (committed.Succeeded) ObserveRemoteGalleryCommit(theme.Envelope);
+                    return committed;
+                }
 
                 var nextDemand = AcquireRemoteTheme(descriptor, assets);
                 var adopted = false;
@@ -138,6 +143,7 @@ namespace TopiaForge.ModManager
                     adopted = true;
                     try { ApplySurfaceTheme(descriptor); }
                     finally { previous?.Dispose(); }
+                    ObserveRemoteGalleryCommit(theme.Envelope);
                     return result;
                 }
                 finally { if (!adopted) nextDemand?.Dispose(); }

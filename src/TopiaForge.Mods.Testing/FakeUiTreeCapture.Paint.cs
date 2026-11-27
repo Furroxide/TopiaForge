@@ -326,8 +326,10 @@ namespace TopiaForge.Mods.Testing
         {
             var height = MeasureText(progress.Label, UiTextStyle.Body, bounds.Width).Height;
             var label = new UiCaptureRect(bounds.X, bounds.Y, bounds.Width, height);
-            Text(path, progress.Id, nameof(UiProgress), label, clip, progress.Label, UiTextStyle.Body, progress.Tone,
-                UiCaptureNodeFlags.ScrollableClip);
+            var colors = PairFor(backdrop, progress.Tone);
+            var content = TextContent(progress.Label, UiTextStyle.Body, UiCaptureNodeFlags.ScrollableClip)
+                .WithStatus("normal", fraction: progress.Fraction);
+            Add(path, progress.Id, nameof(UiProgress), label, clip, content, new UiCaptureNodePaint(colors.On, colors.Fill));
             var track = new UiCaptureRect(bounds.X, bounds.Bottom - 14f * layoutScale, bounds.Width, 14f * layoutScale);
             var role = progress.Tone == UiTone.Neutral || progress.Tone == UiTone.Muted
                 ? UiPaintRole.Primary

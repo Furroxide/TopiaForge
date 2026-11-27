@@ -154,9 +154,10 @@ namespace TopiaForge.ModManager.Tests
                 "Edited input and unexpected transformations are ineligible for native recording.");
             GalleryPortFixturesRequireExactAuthoredPorts();
 
-            var variants = Enumerable.Range(0, GalleryRemotePreview.VariantCount).Select(GalleryRemotePreview.Request).ToArray();
-            Check(GalleryRemotePreview.K1VariantCount == 69 &&
-                variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 79 &&
+            var variants = Enumerable.Range(0, GalleryRemotePreview.VariantCount)
+                .Select(index => GalleryRemotePreview.Request(index, 120d)).ToArray();
+            Check(GalleryRemotePreview.K1VariantCount == 69 && GalleryRemotePreview.StatusStart == 79 &&
+                variants.Select(request => (request.Id, request.Kind, request.Theme?.Id)).Distinct().Count() == 87 &&
                 variants.Count(request => request.Id == FoundationLayoutPages.LayoutNotice().Id &&
                     request.Kind == UiSurfaceKind.Hud) == 3,
                 "The test publisher cycles the complete supported page, surface and theme matrix.");
@@ -188,6 +189,16 @@ namespace TopiaForge.ModManager.Tests
                 var actual = variants[GalleryRemotePreview.K1VariantCount + index];
                 Check((actual.Id, actual.Kind, actual.Theme?.Id) == (expected.Id, expected.Kind, expected.Theme?.Id),
                     "K2 adds the ten authored control positions after the original K1 fixtures.");
+            }
+            var statusPages = new[] { StatusGalleryPage.Status, StatusGalleryPage.Countdowns };
+            for (var index = 0; index < statusPages.Length * 4; index++)
+            {
+                var kind = index % 2 == 0 ? UiSurfaceKind.Window : UiSurfaceKind.Hud;
+                var palette = index % 4 < 2 ? null : FoundationPages.TransportTheme;
+                var expected = StatusGalleryPages.CreateRequest(statusPages[index / 4], kind, 120d, palette);
+                var actual = variants[GalleryRemotePreview.StatusStart + index];
+                Check((actual.Id, actual.Kind, actual.Theme?.Id) == (expected.Id, expected.Kind, expected.Theme?.Id),
+                    "Status and Countdowns append eight page, kind and palette positions after the controls.");
             }
 
             foreach (var request in variants)

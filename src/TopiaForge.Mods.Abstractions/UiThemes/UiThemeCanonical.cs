@@ -37,10 +37,8 @@ namespace TopiaForge.Mods
             NumberMember(json, "baseMs", theme.Motion.BaseMs).Append(',');
             NumberMember(json, "slowMs", theme.Motion.SlowMs).Append(',');
             Member(json, "ease", UiThemePackParser.Eases[(int)theme.Motion.Ease]).Append("},\"components\":{");
-            // Keep the exact K1 digest for existing descriptors, including the defaults fingerprint.
-            var componentCount = theme.MinimumWireVersion == UiWireCodec.FoundationContractVersion
-                ? UiThemePackParser.FoundationComponentCount : UiThemePackParser.Targets.Length;
-            for (var index = 0; index < componentCount; index++)
+            // New component defaults do not change the identity of existing descriptors.
+            for (var index = 0; index < theme.CanonicalComponentCount; index++)
             {
                 Separate(json, index);
                 Name(json, UiThemePackParser.Targets[index]).Append('{');

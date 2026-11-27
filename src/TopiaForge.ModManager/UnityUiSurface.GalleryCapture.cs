@@ -42,19 +42,55 @@ namespace TopiaForge.ModManager
 
         private sealed partial class UnityUiSurface
         {
+            private void ObserveRemoteGalleryCommit(UiWireEnvelope? envelope)
+            {
+                if (!GalleryCaptureEnabled || CanvasRoot == null) return;
+                try { CanvasRoot.GetComponent<UnityUiGalleryCaptureDriver>()?.ObserveCommit(envelope); }
+                catch (Exception error)
+                {
+                    try { logger.Warn("Gallery capture could not follow the committed revision (" + error.GetType().Name + ")."); }
+                    catch { }
+                }
+            }
+
             internal void ObserveGalleryFixture(UiSurfaceRequest fixture, UiNode original, string directory, UiThemeDescriptor? declared,
                 UiWireEnvelope? envelope, Func<NetRealm>? viewer, IModLogger captureLogger)
             {
                 var canvas = CanvasRoot.GetComponent<Canvas>();
-                if (canvas == null) return;
+                if (canvas == null || CanvasRoot.GetComponent<UnityUiGalleryCaptureDriver>() != null) return;
                 var capture = CanvasRoot.AddComponent<UnityUiGalleryCaptureDriver>();
-                capture.Initialize(Collect, captureLogger.Warn);
+                var observed = original;
+                var selected = fixture;
+                var selectedEnvelope = envelope;
+                var latestGeneration = envelope?.Generation ?? 0;
+                var eligible = true;
+                var status = fixture.Id is "gallery-countdowns" or "gallery-status";
+                var watchRetained = envelope != null && fixture.Id == "gallery-countdowns";
+                capture.Initialize(Collect, captureLogger.Warn, watchRetained ? ObserveRetained : null);
+
+                void ObserveRetained(UiWireEnvelope? latest)
+                {
+                    if (ReferenceEquals(observed, admitted) && ReferenceEquals(selectedEnvelope, latest)) return;
+                    var wasEligible = eligible;
+                    eligible = false;
+                    var next = UiGalleryCaptureFixture.MatchRetainedStatus(fixture, admitted, envelope!, latest,
+                        ref latestGeneration, callbacks.ClockEpoch());
+                    if (next == null) return;
+                    var needsCapture = !wasEligible || ReferenceEquals(selected, fixture) ||
+                        selectedEnvelope?.Generation != latestGeneration;
+                    selected = next;
+                    observed = admitted!;
+                    selectedEnvelope = latest;
+                    eligible = true;
+                    if (needsCapture) capture.Request();
+                }
 
                 bool Collect(bool permitFallback)
                 {
                     var tree = compositionRoot;
                     var view = widget;
-                    if (!ReferenceEquals(original, admitted) || tree == null || view == null || !presence.IsLive)
+                    if (!eligible || !ReferenceEquals(observed, admitted) || tree == null || view == null || !presence.IsLive ||
+                        status && (sentBody ?? string.Empty) != selected.Body)
                         return true;
                     var notice = layoutProblem != null ? layoutFallback : null;
                     var imageNotice = notice == null ? layoutFallback?.Rect : null;
@@ -70,27 +106,28 @@ namespace TopiaForge.ModManager
                         return false;
                     var nativeTheme = (notice ?? tree).ResolvedTheme;
                     var effective = nativeTheme.Descriptor ?? UiThemePackParser.Default;
-                    var requestedId = envelope?.ThemeId ?? declared?.Id;
-                    var requestedDigest = envelope?.DescriptorDigest ?? declared?.Digest;
+                    var requestedId = selectedEnvelope?.ThemeId ?? declared?.Id;
+                    var requestedDigest = selectedEnvelope?.DescriptorDigest ?? declared?.Digest;
                     var fallback = notice != null || (requestedId != null && (effective.Id != requestedId || !requestedDigest.HasValue ||
                         !requestedDigest.Value.Span.SequenceEqual(effective.Digest.Span)));
                     if (!permitFallback && (fallback || artwork?.HasPendingDemand() == true)) return false;
 
-                    var recorder = new UiGalleryNativeTree(canvas, nativeTheme, tree.Host.EffectiveAccessibility, fallback);
+                    var recorder = new UiGalleryNativeTree(canvas, nativeTheme, tree.Host.EffectiveAccessibility, fallback,
+                        callbacks.Clock(), callbacks.ClockEpoch());
                     var queuedNotice = hudNoticeOverflowing ? overflowToast : null;
                     var captured = notice != null
-                        ? recorder.TryCaptureLayoutNotice(fixture, view.Rect, notice.Rect, layoutProblem!, out var resolved, queuedNotice)
-                        : recorder.TryCapture(fixture, view.Rect, tree.Rect, imageNotice, out resolved, graphConnections, queuedNotice);
+                        ? recorder.TryCaptureLayoutNotice(selected, view.Rect, notice.Rect, layoutProblem!, out var resolved, queuedNotice)
+                        : recorder.TryCapture(selected, view.Rect, tree.Rect, imageNotice, out resolved, graphConnections, queuedNotice);
                     if (!captured) return false;
-                    var who = envelope != null ? "remote-guest" : viewer?.Invoke() switch
+                    var who = selectedEnvelope != null ? "remote-guest" : viewer?.Invoke() switch
                     {
                         NetRealm.ListenHost => "listen-host",
                         NetRealm.Client => "guest-local",
                         NetRealm.Offline => "solo",
                         _ => "local",
                     };
-                    UiGalleryCaptureJson.Save(directory, fixture.Id, who, resolved!, recorder, envelope);
-                    captureLogger.Info("Captured the native Gallery fixture '" + fixture.Id + "'.");
+                    UiGalleryCaptureJson.Save(directory, selected.Id, who, resolved!, recorder, selectedEnvelope);
+                    captureLogger.Info("Captured the native Gallery fixture '" + selected.Id + "'.");
                     return true;
                 }
             }

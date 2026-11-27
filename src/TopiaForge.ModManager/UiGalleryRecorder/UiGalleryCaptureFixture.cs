@@ -7,7 +7,7 @@ using TopiaForge.UiGallery.Pages;
 
 namespace TopiaForge.ModManager
 {
-    internal static class UiGalleryCaptureFixture
+    internal static partial class UiGalleryCaptureFixture
     {
         internal const string Owner = "io.github.furroxide.topiaforge.uigallery";
         internal const string RemoteFixtureOwner = "dev.topiaforge.multiplayer-acceptance";
@@ -86,7 +86,7 @@ namespace TopiaForge.ModManager
                     if (Matches(expected)) return expected;
                 }
             }
-            return null;
+            return MatchStatus(request, theme, remote);
 
             bool Matches(UiSurfaceRequest expected) => (remote || expected.Id == request.Id) &&
                 request.Title == expected.Title && request.Body == expected.Body && request.Width == expected.Width &&
@@ -108,6 +108,13 @@ namespace TopiaForge.ModManager
             return (actual, expected) switch
             {
                 (UiText left, UiText right) => left.Text == right.Text && left.Style == right.Style && left.Tone == right.Tone,
+                (UiProgress left, UiProgress right) => left.Label == right.Label && left.Fraction == right.Fraction &&
+                    left.Tone == right.Tone && SameThresholds(left.Thresholds, right.Thresholds),
+                (UiStatBar left, UiStatBar right) => left.Label == right.Label && left.Value == right.Value &&
+                    left.Maximum == right.Maximum && left.Format == right.Format && left.Tone == right.Tone &&
+                    SameThresholds(left.Thresholds, right.Thresholds),
+                (UiCountdown left, UiCountdown right) => left.Label == right.Label && left.EndsAt == right.EndsAt &&
+                    left.Format == right.Format && left.Tone == right.Tone && SameThresholds(left.Thresholds, right.Thresholds),
                 (UiRow left, UiRow right) => SameFlex(left.Layout, right.Layout) && SameEntries(left.Children, right.Children, SameNode),
                 (UiColumn left, UiColumn right) => SameFlex(left.Layout, right.Layout) && SameEntries(left.Children, right.Children, SameNode),
                 (UiWrap left, UiWrap right) => left.Spacing == right.Spacing && left.RunSpacing == right.RunSpacing &&

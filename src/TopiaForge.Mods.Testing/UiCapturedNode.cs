@@ -45,6 +45,8 @@ namespace TopiaForge.Mods.Testing
             EffectivePaintRole = paint.EffectivePaintRole;
             State = content.State;
             KeyLabel = content.KeyLabel;
+            RemainingSeconds = content.RemainingSeconds;
+            Fraction = content.Fraction;
             CornerRadiusPixels = paint.CornerRadius;
             BorderWidthPixels = paint.BorderWidth;
             ShadowOffsetXPixels = paint.ShadowX;
@@ -98,6 +100,12 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Gets the resolved control state when the captured group exposes one.</summary>
         [RequiresTopiaForge(UiKitRelease.K2)]
         public string? State { get; }
+        /// <summary>Gets the captured group's remaining time in seconds, when applicable.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public double? RemainingSeconds { get; }
+        /// <summary>Gets the captured group's rendered fraction, when applicable.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public float? Fraction { get; }
         /// <summary>Gets the visible input binding label when the group represents an action.</summary>
         [RequiresTopiaForge(UiKitRelease.K2)]
         public string? KeyLabel { get; }
@@ -150,7 +158,8 @@ namespace TopiaForge.Mods.Testing
     internal readonly struct UiCaptureNodeContent
     {
         internal UiCaptureNodeContent(string text, string label, float textHeight, float expectedTextHeight,
-            UiCaptureNodeFlags flags, string? state = null, string? keyLabel = null)
+            UiCaptureNodeFlags flags, string? state = null, string? keyLabel = null,
+            double? remainingSeconds = null, float? fraction = null)
         {
             Text = text;
             SemanticLabel = label;
@@ -159,6 +168,8 @@ namespace TopiaForge.Mods.Testing
             Flags = flags;
             State = state;
             KeyLabel = keyLabel;
+            RemainingSeconds = remainingSeconds;
+            Fraction = fraction;
         }
 
         internal string Text { get; }
@@ -168,9 +179,14 @@ namespace TopiaForge.Mods.Testing
         internal UiCaptureNodeFlags Flags { get; }
         internal string? State { get; }
         internal string? KeyLabel { get; }
+        internal double? RemainingSeconds { get; }
+        internal float? Fraction { get; }
 
         internal UiCaptureNodeContent WithFlags(UiCaptureNodeFlags flags) =>
-            new UiCaptureNodeContent(Text, SemanticLabel, TextHeight, ExpectedTextHeight, flags, State, KeyLabel);
+            new UiCaptureNodeContent(Text, SemanticLabel, TextHeight, ExpectedTextHeight, flags, State, KeyLabel, RemainingSeconds, Fraction);
+
+        internal UiCaptureNodeContent WithStatus(string state, double? remainingSeconds = null, float? fraction = null) =>
+            new UiCaptureNodeContent(Text, SemanticLabel, TextHeight, ExpectedTextHeight, Flags, state, KeyLabel, remainingSeconds, fraction);
     }
 
     internal readonly struct UiCaptureNodePaint

@@ -15,7 +15,7 @@ namespace TopiaForge.Mods
         internal UiThemeDescriptor(string id, UiThemeScheme paper, UiThemeScheme hud, UiThemeTextRole[] typography,
             UiThemeShape shape, UiThemeMotion motion, Dictionary<UiThemeTarget, UiThemeComponent> components,
             Dictionary<string, UiThemeNamedStyle> styles, UiThemeImage[] images, UiThemeFont[] fonts, int minimumWireVersion,
-            ReadOnlyMemory<byte> defaultsFingerprint)
+            int canonicalComponentCount, ReadOnlyMemory<byte> defaultsFingerprint)
         {
             Id = id;
             this.paper = paper;
@@ -30,11 +30,13 @@ namespace TopiaForge.Mods
             Images = Array.AsReadOnly(images);
             Fonts = Array.AsReadOnly(fonts);
             MinimumWireVersion = minimumWireVersion;
+            CanonicalComponentCount = canonicalComponentCount;
             Digest = UiThemeCanonical.ComputeDigest(this, defaultsFingerprint.Span);
         }
 
         internal string Id { get; }
         internal int MinimumWireVersion { get; }
+        internal int CanonicalComponentCount { get; }
         internal ReadOnlyMemory<byte> Digest { get; }
         internal UiThemeShape Shape { get; }
         internal UiThemeMotion Motion { get; }
@@ -154,7 +156,7 @@ namespace TopiaForge.Mods
     internal enum UiThemeRadius { None, Small, Medium, Control, Card, Pill }
     internal enum UiThemeBorder { None, Thin, Standard, Strong }
     internal enum UiThemeShadow { None, Small, Card }
-    internal enum UiThemeTarget { Card, Box, Badge, Pips, Button, Input, Tabs, Tooltip }
+    internal enum UiThemeTarget { Card, Box, Badge, Pips, Button, Input, Tabs, Tooltip, StatBar }
     internal enum UiThemeEase { OutCubic, OutBack }
 
     internal readonly struct UiThemeShape

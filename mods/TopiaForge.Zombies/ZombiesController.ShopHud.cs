@@ -6,6 +6,8 @@ namespace TopiaForge.Zombies
     /// <summary>Run-upgrade application and dirty-checked HUD projection.</summary>
     internal sealed partial class ZombiesController
     {
+        private double? interWaveEndsAt;
+
         private bool CanPurchaseShopItem(ShopItem item)
         {
             switch (item.Id)
@@ -53,11 +55,23 @@ namespace TopiaForge.Zombies
             }
         }
 
-        private void RefreshHud()
+        private void RefreshHud(bool timerPaused = false)
         {
-            var seconds = phase == ZombiesPhase.Starting || phase == ZombiesPhase.InterWave
+            var seconds = phase == ZombiesPhase.Starting || (phase == ZombiesPhase.InterWave && timerPaused)
                 ? (int)Math.Ceiling(phaseTimer)
                 : 0;
+            if (phase != ZombiesPhase.InterWave || timerPaused)
+            {
+                interWaveEndsAt = null;
+            }
+            else
+            {
+                var now = context.Ui.ClockTime;
+                // The gameplay timer remains authoritative if the two unscaled clocks diverge.
+                var remaining = Math.Ceiling(phaseTimer);
+                if (interWaveEndsAt is not double deadline || Math.Ceiling(Math.Max(0d, deadline - now)) != remaining)
+                    interWaveEndsAt = now + phaseTimer;
+            }
             var chargePercent = charging && config.ChargeShotSeconds > 0f
                 ? (int)Math.Round(Math.Min(1f, chargeSeconds / config.ChargeShotSeconds) * 100f)
                 : 0;
@@ -77,7 +91,8 @@ namespace TopiaForge.Zombies
                 seconds,
                 chargePercent,
                 config.OverrideEnabled,
-                config.ShopEnabled);
+                config.ShopEnabled,
+                interWaveEndsAt);
             hud.Update(snapshot, fireAction, overrideAction, broadcastAction, shopAction);
         }
     }

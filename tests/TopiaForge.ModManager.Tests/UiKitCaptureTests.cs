@@ -52,6 +52,8 @@ namespace TopiaForge.ModManager.Tests
             TargetedBudgetsIncludeFramingWithoutEarlyClockBinding();
             UnchangedReapplicationAllocatesNothing();
             RunArtCaptureTests();
+            RunStatusCaptureTests();
+            UiGalleryNativeStatusTests.Run();
             VerifyGoldenManifest();
             VerifyArtGoldenManifest();
         }

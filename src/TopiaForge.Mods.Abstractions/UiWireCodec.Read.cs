@@ -124,6 +124,7 @@ namespace TopiaForge.Mods
             private UiNode EnhancedNode(byte type, int depth)
             {
                 if (!enhanced) throw Bad();
+                if (type >= FormattedCountdownTag && type <= StatBarTag) return StatusNode(type);
                 if (type >= CheckboxTag && type <= KeyBindingFieldTag) return ControlNode(type, depth);
                 if (type >= IconTag && type <= PipsTag) return ArtNode(type);
                 if (type != EnhancedTextTag && type != EnhancedProgressTag && type != EnhancedCountdownTag)

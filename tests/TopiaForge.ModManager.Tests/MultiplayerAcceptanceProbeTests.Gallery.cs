@@ -74,6 +74,8 @@ namespace TopiaForge.ModManager.Tests
             players.Add(guest.ParticipantId!.Value, "Fixture guest");
             var target = players.State(guest.ParticipantId.Value).Ui;
             SetGalleryAuthorDefaults(target, ControlGalleryPages.DefaultBindings);
+            ((IUiClockReceiver)context.Ui).FollowClock(() => 120d, () => "acceptance-gallery");
+            ((IUiClockReceiver)target).FollowClock(() => 120d, () => "acceptance-gallery");
             Press();
             Check(context.Ui.Surfaces.Count == 1 && target.Surfaces.Count == 1 &&
                 context.Ui.Surfaces[0].Request.Kind == UiSurfaceKind.Window && target.Surfaces[0].Request.Kind == UiSurfaceKind.Window,
@@ -96,7 +98,7 @@ namespace TopiaForge.ModManager.Tests
             for (var variant = 3; variant < GalleryRemotePreview.VariantCount; variant++)
             {
                 Press();
-                var expected = GalleryRemotePreview.Request(variant);
+                var expected = GalleryRemotePreview.Request(variant, context.Ui.ClockTime);
                 var hostSurface = context.Ui.Surfaces.Single();
                 var guestSurface = target.Surfaces.Single();
                 Check(hostSurface.Request.Id == expected.Id && guestSurface.Request.Id == expected.Id &&
@@ -117,7 +119,7 @@ namespace TopiaForge.ModManager.Tests
                     "Both paired HUDs restore the original content when the viewer's scale recovers.");
             }
             Press();
-            Check(context.Ui.Surfaces.Single().Request.Id == GalleryRemotePreview.Request(0).Id,
+            Check(context.Ui.Surfaces.Single().Request.Id == GalleryRemotePreview.Request(0, context.Ui.ClockTime).Id,
                 "F7 wraps from the diagnostics back to Theme packs.");
             var second = rig.AddRemoteClient("second-guest");
             rig.Advance(8);
@@ -126,18 +128,21 @@ namespace TopiaForge.ModManager.Tests
                 "A second guest invalidates the pair and retires both owned surfaces.");
             runner.Unload();
             context.AssertNoLeaks();
+            StatusVisualFixtures(fixture);
 
             static bool ShowsNotice(UiTreeCapture captured) =>
                 captured.Nodes.Any(node => node.Kind == "LayoutFallback" && node.IsRendered && !node.Clipped) &&
                 captured.Nodes.Any(node => node.Kind == "SurfaceTitle" && node.IsRendered && !node.Clipped);
 
-            void Press()
-            {
-                context.Input.SetValue(GalleryRemotePreview.InputAction, 1f);
-                context.AdvanceFrame(TimeSpan.FromMilliseconds(16));
-                context.Input.SetValue(GalleryRemotePreview.InputAction, 0f);
-                context.AdvanceFrame(TimeSpan.Zero);
-            }
+            void Press() => PressGallery(context);
+        }
+
+        private static void PressGallery(FakeModContext context)
+        {
+            context.Input.SetValue(GalleryRemotePreview.InputAction, 1f);
+            context.AdvanceFrame(TimeSpan.FromMilliseconds(16));
+            context.Input.SetValue(GalleryRemotePreview.InputAction, 0f);
+            context.AdvanceFrame(TimeSpan.Zero);
         }
     }
 

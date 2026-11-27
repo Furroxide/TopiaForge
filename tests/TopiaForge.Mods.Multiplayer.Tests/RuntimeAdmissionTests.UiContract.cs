@@ -68,5 +68,6 @@ internal static partial class RuntimeAdmissionTests
         ArtUsesTheCompleteRetainedFrameBudget();
         FoundationPackagesCoexistAcrossGuestProfilesAndScopeLifetimes();
         ControlsUseOnlyTheirAdmittedRecipient();
+        StatusUsesItsAdmittedContractOnBothRoutes();
     }
 }

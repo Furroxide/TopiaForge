@@ -187,6 +187,11 @@
       "radius": "medium",
       "border": "standard",
       "shadow": "none"
+    },
+    "statBar": {
+      "radius": "pill",
+      "border": "thin",
+      "shadow": "none"
     }
   }
 }

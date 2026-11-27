@@ -29,6 +29,7 @@ namespace TopiaForge.Mods
                     break;
                 case UiProgress n: Text(n.Label, 256); break;
                 case UiCountdown n: Text(n.Label, 256); break;
+                case UiStatBar n: Text(n.Label, 24); break;
                 case UiIcon n: Text(n.SemanticLabel, 256); break;
                 case UiImage n:
                     Text(n.SemanticLabel, 256);

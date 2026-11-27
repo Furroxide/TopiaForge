@@ -62,6 +62,7 @@ namespace TopiaForge.ModManager.Tests
                     private readonly List<Observation> observations = new();
                     private static readonly UiCaptureNodeContent EmptyContent = new("", "", 0f, 0f, 0);
                     private bool onlyUnavailableImages;
+                    private bool countdownFixture;
                     internal float? SurfaceAlpha { get; private set; }
 
                     private UiGalleryNativeTree()

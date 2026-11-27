@@ -56,6 +56,9 @@ namespace TopiaForge.ModManager.Tests
                     var progress = service.Render(new UiProgress(0.25f, "Tasks", UiTone.Success));
                     Check(progress.Progress!.Fraction == 0.25f && progress.Progress.Color == TopiaForgeTone.Success && progress.Text!.Plain,
                         "Progress sends fraction, tone and plain caption to the kit.");
+                    var meter = progress.Progress!;
+                    meter.Width = 120f;
+                    Check(meter.FillWidth == 30f, "Progress keeps its fraction **after** the declarative layout assigns a different width.");
                 }
                 public static void OwnershipAndPool()
                 {

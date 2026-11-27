@@ -79,6 +79,8 @@ namespace TopiaForge.Mods.Testing
         private UiLayoutLeafMeasurement MeasurePlacement(UiNode node, UiLayoutConstraints limits, bool disabled)
         {
             if (node is UiIcon or UiImage or UiBadge or UiPips) return MeasureArt(node, limits);
+            if (node is UiStatBar or UiCountdown { UsesStatusFormat: true } or UiProgress { Thresholds: not null })
+                return MeasureStatus(node, limits);
             if (node is UiCard || node is UiBox)
             {
                 var extent = new UiLayoutExtent(limits.MinWidth, limits.MinHeight);

@@ -16,20 +16,26 @@ namespace TopiaForge.ModManager
         private readonly Camera? camera;
         private readonly TopiaForgeResolvedTheme theme;
         private readonly bool fallback;
+        private readonly double clockTime;
+        private readonly string clockEpoch;
         private readonly UiCaptureRect screen;
         private readonly Vector3[] corners = new Vector3[4];
         private readonly List<Observation> observations = new List<Observation>();
         private readonly List<(UiCaptureRect Bounds, bool Protected)> groups = new List<(UiCaptureRect, bool)>();
         private readonly List<UiGalleryFontFact> fonts = new List<UiGalleryFontFact>();
         private bool onlyUnavailableImages;
+        private bool countdownFixture;
         private string? dropdownChoicesPath;
 
-        internal UiGalleryNativeTree(Canvas canvas, TopiaForgeResolvedTheme theme, TopiaForgeEffectiveAccessibility accessibility, bool fallback)
+        internal UiGalleryNativeTree(Canvas canvas, TopiaForgeResolvedTheme theme,
+            TopiaForgeEffectiveAccessibility accessibility, bool fallback, double clockTime, string clockEpoch)
         {
             this.canvas = canvas;
             camera = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
             this.theme = theme;
             this.fallback = fallback;
+            this.clockTime = clockTime;
+            this.clockEpoch = clockEpoch;
             screen = new UiCaptureRect(0, 0, Screen.width, Screen.height);
             Accessibility = accessibility;
         }
@@ -51,6 +57,7 @@ namespace TopiaForge.ModManager
             if (!surface.IsChildOf(canvas.transform) || !composition.IsChildOf(surface) || fixture.Content == null ||
                 !SingleChild(composition, out var native)) return false;
             onlyUnavailableImages = imageNotice != null;
+            countdownFixture = fixture.Id == "gallery-countdowns";
             var fill = AncestorFill(composition);
             if (imageNotice == null || fixture.Kind != UiSurfaceKind.Hud)
                 Add("/", fixture.Id, fixture.Kind.ToString(), composition, EmptyContent, new UiCaptureNodePaint(null, fill));
@@ -100,9 +107,14 @@ namespace TopiaForge.ModManager
         {
             if (onlyUnavailableImages) return true;
             var start = observations.Count;
-            var captured = fixture is UiText text
-                ? Text(path, fixture.Id, nameof(UiText), native.GetComponent<TMP_Text>(), text.Text, text.Style, backdrop)
-                : Control(fixture, native, path, backdrop);
+            var captured = fixture switch
+            {
+                UiText text when countdownFixture && text.Id?.StartsWith("timer-", StringComparison.Ordinal) == true =>
+                    CaptureRetainedZero(text, native, path, backdrop),
+                UiText text => Text(path, fixture.Id, nameof(UiText), native.GetComponent<TMP_Text>(), text.Text, text.Style, backdrop),
+                UiProgress or UiCountdown or UiStatBar => CaptureStatus(fixture, native, path, backdrop),
+                _ => Control(fixture, native, path, backdrop),
+            };
             if (!captured) return false;
             RegisterGroup(start);
             return true;

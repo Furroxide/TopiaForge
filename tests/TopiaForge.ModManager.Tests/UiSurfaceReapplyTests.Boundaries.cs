@@ -230,6 +230,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     public BoundaryProgress Tone(TopiaForgeTone tone) => this;
                     public void SetFraction(float fraction) { }
+                    public void SetHorizontalLayoutFraction(float fraction) { }
                 }
                 public sealed class TopiaForgeListView<T>
                 {
@@ -376,6 +377,19 @@ namespace TopiaForge.ModManager.Tests
                                 var frame = artwork.Resolve(image).Frame;
                                 return new UiLayoutLeafMeasurement(new UiLayoutExtent(frame.Width, frame.Height), UiLayoutPaintKind.Image);
                             }
+
+                            internal void Apply(UiLayoutRect bounds, UiPaintRole backdrop, UiThemeScheme scheme,
+                                TopiaForgeResolvedTheme theme, UiThemeDescriptor effective, UiThemeDescriptor? declared) { }
+                        }
+
+                        private sealed class NativeStatusLeaf
+                        {
+                            internal NativeStatusLeaf(TopiaForgeContainer host, UiNode node, UiCallbackGate callbacks) { }
+
+                            internal static bool Handles(UiNode node) => false;
+
+                            internal UiLayoutLeafMeasurement Measure(UiLayoutConstraints constraints, UiThemeDescriptor effective,
+                                UiThemeDescriptor? declared, bool highContrast) => throw new System.NotSupportedException();
 
                             internal void Apply(UiLayoutRect bounds, UiPaintRole backdrop, UiThemeScheme scheme,
                                 TopiaForgeResolvedTheme theme, UiThemeDescriptor effective, UiThemeDescriptor? declared) { }

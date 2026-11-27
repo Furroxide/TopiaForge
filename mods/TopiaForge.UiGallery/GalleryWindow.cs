@@ -154,6 +154,10 @@ namespace TopiaForge.UiGallery
                 kitControls.Button("Help and tiles", () => ShowControls(ControlGalleryPage.HelpAndTiles));
             }
 
+            var statusPages = column.Row(TopiaForgeGap.Sm);
+            statusPages.Button("Status", () => ShowStatus(StatusGalleryPage.Status, previewKind));
+            statusPages.Button("Countdowns", () => ShowStatus(StatusGalleryPage.Countdowns, previewKind));
+
             var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
             pageHost.Flex(1f, 1f);
@@ -191,6 +195,9 @@ namespace TopiaForge.UiGallery
 
         private void ShowControls(ControlGalleryPage page) =>
             ShowSafePreview(ControlGalleryPages.Create(page, report: ReportInteraction));
+
+        private void ShowStatus(StatusGalleryPage page, UiSurfaceKind kind) =>
+            ShowSafePreview(StatusGalleryPages.CreateRequest(page, kind, previewUi.ClockTime));
 
         private void ShowSafePreview(UiSurfaceRequest request)
         {

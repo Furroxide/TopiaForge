@@ -134,6 +134,9 @@
         },
         "tooltip": {
           "$ref": "#/$defs/component"
+        },
+        "statBar": {
+          "$ref": "#/$defs/component"
         }
       }
     },

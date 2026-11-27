@@ -49,21 +49,21 @@ namespace TopiaForge.Zombies
             {
                 CancelCharge();
                 hordePressure = Math.Min(1f, hordePressure + (config.PressureRampPerSecond * controlDelta));
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
             if (shop.IsOpen)
             {
                 CancelCharge();
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
             if (!RefreshPlayerEntity())
             {
                 CancelCharge();
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
@@ -74,7 +74,7 @@ namespace TopiaForge.Zombies
             {
                 CancelCharge();
                 hordePressure = Math.Min(1f, hordePressure + (config.PressureRampPerSecond * controlDelta));
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
@@ -116,7 +116,7 @@ namespace TopiaForge.Zombies
                 }
             }
 
-            RefreshHud();
+            RefreshHud(timerPaused: shop.IsOpen);
         }
 
         private bool IsWorldReady()

@@ -90,12 +90,20 @@ namespace TopiaForge.Mods.Testing
                     Text(path, text.Id, nameof(UiText), bounds, clip, text.Text, text.Style, text.Tone,
                         UiCaptureNodeFlags.ScrollableClip);
                     return;
+                case UiCountdown { UsesStatusFormat: true } timer:
+                    PaintStatusCountdown(timer, path, bounds, clip);
+                    return;
                 case UiCountdown countdown:
-                    Text(path, countdown.Id, nameof(UiCountdown), bounds, clip, CountdownText(countdown),
-                        UiTextStyle.Body, countdown.Tone, UiCaptureNodeFlags.ScrollableClip);
+                    PaintLegacyCountdown(countdown, path, bounds, clip);
+                    return;
+                case UiProgress { Thresholds: not null } meter:
+                    PaintStatusProgress(meter, path, bounds, clip);
                     return;
                 case UiProgress progress:
                     PaintProgress(progress, path, bounds, clip);
+                    return;
+                case UiStatBar stat:
+                    PaintStatBar(stat, path, bounds, clip);
                     return;
                 case UiIcon or UiImage or UiBadge or UiPips:
                     PaintArt(node, path, bounds, clip);
@@ -136,11 +144,8 @@ namespace TopiaForge.Mods.Testing
                 usedFallback || theme.UsedFallback, rendered, rendered && !clip.Contains(bounds), occluded: false));
         }
 
-        private string CountdownText(UiCountdown countdown)
-        {
-            var remaining = surface.CapturedCountdownSeconds(countdown).ToString(CultureInfo.InvariantCulture);
-            return countdown.Label.Length == 0 ? remaining : countdown.Label + " " + remaining;
-        }
+        private string CountdownText(UiCountdown countdown) =>
+            UiCountdownFormatting.Text(countdown.Label, surface.CapturedCountdownSeconds(countdown), countdown.Format);
 
         private static string ChildPath(string path, int index) => path + "/" + index.ToString(CultureInfo.InvariantCulture);
 
