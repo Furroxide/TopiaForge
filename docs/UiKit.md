@@ -503,6 +503,10 @@ failures. It also implements `IUiSurfaceDismissalSource`, so hide/reopen session
 deterministic without Robotopia. Disposing the test context removes every surface and gates further
 callbacks; finish UI tests with `context.AssertNoLeaks()`.
 
+A standalone `FakeUiService` uses the named actions on the `FakeInputService` supplied to `UseInput`. A
+`FakeModContext` wires its own input automatically. Construct `FakePlayerDirectory` with the presenting
+context to test which registered defaults reach a targeted player. The viewer's effective bindings stay separate.
+
 `FakeUiSurface.IsVisible` follows the fake scenes as the game does: a gameplay HUD is visible only
 while a gameplay scene is active and no scene load is pending. `FakeModContext` starts at the main
 menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay HUD on screen.

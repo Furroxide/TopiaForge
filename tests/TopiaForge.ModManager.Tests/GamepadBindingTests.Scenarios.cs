@@ -8,6 +8,7 @@ namespace TopiaForge.ModManager.Tests
             using TopiaForge.ModManager;
             using TopiaForge.Mods.UnityUi;
             using UnityEngine;
+            using UnityEngine.EventSystems;
             using UnityEngine.InputSystem;
             public static class GamepadScenarios
             {
@@ -27,6 +28,36 @@ namespace TopiaForge.ModManager.Tests
                     => registry.Register("example.input", new InputActionDefinition(axis.ToString(), "Axis", new[] { InputBinding.GamepadAxis(axis, scale) }, yields)).Value;
                 static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
                 static void Equal(float expected, float actual) => Check(Math.Abs(expected - actual) < .00001f, "Expected " + expected + ", got " + actual);
+                public static void UiConflictUsesDisplayName()
+                {
+                    using var registry = new UnityInputRegistry();
+                    var binding = InputBinding.Key("K");
+                    using var current = registry.Register("example.viewer", new InputActionDefinition("mine", "My action", new[] { binding })).Value;
+                    using var other = registry.Register("example.zebra", new InputActionDefinition("other", "Other action", new[] { binding })).Value;
+                    using var first = registry.Register("example.alpha", new InputActionDefinition("ledger", "Open the ledger", new[] { binding })).Value;
+                    Check(registry.GetUiBindingConflict(current, binding) == "Open the ledger", "The warning shows the first conflicting display name.");
+                    Check(registry.GetUiBindingConflict(current, InputBinding.Key("J")) == null, "A free binding has no warning.");
+                }
+                public static void DeclarativeSliderMovesOnePercent()
+                {
+                    var slider = new TopiaForgeSliderInput { minValue = 0, maxValue = 2, value = 1, UsePercentSteps = true };
+                    slider.OnMove(new AxisEventData { moveDir = MoveDirection.Right });
+                    Equal(1.02f, slider.value);
+                    slider.OnMove(new AxisEventData { moveDir = MoveDirection.Left });
+                    Equal(1, slider.value);
+                    slider.value = 1.99f;
+                    slider.OnMove(new AxisEventData { moveDir = MoveDirection.Right });
+                    Equal(2, slider.value);
+                    slider.LeftNeighbor = new object();
+                    slider.OnMove(new AxisEventData { moveDir = MoveDirection.Left });
+                    slider.interactable = false;
+                    slider.OnMove(new AxisEventData { moveDir = MoveDirection.Right });
+                    slider.interactable = true;
+                    slider.UsePercentSteps = false;
+                    slider.OnMove(new AxisEventData { moveDir = MoveDirection.Right });
+                    Equal(2, slider.value);
+                    Check(slider.BaseMoves == 3, "Explicit navigation, disabled controls and stepped sliders retain Unity's behavior.");
+                }
                 public static void Axes()
                 {
                     var pad = Reset();

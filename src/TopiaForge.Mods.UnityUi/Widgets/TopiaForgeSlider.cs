@@ -13,7 +13,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeSlider : TopiaForgeWidget, ITopiaForgeThemeAware
     {
-        private readonly Slider slider;
+        private readonly TopiaForgeSliderInput slider;
         private readonly TopiaForgeControlCues cues;
         private readonly UImage track;
         private readonly UImage fill;
@@ -103,7 +103,7 @@ namespace TopiaForge.Mods.UnityUi
             var handleRect = (RectTransform)handleGo.transform;
             handleRect.sizeDelta = new Vector2(16f, 16f);
 
-            slider = sliderGo.AddComponent<Slider>();
+            slider = sliderGo.AddComponent<TopiaForgeSliderInput>();
             slider.fillRect = (RectTransform)fillGo.transform;
             slider.handleRect = handleRect;
             slider.targetGraphic = handle;
@@ -160,6 +160,7 @@ namespace TopiaForge.Mods.UnityUi
             var initial = Value;
             divisions = steps;
             valueFormat = format;
+            slider.UsePercentSteps = steps == 0;
             if (steps != 0)
             {
                 // Unity's whole-number slider moves one index per keyboard or controller action.

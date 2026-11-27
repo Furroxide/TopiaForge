@@ -7,9 +7,17 @@ namespace TopiaForge.Mods.Testing
         private FakeInputService? fixtureInput;
         private string? fixtureInputOwner;
 
+        /// <summary>Uses the supplied input registrations for binding controls on this fake UI service.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public void UseInput(FakeInputService input)
+        {
+            gameThread.AssertCurrent();
+            fixtureInput = input ?? throw new ArgumentNullException(nameof(input));
+        }
+
         internal void FollowInput(FakeInputService input, string ownerId)
         {
-            fixtureInput = input;
+            UseInput(input);
             fixtureInputOwner = ownerId;
         }
 

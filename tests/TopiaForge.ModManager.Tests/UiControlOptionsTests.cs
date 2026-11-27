@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
             SteppedSlidersUseExactBoundedValues();
             CompositionVisitorsSeeAllTabPages();
             FakeTabsAndBindingsAreViewerLocal();
+            StandaloneAndTargetedFakesUseTheAuthorInput();
             ExplicitControlPaintAndHoverAreCaptured();
             Console.WriteLine("K2 control options: compatibility, steps, invariant formats and tab traversal passed.");
             UiKitButtonMotionTests.Run();
@@ -60,6 +61,32 @@ namespace TopiaForge.ModManager.Tests
                 "A direct action reset redraws the field without a new composition.");
             Check(surface.SetContent(new UiKeyBindingField("typo", "Open")).ErrorCode == ModErrorCode.InvalidArgument &&
                 surface.Content is UiTabs, "Registration is an exact package name match and failed admission preserves the old view.");
+        }
+
+        private static void StandaloneAndTargetedFakesUseTheAuthorInput()
+        {
+            using var context = new FakeModContext();
+            using var standaloneLifetime = new FakeModLifetime();
+            var standalone = new FakeUiService(standaloneLifetime);
+            standalone.UseInput(context.Input);
+            using var players = new FakePlayerDirectory(context);
+            var guestId = new ParticipantId("guest");
+            var guest = players.Add(guestId, "Guest");
+            var binding = context.Input.RegisterAction(new InputActionDefinition("open", "Open the panel",
+                new[] { InputBinding.Key("J") })).Value!;
+            Check(binding.Rebind(new[] { InputBinding.Key("K") }).Succeeded, "The author can replace the effective binding.");
+
+            var request = new UiSurfaceRequest("settings", "Settings", "", UiSurfaceKind.Window, 720, 560,
+                new UiKeyBindingField("binding", "open"));
+            var viewport = new UiCaptureViewport(1920, 1080);
+            var local = standalone.CreateSurface(request);
+            Check(local.Succeeded && standalone.Capture("settings", viewport).Nodes.Any(node => node.Id == "binding" && node.KeyLabel == "K"),
+                "A standalone fake displays the live action registered with UseInput.");
+            var remote = guest.Ui.CreateSurface(request);
+            Check(remote.Succeeded && players.State(guestId).Ui.Capture("settings", viewport).Nodes.Any(node =>
+                node.Id == "binding" && node.KeyLabel == "J"), "A targeted fake sends the author default independently of the author's effective key.");
+            Check(remote.Value!.SetContent(new UiKeyBindingField("binding", "missing")).ErrorCode == ModErrorCode.InvalidArgument,
+                "A targeted update continues to validate the author's action names.");
         }
 
         private static void ExplicitControlPaintAndHoverAreCaptured()

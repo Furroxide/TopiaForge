@@ -16,14 +16,20 @@ namespace TopiaForge.Mods.Testing
         private readonly Dictionary<ParticipantId, FakePlayerState> states = new Dictionary<ParticipantId, FakePlayerState>();
         private readonly List<string> callbackErrors = new List<string>();
         private readonly PlayerDirectory directory;
+        private readonly FakeModContext? authorContext;
         private MultiplayerSessionSnapshot snapshot;
         private ulong generation;
         private ulong tick;
         private bool disposed;
 
         /// <summary>Creates a solo directory whose local participant is named Sam.</summary>
-        public FakePlayerDirectory()
+        public FakePlayerDirectory() : this(null) { }
+
+        /// <summary>Creates a player directory using the presenting context's action defaults for targeted UI.</summary>
+        [RequiresTopiaForge(UiKitRelease.K2)]
+        public FakePlayerDirectory(FakeModContext? authorContext)
         {
+            this.authorContext = authorContext;
             AddRecord(new ParticipantId("local"), "Sam", new MultiplayerPlayerKey("local-key"), true);
             snapshot = BuildSnapshot();
             directory = new PlayerDirectory(() => snapshot, () => generation, new Backend(this),
@@ -90,7 +96,10 @@ namespace TopiaForge.Mods.Testing
         private void AddRecord(ParticipantId id, string name, MultiplayerPlayerKey key, bool local)
         {
             records.Add(new MultiplayerParticipant(id, name, local, true, local, default, null, key));
-            states.Add(id, new FakePlayerState(lifetime));
+            var state = new FakePlayerState(lifetime);
+            if (!local && authorContext != null)
+                state.Ui.AuthorInputDefaults = authorContext.Ui.RegisteredInputDefaults;
+            states.Add(id, state);
         }
         private void Refresh() { snapshot = BuildSnapshot(); directory.Refresh(); }
         private MultiplayerSessionSnapshot BuildSnapshot() => new MultiplayerSessionSnapshot(

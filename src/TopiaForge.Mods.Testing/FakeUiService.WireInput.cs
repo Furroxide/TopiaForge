@@ -7,7 +7,9 @@ namespace TopiaForge.Mods.Testing
     {
         // This provider is the presenting package's definitions. The receiver's input registration is separate.
         internal Func<string, IReadOnlyList<InputBinding>?>? AuthorInputDefaults { get; set; }
-
         internal IReadOnlyList<InputBinding>? DefaultsForWire(string actionName) => AuthorInputDefaults?.Invoke(actionName);
+
+        internal IReadOnlyList<InputBinding>? RegisteredInputDefaults(string actionName) =>
+            fixtureInput?.FindAction(actionName)?.Definition.DefaultBindings;
     }
 }

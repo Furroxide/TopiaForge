@@ -464,6 +464,7 @@ type public sealed class TopiaForge.Mods.Testing.FakePlayerDialogueInputService 
 
 type public sealed class TopiaForge.Mods.Testing.FakePlayerDirectory : System.Object, System.IDisposable, TopiaForge.Mods.IPlayerDirectory [requires-topiaforge="0.2.0"]
   constructor .ctor() [requires-topiaforge="0.2.0"]
+  constructor .ctor(TopiaForge.Mods.Testing.FakeModContext? authorContext) [requires-topiaforge="0.2.0"]
   method System.Boolean Remove(TopiaForge.Mods.ParticipantId id) [requires-topiaforge="0.2.0"]
   method System.Boolean TryGetScore(System.String columnId, TopiaForge.Mods.ParticipantId player, out System.String displayValue, out System.Int64 sortKey) [requires-topiaforge="0.2.0"]
   method System.Void AdvanceTick() [requires-topiaforge="0.2.0"]
@@ -716,6 +717,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, 
   method System.Void AddAssetFixture(TopiaForge.Mods.Testing.FakeUiAssetMetadata asset) [requires-topiaforge="0.2.0"]
   method System.Void CompletePendingThemeRegistrations() [requires-topiaforge="0.2.0"]
   method System.Void FailNextContentUpdate(System.String surfaceId, TopiaForge.Mods.ModErrorCode errorCode = 9 (External), System.String message = "The fake UI content update was rejected.")
+  method System.Void UseInput(TopiaForge.Mods.Testing.FakeInputService input) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeCatalogue(System.String manifestJson, System.Func<System.String, System.String> readFile) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.OperationResult<System.Boolean> AddThemeFixture(System.String definitionJson) [requires-topiaforge="0.2.0"]
   method TopiaForge.Mods.Testing.UiTreeCapture Capture(System.String surfaceId, TopiaForge.Mods.Testing.UiCaptureViewport viewport) [requires-topiaforge="0.2.0"]

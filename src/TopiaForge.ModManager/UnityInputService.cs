@@ -128,13 +128,18 @@ namespace TopiaForge.ModManager
             UnityMainThreadGuard.AssertCurrent();
             lock (sync)
             {
-                string? first = null;
+                string? firstKey = null;
+                UnityInputAction? firstAction = null;
                 foreach (var candidate in actions)
                 {
                     if (ReferenceEquals(candidate.Value, boundAction) || !ContainsControl(candidate.Value.Bindings, binding)) continue;
-                    if (first == null || string.CompareOrdinal(candidate.Key, first) < 0) first = candidate.Key;
+                    if (firstKey == null || string.CompareOrdinal(candidate.Key, firstKey) < 0)
+                    {
+                        firstKey = candidate.Key;
+                        firstAction = candidate.Value;
+                    }
                 }
-                return first;
+                return firstAction?.Definition.DisplayName;
             }
         }
 
