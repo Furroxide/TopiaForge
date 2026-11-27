@@ -82,10 +82,12 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --require-latest
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        run: |
+          latest=()
+          if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
+          dotnet run --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
+            -c Release -- --source public "${latest[@]}"
 
       - name: Restore solution
         run: dotnet restore TopiaForge.slnx
@@ -176,10 +178,12 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --require-latest
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        run: |
+          latest=()
+          if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
+          dotnet run --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
+            -c Release -- --source public "${latest[@]}"
 
       - name: Verify formatting
         run: |
@@ -272,10 +276,13 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
+          latest=()
+          if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi
           dotnet run \
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
-            -c Release -- --source public --require-latest --write-local-props
+            -c Release -- --source public "${latest[@]}" --write-local-props
 
       - name: Build CLI test fixtures
         if: matrix.package == 'apps/topiaforge_cli'
@@ -408,6 +415,7 @@ jobs:
 
       - name: Test incoming commit DCO and release source policy
         run: python3 .github/scripts/test_pr_policy.py
+
       - name: Test required CI and Pages completion gates
         run: python3 .github/scripts/test_ci_validation.py
 
@@ -416,6 +424,15 @@ jobs:
 
       - name: Test multiplayer build configuration
         run: python3 tools/test_multiplayer_build.py
+
+      - name: Test main governance pull request scope
+        run: python3 .github/scripts/test_main_governance_scope.py
+
+      - name: Test required release package source boundary
+        run: python3 .github/scripts/test_release_package_source.py
+
+      - name: Test private Status deployment gate
+        run: python3 .github/scripts/test_private_status_deploy.py
 
       - name: Test protected release evidence gates
         run: |
@@ -653,10 +670,13 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --require-latest
+          PINNED_STABLE_BASELINE: ${{ (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        run: |
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
+          dotnet run `
+            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
+            -c Release -- --source public @latest
 
       - name: Restore pinned documentation tools
         run: dotnet tool restore

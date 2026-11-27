@@ -2,15 +2,17 @@
 
 Status: Archived deployment procedure · Date: 2026-11-17
 
-> **Deployment path changed.** The live Workers deploy from private `TopiaForge-Status` main through the
-> [protected Status-source workflow](https://github.com/Furroxide/TopiaForge/blob/main/.github/workflows/deploy-private-status-source.yml) on public `main`.
-> The `Control plane` workflow here only tests and dry-runs the old source. Do not use the provisioning, Wrangler,
-> or manual dispatch instructions below. Use the current private Status operations runbook for deployments and
-> credential changes.
+> **Deployment path changed.** The live Workers now deploy from private `TopiaForge-Status` main through the
+> [protected Status-source workflow](../../.github/workflows/deploy-private-status-source.yml). The `Control plane`
+> workflow in this repository only tests and dry-runs the old source. Do not use the provisioning, Wrangler, or manual
+> dispatch instructions below. Use the [Cloudflare deployment host](CloudflareDeploymentHost.md) and the private Status
+> operations runbook for current deployments and credential changes.
 
 This archived runbook records the prior control plane in `services/control-plane/`, including its budget and behavior
-decisions. The API is in [ControlPlaneApi.md](ControlPlaneApi.md). The budget figures below are historical; check
-Cloudflare's current TURN pricing before changing a limit.
+decisions. The API is in [ControlPlaneApi.md](ControlPlaneApi.md).
+
+The budget figures below are historical. Use the current private Status runbook and check Cloudflare's current TURN
+pricing before changing a limit.
 
 ## 1. What runs where
 
@@ -18,10 +20,10 @@ Cloudflare's current TURN pricing before changing a limit.
 | --- | --- |
 | Worker `topiaforge-control-plane-staging` | Cloudflare, deployed from `dev` or `main`, served at `https://mp-staging.topiaforge.dev` |
 | Worker `topiaforge-control-plane-production` | Cloudflare, deployed from `main` only, served at `https://mp.topiaforge.dev` |
-| Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter` | Inside each Worker, SQLite-backed, created by migration `v1` on the first deploy |
-| Hourly cron (minute 7) | Each Worker; measures relay usage and can trip the kill switch |
+| Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter`, `ActivityShard`, `ActivitySnapshot` | Inside each Worker, SQLite-backed, created by migrations on the first deploy |
+| Five-minute cron | Each Worker; measures relay usage and can trip the kill switch |
 | Relay | Cloudflare Realtime TURN, one key per environment |
-| Deploy | [Protected Status-source workflow](https://github.com/Furroxide/TopiaForge/blob/main/.github/workflows/deploy-private-status-source.yml); this document's old dispatch and local steps are archived |
+| Deploy | [Protected Status-source workflow](../../.github/workflows/deploy-private-status-source.yml); this document's old dispatch and local steps are archived |
 
 `wrangler.toml` holds no account details. The deploy reads the account from the environment, and every Worker
 secret is set by hand, out of band.
@@ -58,15 +60,15 @@ Create two environments under repository Settings, Environments, before any depl
 | Setting | `control-plane-staging` | `control-plane-production` |
 | --- | --- | --- |
 | Required reviewers | The maintainer | The maintainer |
-| Prevent self-review | On, with a separate dispatcher | On, with a separate dispatcher |
-| Allow administrators to bypass | Off | Off |
+| Prevent self-review | Off | On |
+| Allow administrators to bypass | Off | On, after independent agent review of the exact revision |
 | Deployment branches | Selected: `dev` and `main` | Selected: `main` |
 | Secret `CLOUDFLARE_API_TOKEN` | Staging-only deploy token | Production-only deploy token |
 | Secret `CLOUDFLARE_ACCOUNT_ID` | The account id | The account id |
 | Variable `CONTROL_PLANE_ORIGIN` | The staging origin, `https://…` | The production origin, `https://…` |
 
-The dispatcher must not hold the human review credential. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
-required reviewer, no administrator bypass and custom branch rules. That replaces the governance rule that an
+The maintainer may dispatch the protected production run after an independent agent reviews the exact source revision and deployment plan. GitHub's admin bypass then starts the pending deployment, skipping reviewer approval for that run while retaining self-review prevention. The workflow's preflight job reads the environment before any job names it, and stops unless it exists with a
+required reviewer, the documented admin-bypass and self-review settings, and custom branch rules. That replaces the governance rule that an
 environment must exist before a workflow references it: a dispatch can never create an unprotected environment.
 
 Once both environments exist, register them in the governance desired state, so the live audit watches them:
@@ -80,7 +82,7 @@ Once both environments exist, register them in the governance desired state, so 
     "protected_branches": false,
     "custom_branch_policies": true,
     "reviewer_ids": [221987073],
-    "prevent_self_review": true,
+    "prevent_self_review": false,
     "branch_policies": [
       {"name": "dev", "type": "branch"},
       {"name": "main", "type": "branch"}
@@ -88,7 +90,7 @@ Once both environments exist, register them in the governance desired state, so 
   },
   {
     "name": "control-plane-production",
-    "can_admins_bypass": false,
+    "can_admins_bypass": true,
     "protected_branches": false,
     "custom_branch_policies": true,
     "reviewer_ids": [221987073],
@@ -140,8 +142,7 @@ Use this order for the first production service launch:
 
 1. Review and merge the narrowly scoped `service/production-multiplayer` pull request to `main`; its PR policy
    permits only the service, its fixtures, deployment workflow, governance and operations documentation.
-2. Dispatch **Control plane** from that exact main revision to **control-plane-production**, review the
-   deployment, and provision its Worker secrets as described below. Do not use the staging credential.
+2. Record an independent agent review of that exact main revision and deployment plan, then dispatch **Control plane** from it to **control-plane-production**. GitHub cannot enforce this agent-review prerequisite, so record the reviewed SHA and review result before dispatch. The maintainer uses GitHub's admin bypass only for that pending run, noting the reviewed SHA in the bypass comment, then provisions its Worker secrets as described below. Do not use the staging credential.
 3. Check production readiness with
    `python tools/multiplayer-build.py --environment production --check-only`, then complete the production
    admin/spend checks and real relay live check from steps 4 and 5 below, using the production environment.
@@ -402,7 +403,7 @@ must say so before Internet play is enabled.
 
 | Symptom | Check |
 | --- | --- |
-| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, prevent self-review, refuse administrator bypass and use custom branch rules. |
+| The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, match the documented self-review and admin-bypass settings, and use custom branch rules. |
 | The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
 | `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |

@@ -30,7 +30,7 @@ forcing `main` to absorb unrelated development work merely to satisfy strict sta
 
 - Owner-authored topic and stabilization pull requests use **squash merge**. The Conventional Commit pull-request
   title and body become the commit subject and body.
-- `release/*` to `main` and `sync/main-v*` to `dev` use **merge commits** to preserve ancestry.
+- `release/*`, scoped service and governance pull requests to `main`, and `sync/main-v*` to `dev` use **merge commits**. The `main` ruleset permits only this method.
 - Dependabot version-update pull requests target `dev` and use **merge commits**. The maintainer is not the bot-authored
   PR author, and GitHub cannot create an accepted squash commit for that case under required signed commits.
 - Rebase merging is disabled. Auto-merge and automatic branch deletion remain disabled. "Update branch" is enabled.
@@ -50,7 +50,11 @@ matrix jobs are never configured directly as required checks.
 | --- | --- |
 | `dev` | `Required / PR policy`, `Required / CI validation`, `Required / Unity source validation`, `Required / Registry validation`, `Required / Dependency review` |
 | `release/*` | The same five common checks. Each release-head update also produces `Required / Release packages` for later promotion. |
-| `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. |
+| `main` | The five common checks plus `Required / Release packages` on the pull request's test merge commit. This unsigned package dry run also applies to scoped service and governance changes; it does not publish a release. |
+
+For scoped service and governance pull requests, CI and the required package build verify the historical stable `main` game build
+against its pinned public archive. The upstream game has advanced since that release, so the latest-build check would
+reject this unchanged client baseline. Release-branch pushes and their `main` pull requests retain the latest-build requirement.
 
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
 new dependency with a moderate-or-higher known vulnerability in runtime,
@@ -127,13 +131,20 @@ The stable PR-policy check enforces these routing rules:
 - Fork/community PRs may target only `dev`.
 - Dependabot PRs may target only `dev`.
 - `release/*` accepts same-repository stabilization branches only.
-- `main` accepts only the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
-  from that head's `release/release-policy.json`.
+- `main` accepts the same repository's exact `release/<productVersion>` branch, where `productVersion` is read
+  from that head's `release/release-policy.json`. The exact `cloudflare/deploy-host-main` branch is
+  limited to files that support the protected Status deployment workflow. The exact
+  `maintenance/main-governance` branch is limited to repository governance and release-check workflow files.
+  The one-time sidecar security backport also admits the exact reviewed manifest and lockfile transition
+  together. After the backport lands, the old base blobs no longer match and the exception closes.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
-- Once `v0.1.0-rc.1` exists, every introduced commit must contain a valid
-  `Signed-off-by` trailer matching an author or committer identity. Existing
-  history reachable from the cutover tag is grandfathered.
+- Every introduced commit requires a valid `Signed-off-by` trailer. The
+  same-repository `sync/main-v0.2.0` and `release/0.2.0` routes can certify
+  their exact historical commit lists with the release maintainer's signed
+  attestation. Before merging either route, verify its exact base and head
+  independently using the verifier and public signing key from the protected
+  base.
 
 Only explicitly trusted collaborators may submit formal Approve or Request Changes reviews. Community review remains
 welcome through comments and suggestions; formal reviews become enforcement evidence only when collaboration trust
@@ -141,14 +152,19 @@ has been granted.
 
 ## Trusted release and deployment environments
 
-Environments must exist before any workflow references them. Otherwise GitHub can auto-create an unprotected
-environment. Administrator bypass is disabled on every privileged environment. Self-review is temporarily allowed
-because there is one maintainer.
+Environments must exist before any workflow references them, or a workflow must verify that the protected
+environment already exists before naming it. Administrator bypass is disabled on privileged environments except
+`control-plane-production`. That environment prevents self-review but allows the maintainer to force a pending
+deployment after an independent agent reviews the exact revision and deployment plan. The bypass is a recorded
+exception to GitHub reviewer approval for that run. GitHub cannot enforce the agent-review prerequisite; the
+maintainer records the reviewed SHA and review result before using bypass.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
 | `release` | `v*` tags | Update-metadata signing, verification attestation, and automatic release publication |
-| `github-pages` | published `v*` tags | Deployment of release-derived Pages content |
+| `github-pages` | protected `main` and published `v*` tags | Deployment after successful `main` CI and release-derived Pages refreshes |
+| `control-plane-staging` | `dev`, `main` | Staging multiplayer Worker deployment |
+| `control-plane-production` | `main` | Production multiplayer Worker deployment |
 
 Every GitHub job that can read the update-signing key, read the protected
 governance-audit token, or mutate a release declares the protected `release`
@@ -265,9 +281,6 @@ and [immutable releases](https://docs.github.com/en/code-security/concepts/suppl
 
 ## Multiplayer deployment environments
 
-The protected `control-plane-staging` environment permits `dev` and `main`;
-`control-plane-production` permits only `main`. Both require maintainer review
-and prohibit administrator bypass. Each holds `CLOUDFLARE_ACCOUNT_ID` and
-`CLOUDFLARE_API_TOKEN`, with a public `CONTROL_PLANE_ORIGIN` variable. The CI
-deployment token is separate from the workstation's Wrangler OAuth login.
-Client compilation needs no Cloudflare credentials.
+The [protected Status deployment host](internal/CloudflareDeploymentHost.md)
+documents the staging and production environments, credentials, and deployment
+review procedure. Client compilation needs no Cloudflare credentials.
