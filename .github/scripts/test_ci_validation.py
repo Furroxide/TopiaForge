@@ -155,7 +155,13 @@ class CiValidationTests(unittest.TestCase):
                 self.assertIn("          path: ${{ runner.temp }}/robotopia-managed-refs-cache\n", cache)
                 self.assertNotIn("restore-keys:", cache)
                 self.assertIn("--source public --cache-key-only", step(body, "Resolve Robotopia refs cache key"))
-                self.assertIn("--source public --require-latest", step(body, "Restore Robotopia managed refs"))
+                restore = step(body, "Restore Robotopia managed refs")
+                if name == "docs":
+                    self.assertIn("else { @('--require-latest') }", restore)
+                    self.assertIn("--source public @latest", restore)
+                else:
+                    self.assertIn('if [[ "$PINNED_STABLE_BASELINE" != true ]]; then latest+=(--require-latest); fi', restore)
+                    self.assertIn('--source public "${latest[@]}"', restore)
         self.assertNotIn("    needs:", self.jobs["docs"])
 
     def test_all_scaffolds_still_use_the_current_run_payload(self):

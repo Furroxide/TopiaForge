@@ -152,9 +152,13 @@ class ControlPlaneValidationTests(unittest.TestCase):
         test = self.jobs["test"]
         self.assertIn("    name: Test and dry-run the control plane\n", test)
         self.assertIn("npm test", test)
-        self.assertIn("wrangler deploy --dry-run", test)
-        self.assertIn("--env staging", test)
-        self.assertIn("--env production", test)
+        self.assertIn("node scripts/deployment-config.mjs", test)
+        deploy = "npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run"
+        for environment in ("staging", "production"):
+            self.assertIn(
+                f'{deploy} --outdir "$RUNNER_TEMP/control-plane-{environment}" --env {environment}',
+                test,
+            )
         steps = checkout_steps(test)
         self.assertEqual(len(steps), 1)
         self.assertIn("persist-credentials: false", steps[0])

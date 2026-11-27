@@ -1,7 +1,7 @@
 name: Control plane
 
-# Keep the pre-migration control-plane source tested until it is removed from this repository.
-# Live staging and production deploys run from private Status main through the protected deploy-host workflow.
+# Keep the pre-migration control plane check stable until the service removal lands.
+# Live deployments use deploy-private-status-source.yml and the private Status source.
 on:
   pull_request:
     branches:
@@ -20,6 +20,7 @@ on:
       - "services/control-plane/**"
       - "tests/fixtures/multiplayer/**"
       - ".github/workflows/control-plane.yml"
+
 permissions:
   contents: read
 
@@ -66,5 +67,6 @@ jobs:
           WRANGLER_SEND_METRICS: "false"
         run: |
           set -euo pipefail
-          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-staging" --env staging
-          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-production" --env production
+          node scripts/deployment-config.mjs
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/control-plane-staging" --env staging
+          npx --no-install wrangler deploy --config wrangler.deploy.toml --dry-run --outdir "$RUNNER_TEMP/control-plane-production" --env production

@@ -59,8 +59,8 @@ jobs:
             if [[ "$same_repository" == false ]]; then
               failures+=("main accepts only same-repository release branches.")
             fi
-            if [[ ! $HEAD_REF =~ ^release/$semver$ ]]; then
-              failures+=("main accepts only release/<semver> pull requests.")
+            if [[ ! $HEAD_REF =~ ^release/$semver$ && "$HEAD_REF" != cloudflare/deploy-host-main && "$HEAD_REF" != maintenance/main-governance ]]; then
+              failures+=("main accepts only release/<semver> or scoped service and governance pull requests.")
             fi
           elif [[ "$BASE_REF" == release/* ]]; then
             if [[ ! $BASE_REF =~ ^release/$semver$ ]]; then
@@ -137,8 +137,51 @@ jobs:
             fi
           fi
 
+      - name: Limit the Cloudflare deploy-host pull request
+        if: github.base_ref == 'main' && github.head_ref == 'cloudflare/deploy-host-main'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin "$BASE_SHA"
+          changed=0
+          while IFS= read -r -d '' path; do
+            changed=$((changed + 1))
+            case "$path" in
+              .github/workflows/deploy-private-status-source.yml|\
+              .github/scripts/test_private_status_deploy.py|\
+              .github/workflows/pr-policy.yml|\
+              .github/workflows/ci.yml|\
+              docs/internal/CloudflareDeploymentHost.md) ;;
+              *) echo "::error::Out-of-scope Cloudflare deploy-host file: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only -z --no-renames "$BASE_SHA" HEAD)
+          test "$changed" -gt 0
+          test -f .github/workflows/deploy-private-status-source.yml
+
+      - name: Limit the main governance pull request
+        if: github.base_ref == 'main' && github.head_ref == 'maintenance/main-governance'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin "$BASE_SHA"
+          python3 .github/scripts/check_main_governance_scope.py \
+            --base-ref "$BASE_REF" --head-ref "$HEAD_REF" \
+            --base-repository "$BASE_REPOSITORY" \
+            --head-repository "$HEAD_REPOSITORY" --base-sha "$BASE_SHA"
+
       - name: Validate release source against the product version
-        if: github.base_ref == 'main'
+        if: >-
+          github.base_ref == 'main' &&
+          github.head_ref != 'cloudflare/deploy-host-main' &&
+          github.head_ref != 'maintenance/main-governance'
         shell: bash
         env:
           HEAD_REF: ${{ github.head_ref }}

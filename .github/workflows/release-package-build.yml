@@ -31,15 +31,18 @@ jobs:
 
   preflight:
     name: Verify release package inputs
-    # A reusable workflow sees its caller's github context. Never execute an
-    # independently supplied revision inside that caller's cache/artifact scope.
+    # A reusable workflow receives its caller's event. Admit only exact refs
+    # and run this gate before any package job executes candidate code.
     if: >-
       github.repository == 'Furroxide/TopiaForge' &&
       ((github.event_name == 'push' &&
       startsWith(github.ref, 'refs/heads/release/')) ||
       (github.event_name == 'workflow_dispatch' &&
       (github.ref == 'refs/heads/main' ||
-      startsWith(github.ref, 'refs/heads/release/'))))
+      startsWith(github.ref, 'refs/heads/release/'))) ||
+      (github.event_name == 'pull_request' &&
+      github.base_ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -64,12 +67,15 @@ jobs:
           FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
           ROBOTOPIA_REFS_SOURCE: public
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) }}
         run: |
           $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
           try {
             dotnet run `
               --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
-              -c Release -- --probe --require-latest
+              -c Release -- --probe @latest
             if ($LASTEXITCODE -ne 0) {
               throw "Managed-reference probe failed with exit code $LASTEXITCODE."
             }
@@ -138,10 +144,13 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --require-latest
+          PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) }}
+        run: |
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
+          dotnet run `
+            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
+            -c Release -- --source public @latest
 
       - name: Validate 11 SDK packages and all 7 C# harnesses
         shell: bash
@@ -348,10 +357,13 @@ jobs:
           ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
           ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
           ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --require-latest
+          PINNED_STABLE_BASELINE: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main' && (github.head_ref == 'cloudflare/deploy-host-main' || github.head_ref == 'maintenance/main-governance')) }}
+        run: |
+          $latest = @('--require-latest')
+          if ($env:PINNED_STABLE_BASELINE -eq 'true') { $latest = @() }
+          dotnet run `
+            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
+            -c Release -- @latest
 
       - name: Download macOS x64 CLI
         if: matrix.platform == 'macos'

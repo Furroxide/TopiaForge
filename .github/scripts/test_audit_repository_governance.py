@@ -134,6 +134,13 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
     def test_compliant_snapshot_passes(self) -> None:
         self.assertEqual([], AUDIT.evaluate_snapshot(self.snapshot, self.policy))
 
+    def test_canonical_github_login_casing_is_same_identity(self) -> None:
+        self.snapshot["repository"]["full_name"] = "Furroxide/TopiaForge"
+        self.snapshot["repository_administrators"] = ["Furroxide"]
+        self.snapshot["repository_collaborators"][0]["login"] = "Furroxide"
+
+        self.assertEqual([], AUDIT.evaluate_snapshot(self.snapshot, self.policy))
+
     def test_repository_snapshot_drops_temporary_clone_credentials(self) -> None:
         scrubbed = AUDIT.scrub_repository_data(
             {
@@ -257,7 +264,10 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
             environment["name"] for environment in self.policy["environments"]
         }
 
-        self.assertEqual({"release", "github-pages", "control-plane-staging", "control-plane-production"}, environment_names)
+        self.assertEqual(
+            {"release", "github-pages", "control-plane-staging", "control-plane-production"},
+            environment_names,
+        )
         self.assertNotIn(
             "game-ci/unity-builder@*",
             self.policy["actions"]["selected_actions"]["patterns_allowed"],
