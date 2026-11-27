@@ -69,6 +69,18 @@ class ReleasePackageSourceTests(unittest.TestCase):
         self.assertNotRegex(package, r"uses: actions/cache@")
         self.assertEqual(2, package.count("uses: actions/cache/restore@"))
 
+    def test_ecosystem_restores_locked_cli_before_generated_runtime_tests(self) -> None:
+        ecosystem = job(workflow("release-package-build.yml"), "canonical-ecosystem")
+        restore = (
+            "        working-directory: apps/topiaforge_cli\n"
+            "        run: dart pub get --enforce-lockfile\n"
+        )
+        self.assertIn(restore, ecosystem)
+        self.assertLess(
+            ecosystem.index(restore),
+            ecosystem.index("bash tools/verify-csharp-release-surface.sh"),
+        )
+
     def test_release_prs_keep_latest_managed_ref_requirement(self) -> None:
         package = workflow("release-package-build.yml")
         baselines = re.findall(r"(?m)^          PINNED_STABLE_BASELINE: (.+)$", package)
