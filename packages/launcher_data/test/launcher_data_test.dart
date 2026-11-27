@@ -25,6 +25,7 @@ part 'launch_safe_mode_recovery_test_part.dart';
 part 'launch_creation_receipt_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
+part 'runtime_loader_notices_test_part.dart';
 part 'restart_requirement_test_part.dart';
 part 'world_catalog_test_part.dart';
 part 'launch_v5_integration_test_part.dart';
@@ -130,6 +131,7 @@ void main() {
   );
   _registerRuntimeLoaderPayloadTests(
     repository: () => repository,
+    repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,
   );
   _registerDevToolInstallationTests(

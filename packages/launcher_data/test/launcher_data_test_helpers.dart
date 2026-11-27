@@ -36,6 +36,12 @@ void _createRuntimeSources(Directory repoRoot) {
   for (final dll in topiaForgeRuntimeLoaderDlls) {
     File(p.join(loader.path, dll)).writeAsStringSync('');
   }
+  // Licence texts at their canonical paths, as a checkout or release has them.
+  for (final notice in topiaForgeRuntimeLoaderNotices) {
+    File(p.joinAll([repoRoot.path, ...p.posix.split(notice.sourcePath)]))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('${notice.sourcePath} fixture text');
+  }
 }
 
 // The built-in local source derives its catalog from the .topiaforgemod packages in dist/, so the

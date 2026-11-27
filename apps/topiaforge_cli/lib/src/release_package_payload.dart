@@ -128,18 +128,12 @@ class ReleasePackagePayloadWriter {
       await fileOps.setExecutableBit(p.join(bundleDest, 'libdoorstop.dylib'));
     }
 
-    final loaderDest = p.join(
-      destinationRoot,
-      'src',
-      'TopiaForge.ModManager',
-      'bin',
-      'Release',
-      'netstandard2.1',
+    copyReleaseLoaderPayload(
+      repositoryRoot: repositoryRoot,
+      builtLoaderDirectory: pluginOut,
+      destination: releaseLoaderDirectory(destinationRoot),
+      fileOps: fileOps,
     );
-    Directory(loaderDest).createSync(recursive: true);
-    for (final dll in releaseLoaderDlls) {
-      fileOps.copyFileIfExists(p.join(pluginOut, dll), p.join(loaderDest, dll));
-    }
 
     if (platform == ReleasePackagePlatform.windows) {
       _copyWindowsOverlayRuntime(destinationRoot, bepInEx, pluginOut);
@@ -321,7 +315,7 @@ class ReleasePackagePayloadWriter {
       runtimeId,
       '--self-contained',
       'true',
-      '-p:RuntimeFrameworkVersion=$_gameCompatRuntimeVersion',
+      '-p:RuntimeFrameworkVersion=$releaseGameCompatRuntimeVersion',
       '-p:PublishSingleFile=true',
       '-o',
       publishDir,
@@ -345,14 +339,14 @@ class ReleasePackagePayloadWriter {
     final runtimePack = p.join(
       packagesRoot,
       'microsoft.netcore.app.runtime.$runtimeId',
-      _gameCompatRuntimeVersion,
+      releaseGameCompatRuntimeVersion,
     );
     final license = p.join(runtimePack, 'LICENSE.TXT');
     final notices = p.join(runtimePack, 'THIRD-PARTY-NOTICES.TXT');
     if (!File(license).existsSync() || !File(notices).existsSync()) {
       throw StateError(
         '.NET runtime notices were not restored for $runtimeId '
-        '$_gameCompatRuntimeVersion.',
+        '$releaseGameCompatRuntimeVersion.',
       );
     }
     final destination = p.join(destinationRoot, 'third_party', 'dotnet');
@@ -364,7 +358,7 @@ class ReleasePackagePayloadWriter {
     final metadataLoadContext = p.join(
       packagesRoot,
       'system.reflection.metadataloadcontext',
-      _metadataLoadContextVersion,
+      releaseMetadataLoadContextVersion,
     );
     final metadataNotices = p.join(
       metadataLoadContext,
@@ -389,7 +383,7 @@ class ReleasePackagePayloadWriter {
     );
     File(p.join(destination, 'VERSION.txt'))
       ..parent.createSync(recursive: true)
-      ..writeAsStringSync('$_gameCompatRuntimeVersion\n', flush: true);
+      ..writeAsStringSync('$releaseGameCompatRuntimeVersion\n', flush: true);
   }
 
   String _metadataLoadContextLicense({
@@ -451,16 +445,12 @@ class ReleasePackagePayloadWriter {
       Directory(p.join(bepInEx, 'BepInEx')),
       Directory(p.join(destinationRoot, 'BepInEx')),
     );
-    final pluginDir = p.join(
-      destinationRoot,
-      'BepInEx',
-      'plugins',
-      'TopiaForge.ModManager',
+    copyReleaseLoaderPayload(
+      repositoryRoot: repositoryRoot,
+      builtLoaderDirectory: pluginOut,
+      destination: releaseLoaderOverlayDirectory(destinationRoot),
+      fileOps: fileOps,
     );
-    Directory(pluginDir).createSync(recursive: true);
-    for (final dll in releaseLoaderDlls) {
-      fileOps.copyFileIfExists(p.join(pluginOut, dll), p.join(pluginDir, dll));
-    }
   }
 
   ReleasePackageNoticeWriter get _noticeWriter => ReleasePackageNoticeWriter(
@@ -469,8 +459,9 @@ class ReleasePackagePayloadWriter {
   );
 }
 
-const _gameCompatRuntimeVersion = '10.0.9';
-const _metadataLoadContextVersion = '10.0.9';
+/// Pinned .NET runtime and MetadataLoadContext inside the GameCompat extractor.
+const releaseGameCompatRuntimeVersion = '10.0.9';
+const releaseMetadataLoadContextVersion = '10.0.9';
 
 const _releaseToolStateNames = {
   '.dart_tool',

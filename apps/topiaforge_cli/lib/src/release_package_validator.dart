@@ -340,14 +340,7 @@ class ReleasePackageValidator {
       'Package must include BepInEx core.',
     );
 
-    final loaderDir = p.join(
-      payloadRoot,
-      'src',
-      'TopiaForge.ModManager',
-      'bin',
-      'Release',
-      'netstandard2.1',
-    );
+    final loaderDir = releaseLoaderDirectory(payloadRoot);
     for (final dependency in releaseLoaderDlls) {
       _assertPath(
         p.join(loaderDir, dependency),
@@ -355,18 +348,17 @@ class ReleasePackageValidator {
       );
     }
     _assertRuntimeLoaderProvenance(payloadRoot);
+    validateReleaseLoaderNotices(
+      payloadRoot,
+      windowsOverlay: platform == ReleasePackagePlatform.windows,
+    );
 
     if (platform == ReleasePackagePlatform.windows) {
       _assertPath(
         p.join(payloadRoot, 'winhttp.dll'),
         'Windows package must include the game-overlay Doorstop.',
       );
-      final overlay = p.join(
-        payloadRoot,
-        'BepInEx',
-        'plugins',
-        'TopiaForge.ModManager',
-      );
+      final overlay = releaseLoaderOverlayDirectory(payloadRoot);
       for (final dependency in releaseLoaderDlls) {
         _assertPath(
           p.join(overlay, dependency),

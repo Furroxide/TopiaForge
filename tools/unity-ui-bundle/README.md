@@ -62,10 +62,11 @@ again with the GUID pinned in `Assets/Editor/UiBundleReproducibleAssets.cs` and 
 sub-asset ids. To re-bake an SDF, delete its `.asset` and `.asset.meta` and build. A new
 SDF needs a pinned GUID there first.
 
-With an unchanged source font, a re-bake of `TopiaForge Body Medium SDF` matches the
-committed files. `TopiaForge Body SDF` and `TopiaForge Display SDF` were baked before
-the ids were pinned, and the Body SDF from an earlier copy of the Quicksand font, so the
-first re-bake of either changes its `.asset` and the bundle; later re-bakes match.
+With unchanged inputs, the committed Body Medium and Body SDF bakes are reproducible.
+The Light face uses the recorded upstream Quicksand variable font. The reviewed rebake
+keeps the existing font asset GUID, atlas pixels and face metrics and corrects its glyph
+indices. The Display SDF predates the pinned IDs, so its first rebake changes its
+`.asset` and the bundle.
 
 Every font-asset material stays on TMP's `TextMeshPro/Mobile/Distance Field` shader
 (`Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader`) — building the bundle pulls the

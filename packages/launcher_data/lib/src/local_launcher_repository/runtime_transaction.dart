@@ -42,6 +42,11 @@ class _RuntimeRepairTransaction {
   final Directory gameRoot;
   final Directory root;
   final List<_RuntimeFileOperation> operations = [];
+
+  /// Game-root-relative directories the commit created, shallowest first.
+  /// Rollback removes them once empty, so a failed first install leaves no
+  /// loader, notice, or BepInEx directory behind.
+  final List<String> createdDirectories = [];
   final Set<String> _collisionKeys = {};
   int _stagedBytes = 0;
   String status = 'staging';
@@ -103,6 +108,32 @@ class _RuntimeRepairTransaction {
       }
       final operation = _RuntimeFileOperation.fromJson(raw, index: index);
       transaction._register(operation);
+    }
+    // Journals written before directory tracking carry no such list.
+    final rawDirectories = decoded['createdDirectories'] ?? const <Object?>[];
+    if (rawDirectories is! List ||
+        rawDirectories.length > _maxRuntimeSourceEntries ||
+        rawDirectories.any((value) => value is! String)) {
+      throw StateError('Runtime repair journal directories are invalid.');
+    }
+    if (rawDirectories.isNotEmpty) {
+      final operationParents = <String>{};
+      for (final operation in transaction.operations) {
+        var parent = p.posix.dirname(operation.relativePath);
+        while (parent != '.') {
+          operationParents.add(parent);
+          parent = p.posix.dirname(parent);
+        }
+      }
+      for (final entry in rawDirectories.cast<String>()) {
+        final relative = portableArchivePath(entry, label: 'Runtime journal');
+        if (!operationParents.remove(relative)) {
+          throw StateError(
+            'Runtime repair journal directory has no unique file operation parent path.',
+          );
+        }
+        transaction.createdDirectories.add(relative);
+      }
     }
     if (transaction.status == 'complete') {
       transaction._deleteRoot();
@@ -207,7 +238,7 @@ class _RuntimeRepairTransaction {
     var committed = 0;
     for (final operation in operations) {
       final target = operation.targetFile(gameRoot);
-      _ensureRuntimeDirectory(gameRoot, target.parent);
+      await _createTargetDirectory(target.parent);
       final targetType = FileSystemEntity.typeSync(
         target.path,
         followLinks: false,
@@ -243,6 +274,31 @@ class _RuntimeRepairTransaction {
     }
   }
 
+  /// Creates [directory] and journals every level it adds before adding it,
+  /// so a crash between the two leaves recovery a directory to skip rather
+  /// than one it never heard of.
+  Future<void> _createTargetDirectory(Directory directory) async {
+    _requireRuntimeDirectory(gameRoot, directory, label: 'Runtime destination');
+    final rootPath = gameRoot.absolute.path;
+    final missing = <String>[];
+    for (
+      var current = directory.absolute;
+      current.path != rootPath &&
+          FileSystemEntity.typeSync(current.path, followLinks: false) ==
+              FileSystemEntityType.notFound;
+      current = current.parent
+    ) {
+      missing.add(
+        p.posix.joinAll(p.split(p.relative(current.path, from: rootPath))),
+      );
+    }
+    if (missing.isNotEmpty) {
+      createdDirectories.addAll(missing.reversed);
+      await _writeJournal();
+    }
+    _ensureRuntimeDirectory(gameRoot, directory);
+  }
+
   Future<void> complete() async {
     status = 'complete';
     await _writeJournal();
@@ -259,10 +315,38 @@ class _RuntimeRepairTransaction {
       }
     }
     if (firstFailure == null) {
+      _removeCreatedDirectories();
       _deleteRoot();
       return;
     }
     throw StateError('Runtime repair rollback failed: $firstFailure');
+  }
+
+  /// Removes the directories this transaction created, deepest first. One
+  /// that is no longer an empty, unlinked directory under the game root now
+  /// holds something else and stays; files, not folders, decide whether a
+  /// rollback succeeded.
+  void _removeCreatedDirectories() {
+    for (final relative in createdDirectories.reversed) {
+      final directory = Directory(
+        p.joinAll([gameRoot.path, ...p.posix.split(relative)]),
+      );
+      try {
+        _requireRuntimeDirectory(
+          gameRoot,
+          directory,
+          label: 'Created runtime directory',
+        );
+        if (FileSystemEntity.typeSync(directory.path, followLinks: false) ==
+            FileSystemEntityType.directory) {
+          directory.deleteSync();
+        }
+      } on FileSystemException {
+        // Not empty, or held open by another process.
+      } on StateError {
+        // An ancestor became a link; never follow it out of the game root.
+      }
+    }
   }
 
   void _rollbackOperation(_RuntimeFileOperation operation) {
@@ -316,6 +400,7 @@ class _RuntimeRepairTransaction {
       'formatVersion': 2,
       'status': status,
       'operations': operations.map((item) => item.toJson()).toList(),
+      'createdDirectories': createdDirectories,
     },
     maxBytes: _maxRuntimeTransactionJournalBytes,
     label: 'Runtime repair journal',

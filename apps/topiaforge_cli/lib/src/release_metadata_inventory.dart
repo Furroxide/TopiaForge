@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
@@ -235,6 +236,7 @@ class ReleaseMetadataInventoryBuilder {
         p.relative(entity.path, from: root),
       'packages/launcher_ui/fonts/Audiowide-OFL.txt',
       'packages/launcher_ui/fonts/Quicksand-OFL.txt',
+      for (final notice in topiaForgeRuntimeLoaderNotices) notice.sourcePath,
       'tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt',
       // Notices for vendored source a mod compiles, packed into its package.
       'mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md',

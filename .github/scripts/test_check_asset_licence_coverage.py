@@ -118,6 +118,14 @@ class CoverageRuleTests(unittest.TestCase):
             )
         )
 
+    def test_an_unrecorded_windows_icon_is_not_covered(self):
+        # Selecting `.ico` files only helps if an unrecorded one then fails.
+        self.assertIsNone(
+            self.covered(
+                "apps/topiaforge_launcher_flutter/windows/runner/resources/app_icon.ico"
+            )
+        )
+
 
 class AssetSelectionTests(unittest.TestCase):
     def test_only_non_source_suffixes_are_audited(self):
@@ -133,12 +141,52 @@ class AssetSelectionTests(unittest.TestCase):
         )
         self.assertEqual(selected, ["a/bundle.bundle", "a/font.ttf", "a/pic.PNG"])
 
+    def test_windows_icon_files_are_audited(self):
+        # The regression: `.ico` was absent, so the launcher icon embedded into
+        # the Windows executable was never enumerated at all.
+        selected = AUDIT_MODULE.redistributed_assets(
+            ["runner/resources/app_icon.ico", "a/LEGACY.ICO", "a/notes.txt"]
+        )
+        self.assertEqual(selected, ["a/LEGACY.ICO", "runner/resources/app_icon.ico"])
+
+
+def is_binary(path: Path) -> bool:
+    """Git's own heuristic: a NUL byte in the first 8000 bytes."""
+    with path.open("rb") as handle:
+        return b"\0" in handle.read(8000)
+
 
 class RepositoryTests(unittest.TestCase):
     def test_the_repository_currently_passes(self):
         # An audit nobody can satisfy gets disabled, so the committed tree must
         # be clean at the moment it lands.
         self.assertEqual(AUDIT_MODULE.audit(), [])
+
+    def test_every_binary_file_has_an_audited_suffix(self):
+        # ASSET_SUFFIXES is a closed list, so a binary type it does not name is
+        # skipped silently instead of failing. That is how `app_icon.ico`
+        # escaped. Reading the bytes catches the next such type when it lands.
+        unaudited = []
+        for path in AUDIT_MODULE.repository_files():
+            file = AUDIT_MODULE.ROOT / path
+            if file.is_symlink() or not file.is_file() or not is_binary(file):
+                continue
+            if Path(path).suffix.lower() not in AUDIT_MODULE.ASSET_SUFFIXES:
+                unaudited.append(path)
+        self.assertEqual(
+            unaudited,
+            [],
+            "binary files whose suffix ASSET_SUFFIXES does not name; add the "
+            "suffix, then record each file in THIRD_PARTY_NOTICES.md",
+        )
+
+    def test_the_windows_launcher_icon_is_audited_and_recorded(self):
+        icon = "apps/topiaforge_launcher_flutter/windows/runner/resources/app_icon.ico"
+        self.assertEqual(AUDIT_MODULE.redistributed_assets([icon]), [icon])
+        notices = (AUDIT_MODULE.ROOT / AUDIT_MODULE.NOTICES).read_text(
+            encoding="utf-8"
+        )
+        self.assertIsNotNone(AUDIT_MODULE.coverage_for(icon, notices))
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@
     "third_party/BepInEx/provenance.json"
   ],
   "versioning": {
-    "productVersion": "0.2.0",
+    "productVersion": "0.2.0-rc.1",
     "componentVersionsAreIndependent": true,
     "rollback": "none-initial-release"
   },

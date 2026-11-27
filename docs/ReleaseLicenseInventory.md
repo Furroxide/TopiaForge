@@ -23,6 +23,7 @@ This supersedes the earlier MIT declaration.
 | Surface | Declaration and placement |
 | --- | --- |
 | Repository and platform archives | Root `LICENSE`; release packaging copies `LICENSE` and `DCO` beside the product payload. |
+| Game-side loader | A `licenses` folder beside the loader assemblies wherever they are placed: the payload's loader directory, the Windows archive-root overlay, and the game's plugin folder after launcher install or repair. It holds `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the font and .NET texts; release validation and runtime repair both require it. |
 | Fourteen first-party mods | SPDX `AGPL-3.0-or-later` and package-relative `LICENSE`; the packer injects the reviewed shared mod license into every first-party archive. |
 | Eleven SDK NuGet packages | `PackageLicenseExpression` is `AGPL-3.0-or-later` through the shared pack policy or an equivalent project declaration. |
 | VPM resolver and world companion | SPDX `AGPL-3.0-or-later` in each `package.json` with the complete license text in the package directory. |
@@ -62,6 +63,34 @@ and version inventory; it does not certify these checks or grant redistribution
 approval. The four non-game blocking approvals remain required before private
 preparation, and publication requires detached qualification of the exact
 candidate payloads and reviewed acceptance.
+
+## Release SBOM
+
+`release-sbom.spdx.json` (SPDX 2.3) describes each release-catalog component
+and, as a separate package related by `CONTAINS` from the component that ships
+it, every third-party component inside: the BepInEx runtime dependencies
+(UnityDoorstop as `LGPL-2.1-only`; HarmonyX, Harmony, MonoMod, and Mono.Cecil
+as `MIT`), the .NET runtime and NuGet assemblies, Flutter, the Dart SDK, the
+hosted pub packages each executable resolves from its tracked `pubspec.lock`,
+the OFL fonts, the CC0 launcher artwork, the TextMesh Pro resources, Material
+Icons, the Multiplayer mod's BouncyCastle and Concentus sources, and the SPDX License List Data.
+The records, and the repository file
+each license comes from, are in
+`apps/topiaforge_cli/lib/src/release_spdx_third_party_records.dart`.
+
+A third-party package declares the upstream license this repository records
+for that exact release, or `NOASSERTION` where it records none; a license
+recorded for one version is never assumed for another. Its concluded license
+and copyright are always `NOASSERTION`. A TopiaForge component that ships
+third-party packages declares `AGPL-3.0-or-later` for its own code and concludes
+`NOASSERTION` for the package as a whole. Multiplayer also declares the terms it lists for its
+vendored code. Purely first-party components conclude the project license.
+Metadata verification rejects an SBOM whose packages,
+third-party terms, or containment differ from this inventory.
+
+UnityDoorstop is recorded as `LGPL-2.1-only`, not `-or-later`. The vendored
+source archive's README licenses Doorstop 4 "under LGPLv2.1" without an "any
+later version" grant, and its sources carry no per-file notice.
 
 ## Contribution policy
 

@@ -1,18 +1,18 @@
-# Release readiness for 0.2.0
+# Release readiness for 0.2.0-rc.1
 
-The development target is 0.2.0. The [current register](../release/release-readiness.json)
+The first release target is 0.2.0-rc.1. The [current register](../release/release-readiness.json)
 is **blocked**: all five blocking gates remain unmet. This index distinguishes completed
 subitems from the evidence still required; it does not supply an approval or qualify an archive.
 
 The register is read from the exact candidate commit at `release/release-readiness.json`.
 Historical RC1 records remain in their frozen commits and Git history. Updating the current
-register's version does not change those records or transfer RC1 acceptance to 0.2.0.
+register's version preserves those records. The 0.2.0-rc.1 candidate requires its own acceptance.
 
 ## Blocking evidence
 
 | Gate | Recorded progress and scope | Evidence still required |
 | --- | --- | --- |
-| `P0-IP-01` | TopiaForge's own source has an approved AGPL-3.0-or-later licence. The 2026-08-24 web-art disposition accepts that subitem's risk for `0.x`. | The rights basis for naming, injection and compatibility extraction remains unresolved. The web-art disposition does not settle it. See [the IP entry](LaunchBlockers.md#p0-blockers). |
+| `P0-IP-01` | TopiaForge's own source has an approved AGPL-3.0-or-later licence. The launcher uses [recorded CC0 replacements](../THIRD_PARTY_NOTICES.md) for the three historical web images. | The rights basis for naming, injection, and compatibility extraction remains unresolved. The prior web images in Git history are a separate review question. See [the IP entry](LaunchBlockers.md#p0-blockers). |
 | `P0-OSS-01` | The 2026-08-24 source-inclusion repair and 2026-08-28 asset-coverage audit close engineering gaps. | Compliance review of the LGPL corresponding-source method, OFL/font treatment, notice placement and original terms; then verification of the final BOM, SBOM and archive bytes. See [the licence inventory](ReleaseLicenseInventory.md) and [the OSS entry](LaunchBlockers.md#p0-blockers). |
 | `P0-PRIV-01` | Loopback backend tests recorded on 2026-08-28 and 2026-09-08 cover failure and redaction paths. Multiplayer disclosure wording addresses a separate surface. | Authorization for RoboAPI use and approved destination, purpose, consent, authentication, cost, retention, deletion, training and incident-response disclosures, plus remaining native microphone checks. See [Privacy and capabilities](PrivacyAndCapabilities.md). Test results and multiplayer wording do not provide these approvals. |
 | `P0-CRED-01` | Affected local logs were removed on 2026-07-22, and a sanitized sentinel build was recorded. | A non-secret completion record for rotation and revocation of every credential exposed in the historical Xcode logs, confirmation that the old values no longer work, and the remaining least-privilege review. See [the credential entry](LaunchBlockers.md#p0-blockers). Never put credential values in evidence. |
@@ -25,10 +25,10 @@ unmet. Their status does not remove exact-candidate validation requirements.
 
 ## Distribution and candidate scope
 
-The 0.2.0 target is settled. As of 2026-11-16, explicit unsigned Windows distribution
+The 0.2.0-rc.1 target uses the Windows x64 distribution policy. As of 2026-11-16, explicit unsigned Windows distribution
 is permitted for stable and prerelease `0.x` builds. No certificate may be pinned in
 unsigned mode; `1.0` and later still require signing. Windows may show an
-unrecognized-publisher or SmartScreen warning. The [release notes](../release/notes/v0.2.0.md)
+unrecognized-publisher or SmartScreen warning. The [release notes](../release/notes/v0.2.0-rc.1.md)
 disclose that the executables are not code-signed. Exact unsigned artifact checks,
 signed update metadata and all other release gates remain required.
 
