@@ -14,6 +14,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TextMeshProUGUI text;
         private readonly TopiaForgeTextStyle style;
         private TopiaForgeTone tone = TopiaForgeTone.Neutral;
+        private UiPaintRole backdrop = UiPaintRole.Surface;
         private bool hasCustomColor;
         private bool uppercase;
         private string lastText;
@@ -74,6 +75,13 @@ namespace TopiaForge.Mods.UnityUi
             tone = value;
             hasCustomColor = false;
             text.color = ToneOn(Theme);
+        }
+
+        internal void SetBackdrop(UiPaintRole role)
+        {
+            if (backdrop == role) return;
+            backdrop = role;
+            if (!hasCustomColor) text.color = ToneOn(Theme);
         }
 
         /// <summary>Aligns this element to the center.</summary>
@@ -279,9 +287,24 @@ namespace TopiaForge.Mods.UnityUi
 
         // A display face is large brand type and keeps its tone's own color; every other style is body text, whose status
         // tones the theme darkens until they read on every surface.
-        private Color ToneOn(TopiaForgeResolvedTheme theme) =>
-            theme.Descriptor == null && TopiaForgeTokens.IsDisplay(style)
+        private Color ToneOn(TopiaForgeResolvedTheme theme)
+        {
+            if (backdrop != UiPaintRole.Surface && theme.Descriptor != null)
+            {
+                return theme.ForegroundOn(backdrop, tone switch
+                {
+                    TopiaForgeTone.Muted or TopiaForgeTone.Faint => UiTone.Muted,
+                    TopiaForgeTone.Primary => UiTone.Primary,
+                    TopiaForgeTone.Accent => UiTone.Accent,
+                    TopiaForgeTone.Success => UiTone.Success,
+                    TopiaForgeTone.Warning => UiTone.Warning,
+                    TopiaForgeTone.Danger => UiTone.Danger,
+                    _ => UiTone.Neutral,
+                });
+            }
+            return theme.Descriptor == null && TopiaForgeTokens.IsDisplay(style)
                 ? theme.ToneColor(tone) : theme.TextToneColor(tone);
+        }
 
         private void ApplyTypeface(TopiaForgeResolvedTheme theme)
         {

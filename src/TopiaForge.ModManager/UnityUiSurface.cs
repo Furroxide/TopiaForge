@@ -18,7 +18,14 @@ namespace TopiaForge.ModManager
             private TopiaForgeFullscreenTool? fullscreen;
             private TopiaForgeLabel? body;
             private TopiaForgeContainer? compositionParent;
+            private readonly ScrollRect? outerScroll;
             private TopiaForgeContainer? compositionRoot;
+            private UnityUiLayoutRenderer? layoutRenderer;
+            private TopiaForgeContainer? layoutFallback;
+            private UiThemeDescriptor? declaredTheme;
+            private bool remoteComposition;
+            private int bodyVersion;
+            private string? sentBody;
             private IReadOnlyDictionary<string, TopiaForgeGraphCanvas> retainedGraphs =
                 new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);
             private readonly IModLifetime lifetime;
@@ -54,6 +61,8 @@ namespace TopiaForge.ModManager
                 this.fullscreen = fullscreen;
                 this.body = body;
                 this.compositionParent = compositionParent;
+                outerScroll = window != null || fullscreen != null
+                    ? compositionParent.Go.GetComponentInParent<ScrollRect>(includeInactive: true) : null;
                 this.presence = presence;
                 this.lifetime = lifetime;
                 this.logger = logger;
@@ -132,10 +141,13 @@ namespace TopiaForge.ModManager
             }
 
             /// <summary>Docks the HUD's panel through the process-wide placement, which stacks HUDs sharing a corner.</summary>
-            public void AttachDock(UnityUiHudPlacement hudPlacement, int handle)
+            public void AttachDock(UnityUiHudPlacement hudPlacement, int handle, TopiaForgeLabel title, string titleText)
             {
                 placement = hudPlacement;
                 dockHandle = handle;
+                hudTitle = title;
+                hudTitleText = titleText;
+                ObserveLayout();
             }
 
             public void SetBody(string value)
@@ -147,10 +159,18 @@ namespace TopiaForge.ModManager
                     return;
                 }
 
-                label.SetText(value ?? string.Empty);
+                var next = value ?? string.Empty;
+                if (string.Equals(sentBody, next, StringComparison.Ordinal)) return;
+                label.SetText(next);
+                if (placement != null) label.SetShown(next.Length != 0 && layoutFallback == null);
+                sentBody = next;
+                bodyVersion++;
             }
 
             public OperationResult<bool> SetContent(UiNode content)
+                => SetComposition(content, declaredTheme, remoteComposition, changingTheme: false);
+
+            private OperationResult<bool> SetComposition(UiNode content, UiThemeDescriptor? descriptor, bool remote, bool changingTheme)
             {
                 UnityMainThreadGuard.AssertCurrent();
                 if (content == null) throw new ArgumentNullException(nameof(content));
@@ -177,11 +197,13 @@ namespace TopiaForge.ModManager
 
                 TopiaForgeContainer? next = null;
                 UiGraphRetentionTransaction? graphTransaction = null;
+                UnityUiLayoutRenderer? nextLayout = null;
                 ContentStamp stamp;
                 try
                 {
-                    stamp = new ContentStamp(view, callbacks.ClockEpoch());
-                    if (ReferenceEquals(content, admitted))
+                    stamp = new ContentStamp(view, callbacks.ClockEpoch(), bodyVersion, placement?.DockVersion ?? 0, OuterScrollViewport);
+                    var retained = ReferenceEquals(content, admitted);
+                    if (retained && !changingTheme)
                     {
                         if (!committedStamp.Matches(stamp))
                         {
@@ -194,11 +216,15 @@ namespace TopiaForge.ModManager
                     UiComposition.Validate(content);
                     if (window == null && fullscreen == null && UiComposition.ContainsInteractive(content))
                         return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "HUD surfaces are presentation-only.");
-                    UiClockBinding.Check(content, stamp.ClockEpoch);
+                    if (!retained) UiClockBinding.Check(content, stamp.ClockEpoch);
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
+                    next.SetShown(false);
+                    if (changingTheme) PrepareStagedTheme(next, descriptor);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
-                    RenderNode(content, next, callbacks, graphTransaction);
-                    UiClockBinding.Commit(content, stamp.ClockEpoch);
+                    nextLayout = UnityUiLayoutRenderer.Stage(content, next, MeasureContentArea(parent, view),
+                        descriptor ?? (remote ? null : UiThemePackParser.Default), callbacks, graphTransaction);
+                    graphTransaction.Transfer(next);
+                    if (!retained) UiClockBinding.Commit(content, stamp.ClockEpoch);
                 }
                 catch (ArgumentException exception)
                 {
@@ -217,9 +243,21 @@ namespace TopiaForge.ModManager
 
                 var previous = compositionRoot;
                 compositionRoot = next;
+                layoutRenderer = nextLayout;
                 admitted = content;
+                declaredTheme = descriptor;
+                remoteComposition = remote;
                 committedStamp = stamp;
                 retainedGraphs = graphTransaction!.Commit();
+                RemoveLayoutFallback();
+                next!.SetShown(true);
+                ObserveLayout();
+                try { SyncGraphConnections(); }
+                catch (Exception exception)
+                {
+                    try { logger.Error(exception, "TopiaForgeUi could not refresh the graph Connections controls."); }
+                    catch { }
+                }
                 try
                 {
                     previous?.Destroy();
@@ -233,12 +271,17 @@ namespace TopiaForge.ModManager
                     catch { }
                 }
 
+                RestoreOuterScrollOffset();
                 return ContentApplied;
             }
 
+            partial void SyncGraphConnections();
+            partial void ResetGraphConnections(bool retire);
+            partial void SuspendGraphConnections();
+
             private void RefreshRetainedComposition(TopiaForgeContainer root, string clockEpoch)
             {
-                // Theme updates already repaint live widgets. Keep their input state and scroll positions.
+                UpdateRetainedLayout(root);
                 LayoutRebuilder.MarkLayoutForRebuild(root.Rect);
                 if (!string.Equals(committedStamp.ClockEpoch, clockEpoch, StringComparison.Ordinal))
                 {
@@ -256,10 +299,16 @@ namespace TopiaForge.ModManager
                 private readonly int screenHeight;
                 private readonly float width;
                 private readonly float height;
+                private readonly int bodyVersion;
+                private readonly int dockVersion;
+                private readonly Rect outerScrollViewport;
 
-                internal ContentStamp(TopiaForgeWidget view, string clockEpoch)
+                internal ContentStamp(TopiaForgeWidget view, string clockEpoch, int bodyVersion, int dockVersion, Rect outerScrollViewport)
                 {
                     ClockEpoch = clockEpoch;
+                    this.bodyVersion = bodyVersion;
+                    this.dockVersion = dockVersion;
+                    this.outerScrollViewport = outerScrollViewport;
                     theme = view.ResolvedTheme;
                     screenWidth = Screen.width;
                     screenHeight = Screen.height;
@@ -274,7 +323,10 @@ namespace TopiaForge.ModManager
                     string.Equals(ClockEpoch, other.ClockEpoch, StringComparison.Ordinal)
                     && ReferenceEquals(theme, other.theme)
                     && screenWidth == other.screenWidth && screenHeight == other.screenHeight
-                    && width.Equals(other.width) && height.Equals(other.height);
+                    && width.Equals(other.width) && height.Equals(other.height) && bodyVersion == other.bodyVersion
+                    && dockVersion == other.dockVersion
+                    && outerScrollViewport.width.Equals(other.outerScrollViewport.width)
+                    && outerScrollViewport.height.Equals(other.outerScrollViewport.height);
             }
 
             private static string RollbackFailedRender(

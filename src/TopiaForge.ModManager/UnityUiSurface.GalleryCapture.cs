@@ -56,8 +56,9 @@ namespace TopiaForge.ModManager
                     var view = widget;
                     if (!ReferenceEquals(original, admitted) || tree == null || view == null || !presence.IsLive)
                         return true;
-                    if (!IsVisible || !tree.Go.activeInHierarchy || !canvas.isActiveAndEnabled ||
-                        tree.Rect.rect.width <= 0 || tree.Rect.rect.height <= 0 ||
+                    var notice = layoutProblem != null ? layoutFallback : null;
+                    if (!IsVisible || (notice == null && (!tree.Go.activeInHierarchy ||
+                            tree.Rect.rect.width <= 0 || tree.Rect.rect.height <= 0)) || !canvas.isActiveAndEnabled ||
                         Screen.width <= 0 || Screen.height <= 0 || canvas.scaleFactor <= 0 ||
                         !Mathf.Approximately(view.Rect.localScale.x, 1f) || !Mathf.Approximately(view.Rect.localScale.y, 1f))
                         return false;
@@ -66,16 +67,20 @@ namespace TopiaForge.ModManager
                     if (visibility != null && visibility.alpha < 0.999f ||
                         scroll != null && scroll.velocity.sqrMagnitude > 0.01f)
                         return false;
-                    var nativeTheme = tree.ResolvedTheme;
+                    var nativeTheme = (notice ?? tree).ResolvedTheme;
                     var effective = nativeTheme.Descriptor ?? UiThemePackParser.Default;
                     var requestedId = envelope?.ThemeId ?? declared?.Id;
                     var requestedDigest = envelope?.DescriptorDigest ?? declared?.Digest;
-                    var fallback = requestedId != null && (effective.Id != requestedId || !requestedDigest.HasValue ||
-                        !requestedDigest.Value.Span.SequenceEqual(effective.Digest.Span));
+                    var fallback = notice != null || (requestedId != null && (effective.Id != requestedId || !requestedDigest.HasValue ||
+                        !requestedDigest.Value.Span.SequenceEqual(effective.Digest.Span)));
                     if (fallback && !permitFallback) return false;
 
                     var recorder = new UiGalleryNativeTree(canvas, nativeTheme, tree.Host.EffectiveAccessibility, fallback);
-                    if (!recorder.TryCapture(fixture, view.Rect, tree.Rect, out var resolved)) return false;
+                    var captured = notice != null
+                        ? recorder.TryCaptureLayoutNotice(fixture, view.Rect, notice.Rect, layoutProblem!, out var resolved,
+                            hudNoticeOverflowing ? overflowToast : null)
+                        : recorder.TryCapture(fixture, view.Rect, tree.Rect, out resolved, graphConnections);
+                    if (!captured) return false;
                     var who = envelope != null ? "remote-guest" : viewer?.Invoke() switch
                     {
                         NetRealm.ListenHost => "listen-host",

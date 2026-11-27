@@ -1,3 +1,4 @@
+using System;
 using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -24,20 +25,34 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
-        internal static void Install(TopiaForgeWidget widget)
+        internal static Action<UiPaintRole>? Install(TopiaForgeWidget widget, UiPaintRole backdrop)
         {
+            Action<UiPaintRole>? repaint = null;
             foreach (var control in widget.Go.GetComponentsInChildren<Selectable>(includeInactive: true))
-                Install(widget, control);
+                repaint += Install(widget, control, backdrop);
+            return repaint;
         }
 
-        internal static TopiaForgeControlFocus? Install(TopiaForgeWidget widget, Selectable control,
-            UiPaintRole backdrop = UiPaintRole.Surface) =>
-            control.GetComponent<TopiaForgeControlFocusEvents>() == null ? new TopiaForgeControlFocus(widget, control, backdrop) : null;
+        internal static TopiaForgeControlFocus? Install(TopiaForgeWidget widget, Selectable control) =>
+            control.GetComponent<TopiaForgeControlFocusEvents>() == null
+                ? new TopiaForgeControlFocus(widget, control, UiPaintRole.Surface) : null;
 
         internal void SetBackdrop(TopiaForgeResolvedTheme theme, UiPaintRole role)
         {
             backdrop = role;
             image.color = theme.FocusOn(role);
+        }
+
+        internal static Action<UiPaintRole>? Install(TopiaForgeWidget widget, Selectable control, UiPaintRole backdrop)
+        {
+            if (control.GetComponent<TopiaForgeControlFocusEvents>() != null) return null;
+            var focus = new TopiaForgeControlFocus(widget, control, backdrop);
+            return focus.SetBackdrop;
+        }
+
+        private void SetBackdrop(UiPaintRole role)
+        {
+            if (backdrop != role) SetBackdrop(Theme, role);
         }
 
         public void ApplyTheme(TopiaForgeResolvedTheme theme)

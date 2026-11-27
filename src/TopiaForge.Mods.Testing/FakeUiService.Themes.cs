@@ -93,6 +93,7 @@ namespace TopiaForge.Mods.Testing
         {
             gameThread.AssertCurrent();
             themeScope.Package.Advance();
+            RefreshHudLayoutNotices();
         }
 
         internal FakeUiService CreateThemeScope(FakeModLifetime childLifetime)
@@ -102,7 +103,7 @@ namespace TopiaForge.Mods.Testing
             if (ReferenceEquals(childLifetime, lifetime)) throw new ArgumentException("A child needs its own lifetime.", nameof(childLifetime));
             var lease = lifetime.Track(childLifetime);
             childLifetime.StoppingToken.Register(lease.Dispose);
-            return new FakeUiService(childLifetime, gameThread, themeScope);
+            return new FakeUiService(childLifetime, gameThread, themeScope, HudPackageDisplayName);
         }
 
         internal FakeUiThemeResolution ResolveTheme(UiThemeRef? theme) => themeScope.Package.Resolve(themeScope, theme);

@@ -35,6 +35,11 @@ namespace TopiaForge.Mods
 
         private static void WriteNode(IUiWireWriter w, UiNode? node, string clockEpoch, bool retained, ref bool hasCountdown)
         {
+            if (node != null && IsEnhancedLayout(node))
+            {
+                WriteLayoutNode(w, node, clockEpoch, retained, ref hasCountdown);
+                return;
+            }
             switch (node)
             {
                 case null: w.WriteByte(0); break;
@@ -75,10 +80,11 @@ namespace TopiaForge.Mods
                 default: throw new ArgumentException(node.GetType().Name + " cannot be sent to a player. Use supported declarative UI nodes.");
             }
         }
-        private static void Children(IUiWireWriter w, UiLayoutNode node, string clockEpoch, bool retained, ref bool hasCountdown)
+        private static void Children(IUiWireWriter w, UiNode node, string clockEpoch, bool retained, ref bool hasCountdown)
         {
-            w.WriteVarUInt((ulong)node.Children.Count);
-            for (var i = 0; i < node.Children.Count; i++) WriteNode(w, node.Children[i], clockEpoch, retained, ref hasCountdown);
+            var children = UiNodeChildren.Of(node);
+            w.WriteVarUInt((ulong)children.Count);
+            for (var i = 0; i < children.Count; i++) WriteNode(w, children[i], clockEpoch, retained, ref hasCountdown);
         }
 
         private static void WriteText(IUiWireWriter w, string text, UiTextStyle style, UiTone tone, string? id)
@@ -124,32 +130,23 @@ namespace TopiaForge.Mods
 
         internal static bool Invoke(UiNode? node, string id, string value)
         {
-            if (node == null) return false;
-            if (node.Id == id)
+            if (!UiLayoutTree.TryFind(node, id, out var control, out var disabled) || disabled) return false;
+            switch (control)
             {
-                switch (node)
-                {
-                    case UiButton b when b.Enabled && value.Length == 0: b.Activated(); return true;
-                    case UiToggle t when t.Enabled && (value == "0" || value == "1"): t.Changed(value == "1"); return true;
-                    case UiSlider s when s.Enabled && float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && Finite(number) && number >= s.Minimum && number <= s.Maximum:
-                        s.Changed(number); return true;
-                    case UiTextInput t when t.Enabled && value.Length <= t.MaximumLength: t.Changed(value); return true;
-                    case UiDropdown d when d.Enabled:
-                        for (var i = 0; i < d.Choices.Count; i++) if (d.Choices[i].Value == value) { d.Changed(value); return true; }
-                        return false;
-                    case UiVirtualList l when l.Enabled:
-                        for (var i = 0; i < l.Items.Count; i++) if (l.Items[i].Id == value) { l.Selected(value); return true; }
-                        return false;
-                }
-                return false;
+                case UiButton b when value.Length == 0: b.Activated(); return true;
+                case UiToggle t when value == "0" || value == "1": t.Changed(value == "1"); return true;
+                case UiSlider s when float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) &&
+                    Finite(number) && number >= s.Minimum && number <= s.Maximum:
+                    s.Changed(number); return true;
+                case UiTextInput t when value.Length <= t.MaximumLength: t.Changed(value); return true;
+                case UiDropdown d:
+                    for (var i = 0; i < d.Choices.Count; i++) if (d.Choices[i].Value == value) { d.Changed(value); return true; }
+                    return false;
+                case UiVirtualList l:
+                    for (var i = 0; i < l.Items.Count; i++) if (l.Items[i].Id == value) { l.Selected(value); return true; }
+                    return false;
+                default: return false;
             }
-            if (node is UiLayoutNode layout)
-            {
-                for (var i = 0; i < layout.Children.Count; i++) if (Invoke(layout.Children[i], id, value)) return true;
-            }
-            else if (node is UiScroll scroll) return Invoke(scroll.Content, id, value);
-            else if (node is UiSplitPane split) return Invoke(split.Primary, id, value) || Invoke(split.Secondary, id, value);
-            return false;
         }
     }
 }

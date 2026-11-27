@@ -106,6 +106,8 @@ namespace TopiaForge.Zombies
         internal const string WaveNodeId = "zombies-wave";
         internal const string ScoreNodeId = "zombies-score";
         internal const string DetailsNodeId = "zombies-details";
+        internal const string IntegrityNodeId = "zombies-integrity";
+        internal const string CreditsNodeId = "zombies-credits";
 
         private readonly IUiSurface surface;
         private readonly IModLogger logger;
@@ -201,13 +203,29 @@ namespace TopiaForge.Zombies
                 score += "  x" + value.ComboMultiplier.ToString(CultureInfo.InvariantCulture);
             }
 
+            var integrity = new UiText("INTEGRITY  " + value.Integrity.ToString(CultureInfo.InvariantCulture)
+                + " / " + value.MaximumIntegrity.ToString(CultureInfo.InvariantCulture),
+                UiTextStyle.Label, id: IntegrityNodeId);
+            var supplies = value.ShopEnabled ? new UiNode[]
+            {
+                integrity,
+                new UiText("CREDITS  " + value.Credits.ToString(CultureInfo.InvariantCulture),
+                    UiTextStyle.Label, id: CreditsNodeId),
+            } : new UiNode[] { integrity };
+
             return new UiColumn(
-                new UiText(phase, UiTextStyle.Title, UiTone.Primary, PhaseNodeId),
-                new UiRow(
+                new UiCard(new UiRow(new UiNode[]
+                {
                     new UiText("WAVE  " + value.Wave.ToString(CultureInfo.InvariantCulture),
                         UiTextStyle.Label, id: WaveNodeId),
-                    new UiText(score, UiTextStyle.Numeral, id: ScoreNodeId)),
-                new UiText(BuildDetails(value), id: DetailsNodeId));
+                    new UiText(score, UiTextStyle.Numeral, id: ScoreNodeId),
+                }, new UiFlexLayout(spacing: UiSpace.Lg)),
+                    header: new UiText(phase, UiTextStyle.Title, UiTone.Primary, PhaseNodeId),
+                    padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-wave-card"),
+                new UiCard(new UiColumn(
+                    new UiWrap(supplies, spacing: UiSpace.Lg, runSpacing: UiSpace.Xs),
+                    new UiText(BuildDetails(value), id: DetailsNodeId)),
+                    padding: new UiInsets(UiSpace.Md, UiSpace.Sm), id: "zombies-supplies-card"));
         }
 
         private string BuildDetails(in ZombiesHudSnapshot value)
@@ -224,17 +242,9 @@ namespace TopiaForge.Zombies
                 text.Append("    ALLIES  ").Append(value.Allies.ToString(CultureInfo.InvariantCulture));
             }
 
-            text.Append("\nINTEGRITY  ").Append(value.Integrity.ToString(CultureInfo.InvariantCulture))
-                .Append(" / ").Append(value.MaximumIntegrity.ToString(CultureInfo.InvariantCulture));
-
-            if (value.ShopEnabled)
-            {
-                text.Append("\nCREDITS  ").Append(value.Credits.ToString(CultureInfo.InvariantCulture));
-            }
-
             if (value.UplinkAvailable)
             {
-                text.Append(value.ShopEnabled ? "    UPLINK  " : "\nUPLINK  ")
+                text.Append("    UPLINK  ")
                     .Append(value.UplinkCharges.ToString(CultureInfo.InvariantCulture))
                     .Append(" / ").Append(value.MaximumUplinkCharges.ToString(CultureInfo.InvariantCulture));
             }

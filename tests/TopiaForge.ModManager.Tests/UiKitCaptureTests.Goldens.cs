@@ -63,7 +63,8 @@ namespace TopiaForge.ModManager.Tests
                     foreach (var useHud in new[] { false, true })
                         foreach (var guest in new[] { false, true })
                         {
-                            var interactive = page == FoundationPage.InteractionStates;
+                            var graphConnections = page == FoundationPage.GraphConnections;
+                            var interactive = page == FoundationPage.InteractionStates || graphConnections;
                             var kind = useHud && !interactive ? UiSurfaceKind.Hud : UiSurfaceKind.Window;
                             using var lifetime = new FakeModLifetime();
                             using var players = guest ? new FakePlayerDirectory() : null;
@@ -88,9 +89,15 @@ namespace TopiaForge.ModManager.Tests
                                             var viewport = new UiCaptureViewport(size.Width, size.Height);
                                             Check(ui.ApplyAccessibility(new UiAccessibilityPreferences(highContrast, scale, reducedMotion)).Succeeded,
                                                 "Apply viewer-local capture preferences.");
-                                            var states = interactive ? new[] { "Rest", "Hovered", "Focused", "Selected", "Pressed", "SelectedPressed" } : new[] { "Rest" };
+                                            var states = graphConnections ? new[] { "Rest", "Focused" }
+                                                : interactive ? new[] { "Rest", "Hovered", "Focused", "Selected", "Pressed", "SelectedPressed" } : new[] { "Rest" };
                                             foreach (var state in states)
                                             {
+                                                if (graphConnections)
+                                                {
+                                                    if (state == "Rest") CloseGraphConnections(surface);
+                                                    else Check(OpenGraphConnections(surface, viewport), "The Graph Connections fixture opens its measured list.");
+                                                }
                                                 var contrast = highContrast ? "high" : "standard";
                                                 var motion = reducedMotion ? "reduced" : "full";
                                                 var id = FormattableString.Invariant($"{page}/{theme}/{scheme}/{contrast}/{size.Width}x{size.Height}/{scale}/{route}/{motion}/{state}");
@@ -101,6 +108,7 @@ namespace TopiaForge.ModManager.Tests
                                         }
                         }
 
+            AddLayoutNoticeCases(cases, dimensions, declaration, ReadFixture);
             Check(survival != null && survival.Id == "survival", "The sample theme must be resolved from the real Gallery fixture.");
             return JsonSerializer.Serialize(new
             {
@@ -147,8 +155,11 @@ namespace TopiaForge.ModManager.Tests
         {
             using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             var first = CaptureForFixture(surface, viewport, state, 0f, hudScheme);
+            var initialIssues = first.CheckAccessibility();
+            Check(initialIssues.Count == 0, caseId + ": " + string.Join(", ", initialIssues.Select(issue => issue.Kind + " at " + issue.Path)));
             var panel = first.Nodes[0];
-            var children = first.Nodes.Single(node => node.Path == "/0");
+            var children = first.Nodes.Single(node => node.Path == "/0" || node.Path.StartsWith("/0:", StringComparison.Ordinal)
+                && node.Path.IndexOf('/', 3) < 0);
             var bodyHeight = panel.Y + panel.Height - children.Y - 12f * offsetScale;
             var step = Math.Max(40, bodyHeight * 0.72f) / offsetScale;
             var maxOffset = Math.Max(0, children.Height - bodyHeight) / offsetScale;

@@ -4,7 +4,7 @@ using TopiaForge.Mods.UnityUi;
 namespace TopiaForge.ModManager.Sessions
 {
     /// <summary>The same fading HUD log and kit text composer in the game and the gallery. No native input is disabled.</summary>
-    internal sealed class ChatOverlay : ITopiaForgeDismissable, IDisposable
+    internal sealed partial class ChatOverlay : ITopiaForgeDismissable, IDisposable
     {
         private readonly IInSessionScreen screen;
         private readonly TopiaForgeContainer root;

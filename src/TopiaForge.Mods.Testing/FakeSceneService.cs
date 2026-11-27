@@ -103,6 +103,13 @@ namespace TopiaForge.Mods.Testing
             }
         }
 
+        internal event Action? GameplayVisibilityChanged;
+
+        private void NotifyGameplayVisibility(bool wasGameplay)
+        {
+            if (wasGameplay != IsGameplay) GameplayVisibilityChanged?.Invoke();
+        }
+
         /// <summary>Gets the number of active checkpoint subscriptions.</summary>
         public int ActiveCheckpointSubscriptionCount => checkpointHandlers.Count;
 
@@ -213,7 +220,9 @@ namespace TopiaForge.Mods.Testing
                 cancellationToken,
                 lifetime.StoppingToken);
             var operation = new ControlledOperation<SceneSnapshot>(linked.Token);
+            var wasGameplay = IsGameplay;
             pending.Enqueue(new PendingLoad(request, operation, linked));
+            NotifyGameplayVisibility(wasGameplay);
             return operation.Task;
         }
 
@@ -253,11 +262,13 @@ namespace TopiaForge.Mods.Testing
                 return true;
             }
 
+            var wasGameplay = IsGameplay;
             for (var index = 0; index < loaded.Count; index++)
             {
                 loaded[index].IsActive = index == targetIndex;
             }
 
+            NotifyGameplayVisibility(wasGameplay);
             events.RaiseSceneActivated(
                 new SceneLoadEvent(target.SceneName, target.Mode, isActive: true),
                 target.SceneInstanceId);
@@ -267,6 +278,7 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Successfully completes the oldest manually pending scene load.</summary>
         public bool CompleteNextLoad()
         {
+            var wasGameplay = IsGameplay;
             if (!TryTakePending(out var item))
             {
                 return false;
@@ -274,7 +286,7 @@ namespace TopiaForge.Mods.Testing
 
             try
             {
-                var snapshot = Apply(item.Request);
+                var snapshot = Apply(item.Request, wasGameplay);
                 item.Operation.Succeed(snapshot);
                 return true;
             }
@@ -287,6 +299,7 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Fails the oldest manually pending scene load.</summary>
         public bool FailNextLoad(ModErrorCode errorCode, string message)
         {
+            var wasGameplay = IsGameplay;
             if (!TryTakePending(out var item))
             {
                 return false;
@@ -294,6 +307,7 @@ namespace TopiaForge.Mods.Testing
 
             try
             {
+                NotifyGameplayVisibility(wasGameplay);
                 item.Operation.Fail(errorCode, message);
                 return true;
             }
@@ -303,8 +317,9 @@ namespace TopiaForge.Mods.Testing
             }
         }
 
-        private SceneSnapshot Apply(SceneLoadRequest request)
+        private SceneSnapshot Apply(SceneLoadRequest request, bool? wasGameplay = null)
         {
+            var priorVisibility = wasGameplay ?? IsGameplay;
             if (request.Mode == SceneLoadMode.Single)
             {
                 var replaced = new List<LoadedScene>(loaded);
@@ -324,6 +339,7 @@ namespace TopiaForge.Mods.Testing
             var snapshot = scene.ToSnapshot();
             loaded.Add(scene);
             history.Add(request.SceneName);
+            NotifyGameplayVisibility(priorVisibility);
             events.RaiseSceneLoaded(
                 new SceneLoadEvent(request.SceneName, request.Mode, isActive),
                 sceneInstanceId,
@@ -356,6 +372,7 @@ namespace TopiaForge.Mods.Testing
 
         private void CancelPendingLoads()
         {
+            GameplayVisibilityChanged = null;
             // Owner shutdown suppresses consumer results, but mirrors production by retaining already-dispatched
             // native replacements until the backend completion control consumes them.
             foreach (var item in pending)

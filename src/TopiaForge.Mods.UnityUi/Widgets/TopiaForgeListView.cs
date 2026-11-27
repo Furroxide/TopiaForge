@@ -12,7 +12,7 @@ namespace TopiaForge.Mods.UnityUi
     /// visible range as the view scrolls, so a 1,000-item list costs a dozen rows. The
     /// visible-range math lives in the unit-tested Core (TopiaForgeVirtualListMath).
     /// </summary>
-    public sealed class TopiaForgeListView<T> : TopiaForgeWidget
+    public sealed partial class TopiaForgeListView<T> : TopiaForgeWidget
     {
         private const float Spacing = 4f;
 
@@ -32,6 +32,7 @@ namespace TopiaForge.Mods.UnityUi
         private float declaredViewportHeight;
         private bool hasViewportLayout;
         private bool enabledState = true;
+        private UiPaintRole rowBackdrop;
 
         private float RowSpacing => declarativeRows ? UiVirtualListGeometry.Spacing : Spacing;
         private float RowGutter => declarativeRows ? UiVirtualListGeometry.Gutter : 0f;
@@ -147,10 +148,19 @@ namespace TopiaForge.Mods.UnityUi
                 foreach (var row in pool) row.SetDeclarativeEnabled(enabled);
         }
 
-        internal void UseDeclarativeRows(int visibleRows)
+        internal void UseDeclarativeRows(int visibleRows, UiPaintRole backdrop)
         {
             declarativeRows = true;
             declaredViewportHeight = UiVirtualListGeometry.Height(visibleRows);
+            rowBackdrop = backdrop;
+            Go.GetComponent<TopiaForgeListViewRuntime>().UseDeclarativeLayout(RequireRowWidth, PlaceRows);
+        }
+
+        internal void SetRowBackdrop(UiPaintRole role)
+        {
+            if (rowBackdrop == role) return;
+            rowBackdrop = role;
+            foreach (var row in pool) row.SetDeclarativeBackdrop(role);
         }
 
         private void SetSelection(int index, bool notify)
@@ -239,6 +249,7 @@ namespace TopiaForge.Mods.UnityUi
                 poolBinding[poolIndex] = itemIndex;
                 row.SetSelected(itemIndex == selectedIndex);
                 TopiaForgeCallbacks.Invoke(binder, row, items[itemIndex], itemIndex, "List row binding");
+                if (declarativeRows) PlacePooledRow(row, itemIndex);
             }
         }
 
@@ -265,7 +276,7 @@ namespace TopiaForge.Mods.UnityUi
                 row.Rect.anchorMax = new Vector2(1f, 1f);
                 row.Rect.pivot = new Vector2(0.5f, 1f);
                 row.Rect.sizeDelta = new Vector2(-2f * RowGutter, rowHeight);
-                if (declarativeRows) row.UseDeclarativePaint(enabledState);
+                if (declarativeRows) row.UseDeclarativePaint(enabledState, rowBackdrop);
                 row.OnClick(() =>
                 {
                     var bound = poolBinding[poolIndex];

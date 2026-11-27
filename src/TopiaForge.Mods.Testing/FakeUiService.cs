@@ -28,10 +28,12 @@ namespace TopiaForge.Mods.Testing
         /// </summary>
         public FakeUiService(FakeModLifetime lifetime) : this(lifetime, default(FakeGameThread)) { }
 
-        internal FakeUiService(FakeModLifetime lifetime, FakeGameThread gameThread, FakeUiThemeScope? parentThemeScope = null)
+        internal FakeUiService(FakeModLifetime lifetime, FakeGameThread gameThread, FakeUiThemeScope? parentThemeScope = null,
+            string? hudPackageDisplayName = null)
         {
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
             this.gameThread = gameThread;
+            HudPackageDisplayName = hudPackageDisplayName;
             themeScope = new FakeUiThemeScope(lifetime, gameThread, parentThemeScope);
             surfaceView = surfaces.AsReadOnly();
             modalView = modals.AsReadOnly();
@@ -93,7 +95,13 @@ namespace TopiaForge.Mods.Testing
                     "The fake mod is stopping and cannot change UI accessibility preferences.");
             }
 
+            var geometryChanged = preferences.UiScale != accessibility.UiScale || preferences.HighContrast != accessibility.HighContrast;
             accessibility = preferences;
+            if (geometryChanged)
+            {
+                foreach (var surface in surfaces) surface.RevalidateGraphConnections();
+                RefreshHudLayoutNotices();
+            }
             return OperationResult<UiAccessibilityPreferences>.Success(accessibility);
         }
 
@@ -137,18 +145,6 @@ namespace TopiaForge.Mods.Testing
             if (!themeCheck.Succeeded)
                 return OperationResult<IUiSurface>.Failure(themeCheck.ErrorCode, themeCheck.ErrorMessage);
 
-            var epoch = WidgetEpoch();
-            try
-            {
-                wireTarget?.Measure(this, 1, request, request.Body, visible: true, request.Content, epoch, retained: false);
-                UiClockBinding.Bind(request.Content, epoch);
-            }
-            catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
-            catch (InvalidOperationException) when (wireTarget.HasValue)
-            {
-                return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "The remote UI surface exceeds its packet budget.");
-            }
-
             var scenesNow = scenes;
             var surface = new FakeUiSurface(
                 request,
@@ -157,6 +153,19 @@ namespace TopiaForge.Mods.Testing
                 scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay,
                 wireTarget);
             surface.SetClock(() => widgetClock(), () => WidgetEpoch());
+            var epoch = WidgetEpoch();
+            try
+            {
+                wireTarget?.Measure(this, 1, request, request.Body, visible: true, request.Content, epoch, retained: false);
+                FakeUiTreeCapture.VerifyComposition(this, surface, request.Content);
+                UiClockBinding.Bind(request.Content, epoch);
+            }
+            catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
+            catch (InvalidOperationException) when (wireTarget.HasValue)
+            {
+                return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "The remote UI surface exceeds its packet budget.");
+            }
+
             if (pendingContentFailures.TryGetValue(request.Id, out var contentFailure))
             {
                 pendingContentFailures.Remove(request.Id);
@@ -168,6 +177,7 @@ namespace TopiaForge.Mods.Testing
             {
                 surface.AttachLifetimeLease(lifetime.Track(surface));
                 themeScope.Package.AddSurface(themeScope, surface);
+                if (request.Kind == UiSurfaceKind.Hud) RefreshHudLayoutNotices();
                 return OperationResult<IUiSurface>.Success(surface);
             }
             catch (ObjectDisposedException)
@@ -246,13 +256,17 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Makes gameplay HUDs follow these fake scenes: shown only while they are in gameplay.</summary>
         internal void FollowScenes(FakeSceneService fakeScenes)
         {
-            scenes = fakeScenes ?? throw new ArgumentNullException(nameof(fakeScenes));
+            if (fakeScenes == null) throw new ArgumentNullException(nameof(fakeScenes));
+            if (scenes != null) scenes.GameplayVisibilityChanged -= RefreshHudLayoutNotices;
+            scenes = fakeScenes;
+            scenes.GameplayVisibilityChanged += RefreshHudLayoutNotices;
         }
 
         private void RemoveSurface(FakeUiSurface surface)
         {
             surfaces.Remove(surface);
             themeScope.Package.RemoveSurface(themeScope, surface);
+            if (surface.Request.Kind == UiSurfaceKind.Hud) RefreshHudLayoutNotices();
         }
 
         private readonly struct ContentFailure

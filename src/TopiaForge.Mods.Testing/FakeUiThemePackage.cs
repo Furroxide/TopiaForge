@@ -12,6 +12,8 @@ namespace TopiaForge.Mods.Testing
             OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The theme request ended before registration completed.");
         private static readonly OperationResult<bool> NotDeclared =
             OperationResult<bool>.Failure(ModErrorCode.NotFound, "The theme is not declared in this package.");
+        private static readonly OperationResult<bool> StyleMismatch =
+            OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "A named UI style must be declared for its component.");
         private static readonly Task<OperationResult<bool>> CancelledTask = Task.FromResult(Cancelled);
         private static readonly Task<OperationResult<bool>> ReadyTask = Task.FromResult(Success);
 
@@ -43,10 +45,39 @@ namespace TopiaForge.Mods.Testing
             {
                 var admitted = ValidateSelection(scope, theme);
                 if (!admitted.Succeeded) return admitted;
+                var changed = !Equals(scope.Selection, theme);
+                if (changed && !StylesCanInherit(scope, theme)) return StyleMismatch;
                 scope.Selection = theme;
                 Reconcile(theme?.Id);
+                if (changed) RevalidateOpenGraphs();
                 return Success;
             }
+        }
+
+        private void RevalidateOpenGraphs()
+        {
+            foreach (var scope in scopes)
+                foreach (var surface in scope.Surfaces)
+                    surface.RevalidateGraphConnections();
+        }
+
+        private bool StylesCanInherit(FakeUiThemeScope changed, UiThemeRef? proposed)
+        {
+            foreach (var scope in scopes)
+            {
+                if (scope.Surfaces.Count == 0) continue;
+                var prior = EffectiveId(scope, null);
+                var next = EffectiveId(scope, null, changed, proposed);
+                if (prior == next) continue;
+                var descriptor = next != null && registrations.TryGetValue(next, out var registration)
+                    ? registration.Definition.Descriptor : UiThemePackParser.Default;
+                foreach (var surface in scope.Surfaces)
+                {
+                    if (surface.Request.Theme != null) continue;
+                    if (!UiLayoutDecoration.AdmitsNamedStyles(surface.Content, descriptor)) return false;
+                }
+            }
+            return true;
         }
 
         internal OperationResult<bool> ValidateSelection(FakeUiThemeScope scope, UiThemeRef? theme)
@@ -128,6 +159,7 @@ namespace TopiaForge.Mods.Testing
         {
             lock (gate)
             {
+                var completed = false;
                 foreach (var registration in registrations.Values)
                 {
                     if (registration.State == FakeUiThemeLoadState.Draining)
@@ -137,6 +169,7 @@ namespace TopiaForge.Mods.Testing
                     }
 
                     if (registration.State != FakeUiThemeLoadState.Loading) continue;
+                    completed = true;
                     var result = Acquire(registration.Definition);
                     registration.Loaded = result.Value;
                     registration.State = result.Succeeded ? FakeUiThemeLoadState.Ready : FakeUiThemeLoadState.Failed;
@@ -147,6 +180,7 @@ namespace TopiaForge.Mods.Testing
 
                 // Reconcile only after the whole batch. An attempt made eligible by a drain does not complete this step.
                 Reconcile();
+                if (completed) RevalidateOpenGraphs();
             }
         }
 
@@ -229,13 +263,15 @@ namespace TopiaForge.Mods.Testing
             if (id != null && registrations.TryGetValue(id, out var registration)) demanded.Add(registration);
         }
 
-        private string? EffectiveId(FakeUiThemeScope scope, UiThemeRef? surfaceTheme)
+        private string? EffectiveId(FakeUiThemeScope scope, UiThemeRef? surfaceTheme,
+            FakeUiThemeScope? changed = null, UiThemeRef? proposed = null)
         {
             if (scope.Stopped) return null;
             if (surfaceTheme != null) return surfaceTheme.Id;
             for (FakeUiThemeScope? current = scope; current != null; current = current.Parent)
             {
-                if (current.Selection != null) return current.Selection.Id;
+                var selection = ReferenceEquals(current, changed) ? proposed : current.Selection;
+                if (selection != null) return selection.Id;
             }
             return manifestDefault;
         }

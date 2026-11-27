@@ -173,7 +173,10 @@ namespace TopiaForge.ModManager
                 }
                 else
                 {
-                    surface = CreateHud(request, ref nativeRoot);
+                    var packageName = remoteTheme is { } remote
+                        ? remote.Envelope != null ? remote.Package?.Manifest.Name : null
+                        : hudNoticePackageName;
+                    surface = CreateHud(request, packageName, ref nativeRoot);
                     nativeRoot = null;
                 }
 

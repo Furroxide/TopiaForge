@@ -76,6 +76,7 @@ namespace TopiaForge.Mods.UnityUi
             drag.Window = this;
 
             var titleBar = new TopiaForgeContainer(Host, Scheme, titleBarGo);
+            TitleBar = titleBar;
             var titleGo = titleBar.CreateChildGameObject("Title");
             titleLabel = TopiaForgeTmp.Create(titleGo);
             titleLabel.fontSize = TopiaForgeTokens.TitleSize;
@@ -122,6 +123,7 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Window body — add content here.</summary>
         public TopiaForgeContainer Content { get; }
+        internal TopiaForgeContainer TitleBar { get; }
 
         /// <summary>Gets whether the window is open.</summary>
         public bool IsOpen => open;
