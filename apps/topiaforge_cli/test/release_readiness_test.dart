@@ -12,6 +12,7 @@ part 'release_readiness_git_test_part.dart';
 /// Shared across both halves of this suite: the parts are one library, so the
 /// fixtures `setUpAll` fills are top-level rather than locals of `main`.
 const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const _releaseVersion = '0.2.0-rc.1';
 late String repositoryRoot;
 late List<int> readinessBytes;
 late List<int> schemaBytes;
@@ -30,7 +31,7 @@ void main() {
   test('current decision is an honest blocked exact-gate summary', () {
     final decision = _parse(readinessBytes, schemaBytes, targetSha: targetSha);
 
-    expect(decision.releaseVersion, '0.2.0');
+    expect(decision.releaseVersion, _releaseVersion);
     expect(decision.status, 'blocked');
     expect(decision.isReady, isFalse);
     expect(decision.gates, hasLength(12));
@@ -411,7 +412,7 @@ ReleaseReadinessDecision _parse(
     readinessBytes: readinessBytes,
     schemaBytes: schemaBytes,
     targetSha: targetSha,
-    expectedReleaseVersion: '0.2.0',
+    expectedReleaseVersion: _releaseVersion,
   );
 }
 

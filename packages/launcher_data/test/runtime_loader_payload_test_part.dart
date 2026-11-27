@@ -2,8 +2,14 @@ part of 'launcher_data_test.dart';
 
 void _registerRuntimeLoaderPayloadTests({
   required LocalLauncherRepository Function() repository,
+  required Directory Function() repositoryRoot,
   required Directory Function() gameRoot,
 }) {
+  _registerRuntimeLoaderNoticeTests(
+    repository: repository,
+    repositoryRoot: repositoryRoot,
+    gameRoot: gameRoot,
+  );
   const moduleAndInteropDlls = <String>[
     'TopiaForge.Mods.Chronos.dll',
     'TopiaForge.Mods.CreatorContent.dll',

@@ -6,6 +6,7 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
+import 'release_dart_runtime_packages.dart';
 import 'release_package_io.dart';
 
 /// Copies the license texts that correspond to the exact Dart packages linked
@@ -75,6 +76,10 @@ class ReleasePackageNoticeWriter {
 
   /// Copies and verifies notices for the exact managed validator dependencies
   /// that are installed beside the game-side loader.
+  ///
+  /// The texts come from their checked-in copies, which runtime repair also
+  /// installs from a source checkout, and each must match the pinned text of
+  /// the restored package.
   Future<void> copyRuntimeLoaderNotices(
     String destinationRoot, {
     String nugetPackagesRoot = '',
@@ -83,15 +88,13 @@ class ReleasePackageNoticeWriter {
     final destination = Directory(
       p.join(destinationRoot, 'third_party', 'dotnet', 'runtime-loader'),
     )..createSync(recursive: true);
-    final license = File(
-      p.join(
-        repositoryRoot,
-        'third_party',
-        'dotnet',
-        'runtime-loader',
-        'LICENSE.txt',
-      ),
+    final checkedIn = p.join(
+      repositoryRoot,
+      'third_party',
+      'dotnet',
+      'runtime-loader',
     );
+    final license = File(p.join(checkedIn, 'LICENSE.txt'));
     await _requireSha256(
       license,
       _dotnetRuntimeLoaderLicenseSha256,
@@ -129,8 +132,14 @@ class ReleasePackageNoticeWriter {
       );
       _validateRuntimePackageNuspec(nuspec, assembly);
       final noticesName = '${assembly.packageId}-ThirdPartyNotices.txt';
+      final checkedInNotices = File(p.join(checkedIn, noticesName));
+      await _requireSha256(
+        checkedInNotices,
+        assembly.thirdPartyNoticesSha256,
+        '${assembly.packageId} checked-in third-party notices',
+      );
       fileOps.copyFileIfExists(
-        notices.path,
+        checkedInNotices.path,
         p.join(destination.path, noticesName),
       );
       packages.add({
@@ -210,7 +219,7 @@ class ReleasePackageNoticeWriter {
     );
 
     final versions = <String, String>{};
-    for (final name in _dartCliRuntimePackages) {
+    for (final name in dartCliRuntimePackages) {
       final entry = packages[name];
       if (entry == null || entry['rootUri'] is! String) {
         throw StateError('The runtime Dart package $name is unresolved.');
@@ -233,6 +242,7 @@ class ReleasePackageNoticeWriter {
         license,
         p.join(destination.path, '$name-LICENSE.txt'),
       );
+      _copySupplementaryNotices(name, packageRoot, license, destination.path);
     }
 
     final dartVersionFile = File(p.join(dartSdk, 'version'));
@@ -317,6 +327,38 @@ class ReleasePackageNoticeWriter {
     }
   }
 
+  /// Copies the licence, notice and patent files [packageRoot] carries beside
+  /// [primaryLicense], and refuses any the release does not record.
+  void _copySupplementaryNotices(
+    String name,
+    String packageRoot,
+    String primaryLicense,
+    String destination,
+  ) {
+    final expected = [...dartCliSupplementaryNotices[name] ?? const <String>[]]
+      ..sort();
+    final found = [
+      for (final entity in Directory(packageRoot).listSync(followLinks: false))
+        if (entity is File &&
+            p.basename(entity.path) != p.basename(primaryLicense) &&
+            _supplementaryNoticeName.hasMatch(p.basename(entity.path)))
+          p.basename(entity.path),
+    ]..sort();
+    if (found.join('\n') != expected.join('\n')) {
+      throw StateError(
+        'The runtime Dart package $name carries licence or notice files '
+        '[${found.join(', ')}], but the release records '
+        '[${expected.join(', ')}].',
+      );
+    }
+    for (final file in expected) {
+      fileOps.copyFileIfExists(
+        p.join(packageRoot, file),
+        p.join(destination, '$name-$file'),
+      );
+    }
+  }
+
   String? _firstExistingFile(List<String> candidates) {
     for (final candidate in candidates) {
       if (File(candidate).existsSync()) {
@@ -341,40 +383,19 @@ class ReleasePackageNoticeWriter {
   }
 }
 
-const _dartCliRuntimePackages = [
-  'archive',
-  'async',
-  'boolean_selector',
-  'collection',
-  'crypto',
-  'ffi',
-  'http',
-  'http_parser',
-  'json_schema',
-  'logging',
-  'matcher',
-  'meta',
-  'path',
-  'posix',
-  'quiver',
-  'rfc_6901',
-  'source_span',
-  'stack_trace',
-  'stream_channel',
-  'string_scanner',
-  'term_glyph',
-  'test_api',
-  'typed_data',
-  'unorm_dart',
-  'uri',
-  'web',
-];
-
 final List<String> dartCliLicenseNames = List.unmodifiable([
   'Dart-SDK-LICENSE.txt',
   'VERSIONS.json',
-  for (final package in _dartCliRuntimePackages) '$package-LICENSE.txt',
+  for (final package in dartCliRuntimePackages) '$package-LICENSE.txt',
+  for (final entry in dartCliSupplementaryNotices.entries)
+    for (final file in entry.value) '${entry.key}-$file',
 ]);
+
+/// Package-root files that carry licence, notice or patent-grant text.
+final _supplementaryNoticeName = RegExp(
+  r'^(?:licen[cs]e|copying|notice|patents)(?:[-._].*)?$',
+  caseSensitive: false,
+);
 
 const runtimeLoaderNoticeNames = <String>[
   'LICENSE.txt',

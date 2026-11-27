@@ -15,10 +15,16 @@ void main() {
     ].firstWhere((file) => file.existsSync());
     final policy =
         jsonDecode(policyFile.readAsStringSync()) as Map<String, Object?>;
-    expect(
-      (policy['versioning'] as Map)['productVersion'],
-      TopiaForgeRuntimeVersions.loaderVersion,
+    final catalogFile = File('${policyFile.parent.path}/catalog.json');
+    final catalog =
+        jsonDecode(catalogFile.readAsStringSync()) as Map<String, Object?>;
+    final productVersion = (policy['versioning'] as Map)['productVersion'];
+    final release = (catalog['releases'] as List).cast<Map>().singleWhere(
+      (entry) => entry['version'] == productVersion,
     );
+    final components = release['components'] as Map;
+    expect(components['loader'], TopiaForgeRuntimeVersions.loaderVersion);
+    expect(components['sdk'], TopiaForgeRuntimeVersions.sdkVersion);
     final gameBuild = policy['gameBuild'] as Map<String, Object?>;
     expect(
       RobotopiaGameVersion.tryFromBuildId(gameBuild['id']),

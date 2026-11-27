@@ -38,26 +38,40 @@ RoboPatch was used only as behavior prior art for clean-room compatibility plann
 
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
 
-TopiaForge launcher UI bundles Robotopia web brand assets from `https://robotopia.gg/` and local
-TopiaForge artwork for offline launcher theming.
+TopiaForge launcher UI bundles CC0 pixel artwork for offline launcher theming. These three files
+replaced Robotopia web brand assets taken from `https://robotopia.gg/` that carried no
+redistribution grant. The launcher carries the replacement assets originally reviewed in PR #128.
 
-- Web-derived raster files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
+- Files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
   `packages/launcher_ui/assets/brand/baby-stitch.webp`, and
   `packages/launcher_ui/assets/brand/sheriff.webp`
-- Source: `https://robotopia.gg/`
-- Owner: **Tomato Cake.** These three files are Robotopia web brand assets and remain the property of
-  Tomato Cake. TopiaForge does not claim any ownership of them, they are not covered by this project's
-  AGPL-3.0-or-later grant, and they carry no separate redistribution licence. They are bundled for
-  offline launcher theming with attribution only.
-- Rights basis: attribution pending a written grant. Permission has been requested from Tomato Cake and
-  no written grant has been recorded yet. The project owner has accepted this as a non-blocking risk
-  for the `0.x` line (recorded 2026-08-24); it must be revisited before `1.0`. If permission is
-  declined, or if Tomato Cake asks for their removal, these files are removed or replaced on request.
-- Replacement status: no first-party artwork exists for these three yet. All three are referenced by the
-  launcher (`TopiaForgeBrandAssets.cityHeader`, `.babyStitch`, `.sheriff` in
-  `packages/launcher_ui/lib/src/launcher_theme.dart`). The precedent for replacing them is
-  `packages/launcher_ui/lib/src/pixel_robot.dart`, which retired the bundled `robot.webp`.
-- Local changes: filenames were normalized for launcher packaging.
+- Artist: **GrafxKid**, via OpenGameArt.
+- License: **CC0 1.0 Universal (public domain dedication)**. No attribution is required and no
+  share-alike term applies, so these files raise no compatibility question against this project's
+  AGPL-3.0-or-later grant. The attribution below is recorded as provenance, not as an obligation.
+- Sources and upstream SHA-256:
+  - `topiaforge-city-header.webp` from *City Mega Pack*,
+    `https://opengameart.org/content/city-mega-pack`, upstream file `SHIPPING_DOCKS_AREA.png`
+    (SHA-256 `984030543b9f7fcf0197c07eba9ad4f8768cb8f705e3ee1673fa7f685ae65b00`).
+  - `baby-stitch.webp` and `sheriff.webp` from *Gum Bot sprites*,
+    `https://opengameart.org/content/gum-bot-sprites`, upstream file `Gum Bot sprites.png`
+    (SHA-256 `8ed4706fd6a339b31d951a7b78e5ce56c1bd95c9bbcb7763dfddb4161570060f`).
+- Local changes:
+  - `topiaforge-city-header.webp`: cropped from `SHIPPING_DOCKS_AREA.png` at `(64, 768)-(832, 1056)`
+    to 768x288, then the plain sky band was repeated upward by 144 rows to reach 768x432 (16:9).
+    No repainting or recolouring.
+  - `baby-stitch.webp`: the 32x32 cell at row 1, column 1 of `Gum Bot sprites.png`, keyed from its
+    flat `#F5BAFE` sheet background to binary alpha and trimmed to its bounding box (14x18).
+  - `sheriff.webp`: the same, for the cell at row 1, column 2 (16x18).
+  - All three re-encoded as lossless WebP. Filenames are unchanged because
+    `TopiaForgeBrandAssets.cityHeader`, `.babyStitch` and `.sheriff` in
+    `packages/launcher_ui/lib/src/launcher_theme.dart` refer to them by name.
+- Installed SHA-256: `topiaforge-city-header.webp`
+  `a3f642ad8ef8b817b96257df670d0d5773fb40ead5da7ebf4699d84022d940dd`; `baby-stitch.webp`
+  `36328e54cb9c7382b06ba81ed568e6b1553f8a3791735afd792d4a0daadb2978`; `sheriff.webp`
+  `dc488ee07c3244356c707882cdeb5c3b4f2943c109edad0996cd444887d90378`.
+- The two character sprites are pixel art drawn on a small grid and are rendered with
+  `FilterQuality.none`, matching `packages/launcher_ui/lib/src/pixel_robot.dart`.
 
 ## Vendored source
 
@@ -143,6 +157,10 @@ checked, and this section claims to cover every non-source file a user receives:
   `apps/topiaforge_launcher_flutter/snap/gui/topiaforge.png` — the launcher application icon.
 - `apps/topiaforge_launcher_flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset` — the same icon at
   the eight sizes macOS requires. Generated from the mark above, not drawn separately.
+- `apps/topiaforge_launcher_flutter/windows/runner/resources/app_icon.ico` — the same icon at eight
+  sizes from 16 to 256 pixels, embedded into the Windows launcher executable by `Runner.rc`.
+  `icons_launcher` generates it from `topiaforge-app-icon.png`; the five sizes it shares with the macOS
+  set are pixel-identical to those files.
 - `website/public/favicon.png` and `website/src/assets/topiaforge-wordmark.png` — the documentation
   site's copies of the same marks.
 
@@ -184,6 +202,10 @@ TopiaForge bundles the Quicksand font for body typography in the launcher UI and
   `tools/unity-ui-bundle/Assets/FontAssets/TopiaForge Body Medium SDF.asset`, is baked with the same
   atlas settings and character set as the Light SDF beside it, and ships in
   `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle`.
+
+The Light face's `TopiaForge Body SDF.asset` uses that same upstream Quicksand variable font.
+The reviewed rebake retains its asset identity, face metrics and atlas pixels and corrects
+93 glyph indices to match the upstream font.
 
 TopiaForge bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
 
@@ -233,11 +255,12 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 | Component | Pinned release resolution | License |
 | --- | --- | --- |
 | Dart SDK | 3.12.2 | BSD-3-Clause |
-| archive | 4.0.9 | MIT |
+| archive | 4.6.0 | MIT AND BSD-3-Clause AND bzip2-1.0.6 AND Zlib |
 | async | 2.13.1 | BSD-3-Clause |
 | boolean_selector | 2.1.2 | BSD-3-Clause |
 | collection | 1.19.1 | BSD-3-Clause |
 | crypto | 3.0.7 | BSD-3-Clause |
+| cryptography | 2.9.0 | Apache-2.0 |
 | ffi | 2.2.0 | BSD-3-Clause |
 | http | 1.6.0 | BSD-3-Clause |
 | http_parser | 4.1.2 | BSD-3-Clause |
@@ -259,6 +282,13 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 | unorm_dart | 0.3.2 | MIT (Copyright Yasuhiro Shimizu) |
 | uri | 1.0.0 | BSD-3-Clause |
 | web | 1.1.1 | BSD-3-Clause |
+
+Some packages carry further licence or notice files, which packaging copies into the same bundle as
+`<package>-<file>`. `archive` carries `LICENSE-other.md`: the notices of the zlib.js (MIT), JZLib (BSD-3-Clause),
+bzip2 (bzip2-1.0.6), zlib-ng (Zlib), Zstandard and xxh64 (BSD-3-Clause) code it incorporates.
+`quiver` carries an Apache-2.0 `NOTICE` and a
+`PATENTS` grant, and `uri` carries a `PATENTS` grant. Packaging fails if a package carries such a file the release
+does not record.
 
 The Flutter 3.44.6 launcher embeds Flutter, Dart, plugins, and package dependencies. Flutter generates the complete
 `flutter_assets/NOTICES.Z` notice bundle during each platform build; release validation requires that bundle inside
@@ -284,6 +314,15 @@ Robotopia build 2640 supplies the referenced `System.Memory`, `System.Buffers`,
 and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
 identities and hashes are validated but their proprietary game copies are not
 redistributed.
+
+The loader's licence texts are installed beside its assemblies, in a `licenses`
+folder wherever they are placed: the payload's
+`src/TopiaForge.ModManager/bin/Release/netstandard2.1`, the Windows archive-root
+`BepInEx/plugins/TopiaForge.ModManager`, and the same plugin folder in the game
+when the launcher installs or repairs the runtime. The folder holds the project
+`LICENSE`, this file, the Quicksand, Audiowide and JetBrains Mono OFL texts for the glyph data
+inside `TopiaForge.Mods.UnityUi.dll`, and the MIT licence and third-party
+notices of each System package above.
 
 The CLI's publication gate includes a generated identifier allowlist from SPDX License List Data 3.28.0.
 

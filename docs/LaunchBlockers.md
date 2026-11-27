@@ -4,7 +4,7 @@ Last audited: 2026-07-31. Reconciled against the 2409 tree on 2026-08-27; see
 [Reconciliation](#reconciliation-2026-08-27). Reconciled again on 2026-08-28 after a
 working session that closed two advisory gates and moved engineering work on four
 others; see [Second reconciliation](#second-reconciliation-2026-08-28).
-Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
+Current candidate target is `0.2.0-rc.1`. [Release readiness](ReleaseReadiness.md) records the current gates.
 
 **Live multiplayer range gate, 26 October 2026:** ModRuntime now connects motion ownership to the host's validated
 presence position. Missing, stale or disconnected player positions fail closed; motion packets cannot substitute a
@@ -410,21 +410,14 @@ automated tests cannot close Unity object lifetime.
 
   Owner: project owner, Robotopia owner, and IP/trademark counsel.
 
-  Current state, web-derived art (recorded 2026-08-24): the three Robotopia web brand rasters
-  (`topiaforge-city-header.webp`, `baby-stitch.webp`, `sheriff.webp`) are now attributed in
-  [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) as the property of Tomato Cake, outside this
-  project's AGPL grant, bundled with attribution only while a written grant remains outstanding. All
-  three are still referenced by the launcher and no first-party replacement exists for them; the
-  precedent for retiring one is `packages/launcher_ui/lib/src/pixel_robot.dart`, which replaced
-  `robot.webp`. The project owner has accepted this as a **non-blocking** risk for the `0.x` line. It
-  must be revisited before `1.0`, and the files are removed or replaced on request from Tomato Cake.
+  Current state: the launcher uses three verified CC0 assets from GrafxKid in place of its original
+  web-derived images. [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) records each source, edit and
+  installed hash. Prior copies remain part of the repository's history and are a separate question
+  for the rights review.
 
-  Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
-  TopiaForge names, Robotopia injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
-  icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
-  record provenance, transformation, hash, license, and approver for retained assets. The web-derived art
-  sub-item carries the dated disposition above for `0.x`; the naming, injection, and extraction
-  questions are unchanged and still need counsel.
+  Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for naming,
+  compatibility extraction, injection, and other redistributed content. Record the provenance, license,
+  transformation, hash, and applicable approval for the retained assets.
 
 - [ ] **P0-OSS-01 — Complete the third-party redistribution audit.** *(re-opened 2026-08-06)* *(blocking)*
 
@@ -465,12 +458,10 @@ automated tests cannot close Unity object lifetime.
 
   Owner: backend owner, Robotopia owner, privacy/legal, security, and product.
 
-  Current state: canonical descriptive capabilities are present; `remote-ai` is the sole remote-inference label; Zombies live-brain
-  and voice defaults are off; no request is sent to the RoboAPI backend, no token value is read, and no audio is
-  captured without explicit configuration. One qualification, corrected on 2026-08-13: RobotKit's availability probe
-  runs on every mod load and scene change, and it tests for the presence of the credential file and enumerates
-  microphone device names. It no longer parses or caches the token — that happens only on the request path, behind the
-  consumer opt-in — and enumerating device names starts no capture.
+  Current state: RobotKit sends requests and captures audio on the respective opt-in paths.
+  Its capability probe checks local availability on lifecycle events, periodically, and on demand.
+  Prompts and Sandbox can also set inputs on the game's own robot agent. The request data, backend
+  override, and separate native paths are documented in [Privacy and capabilities](PrivacyAndCapabilities.md).
 
   Evidence progress 2026-08-28: the offline, timeout, caller-cancellation, response-cap, request-cap, and
   log-redaction rows of the acceptance matrix in
@@ -733,7 +724,7 @@ automated tests cannot close Unity object lifetime.
   read-only governance-audit token there; prove fork PRs are secretless;
   independently recovery-test the protected update seed and remove plaintext
   local duplicates; enable reviewed Pages and immutable-release policy; protect creation of the annotated
-  `v0.1.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
+  `v0.2.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
   non-publishing two-platform rehearsal before deleting the obsolete live `unity-validation` and
   `game-acceptance` environments.
 
@@ -751,10 +742,11 @@ automated tests cannot close Unity object lifetime.
   Dart `3.12.2`, and CocoaPods `1.16.2` succeeded; a name-only scan of all 13 new Xcode activity logs found no
   credential-shaped variables or values.
 
-  Exit criteria: revoke and rotate every credential present in the affected audit/Xcode log; remove the affected
-  local DerivedData and task logs under the applicable retention policy; confirm the old credentials no longer work;
-  review local and GitHub secrets for least privilege; and retain a sentinel build proving a sanitized Xcode launch does not
-  expose credentials.
+  Exit criteria: credential owners privately review every affected credential type, revoke or
+  rotate each value, and confirm the old access is invalid. The security reviewer checks least privilege,
+  retention and cleanup, then records the reviewed source build and the sanitized sentinel evidence.
+  Public evidence may include the gate ID, actions completed, date and disposition. Keep credential values,
+  account identifiers, local paths and raw logs in the private review.
 
 - [ ] **P0-CAND-01 — Freeze and attest one candidate SHA.** *(advisory)*
 
@@ -765,8 +757,8 @@ automated tests cannot close Unity object lifetime.
   this register does not designate either commit as the frozen candidate. No tag, release, signature, or publication
   has been created.
 
-  Exit criteria: integrate the topic through `dev`, cut and stabilize `release/0.1.0-rc.1`, merge it to `main`, and
-  approve the release notes; create the protected annotated `v0.1.0-rc.1` tag on the exact verified `main` SHA through
+  Exit criteria: integrate the topic through `dev`, cut and stabilize `release/0.2.0-rc.1`, merge it to `main`, and
+  approve the release notes; create the protected annotated `v0.2.0-rc.1` tag on the exact verified `main` SHA through
   the authorized process; run every local/native/Unity gate without unexplained
   warnings or skips; generate and independently verify the candidate BOM, SPDX SBOM, `SHA256SUMS`, nested digests,
   sizes, signatures, provenance, platform manifests, handoff manifest, and manual-release index. The administrator

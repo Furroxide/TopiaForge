@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
+import 'package:topiaforge/src/release_dart_runtime_packages.dart';
 
 /// Metadata tampering tests use a synthetic prerelease with current components.
 /// This fixture does not qualify the blocked stable target or edit real policy.
@@ -53,7 +55,12 @@ Directory writeMetadataPrereleaseFixture(String source) {
               'tools/unity-ui-bundle/ProjectSettings/ProjectVersion.txt',
             }.contains(name),
       );
-  for (final name in {...files, 'release/notes/v0.2.0.md'}) {
+  for (final name in {
+    ...files,
+    for (final shipment in releaseDartShipments.values) shipment.lockfile,
+    for (final notice in topiaForgeRuntimeLoaderNotices) notice.sourcePath,
+    'release/notes/v0.2.0.md',
+  }) {
     final destination = File(p.join(output.path, name))
       ..parent.createSync(recursive: true);
     File(p.join(source, name)).copySync(destination.path);

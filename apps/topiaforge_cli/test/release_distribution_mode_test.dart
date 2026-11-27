@@ -18,7 +18,9 @@ void main() {
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-distribution-test-');
     root = _repositoryRoot();
-    release = TopiaForgeReleaseCatalog.load(root).release('0.2.0');
+    release = TopiaForgeReleaseCatalog.load(
+      root,
+    ).release(TopiaForgeReleasePolicy.load(root).productVersion);
   });
 
   tearDown(() {
@@ -72,7 +74,7 @@ void main() {
 
       final reviewed = TopiaForgeReleasePolicy.load(root);
       expect(schema.validate(policyJson).isValid, isTrue);
-      expect(reviewed.productVersion, '0.2.0');
+      expect(reviewed.productVersion, '0.2.0-rc.1');
       expect(reviewed.windowsDistribution, 'unsigned');
       expect(reviewed.windowsCertificateSha256, isEmpty);
 

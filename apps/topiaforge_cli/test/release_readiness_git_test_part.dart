@@ -41,13 +41,13 @@ void _exactTargetCommitTests() {
         final decision = await ReleaseReadinessDecision.loadAtGitSha(
           repositoryRoot: temp.path,
           targetSha: commit,
-          expectedReleaseVersion: '0.2.0',
+          expectedReleaseVersion: _releaseVersion,
         );
         expect(decision.status, 'blocked');
         expect(decision.targetSha, commit);
         final metadataReadiness = await ReleaseMetadataReadiness.load(
           repositoryRoot: temp.path,
-          version: '0.2.0',
+          version: _releaseVersion,
           targetSha: commit,
           allowUnresolved: true,
         );
@@ -74,7 +74,7 @@ void _exactTargetCommitTests() {
         await expectLater(
           ReleaseMetadataReadiness.load(
             repositoryRoot: temp.path,
-            version: '0.2.0',
+            version: _releaseVersion,
             targetSha: commit,
             allowUnresolved: false,
           ),
@@ -98,7 +98,7 @@ void _exactTargetCommitTests() {
           'release',
           'validate-readiness',
           '--version',
-          '0.2.0',
+          _releaseVersion,
           '--target-sha',
           commit,
         ], workingDirectory: temp.path);
@@ -130,7 +130,7 @@ void _exactTargetCommitTests() {
           ReleaseReadinessDecision.loadAtGitSha(
             repositoryRoot: temp.path,
             targetSha: missingDecisionCommit,
-            expectedReleaseVersion: '0.2.0',
+            expectedReleaseVersion: _releaseVersion,
           ),
           throwsA(
             isA<StateError>().having(
@@ -142,7 +142,7 @@ void _exactTargetCommitTests() {
         );
         final unavailable = await ReleaseMetadataReadiness.load(
           repositoryRoot: temp.path,
-          version: '0.2.0',
+          version: _releaseVersion,
           targetSha: missingDecisionCommit,
           allowUnresolved: true,
         );

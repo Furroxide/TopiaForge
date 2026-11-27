@@ -39,10 +39,9 @@ the statement itself.
 
 ## Bundled brand assets
 
-The statement above covers names and affiliation. It does **not** cover the artwork this project
-bundles. Three Robotopia web images ship with the launcher under attribution while a written grant
-remains outstanding; they are recorded, with their rights basis and dated disposition, in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The statement above covers names and affiliation. The launcher's offline theme uses three CC0
+pixel-art assets by GrafxKid. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) records their
+sources and changes. Review of naming, injection, and compatibility extraction remains open.
 
 ## Status
 

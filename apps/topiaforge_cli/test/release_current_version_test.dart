@@ -22,10 +22,10 @@ void main() {
     () async {
       final policy = TopiaForgeReleasePolicy.load(root);
       final catalog = TopiaForgeReleaseCatalog.load(root);
-      final release = catalog.release('0.2.0');
-      expect(policy.productVersion, '0.2.0');
-      expect(release.tag, 'v0.2.0');
-      expect(release.prerelease, isFalse);
+      expect(policy.productVersion, '0.2.0-rc.1');
+      final release = catalog.release(policy.productVersion);
+      expect(release.tag, 'v0.2.0-rc.1');
+      expect(release.prerelease, isTrue);
       expect(release.status, 'blocked');
       expect(
         TopiaForgeRuntimeVersions.loaderVersion,
@@ -46,7 +46,7 @@ void main() {
       expect(
         issues,
         unorderedEquals([
-          'Release 0.2.0 is blocked; set its manually reviewed catalog status to ready.',
+          'Release 0.2.0-rc.1 is blocked; set its manually reviewed catalog status to ready.',
         ]),
       );
     },
@@ -55,10 +55,14 @@ void main() {
   test('historical and independent versions retain their identity', () {
     final catalog = TopiaForgeReleaseCatalog.load(root);
     final historical = catalog.release('0.1.0-rc.1');
-    final current = catalog.release('0.2.0');
+    final current = catalog.release('0.2.0-rc.1');
+    final stable = catalog.release('0.2.0');
     expect(historical.tag, 'v0.1.0-rc.1');
     expect(historical.prerelease, isTrue);
+    expect(historical.status, 'withdrawn');
     expect(historical.components['sdk'], '0.1.0-rc.1');
+    expect(stable.prerelease, isFalse);
+    expect(stable.status, 'blocked');
     expect(current.vpmPackages, historical.vpmPackages);
     for (final component in [
       'gameCompatExtractor',

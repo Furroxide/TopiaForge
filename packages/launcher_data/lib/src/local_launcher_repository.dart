@@ -76,6 +76,7 @@ part 'local_launcher_repository/repository_hooks.dart';
 part 'local_launcher_repository/repository_work.dart';
 part 'local_launcher_repository/snapshot_loading.dart';
 part 'local_launcher_repository/runtime_transaction.dart';
+part 'local_launcher_repository/runtime_loader_notices.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
 part 'local_launcher_repository/storage_helpers.dart';
 part 'local_launcher_repository/multiplayer_content_host.dart';
