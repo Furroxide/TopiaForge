@@ -243,6 +243,11 @@ void _createRuntimeSources(Directory repositoryRoot) {
   for (final dll in topiaForgeRuntimeLoaderDlls) {
     File(p.join(loader.path, dll)).writeAsStringSync('');
   }
+  for (final notice in topiaForgeRuntimeLoaderNotices) {
+    File(p.joinAll([repositoryRoot.path, ...p.posix.split(notice.sourcePath)]))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('${notice.sourcePath} fixture text');
+  }
 }
 
 /// Sets up the player of [StandardJoin] in [rig]: Alpha 1.0.0 on, Beta
