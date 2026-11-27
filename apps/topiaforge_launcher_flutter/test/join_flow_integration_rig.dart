@@ -155,6 +155,11 @@ final class _Rig {
     for (final dll in topiaForgeRuntimeLoaderDlls) {
       File(p.join(loader.path, dll)).writeAsStringSync('');
     }
+    for (final notice in topiaForgeRuntimeLoaderNotices) {
+      File(p.joinAll([repositoryRoot, ...p.posix.split(notice.sourcePath)]))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('Test loader notice');
+    }
   }
 }
 
