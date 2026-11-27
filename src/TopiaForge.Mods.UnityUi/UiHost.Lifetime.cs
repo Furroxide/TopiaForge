@@ -6,6 +6,8 @@ namespace TopiaForge.Mods.UnityUi
 {
     public sealed partial class UiHost
     {
+        private bool initReported;
+
         /// <summary>
         /// Raised when a canvas this host made is destroyed outside the kit: by a scene that unloads it, the game or another
         /// mod. By then the host has let go of everything on that canvas, closing its windows, tools and dialogs (a dialog as
@@ -133,6 +135,21 @@ namespace TopiaForge.Mods.UnityUi
             {
                 return null;
             }
+        }
+
+        private void ReportInitOnce()
+        {
+            if (initReported)
+            {
+                return;
+            }
+
+            initReported = true;
+            TopiaForgeLog.Info(
+                "UiHost '" + OwnerId + "' initialized (fonts: " + TopiaForgeFonts.ResolvedTier +
+                ", input: " + (TopiaForgeInput.LegacyAvailable ? "legacy/both" : "input-system") +
+                ", ui-scale: " + EffectiveUiScale.ToString("0.##") +
+                ", high-contrast: " + (EffectiveHighContrast ? "on" : "off") + ").");
         }
     }
 }

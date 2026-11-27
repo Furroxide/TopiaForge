@@ -30,6 +30,7 @@ def pack(cli: str, output: Path) -> None:
         ):
             shutil.copy2(package / name, stage / name)
         shutil.copytree(package / "ui", stage / "ui")
+        shutil.copytree(package / "LICENSES", stage / "LICENSES")
 
         # R4-11 exception. Only the disposable input of this non-distributable probe receives a copy.
         staged_theme = stage / "ui" / "themes" / "survival.json"

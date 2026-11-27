@@ -31,7 +31,8 @@ namespace TopiaForge.ModManager.Tests
                 .Append(Path.Combine(gallery, "Pages", "FoundationPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "FoundationLayoutPages.cs"))
                 .Append(Path.Combine(gallery, "Pages", "FoundationGraphPages.cs"))
-                .Append(Path.Combine(gallery, "Pages", "FoundationArtPages.cs"));
+                .Append(Path.Combine(gallery, "Pages", "FoundationArtPages.cs"))
+                .Append(Path.Combine(gallery, "Pages", "FoundationIntegrationPages.cs"));
             var trees = files.Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path))
                 .Append(CSharpSyntaxTree.ParseText(Boundaries, path: "PreviewBoundaries.cs"))
                 .Append(CSharpSyntaxTree.ParseText(AssetBoundaries, path: "PreviewAssetBoundaries.cs"))
@@ -62,11 +63,16 @@ namespace TopiaForge.ModManager.Tests
             var plugin = PluginSourceSyntax.Read();
             var awake = plugin.Statements("Awake");
             var capturesStartupOption = awake.First().DescendantTokens().Any(token => token.ValueText == "GalleryCaptureEnabled");
-            var armsFromStartup = awake.Any(statement => PluginSourceSyntax.CallsOn(statement, "runtime", "StartGalleryInteractionPreview"));
+            var successfulStartup = awake.OfType<TryStatementSyntax>().Last().Block.Statements;
+            var armsAfterStartup = PluginSourceSyntax.CallsOn(successfulStartup.Last(), "runtime", "StartGalleryInteractionPreview")
+                && successfulStartup.Take(successfulStartup.Count - 1).Any(statement =>
+                    PluginSourceSyntax.Calls(statement, "TryMarkStartupComplete"))
+                && awake.SelectMany(statement => statement.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                    .Count(call => PluginSourceSyntax.CallsOn(call, "runtime", "StartGalleryInteractionPreview")) == 1;
             var retiresOnTeardown = plugin.Statements("BeginPluginTeardown")
                 .Any(statement => PluginSourceSyntax.CallsOn(statement, "galleryInteractionPreview", "Dispose"));
-            if (!capturesStartupOption || !armsFromStartup || !retiresOnTeardown)
-                throw new InvalidOperationException("The loader owns the startup option and preview teardown.");
+            if (!capturesStartupOption || !armsAfterStartup || !retiresOnTeardown)
+                throw new InvalidOperationException("The loader arms the preview only after successful startup and owns its teardown.");
             Console.WriteLine("UiGalleryInteractionPreviewTests passed for startup, four palettes, capture and caller isolation.");
 
             void RunProbe(string startOption, bool enabled)
@@ -79,9 +85,12 @@ namespace TopiaForge.ModManager.Tests
 
         private static void CheckAcceptanceBindings(string root, SyntaxTree preview)
         {
-            var previewBinding = preview.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>()
-                .Single(call => call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "Hotkey");
-            var previewKey = ((MemberAccessExpressionSyntax)previewBinding.ArgumentList.Arguments[0].Expression).Name.Identifier.ValueText;
+            var previewKeys = preview.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Where(call => call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "Hotkey")
+                .Select(call => ((MemberAccessExpressionSyntax)call.ArgumentList.Arguments[0].Expression).Name.Identifier.ValueText)
+                .OrderBy(key => key, StringComparer.Ordinal).ToArray();
+            if (!previewKeys.SequenceEqual(new[] { "F3", "F4" }))
+                throw new InvalidOperationException("The capture loader owns exactly F3 and F4.");
             var acceptance = new[] { "TopiaForge.SdkAcceptanceMod", "TopiaForge.MultiplayerAcceptanceMod" };
             var files = acceptance.SelectMany(project => Directory.EnumerateFiles(Path.Combine(root, "tests", project), "*.cs"));
             foreach (var file in files)
@@ -95,7 +104,7 @@ namespace TopiaForge.ModManager.Tests
                     })
                     .Select(call => call.ArgumentList.Arguments.FirstOrDefault()?.Expression)
                     .OfType<LiteralExpressionSyntax>();
-                if (keys.Any(key => string.Equals(key.Token.ValueText, previewKey, StringComparison.OrdinalIgnoreCase)))
+                if (keys.Any(key => previewKeys.Contains(key.Token.ValueText, StringComparer.OrdinalIgnoreCase)))
                     throw new InvalidOperationException("The Gallery preview key overlaps an acceptance binding in " + Path.GetFileName(file));
             }
         }

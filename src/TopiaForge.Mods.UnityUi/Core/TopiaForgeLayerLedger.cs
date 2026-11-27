@@ -32,6 +32,12 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         public int Claim(TCanvas canvas, TopiaForgeLayerBand band, out bool exhausted)
         {
+            TopiaForgeLayerBands.RequirePublicBand(band);
+            return ClaimBand(canvas, band, out exhausted);
+        }
+
+        internal int ClaimBand(TCanvas canvas, TopiaForgeLayerBand band, out bool exhausted)
+        {
             if (canvas == null) throw new ArgumentNullException(nameof(canvas));
             if (slots.TryGetValue(canvas, out var held))
             {
@@ -39,7 +45,7 @@ namespace TopiaForge.Mods.UnityUi
                 return held.Order;
             }
 
-            exhausted = !bands.TryAllocate(band, out var order);
+            exhausted = !bands.TryAllocateBand(band, out var order);
             slots.Add(canvas, new Slot(band, order));
             return order;
         }
@@ -64,7 +70,7 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         public bool Reassign(TCanvas canvas, int sortingOrder)
         {
-            if (canvas == null || !slots.TryGetValue(canvas, out var slot) || !bands.Holds(slot.Band, sortingOrder))
+            if (canvas == null || !slots.TryGetValue(canvas, out var slot) || !bands.HoldsAllocatedBand(slot.Band, sortingOrder))
             {
                 return false;
             }

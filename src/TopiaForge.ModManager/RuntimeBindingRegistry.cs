@@ -78,7 +78,10 @@ namespace TopiaForge.ModManager
                     var selected = matches.Dequeue();
                     var errors = package.Errors.ToList();
                     if (IsAmbiguousOwner(manifest.Id)) errors.Add("The selected package id is ambiguous: " + manifest.Id + ".");
-                    frozen.Add(new ModPackage(package.PackagePath, selected.Manifest,
+                    var runtimeManifest = selected.Manifest;
+                    // The exact match keeps profile data canonical and resources from the verified install.
+                    if (errors.Count == 0) runtimeManifest.AdmittedUi = manifest.AdmittedUi;
+                    frozen.Add(new ModPackage(package.PackagePath, runtimeManifest,
                         package.State == null ? null : JsonUtil.Clone(package.State),
                         errors.Distinct(StringComparer.Ordinal).ToArray(), package.SelectionReason));
                 }

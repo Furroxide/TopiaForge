@@ -20,7 +20,8 @@ namespace TopiaForge.ModManager
                 var ui = new OwnerUiService(GalleryInteractionOwner, dataDirectory, lifetime, logger, gameplay, hudPlacement, themePackages);
                 ui.FollowGalleryViewer(view);
                 var preview = new GalleryInteractionPreview(ui);
-                ui.host.Hotkey(TopiaForgeKey.F3, preview.Advance);
+                ui.host.Hotkey(TopiaForgeKey.F3, () => preview.Advance(FoundationPage.InteractionStates));
+                ui.host.Hotkey(TopiaForgeKey.F4, () => preview.Advance(FoundationPage.GraphConnections));
                 return lifetime;
             }
             catch
@@ -35,29 +36,33 @@ namespace TopiaForge.ModManager
         {
             private readonly OwnerUiService ui;
             private IUiSurface? active;
+            private FoundationPage? activePage;
             private int next;
 
             internal GalleryInteractionPreview(OwnerUiService ui) => this.ui = ui;
 
-            internal void Advance()
+            internal void Advance(FoundationPage page)
             {
                 if (ui.lifetime.IsStopping) return;
-                var palette = GalleryPreviewPalette.At(next);
+                var index = page == activePage ? next : 0;
+                var prefix = page == FoundationPage.GraphConnections ? "gallery-graph-" : "gallery-interaction-";
+                var palette = GalleryPreviewPalette.At(index, prefix);
                 IUiSurface? opened = null;
-                var fixture = FoundationPages.CreateRequest(FoundationPage.InteractionStates, UiSurfaceKind.Window,
+                var fixture = FoundationPages.CreateRequest(page, UiSurfaceKind.Window,
                     report: message => opened?.SetBody(message));
                 var request = new UiSurfaceRequest(palette.Id, fixture.Title + " · " + palette.Label, fixture.Body,
                     fixture.Kind, fixture.Width, fixture.Height, fixture.Content);
                 var result = ui.CreateSurface(request, null, palette);
                 if (!result.TryGetValue(out opened) || opened == null)
                 {
-                    ui.logger.Warn("The Gallery interaction preview could not open (" + result.ErrorCode + ").");
+                    ui.logger.Warn("The local Gallery preview could not open (" + result.ErrorCode + ").");
                     return;
                 }
 
                 var previous = active;
                 active = opened;
-                next = (next + 1) % GalleryPreviewPalette.Count;
+                activePage = page;
+                next = (index + 1) % GalleryPreviewPalette.Count;
                 previous?.Dispose();
             }
         }
@@ -79,15 +84,15 @@ namespace TopiaForge.ModManager
             internal UiThemeDescriptor Descriptor { get; }
             internal TopiaForgeScheme Scheme { get; }
 
-            internal static GalleryPreviewPalette At(int index) => index switch
+            internal static GalleryPreviewPalette At(int index, string prefix) => index switch
             {
-                0 => new GalleryPreviewPalette("gallery-interaction-kit-paper", "Kit Paper",
+                0 => new GalleryPreviewPalette(prefix + "kit-paper", "Kit Paper",
                     UiThemePackParser.Default, TopiaForgeScheme.Paper),
-                1 => new GalleryPreviewPalette("gallery-interaction-kit-hud", "Kit HUD",
+                1 => new GalleryPreviewPalette(prefix + "kit-hud", "Kit HUD",
                     UiThemePackParser.Default, TopiaForgeScheme.Hud),
-                2 => new GalleryPreviewPalette("gallery-interaction-survival-paper", "Survival Paper",
+                2 => new GalleryPreviewPalette(prefix + "survival-paper", "Survival Paper",
                     UiGallerySurvivalTheme.Descriptor, TopiaForgeScheme.Paper),
-                3 => new GalleryPreviewPalette("gallery-interaction-survival-hud", "Survival HUD",
+                3 => new GalleryPreviewPalette(prefix + "survival-hud", "Survival HUD",
                     UiGallerySurvivalTheme.Descriptor, TopiaForgeScheme.Hud),
                 _ => throw new ArgumentOutOfRangeException(nameof(index)),
             };

@@ -4,8 +4,8 @@ using UnityEngine;
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
-    /// The Back stack: one Back press, Escape or a controller's B, dismisses only the top-most visible surface: modals beat
-    /// windows, later registrations beat earlier ones. TopiaForge takes that press from the game, so the game sees nothing
+    /// One Back press, Escape or a controller's B, dismisses the topmost visible surface. Loader trust prompts take priority,
+    /// then the highest band and the latest registration. TopiaForge takes that press from the game, so the game sees nothing
     /// of it, and keeps the key until it is released; the next press with no surface left reaches the game as before. While
     /// they are on the stack, surfaces also take what they claim from the game: kit modals, fullscreen tools and the manager
     /// overlay take menu navigation, a window takes it while one of its controls is selected, and a key capture takes the
@@ -14,7 +14,8 @@ namespace TopiaForge.Mods.UnityUi
     public static class TopiaForgeDismissStack
     {
         private static readonly TopiaForgeDismissOrder Order =
-            new TopiaForgeDismissOrder(TopiaForgeInputOwnership.IsLiveRoot, TopiaForgeInputOwnership.HoldsSelection);
+            new TopiaForgeDismissOrder(TopiaForgeInputOwnership.IsLiveRoot, TopiaForgeInputOwnership.HoldsSelection,
+                entry => entry is TopiaForgeModalInstance { IsTrust: true });
 
         /// <summary>Gets count.</summary>
         public static int Count => Order.Count;
@@ -31,7 +32,7 @@ namespace TopiaForge.Mods.UnityUi
             Order.Remove(entry);
         }
 
-        /// <summary>Picks the entry to dismiss: highest band wins, then latest pushed.</summary>
+        /// <summary>Gets the topmost entry in trust, band and registration order.</summary>
         public static ITopiaForgeDismissable? Top()
         {
             return Order.Top();

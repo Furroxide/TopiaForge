@@ -187,6 +187,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && args[0] == "--log-privacy")
             { DiagnosticPathRedactorTests.Run(); SafeEventTests.Run(); UgcImportProblemsTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--multiplayer-acceptance") { AcceptanceIsolationTests.Run(); AcceptanceIsolationStagingTests.Run(); AcceptancePluginLifecycleTests.Run(); MultiplayerAcceptanceProbeTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--ui-kit-gallery-fixtures") { MultiplayerAcceptanceProbeTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--ui-kit-event-systems")
             {
                 try { UiKitEventSystemTests.Run(); return 0; }

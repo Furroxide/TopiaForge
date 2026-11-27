@@ -64,5 +64,6 @@ internal static partial class RuntimeAdmissionTests
         FailedTargetedUpgradeKeepsLegacyState();
         ArtUsesItsOwnPackOnBothRoutes();
         ArtUsesTheCompleteRetainedFrameBudget();
+        FoundationPackagesCoexistAcrossGuestProfilesAndScopeLifetimes();
     }
 }

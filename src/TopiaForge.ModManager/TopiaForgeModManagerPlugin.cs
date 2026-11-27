@@ -180,11 +180,7 @@ namespace TopiaForge.ModManager
                     launchProfile?.RequestId ?? rejectedCorrelation?.RequestId,
                     error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."),
                     session: LaunchSessionIdentityForPublication(), sessionRefusal: launchSessionRefusal);
-                initializationLifetime.InitializeUi(() =>
-                {
-                    if (enableGalleryPreview) galleryInteractionPreview = runtime.StartGalleryInteractionPreview();
-                    runtime.Load(selection.Packages);
-                });
+                initializationLifetime.InitializeUi(() => runtime.Load(selection.Packages));
                 // The provider published its control as it loaded, and ModRuntime attached to it: the provider takes the session now.
                 TakeLaunchSession();
                 PublishRuntimeObservations();
@@ -217,6 +213,7 @@ namespace TopiaForge.ModManager
                 WriteLastRunReport(null);
                 managerLogger.Info(
                     "TopiaForge ready. Use the GAMEMODES and TOPIAFORGE buttons on the main menu, or press F10.");
+                if (enableGalleryPreview) galleryInteractionPreview = runtime.StartGalleryInteractionPreview();
             }
             catch (Exception ex)
             {

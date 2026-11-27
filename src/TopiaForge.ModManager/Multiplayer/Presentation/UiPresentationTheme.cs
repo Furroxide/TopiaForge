@@ -34,6 +34,7 @@ namespace TopiaForge.ModManager
 
     internal static class UiPresentationTheme
     {
+        internal const string ReceiverOwner = "topiaforge.presentation";
         internal const int LegacyVersion = 1;
         internal const int FoundationVersion = 2;
         internal const string RequiredRuntime = "This UI requires TopiaForge UI contract 2 on every recipient. Update TopiaForge to continue.";

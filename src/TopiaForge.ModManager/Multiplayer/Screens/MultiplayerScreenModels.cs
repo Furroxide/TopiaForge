@@ -75,7 +75,10 @@ namespace TopiaForge.ModManager.Sessions
         Destructive = 2,
 
         /// <summary>A session password typed in game, in a masked field; the answer carries it once and nothing keeps it.</summary>
-        Password = 3
+        Password = 3,
+
+        /// <summary>Confirmation of a changed or unverified server identity.</summary>
+        TrustIdentity = 4
     }
 
     /// <summary>One row of a server list. Every text is display-ready: host-authored words are redacted and bounded.</summary>

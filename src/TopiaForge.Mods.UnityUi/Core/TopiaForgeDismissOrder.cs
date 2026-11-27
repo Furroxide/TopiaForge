@@ -5,7 +5,8 @@ namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
     /// The dismiss stack's order and what its surfaces take from the game, Unity-free. One Back press dismisses the topmost
-    /// live surface: the highest band, then the latest pushed. Every live surface claims Back, plus what it was pushed with.
+    /// live surface. Loader trust prompts take priority. Within each priority, the highest band wins, then the latest pushed.
+    /// Every live surface claims Back plus what it was pushed with.
     /// A surface's root is what it shows in: a surface whose root is gone (destroyed with a scene, or by the game or another
     /// mod) or hidden claims nothing and is never dismissed, so no way out of a surface leaves the game's input taken. A
     /// surface pushed without a root is always live.
@@ -18,15 +19,19 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TopiaForgeBackPress back = new TopiaForgeBackPress();
         private readonly Func<object, bool> isLive;
         private readonly Func<object, bool> holdsSelection;
+        private readonly Func<ITopiaForgeDismissable, bool> isTrust;
 
         /// <summary>
         /// Creates an empty order. <paramref name="isLive"/> says whether a root still exists and shows;
         /// <paramref name="holdsSelection"/> whether the EventSystem selection is one of a root's controls.
+        /// The optional <paramref name="isTrust"/> identifies loader-owned trust prompts.
         /// </summary>
-        public TopiaForgeDismissOrder(Func<object, bool> isLive, Func<object, bool> holdsSelection)
+        public TopiaForgeDismissOrder(Func<object, bool> isLive, Func<object, bool> holdsSelection,
+            Func<ITopiaForgeDismissable, bool>? isTrust = null)
         {
             this.isLive = isLive ?? throw new ArgumentNullException(nameof(isLive));
             this.holdsSelection = holdsSelection ?? throw new ArgumentNullException(nameof(holdsSelection));
+            this.isTrust = isTrust ?? (_ => false);
         }
 
         /// <summary>Gets how many surfaces are on the stack, live or not.</summary>
@@ -154,7 +159,7 @@ namespace TopiaForge.Mods.UnityUi
                 if (IsLive(index)
                     && (surfaces[index].Band >= TopiaForgeLayerBand.Modal
                         || (Resolve(index) & (TopiaForgeInputClaim.Navigation | TopiaForgeInputClaim.Keyboard)) != 0)
-                    && (top < 0 || surfaces[index].Band >= surfaces[top].Band))
+                    && IsAbove(index, top))
                 {
                     top = index;
                 }
@@ -201,13 +206,22 @@ namespace TopiaForge.Mods.UnityUi
             var top = -1;
             for (var index = 0; index < surfaces.Count; index++)
             {
-                if (IsLive(index) && (top < 0 || surfaces[index].Band >= surfaces[top].Band))
+                if (IsLive(index) && IsAbove(index, top))
                 {
                     top = index;
                 }
             }
 
             return top;
+        }
+
+        private bool IsAbove(int index, int top)
+        {
+            if (top < 0) return true;
+            var candidate = surfaces[index];
+            var current = surfaces[top];
+            var trust = isTrust(candidate);
+            return trust != isTrust(current) ? trust : candidate.Band >= current.Band;
         }
 
         private void RemoveAt(int index)

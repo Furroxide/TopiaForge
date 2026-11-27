@@ -149,6 +149,26 @@ namespace TopiaForge.ModManager.Tests
                 Record(mismatch ? "guest-digest-mismatch" : "guest-missing-pack", remote, 5);
             }
 
+            var diagnostics = FoundationPages.CreateRequest(FoundationPage.TrustAndFallback, UiSurfaceKind.Hud);
+            using var diagnosticLocal = Make(owner, diagnostics);
+            owner.CompletePendingThemeRegistrations();
+            Record("gallery-diagnostics-ready", diagnosticLocal, 0);
+            using var diagnosticGuestLife = new FakeModLifetime();
+            var diagnosticGuest = new FakeUiService(diagnosticGuestLife);
+            using var diagnosticRemote = OpenArtReceiver(diagnosticGuest, owner, diagnostics);
+            Record("gallery-diagnostics-missing-pack", diagnosticRemote, 2);
+            var localCard = diagnosticLocal.Capture(Viewport).Nodes.Single(node => node.Id == "diagnostic-card");
+            var remoteCard = diagnosticRemote.Capture(Viewport).Nodes.Single(node => node.Id == "diagnostic-card");
+            Check((localCard.X, localCard.Y, localCard.Width, localCard.Height, localCard.SemanticLabel) ==
+                (remoteCard.X, remoteCard.Y, remoteCard.Width, remoteCard.Height, remoteCard.SemanticLabel) &&
+                !localCard.UsedFallback && remoteCard.UsedFallback && remoteCard.SemanticLabel == "Supply card",
+                "The diagnostics compare the same art frame and label before and after authentication without guest resources.");
+            var fallbackGroups = diagnosticRemote.Capture(Viewport).Nodes;
+            Check(fallbackGroups.Count(node => node.Kind == "ImagePlaceholder" && node.IsRendered &&
+                node.Text == "Supply card" && node.ContrastRatio >= 4.5f && node.TextHeightPixels >= 18f) == 1 &&
+                !fallbackGroups.Any(node => node.Kind == "ImagePlaceholder" && node.Path.Contains("diagnostic-mark", StringComparison.Ordinal)),
+                "Missing diagnostics art has one readable label and the decorative marker has no label.");
+
             return results;
 
             void Record(string id, FakeUiSurface surface, int missing)

@@ -84,7 +84,7 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed class TopiaForgeLayerSlot : MonoBehaviour { }
                 internal sealed class TopiaForgeGraphConnections { }
                 public enum TopiaForgeScheme { Paper, Hud }
-                public enum TopiaForgeKey { F3, F6, F11 }
+                public enum TopiaForgeKey { F3, F4, F6, F11 }
                 public enum TopiaForgeGap { None, Sm, Md }
                 public enum TopiaForgeTextStyle { Body }
                 public enum TopiaForgeButtonStyle { Ghost, Danger, Filled }

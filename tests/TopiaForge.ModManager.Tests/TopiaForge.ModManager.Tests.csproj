@@ -19,6 +19,8 @@
     <Compile Include="../../src/TopiaForge.ModManager/UiGalleryRecorder/UiGallerySurvivalTheme.cs" Link="UiGallery/UiGallerySurvivalTheme.cs" />
     <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
     <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationArtPages.cs" Link="UiGallery/FoundationArtPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationIntegrationPages.cs" Link="UiGallery/FoundationIntegrationPages.cs" />
+    <EmbeddedResource Include="../TopiaForge.MultiplayerAcceptanceMod/ui/themes/transport-preview.json" LogicalName="TopiaForge.UiGallery.TransportPreview.json" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/AcceptanceConfig.cs" Link="MultiplayerAcceptance/AcceptanceConfig.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/GalleryRemotePreview.cs" Link="MultiplayerAcceptance/GalleryRemotePreview.cs" />
     <Compile Include="../TopiaForge.MultiplayerAcceptanceMod/MultiplayerAcceptanceMod.cs" Link="MultiplayerAcceptance/MultiplayerAcceptanceMod.cs" />
