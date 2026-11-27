@@ -118,7 +118,7 @@ class ReleasePackageSourceTests(unittest.TestCase):
         build = matrix[start:end]
         invoke = build.index('dart run bin/topiaforge.dart "${args[@]}"')
         self.assertLess(build.index('cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"'), invoke)
-        self.assertIn('export RobotopiaManagedDir="$root/robotopia-managed"', build)
+        self.assertIn('export RobotopiaManagedDir="$root/managed-refs"', build)
         self.assertIn('mv "$output/${{ matrix.asset }}" "$workspace/release-artifacts/"', build)
         self.assertIn("args+=(--require-mac-universal)", matrix[end:])
 

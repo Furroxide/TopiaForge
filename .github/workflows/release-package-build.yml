@@ -489,8 +489,8 @@ jobs:
             root="${TOPIAFORGE_CI_BUILD_ROOT%/source}"
             export TMPDIR="$root/tmp"
             mkdir "$TMPDIR"
-            cp -R "${RobotopiaManagedDir:?}" "$root/robotopia-managed"
-            export RobotopiaManagedDir="$root/robotopia-managed"
+            cp -R "${RobotopiaManagedDir:?}" "$root/managed-refs"
+            export RobotopiaManagedDir="$root/managed-refs"
             output="$root/release-artifacts"
             cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"
           fi
