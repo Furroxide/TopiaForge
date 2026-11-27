@@ -81,6 +81,31 @@ class ReleasePackageSourceTests(unittest.TestCase):
             ecosystem.index("bash tools/verify-csharp-release-surface.sh"),
         )
 
+    def test_unix_compilers_use_neutral_source_and_package_cache(self) -> None:
+        package = workflow("release-package-build.yml")
+        launcher = job(workflow("flutter-launcher-builds.yml"), "build")
+        helper = (WORKFLOWS.parent / "scripts" / "prepare-hosted-dart-build.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('mktemp -d /tmp/topiaforge-build.', helper)
+        self.assertIn('ls-files -z', helper)
+        self.assertIn('PUB_CACHE=%s', helper)
+
+        stage = "bash .github/scripts/prepare-hosted-dart-build.sh"
+        neutral_cli = 'cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"'
+        intel = job(package, "macos-cli-x64")
+        matrix = job(package, "build")
+        self.assertLess(intel.index(stage), intel.index(neutral_cli))
+        self.assertLess(matrix.index(stage), matrix.index(neutral_cli))
+        self.assertEqual(matrix.count(neutral_cli), 2)
+        self.assertIn('args+=(--prebuilt-cli "$temp/topiaforge-linux-x64")', matrix)
+        self.assertIn('args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")', matrix)
+
+        build_launcher = 'cd "$source/apps/topiaforge_launcher_flutter"'
+        self.assertLess(launcher.index(stage), launcher.index(build_launcher))
+        self.assertIn('source="${TOPIAFORGE_CI_BUILD_ROOT:-', launcher)
+        self.assertIn('cd "${TOPIAFORGE_CI_BUILD_ROOT:-', launcher)
+
     def test_release_prs_keep_latest_managed_ref_requirement(self) -> None:
         package = workflow("release-package-build.yml")
         baselines = re.findall(r"(?m)^          PINNED_STABLE_BASELINE: (.+)$", package)
