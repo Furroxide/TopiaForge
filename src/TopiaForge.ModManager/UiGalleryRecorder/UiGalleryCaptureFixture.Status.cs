@@ -60,7 +60,7 @@ namespace TopiaForge.ModManager
             expected is UiColumn timers && actual.Id == timers.Id && SameFlex(actual.Layout, timers.Layout) &&
             SameEntries(actual.Children, timers.Children, (observed, fixture) => fixture is UiCountdown countdown
                 ? observed is UiText zero && zero.Id == countdown.Id && zero.Style == UiTextStyle.Body &&
-                    zero.Tone == UiStatusPresentation.For(countdown, 0).Tone &&
+                    zero.Tone == countdown.Tone &&
                     zero.Text == UiCountdownFormatting.Text(countdown.Label, 0, countdown.Format)
                 : SameNode(observed, fixture));
 

@@ -102,10 +102,10 @@ internal static partial class RuntimeAdmissionTests
         That(rig.Run(() => guest.Players.UiClockEpoch != epoch &&
             guest.Ui.Surfaces.TryGetValue("Status panel", out var restored) &&
             restored.ReceivedContent is UiColumn restoredPanel &&
-            ((UiCard)restoredPanel.Children[0]).Child is UiText { Text: "Wave 0:00", Tone: UiTone.Danger } &&
+            ((UiCard)restoredPanel.Children[0]).Child is UiText { Text: "Wave 0:00", Tone: UiTone.Neutral } &&
             guest.Ui.Surfaces.TryGetValue("Status HUD", out var restoredHud) &&
-            restoredHud.ReceivedContent is UiText { Text: "Wave 0:00", Tone: UiTone.Danger }),
-            "The replacement stream shows formatted zero on both authenticated routes.");
+            restoredHud.ReceivedContent is UiText { Text: "Wave 0:00", Tone: UiTone.Neutral }),
+            "Both authenticated routes display a formatted zero in its base tone after the clock changes.");
         That(ReferenceEquals(identity, timer.ClockIdentity) && timer.ClockEpoch == epoch && allowed.SetContent(tree).Succeeded &&
             allowed.SetContent(new UiColumn(timer)).ErrorCode == ModErrorCode.InvalidArgument,
             "Retained reapplication keeps the clock identity and new admission refuses the expired node.");

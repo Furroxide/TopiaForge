@@ -283,7 +283,8 @@ map launch that keeps the listen process and guest connected. Once the guest fol
 F11 on both peers. Keep the same acceptance archive installed and leave the original HUD in place.
 
 The host should still show formatted zeros in the old HUD. The guest should recover the same title, theme,
-captions and frame with the plain formatted zero text carried by the replacement stream: `Seconds 0`,
+captions and frame with the plain formatted zero text carried by the replacement stream. The text uses the
+countdown's base tone, with no critical paint or Cross. Confirm `Seconds 0`,
 `Minutes and seconds 0:00`, `Hours, minutes and seconds 0:00:00` and `Next transfer 0:00`.
 Check the guest's exact archive and descriptor hashes across both observations. A disconnect, a guest change,
 or a second replacement retires the paired fixture. If the local map cannot replace the session in place,

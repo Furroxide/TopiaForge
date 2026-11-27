@@ -131,7 +131,7 @@ namespace TopiaForge.ModManager.Tests
             Check(UiGalleryCaptureFixture.MatchRetainedStatus(initial, zero, first, retained, ref high, FirstClock) == null,
                 "The bound live epoch cannot be replaced for a zero-only capture.");
             Check(UiGalleryCaptureFixture.MatchRetainedStatus(initial, zero, first, retained, ref high, NextClock)?.Id == initial.Id &&
-                high == latest.Generation && Last(zero) is UiText { Text: "Elapsed 0:00", Style: UiTextStyle.Body, Tone: UiTone.Danger },
+                high == latest.Generation && Last(zero) is UiText { Text: "Elapsed 0:00", Style: UiTextStyle.Body, Tone: UiTone.Neutral },
                 "The committed next epoch and latest same-package envelope admit only the real codec's zero projection.");
             Check(UiGalleryCaptureFixture.MatchRetainedStatus(initial, zero, first, Envelope(11), ref high, NextClock) == null &&
                 UiGalleryCaptureFixture.MatchRetainedStatus(initial, zero, first, Envelope(13, package: new byte[32]), ref high, NextClock) == null,

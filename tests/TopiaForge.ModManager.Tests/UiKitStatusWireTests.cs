@@ -163,11 +163,11 @@ namespace TopiaForge.ModManager.Tests
             var expired = Write(tabs, epoch: replacement, retained: true);
             var page = (UiColumn)((UiTooltip)((UiTabs)Read(expired.Bytes, epoch: replacement)).Tabs[1].Child).Child;
             Check(!expired.Timed && expired.Bytes.Length < live.Bytes.Length &&
-                page.Children[0] is UiText first && first.Id == "clock" && first.Text == longLabel + " 0:00:00" && first.Tone == UiTone.Danger &&
+                page.Children[0] is UiText first && first.Id == "clock" && first.Text == longLabel + " 0:00:00" && first.Tone == timer.Tone &&
                 page.Children[1] is UiText { Id: "minutes", Text: "Break 0:00", Tone: UiTone.Muted } &&
-                page.Children[2] is UiText { Id: "seconds", Text: "0", Tone: UiTone.Danger } &&
+                page.Children[2] is UiText { Id: "seconds", Text: "0", Tone: UiTone.Neutral } &&
                 ReferenceEquals(timer.ClockIdentity, identity) && timer.ClockEpoch == Epoch,
-                "Retained status projects the exact clock format and tone at zero without carrying a stale deadline.");
+                "Retained status projects the exact clock format and base tone at zero without a threshold or stale deadline.");
             var fresh = UiCountdown.WithFormat(70d, "Fresh", UiCountdownFormat.MinutesSeconds);
             var writer = new WorldWireWriter(4096);
             Refused(() => UiWireCodec.Write(writer, new UiColumn(fresh, tabs), replacement, Envelope),

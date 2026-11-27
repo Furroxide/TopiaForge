@@ -54,8 +54,7 @@ namespace TopiaForge.Mods
         {
             if (countdown.UsesStatusFormat)
             {
-                var tone = UiStatusPresentation.For(countdown, 0).Tone;
-                WriteText(writer, UiCountdownFormatting.Text(countdown.Label, 0, countdown.Format), UiTextStyle.Body, tone, countdown.Id);
+                WriteText(writer, UiCountdownFormatting.Text(countdown.Label, 0, countdown.Format), UiTextStyle.Body, countdown.Tone, countdown.Id);
                 return;
             }
             // A legacy countdown keeps its original plain-text expiry encoding.
