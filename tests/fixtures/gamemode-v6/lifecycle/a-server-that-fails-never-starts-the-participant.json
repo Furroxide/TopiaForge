@@ -1,0 +1,30 @@
+{
+  "id": "a-server-that-fails-never-starts-the-participant",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A server controller that fails to start keeps its own reason, and the participant is never started.",
+  "scenario": {
+    "role": "host",
+    "factory": "participant",
+    "serverStart": "fails",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "invalidState",
+          "message": "The arena has no spawn."
+        },
+        "calls": [
+          "server.start"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

@@ -8,23 +8,34 @@ import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
+import 'agpl_3_0_text.g.dart';
+import 'atomic_file_writes.dart';
+import 'atomic_files.dart';
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
+import 'linear_text_scan.dart';
+import 'managed_package_validator.dart';
+import 'nuget_lock_check.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
 import 'safe_zip_archive.dart';
 import 'secure_http.dart';
+import 'sdk_package_references.dart';
 import 'sdk_reference_pack.dart';
-import 'ugc_sidecar_runtime.dart';
+import 'source_sdk_build_lock.dart';
 
 part 'local_developer_repository/io_helpers.dart';
 part 'local_developer_repository/template_copy.dart';
 part 'local_developer_repository/archive_safety.dart';
 part 'local_developer_repository/data_root_repository.dart';
 part 'local_developer_repository/pack_helpers.dart';
+part 'local_developer_repository/pack_metadata.dart';
+part 'local_developer_repository/map_pack_helpers.dart';
+part 'local_developer_repository/ui_pack_helpers.dart';
 part 'local_developer_repository/multiplayer_contract_lock.dart';
 part 'local_developer_repository/mod_scaffolding.dart';
+part 'local_developer_repository/mod_scaffold_plan.dart';
 part 'local_developer_repository/license_scaffolding.dart';
 part 'local_developer_repository/environment_helpers.dart';
 part 'local_developer_repository/project_registry.dart';
@@ -33,6 +44,7 @@ part 'local_developer_repository/source_models.dart';
 part 'local_developer_repository/package_restore.dart';
 part 'local_developer_repository/sdk_restore.dart';
 part 'local_developer_repository/sdk_restore_models.dart';
+part 'local_developer_repository/restored_sdk_check.dart';
 part 'local_developer_repository/unity_vpm.dart';
 part 'local_developer_repository/unity_package_scaffolding.dart';
 part 'local_developer_repository/unity_vpm_network.dart';
@@ -47,10 +59,14 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     String? repositoryRoot,
     String? workingDirectory,
     DeveloperProjectResolver resolver = const DeveloperProjectResolver(),
+    this.manifestFeatures = ManifestFeatureRequirements.current,
     UnityEditorScanner? unityEditorScanner,
     UnityEditorVersionProbe? unityEditorVersionProbe,
     UnityEditorLauncher? unityEditorLauncher,
     RepositoryDotnetSdkResolver? dotnetSdkResolver,
+    Future<List<String>> Function(Directory packageRoot)?
+    uiThemePackageValidator,
+    ExecutableLocator? executableLocator,
     Duration unityEditorProbeTimeout = const Duration(seconds: 5),
   }) : _repositoryRoot = Directory(
          repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory),
@@ -60,15 +76,21 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
        _unityEditorVersionProbe = unityEditorVersionProbe,
        _unityEditorLauncher = unityEditorLauncher,
        _dotnetSdkResolver = dotnetSdkResolver ?? resolveRepositoryDotnetSdk,
+       _uiThemePackageValidator = uiThemePackageValidator,
+       _executableLocator = executableLocator,
        _unityEditorProbeTimeout = unityEditorProbeTimeout,
        super(Directory(dataRoot ?? resolveTopiaForgeDataRoot()));
 
   final Directory _repositoryRoot;
+  final ManifestFeatureRequirements manifestFeatures;
   final DeveloperProjectResolver _resolver;
   final UnityEditorScanner? _unityEditorScanner;
   final UnityEditorVersionProbe? _unityEditorVersionProbe;
   final UnityEditorLauncher? _unityEditorLauncher;
   final RepositoryDotnetSdkResolver _dotnetSdkResolver;
+  final Future<List<String>> Function(Directory packageRoot)?
+  _uiThemePackageValidator;
+  final ExecutableLocator? _executableLocator;
   final Duration _unityEditorProbeTimeout;
 
   @override
@@ -114,62 +136,30 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     bool includeUnityCompanion = false,
     ModScaffoldOptions options = const ModScaffoldOptions(),
   }) async {
-    final safeName = _safeName(id);
-    final root = Directory(p.join(parentDirectory, safeName));
-    if (root.existsSync()) {
-      throw StateError('Project already exists: ${root.path}');
-    }
-    // Live sync implies the Unity companion; some templates scaffold it too.
-    final templates = await _listModTemplates();
-    final templateInfo = templates.firstWhere(
-      (template) => template.id == options.template,
-      orElse: () => ModTemplateInfo(id: options.template),
-    );
-    final withCompanion =
-        includeUnityCompanion ||
-        options.includeUnityCompanion ||
-        options.liveSync != null ||
-        templateInfo.includeUnityCompanion;
-    root.createSync(recursive: true);
-
-    var project = DeveloperProject(
-      schemaVersion: 2,
+    // Every argument is checked and the template read before anything
+    // exists, and a failure while writing removes only what this run
+    // created, so a retry never meets a half-made project.
+    final plan = await _planModScaffold(
+      parentDirectory: parentDirectory,
       id: id,
       name: name,
-      unityCompanion: withCompanion
-          ? UnityCompanionSettings(
-              enabled: true,
-              projectPath: p.join(root.path, 'unity-companion'),
-              assetBundleOutputPath: 'assets/AssetBundles',
-            )
-          : const UnityCompanionSettings(),
+      includeUnityCompanion: includeUnityCompanion,
+      options: options,
     );
-    if (options.liveSync != null) {
-      project = project.copyWith(
-        unityCompanion: UnityCompanionSettings(
-          enabled: true,
-          projectPath: project.unityCompanion.projectPath,
-          unityVersion: project.unityCompanion.unityVersion,
-          assetBundleOutputPath: project.unityCompanion.assetBundleOutputPath,
-          liveSync: options.liveSync!,
-        ),
-      );
+    final created = _createProjectFolders(plan.root);
+    try {
+      await _applyModScaffold(plan);
+    } on Object {
+      _removeCreated(created, plan.root);
+      rethrow;
     }
-    await _writeProject(root.path, project);
-    await _scaffoldModFromTemplate(root.path, id, name, options, withCompanion);
-    final sdk = await _initializeSdkProject(root.path);
-    if (sdk != null) {
-      await _ensureSdkPackageReferences(root.path, sdk);
-      await _writeDevProps(root.path, null, sdk: sdk);
-    }
-    await _ensureProjectGitignore(root.path);
     // Registry writes are best-effort; project files stay valid if this fails.
     try {
-      await _registerProject(root.path);
+      await _registerProject(plan.root.path);
     } on Object {
       // ignore: registration is non-essential.
     }
-    return loadDeveloperWorkspace(projectPath: root.path);
+    return loadDeveloperWorkspace(projectPath: plan.root.path);
   }
 
   @override
@@ -193,13 +183,14 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
       includePrerelease: includePrerelease,
     );
     var lock = resolution.lock;
+    final restored = <LauncherIssue>[];
     if (restore && !resolution.hasBlockingIssues) {
       final sdk = await _restoreProjectSdk(root.path);
       lock = await _restoreLockedPackages(root.path, lock);
       await _writeDevProps(root.path, lock, sdk: sdk);
       if (sdk != null) {
         await _ensureSdkPackageReferences(root.path, sdk);
-        await _restoreNuGetPackages(root.path, sdk);
+        restored.addAll(await _restoreNuGetPackages(root.path, sdk));
       }
       await _ensureProjectGitignore(root.path);
     }
@@ -209,7 +200,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
       project: project,
       lock: lock,
       generatedPropsPath: p.join(root.path, 'topiaforge.dev.props'),
-      issues: [...loaded.issues, ...resolution.issues],
+      issues: [...loaded.issues, ...resolution.issues, ...restored],
     );
   }
 
@@ -228,30 +219,36 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     // Accept both a packed .topiaforgemod archive and an unpacked mod directory (e.g. a fresh scaffold), so
     // authors can validate before ever packing.
     final ModManifest manifest;
+    Directory? source;
+    SafeZipArchive? archive;
     if (FileSystemEntity.isDirectorySync(packagePath)) {
-      final file = File(p.join(packagePath, 'topiaforge.mod.json'));
+      source = Directory(packagePath);
+      final file = File(p.join(source.path, 'topiaforge.mod.json'));
       if (!file.existsSync()) {
         throw StateError('topiaforge.mod.json was not found in $packagePath.');
       }
       manifest = ModManifest.fromJson(
-        jsonDecode(
-              utf8.decode(
-                await _readDeveloperFileBounded(
-                  file,
-                  maxBytes: _maxDeveloperManifestBytes,
-                  label: 'topiaforge.mod.json',
-                ),
-              ),
-            )
-            as Map<String, Object?>,
+        _decodeDeveloperManifest(
+          await _readDeveloperFileBounded(
+            file,
+            maxBytes: _maxDeveloperManifestBytes,
+            label: 'topiaforge.mod.json',
+          ),
+        ),
       );
     } else {
-      manifest = (await _readPackage(packagePath, expectedSha256: '')).manifest;
+      final packaged = await _readPackage(packagePath, expectedSha256: '');
+      manifest = packaged.manifest;
+      archive = packaged.archive;
     }
-    final issues = manifest.validate();
+    final issues = [
+      ...manifest.validate(),
+      ...manifestFeatures.validate(manifest),
+    ];
     if (issues.any((issue) => issue.isBlocking)) {
       throw StateError(issues.map((issue) => issue.message).join(' '));
     }
+    await _prepareUiThemes(manifest, source: source, archive: archive);
     return manifest;
   }
 
@@ -321,43 +318,6 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
   ) => _updateModManifest(projectPath, manifest);
 
   @override
-  Future<bool> ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  }) => _ensureUgcCompanionPackage(projectPath, update: update);
-
-  @override
-  Future<String> writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  }) => _writeUgcCompanionSeed(
-    projectPath,
-    watchFolder: watchFolder,
-    projectName: projectName,
-    sceneId: sceneId,
-    sceneName: sceneName,
-    environment: environment,
-    liveSync: liveSync,
-  );
-
-  @override
-  Future<DeveloperProject> updateUgcLiveSync(
-    String projectPath,
-    UgcLiveSyncSettings settings,
-  ) async {
-    final root = _requireProjectRoot(projectPath);
-    final project = await _readProject(root.path);
-    final updated = project.withUgcLiveSync(settings);
-    await _writeProject(root.path, updated);
-    return updated;
-  }
-
-  @override
   Future<String> packProject(
     String projectPath, {
     String outputDir = '',
@@ -368,7 +328,12 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     await _writeDevProps(root.path, await _readLock(root.path), sdk: sdk);
     if (sdk != null) {
       await _ensureSdkPackageReferences(root.path, sdk);
-      await _restoreNuGetPackages(root.path, sdk);
+      // A package built against another SDK version than the pin is never
+      // packed.
+      final restored = await _restoreNuGetPackages(root.path, sdk);
+      if (restored.isNotEmpty) {
+        throw StateError(restored.map((issue) => issue.message).join('\n'));
+      }
     }
     return _packModProject(
       root,

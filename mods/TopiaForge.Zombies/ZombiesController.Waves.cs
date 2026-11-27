@@ -28,9 +28,8 @@ namespace TopiaForge.Zombies
             phase = ZombiesPhase.InterWave;
             phaseTimer = config.InterWaveDelaySeconds;
             CancelSpawnSearch();
-            context.Ui.ShowToast(
-                config.ShopEnabled ? "Wave clear. Requisitions available." : "Wave clear.",
-                UiTone.Success);
+            context.Ui.ShowStinger(new UiStingerRequest("WAVE CLEAR", config.ShopEnabled ? "Requisitions open" : string.Empty,
+                UiGlyph.Check, UiPaintRole.Success));
         }
 
         private void AdvanceSpawning(float worldDelta)

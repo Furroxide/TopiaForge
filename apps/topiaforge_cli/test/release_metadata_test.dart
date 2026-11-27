@@ -10,21 +10,28 @@ import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
 import 'package:test/test.dart';
 
+import 'release_metadata_source_fixture.dart';
+
+part 'release_metadata_fixtures.dart';
+
 void main() {
   late Directory temp;
+  late Directory sourceFixture;
   late String root;
   late TopiaForgeReleaseCatalogEntry release;
   const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-metadata-test-');
-    root = _repositoryRoot();
-    release = TopiaForgeReleaseCatalog.load(root).release('1.0.0-rc.1');
+    sourceFixture = writeMetadataPrereleaseFixture(_repositoryRoot());
+    root = sourceFixture.path;
+    release = TopiaForgeReleaseCatalog.load(root).release('0.2.0-rc.1');
     _writeCandidateAssets(temp, release);
   });
 
   tearDown(() {
     if (temp.existsSync()) temp.deleteSync(recursive: true);
+    sourceFixture.deleteSync(recursive: true);
   });
 
   test('release catalog schema and parser retain prerelease state', () {
@@ -41,12 +48,15 @@ void main() {
 
     expect(result.isValid, isTrue, reason: result.errors.join('\n'));
     expect(catalogJson['schemaVersion'], 3);
-    expect(release.version, '1.0.0-rc.1');
-    expect(release.tag, 'v1.0.0-rc.1');
+    expect(release.version, '0.2.0-rc.1');
+    expect(release.tag, 'v0.2.0-rc.1');
     expect(release.prerelease, isTrue);
 
     final entryWithoutFlag = Map<String, Object?>.from(
-      (catalogJson['releases'] as List).single as Map,
+      (catalogJson['releases'] as List).singleWhere(
+            (entry) => (entry as Map)['version'] == release.version,
+          )
+          as Map,
     )..remove('prerelease');
     final invalidCatalog = <String, Object?>{
       ...catalogJson,
@@ -76,51 +86,66 @@ void main() {
     );
   });
 
-  test('release policy forbids RC1 signing exceptions and requires a pin', () {
-    final policyFile = File(p.join(root, 'release', 'release-policy.json'));
-    final schemaFile = File(
-      p.join(root, 'schemas', 'topiaforge.release-policy.schema.json'),
-    );
-    final policyJson =
-        jsonDecode(policyFile.readAsStringSync()) as Map<String, Object?>;
-    final schema = JsonSchema.create(
-      jsonDecode(schemaFile.readAsStringSync()) as Map<String, Object?>,
-    );
-    expect(
-      schema.validate(policyJson).isValid,
-      isTrue,
-      reason: schema.validate(policyJson).errors.join('\n'),
-    );
+  test(
+    'release policy preserves explicit unsigned and signed default rules',
+    () {
+      final policyFile = File(p.join(root, 'release', 'release-policy.json'));
+      final schemaFile = File(
+        p.join(root, 'schemas', 'topiaforge.release-policy.schema.json'),
+      );
+      final policyJson =
+          jsonDecode(policyFile.readAsStringSync()) as Map<String, Object?>;
+      final schema = JsonSchema.create(
+        jsonDecode(schemaFile.readAsStringSync()) as Map<String, Object?>,
+      );
+      expect(
+        schema.validate(policyJson).isValid,
+        isTrue,
+        reason: schema.validate(policyJson).errors.join('\n'),
+      );
 
-    final policy = TopiaForgeReleasePolicy.load(root);
-    expect(policy.targetPlatforms, ['windows-x64']);
-    expect(policy.windowsCertificateSha256, isEmpty);
-    expect(policy.requiresWindowsSigningIdentity, isTrue);
-    expect(policy.hasConfiguredWindowsSigningIdentity, isFalse);
+      final unsignedRoot = Directory(p.join(temp.path, 'unsigned-policy'));
+      _writeJson(
+        File(p.join(unsignedRoot.path, 'release/release-policy.json'))
+          ..createSync(recursive: true),
+        {
+          ...policyJson,
+          'signingIdentities': {'windowsDistribution': 'unsigned'},
+        },
+      );
+      final policy = TopiaForgeReleasePolicy.load(unsignedRoot.path);
+      expect(policy.targetPlatforms, ['windows-x64']);
+      expect(policy.windowsCertificateSha256, isEmpty);
+      expect(policy.distributesWindowsUnsigned, isTrue);
+      expect(policy.requiresWindowsSigningIdentity, isFalse);
+      expect(policy.hasConfiguredWindowsSigningIdentity, isFalse);
 
-    final configuredJson = jsonDecode(jsonEncode(policyJson)) as Map;
-    configuredJson['signingIdentities'] = {
-      'windowsCertificateSha256': List.filled(64, 'a').join(),
-    };
-    final configuredRoot = Directory(p.join(temp.path, 'configured-policy'));
-    File(p.join(configuredRoot.path, 'release', 'release-policy.json'))
-      ..createSync(recursive: true)
-      ..writeAsStringSync(jsonEncode(configuredJson));
-    final configuredPolicy = TopiaForgeReleasePolicy.load(configuredRoot.path);
-    expect(configuredPolicy.hasConfiguredWindowsSigningIdentity, isTrue);
-    expect(schema.validate(configuredJson).isValid, isTrue);
+      final configuredJson = jsonDecode(jsonEncode(policyJson)) as Map;
+      configuredJson['signingIdentities'] = {
+        'windowsCertificateSha256': List.filled(64, 'a').join(),
+      };
+      final configuredRoot = Directory(p.join(temp.path, 'configured-policy'));
+      File(p.join(configuredRoot.path, 'release', 'release-policy.json'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync(jsonEncode(configuredJson));
+      final configuredPolicy = TopiaForgeReleasePolicy.load(
+        configuredRoot.path,
+      );
+      expect(configuredPolicy.hasConfiguredWindowsSigningIdentity, isTrue);
+      expect(schema.validate(configuredJson).isValid, isTrue);
 
-    final zeroPinJson = jsonDecode(jsonEncode(configuredJson)) as Map;
-    (zeroPinJson['signingIdentities'] as Map)['windowsCertificateSha256'] =
-        List.filled(64, '0').join();
-    expect(schema.validate(zeroPinJson).isValid, isFalse);
+      final zeroPinJson = jsonDecode(jsonEncode(configuredJson)) as Map;
+      (zeroPinJson['signingIdentities'] as Map)['windowsCertificateSha256'] =
+          List.filled(64, '0').join();
+      expect(schema.validate(zeroPinJson).isValid, isFalse);
 
-    final exceptionJson = jsonDecode(jsonEncode(policyJson)) as Map;
-    (exceptionJson['publication'] as Map)['codeSigningException'] = {
-      'legacy': 'forbidden',
-    };
-    expect(schema.validate(exceptionJson).isValid, isFalse);
-  });
+      final exceptionJson = jsonDecode(jsonEncode(policyJson)) as Map;
+      (exceptionJson['publication'] as Map)['codeSigningException'] = {
+        'legacy': 'forbidden',
+      };
+      expect(schema.validate(exceptionJson).isValid, isFalse);
+    },
+  );
 
   test('release policy rejects a mismatched prerelease flag', () async {
     final mismatched = TopiaForgeReleaseCatalogEntry(
@@ -144,27 +169,25 @@ void main() {
 
     expect(
       issues,
-      contains('Catalog prerelease false does not match version 1.0.0-rc.1.'),
+      contains('Catalog prerelease false does not match version 0.2.0-rc.1.'),
     );
   });
 
-  test(
-    'RC1 fails closed until its reviewed signer pin is configured',
-    () async {
-      final policy = TopiaForgeReleasePolicy.load(root);
-      final issues = await const ReleasePolicyValidator().validate(
-        policy: policy,
-        release: release,
-        verifyArchiveHashes: false,
-      );
-      expect(
-        issues,
-        contains(
-          'A configured Windows signing identity is required for this release.',
-        ),
-      );
-    },
-  );
+  test('explicit unsigned policy does not claim a configured signer', () {
+    final policyJson = _json(File(p.join(root, 'release/release-policy.json')));
+    final unsignedRoot = Directory(p.join(temp.path, 'unsigned-policy'));
+    _writeJson(
+      File(p.join(unsignedRoot.path, 'release/release-policy.json'))
+        ..createSync(recursive: true),
+      {
+        ...policyJson,
+        'signingIdentities': {'windowsDistribution': 'unsigned'},
+      },
+    );
+    final policy = TopiaForgeReleasePolicy.load(unsignedRoot.path);
+    expect(policy.requiresWindowsSigningIdentity, isFalse);
+    expect(policy.hasConfiguredWindowsSigningIdentity, isFalse);
+  });
 
   test(
     'unresolved release metadata is complete but non-distributable',
@@ -182,6 +205,19 @@ void main() {
       final sbom = _json(File(p.join(temp.path, 'release-sbom.spdx.json')));
 
       expect(bom['distributable'], isFalse);
+      final schema = JsonSchema.create(
+        _json(File(p.join(root, 'schemas/topiaforge.release-bom.schema.json'))),
+      );
+      expect(
+        schema.validate({
+          ...bom,
+          'distributable': true,
+          'blockingReasons': <String>[],
+        }).isValid,
+        isFalse,
+        reason:
+            'Unavailable qualification can never describe a distributable BOM.',
+      );
       expect(
         bom['blockingReasons'] as List,
         contains('Unresolved-policy mode is non-distributable.'),
@@ -206,6 +242,20 @@ void main() {
       );
       expect((bom['legalInventory'] as List), isNotEmpty);
       expect(sbom['spdxVersion'], 'SPDX-2.3');
+      final doorstop = (sbom['packages'] as List).cast<Map>().singleWhere(
+        (entry) => entry['name'] == 'UnityDoorstop',
+      );
+      expect(doorstop['licenseDeclared'], 'LGPL-2.1-only');
+      expect(
+        sbom['relationships'] as List,
+        anyElement(
+          equals({
+            'spdxElementId': 'SPDXRef-Package-bepInEx',
+            'relationshipType': 'CONTAINS',
+            'relatedSpdxElement': doorstop['SPDXID'],
+          }),
+        ),
+      );
       await builder.verify(
         repositoryRoot: root,
         version: release.version,
@@ -335,14 +385,61 @@ void main() {
     },
   );
 
-  test('V1 safe contract assembly identity survives patch releases', () async {
+  test('SBOM third-party terms and containment are verified', () async {
+    final builder = const TopiaForgeReleaseMetadataBuilder();
+    await builder.build(
+      repositoryRoot: root,
+      version: release.version,
+      targetSha: targetSha,
+      assetsDirectory: temp.path,
+      outputDirectory: temp.path,
+      allowUnresolvedPolicy: true,
+    );
+    final sbomFile = File(p.join(temp.path, 'release-sbom.spdx.json'));
+    final generated = sbomFile.readAsStringSync();
+    Map<String, Object?> named(Map<String, Object?> sbom, String name) =>
+        (sbom['packages'] as List).cast<Map<String, Object?>>().singleWhere(
+          (entry) => entry['name'] == name,
+        );
+    for (final tamper in <void Function(Map<String, Object?>)>[
+      (sbom) => named(sbom, 'UnityDoorstop')['licenseDeclared'] = 'MIT',
+      (sbom) => (sbom['relationships'] as List).removeWhere(
+        (entry) => (entry as Map)['spdxElementId'] == 'SPDXRef-Package-bepInEx',
+      ),
+      (sbom) => (sbom['packages'] as List).remove(named(sbom, 'Flutter')),
+    ]) {
+      final sbom = jsonDecode(generated) as Map<String, Object?>;
+      tamper(sbom);
+      _writeJson(sbomFile, sbom);
+      _refreshChecksum(temp, 'release-sbom.spdx.json');
+      await expectLater(
+        builder.verify(
+          repositoryRoot: root,
+          version: release.version,
+          targetSha: targetSha,
+          assetsDirectory: temp.path,
+          metadataDirectory: temp.path,
+          allowUnresolvedPolicy: true,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            startsWith('SPDX SBOM '),
+          ),
+        ),
+      );
+    }
+  });
+
+  test('safe contract assembly identity survives patch releases', () async {
     final next = TopiaForgeReleaseCatalogEntry(
       version: release.version,
       tag: release.tag,
       prerelease: release.prerelease,
       status: release.status,
       notesFile: release.notesFile,
-      components: {...release.components, 'sdk': '1.0.1', 'unityUi': '1.0.1'},
+      components: {...release.components, 'sdk': '0.2.1', 'unityUi': '0.2.1'},
       vpmPackages: release.vpmPackages,
       mods: release.mods,
       excludedDeveloperMods: release.excludedDeveloperMods,
@@ -369,120 +466,14 @@ void main() {
 
     expect(
       issues,
-      contains('$abstractions Version 1.0.0-rc.1 does not match 1.0.1.'),
+      contains('$abstractions Version 0.2.0 does not match 0.2.1.'),
     );
     expect(hasAssemblyIssue(abstractions), isFalse);
     expect(hasAssemblyIssue(unityUi), isFalse);
     expect(
       hasAssemblyIssue(interop),
       isTrue,
-      reason: 'the explicitly unstable interop package is not V1-frozen',
+      reason: 'the explicitly unstable interop package is not frozen',
     );
   });
-}
-
-void _writeCandidateAssets(
-  Directory output,
-  TopiaForgeReleaseCatalogEntry release,
-) {
-  for (final entry in release.mods.entries) {
-    File(p.join(output.path, '${entry.key}-${entry.value}.topiaforgemod'))
-      ..parent.createSync(recursive: true)
-      ..writeAsStringSync('package:${entry.key}:${entry.value}\n');
-  }
-  _writePlatformArchive(
-    File(p.join(output.path, 'TopiaForge-windows-x64.zip')),
-    release,
-    prefix: 'TopiaForge/',
-  );
-  File(
-    p.join(output.path, 'topiaforge-update-v1.json'),
-  ).writeAsStringSync('{"fixture":true}\n');
-  File(
-    p.join(output.path, 'topiaforge-update-v1.json.sig'),
-  ).writeAsStringSync('{"fixture":true}\n');
-  _writeJson(
-    File(
-      p.join(
-        output.path,
-        TopiaForgeReleaseMetadataBuilder.trustEvidenceFileName,
-      ),
-    ),
-    {
-      'windows-x64': {'status': 'trusted', 'exceptionApplied': false},
-    },
-  );
-}
-
-void _writePlatformArchive(
-  File file,
-  TopiaForgeReleaseCatalogEntry release, {
-  required String prefix,
-  String? changedPath,
-}) {
-  final archive = Archive();
-  for (final entry in release.mods.entries) {
-    final relative = 'dist/${entry.key}-${entry.value}.topiaforgemod';
-    final bytes = File(
-      p.join(file.parent.path, p.basename(relative)),
-    ).readAsBytesSync();
-    archive.addFile(ArchiveFile.bytes('$prefix$relative', bytes));
-  }
-  final indexBytes = utf8.encode(
-    changedPath == 'dist/vpm/index.json'
-        ? '{"changed":true}\n'
-        : '{"packages":{}}\n',
-  );
-  archive.addFile(
-    ArchiveFile.bytes('${prefix}dist/vpm/index.json', indexBytes),
-  );
-  for (final entry in release.vpmPackages.entries) {
-    final relative = 'dist/vpm/${entry.key}-${entry.value}.zip';
-    archive.addFile(
-      ArchiveFile.string(
-        '$prefix$relative',
-        changedPath == relative
-            ? 'changed\n'
-            : 'vpm:${entry.key}:${entry.value}\n',
-      ),
-    );
-  }
-  file.writeAsBytesSync(ZipEncoder().encode(archive));
-}
-
-void _refreshChecksum(Directory directory, String name) {
-  final sums = File(p.join(directory.path, 'SHA256SUMS'));
-  final file = File(p.join(directory.path, name));
-  final hash = sha256.convert(file.readAsBytesSync()).toString();
-  final lines = sums.readAsLinesSync();
-  final replacement = '$hash  $name';
-  sums.writeAsStringSync(
-    '${lines.map((line) => line.endsWith('  $name') ? replacement : line).join('\n')}\n',
-  );
-}
-
-void _appendChecksum(Directory directory, String name) {
-  final file = File(p.join(directory.path, name));
-  final hash = sha256.convert(file.readAsBytesSync()).toString();
-  File(
-    p.join(directory.path, 'SHA256SUMS'),
-  ).writeAsStringSync('$hash  $name\n', mode: FileMode.append, flush: true);
-}
-
-Map<String, Object?> _json(File file) =>
-    (jsonDecode(file.readAsStringSync()) as Map).cast<String, Object?>();
-
-void _writeJson(File file, Object value) => file.writeAsStringSync(
-  '${const JsonEncoder.withIndent('  ').convert(value)}\n',
-);
-
-String _repositoryRoot() {
-  var directory = Directory.current.absolute;
-  while (!File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
-    if (directory.parent.path == directory.path) {
-      throw StateError('Repository root not found.');
-    }
-    directory = directory.parent;
-  }
-  return directory.path;
 }

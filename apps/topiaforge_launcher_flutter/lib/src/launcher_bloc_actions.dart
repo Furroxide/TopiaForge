@@ -1,55 +1,29 @@
 part of 'launcher_bloc.dart';
 
 extension LauncherBlocActions on LauncherBloc {
-  Future<void> _onWorldSelectionChanged(
-    WorldSelectionChanged event,
-    Emitter<LauncherState> emit,
-  ) async {
-    final selected = state.selectedProfile;
-    if (selected == null) {
+  Future<void> _onDownloadedMapsClear(Emitter<LauncherState> emit) async {
+    final install = state.gameInstall;
+    final maps = switch (_repository) {
+      DownloadedMapRepository maps => maps,
+      _ => null,
+    };
+    if (install == null || maps == null) {
+      emit(
+        state.copyWith(
+          statusMessage:
+              'Select a game installation with map cache support first.',
+          statusSeverity: IssueSeverity.warning,
+          clearError: true,
+        ),
+      );
       return;
     }
-    // Normalize before persisting so the stored selection is always consistent with the catalog and the
-    // runtime's allowed set. This is the single authoritative place that guards persisted world state: an
-    // unknown world/gamemode id is ignored (keeps the prior value) and loadMode is clamped to a known mode.
-    final catalog = state.worldCatalog;
-    final worldId = catalog.worlds.any((world) => world.id == event.worldId)
-        ? event.worldId
-        : null;
-    final gamemodeId =
-        catalog.gamemodes.any((mode) => mode.id == event.gamemodeId)
-        ? event.gamemodeId
-        : null;
-    // Reconcile the load mode against the world this selection will actually point at. The load-mode
-    // control in the UI only clamps for DISPLAY, so without this a world change (or an untouched default)
-    // could leave a load mode the world cannot honour persisted and written to the runtime config — e.g.
-    // additiveArena for a checkpoint level that is scene-replacement only. The runtime would then receive
-    // an incoherent (world, loadMode) pair, so this is reconciled here, the single authoritative guard.
-    final prior = selected.worldSelection;
-    final resolvedWorldId = worldId ?? prior.worldId;
-    final loadMode = catalog.reconcileLoadMode(
-      resolvedWorldId,
-      event.loadMode ?? prior.loadMode,
-    );
-    final updated = selected.copyWith(
-      worldSelection: prior.copyWith(
-        worldId: worldId,
-        gamemodeId: gamemodeId,
-        loadMode: loadMode,
-        autoLoadOnStart: event.autoLoadOnStart,
-      ),
-    );
-    final profiles = [
-      for (final profile in state.profiles)
-        if (profile.id == updated.id) updated else profile,
-    ];
-    await _repository.saveProfiles(profiles, updated.id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: updated.id,
-        statusMessage: 'Updated world launch settings.',
-      ),
+    await _guard(
+      emit,
+      'Downloaded maps cleared. Published maps download again when you next play.',
+      () async {
+        await maps.clearDownloadedMaps(install);
+      },
     );
   }
 
@@ -57,6 +31,7 @@ extension LauncherBlocActions on LauncherBloc {
     PackageSourceAdded event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, _sourcesNotSaved)) return;
     final id = 'source-${DateTime.now().millisecondsSinceEpoch}';
     final source = PackageSource(id: id, name: event.name, url: event.url);
     await _guard(emit, 'Added package source.', () async {
@@ -69,6 +44,7 @@ extension LauncherBlocActions on LauncherBloc {
     PackageSourceEnabledChanged event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, _sourcesNotSaved)) return;
     final sources = [
       for (final source in state.packageSources)
         if (source.id == event.sourceId)
@@ -86,6 +62,7 @@ extension LauncherBlocActions on LauncherBloc {
     PackageSourceRemoved event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, _sourcesNotSaved)) return;
     final sources = state.packageSources
         .where((source) => source.id != event.sourceId || source.builtIn)
         .toList();
@@ -93,59 +70,6 @@ extension LauncherBlocActions on LauncherBloc {
       await _repository.savePackageSources(sources);
       emit(_snapshotState(await _repository.loadSnapshot(), 'Ready.'));
     });
-  }
-
-  Future<void> _onGameLaunchRequested(
-    GameLaunchRequested event,
-    Emitter<LauncherState> emit,
-  ) async {
-    final install = state.gameInstall;
-    final profile = state.selectedProfile;
-    if (install == null || profile == null) {
-      return;
-    }
-    await _guard(emit, 'Launched TopiaForge.', () async {
-      final launchInstall = await _repairRuntimeBeforeLaunchIfNeeded(
-        emit,
-        install,
-      );
-      if (launchInstall == null) {
-        return;
-      }
-      final result = await _repository.launch(launchInstall, profile);
-      emit(_launchResultState(result));
-    });
-  }
-
-  Future<void> _onGameRestartRequested(
-    GameRestartRequested event,
-    Emitter<LauncherState> emit,
-  ) async {
-    final install = state.gameInstall;
-    final profile = state.selectedProfile;
-    if (install == null || profile == null) {
-      return;
-    }
-    await _guard(emit, 'Restarted TopiaForge.', () async {
-      final launchInstall = await _repairRuntimeBeforeLaunchIfNeeded(
-        emit,
-        install,
-      );
-      if (launchInstall == null) {
-        return;
-      }
-      final result = await _repository.restart(launchInstall, profile);
-      emit(_launchResultState(result));
-    });
-  }
-
-  LauncherState _launchResultState(LaunchResult result) {
-    return state.copyWith(
-      isBusy: false,
-      statusMessage: result.message,
-      errorMessage: result.started ? null : result.message,
-      clearError: result.started,
-    );
   }
 
   Future<void> _onGameFolderOpened(
@@ -229,6 +153,8 @@ extension LauncherBlocActions on LauncherBloc {
     ].join(' ');
   }
 }
+
+const _sourcesNotSaved = 'Package sources could not be saved.';
 
 String _packageInboxMessage(PackageInboxInstallOutcome outcome) {
   final summary = switch (outcome.status) {

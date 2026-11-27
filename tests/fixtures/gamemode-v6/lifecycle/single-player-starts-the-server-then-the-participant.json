@@ -1,0 +1,33 @@
+{
+  "id": "single-player-starts-the-server-then-the-participant",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "In single player the gamemode's server controller starts first, then the player's participant; stopping disposes them in reverse.",
+  "scenario": {
+    "role": "single-player",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "succeeded",
+          "code": "none",
+          "message": ""
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "participant.stop",
+          "server.stop"
+        ],
+        "stop": "succeeded"
+      }
+    }
+  }
+}

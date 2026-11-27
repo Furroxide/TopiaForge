@@ -172,7 +172,8 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Objective target '" + name + "' resolver threw: " + exception.Message);
+                // Registered names are arbitrary mod-supplied text and can still contain paths or player data.
+                logger.Warn("Robot objective " + entry.Info.Kind + " target resolver failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
 
@@ -249,7 +250,7 @@ namespace TopiaForge.RobotKit
                 random01,
                 resolveAgent,
                 (recipient, payload) => DeliverProgram(ownerModId, agent, recipient, payload),
-                exception => logger.Warn("Robot objective cancellation cleanup failed: " + exception.Message));
+                exception => logger.Warn("Robot objective cancellation cleanup failed: " + RobotKitLog.ExceptionType(exception)));
 
             if (runners.TryGetValue(agentId, out var previous))
             {
@@ -358,7 +359,7 @@ namespace TopiaForge.RobotKit
                 }
                 catch (Exception exception)
                 {
-                    logger.Warn("Robot objective tick failed; the faulty objective was cancelled: " + exception.Message);
+                    logger.Warn("Robot objective tick failed; the faulty objective was cancelled: " + RobotKitLog.ExceptionType(exception));
                     TryCancel(runner, "isolating a failed objective");
                 }
             }
@@ -377,7 +378,7 @@ namespace TopiaForge.RobotKit
                     catch (Exception exception)
                     {
                         logger.Warn("Robot objective liveness check failed; the faulty objective was removed: "
-                            + exception.Message);
+                            + RobotKitLog.ExceptionType(exception));
                         remove = true;
                     }
                 }
@@ -418,11 +419,11 @@ namespace TopiaForge.RobotKit
             SafeEvent.Invoke(
                 ProgramDelivered,
                 delivery,
-                exception => logger.Warn("A ProgramDelivered subscriber threw: " + exception.Message));
+                exception => logger.Warn("A ProgramDelivered subscriber threw: " + RobotKitLog.ExceptionType(exception)));
             SafeEvent.Invoke(
                 ProgramDeliveredOwned,
                 new OwnedDelivery(ownerModId, delivery),
-                exception => logger.Warn("An owner-bound ProgramDelivered subscriber threw: " + exception.Message));
+                exception => logger.Warn("An owner-bound ProgramDelivered subscriber threw: " + RobotKitLog.ExceptionType(exception)));
         }
 
         public void OnSceneChanged()
@@ -566,7 +567,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective rejected an agent whose id getter failed: " + exception.Message);
+                logger.Warn("Robot objective rejected an agent whose id getter failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
 
@@ -589,7 +590,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective rejected an agent whose liveness getter failed: " + exception.Message);
+                logger.Warn("Robot objective rejected an agent whose liveness getter failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
         }
@@ -602,7 +603,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective failed while " + operation + ": " + exception.Message);
+                logger.Warn("Robot objective failed while " + operation + ": " + RobotKitLog.ExceptionType(exception));
             }
         }
 
@@ -703,7 +704,7 @@ namespace TopiaForge.RobotKit
                         return;
                     }
 
-                    var subscription = new DeliverySubscription(service, ownerModId, value);
+                    var subscription = new DeliverySubscription(service, ownerModId, lifetime, value);
                     lock (eventSync)
                     {
                         subscriptions.Add(subscription);
@@ -752,6 +753,9 @@ namespace TopiaForge.RobotKit
                 RobotTargetKind kind,
                 Func<RobotTargetSnapshot?> resolve)
             {
+                if (lifetime.IsStopping)
+                    return OperationResult<IRobotTargetRegistration>.Failure(
+                        ModErrorCode.InvalidState, "The mod lifetime is stopping.");
                 var result = service.RegisterTarget(ownerModId, name, kind, resolve);
                 if (!result.TryGetValue(out var registration))
                 {
@@ -765,7 +769,6 @@ namespace TopiaForge.RobotKit
                 }
                 catch (ObjectDisposedException)
                 {
-                    registration.Dispose();
                     return OperationResult<IRobotTargetRegistration>.Failure(
                         ModErrorCode.InvalidState,
                         "The mod lifetime is stopping.");
@@ -781,18 +784,13 @@ namespace TopiaForge.RobotKit
                 IRobotAgent agent,
                 RobotObjective objective)
             {
+                if (lifetime.IsStopping)
+                    return OperationResult<IRobotObjectiveHandle>.Failure(
+                        ModErrorCode.InvalidState, "The mod lifetime is stopping.");
                 var result = service.SetObjective(ownerModId, agent, objective);
                 if (!result.TryGetValue(out var handle))
                 {
                     return result;
-                }
-
-                if (lifetime.IsStopping)
-                {
-                    handle.Dispose();
-                    return OperationResult<IRobotObjectiveHandle>.Failure(
-                        ModErrorCode.InvalidState,
-                        "The mod lifetime is stopping.");
                 }
 
                 try
@@ -802,7 +800,6 @@ namespace TopiaForge.RobotKit
                 }
                 catch (ObjectDisposedException)
                 {
-                    handle.Dispose();
                     return OperationResult<IRobotObjectiveHandle>.Failure(
                         ModErrorCode.InvalidState,
                         "The mod lifetime is stopping.");
@@ -812,8 +809,9 @@ namespace TopiaForge.RobotKit
             public bool TryGetObjective(IRobotAgent agent, out IRobotObjectiveHandle? objective) =>
                 service.TryGetObjective(ownerModId, agent, out objective);
 
-            public OperationResult<bool> ClearObjective(IRobotAgent agent) =>
-                service.ClearObjective(ownerModId, agent);
+            public OperationResult<bool> ClearObjective(IRobotAgent agent) => lifetime.IsStopping
+                ? OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.")
+                : service.ClearObjective(ownerModId, agent);
 
             private sealed class OwnerTargetRegistration : IRobotTargetRegistration
             {
@@ -865,15 +863,18 @@ namespace TopiaForge.RobotKit
                 private RobotObjectiveService? service;
                 private readonly string ownerModId;
                 private readonly Action<RobotProgramDelivery> handler;
+                private readonly IModLifetime lifetime;
 
                 public DeliverySubscription(
                     RobotObjectiveService service,
                     string ownerModId,
+                    IModLifetime lifetime,
                     Action<RobotProgramDelivery> handler)
                 {
                     this.service = service;
                     this.ownerModId = ownerModId;
                     this.handler = handler;
+                    this.lifetime = lifetime;
                     Wrapper = OnDelivery;
                 }
 
@@ -891,7 +892,8 @@ namespace TopiaForge.RobotKit
 
                 private void OnDelivery(OwnedDelivery delivery)
                 {
-                    if (string.Equals(delivery.OwnerModId, ownerModId, StringComparison.OrdinalIgnoreCase))
+                    if (service != null && !lifetime.IsStopping
+                        && string.Equals(delivery.OwnerModId, ownerModId, StringComparison.OrdinalIgnoreCase))
                     {
                         handler(delivery.Delivery);
                     }

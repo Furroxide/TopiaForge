@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "modId": "io.github.furroxide.topiaforge.perffixes",
   "modName": "TopiaForge Performance Fixes",
   "bindings": [
@@ -22,7 +22,14 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Degraded",
       "feature": "Camera.main caching per-frame optimization",
-      "sourceRef": "mods/TopiaForge.PerfFixes/Appliers/CameraMainCacheApplier.cs:50"
+      "sourceRef": "mods/TopiaForge.PerfFixes/Appliers/CameraMainCacheApplier.cs:52",
+      "parameters": [
+        {
+          "type": "UnityEngine.Camera&",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Boolean"
     },
     {
       "id": "perffixes.collisioneventproxy-oncollisionenter",
@@ -39,7 +46,8 @@
           "type": "UnityEngine.Collision",
           "constrained": true
         }
-      ]
+      ],
+      "returnType": "System.Void"
     },
     {
       "id": "perffixes.collisioneventproxy-oncollisionexit",
@@ -56,7 +64,8 @@
           "type": "UnityEngine.Collision",
           "constrained": true
         }
-      ]
+      ],
+      "returnType": "System.Void"
     },
     {
       "id": "perffixes.icollisioneventreceiver",

@@ -1,6 +1,5 @@
 {
-  "schemaVersion": 2,
-  "protocolVersion": "1.0.0",
+  "schemaVersion": 3,
   "contracts": [
     {
       "id": "io.github.furroxide.topiaforge.samples.counter",

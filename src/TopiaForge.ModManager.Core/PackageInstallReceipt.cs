@@ -318,7 +318,9 @@ namespace TopiaForge.ModManager.Core
 
         private static bool IsCritical(string path, ModManifest manifest)
         {
-            return string.Equals(path, "topiaforge.mod.json", StringComparison.Ordinal) ||
+            return (manifest.Contributions?.Worlds ?? new List<ModWorldDeclaration>()).Any(world =>
+                    world.Content?.Kind == ModWorldContent.MapKind && string.Equals(path, world.Content.File, StringComparison.Ordinal)) ||
+                string.Equals(path, "topiaforge.mod.json", StringComparison.Ordinal) ||
                 string.Equals(path, manifest.EntryAssembly.Replace('\\', '/'), StringComparison.Ordinal) ||
                 (manifest.ApiAssemblies ?? new List<string>()).Any(api =>
                     string.Equals(path, api.Replace('\\', '/'), StringComparison.Ordinal)) ||

@@ -14,10 +14,18 @@ namespace TopiaForge.Mods.Multiplayer.Generators
 {
     /// <summary>Generates bounded codecs, registration, descriptors, and typed submission proxies for multiplayer contracts.</summary>
     [Generator(LanguageNames.CSharp)]
-    public sealed class MultiplayerContractGenerator : IIncrementalGenerator
+    public sealed partial class MultiplayerContractGenerator : IIncrementalGenerator
     {
         internal const int WireFormatRevision = 1;
 
+        /// <summary>
+        /// Per-connection client-to-server design budget in encoded bytes per second. 32 KiB/s is 256 kbit/s, the
+        /// per-connection ceiling recorded in docs/internal/MultiplayerTransportOptions.md. It is a budget, not a
+        /// wire constraint: it is never encoded, never hashed into a schema digest, and never enters a contract lock.
+        /// </summary>
+        internal const int PerConnectionInboundBudgetBytesPerSecond = 32 * 1024;
+
+        private const string DocsRoot = "https://docs.topiaforge.dev/diagnostics/";
         private const string ContractAttribute = "TopiaForge.Mods.MultiplayerContractAttribute";
         private const string StateAttribute = "TopiaForge.Mods.ReplicatedStateAttribute";
         private const string ObjectAttribute = "TopiaForge.Mods.ReplicatedObjectAttribute";
@@ -33,15 +41,17 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Multiplayer contract '{0}' must be a non-generic top-level partial class",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP001");
 
         private static readonly DiagnosticDescriptor InvalidCommand = new DiagnosticDescriptor(
             "TFMP002",
             "Invalid multiplayer command",
-            "Command '{0}' must be a non-static method with signature OperationResult<TResponse> Method(MultiplayerCommandContext, TRequest)",
+            "Command '{0}' must be a non-static, non-async, non-generic method with signature OperationResult<TResponse> Method(MultiplayerCommandContext, TRequest), where TRequest and TResponse are classes and no parameter is ref, in, or out",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP002");
 
         private static readonly DiagnosticDescriptor UnsupportedType = new DiagnosticDescriptor(
             "TFMP003",
@@ -49,7 +59,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Type '{0}' is not supported by generated multiplayer codecs: {1}",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP003");
 
         private static readonly DiagnosticDescriptor MissingBound = new DiagnosticDescriptor(
             "TFMP004",
@@ -57,7 +68,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Member '{0}' must declare [NetworkBound(maximum)] because strings and collections are unbounded on the wire",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP004");
 
         private static readonly DiagnosticDescriptor PredictedNondeterminism = new DiagnosticDescriptor(
             "TFMP005",
@@ -65,15 +77,17 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Predicted command '{0}' uses nondeterministic API '{1}'",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP005");
 
         private static readonly DiagnosticDescriptor PredictedSideEffect = new DiagnosticDescriptor(
             "TFMP006",
             "Predicted command performs a process-local side effect",
-            "Predicted command '{0}' accesses '{1}'; predicted handlers may only mutate generated replicated state and emit buffered presentation events",
+            "Predicted command '{0}' uses '{1}'. A predicted handler runs on the sender and again on the host, so it may only read its request, its state, its locals and arrays, call this mod's own methods that follow the same rules, update replicated state and emit presentation events. Move other work into a [PresentationEvent] handler, or set Prediction = PredictionMode.None.",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP006");
 
         private static readonly DiagnosticDescriptor DuplicateId = new DiagnosticDescriptor(
             "TFMP007",
@@ -81,7 +95,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Wire id '{0}' is declared more than once in contract '{1}'",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP007");
 
         private static readonly DiagnosticDescriptor PayloadLimitExceeded = new DiagnosticDescriptor(
             "TFMP008",
@@ -89,7 +104,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Command '{0}' declares a {1}-byte payload limit, but its generated request or response codec can require {2} bytes",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP008");
 
         private static readonly DiagnosticDescriptor InvalidId = new DiagnosticDescriptor(
             "TFMP009",
@@ -97,15 +113,17 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Wire id '{0}' must be non-empty, contain no control characters, and remain at most 128 characters after contract namespacing",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP009");
 
         private static readonly DiagnosticDescriptor InvalidObject = new DiagnosticDescriptor(
             "TFMP010",
             "Invalid replicated object handler",
-            "Replicated object handler '{0}' must have signature OperationResult<TState> Method(ReplicatedObjectCommandContext, TState, TInput)",
+            "Replicated object handler '{0}' must be a non-async, non-generic method with signature OperationResult<TState> Method(ReplicatedObjectCommandContext, TState, TInput), where TState and TInput are classes and no parameter is ref, in, or out",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP010");
 
         private static readonly DiagnosticDescriptor TransportPayloadLimitExceeded = new DiagnosticDescriptor(
             "TFMP011",
@@ -113,7 +131,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "{0} '{1}' has a generated codec bound of {2} bytes, above the 1048576-byte transport limit",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP011");
 
         private static readonly DiagnosticDescriptor GeneratedNameCollision = new DiagnosticDescriptor(
             "TFMP012",
@@ -121,7 +140,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Wire declaration '{0}' would generate member '{1}', which collides with another generated or author-defined member in contract '{2}'",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP012");
 
         private static readonly DiagnosticDescriptor ExplicitContractIdRequired = new DiagnosticDescriptor(
             "TFMP013",
@@ -129,7 +149,17 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Multiplayer contract '{0}' must declare an explicit stable Id; class and namespace names are not wire identities",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
-            true);
+            true,
+            helpLinkUri: DocsRoot + "TFMP013");
+
+        private static readonly DiagnosticDescriptor InboundBudgetExceeded = new DiagnosticDescriptor(
+            "TFMP014",
+            "Multiplayer contract exceeds the per-connection inbound budget",
+            "Contract '{0}' declares a worst-case client-to-server rate of {1} bytes/second across its commands and replicated objects, above the {2}-byte/second per-connection design budget; lower MaximumPerSecond or MaximumPayloadBytes",
+            "TopiaForge.Multiplayer",
+            DiagnosticSeverity.Warning,
+            true,
+            helpLinkUri: DocsRoot + "TFMP014");
 
         private static readonly SymbolDisplayFormat FullyQualified = SymbolDisplayFormat.FullyQualifiedFormat
             .WithMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
@@ -178,6 +208,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             var objects = new List<ObjectModel>();
             var events = new List<EventModel>();
             var predictedMethods = new List<IMethodSymbol>();
+            var serverOnlyMethods = new List<IMethodSymbol>();
             var ids = new Dictionary<string, Location>(StringComparer.Ordinal);
             var invalid = missingContractId;
 
@@ -188,18 +219,30 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 var id = GetConstructorString(attribute);
                 if (!RegisterId(context, contract, contractId, ids, id, field.Locations.FirstOrDefault())) invalid = true;
                 if (field.IsStatic || field.IsReadOnly || field.Type is not INamedTypeSymbol named ||
-                    named.ConstructedFrom.ToDisplayString() != ReplicatedStateType)
+                    (named.ConstructedFrom.ToDisplayString() != ReplicatedStateType && named.ConstructedFrom.ToDisplayString() != "TopiaForge.Mods.PerPlayerState<T>"))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         UnsupportedType,
                         field.Locations.FirstOrDefault(),
                         field.Type.ToDisplayString(),
-                        "[ReplicatedState] fields must be mutable instance fields of type ReplicatedState<T>"));
+                        "[ReplicatedState] fields must be mutable instance fields of type ReplicatedState<T> or PerPlayerState<T>"));
                     invalid = true;
                     continue;
                 }
 
-                states.Add(new StateModel(field, id, named.TypeArguments[0]));
+                if (!TryReadDeliverySettings(context, field, attribute, out var stateDelivery, out var stateUpdates))
+                {
+                    invalid = true;
+                    continue;
+                }
+
+                if (named.ConstructedFrom.ToDisplayString() == "TopiaForge.Mods.PerPlayerState<T>" && stateDelivery != 0)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(UnsupportedType, field.Locations.FirstOrDefault(), field.Type.ToDisplayString(), "Private state requires coalesced delivery"));
+                    invalid = true;
+                }
+
+                states.Add(new StateModel(field, id, named.TypeArguments[0], stateDelivery, stateUpdates));
             }
 
             foreach (var method in contract.GetMembers().OfType<IMethodSymbol>())
@@ -209,16 +252,30 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 {
                     var id = GetConstructorString(objectAttribute);
                     if (!RegisterId(context, contract, contractId, ids, id, method.Locations.FirstOrDefault())) invalid = true;
-                    if (!TryCreateObject(method, objectAttribute, id, out var replicatedObject))
+                    if (!HasObjectSignature(method))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(InvalidObject, method.Locations.FirstOrDefault(), method.Name));
                         invalid = true;
                     }
+                    else if (!TryReadHandlerSettings(context, method, objectAttribute, out var objectPrediction, out var objectRate, out var objectPayload) |
+                             !TryReadDeliverySettings(context, method, objectAttribute, out var objectDelivery, out var objectUpdates))
+                    {
+                        invalid = true;
+                    }
                     else
                     {
-                        objects.Add(replicatedObject!);
-                        if (replicatedObject!.Prediction == 1)
-                            predictedMethods.Add(method);
+                        objects.Add(new ObjectModel(
+                            method,
+                            id,
+                            method.Parameters[1].Type,
+                            method.Parameters[2].Type,
+                            objectPrediction,
+                            objectRate,
+                            objectPayload,
+                            objectDelivery,
+                            objectUpdates));
+                        if (objectPrediction == 1) predictedMethods.Add(method);
+                        else serverOnlyMethods.Add(method);
                     }
                 }
 
@@ -227,18 +284,27 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 {
                     var id = GetConstructorString(commandAttribute);
                     if (!RegisterId(context, contract, contractId, ids, id, method.Locations.FirstOrDefault())) invalid = true;
-                    if (!TryCreateCommand(method, commandAttribute, id, out var command))
+                    if (!HasCommandSignature(method, out var responseType))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(InvalidCommand, method.Locations.FirstOrDefault(), method.Name));
                         invalid = true;
                     }
+                    else if (!TryReadHandlerSettings(context, method, commandAttribute, out var commandPrediction, out var commandRate, out var commandPayload))
+                    {
+                        invalid = true;
+                    }
                     else
                     {
-                        commands.Add(command!);
-                        if (command!.Prediction == 1)
-                        {
-                            predictedMethods.Add(method);
-                        }
+                        commands.Add(new CommandModel(
+                            method,
+                            id,
+                            method.Parameters[1].Type,
+                            responseType!,
+                            commandPrediction,
+                            commandRate,
+                            commandPayload));
+                        if (commandPrediction == 1) predictedMethods.Add(method);
+                        else serverOnlyMethods.Add(method);
                     }
                 }
 
@@ -265,7 +331,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             }
 
             var generatedPresentationEmitters = new HashSet<string>(
-                events.Select(item => "Emit" + item.Method.Name),
+                events.SelectMany(item => new[] { "Emit" + item.Method.Name, "Emit" + item.Method.Name + "To" }),
                 StringComparer.Ordinal);
             foreach (var predictedMethod in predictedMethods)
             {
@@ -274,6 +340,11 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                     compilation,
                     predictedMethod,
                     generatedPresentationEmitters);
+            }
+
+            foreach (var serverOnlyMethod in serverOnlyMethods)
+            {
+                ReportHostOnlyPresentation(context, compilation, serverOnlyMethod);
             }
 
             invalid |= ReportGeneratedNameCollisions(context, contract, commands, objects, events);
@@ -339,6 +410,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             {
                 var codec = codecModels.FirstOrDefault(item =>
                     SymbolEqualityComparer.Default.Equals(item.Type, state.ValueType));
+                if (state.IsPrivate && (codec?.MaximumBytes ?? 0) > 16 * 1024)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(UnsupportedType, state.Field.Locations.FirstOrDefault(),
+                        state.ValueType.ToDisplayString(), "Private state codec bounds must not exceed 16384 bytes"));
+                    invalid = true;
+                    continue;
+                }
                 if ((codec?.MaximumBytes ?? 0) <= 1024 * 1024) continue;
                 context.ReportDiagnostic(Diagnostic.Create(
                     TransportPayloadLimitExceeded,
@@ -384,9 +462,49 @@ namespace TopiaForge.Mods.Multiplayer.Generators
 
             if (invalid) return;
 
-            var source = Render(contract, contractId, states, commands, objects, events, codecModels);
+            ReportInboundBudget(context, contract, commands, objects);
+
+            var source = Render(contract, contractId, states, commands, objects, events, codecModels, FindSessionHooks(contract));
             var hintName = Sanitize(contract.ToDisplayString()) + ".Multiplayer.g.cs";
             context.AddSource(hintName, source);
+        }
+
+        /// <summary>
+        /// Reports the declared worst-case client-to-server rate against the recorded per-connection design budget.
+        /// </summary>
+        /// <remarks>
+        /// This is deliberately partial coverage. Commands and replicated objects each declare an explicit
+        /// <c>MaximumPerSecond</c> and <c>MaximumPayloadBytes</c>, so their inbound ceiling is expressible from the
+        /// frozen contract. Replicated state and presentation events declare neither a rate nor a fan-out, so the
+        /// server-to-client direction - the one a relay meters, and the one lobby size multiplies - cannot be checked
+        /// here. See docs/internal/MultiplayerTransportOptions.md for the recorded gap. The diagnostic is a warning
+        /// because the budget is a pre-gate design constraint rather than a shipped wire invariant.
+        /// </remarks>
+        private static void ReportInboundBudget(
+            SourceProductionContext context,
+            INamedTypeSymbol contract,
+            IReadOnlyList<CommandModel> commands,
+            IReadOnlyList<ObjectModel> objects)
+        {
+            var declared = 0L;
+            foreach (var command in commands)
+            {
+                declared += (long)command.MaximumPerSecond * command.MaximumPayloadBytes;
+            }
+
+            foreach (var item in objects)
+            {
+                declared += (long)item.MaximumPerSecond * item.MaximumPayloadBytes;
+            }
+
+            if (declared <= PerConnectionInboundBudgetBytesPerSecond) return;
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                InboundBudgetExceeded,
+                contract.Locations.FirstOrDefault(),
+                contract.ToDisplayString(),
+                declared.ToString(CultureInfo.InvariantCulture),
+                PerConnectionInboundBudgetBytesPerSecond.ToString(CultureInfo.InvariantCulture)));
         }
 
         private static bool RegisterId(
@@ -439,6 +557,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 foreach (var name in new[]
                          {
                              PublicName(command.Id) + "CommandType",
+                             AnsweredSubmitName(command),
                              "Submit" + command.Method.Name + "Async"
                          })
                 {
@@ -483,7 +602,9 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                          {
                              PublicName(item.Id) + "EventType",
                              "Emit" + item.Method.Name,
-                             "Publish" + item.Method.Name
+                             "Publish" + item.Method.Name,
+                             "Emit" + item.Method.Name + "To",
+                             "Publish" + item.Method.Name + "To"
                          })
                 {
                     if (names.Add(name)) continue;
@@ -503,13 +624,9 @@ namespace TopiaForge.Mods.Multiplayer.Generators
         private static bool IsValidIdentity(string value) =>
             !string.IsNullOrWhiteSpace(value) && value.Length <= 128 && value.All(character => !char.IsControl(character));
 
-        private static bool TryCreateCommand(
-            IMethodSymbol method,
-            AttributeData attribute,
-            string id,
-            out CommandModel? command)
+        private static bool HasCommandSignature(IMethodSymbol method, out ITypeSymbol? responseType)
         {
-            command = null;
+            responseType = null;
             if (method.IsStatic || method.IsAsync || method.IsGenericMethod || method.Parameters.Length != 2 ||
                 method.Parameters[0].Type.ToDisplayString() != "TopiaForge.Mods.MultiplayerCommandContext" ||
                 method.Parameters.Any(parameter => parameter.RefKind != RefKind.None) ||
@@ -519,55 +636,18 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 return false;
             }
 
-            var prediction = GetNamedInt(attribute, "Prediction", 0);
-            var rate = GetNamedInt(attribute, "MaximumPerSecond", 30);
-            var maximumPayload = GetNamedInt(attribute, "MaximumPayloadBytes", 16 * 1024);
-            if (prediction < 0 || prediction > 1 || rate < 1 || rate > 1000 || maximumPayload < 64 || maximumPayload > 1024 * 1024)
-            {
-                return false;
-            }
-
-            command = new CommandModel(method, id, method.Parameters[1].Type, result.TypeArguments[0], prediction, rate, maximumPayload);
+            responseType = result.TypeArguments[0];
             return true;
         }
 
-        private static bool TryCreateObject(
-            IMethodSymbol method,
-            AttributeData attribute,
-            string id,
-            out ObjectModel? replicatedObject)
-        {
-            replicatedObject = null;
-            if (method.IsAsync || method.IsGenericMethod || method.Parameters.Length != 3 ||
-                method.Parameters[0].Type.ToDisplayString() != "TopiaForge.Mods.ReplicatedObjectCommandContext" ||
-                method.Parameters.Any(parameter => parameter.RefKind != RefKind.None) ||
-                method.Parameters[1].Type.IsValueType || method.Parameters[2].Type.IsValueType ||
-                method.ReturnType is not INamedTypeSymbol result ||
-                result.ConstructedFrom.ToDisplayString() != OperationResultType ||
-                !SymbolEqualityComparer.Default.Equals(result.TypeArguments[0], method.Parameters[1].Type))
-            {
-                return false;
-            }
-
-            var prediction = GetNamedInt(attribute, "Prediction", 0);
-            var rate = GetNamedInt(attribute, "MaximumPerSecond", 30);
-            var maximumPayload = GetNamedInt(attribute, "MaximumPayloadBytes", 16 * 1024);
-            if (prediction < 0 || prediction > 1 || rate < 1 || rate > 1000 ||
-                maximumPayload < 64 || maximumPayload > 1024 * 1024)
-            {
-                return false;
-            }
-
-            replicatedObject = new ObjectModel(
-                method,
-                id,
-                method.Parameters[1].Type,
-                method.Parameters[2].Type,
-                prediction,
-                rate,
-                maximumPayload);
-            return true;
-        }
+        private static bool HasObjectSignature(IMethodSymbol method) =>
+            !method.IsAsync && !method.IsGenericMethod && method.Parameters.Length == 3 &&
+            method.Parameters[0].Type.ToDisplayString() == "TopiaForge.Mods.ReplicatedObjectCommandContext" &&
+            method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+            !method.Parameters[1].Type.IsValueType && !method.Parameters[2].Type.IsValueType &&
+            method.ReturnType is INamedTypeSymbol result &&
+            result.ConstructedFrom.ToDisplayString() == OperationResultType &&
+            SymbolEqualityComparer.Default.Equals(result.TypeArguments[0], method.Parameters[1].Type);
 
         private static bool ReportPredictedSafetyDiagnostics(
             SourceProductionContext context,
@@ -581,6 +661,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 context,
                 compilation,
                 method.Name,
+                method.ContainingType,
                 method,
                 generatedPresentationEmitters,
                 reported,
@@ -591,6 +672,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             SourceProductionContext context,
             Compilation compilation,
             string predictedMethodName,
+            INamedTypeSymbol contractType,
             IMethodSymbol method,
             ISet<string> generatedPresentationEmitters,
             ISet<string> reported,
@@ -634,13 +716,41 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                     else if (operation is IInvocationOperation invocation &&
                              !IsAllowedPredictedInvocation(invocation))
                     {
-                        invalid |= ReportPredictedDiagnostic(
-                            context,
-                            reported,
-                            PredictedSideEffect,
-                            operation.Syntax.GetLocation(),
-                            predictedMethodName,
-                            display);
+                        if (IsPredictedHelper(compilation, invocation.TargetMethod))
+                        {
+                            // The call may first run its type's static constructor, which nothing here reads.
+                            if (TryGetPendingStaticConstructor(invocation.TargetMethod, contractType, out var staticConstructor))
+                            {
+                                invalid |= ReportPredictedDiagnostic(
+                                    context,
+                                    reported,
+                                    PredictedSideEffect,
+                                    staticConstructor!.Locations.FirstOrDefault() ?? operation.Syntax.GetLocation(),
+                                    predictedMethodName,
+                                    staticConstructor.ToDisplayString());
+                            }
+
+                            // The mod's own method runs on both sides too, so its body answers to the same rules.
+                            invalid |= ReportPredictedMethodSafetyDiagnostics(
+                                context,
+                                compilation,
+                                predictedMethodName,
+                                contractType,
+                                invocation.TargetMethod.OriginalDefinition,
+                                generatedPresentationEmitters,
+                                reported,
+                                inspectedMethods);
+                        }
+                        else
+                        {
+                            invalid |= ReportPredictedDiagnostic(
+                                context,
+                                reported,
+                                PredictedSideEffect,
+                                operation.Syntax.GetLocation(),
+                                predictedMethodName,
+                                display);
+                        }
                     }
                     else if (operation is IObjectCreationOperation creation &&
                              !IsAllowedPredictedObjectCreation(creation))
@@ -712,6 +822,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                                 context,
                                 compilation,
                                 predictedMethodName,
+                                contractType,
                                 callback!,
                                 generatedPresentationEmitters,
                                 reported,
@@ -727,6 +838,20 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                             operation.Syntax.GetLocation(),
                             predictedMethodName,
                             operatorMethod!.ToDisplayString());
+                    }
+                    else if (operation is IEventReferenceOperation ||
+                             operation is ITypeParameterObjectCreationOperation ||
+                             operation is IInstanceReferenceOperation instance && IsEscapingContractInstance(instance))
+                    {
+                        // An event's handlers, a type argument's constructor and whatever a helper does with the mod
+                        // instance it was handed are all invisible to these rules.
+                        invalid |= ReportPredictedDiagnostic(
+                            context,
+                            reported,
+                            PredictedSideEffect,
+                            operation.Syntax.GetLocation(),
+                            predictedMethodName,
+                            display);
                     }
                 }
 
@@ -772,6 +897,63 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             });
         }
 
+        /// <summary>
+        /// Whether a call from a predicted handler is to a method of this compilation whose body can be checked by the
+        /// same rules: an ordinary or local method with a body, which no override can replace and no await suspends.
+        /// </summary>
+        private static bool IsPredictedHelper(Compilation compilation, IMethodSymbol method)
+        {
+            method = method.OriginalDefinition;
+            if (method.MethodKind != MethodKind.Ordinary && method.MethodKind != MethodKind.LocalFunction) return false;
+            if (method.IsVirtual || method.IsAbstract || method.IsOverride || method.IsExtern || method.IsAsync) return false;
+            if (!SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, compilation.Assembly)) return false;
+            return HasPredictedMethodBody(method);
+        }
+
+        /// <summary>
+        /// Finds the explicit static constructor a helper call would run first. A static method's type, or a struct's,
+        /// may not be initialised yet; the contract's own type is, since its instance runs the handler.
+        /// </summary>
+        private static bool TryGetPendingStaticConstructor(
+            IMethodSymbol method,
+            INamedTypeSymbol contractType,
+            out IMethodSymbol? staticConstructor)
+        {
+            staticConstructor = null;
+            method = method.OriginalDefinition;
+            var type = method.ContainingType?.OriginalDefinition;
+            if (type == null || method.MethodKind == MethodKind.LocalFunction || !method.IsStatic && !type.IsValueType)
+            {
+                return false;
+            }
+
+            for (INamedTypeSymbol? initialized = contractType; initialized != null; initialized = initialized.BaseType)
+            {
+                if (SymbolEqualityComparer.Default.Equals(initialized.OriginalDefinition, type)) return false;
+            }
+
+            staticConstructor = type.StaticConstructors.FirstOrDefault(constructor => !constructor.IsImplicitlyDeclared);
+            return staticConstructor != null;
+        }
+
+        /// <summary>
+        /// Whether the mod instance is used as a value rather than to reach one of its members. Handed to a helper's
+        /// parameter, a local or a return value, it would pass as predicted data and open every field to the helper.
+        /// </summary>
+        private static bool IsEscapingContractInstance(IInstanceReferenceOperation instance)
+        {
+            if (instance.ReferenceKind != InstanceReferenceKind.ContainingTypeInstance) return false;
+            IOperation receiver = instance;
+            while (receiver.Parent is IConversionOperation conversion) receiver = conversion;
+            return receiver.Parent switch
+            {
+                IMemberReferenceOperation member => !ReferenceEquals(member.Instance, receiver),
+                IInvocationOperation invocation => !ReferenceEquals(invocation.Instance, receiver),
+                IInvalidOperation => false,
+                _ => true
+            };
+        }
+
         private static bool TryGetAllowedPredictedCallback(
             IMethodReferenceOperation reference,
             out IMethodSymbol? callback)
@@ -803,10 +985,32 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             string methodName,
             string display)
         {
-            var key = descriptor.Id + ":" + location.SourceSpan.Start + ":" + location.SourceSpan.Length;
-            if (!reported.Add(key)) return false;
+            var path = location.SourceTree?.FilePath ?? string.Empty;
+            var key = descriptor.Id + ":" + path + ":" + location.SourceSpan.Start + ":" + location.SourceSpan.Length;
+            if (reported.Contains(key)) return false;
+            if (descriptor == PredictedSideEffect && reported.Any(existing => ContainsReportedSpan(existing, path, location)))
+            {
+                return false;
+            }
+
+            reported.Add(key);
             context.ReportDiagnostic(Diagnostic.Create(descriptor, location, methodName, display));
             return true;
+        }
+
+        private static bool ContainsReportedSpan(string key, string path, Location location)
+        {
+            var prefix = PredictedSideEffect.Id + ":" + path + ":";
+            if (!key.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            var parts = key.Substring(prefix.Length).Split(':');
+            if (parts.Length != 2 ||
+                !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var start) ||
+                !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var length))
+            {
+                return false;
+            }
+
+            return location.SourceSpan.Start >= start && location.SourceSpan.End <= start + length;
         }
 
         private static IEnumerable<IOperation> DescendantsAndSelf(IOperation root)
@@ -829,6 +1033,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             IObjectCreationOperation creation => creation.Constructor,
             IPropertyReferenceOperation property => property.Property,
             IFieldReferenceOperation field => field.Field,
+            IEventReferenceOperation eventReference => eventReference.Event,
             IBinaryOperation binary => binary.OperatorMethod,
             IUnaryOperation unary => unary.OperatorMethod,
             IConversionOperation conversion => conversion.OperatorMethod,
@@ -842,6 +1047,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             var method = invocation.TargetMethod;
             if (method.ContainingType?.ToDisplayString() == "TopiaForge.Mods.MultiplayerCommandContext" &&
                 method.Name == "Emit") return true;
+            if (method.ContainingType?.ToDisplayString() == "TopiaForge.Mods.MultiplayerCommandContext" &&
+                method.Name == "CreateRandom" && IsRootedInParameter(invocation.Instance)) return true;
+            // A command's random stream is deterministic only while it stays local to the handler.
+            if (method.ContainingType?.ToDisplayString() == "TopiaForge.Mods.DeterministicRandom" && !method.IsStatic &&
+                (IsRootedInLocal(invocation.Instance) || IsCommandRandom(invocation.Instance))) return true;
+            // PresentationTarget is an immutable value type; every member is pure.
+            if (method.ContainingType?.ToDisplayString() == "TopiaForge.Mods.PresentationTarget") return true;
             if (method.ContainingType is INamedTypeSymbol containing &&
                 containing.ConstructedFrom.ToDisplayString() == "TopiaForge.Mods.ReplicatedState<T>" &&
                 method.Name == "Update") return true;
@@ -851,8 +1063,20 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             if (method.ContainingType is INamedTypeSymbol result &&
                 result.ConstructedFrom.ToDisplayString() == OperationResultType &&
                 method.Name == "TryGetValue" && IsRootedInLocal(invocation.Instance)) return true;
+            // Copying, cloning, resizing or emptying an array touches only the arrays it is given, and each of those
+            // operands answers to these rules where it appears.
+            if (method.ContainingType?.SpecialType == SpecialType.System_Array && IsPureArrayMember(method.Name)) return true;
             return false;
         }
+
+        private static bool IsPureArrayMember(string name) =>
+            name == "Copy" || name == "CopyTo" || name == "Clone" || name == "Resize" || name == "Empty";
+
+        private static bool IsCommandRandom(IOperation? operation) =>
+            Unwrap(operation) is IInvocationOperation invocation &&
+            invocation.TargetMethod.Name == "CreateRandom" &&
+            invocation.TargetMethod.ContainingType?.ToDisplayString() == "TopiaForge.Mods.MultiplayerCommandContext" &&
+            IsRootedInParameter(invocation.Instance);
 
         private static bool IsAllowedPredictedObjectCreation(IObjectCreationOperation creation) =>
             creation.Constructor?.IsImplicitlyDeclared == true &&
@@ -1038,6 +1262,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 (property.Name == "Succeeded" || property.Name == "Value" || property.Name == "ErrorCode" ||
                  property.Name == "ErrorMessage") && IsRootedInLocal(reference.Instance)) return true;
             var containingType = property.ContainingType?.ToDisplayString();
+            if (containingType == "TopiaForge.Mods.PresentationTarget") return true;
             if ((containingType == "TopiaForge.Mods.MultiplayerCommandContext" ||
                  containingType == "TopiaForge.Mods.ReplicatedObjectCommandContext") &&
                 IsRootedInParameter(reference.Instance)) return true;
@@ -1045,7 +1270,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 IsRootedInPredictedData(reference.Instance)) return true;
             if (property.ContainingType?.SpecialType == SpecialType.System_String && property.Name == "Length" &&
                 IsRootedInPredictedData(reference.Instance)) return true;
+            if (property.ContainingType?.SpecialType == SpecialType.System_Array &&
+                (property.Name == "Length" || property.Name == "LongLength") &&
+                IsRootedInPredictedData(reference.Instance)) return true;
+            // An interface's or an overridable property may run a body that is not this declaration's.
             return property.Locations.Any(location => location.IsInSource) && IsAutoProperty(property) &&
+                   !property.IsAbstract && !property.IsVirtual && !property.IsOverride &&
                    IsRootedInPredictedData(reference.Instance);
         }
 
@@ -1054,7 +1284,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             var field = reference.Field;
             if (field.IsConst || field.ContainingType?.TypeKind == TypeKind.Enum) return true;
             if (field.ContainingType?.SpecialType == SpecialType.System_String && field.Name == "Empty") return true;
-            if (field.Type is INamedTypeSymbol state &&
+            // Only an instance field can be generated state; reading a static one runs its type's initializer.
+            if (field.Type is INamedTypeSymbol state && !field.IsStatic &&
                 state.ConstructedFrom.ToDisplayString() == "TopiaForge.Mods.ReplicatedState<T>" &&
                 field.Locations.Any(location => location.IsInSource)) return true;
             return field.Locations.Any(location => location.IsInSource) &&
@@ -1086,7 +1317,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             operation = Unwrap(operation);
             return operation is IParameterReferenceOperation || operation is ILocalReferenceOperation ||
                    operation is IPropertyReferenceOperation property && IsRootedInPredictedData(property.Instance) ||
-                   operation is IFieldReferenceOperation field && IsRootedInPredictedData(field.Instance);
+                   operation is IFieldReferenceOperation field && IsRootedInPredictedData(field.Instance) ||
+                   operation is IArrayElementReferenceOperation element && IsRootedInPredictedData(element.ArrayReference);
         }
 
         private static IOperation? Unwrap(IOperation? operation)
@@ -1166,7 +1398,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 "TopiaForge.Mods.ICommandService", "TopiaForge.Mods.IDiagnosticsService",
                 "TopiaForge.Mods.IExtensionService", "TopiaForge.Mods.IMultiplayerSession",
                 "TopiaForge.Mods.IReplicatedObject", "TopiaForge.Mods.IReplicatedObjectTypeRegistration",
-                "TopiaForge.Mods.IPresentationEventRegistration", "TopiaForge.Mods.IWorldGamemodeService",
+                "TopiaForge.Mods.IPresentationEventRegistration", "TopiaForge.Mods.IWorldSessionService",
+                "TopiaForge.Mods.IWorldSession", "TopiaForge.Mods.ILocalWorldService",
                 "TopiaForge.Mods.ITimeControlService"
             };
             return banned.Any(value => symbol.IndexOf(value, StringComparison.Ordinal) >= 0);
@@ -1282,7 +1515,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 }
                 if (RequiresBound(memberType) && bound == null)
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(MissingBound, member.Locations.FirstOrDefault(), member.Name));
+                    // A bound the compiler cannot resolve, typically for want of `using TopiaForge.Mods;`, is the
+                    // compiler's to report: TFMP004 would claim the member declares no bound at all.
+                    if (!HasUnresolvedBound(member))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(MissingBound, member.Locations.FirstOrDefault(), member.Name));
+                    }
+
                     success = false;
                     continue;
                 }
@@ -1398,7 +1637,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             IReadOnlyList<CommandModel> commands,
             IReadOnlyList<ObjectModel> objects,
             IReadOnlyList<EventModel> events,
-            IReadOnlyList<CodecModel> codecs)
+            IReadOnlyList<CodecModel> codecs,
+            SessionHooksModel hooks)
         {
             var schema = BuildSchema(WireFormatRevision, contractId, states, commands, objects, events, codecs);
             var hash = Sha256(schema);
@@ -1420,10 +1660,10 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 builder.AppendLine("{");
             }
 
-            builder.Append("partial class ").Append(contract.Name).AppendLine(" : global::TopiaForge.Mods.IGeneratedMultiplayerContract");
+            builder.Append("partial class ").Append(contract.Name).AppendLine(" : global::TopiaForge.Mods.IGeneratedMultiplayerBinding");
             builder.AppendLine("{");
             builder.AppendLine("    private global::TopiaForge.Mods.IMultiplayerSession? __topiaforgeMultiplayerSession;");
-            builder.AppendLine("    private global::System.IDisposable? __topiaforgeMultiplayerBinding;");
+            builder.AppendLine("    private __TopiaForgeMultiplayerBinding? __topiaforgeMultiplayerBinding;");
             builder.AppendLine();
             builder.AppendLine("    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
             builder.AppendLine("    public global::TopiaForge.Mods.MultiplayerContractDescriptor MultiplayerContractDescriptor { get; } =");
@@ -1497,22 +1737,43 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             builder.AppendLine("    public global::TopiaForge.Mods.OperationResult<global::System.IDisposable> BindMultiplayer(global::TopiaForge.Mods.IMultiplayerSession session)");
             builder.AppendLine("    {");
             builder.AppendLine("        if (session == null) throw new global::System.ArgumentNullException(nameof(session));");
+            builder.AppendLine("        // The runtime binds generated contracts before OnLoad, so a mod's own call for the same session is");
+            builder.AppendLine("        // a no-op that leaves the runtime's lease in charge of the binding.");
             builder.AppendLine("        if (__topiaforgeMultiplayerBinding != null)");
-            builder.AppendLine("            return global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Failure(global::TopiaForge.Mods.ModErrorCode.Conflict, \"The generated multiplayer contract is already bound.\");");
+            builder.AppendLine("            return global::System.Object.ReferenceEquals(__topiaforgeMultiplayerSession, session)");
+            builder.AppendLine("                ? global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Success(__TopiaForgeRepeatedBinding.Instance)");
+            builder.AppendLine("                : global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Failure(global::TopiaForge.Mods.ModErrorCode.Conflict, \"The generated multiplayer contract is already bound to another session; dispose that binding first.\");");
             builder.AppendLine("        var binding = new __TopiaForgeMultiplayerBinding(() =>");
             builder.AppendLine("        {");
             builder.AppendLine("            __topiaforgeMultiplayerSession = null;");
             builder.AppendLine("            __topiaforgeMultiplayerBinding = null;");
+            if (hooks.Any)
+            {
+                builder.AppendLine("            __topiaforgeStartedSession = null;");
+                builder.AppendLine("            __topiaforgeStartedSnapshot = null;");
+            }
+
             builder.AppendLine("        });");
             builder.AppendLine("        try");
             builder.AppendLine("        {");
+            builder.AppendLine("            var contract = session.RegisterContract(MultiplayerContractDescriptor);");
+            builder.AppendLine("            if (!contract.TryGetValue(out var contractRegistration)) { binding.Dispose(); return global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Failure(contract.ErrorCode, contract.ErrorMessage); }");
+            builder.AppendLine("            binding.Add(contractRegistration!);");
             foreach (var state in states)
             {
                 var codecName = CodecName(state.ValueType);
                 var resultName = "state_" + Sanitize(state.Field.Name);
                 builder.Append("            var ").Append(resultName).Append(" = this.").Append(state.Field.Name)
                     .Append(".Bind(session, ").Append(Literal(Namespaced(contractId, state.Id))).Append(", ")
-                    .Append(codecName).AppendLine(".Instance);");
+                    .Append(codecName).Append(".Instance");
+                if (state.Delivery != 0 || state.MaximumUpdatesPerSecond != 0)
+                {
+                    builder.Append(", (global::TopiaForge.Mods.MultiplayerDelivery)")
+                        .Append(state.Delivery.ToString(CultureInfo.InvariantCulture)).Append(", ")
+                        .Append(state.MaximumUpdatesPerSecond.ToString(CultureInfo.InvariantCulture));
+                }
+
+                builder.AppendLine(");");
                 builder.Append("            if (!").Append(resultName).AppendLine(".TryGetValue(out var connection_" + Sanitize(state.Field.Name) + ")) { binding.Dispose(); return global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Failure(" + resultName + ".ErrorCode, " + resultName + ".ErrorMessage); }");
                 builder.Append("            binding.Add(connection_").Append(Sanitize(state.Field.Name)).AppendLine(");");
             }
@@ -1544,7 +1805,15 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                     .Append(CodecName(item.InputType)).Append(".Instance, ").Append(item.Method.Name)
                     .Append(", (global::TopiaForge.Mods.PredictionMode)").Append(item.Prediction.ToString(CultureInfo.InvariantCulture))
                     .Append(", ").Append(item.MaximumPerSecond.ToString(CultureInfo.InvariantCulture))
-                    .Append(", ").Append(item.MaximumPayloadBytes.ToString(CultureInfo.InvariantCulture)).AppendLine("));");
+                    .Append(", ").Append(item.MaximumPayloadBytes.ToString(CultureInfo.InvariantCulture));
+                if (item.Delivery != 0 || item.MaximumUpdatesPerSecond != 0)
+                {
+                    builder.Append(", (global::TopiaForge.Mods.MultiplayerDelivery)")
+                        .Append(item.Delivery.ToString(CultureInfo.InvariantCulture)).Append(", ")
+                        .Append(item.MaximumUpdatesPerSecond.ToString(CultureInfo.InvariantCulture));
+                }
+
+                builder.AppendLine("));");
                 builder.Append("            if (!").Append(resultName).AppendLine(".TryGetValue(out var registration_" + uniqueName + ")) { binding.Dispose(); return global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Failure(" + resultName + ".ErrorCode, " + resultName + ".ErrorMessage); }");
                 builder.Append("            binding.Add(registration_").Append(uniqueName).AppendLine(");");
             }
@@ -1556,7 +1825,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 var resultName = "presentation_" + uniqueName;
                 builder.Append("            var ").Append(resultName).Append(" = session.RegisterPresentation(new global::TopiaForge.Mods.PresentationEventDefinition<")
                     .Append(TypeName(item.PayloadType)).Append(">(__topiaforgeEventType_").Append(PublicName(item.Id))
-                    .Append(", session.Snapshot.HasPresentation ? (global::System.Action<").Append(TypeName(item.PayloadType)).Append(">)this.")
+                    .Append(", session.Snapshot.ProcessKind == global::TopiaForge.Mods.MultiplayerProcessKind.Interactive ? (global::System.Action<").Append(TypeName(item.PayloadType)).Append(">)this.")
                     .Append(item.Method.Name).AppendLine(" : null));");
                 builder.Append("            if (!").Append(resultName).AppendLine(".TryGetValue(out var registration_" + uniqueName + ")) { binding.Dispose(); return global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Failure(" + resultName + ".ErrorCode, " + resultName + ".ErrorMessage); }");
                 builder.Append("            binding.Add(registration_").Append(uniqueName).AppendLine(");");
@@ -1564,6 +1833,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators
 
             builder.AppendLine("            __topiaforgeMultiplayerSession = session;");
             builder.AppendLine("            __topiaforgeMultiplayerBinding = binding;");
+            if (hooks.Any)
+            {
+                builder.AppendLine("            binding.Add(session.SubscribeChanged(this.__TopiaForgeTrackSession));");
+                builder.AppendLine("            this.__TopiaForgeTrackSession(session.Snapshot);");
+            }
+
             builder.AppendLine("            return global::TopiaForge.Mods.OperationResult<global::System.IDisposable>.Success(binding);");
             builder.AppendLine("        }");
             builder.AppendLine("        catch");
@@ -1575,6 +1850,11 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             builder.AppendLine();
             foreach (var command in commands)
             {
+                RenderAnsweredSubmit(builder, command);
+                builder.AppendLine("    /// <summary>");
+                builder.Append("    /// Submits one <c>").Append(Xml(command.Id)).AppendLine("</c> command and returns a task for its confirmation. In mod code, call");
+                builder.Append("    /// <see cref=\"").Append(AnsweredSubmitName(command)).AppendLine("\"/> instead: its answer needs no polling and never runs after the mod stops.");
+                builder.AppendLine("    /// </summary>");
                 builder.Append("    public global::System.Threading.Tasks.Task<global::TopiaForge.Mods.MultiplayerCommandConfirmation<")
                     .Append(TypeName(command.ResponseType)).Append(">> Submit").Append(command.Method.Name).Append("Async(")
                     .Append(TypeName(command.RequestType)).Append(" request, global::System.Threading.CancellationToken cancellationToken = default)")
@@ -1653,8 +1933,25 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 builder.Append("        return __topiaforgeMultiplayerSession.PublishPresentation(__topiaforgeEventType_").Append(eventName).AppendLine(", value, audience);");
                 builder.AppendLine("    }");
                 builder.AppendLine();
+                builder.Append("    public global::TopiaForge.Mods.OperationResult<bool> Emit").Append(item.Method.Name)
+                    .Append("To(global::TopiaForge.Mods.MultiplayerCommandContext context, ").Append(TypeName(item.PayloadType))
+                    .AppendLine(" value, global::TopiaForge.Mods.PresentationTarget target)");
+                builder.AppendLine("    {");
+                builder.AppendLine("        if (context == null) throw new global::System.ArgumentNullException(nameof(context));");
+                builder.Append("        return context.Emit(__topiaforgeEventType_").Append(eventName).AppendLine(", value, target);");
+                builder.AppendLine("    }");
+                builder.AppendLine();
+                builder.Append("    public global::TopiaForge.Mods.OperationResult<bool> Publish").Append(item.Method.Name)
+                    .Append("To(").Append(TypeName(item.PayloadType))
+                    .AppendLine(" value, global::TopiaForge.Mods.PresentationTarget target)");
+                builder.AppendLine("    {");
+                builder.AppendLine("        if (__topiaforgeMultiplayerSession == null) throw new global::System.InvalidOperationException(\"BindMultiplayer must succeed before a generated presentation proxy is used.\");");
+                builder.Append("        return __topiaforgeMultiplayerSession.PublishPresentation(__topiaforgeEventType_").Append(eventName).AppendLine(", value, target);");
+                builder.AppendLine("    }");
+                builder.AppendLine();
             }
 
+            RenderSessionHooks(builder, hooks);
             RenderBinding(builder);
             foreach (var codec in codecs.OrderBy(codec => TypeName(codec.Type), StringComparer.Ordinal))
             {
@@ -1698,11 +1995,20 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             builder.AppendLine("    private sealed class __TopiaForgeMultiplayerBinding : global::System.IDisposable");
             builder.AppendLine("    {");
             builder.AppendLine("        private readonly global::System.Collections.Generic.List<global::System.IDisposable> items = new global::System.Collections.Generic.List<global::System.IDisposable>();");
+            builder.AppendLine("        // Cancelled when the binding is released, so no answer to a command it submitted runs after that.");
+            builder.AppendLine("        private readonly global::System.Threading.CancellationTokenSource stopping = new global::System.Threading.CancellationTokenSource();");
             builder.AppendLine("        private global::System.Action? onDispose;");
             builder.AppendLine("        private bool disposed;");
             builder.AppendLine("        internal __TopiaForgeMultiplayerBinding(global::System.Action onDispose) { this.onDispose = onDispose ?? throw new global::System.ArgumentNullException(nameof(onDispose)); }");
+            builder.AppendLine("        internal global::System.Threading.CancellationToken Stopping => stopping.Token;");
             builder.AppendLine("        public void Add(global::System.IDisposable item) { if (disposed) item.Dispose(); else items.Add(item); }");
-            builder.AppendLine("        public void Dispose() { if (disposed) return; disposed = true; for (var index = items.Count - 1; index >= 0; index--) items[index].Dispose(); items.Clear(); var callback = onDispose; onDispose = null; callback?.Invoke(); }");
+            builder.AppendLine("        public void Dispose() { if (disposed) return; disposed = true; stopping.Cancel(); for (var index = items.Count - 1; index >= 0; index--) items[index].Dispose(); items.Clear(); var callback = onDispose; onDispose = null; callback?.Invoke(); }");
+            builder.AppendLine("    }");
+            builder.AppendLine();
+            builder.AppendLine("    private sealed class __TopiaForgeRepeatedBinding : global::System.IDisposable");
+            builder.AppendLine("    {");
+            builder.AppendLine("        internal static readonly __TopiaForgeRepeatedBinding Instance = new __TopiaForgeRepeatedBinding();");
+            builder.AppendLine("        public void Dispose() { }");
             builder.AppendLine("    }");
             builder.AppendLine();
             builder.AppendLine("    private sealed class __TopiaForgeRegistrationGuard : global::System.IDisposable");
@@ -1956,12 +2262,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 "wire-format-revision:" + wireFormatRevision.ToString(CultureInfo.InvariantCulture),
                 "contract:" + contractId
             };
-            lines.AddRange(states.OrderBy(state => state.Id, StringComparer.Ordinal).Select(state => "state:" + state.Id + ":" + TypeName(state.ValueType)));
+            lines.AddRange(states.OrderBy(state => state.Id, StringComparer.Ordinal).Select(state => (state.IsPrivate ? "private-state:" : "state:") + state.Id + ":" + TypeName(state.ValueType)));
             lines.AddRange(commands.OrderBy(command => command.Id, StringComparer.Ordinal).Select(command =>
                 "command:" + command.Id + ":" + TypeName(command.RequestType) + ":" + TypeName(command.ResponseType) + ":" + command.Prediction + ":" + command.MaximumPerSecond + ":" + command.MaximumPayloadBytes));
             lines.AddRange(objects.OrderBy(item => item.Id, StringComparer.Ordinal).Select(item =>
                 "object:" + item.Id + ":" + TypeName(item.StateType) + ":" + TypeName(item.InputType) + ":" + item.Prediction + ":" + item.MaximumPerSecond + ":" + item.MaximumPayloadBytes));
             lines.AddRange(events.OrderBy(item => item.Id, StringComparer.Ordinal).Select(item => "event:" + item.Id + ":" + TypeName(item.PayloadType)));
+            lines.AddRange(BuildDeliverySchemaLines(states, objects));
             var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
             foreach (var codec in codecs.OrderBy(codec => TypeName(codec.Type), StringComparer.Ordinal))
             {
@@ -2051,6 +2358,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 Array.Empty<EventModel>());
         }
 
+        /// <summary>Whether <paramref name="member"/> carries a <c>[NetworkBound]</c> that the compiler cannot resolve.</summary>
+        private static bool HasUnresolvedBound(ISymbol member) =>
+            member.GetAttributes().Any(attribute =>
+                attribute.AttributeClass is { TypeKind: TypeKind.Error } unresolved &&
+                (unresolved.Name == "NetworkBound" || unresolved.Name == "NetworkBoundAttribute"));
+
         private static AttributeData? FindAttribute(ISymbol symbol, string metadataName) =>
             symbol.GetAttributes().FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == metadataName);
 
@@ -2103,10 +2416,14 @@ namespace TopiaForge.Mods.Multiplayer.Generators
 
         private sealed class StateModel
         {
-            public StateModel(IFieldSymbol field, string id, ITypeSymbol valueType) { Field = field; Id = id; ValueType = valueType; }
+            public StateModel(IFieldSymbol field, string id, ITypeSymbol valueType, int delivery = 0, int maximumUpdatesPerSecond = 0)
+            { Field = field; Id = id; ValueType = valueType; Delivery = delivery; MaximumUpdatesPerSecond = maximumUpdatesPerSecond; }
+            public bool IsPrivate => ((INamedTypeSymbol)Field.Type).ConstructedFrom.ToDisplayString() == "TopiaForge.Mods.PerPlayerState<T>";
             public IFieldSymbol Field { get; }
             public string Id { get; }
             public ITypeSymbol ValueType { get; }
+            public int Delivery { get; }
+            public int MaximumUpdatesPerSecond { get; }
         }
 
         private sealed class CommandModel
@@ -2124,8 +2441,10 @@ namespace TopiaForge.Mods.Multiplayer.Generators
 
         private sealed class ObjectModel
         {
-            public ObjectModel(IMethodSymbol method, string id, ITypeSymbol stateType, ITypeSymbol inputType, int prediction, int maximumPerSecond, int maximumPayloadBytes)
-            { Method = method; Id = id; StateType = stateType; InputType = inputType; Prediction = prediction; MaximumPerSecond = maximumPerSecond; MaximumPayloadBytes = maximumPayloadBytes; }
+            public ObjectModel(IMethodSymbol method, string id, ITypeSymbol stateType, ITypeSymbol inputType, int prediction, int maximumPerSecond, int maximumPayloadBytes, int delivery, int maximumUpdatesPerSecond)
+            { Method = method; Id = id; StateType = stateType; InputType = inputType; Prediction = prediction; MaximumPerSecond = maximumPerSecond; MaximumPayloadBytes = maximumPayloadBytes; Delivery = delivery; MaximumUpdatesPerSecond = maximumUpdatesPerSecond; }
+            public int Delivery { get; }
+            public int MaximumUpdatesPerSecond { get; }
             public IMethodSymbol Method { get; }
             public string Id { get; }
             public ITypeSymbol StateType { get; }

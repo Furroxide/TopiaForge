@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Security;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,6 +26,11 @@ internal sealed partial class ManagedRefsRestore : IDisposable
     private PublicBuildConfiguration? publicConfiguration;
     private string? resolvedConfigPath;
     private bool publicLatestGateComplete;
+
+    // A dropped connection or time-out on the build manifest is retried twice; an HTTP error status is not.
+    private static readonly TimeSpan[] ManifestRetryDelays = { TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5) };
+
+    internal Func<TimeSpan, CancellationToken, Task> RetryDelay { get; init; } = Task.Delay;
 
     internal ManagedRefsRestore(ManagedRefsOptions options)
         : this(
@@ -290,19 +296,25 @@ internal sealed partial class ManagedRefsRestore : IDisposable
             var manifestUri = SafeHttpsUri.ParseAbsolute(
                 configuration.ManifestUrl,
                 "Robotopia build manifest URL");
-            await http.HeadAsync(
-                manifestUri,
+            await WithManifestRetriesAsync(
+                () => http.HeadAsync(
+                    manifestUri,
+                    "Robotopia build manifest HEAD",
+                    bearerToken: null,
+                    hideUri: false,
+                    TimeSpan.FromMinutes(1),
+                    cancellationToken),
                 "Robotopia build manifest HEAD",
-                bearerToken: null,
-                hideUri: false,
-                TimeSpan.FromMinutes(1),
                 cancellationToken).ConfigureAwait(false);
-            var manifestJson = await http.GetStringAsync(
-                manifestUri,
+            var manifestJson = await WithManifestRetriesAsync(
+                () => http.GetStringAsync(
+                    manifestUri,
+                    "Robotopia build manifest GET",
+                    bearerToken: null,
+                    hideUri: false,
+                    TimeSpan.FromMinutes(1),
+                    cancellationToken),
                 "Robotopia build manifest GET",
-                bearerToken: null,
-                hideUri: false,
-                TimeSpan.FromMinutes(1),
                 cancellationToken).ConfigureAwait(false);
             var manifest = PublicBuildManifest.Parse(manifestJson);
 
@@ -575,6 +587,27 @@ internal sealed partial class ManagedRefsRestore : IDisposable
         finally
         {
             TryDeleteFile(temporaryPath);
+        }
+    }
+
+    private async Task<T> WithManifestRetriesAsync<T>(
+        Func<Task<T>> request,
+        string label,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await request().ConfigureAwait(false);
+            }
+            catch (InvalidDataException exception)
+                when (attempt < ManifestRetryDelays.Length &&
+                      exception.InnerException is HttpRequestException or OperationCanceledException)
+            {
+                errors.WriteLine($"{label} did not complete; retrying ({attempt + 2} of {ManifestRetryDelays.Length + 1}).");
+                await RetryDelay(ManifestRetryDelays[attempt], cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

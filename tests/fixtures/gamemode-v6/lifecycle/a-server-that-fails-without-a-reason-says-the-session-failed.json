@@ -1,0 +1,30 @@
+{
+  "id": "a-server-that-fails-without-a-reason-says-the-session-failed",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A server controller that fails without a reason ends the session in the game's own words, and the participant never starts.",
+  "scenario": {
+    "role": "single-player",
+    "factory": "participant",
+    "serverStart": "fails-without-reason",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "invalidState",
+          "message": "The session operation failed."
+        },
+        "calls": [
+          "server.start"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

@@ -10,7 +10,7 @@ namespace TopiaForge.RobotKit
         GameObject NativeGameObject { get; }
     }
 
-    internal sealed class NativeEntityAdapter : IEntity, INativeEntityAdapter
+    internal sealed class NativeEntityAdapter : IEntity, INativeEntityAdapter, IInternalNativeObjectEntity
     {
         private readonly string id;
         private readonly GameObject gameObject;
@@ -39,6 +39,8 @@ namespace TopiaForge.RobotKit
         }
 
         public GameObject NativeGameObject => gameObject;
+
+        public object? NativeObject => gameObject != null ? gameObject : null;
     }
 
     // Attached to a spawned robot's root before activation. The host entity registry discovers this marker while

@@ -1,0 +1,30 @@
+{
+  "id": "a-participant-that-fails-with-an-unknown-code-fails-as-external",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A joined player's participant that fails with a code the SDK does not define ends the session as an external failure that says so.",
+  "scenario": {
+    "role": "client",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "fails-with-an-unknown-code",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "external",
+          "message": "The gamemode's participant controller failed to start: An implementation returned an unsupported operation error code (99). The tool bar has no slot for this player."
+        },
+        "calls": [
+          "participant.start"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

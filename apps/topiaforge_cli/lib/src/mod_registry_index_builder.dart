@@ -11,6 +11,7 @@ import 'bounded_file_reader.dart';
 
 part 'mod_registry_validator.dart';
 part 'mod_registry_collection_policy.dart';
+part 'mod_registry_entry_collection.dart';
 part 'registry_publication_policy.dart';
 
 /// Builds the published mod-registry `index.json`.
@@ -31,7 +32,14 @@ class ModRegistryIndexConfig {
     this.baseUrl = '',
     this.includePrerelease = false,
     this.registryName = 'TopiaForge Mod Registry',
+    this.historyManifests = defaultHistoryManifests,
   });
+
+  /// How many history versions per mod carry their manifest by default.
+  static const defaultHistoryManifests = 20;
+
+  /// The most history manifests a mod may carry.
+  static const maximumHistoryManifests = 1000;
 
   final String outputDirectory;
 
@@ -55,6 +63,12 @@ class ModRegistryIndexConfig {
 
   final bool includePrerelease;
   final String registryName;
+
+  /// How many of each mod's newest history versions carry their full
+  /// manifest (and, for first-party packages, their size), so a launcher can
+  /// install the exact version a multiplayer server runs. Zero inlines none;
+  /// older rows keep only version, URL and SHA-256.
+  final int historyManifests;
 }
 
 class ModRegistryIndexResult {
@@ -70,16 +84,30 @@ class ModRegistryIndexResult {
 }
 
 class ModRegistryIndexBuilder {
+  /// [maxIndexBytes] is the largest index the builder writes: by default the
+  /// [ModRegistryFormat.maxIndexBytes] a launcher reads.
   ModRegistryIndexBuilder({
     GitHubReleaseClient? client,
     DateTime Function()? clock,
+    int maxIndexBytes = ModRegistryFormat.maxIndexBytes,
   }) : _client = client,
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _maxIndexBytes = maxIndexBytes;
 
   final GitHubReleaseClient? _client;
   final DateTime Function() _clock;
+  final int _maxIndexBytes;
 
   Future<ModRegistryIndexResult> build(ModRegistryIndexConfig config) async {
+    if (config.historyManifests < 0 ||
+        config.historyManifests >
+            ModRegistryIndexConfig.maximumHistoryManifests) {
+      throw ArgumentError.value(
+        config.historyManifests,
+        'historyManifests',
+        'Must be 0 to ${ModRegistryIndexConfig.maximumHistoryManifests}.',
+      );
+    }
     final hasRepository = config.repository.trim().isNotEmpty;
     final hasDirectory = config.packagesDirectory.trim().isNotEmpty;
     if (hasRepository == hasDirectory) {
@@ -96,12 +124,17 @@ class ModRegistryIndexBuilder {
     final community = _loadCommunityEntries(
       config.entriesDirectory,
       firstPartyIds: firstParty.keys.toSet(),
+      historyManifests: config.historyManifests,
     );
 
     final mods =
         [
           ...firstParty.values.map(
-            (versions) => _indexEntry(versions, 'first-party'),
+            (versions) => _indexEntry(
+              versions,
+              'first-party',
+              historyManifests: config.historyManifests,
+            ),
           ),
           ...community,
         ]..sort(
@@ -110,8 +143,6 @@ class ModRegistryIndexBuilder {
           ),
         );
 
-    final output = createAtomicStagingDirectory(config.outputDirectory);
-    final indexPath = p.join(output.path, 'index.json');
     final index = <String, Object?>{
       r'$schema': ModRegistryFormat.canonicalIndexSchemaUrl,
       'formatVersion': ModRegistryFormat.indexFormatVersion,
@@ -121,9 +152,20 @@ class ModRegistryIndexBuilder {
         'sourceRepository': 'https://github.com/${config.repository.trim()}',
       'mods': mods.map((entry) => entry.toJson()).toList(),
     };
-    final json = const JsonEncoder.withIndent('  ').convert(index);
+    final json = '${const JsonEncoder.withIndent('  ').convert(index)}\n';
+    // A launcher refuses a larger index whole, so never publish one.
+    final size = utf8.encode(json).length;
+    if (size > _maxIndexBytes) {
+      throw StateError(
+        'The registry index would be $size bytes, more than the '
+        '$_maxIndexBytes a launcher reads. Lower --history-manifests or '
+        'split the registry.',
+      );
+    }
+    final output = createAtomicStagingDirectory(config.outputDirectory);
+    final indexPath = p.join(output.path, 'index.json');
     try {
-      await File(indexPath).writeAsString('$json\n');
+      await File(indexPath).writeAsString(json);
       await File(p.join(output.path, '.nojekyll')).writeAsString('');
       publishAtomicDirectory(output, config.outputDirectory);
       return ModRegistryIndexResult(
@@ -137,236 +179,11 @@ class ModRegistryIndexBuilder {
     }
   }
 
-  /// Collected versions per lowercase mod id, newest release first (GitHub
-  /// lists releases newest-first; a re-uploaded id+version keeps the newest).
-  Future<Map<String, List<_CollectedVersion>>> _collectFromReleases(
-    ModRegistryIndexConfig config,
-  ) async {
-    final client = _client;
-    if (client == null) {
-      throw StateError('A GitHub client is required for repository mode.');
-    }
-    final byId = <String, List<_CollectedVersion>>{};
-    final releases = await client.listReleases(config.repository.trim());
-    for (final release in releases) {
-      if (release.draft) {
-        continue;
-      }
-      if (release.prerelease && !config.includePrerelease) {
-        continue;
-      }
-      for (final asset in release.assets) {
-        if (!asset.name.toLowerCase().endsWith('.topiaforgemod')) {
-          continue;
-        }
-        final bytes = await _readAssetBytes(client, asset);
-        final ModPackageSummary package;
-        try {
-          package = readModPackage(bytes);
-        } on StateError catch (error) {
-          throw StateError(
-            'Release asset ${asset.name} (${release.tagName}) is not a valid '
-            'mod package: ${error.message}',
-          );
-        }
-        _requirePublicHttpsUrl(
-          asset.browserDownloadUrl,
-          label: 'release asset ${asset.name}',
-        );
-        _addCollectedVersion(
-          byId,
-          _CollectedVersion(
-            manifest: package.manifest,
-            downloadUrl: asset.browserDownloadUrl,
-            packageSha256: package.sha256Hex,
-            publishedAt: release.publishedAt,
-            sourceLabel: '${release.tagName}/${asset.name}',
-          ),
-        );
-      }
-    }
-    return byId;
-  }
-
-  Map<String, List<_CollectedVersion>> _collectFromDirectory(
-    ModRegistryIndexConfig config,
-  ) {
-    final directory = Directory(config.packagesDirectory);
-    if (!directory.existsSync()) {
-      throw StateError(
-        'Packages directory does not exist: ${config.packagesDirectory}',
-      );
-    }
-    final baseUri = config.baseUrl.trim().isEmpty
-        ? null
-        : _normalizeAbsoluteBase(config.baseUrl);
-    final files =
-        listBoundedDirectorySync(directory)
-            .whereType<File>()
-            .where((file) => file.path.toLowerCase().endsWith('.topiaforgemod'))
-            .toList()
-          ..sort((a, b) => a.path.compareTo(b.path));
-
-    final byId = <String, List<_CollectedVersion>>{};
-    for (final file in files) {
-      final ModPackageSummary package;
-      try {
-        package = readModPackage(
-          readBoundedRegularFileSync(file, maxBytes: CliFileLimits.package),
-        );
-      } on StateError catch (error) {
-        throw StateError(
-          '${p.basename(file.path)} is not a valid mod package: '
-          '${error.message}',
-        );
-      }
-      final fileName = p.basename(file.path);
-      _addCollectedVersion(
-        byId,
-        _CollectedVersion(
-          manifest: package.manifest,
-          downloadUrl: baseUri == null
-              ? fileName
-              : baseUri.resolve(Uri.encodeComponent(fileName)).toString(),
-          packageSha256: package.sha256Hex,
-          sourceLabel: file.path,
-        ),
-      );
-    }
-    return byId;
-  }
-
-  void _attachChangelogs(
-    Map<String, List<_CollectedVersion>> byId,
-    String changelogsDirectory,
-  ) {
-    if (changelogsDirectory.trim().isEmpty) {
-      return;
-    }
-    final directory = Directory(changelogsDirectory);
-    if (!directory.existsSync()) {
-      return;
-    }
-    for (final modDir in listBoundedDirectorySync(
-      directory,
-    ).whereType<Directory>()) {
-      final manifestFile = File(p.join(modDir.path, 'topiaforge.mod.json'));
-      final changelogFile = File(p.join(modDir.path, 'CHANGELOG.md'));
-      if (!manifestFile.existsSync() || !changelogFile.existsSync()) {
-        continue;
-      }
-      final Object? decoded;
-      try {
-        decoded = readBoundedJsonObjectSync(
-          manifestFile,
-          maxBytes: CliFileLimits.manifest,
-        );
-      } on FormatException {
-        continue;
-      }
-      if (decoded is! Map) {
-        continue;
-      }
-      final id = (decoded['name'] as String?)?.toLowerCase() ?? '';
-      final versions = byId[id];
-      if (versions == null || versions.isEmpty) {
-        continue;
-      }
-      _latestOf(versions).changelog = readBoundedTextFileSync(
-        changelogFile,
-        maxBytes: CliFileLimits.changelog,
-        allowEmpty: true,
-      ).trim();
-    }
-  }
-
-  List<RegistryIndexEntry> _loadCommunityEntries(
-    String entriesDirectory, {
-    required Set<String> firstPartyIds,
-  }) {
-    if (entriesDirectory.trim().isEmpty) {
-      return const [];
-    }
-    final directory = Directory(entriesDirectory);
-    if (!directory.existsSync()) {
-      return const [];
-    }
-    final files =
-        listBoundedDirectorySync(directory)
-            .whereType<File>()
-            .where((file) => file.path.toLowerCase().endsWith('.json'))
-            .toList()
-          ..sort((a, b) => a.path.compareTo(b.path));
-
-    final entries = <RegistryIndexEntry>[];
-    final seenIds = <String>{};
-    for (final file in files) {
-      final name = p.basename(file.path);
-      final RegistryEntryFile entry;
-      try {
-        entry = RegistryEntryFile.fromJson(
-          readBoundedJsonObjectSync(
-            file,
-            maxBytes: CliFileLimits.registryEntry,
-          ),
-        );
-      } on Object {
-        throw StateError('Registry entry $name is not valid JSON.');
-      }
-      final issues = [
-        ...entry.validate(),
-        ..._entryPlacementIssues(
-          entry,
-          fileName: name,
-          firstPartyIds: firstPartyIds,
-          seenIds: seenIds,
-        ),
-      ].where((issue) => issue.isBlocking).toList();
-      for (final version in entry.versions) {
-        final manifest = version.manifest;
-        if (manifest == null) continue;
-        issues.addAll(manifest.validate());
-        issues.addAll(validateManifestPublicationLicense(manifest));
-      }
-      if (issues.isNotEmpty) {
-        final details = issues.map((issue) => issue.message).join(' ');
-        throw StateError(
-          'Registry entry $name failed validation — run '
-          '`topiaforge registry validate` for details. $details',
-        );
-      }
-      seenIds.add(entry.id.toLowerCase());
-
-      final versions = entry.sortedVersions;
-      final latest = versions.first;
-      entries.add(
-        RegistryIndexEntry(
-          manifest: latest.manifest!,
-          downloadUrl: latest.downloadUrl,
-          packageSha256: latest.packageSha256,
-          changelog: latest.changelog,
-          origin: 'community',
-          extraFields: latest.extraFields,
-          history: [
-            for (final version in versions.skip(1))
-              RegistryVersionRef(
-                version: version.version,
-                downloadUrl: version.downloadUrl,
-                packageSha256: version.packageSha256,
-                changelog: version.changelog,
-                extraFields: version.extraFields,
-              ),
-          ],
-        ),
-      );
-    }
-    return entries;
-  }
-
   RegistryIndexEntry _indexEntry(
     List<_CollectedVersion> versions,
-    String origin,
-  ) {
+    String origin, {
+    required int historyManifests,
+  }) {
     final latest = _latestOf(versions);
     final history = versions.where((item) => !identical(item, latest)).toList()
       ..sort(
@@ -380,12 +197,16 @@ class ModRegistryIndexBuilder {
       origin: origin,
       publishedAt: latest.publishedAt,
       history: [
-        for (final version in history)
+        for (final (index, version) in history.indexed)
           RegistryVersionRef(
             version: version.manifest.version,
             downloadUrl: version.downloadUrl,
             packageSha256: version.packageSha256,
             publishedAt: version.publishedAt,
+            manifest: index < historyManifests ? version.manifest : null,
+            packageBytes: index < historyManifests
+                ? version.packageBytes
+                : null,
           ),
       ],
     );
@@ -407,32 +228,6 @@ class ModRegistryIndexBuilder {
   SemanticVersion _versionOf(ModManifest manifest) {
     return SemanticVersion.tryParse(manifest.version) ??
         SemanticVersion(0, 0, 0);
-  }
-
-  Future<List<int>> _readAssetBytes(
-    GitHubReleaseClient client,
-    GitHubAsset asset,
-  ) async {
-    final stream = await client.openAsset(asset);
-    final bytes = <int>[];
-    await for (final chunk in stream) {
-      bytes.addAll(chunk);
-      if (bytes.length > ModRegistryFormat.maxPackageBytes) {
-        throw StateError(
-          'Release asset ${asset.name} is larger than the 512 MB launcher '
-          'limit.',
-        );
-      }
-    }
-    return bytes;
-  }
-
-  Uri _normalizeAbsoluteBase(String baseUrl) {
-    final normalized = baseUrl.trim().endsWith('/')
-        ? baseUrl.trim()
-        : '${baseUrl.trim()}/';
-    final uri = _requirePublicHttpsUrl(normalized, label: 'baseUrl');
-    return uri;
   }
 }
 

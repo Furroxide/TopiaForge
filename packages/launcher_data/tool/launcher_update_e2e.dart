@@ -77,12 +77,12 @@ Future<void> main(List<String> arguments) async {
       await _publish(
         transport,
         key,
-        version: '1.0.0-rc.2',
+        version: '0.1.0-rc.2',
         archive: archiveBytes,
         entryCount: decoded.entries.length,
         expandedSize: expandedSize,
       );
-      final rc2 = await _discover(repository, currentVersion: '1.0.0-rc.1');
+      final rc2 = await _discover(repository, currentVersion: '0.1.0-rc.1');
       final rc2Plan = await _stageForExecution(
         repository,
         rc2,
@@ -118,7 +118,7 @@ Future<void> main(List<String> arguments) async {
         entryCount: decoded.entries.length,
         expandedSize: expandedSize,
       );
-      final rc3 = await _discover(repository, currentVersion: '1.0.0-rc.2');
+      final rc3 = await _discover(repository, currentVersion: '0.1.0-rc.2');
       final rc3Plan = await _stageForExecution(
         repository,
         rc3,
@@ -256,7 +256,7 @@ Future<void> _publish(
         'version': version,
         'tag': tag,
         'channel': 'beta',
-        'minimumUpdaterVersion': '1.0.0-rc.1',
+        'minimumUpdaterVersion': '0.1.0-rc.1',
         'releaseUrl': 'https://github.com/furroxide/TopiaForge/releases/tag/$tag',
         'platforms': {
           for (final artifact in artifacts.entries) artifact.key: {'assetName': artifact.value.name, 'url': _assetUri(tag, artifact.value.name).toString(), 'sha256': hash, 'size': archive.length, 'entryCount': entryCount, 'expandedSize': expandedSize, 'installLayout': artifact.value.layout},

@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using BepInEx.Logging;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
@@ -73,6 +74,9 @@ namespace TopiaForge.ModManager
 
         public void Write(string level, string source, string message)
         {
+            level = DiagnosticPathRedactor.Redact(level);
+            source = DiagnosticPathRedactor.Redact(source);
+            message = DiagnosticPathRedactor.Redact(message);
             var consoleMessage = string.Equals(source, "manager", StringComparison.Ordinal)
                 ? message
                 : "[" + source + "] " + message;
@@ -165,6 +169,7 @@ namespace TopiaForge.ModManager
 
         private void EmitToBepInEx(string level, string message)
         {
+            message = DiagnosticPathRedactor.Redact(message);
             try
             {
                 switch (level)
@@ -187,7 +192,10 @@ namespace TopiaForge.ModManager
             {
                 // Never recurse through the file/BepInEx logger while reporting a logging failure. Console is
                 // the final independent sink available during early startup and late shutdown.
-                FallbackToConsole("TopiaForge logging failed (" + level + "): " + ex.Message + ". Original: " + message);
+                // Redact the failure before joining it to the already filtered entry, so an ambiguous quote in either
+                // fragment cannot withhold the other fragment's useful explanation.
+                var failure = DiagnosticPathRedactor.Redact(ex.Message);
+                FallbackToConsole("TopiaForge logging failed (" + level + "): " + failure + ". Original: " + message);
             }
         }
 
@@ -195,7 +203,7 @@ namespace TopiaForge.ModManager
         {
             try
             {
-                Console.Error.WriteLine(message);
+                Console.Error.WriteLine(DiagnosticPathRedactor.Redact(message));
             }
             catch
             {

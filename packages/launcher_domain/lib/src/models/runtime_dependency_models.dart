@@ -1,9 +1,15 @@
 part of '../models.dart';
 
 class TopiaForgeRuntimeVersions {
-  static const loaderVersion = '1.0.0-rc.1';
-  static const sdkVersion = '1.0.0-rc.1';
-  static const gameVersion = '0.0.2309';
+  static const loaderVersion = '0.2.0';
+  static const sdkVersion = '0.2.0';
+  static const gameVersion = '0.0.2640';
+
+  /// The live-multiplayer protocol the bundled runtime speaks, and the peer
+  /// versions it accepts: the game's `MultiplayerModule.ProtocolVersion` and
+  /// `PeerVersionRange`. A join plan predicts admission with them.
+  static const multiplayerProtocolVersion = '2.1.0';
+  static const multiplayerPeerVersionRange = '>=2.0.0 <3.0.0';
 }
 
 class ModDependency {

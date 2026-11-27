@@ -7,41 +7,89 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const ScreenHeader(
-          title: 'Settings',
-          subtitle: 'Local launcher paths and runtime management.',
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const ScreenHeader(
+            title: 'Settings',
+            subtitle:
+                'Local launcher paths, runtime management and multiplayer.',
+          ),
+          const _SectionTabs(tabs: ['General', 'Multiplayer']),
+          Expanded(
+            child: TabBarView(
+              physics: const NeverScrollableScrollPhysics(),
               children: [
-                _GameInstallSettings(state: state),
-                if (_shouldShowGameInstallSelector(state)) ...[
-                  const SizedBox(height: 14),
-                  _GameInstallCandidateSelector(state: state),
-                ],
-                const SizedBox(height: 14),
-                _PackageSourcesSettings(state: state),
-                const SizedBox(height: 14),
-                _LauncherDataSettings(state: state),
-                const SizedBox(height: 14),
-                _LauncherUpdateSettings(state: state),
-                const SizedBox(height: 14),
-                _DeveloperModeSettings(state: state),
-                const SizedBox(height: 14),
-                const BorderedPane(
-                  child: Text(
-                    'RoboPatch behavior is treated as clean-room compatibility. No RoboPatch or Prism Launcher code is copied into this launcher.',
-                  ),
-                ),
+                _GeneralSettings(state: state),
+                _MultiplayerSettingsPane(state: state),
               ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Tabs that split a screen into its parts, such as Settings into General
+/// and Multiplayer.
+class _SectionTabs extends StatelessWidget {
+  const _SectionTabs({required this.tabs});
+
+  final List<String> tabs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: TabBar(
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        labelColor: TopiaForgePalette.text,
+        unselectedLabelColor: TopiaForgePalette.mutedText,
+        indicatorColor: TopiaForgePalette.launch,
+        dividerColor: TopiaForgePalette.surfaceTint,
+        tabs: [for (final tab in tabs) Tab(text: tab, height: 40)],
+      ),
+    );
+  }
+}
+
+class _GeneralSettings extends StatelessWidget {
+  const _GeneralSettings({required this.state});
+
+  final LauncherState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        children: [
+          _GameInstallSettings(state: state),
+          if (_shouldShowGameInstallSelector(state)) ...[
+            const SizedBox(height: 14),
+            _GameInstallCandidateSelector(state: state),
+          ],
+          const SizedBox(height: 14),
+          _PackageSourcesSettings(state: state),
+          const SizedBox(height: 14),
+          _LauncherDataSettings(state: state),
+          const SizedBox(height: 14),
+          _DownloadedMapSettings(state: state),
+          const SizedBox(height: 14),
+          _LauncherUpdateSettings(state: state),
+          const SizedBox(height: 14),
+          _DeveloperModeSettings(state: state),
+          const SizedBox(height: 14),
+          const BorderedPane(
+            child: Text(
+              'RoboPatch behavior is treated as clean-room compatibility. No RoboPatch or Prism Launcher code is copied into this launcher.',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -146,196 +194,6 @@ PackageSourceStatus? _sourceStatus(LauncherState state, String sourceId) {
   return null;
 }
 
-class _LauncherUpdateSettings extends StatelessWidget {
-  const _LauncherUpdateSettings({required this.state});
-
-  final LauncherState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final settings = state.launcherUpdates;
-    final status = state.launcherUpdateStatus;
-    final checking =
-        status.phase == LauncherUpdatePhase.checking ||
-        status.phase == LauncherUpdatePhase.downloading;
-    return BorderedPane(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Launcher Updates',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              StatusPill(
-                label: _phaseLabel(status.phase),
-                tone: _phaseTone(status.phase),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'TopiaForge ${TopiaForgeLauncherBuild.version} verifies '
-            'Ed25519-signed release metadata before downloading a complete '
-            'platform package. Installing always requires confirmation.',
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: settings.enabled,
-            onChanged: (enabled) =>
-                _add(context, LauncherUpdateSettingsChanged(enabled: enabled)),
-            title: const Text('Enable signed update checks'),
-            subtitle: const Text(
-              'Prerelease builds check the beta channel by default.',
-            ),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: settings.checkAutomatically,
-            onChanged: settings.enabled
-                ? (enabled) => _add(
-                    context,
-                    LauncherUpdateSettingsChanged(checkAutomatically: enabled),
-                  )
-                : null,
-            title: const Text('Check at startup'),
-            subtitle: const Text('A persisted cooldown limits network checks.'),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<LauncherUpdateChannel>(
-            initialValue: settings.channel,
-            decoration: const InputDecoration(labelText: 'Update channel'),
-            items: const [
-              DropdownMenuItem(
-                value: LauncherUpdateChannel.release,
-                child: Text('Stable'),
-              ),
-              DropdownMenuItem(
-                value: LauncherUpdateChannel.beta,
-                child: Text('Beta (includes stable)'),
-              ),
-            ],
-            onChanged: settings.enabled
-                ? (channel) {
-                    if (channel != null) {
-                      _add(
-                        context,
-                        LauncherUpdateSettingsChanged(channel: channel),
-                      );
-                    }
-                  }
-                : null,
-          ),
-          const SizedBox(height: 12),
-          if (checking) ...[
-            LinearProgressIndicator(
-              value: status.phase == LauncherUpdatePhase.downloading
-                  ? status.progress.clamp(0, 1)
-                  : null,
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (status.message.isNotEmpty)
-            SelectableText(status.message)
-          else
-            const Text('No update check has run in this session.'),
-          if (status.candidate case final candidate?) ...[
-            const SizedBox(height: 8),
-            SelectableText(
-              'Candidate ${candidate.version} • ${candidate.signingKeyId}\n'
-              'Payload SHA-256 ${candidate.payloadSha256}',
-            ),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: settings.enabled && !checking
-                    ? () => _add(context, const LauncherUpdateCheckRequested())
-                    : null,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Check now'),
-              ),
-              if (status.phase == LauncherUpdatePhase.available)
-                FilledButton.icon(
-                  onPressed: () =>
-                      _add(context, const LauncherUpdateDownloadRequested()),
-                  icon: const Icon(Icons.download),
-                  label: const Text('Download and verify'),
-                ),
-              if (status.phase == LauncherUpdatePhase.staged)
-                FilledButton.icon(
-                  onPressed: () => _confirmInstall(context),
-                  icon: const Icon(Icons.restart_alt),
-                  label: const Text('Restart and install'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const SelectableText(
-            'Recovery and manual downloads: '
-            'https://github.com/furroxide/TopiaForge/releases',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmInstall(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Install verified update?'),
-        content: const Text(
-          'TopiaForge will close, replace the complete portable package, and '
-          'roll back automatically if the updated launcher does not report a '
-          'healthy startup.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Restart and install'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && context.mounted) {
-      _add(context, const LauncherUpdateInstallConfirmed());
-    }
-  }
-}
-
-String _phaseLabel(LauncherUpdatePhase phase) => switch (phase) {
-  LauncherUpdatePhase.idle => 'Idle',
-  LauncherUpdatePhase.checking => 'Checking',
-  LauncherUpdatePhase.current => 'Current',
-  LauncherUpdatePhase.available => 'Available',
-  LauncherUpdatePhase.downloading => 'Downloading',
-  LauncherUpdatePhase.staged => 'Verified',
-  LauncherUpdatePhase.applying => 'Restarting',
-  LauncherUpdatePhase.recovering => 'Recovering',
-  LauncherUpdatePhase.failed => 'Attention',
-};
-
-StatusTone _phaseTone(LauncherUpdatePhase phase) => switch (phase) {
-  LauncherUpdatePhase.failed => StatusTone.danger,
-  LauncherUpdatePhase.available ||
-  LauncherUpdatePhase.downloading ||
-  LauncherUpdatePhase.staged => StatusTone.warning,
-  LauncherUpdatePhase.current => StatusTone.good,
-  _ => StatusTone.neutral,
-};
-
 class _DeveloperModeSettings extends StatelessWidget {
   const _DeveloperModeSettings({required this.state});
 
@@ -355,7 +213,7 @@ class _DeveloperModeSettings extends StatelessWidget {
                 _add(context, DeveloperModeToggled(enabled)),
             title: const Text('Developer mode'),
             subtitle: const Text(
-              'Show the Developer tab (build mods, UGC live-sync). Off by default — '
+              'Show the Developer tab (build mods). Off by default — '
               'installing and playing mods needs no developer tools.',
             ),
           ),

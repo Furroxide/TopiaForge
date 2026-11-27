@@ -397,7 +397,7 @@ namespace TopiaForge.ModManager
             return true;
         }
 
-        private static string GetItemId(GameObject item)
+        internal static string GetItemId(GameObject item)
         {
             var registry = EquippableItemRegistry.Instance;
             if (registry != null && registry.TryGetEntryByWorldItem(item, out var entry)

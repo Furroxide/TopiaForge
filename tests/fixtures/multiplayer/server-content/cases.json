@@ -1,0 +1,693 @@
+{
+  "schema": 1,
+  "about": "The record of server content, BepInEx/TopiaForge/server-content.json, which the launcher writes and both the launcher and the game's loader read. See docs/internal/MultiplayerLaunchContract.md section 11 and this generator's docstring.",
+  "limits": {
+    "schemaVersion": 1,
+    "maximumBytes": 1048576,
+    "maximumEntries": 1024,
+    "maximumSafeInteger": 9007199254740991,
+    "idLength": 64,
+    "versionLength": 64
+  },
+  "valid": [
+    {
+      "id": "empty",
+      "about": "Nothing was installed for servers.",
+      "document": {
+        "schemaVersion": 1,
+        "versions": [],
+        "withheld": [],
+        "addedRecords": []
+      },
+      "bytes": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[],\"withheld\":[]}",
+      "reordered": "{\n  \"withheld\": [],\n  \"versions\": [],\n  \"schemaVersion\": 1,\n  \"addedRecords\": []\n}",
+      "hides": [
+        {
+          "id": "io.example.lights",
+          "version": "2.0.0",
+          "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+          "hidden": false
+        }
+      ],
+      "addedRecords": []
+    },
+    {
+      "id": "server-versions",
+      "about": "A join installed a newer version of a mod the player had, hidden from the player's own play, and a mod new to the player, visible but recorded disabled.",
+      "document": {
+        "schemaVersion": 1,
+        "versions": [
+          {
+            "id": "io.example.lights",
+            "version": "2.0.0",
+            "sha256": "945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade",
+            "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+            "hidden": true,
+            "installedAt": 1760745600
+          },
+          {
+            "id": "io.example.arena",
+            "version": "1.4.0",
+            "sha256": "86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9",
+            "receipt": "0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9",
+            "hidden": false,
+            "installedAt": 1760745601
+          }
+        ],
+        "withheld": [],
+        "addedRecords": [
+          "io.example.arena"
+        ]
+      },
+      "bytes": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}",
+      "reordered": "{\n  \"withheld\": [],\n  \"versions\": [\n    {\n      \"version\": \"1.4.0\",\n      \"sha256\": \"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\n      \"receipt\": \"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\n      \"installedAt\": 1760745601,\n      \"id\": \"io.example.arena\",\n      \"hidden\": false\n    },\n    {\n      \"version\": \"2.0.0\",\n      \"sha256\": \"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\n      \"receipt\": \"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\n      \"installedAt\": 1760745600,\n      \"id\": \"io.example.lights\",\n      \"hidden\": true\n    }\n  ],\n  \"schemaVersion\": 1,\n  \"addedRecords\": [\n    \"io.example.arena\"\n  ]\n}",
+      "hides": [
+        {
+          "id": "io.example.lights",
+          "version": "2.0.0",
+          "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+          "hidden": true
+        },
+        {
+          "id": "IO.EXAMPLE.LIGHTS",
+          "version": "2.0.0",
+          "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+          "hidden": true
+        },
+        {
+          "id": "io.example.lights",
+          "version": "2.0.0",
+          "receipt": "811bc6f38b36837fa6ebd524919a316c2dcb4215a81fefb314ac00698469fbed",
+          "hidden": false
+        },
+        {
+          "id": "io.example.lights",
+          "version": "1.0.0",
+          "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+          "hidden": false
+        },
+        {
+          "id": "io.example.arena",
+          "version": "1.4.0",
+          "receipt": "0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9",
+          "hidden": false
+        }
+      ],
+      "addedRecords": [
+        "io.example.arena"
+      ]
+    },
+    {
+      "id": "prerelease-and-case",
+      "about": "Ids keep the manifest's spelling and match in any case; versions match exactly, prerelease and build included; installedAt reaches the largest safe integer.",
+      "document": {
+        "schemaVersion": 1,
+        "versions": [
+          {
+            "id": "Io.Example.Paint",
+            "version": "3.1.0-beta.2+build.7",
+            "sha256": "86f66fbf75edb7b1bac474fd270fd23c1d193b8418f8f3efb14f59e192a0f338",
+            "receipt": "fc1404c66dd72df5a0d3794d57f34669449f0a510902e4c092419f32ab9d4792",
+            "hidden": true,
+            "installedAt": 9007199254740991
+          }
+        ],
+        "withheld": [],
+        "addedRecords": []
+      },
+      "bytes": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"Io.Example.Paint\",\"installedAt\":9007199254740991,\"receipt\":\"fc1404c66dd72df5a0d3794d57f34669449f0a510902e4c092419f32ab9d4792\",\"sha256\":\"86f66fbf75edb7b1bac474fd270fd23c1d193b8418f8f3efb14f59e192a0f338\",\"version\":\"3.1.0-beta.2+build.7\"}],\"withheld\":[]}",
+      "reordered": "{\n  \"withheld\": [],\n  \"versions\": [\n    {\n      \"version\": \"3.1.0-beta.2+build.7\",\n      \"sha256\": \"86f66fbf75edb7b1bac474fd270fd23c1d193b8418f8f3efb14f59e192a0f338\",\n      \"receipt\": \"fc1404c66dd72df5a0d3794d57f34669449f0a510902e4c092419f32ab9d4792\",\n      \"installedAt\": 9007199254740991,\n      \"id\": \"Io.Example.Paint\",\n      \"hidden\": true\n    }\n  ],\n  \"schemaVersion\": 1,\n  \"addedRecords\": []\n}",
+      "hides": [
+        {
+          "id": "io.example.paint",
+          "version": "3.1.0-beta.2+build.7",
+          "receipt": "fc1404c66dd72df5a0d3794d57f34669449f0a510902e4c092419f32ab9d4792",
+          "hidden": true
+        },
+        {
+          "id": "Io.Example.Paint",
+          "version": "3.1.0-beta.2",
+          "receipt": "fc1404c66dd72df5a0d3794d57f34669449f0a510902e4c092419f32ab9d4792",
+          "hidden": false
+        },
+        {
+          "id": "Io.Example.Paint",
+          "version": "3.1.0-beta.2+build.7",
+          "receipt": "b69c16d49e31128ed5a17e7911dc6b1fa415de1d4f2f59b252b233957dd98c3b",
+          "hidden": false
+        }
+      ],
+      "addedRecords": []
+    },
+    {
+      "id": "rebuilt",
+      "about": "A record the launcher rebuilt after damage: the entry that still read, and every other installed version withheld, except the ones the manager state names.",
+      "document": {
+        "schemaVersion": 1,
+        "versions": [
+          {
+            "id": "io.example.tools",
+            "version": "1.2.0",
+            "sha256": "6ad6e62f5a3285e38d4a78969b0fea3ceacbb5e1fcf6dfdf301e8f71dabdcc06",
+            "receipt": "f700f4b3cc05e781d8e8756487f32baae582a58b64ab98ed6263833a31f79a9b",
+            "hidden": true,
+            "installedAt": 0
+          }
+        ],
+        "withheld": [
+          {
+            "id": "io.example.tools",
+            "version": "1.0.0",
+            "receipt": "ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c"
+          },
+          {
+            "id": "io.example.maps",
+            "version": "0.9.1",
+            "receipt": "00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e"
+          }
+        ],
+        "addedRecords": []
+      },
+      "bytes": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.tools\",\"installedAt\":0,\"receipt\":\"f700f4b3cc05e781d8e8756487f32baae582a58b64ab98ed6263833a31f79a9b\",\"sha256\":\"6ad6e62f5a3285e38d4a78969b0fea3ceacbb5e1fcf6dfdf301e8f71dabdcc06\",\"version\":\"1.2.0\"}],\"withheld\":[{\"id\":\"io.example.maps\",\"receipt\":\"00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e\",\"version\":\"0.9.1\"},{\"id\":\"io.example.tools\",\"receipt\":\"ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c\",\"version\":\"1.0.0\"}]}",
+      "reordered": "{\n  \"withheld\": [\n    {\n      \"version\": \"0.9.1\",\n      \"receipt\": \"00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e\",\n      \"id\": \"io.example.maps\"\n    },\n    {\n      \"version\": \"1.0.0\",\n      \"receipt\": \"ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c\",\n      \"id\": \"io.example.tools\"\n    }\n  ],\n  \"versions\": [\n    {\n      \"version\": \"1.2.0\",\n      \"sha256\": \"6ad6e62f5a3285e38d4a78969b0fea3ceacbb5e1fcf6dfdf301e8f71dabdcc06\",\n      \"receipt\": \"f700f4b3cc05e781d8e8756487f32baae582a58b64ab98ed6263833a31f79a9b\",\n      \"installedAt\": 0,\n      \"id\": \"io.example.tools\",\n      \"hidden\": true\n    }\n  ],\n  \"schemaVersion\": 1,\n  \"addedRecords\": []\n}",
+      "hides": [
+        {
+          "id": "io.example.tools",
+          "version": "1.0.0",
+          "receipt": "ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c",
+          "hidden": true
+        },
+        {
+          "id": "io.example.tools",
+          "version": "1.2.0",
+          "receipt": "f700f4b3cc05e781d8e8756487f32baae582a58b64ab98ed6263833a31f79a9b",
+          "hidden": true
+        },
+        {
+          "id": "io.example.maps",
+          "version": "0.9.1",
+          "receipt": "00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e",
+          "hidden": true
+        },
+        {
+          "id": "io.example.maps",
+          "version": "0.9.1",
+          "receipt": "ec62a1e755c5e0175dd2ed0c604a1a0e0035a6549f3dcfeef3a2d7e6c8cff797",
+          "hidden": false
+        }
+      ],
+      "addedRecords": []
+    },
+    {
+      "id": "both-lists",
+      "about": "A version may be in both lists; either one withholds it.",
+      "document": {
+        "schemaVersion": 1,
+        "versions": [
+          {
+            "id": "io.example.lights",
+            "version": "2.0.0",
+            "sha256": "945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade",
+            "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+            "hidden": true,
+            "installedAt": 1760745600
+          }
+        ],
+        "withheld": [
+          {
+            "id": "io.example.lights",
+            "version": "2.0.0",
+            "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8"
+          }
+        ],
+        "addedRecords": []
+      },
+      "bytes": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[{\"id\":\"io.example.lights\",\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"version\":\"2.0.0\"}]}",
+      "reordered": "{\n  \"withheld\": [\n    {\n      \"version\": \"2.0.0\",\n      \"receipt\": \"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\n      \"id\": \"io.example.lights\"\n    }\n  ],\n  \"versions\": [\n    {\n      \"version\": \"2.0.0\",\n      \"sha256\": \"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\n      \"receipt\": \"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\n      \"installedAt\": 1760745600,\n      \"id\": \"io.example.lights\",\n      \"hidden\": true\n    }\n  ],\n  \"schemaVersion\": 1,\n  \"addedRecords\": []\n}",
+      "hides": [
+        {
+          "id": "io.example.lights",
+          "version": "2.0.0",
+          "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+          "hidden": true
+        }
+      ],
+      "addedRecords": []
+    },
+    {
+      "id": "escaped-spelling",
+      "about": "Escapes in member names and values read as the characters they stand for.",
+      "document": {
+        "schemaVersion": 1,
+        "versions": [],
+        "withheld": [
+          {
+            "id": "io.example.maps",
+            "version": "0.9.1",
+            "receipt": "00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e"
+          }
+        ],
+        "addedRecords": []
+      },
+      "bytes": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[],\"withheld\":[{\"id\":\"io.example.maps\",\"receipt\":\"00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e\",\"version\":\"0.9.1\"}]}",
+      "reordered": "{\"schemaVersion\":1,\"versions\":[],\"withheld\":[{\"\\u0069d\":\"io.example.\\u006daps\",\"version\":\"0.9.1\",\"receipt\":\"00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e\"}],\"addedRecords\":[]}",
+      "hides": [
+        {
+          "id": "io.example.maps",
+          "version": "0.9.1",
+          "receipt": "00f0045671123508806aff7329a1303e8c4f36427e9d56fecc2c4f9f2039957e",
+          "hidden": true
+        }
+      ],
+      "addedRecords": []
+    },
+    {
+      "id": "negative-zero",
+      "about": "Minus zero is the integer zero, as both JSON readers decode it.",
+      "document": {
+        "schemaVersion": 1,
+        "versions": [
+          {
+            "id": "io.example.lights",
+            "version": "2.0.0",
+            "sha256": "945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade",
+            "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+            "hidden": true,
+            "installedAt": 0
+          },
+          {
+            "id": "io.example.arena",
+            "version": "1.4.0",
+            "sha256": "86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9",
+            "receipt": "0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9",
+            "hidden": false,
+            "installedAt": 1760745601
+          }
+        ],
+        "withheld": [],
+        "addedRecords": [
+          "io.example.arena"
+        ]
+      },
+      "bytes": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":0,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}",
+      "reordered": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":-0,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}",
+      "hides": [
+        {
+          "id": "io.example.lights",
+          "version": "2.0.0",
+          "receipt": "b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8",
+          "hidden": true
+        }
+      ],
+      "addedRecords": [
+        "io.example.arena"
+      ]
+    }
+  ],
+  "newer": [
+    {
+      "id": "schema-2",
+      "about": "A newer launcher's record, with a member this one does not know.",
+      "text": "{\"addedRecords\":[],\"futureField\":true,\"schemaVersion\":2,\"versions\":[],\"withheld\":[]}"
+    },
+    {
+      "id": "schema-2-alone",
+      "about": "Only the version is read before a newer record is refused.",
+      "text": "{\"schemaVersion\":2}"
+    },
+    {
+      "id": "schema-largest",
+      "about": "The largest 64-bit integer is still a version number.",
+      "text": "{\"schemaVersion\":9223372036854775807,\"versions\":\"another shape\"}"
+    }
+  ],
+  "invalid": [
+    {
+      "id": "empty-file",
+      "about": "No bytes at all.",
+      "text": ""
+    },
+    {
+      "id": "truncated",
+      "about": "A write cut short.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"sc"
+    },
+    {
+      "id": "array",
+      "about": "Not an object.",
+      "text": "[]"
+    },
+    {
+      "id": "string",
+      "about": "Not an object.",
+      "text": "\"server-content\""
+    },
+    {
+      "id": "null",
+      "about": "Not an object.",
+      "text": "null"
+    },
+    {
+      "id": "trailing-content",
+      "about": "One document and more.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}x"
+    },
+    {
+      "id": "two-documents",
+      "about": "Two documents.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "byte-order-mark",
+      "about": "A byte order mark is not part of the contract.",
+      "text": "﻿{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "invalid-utf8",
+      "about": "Bytes that are not UTF-8, inside a string.",
+      "hex": "7b2261646465645265636f726473223a5b22696f2e6578616d706c652e6172ff6e61225d2c22736368656d6156657273696f6e223a312c2276657273696f6e73223a5b7b2268696464656e223a66616c73652c226964223a22696f2e6578616d706c652e6172656e61222c22696e7374616c6c65644174223a313736303734353630312c2272656365697074223a2230616439383862633337326261353464376235636238353438336134316433613637373061353933653835316665643535613863336562616263343566396539222c22736861323536223a2238363430373832386134316430616266633638613430613231333331613762656563623963343162396530623163313830306266666265356434316265396139222c2276657273696f6e223a22312e342e30227d2c7b2268696464656e223a747275652c226964223a22696f2e6578616d706c652e6c6967687473222c22696e7374616c6c65644174223a313736303734353630302c2272656365697074223a2262306237316332323932346665646263613961356466386262323739663733616335613464626433653564383664666435643836343963363139326230666338222c22736861323536223a2239343562626562383430303763343137626266366432316664363865336466336639383666653236316263613933326263323264633536656166626131616465222c2276657273696f6e223a22322e302e30227d5d2c227769746868656c64223a5b5d7d"
+    },
+    {
+      "id": "duplicate-member",
+      "about": "A member twice, which one JSON reader would quietly collapse.",
+      "text": "{\"schemaVersion\":1,\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "duplicate-entry-member",
+      "about": "A member twice inside an entry.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":false,\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "duplicate-escaped-member",
+      "about": "Two spellings of one member name.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"schema\\u0056ersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "missing-schema-version",
+      "about": "No version.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "schema-zero",
+      "about": "Version zero.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":0,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "schema-negative",
+      "about": "A negative version.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":-1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "schema-fraction",
+      "about": "A version with a fraction.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1.0,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "schema-exponent",
+      "about": "A version with an exponent.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1e0,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "schema-past-64-bits",
+      "about": "A version past 64 bits is not an integer to either reader.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":9223372036854775808,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "schema-string",
+      "about": "A version in quotes.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":\"1\",\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "missing-withheld",
+      "about": "A member missing.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}]}"
+    },
+    {
+      "id": "missing-versions",
+      "about": "A member missing.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"withheld\":[]}"
+    },
+    {
+      "id": "missing-added-records",
+      "about": "A member missing.",
+      "text": "{\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "extra-member",
+      "about": "A member version 1 does not have.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"note\":\"kept by hand\",\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "versions-object",
+      "about": "A list that is not one.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":{},\"withheld\":[]}"
+    },
+    {
+      "id": "withheld-null",
+      "about": "A list that is not one.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":null}"
+    },
+    {
+      "id": "entry-not-object",
+      "about": "An entry that is not an object.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[\"lights\"],\"withheld\":[]}"
+    },
+    {
+      "id": "entry-extra-field",
+      "about": "An entry with a member it does not have.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"note\":\"x\",\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "entry-missing-receipt",
+      "about": "An entry without its receipt.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "entry-missing-hidden",
+      "about": "An entry without hidden.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "id-leading-dot",
+      "about": "An id that does not start with a letter or digit.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\".example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "id-too-short",
+      "about": "An id of one character.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"l\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "id-too-long",
+      "about": "An id of 65 characters.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "id-space",
+      "about": "An id with a space.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "id-trailing-newline",
+      "about": "An id followed by a line feed.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\\n\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "id-nul",
+      "about": "An id with a NUL.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example\\u0000lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "version-short",
+      "about": "Two components.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "version-leading-zero",
+      "about": "A leading zero.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"02.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "version-empty-prerelease",
+      "about": "An empty prerelease.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0-\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "version-prerelease-zero",
+      "about": "A numeric prerelease identifier with a leading zero.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0-01\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "version-trailing-newline",
+      "about": "A version followed by a line feed.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\\n\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "version-too-long",
+      "about": "A version of 65 characters.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "sha256-uppercase",
+      "about": "Digests are lowercase.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945BBEB84007C417BBF6D21FD68E3DF3F986FE261BCA932BC22DC56EAFBA1ADE\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "sha256-short",
+      "about": "63 characters.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ad\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "receipt-not-hex",
+      "about": "Not hexadecimal.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "hidden-string",
+      "about": "A Boolean in quotes.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":\"true\",\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "hidden-number",
+      "about": "A Boolean as a number.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":1,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "installed-negative",
+      "about": "Before 1970.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":-1,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "installed-fraction",
+      "about": "A fraction.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600.5,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "installed-exponent",
+      "about": "An exponent, even of an integer.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1e9,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "installed-unsafe",
+      "about": "Past the largest safe integer.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":9007199254740992,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "installed-string",
+      "about": "A number in quotes.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":\"1760745600\",\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "duplicate-version",
+      "about": "One version twice, in another case.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"},{\"hidden\":false,\"id\":\"IO.EXAMPLE.LIGHTS\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    },
+    {
+      "id": "duplicate-withheld",
+      "about": "One withheld version twice.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[],\"withheld\":[{\"id\":\"io.example.tools\",\"receipt\":\"ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c\",\"version\":\"1.0.0\"},{\"id\":\"io.example.tools\",\"receipt\":\"ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c\",\"version\":\"1.0.0\"}]}"
+    },
+    {
+      "id": "withheld-extra-field",
+      "about": "A withheld entry with a member it does not have.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[],\"withheld\":[{\"hidden\":true,\"id\":\"io.example.tools\",\"receipt\":\"ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c\",\"version\":\"1.0.0\"}]}"
+    },
+    {
+      "id": "withheld-missing-receipt",
+      "about": "A withheld entry without its receipt.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[],\"withheld\":[{\"id\":\"io.example.tools\",\"version\":\"1.0.0\"}]}"
+    },
+    {
+      "id": "withheld-bad-version",
+      "about": "A withheld entry whose version is not one.",
+      "text": "{\"addedRecords\":[],\"schemaVersion\":1,\"versions\":[],\"withheld\":[{\"id\":\"io.example.tools\",\"receipt\":\"ca687067623ae03e6e57dfe574ccd07f92e9d90e5e568b0784e9759885522a6c\",\"version\":\"1.0\"}]}"
+    },
+    {
+      "id": "added-uppercase",
+      "about": "Added records are lowercase ids.",
+      "text": "{\"addedRecords\":[\"Io.Example.Arena\"],\"schemaVersion\":1,\"versions\":[],\"withheld\":[]}"
+    },
+    {
+      "id": "added-duplicate",
+      "about": "An added record twice.",
+      "text": "{\"addedRecords\":[\"io.example.arena\",\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[],\"withheld\":[]}"
+    },
+    {
+      "id": "added-not-id",
+      "about": "An added record that is not an id.",
+      "text": "{\"addedRecords\":[\"io example\"],\"schemaVersion\":1,\"versions\":[],\"withheld\":[]}"
+    },
+    {
+      "id": "added-number",
+      "about": "An added record that is not a string.",
+      "text": "{\"addedRecords\":[5],\"schemaVersion\":1,\"versions\":[],\"withheld\":[]}"
+    },
+    {
+      "id": "deep-nesting",
+      "about": "Nesting far past what the record has.",
+      "text": "{\"addedRecords\":[\"io.example.arena\"],\"schemaVersion\":1,\"versions\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]],{\"hidden\":false,\"id\":\"io.example.arena\",\"installedAt\":1760745601,\"receipt\":\"0ad988bc372ba54d7b5cb85483a41d3a6770a593e851fed55a8c3ebabc45f9e9\",\"sha256\":\"86407828a41d0abfc68a40a21331a7beecb9c41b9e0b1c1800bffbe5d41be9a9\",\"version\":\"1.4.0\"},{\"hidden\":true,\"id\":\"io.example.lights\",\"installedAt\":1760745600,\"receipt\":\"b0b71c22924fedbca9a5df8bb279f73ac5a4dbd3e5d86dfd5d8649c6192b0fc8\",\"sha256\":\"945bbeb84007c417bbf6d21fd68e3df3f986fe261bca932bc22dc56eafba1ade\",\"version\":\"2.0.0\"}],\"withheld\":[]}"
+    }
+  ],
+  "generated": [
+    {
+      "id": "maximal",
+      "about": "The largest record: 1,024 entries in each list, every id and version 64 characters long and every installedAt the largest safe integer. Both readers accept it, and it fits the byte bound.",
+      "recipe": "maximal",
+      "valid": true,
+      "length": 659518,
+      "sha256": "613023c28916cb633042f4ad20b0a3957041b0bff658b2544512bd45f87ae2bc",
+      "entries": 1024
+    },
+    {
+      "id": "too-many-versions",
+      "about": "1,025 versions: the count, not the size, is refused.",
+      "recipe": "too-many",
+      "valid": false,
+      "length": 237864,
+      "sha256": "1295274ce1211faf29440d8562a33bfd9e842c6ed63c46f0b716c5f55e4bf13f",
+      "entries": 1025,
+      "list": "versions"
+    },
+    {
+      "id": "too-many-withheld",
+      "about": "1,025 withheld versions.",
+      "recipe": "too-many",
+      "valid": false,
+      "length": 113839,
+      "sha256": "2c77a4ce811dce14ba5b454557948ed62986d274f81e4f4cbc235dcd442c31fd",
+      "entries": 1025,
+      "list": "withheld"
+    },
+    {
+      "id": "too-many-added",
+      "about": "1,025 added records.",
+      "recipe": "too-many",
+      "valid": false,
+      "length": 9289,
+      "sha256": "fb738fcf654fc19ccfc4d6aa07076f0fc17b9dbb4e49e7f613dddb6a72b2646a",
+      "entries": 1025,
+      "list": "addedRecords"
+    },
+    {
+      "id": "oversized",
+      "about": "The empty record followed by spaces to one byte past the bound. JSON allows the spaces; the bound does not.",
+      "recipe": "padded",
+      "valid": false,
+      "length": 1048577,
+      "sha256": "aa292b1b4c9b3babc1887cb3049653ce0873972575c989964c4b20ab28d5b320"
+    },
+    {
+      "id": "at-bound",
+      "about": "The empty record followed by spaces to exactly the bound, which both accept.",
+      "recipe": "padded",
+      "valid": true,
+      "length": 1048576,
+      "sha256": "e1749e4258f78a2457121cff150b9af10ea59fac17ca90de18a852dc8d0f71ad"
+    }
+  ],
+  "recipes": {
+    "maximal": "For i from 0 to entries - 1, with id = 'm', i as 4 decimal digits, then 59 'x': versions[i] = {id, version: '1.0.0-' and 58 'a', sha256: i as 64 lowercase hexadecimal digits, receipt: i + entries as 64 hexadecimal digits, hidden: true, installedAt: 9007199254740991}; withheld[i] = {id, version: '2.0.0-' and 58 'b', receipt: i + 2 * entries as 64 hexadecimal digits}; addedRecords[i] = id. Written canonically.",
+    "too-many": "As maximal, but only the list named holds entries, the id is 'm' and i as 5 decimal digits, and the versions are '1.0.0' and '2.0.0'.",
+    "padded": "The canonical empty record followed by spaces up to length bytes."
+  }
+}

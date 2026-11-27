@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
     {
         private const string FixtureAssembly = "TopiaForge.ValidTestMod.dll";
         private const string SdkAssemblyName = "TopiaForge.Mods.Abstractions";
-        private static readonly Version CompatibleSdkVersion = new Version(1, 0, 0, 0);
+        private static readonly Version CompatibleSdkVersion = new Version(0, 1, 0, 0);
 
         public static void Run(string root)
         {
@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             TestBaseTypeResolutionScope(root);
             TestDuplicateAssemblyIdentities(root);
             TestBundledFrameworkAssemblies(root);
+            TestInternalsVisibleToNames(root);
             Console.WriteLine("ManagedModAssemblyValidatorTests passed.");
         }
 
@@ -120,7 +121,7 @@ namespace TopiaForge.ModManager.Tests
                 SdkAssemblyName,
                 addCompatibleSdkReference: false);
             var manifest = NewManifest("IncompatibleSdk.dll", "Synthetic.IncompatibleSdkMod");
-            AssertContains(ManagedModAssemblyValidator.Validate(package, manifest), "V1 requires unsigned TopiaForge.Mods.Abstractions 1.0.0.0");
+            AssertContains(ManagedModAssemblyValidator.Validate(package, manifest), "the loader requires unsigned TopiaForge.Mods.Abstractions 0.1.0.0");
 
             package = CreateEmptyPackage(root, "tfm-incompatible");
             WriteSyntheticAssembly(
@@ -214,6 +215,48 @@ namespace TopiaForge.ModManager.Tests
             AssertContains(ManagedModAssemblyValidator.Validate(symbolsPackage, symbolsManifest), "must not bundle");
         }
 
+        /// <summary>
+        /// Every assembly a TopiaForge assembly names in InternalsVisibleTo sees TopiaForge internals, so no package may bundle
+        /// one under another package's id: the names come from the sources, so a new one cannot be missed.
+        /// </summary>
+        private static void TestInternalsVisibleToNames(string root)
+        {
+            var repository = Program.FindRepoRoot();
+            var names = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var folder in new[] { "src", "mods" })
+            {
+                foreach (var file in Directory.EnumerateFiles(Path.Combine(repository, folder), "*.*", SearchOption.AllDirectories))
+                {
+                    var parts = file.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    if (parts.Contains("bin") || parts.Contains("obj")) continue;
+                    var pattern = file.EndsWith("AssemblyInfo.cs", StringComparison.Ordinal) ? "InternalsVisibleTo\\(\"([^\"]+)\"\\)"
+                        : file.EndsWith(".csproj", StringComparison.Ordinal) ? "<InternalsVisibleTo Include=\"([^\"]+)\"" : null;
+                    if (pattern == null) continue;
+                    foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(file), pattern))
+                        names.Add(match.Groups[1].Value);
+                }
+            }
+
+            Assert(names.Contains("TopiaForge.Mods.Multiplayer.Tests") && names.Contains("TopiaForge.ModManager.Tests") && names.Count >= 10,
+                "The InternalsVisibleTo names are read from the sources.");
+            foreach (var name in names)
+            {
+                var package = CreateFixturePackage(root, "internals-" + name.Replace('.', '-'));
+                File.WriteAllText(Path.Combine(package, name + ".dll"), "an assembly TopiaForge trusts");
+                var errors = ManagedModAssemblyValidator.Validate(package, NewManifest(FixtureAssembly, "TopiaForge.ValidTestMod.ValidMod"));
+                AssertContains(errors, name + ".dll");
+                AssertContains(errors, "must not bundle");
+            }
+
+            // The first-party package that ships an assembly may bundle it.
+            var owned = CreateFixturePackage(root, "internals-owner");
+            File.WriteAllText(Path.Combine(owned, "TopiaForge.Multiplayer.dll"), "the provider");
+            var ownerManifest = NewManifest(FixtureAssembly, "TopiaForge.ValidTestMod.ValidMod");
+            ownerManifest.Id = "io.github.furroxide.topiaforge.multiplayer";
+            Assert(!ManagedModAssemblyValidator.Validate(owned, ownerManifest).Any(error => error.Contains("must not bundle", StringComparison.Ordinal)),
+                "The multiplayer package bundles its own assembly.");
+        }
+
         private static string CreateFixturePackage(string root, string name)
         {
             var package = CreateEmptyPackage(root, name);
@@ -240,7 +283,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = 6,
                 Id = "tests.valid-mod",
                 Name = "Valid test mod",
                 Author = new ModAuthor { Name = "TopiaForge" },
@@ -248,8 +291,8 @@ namespace TopiaForge.ModManager.Tests
                 EntryAssembly = assembly,
                 EntryType = type,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0"
+                SupportedLoaderVersionRange = ">=0.2.0 <0.3.0",
+                SupportedSdkVersionRange = ">=0.2.0 <0.3.0"
             };
         }
 

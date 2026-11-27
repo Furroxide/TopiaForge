@@ -65,22 +65,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
 
+      - name: Prepare neutral Dart build root
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: bash .github/scripts/prepare-hosted-dart-build.sh
+
       - name: Build launcher
         shell: bash
-        working-directory: apps/topiaforge_launcher_flutter
         env:
           # Flutter forwards FLUTTER_XCODE_* variables as Xcode build settings.
           # The protected release job signs this reusable build output later.
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
           LAUNCHER_PLATFORM: ${{ matrix.platform }}
+          MULTIPLAYER_ENVIRONMENT: staging
         run: |
           set -euo pipefail
+          source="${TOPIAFORGE_CI_BUILD_ROOT:-${GITHUB_WORKSPACE//\\//}}"
+          cd "$source/apps/topiaforge_launcher_flutter"
           flutter pub get --enforce-lockfile
           product_version=$(jq -er \
             '.versioning.productVersion' \
             ../../release/release-policy.json)
-          flutter build "$LAUNCHER_PLATFORM" --release \
+          service_options=()
+          service_options+=(--build-only)
+          python ../../tools/multiplayer-build.py --environment "$MULTIPLAYER_ENVIRONMENT" "${service_options[@]}" -- build "$LAUNCHER_PLATFORM" --release \
             --dart-define="TOPIAFORGE_PRODUCT_VERSION=$product_version"
 
       - name: Verify unsigned macOS launcher policy
@@ -88,6 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cd "$TOPIAFORGE_CI_BUILD_ROOT"
           project_dir="apps/topiaforge_launcher_flutter/macos"
           app="apps/topiaforge_launcher_flutter/build/macos/Build/Products/Release/TopiaForge.app"
           test -d "$app"
@@ -138,8 +148,10 @@ jobs:
         shell: bash
         env:
           LAUNCHER_PLATFORM: ${{ matrix.platform }}
+          MULTIPLAYER_ENVIRONMENT: staging
         run: |
           set -euo pipefail
+          cd "${TOPIAFORGE_CI_BUILD_ROOT:-${GITHUB_WORKSPACE//\\//}}"
           artifact_dir="${RUNNER_TEMP//\\//}/launcher-artifact"
           mkdir -p "$artifact_dir"
           case "$LAUNCHER_PLATFORM" in

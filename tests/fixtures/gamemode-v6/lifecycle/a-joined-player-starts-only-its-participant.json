@@ -1,0 +1,31 @@
+{
+  "id": "a-joined-player-starts-only-its-participant",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "On a joined player the server controller never runs; only that player's own participant controller starts and stops.",
+  "scenario": {
+    "role": "client",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "succeeded",
+          "code": "none",
+          "message": ""
+        },
+        "calls": [
+          "participant.start",
+          "participant.stop"
+        ],
+        "stop": "succeeded"
+      }
+    }
+  }
+}

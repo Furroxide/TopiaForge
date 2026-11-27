@@ -69,6 +69,59 @@ class ReleasePackageSourceTests(unittest.TestCase):
         self.assertNotRegex(package, r"uses: actions/cache@")
         self.assertEqual(2, package.count("uses: actions/cache/restore@"))
 
+    def test_ecosystem_restores_locked_cli_before_generated_runtime_tests(self) -> None:
+        ecosystem = job(workflow("release-package-build.yml"), "canonical-ecosystem")
+        restore = (
+            "        working-directory: apps/topiaforge_cli\n"
+            "        run: dart pub get --enforce-lockfile\n"
+        )
+        self.assertIn(restore, ecosystem)
+        self.assertLess(
+            ecosystem.index(restore),
+            ecosystem.index("bash tools/verify-csharp-release-surface.sh"),
+        )
+
+    def test_unix_compilers_use_neutral_source_and_package_cache(self) -> None:
+        package = workflow("release-package-build.yml")
+        launcher = job(workflow("flutter-launcher-builds.yml"), "build")
+        helper = (WORKFLOWS.parent / "scripts" / "prepare-hosted-dart-build.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('mktemp -d /tmp/topiaforge-build.', helper)
+        self.assertIn('ls-files -z', helper)
+        self.assertIn('PUB_CACHE=%s', helper)
+
+        stage = "bash .github/scripts/prepare-hosted-dart-build.sh"
+        neutral_cli = 'cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"'
+        intel = job(package, "macos-cli-x64")
+        matrix = job(package, "build")
+        self.assertLess(intel.index(stage), intel.index(neutral_cli))
+        self.assertLess(matrix.index(stage), matrix.index(neutral_cli))
+        self.assertEqual(matrix[: matrix.index("- name: Build release package")].count(neutral_cli), 2)
+        self.assertIn('args+=(--prebuilt-cli "$temp/topiaforge-linux-x64")', matrix)
+        self.assertIn('args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")', matrix)
+
+        build_launcher = 'cd "$source/apps/topiaforge_launcher_flutter"'
+        self.assertLess(launcher.index(stage), launcher.index(build_launcher))
+        self.assertIn('source="${TOPIAFORGE_CI_BUILD_ROOT:-', launcher)
+        self.assertIn('cd "${TOPIAFORGE_CI_BUILD_ROOT:-', launcher)
+
+    def test_macos_extractor_publish_uses_neutral_build_paths(self) -> None:
+        matrix = job(workflow("release-package-build.yml"), "build")
+        setup = matrix.index("- name: Set up .NET")
+        stage = matrix.index("bash .github/scripts/prepare-hosted-dart-build.sh")
+        self.assertLess(stage, setup)
+        for setting in ("DOTNET_INSTALL_DIR", "DOTNET_CLI_HOME", "NUGET_PACKAGES"):
+            self.assertIn(f"{setting}=%s", matrix[stage:setup])
+        start = matrix.index("- name: Build release package")
+        end = matrix.index("- name: Smoke test release package")
+        build = matrix[start:end]
+        invoke = build.index('dart run bin/topiaforge.dart "${args[@]}"')
+        self.assertLess(build.index('cd "$TOPIAFORGE_CI_BUILD_ROOT/apps/topiaforge_cli"'), invoke)
+        self.assertIn('export RobotopiaManagedDir="$root/managed-refs"', build)
+        self.assertIn('mv "$output/${{ matrix.asset }}" "$workspace/release-artifacts/"', build)
+        self.assertIn("args+=(--require-mac-universal)", matrix[end:])
+
     def test_release_prs_keep_latest_managed_ref_requirement(self) -> None:
         package = workflow("release-package-build.yml")
         baselines = re.findall(r"(?m)^          PINNED_STABLE_BASELINE: (.+)$", package)
@@ -80,7 +133,7 @@ class ReleasePackageSourceTests(unittest.TestCase):
         ci_baselines = re.findall(
             r"(?m)^          PINNED_STABLE_BASELINE: (.+)$", workflow("ci.yml")
         )
-        self.assertEqual(3, len(ci_baselines))
+        self.assertEqual(4, len(ci_baselines))
         for expression in ci_baselines:
             self.assertIn("github.head_ref == 'maintenance/main-governance'", expression)
             self.assertNotIn("github.head_ref == 'release/", expression)

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using TopiaForge.GameCompat;
+using TopiaForge.ModManager.Core;
 
 namespace TopiaForge.GameCompat.Extractor
 {
@@ -69,7 +70,8 @@ Commands:
   audit     Offline source-vs-manifest drift check (no game DLL needed).
 
 Managed dir resolution order: --managed, $RobotopiaManagedDir, the platform-specific layout under
-$RobotopiaGameDir, then the default launcher install path.");
+$RobotopiaGameDir, the default launcher install path, then the folder the official launcher moved
+the game to (game_dir in its launcher-config.json, Windows only).");
             return 0;
         }
 
@@ -318,7 +320,9 @@ $RobotopiaGameDir, then the default launcher install path.");
 
         private static string? RequireManagedDir(Options options)
         {
-            foreach (var candidate in ManagedDirCandidates(options.Managed))
+            foreach (var candidate in ManagedDirCandidates(
+                         options.Managed,
+                         TomatoCakeLauncherState.DefaultStateDirectory()))
             {
                 if (candidate != null && Directory.Exists(candidate) && File.Exists(Path.Combine(candidate, "GameCode.dll")))
                 {
@@ -329,7 +333,11 @@ $RobotopiaGameDir, then the default launcher install path.");
             return null;
         }
 
-        private static IEnumerable<string?> ManagedDirCandidates(string? explicitDir)
+        /// <summary>
+        /// Managed directories to try, in order. The directory the official Tomato Cake launcher moved the game to
+        /// comes last, so every explicit choice and default location keeps precedence over it.
+        /// </summary>
+        internal static IEnumerable<string?> ManagedDirCandidates(string? explicitDir, string? launcherStateDirectory)
         {
             yield return explicitDir;
             yield return Environment.GetEnvironmentVariable("RobotopiaManagedDir");
@@ -355,6 +363,12 @@ $RobotopiaGameDir, then the default launcher install path.");
             {
                 yield return Path.Combine(home, "Library", "Application Support", "Tomato Cake", "launcher",
                     "Robotopia.app", "Contents", "Resources", "Data", "Managed");
+            }
+
+            var relocatedRoot = TomatoCakeLauncherState.RelocatedGameRoot(launcherStateDirectory);
+            if (relocatedRoot != null)
+            {
+                yield return Path.Combine(relocatedRoot, "Robotopia_Data", "Managed");
             }
         }
 

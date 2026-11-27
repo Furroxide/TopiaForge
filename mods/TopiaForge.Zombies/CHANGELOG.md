@@ -1,6 +1,10 @@
 # Changelog
 
-## 1.0.0-rc.1
+## 0.2.0
+
+- Target the TopiaForge 0.2 loader and SDK line.
+
+## 0.1.0-rc.1
 
 - Migrated to the owner-scoped TopiaForge V1 lifecycle, package, and SDK contracts.
 - Rebuilt combat around stable RobotKit/physics entity identity, custom archetype health, headshots, charged piercing shots, and combo scoring.

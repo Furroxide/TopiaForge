@@ -1,24 +1,37 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.uigallery",
   "displayName": "TopiaForge UI Gallery",
-  "version": "1.0.0-rc.1",
+  "version": "0.2.0",
   "author": {
     "name": "TopiaForge"
   },
-  "description": "Developer tool: a living catalog of every TopiaForgeUi widget in both brand schemes, with live high-contrast, UI-scale, and motion toggles. Toggle with F8. Not shipped in releases.",
+  "description": "Developer tool for previewing TopiaForgeUi widgets in Paper, HUD, high contrast, and the Survival sample theme. Toggle with F8. Not shipped in releases.",
   "entryAssembly": "TopiaForge.UiGallery.dll",
   "entryType": "TopiaForge.UiGallery.UiGalleryMod",
+  "ui": {
+    "schema": 1,
+    "themes": [
+      {
+        "id": "survival",
+        "definition": "ui/themes/survival.json"
+      },
+      {
+        "id": "preview-art",
+        "definition": "ui/themes/preview-art.json"
+      }
+    ]
+  },
   "dependencies": {
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
+    "io.github.furroxide.topiaforge.worlds": ">=0.2.0 <0.3.0"
   },
   "loadAfter": [
     "io.github.furroxide.topiaforge.worlds"
   ],
-  "supportedGameVersionRange": "0.0.2309",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedGameVersionRange": ">=0.0.2640 <0.0.2700",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.2.0 <0.3.0",
   "category": "DevTool",
   "tags": [
     "dev-only",
@@ -26,12 +39,15 @@
     "gallery",
     "sdk"
   ],
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "licenseFiles": [
     "LICENSE"
   ],
   "capabilities": [
     "hud",
     "input"
-  ]
+  ],
+  "multiplayer": {
+    "mode": "client-local"
+  }
 }

@@ -4,8 +4,9 @@ description: Install the repository-pinned Flutter SDK from a verified official 
 runs:
   using: composite
   steps:
-    - name: Cache the pinned Flutter archive
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+    # Shared with Pages and release jobs: never register a post-job cache save.
+    - name: Restore the pinned Flutter archive
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ runner.temp }}/topiaforge-flutter-archives
         key: >-

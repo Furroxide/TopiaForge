@@ -10,18 +10,23 @@ namespace TopiaForge.Chronos
     // never last-writer-wins. fixedDeltaTime is co-scaled off a baseline captured ONCE so the timestep can't drift
     // across gamemode loads. Force-reset on scene change / owner teardown / dispose / a thrown frame, so a held scale
     // can never leak. Coexists with native pause through a read-only pause-UI signal plus observed-zero ownership
-    // fallback, so a pause layered over a Chronos freeze is never lifted. Drives Unity time; derivation/ordering live
-    // in Unity-free files (TimeMath/LeaseLedger/TimeScalePlan/TurnOrder) so they unit-test.
+    // fallback, so a pause layered over a Chronos freeze is never lifted. Drives Unity time through the runtime's game
+    // clock; derivation/ordering live in Unity-free files (TimeMath/LeaseLedger/TimeScalePlan/TurnOrder) so they
+    // unit-test. In a multiplayer session (ChronosNetBridge) the host publishes the time its leases derive and a joined
+    // player follows it, only the gamemode's server controller changes time, and the clock never yields to one player's
+    // own pause menu; offline every behaviour above is unchanged.
     internal sealed partial class TimeControlService :
         ITimeControlService,
         ITimeLeaseHost,
-        IOwnerBoundExtensionFactory,
+        IOwnerContextBoundExtensionFactory,
         IDisposable
     {
         private const float FixedFloor = 0.1f; // co-scale floor for fixedDeltaTime (keeps the physics step affordable)
 
         private readonly string ownerModId;
         private readonly IModLogger logger;
+        private readonly IInternalGameClock clock;
+        private readonly ChronosNetBridge net;
         private readonly LeaseLedger ledger = new LeaseLedger();
         private readonly PlayerTimeExemption player;
         private readonly PlayerSuspendCoordinator playerSuspend;
@@ -40,10 +45,20 @@ namespace TopiaForge.Chronos
 
         private TurnScheduler? turnScheduler;
 
-        public TimeControlService(string ownerModId, IModLogger logger, ILocalPlayerService playerService)
+        /// <param name="replication">
+        /// The runtime's replication seam of Chronos' own context: the game's clock, the realm and the session's time. A
+        /// context without one is single player on Unity's own clock.
+        /// </param>
+        public TimeControlService(
+            string ownerModId,
+            IModLogger logger,
+            ILocalPlayerService playerService,
+            IRuntimeReplication? replication = null)
         {
             this.ownerModId = ownerModId ?? "io.github.furroxide.topiaforge.chronos";
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            clock = replication?.GameClock ?? UnityChronosClock.Instance;
+            net = new ChronosNetBridge(replication);
             player = new PlayerTimeExemption(logger);
             playerSuspend = new PlayerSuspendCoordinator(playerService, logger);
             nativePause = new NativePauseSignal(logger);
@@ -56,24 +71,33 @@ namespace TopiaForge.Chronos
         public bool IsAvailable => !disposed;
 
         public float WorldScale { get; private set; } = 1f;
-        public float WorldDeltaTime => Time.deltaTime;
-        public float WorldTime => Time.time;
-        public float ControlDeltaTime => Time.unscaledDeltaTime;
-        public float ControlTime => Time.unscaledTime;
+        public float WorldDeltaTime => clock.DeltaTime;
+        public float WorldTime => clock.Time;
+        public float ControlDeltaTime => clock.UnscaledDeltaTime;
+        public float ControlTime => clock.UnscaledTime;
         public bool IsFrozen => WorldScale <= 0f;
         public TimeMode Mode { get; private set; } = TimeMode.Realtime;
 
-        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
-            Type contractType,
-            string consumerId,
-            IModLifetime lifetime)
+        // Each consuming context, a gamemode's server or participant scope included, gets a facade bound to its own seam,
+        // so whether its code may change time follows where that code runs.
+        object IOwnerContextBoundExtensionFactory.CreateOwnerFacade(Type contractType, IModContext context)
         {
             if (contractType != typeof(ITimeControlService))
             {
                 throw new ArgumentException("Unsupported Chronos extension contract.", nameof(contractType));
             }
 
-            return new OwnerFacade(this, consumerId, lifetime);
+            if (context == null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            return new OwnerFacade(
+                this,
+                context.Identity.Id,
+                context.Lifetime,
+                net,
+                (context as IInternalReplicationContext)?.Replication);
         }
 
         public void ForceReset()
@@ -92,7 +116,7 @@ namespace TopiaForge.Chronos
             player.RestoreExemption();
             playerSuspend.Release();
             exemptApplied = false;
-            var explicitNativePause = hasWritten && nativePause.IsPaused();
+            var explicitNativePause = hasWritten && net.YieldsToNativePause && nativePause.IsPaused();
             RestoreBaseline(explicitNativePause);
             WorldScale = 1f;
             Mode = TimeMode.Realtime;
@@ -109,9 +133,18 @@ namespace TopiaForge.Chronos
 
             try
             {
+                // Follow the realm first: a change ends whatever lost its authority there before anything derives.
+                net.Update();
                 if (suspendRefCount > 0)
                 {
                     playerSuspend.Tick(unscaledDeltaTime);
+                }
+
+                if (net.IsFollowing)
+                {
+                    ApplyFollowed();
+                    turnScheduler?.Tick(unscaledDeltaTime);
+                    return;
                 }
 
                 // Keep deriving logical state while Robotopia owns the native clock. This is important when a mod
@@ -175,7 +208,7 @@ namespace TopiaForge.Chronos
                 // ForceReset deliberately leaves timeScale at zero while Robotopia's pause remains authoritative.
                 // Chronos will no longer receive a Tick after disposal, so relinquish the independent fixed-step
                 // setting now. The deferred handoff below restores timeScale only after native pause closes.
-                Time.fixedDeltaTime = baseFixedDelta;
+                clock.FixedDeltaTime = baseFixedDelta;
             }
 
             if (hasWritten)
@@ -209,6 +242,12 @@ namespace TopiaForge.Chronos
         {
             if (disposed)
             {
+                return;
+            }
+
+            if (net.IsFollowing)
+            {
+                ApplyFollowed();
                 return;
             }
 
@@ -251,6 +290,15 @@ namespace TopiaForge.Chronos
             }
         }
 
+        // A joined player runs at its host's time, whatever its own leases say: they can only exempt its player.
+        private void ApplyFollowed()
+        {
+            var host = net.FollowedTime;
+            var plan = TimeScalePlan.Follow(ledger, host.Scale, (TimeMode)(int)host.Mode);
+            ApplyLogical(plan);
+            ApplyScale(plan.WorldScale);
+        }
+
         private void ApplyLogical(TimeScalePlan plan)
         {
             WorldScale = plan.WorldScale;
@@ -266,6 +314,10 @@ namespace TopiaForge.Chronos
                 player.RestoreExemption();
                 exemptApplied = false;
             }
+
+            // The logical time is this process's: a listen host's players follow it, and offline it is kept for a later
+            // promotion. A joined player publishes nothing.
+            net.Publish(WorldScale, Mode);
         }
 
         private void ApplyScale(float scale)
@@ -273,10 +325,10 @@ namespace TopiaForge.Chronos
             // A reloaded Chronos instance is now authoritative; prevent an older unload handoff from writing a
             // baseline over this new lease after the native pause closes.
             DeferredTimeScaleRestore.CancelForActiveOwner();
-            Time.timeScale = scale;
+            clock.TimeScale = scale;
             if (baseFixedCaptured)
             {
-                Time.fixedDeltaTime = TimeMath.FixedDelta(baseFixedDelta, scale, FixedFloor);
+                clock.FixedDeltaTime = TimeMath.FixedDelta(baseFixedDelta, scale, FixedFloor);
             }
 
             ownedScale = scale;
@@ -290,11 +342,12 @@ namespace TopiaForge.Chronos
                 return;
             }
 
-            var plan = TimeScaleOwnership.PlanRestore(
+            var plan = ChronosNetRules.PlanRestore(
+                net.YieldsToNativePause,
                 explicitNativePause,
                 hasWritten,
                 ownedScale,
-                Time.timeScale);
+                clock.TimeScale);
             if (plan.RetainOwnership)
             {
                 // Keep the last written scale/fixed-step ownership until the native pause actually releases.
@@ -303,10 +356,10 @@ namespace TopiaForge.Chronos
 
             if (plan.WriteBaseline)
             {
-                Time.timeScale = 1f;
+                clock.TimeScale = 1f;
                 if (baseFixedCaptured)
                 {
-                    Time.fixedDeltaTime = baseFixedDelta;
+                    clock.FixedDeltaTime = baseFixedDelta;
                 }
 
                 ownedScale = 1f;
@@ -314,14 +367,17 @@ namespace TopiaForge.Chronos
             }
         }
 
+        // Online the game's own pause menu is one player's alone: the shared world's clock never yields to it.
         private bool IsNativePaused(out bool explicitNativePause)
         {
-            explicitNativePause = nativePause.IsPaused();
-            return TimeScaleOwnership.IsNativePaused(
+            var yields = net.YieldsToNativePause;
+            explicitNativePause = yields && nativePause.IsPaused();
+            return ChronosNetRules.NativePauseHolds(
+                yields,
                 explicitNativePause,
                 hasWritten,
                 ownedScale,
-                Time.timeScale);
+                clock.TimeScale);
         }
 
         // Briefly lift the freeze to advance the frozen sim by a bounded slice (RTwP "advance a beat" / turn step).
@@ -342,10 +398,10 @@ namespace TopiaForge.Chronos
             // Tick re-applies the frozen scale. (A precise N-fixed-step advance would need a coroutine; this bounded
             // single-frame lift is the safe primitive — callers Step() once per beat.)
             DeferredTimeScaleRestore.CancelForActiveOwner();
-            Time.timeScale = 1f;
+            clock.TimeScale = 1f;
             if (baseFixedCaptured)
             {
-                Time.fixedDeltaTime = baseFixedDelta;
+                clock.FixedDeltaTime = baseFixedDelta;
             }
 
             ownedScale = 1f;
@@ -380,7 +436,7 @@ namespace TopiaForge.Chronos
         {
             try
             {
-                baseFixedDelta = Time.fixedDeltaTime;
+                baseFixedDelta = clock.FixedDeltaTime;
                 baseFixedCaptured = baseFixedDelta > 0f;
             }
             catch

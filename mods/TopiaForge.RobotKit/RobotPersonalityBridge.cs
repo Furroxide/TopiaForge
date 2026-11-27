@@ -76,7 +76,8 @@ namespace TopiaForge.RobotKit
                 {
                     UnityEngine.Object.Destroy(bio);
                 }
-                return OperationResult<object>.Failure(ModErrorCode.External, Unwrap(exception).Message);
+                return OperationResult<object>.Failure(ModErrorCode.External,
+                    "The temporary robot personality could not be applied: " + RobotKitLog.ExceptionType(Unwrap(exception)));
             }
         }
 

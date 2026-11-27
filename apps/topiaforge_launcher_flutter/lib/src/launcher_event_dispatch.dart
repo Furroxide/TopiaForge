@@ -8,7 +8,20 @@ extension LauncherEventDispatch on LauncherBloc {
     LauncherEvent event,
     Emitter<LauncherState> emit,
   ) {
+    if (event is ProfileSelected ||
+        event is ProfileLaunchRequested ||
+        event is GameDirectorySelected ||
+        event is LaunchSelectionChanged ||
+        event is SafeModeToggled ||
+        event is DeveloperModeToggled) {
+      // Stop a pending host as soon as the player's selection changes, even
+      // when persisting that selection is still waiting on disk.
+      _multiplayerWork.host.stop();
+      if (_hosting.phase != HostingPhase.closed) add(const HostingClosed());
+    }
     return switch (event) {
+      HostingEvent() => _dispatchHosting(event, emit),
+      ServerCleanupEvent() => _dispatchCleanup(event, emit),
       LauncherStarted() ||
       LauncherRefreshRequested() ||
       PackageSourcesRefreshed() => _onLoad(event, emit),
@@ -27,10 +40,19 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
-      WorldSelectionChanged() => _onWorldSelectionChanged(event, emit),
+      LaunchSelectionChanged() => _onLaunchSelectionChanged(event, emit),
+      LaunchPreviewUpdated() => _onLaunchPreviewUpdated(event, emit),
+      LaunchActivityUpdated() => _onLaunchActivityUpdated(event, emit),
+      LaunchActivityMonitorFailed() => _onLaunchActivityMonitorFailed(
+        event,
+        emit,
+      ),
       KnownInstallDetected() => _onKnownInstallDetected(event, emit),
       GameDirectorySelected() => _onGameDirectorySelected(event, emit),
       RuntimeRepaired() => _onRuntimeRepaired(event, emit),
+      PublishedMapSourceSaved() => _onMapSourceSaved(event, emit),
+      PublishedMapSourceRemoved() => _onMapSourceRemoved(event, emit),
+      DownloadedMapsClearRequested() => _onDownloadedMapsClear(emit),
       PackagePreviewRequested() => _onPackagePreviewRequested(event, emit),
       PreviewedPackageInstalled() => _onPreviewedPackageInstalled(event, emit),
       InboxPackagesInstalled() => _onInboxPackagesInstalled(event, emit),
@@ -131,33 +153,15 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
-      DeveloperUgcSettingsSaved() => _onDeveloperUgcSettingsSaved(event, emit),
-      DeveloperUgcConfigDeployed() => _onDeveloperUgcConfigDeployed(
+      ReachabilityProbeSettingsChanged() => _onReachabilityProbeSettingsChanged(
         event,
         emit,
       ),
-      DeveloperWatchFolderOpened() => _onDeveloperWatchFolderOpened(
+      ReachabilityProbeRequested() => _onReachabilityProbeRequested(
         event,
         emit,
       ),
-      DeveloperUgcPublishToggled() => _onDeveloperUgcPublishToggled(
-        event,
-        emit,
-      ),
-      DeveloperUgcCleanupRequested() => _onDeveloperUgcCleanupRequested(
-        event,
-        emit,
-      ),
-      DeveloperUgcStatusRefreshed() => _onDeveloperUgcStatusRefreshed(
-        event,
-        emit,
-      ),
-      DeveloperUgcSidecarOutput() => _onDeveloperUgcSidecarOutput(event, emit),
-      DeveloperUgcPublisherExited() => _onDeveloperUgcPublisherExited(
-        event,
-        emit,
-      ),
-      DeveloperUgcGoLive() => _onDeveloperUgcGoLive(event, emit),
+      MultiplayerEvent() => _dispatchMultiplayerEvent(event, emit),
     };
   }
 }

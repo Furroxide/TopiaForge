@@ -1,14 +1,76 @@
 part of 'release_package_mod_sdk_test.dart';
 
+void _copyRelocatedValidator(Directory payload, Directory destination) {
+  File(
+    p.join(payload.path, 'global.json'),
+  ).copySync(p.join(destination.path, 'global.json'));
+  const ReleaseFileOps().copyDirectory(
+    Directory(p.join(payload.path, 'tools', 'package-validator')),
+    Directory(p.join(destination.path, 'tools', 'package-validator')),
+  );
+}
+
+void _expectValidatorRuntimeDependency(Directory payload) {
+  const validator = ReleaseSdkPayloadValidator();
+  validator.validate(payload.path);
+  final dependency = File(
+    p.join(
+      payload.path,
+      'tools',
+      'package-validator',
+      'TopiaForge.Mods.Abstractions.dll',
+    ),
+  );
+  final removed = dependency.renameSync('${dependency.path}.withheld');
+  try {
+    expect(
+      () => validator.validate(payload.path),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains(dependency.path),
+        ),
+      ),
+    );
+  } finally {
+    removed.renameSync(dependency.path);
+  }
+  validator.validate(payload.path);
+}
+
 const _releaseModTemplates = [
   'asset',
   'gamemode',
   'gameplay',
   'minimal',
+  'multiplayer',
   'service',
   'ui',
   'world',
 ];
+
+/// Whether [projectRoot] carries a multiplayer contract lock. A template ships
+/// the empty lock that `topiaforge mod add multiplayer` writes, and pack accepts
+/// the project only once the lock is generated from the built contract.
+bool _hasContractLock(String projectRoot) =>
+    File(p.join(projectRoot, 'topiaforge.multiplayer.lock.json')).existsSync();
+
+/// Generates [project]'s contract lock with the packaged [cli], as an author
+/// does after restore. A project without a contract lock is left alone.
+Future<void> _syncContractLock(
+  File cli,
+  String project,
+  Map<String, String> environment,
+) async {
+  if (!_hasContractLock(project)) return;
+  await _runPackagedCli(
+    cli,
+    ['mod', 'sync', 'multiplayer', '--project', project],
+    workingDirectory: project,
+    environment: environment,
+  );
+}
 
 List<File> _releaseProjectFiles(String projectRoot) => Directory(projectRoot)
     .listSync(recursive: true, followLinks: false)
@@ -251,6 +313,7 @@ Future<void> _runCheckedProcess(
     arguments,
     workingDirectory: workingDirectory,
     environment: environment,
+    includeParentEnvironment: false,
   );
   expect(
     result.exitCode,
@@ -271,6 +334,7 @@ Future<List<String>> _packRuntimeTemplateDependencies(
   for (final projectName in const [
     'TopiaForge.Worlds',
     'TopiaForge.RobotKit',
+    'TopiaForge.Multiplayer',
   ]) {
     await _runPackagedCli(
       cli,
@@ -293,7 +357,7 @@ Future<List<String>> _packRuntimeTemplateDependencies(
           .map((file) => file.path)
           .toList()
         ..sort();
-  expect(packages, hasLength(2));
+  expect(packages, hasLength(3));
   return packages;
 }
 
@@ -305,7 +369,7 @@ Directory _createSdkSmokeGame(Directory temp) {
   File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('unity');
   File(
     p.join(root.path, 'installed-build.json'),
-  ).writeAsStringSync(jsonEncode({'id': '2309'}));
+  ).writeAsStringSync(jsonEncode({'id': '2640'}));
   return root;
 }
 
@@ -320,7 +384,7 @@ Future<void> _expectPackagedCliRejectsBadPe(
       ArchiveFile.string(
         'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 5,
+          'schemaVersion': 6,
           'name': 'test.packaged.bad-pe',
           'displayName': 'Packaged Bad PE',
           'version': '1.0.0',

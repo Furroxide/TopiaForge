@@ -12,10 +12,22 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 
+    <!-- Release packages are built on an administrator workstation, never by CI
+         (GitHub verifies staged bytes rather than producing them). Anything
+         conditioned on $(CI) is therefore absent from every shipped binary, so
+         source-path normalisation must not be. Without this, Roslyn records the
+         absolute PDB path in each assembly's CodeView debug directory and the
+         build host's username and folder layout ship inside the package.
+         Mapping the repository root keeps line numbers in stack traces while
+         emitting the same paths from any checkout. -->
+    <PathMap Condition="'$(PathMap)' == ''">$(MSBuildThisFileDirectory)=/_/</PathMap>
+    <PathMap Condition="'$(PathMap)' != '' and !$(PathMap.Contains('/_/'))">$(MSBuildThisFileDirectory)=/_/,$(PathMap)</PathMap>
+
     <!-- Explicit override always wins: set ROBOTOPIA_GAME_DIR (or pass -p:RobotopiaGameDir=...) to point at any
          game install. CI sets RobotopiaManagedDir directly from its reference-assembly archive. On Linux the
          game runs under Proton, so there is no default — set ROBOTOPIA_GAME_DIR to the Windows-layout game
-         folder inside the prefix. -->
+         folder inside the prefix. A game the official launcher moved elsewhere also needs ROBOTOPIA_GAME_DIR
+         (or the managed-reference cache), because MSBuild does not read the launcher's launcher-config.json. -->
     <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == '' and '$(ROBOTOPIA_GAME_DIR)' != ''">$(ROBOTOPIA_GAME_DIR)</RobotopiaGameDir>
     <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == '' and '$(OS)' == 'Windows_NT'">$(LOCALAPPDATA)\Tomato Cake\launcher\Robotopia</RobotopiaGameDir>
     <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(HOME)/Library/Application Support/Tomato Cake/launcher/Robotopia.app</RobotopiaGameDir>
@@ -40,6 +52,6 @@
         Condition="'%(Reference.HintPath)' != '' and !Exists('%(Reference.HintPath)') and ($([System.String]::Copy('%(Reference.Identity)').StartsWith('UnityEngine')) or '%(Reference.Identity)' == 'GameCode' or '%(Reference.Identity)' == 'Assembly-CSharp')" />
     </ItemGroup>
     <Error Condition="'@(_MissingRobotopiaGameRef)' != ''"
-      Text="Robotopia game reference assemblies were not found (looked for @(_MissingRobotopiaGameRef->'%(HintPath)', ', ')). Install the game, or set ROBOTOPIA_GAME_DIR (or the RobotopiaManagedDir MSBuild property) to a folder containing the game's Managed assemblies." />
+      Text="Robotopia game reference assemblies were not found (looked for @(_MissingRobotopiaGameRef->'%(HintPath)', ', ')). Install the game, or set ROBOTOPIA_GAME_DIR (or the RobotopiaManagedDir MSBuild property) to a folder containing the game's Managed assemblies. If the official launcher moved the game, point ROBOTOPIA_GAME_DIR at its new Robotopia folder." />
   </Target>
 </Project>

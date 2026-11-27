@@ -12,7 +12,6 @@ LauncherSnapshot _replaceGameInstall(
     installedMods: snapshot.installedMods,
     registryMods: snapshot.registryMods,
     packageSources: snapshot.packageSources,
-    worldCatalog: snapshot.worldCatalog,
     recentLog: snapshot.recentLog,
     launcherUpdates: snapshot.launcherUpdates,
     developerMode: snapshot.developerMode,
@@ -63,7 +62,6 @@ LauncherSnapshot _multipleInstallSnapshot() {
     installedMods: const [],
     registryMods: const [],
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
   );
 }
@@ -89,7 +87,6 @@ LauncherSnapshot _singleRecoveryInstallSnapshot() {
     installedMods: base.installedMods,
     registryMods: base.registryMods,
     packageSources: base.packageSources,
-    worldCatalog: base.worldCatalog,
     recentLog: base.recentLog,
   );
 }
@@ -115,7 +112,6 @@ LauncherSnapshot _readySnapshot({
     installedMods: installedMods,
     registryMods: registryMods,
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
     launcherUpdates: const LauncherUpdateSettings(enabled: false),
   );
@@ -162,7 +158,6 @@ LauncherSnapshot _updateSnapshot({
       ),
     ],
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
     launcherUpdates: const LauncherUpdateSettings(enabled: false),
   );
@@ -174,9 +169,10 @@ ModManifest _manifest(
   String name = 'Timer Mod',
   String category = '',
   List<ModDependency> dependencies = const [],
+  List<ModConflict> conflicts = const [],
 }) {
   return ModManifest(
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: id,
     name: name,
     version: version,
@@ -185,8 +181,28 @@ ModManifest _manifest(
     entryType: 'Timer.Entry',
     category: category,
     dependencies: dependencies,
+    conflicts: conflicts,
   );
 }
+
+/// Two enabled mods that refuse to load together.
+List<InstalledMod> _conflictingMods() => [
+  _installedMod(
+    _manifest(
+      'example.gravity',
+      version: '1.0.0',
+      name: 'Gravity Mod',
+      conflicts: const [
+        ModConflict(id: 'example.zombies', reason: 'both bind primary fire'),
+      ],
+    ),
+    enabled: true,
+  ),
+  _installedMod(
+    _manifest('example.zombies', version: '1.0.0', name: 'Zombies'),
+    enabled: true,
+  ),
+];
 
 InstalledMod _installedMod(ModManifest manifest, {bool enabled = false}) =>
     InstalledMod(
@@ -216,7 +232,6 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
       _registryMod('gameplay.mod', 'Gameplay Mod', 'Gameplay'),
     ],
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
     launcherUpdates: const LauncherUpdateSettings(enabled: false),
     developerMode: developerMode,
@@ -226,7 +241,7 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
 RegistryMod _registryMod(String id, String name, String category) {
   return RegistryMod(
     manifest: ModManifest(
-      schemaVersion: 5,
+      schemaVersion: 6,
       id: id,
       name: name,
       version: '1.0.0',

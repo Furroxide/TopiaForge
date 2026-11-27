@@ -1,5 +1,13 @@
+import 'cancellation.dart';
 import 'dependency_planner.dart';
+import 'join_host_packages.dart';
 import 'models.dart';
+import 'multiplayer.dart';
+
+/// Optional local capability; clearing maps requires an idle game installation.
+abstract interface class DownloadedMapRepository {
+  Future<int> clearDownloadedMaps(GameInstall install);
+}
 
 abstract interface class LauncherRepository {
   String get dataRoot;
@@ -75,11 +83,27 @@ abstract interface class LauncherRepository {
   /// Starts [install] with [profile] as a process-scoped snapshot. Profile mod
   /// enablement, version pins, safe mode, arguments, and environment must not
   /// be persisted into the manager's global state when launch fails or exits.
-  Future<LaunchResult> launch(GameInstall install, LauncherProfile profile);
+  Stream<LaunchActivity> get launchActivities;
 
-  /// Stops the matching game process, then follows the same process-scoped
-  /// profile contract as [launch].
-  Future<LaunchResult> restart(GameInstall install, LauncherProfile profile);
+  Future<LaunchPreview> previewLaunch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
+
+  Future<LaunchResult> launch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
+
+  /// Preflights before stopping the owned process and resolves again before
+  /// creating its replacement. The optional command never changes saved intent.
+  Future<LaunchResult> restart(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
 
   Future<DiagnosticBundle> createDiagnosticBundle(
     GameInstall install,
@@ -101,46 +125,6 @@ abstract interface class LauncherRepository {
 
   /// Persists launcher self-update settings such as automatic checks and release channel.
   Future<void> saveLauncherUpdateSettings(LauncherUpdateSettings settings);
-
-  /// Writes the UGC live-sync runtime config (`config/topiaforge.ugc.livesync.json`) into the install so the
-  /// `TopiaForge.UgcLiveSync` mod picks it up on next launch. Returns the written file path.
-  Future<String> deployUgcLiveSyncConfig(
-    GameInstall install,
-    UgcLiveSyncSettings settings,
-  );
-
-  /// Stops the active UGC live-sync loop and clears transient connection state.
-  /// Durable preferences come from the deployed runtime config when readable;
-  /// [fallbackSettings] is used only when no valid config has been deployed.
-  Future<UgcLiveSyncCleanupReport> cleanupUgcLiveSync(
-    GameInstall install,
-    UgcLiveSyncSettings fallbackSettings,
-  );
-
-  /// Sidecar lifecycle events emitted by the repository-owned publisher.
-  Stream<UgcPublisherEvent> get ugcPublisherEvents;
-
-  bool get isUgcPublisherRunning;
-
-  Future<UgcPublisherStartResult> startUgcPublisher(
-    UgcLiveSyncSettings settings,
-  );
-
-  /// Stops a repository-owned sidecar. This does not revoke a detached
-  /// publisher lease owned by another launcher or CLI process.
-  Future<void> stopUgcPublisher({bool waitForExit = false});
-
-  /// Explicitly revokes the shared publisher lease, independent of installs.
-  Future<void> revokeUgcPublisherSession();
-
-  /// Reads the UGC live-sync status handshake the mod writes (`config/topiaforge.ugc.livesync.status.json`) so the
-  /// cockpit can auto-detect the game's default watch folder and show live state. Null only when absent; malformed
-  /// or unsafe files throw so callers can surface the failure.
-  Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(GameInstall install);
-
-  /// Inspects the deterministic newest exported project snapshot and returns
-  /// its scenes, source provenance, and structured validation issues.
-  Future<UgcSceneInspectionResult> inspectWatchFolderScenes(String watchFolder);
 }
 
 abstract interface class LauncherUpdateRepository {
@@ -170,6 +154,114 @@ abstract interface class GameInstallDiscoveryRepository
   Future<List<GameInstallCandidate>> discoverGameInstalls();
 }
 
+/// Optional launcher-repository capability for the join stages that need the
+/// game's files once a plan exists, and for cleaning up what joins installed.
+///
+/// Callers test for it with `is`: a repository without it cannot download,
+/// install or prepare a join, and holds no server content. Each join method
+/// answers its stage with the event [JoinSession.reduce] takes, and null for
+/// any other stage or once its [CancellationToken] stopped the work. Each
+/// failure detail says, in plain words, what happened and what to do next,
+/// and names no address.
+///
+/// The player matches nothing by hand: a join installs exactly the archives
+/// the server runs, and what joins install never changes what the player's
+/// own profiles load. The manager record of a mod the player already has is
+/// never touched, a mod new to the player is recorded disabled, and a version
+/// installed for a mod the player already had is seen only by server profiles
+/// ([ServerProfiles]). Versions no profile pins any more are removed after
+/// each join on their own, so the player cleans up only whole servers.
+abstract interface class MultiplayerContentHost {
+  /// Answers a join in [JoinStage.downloading]: fetches each package the
+  /// plan downloads from the source the plan names, bounded by
+  /// [ModRegistryFormat.maxPackageBytes] and the size the source states,
+  /// checks its SHA-256 as it streams and its manifest against the trusted
+  /// one, and keeps it in the package cache. Reports progress to
+  /// [onProgress], in bytes across every package.
+  ///
+  /// Packages only the host serves come last, from [hostPackages], checked
+  /// the same way, with a manifest that must name the mod and version the
+  /// descriptor claims. They need developer mode, which this checks itself,
+  /// and the player's acknowledgement
+  /// ([JoinSessionState.hostServedAcknowledged]); without either, or without
+  /// [hostPackages], the join ends as
+  /// [JoinFailureCode.hostDownloadUnsupported] before anything is fetched.
+  ///
+  /// When the repository closes during the downloads, it stops them at once,
+  /// as a cancel does, and answers [JoinCancelRequested], so the join ends as
+  /// cancelled; the close does not wait for a transfer.
+  Future<JoinEvent?> downloadJoinContent(
+    GameInstall install,
+    JoinSessionState state, {
+    void Function(JoinDownloadProgressed progress)? onProgress,
+    CancellationToken? cancellation,
+    JoinHostPackageSource? hostPackages,
+  });
+
+  /// Answers a join in [JoinStage.installing]: installs every downloaded
+  /// package into [install] as one change. A failure part way rolls back
+  /// everything this join installed and says whether the rollback completed;
+  /// a cancel before anything the game reads changed undoes it all
+  /// ([JoinInstallUndone]). Reports to [onProgress] how many of the packages
+  /// it installs are prepared: none once it has counted them, then one more
+  /// as each is staged. A listener that throws never stops the install.
+  /// Packages the host served install as registry ones do, from the
+  /// manifest their archive holds, once it names the mod and version the
+  /// descriptor claims, and only while developer mode is on and the player's
+  /// acknowledgement stands.
+  ///
+  /// Nothing installs beside a running game: it writes its manager state
+  /// when it quits, over what an install changed. A game this launcher
+  /// started is closed only when [JoinSessionState.closeOwnedGameAcknowledged]
+  /// says the consent covered it, and only once every package is staged and
+  /// the install can no longer be cancelled, so a join that is refused or
+  /// cancelled leaves it running. The launcher asks it to quit, as its Quit
+  /// button would, and stops it only if it does not. The join goes on only
+  /// when the game's next start loads its mods, read from the startup
+  /// journal the game left: a game that recorded no clean exit, because it
+  /// was stopped, or quit before its mods finished unloading, or had
+  /// crashed, opens in safe mode, where a session is refused, so the install
+  /// ends as [JoinFailureCode.installFailed] with nothing installed and says
+  /// what to do. Otherwise a running game, or one this launcher did not
+  /// start, ends the join as [JoinFailureCode.gameRunning].
+  Future<JoinEvent?> installJoinContent(
+    GameInstall install,
+    JoinSessionState state, {
+    void Function(JoinInstallProgressed progress)? onProgress,
+    CancellationToken? cancellation,
+  });
+
+  /// Answers a join in [JoinStage.preparingProfile]: saves the plan's server
+  /// profile, merged with the one an earlier join of the same server saved
+  /// ([ServerProfiles.merge]). A failed save leaves the earlier one as it was.
+  /// Once it is saved, the versions of server content no profile pins any
+  /// more are removed from [install], unless the game runs or a launch or
+  /// install holds the game's files just then; that tidying never fails the
+  /// join.
+  Future<JoinEvent?> prepareJoinProfile(
+    GameInstall install,
+    JoinSessionState state,
+  );
+
+  /// What a cleanup of [install]'s server content would remove: every server
+  /// profile and the content only they need, or only the server profiles
+  /// [serverProfileIds] names and the versions only they pin. Versions no
+  /// server profile pins go in every plan. Throws [StateError] while the
+  /// record of server content or the profiles cannot be read.
+  Future<ServerContentCleanupPlan> planServerContentCleanup(
+    GameInstall install, {
+    Set<String>? serverProfileIds,
+  });
+
+  /// Applies exactly [plan] to [install], or refuses it: while the game runs,
+  /// while a launch or install is using the game's files, and once anything
+  /// the plan was made from has changed.
+  Future<ServerContentCleanupResult> applyServerContentCleanup(
+    GameInstall install,
+    ServerContentCleanupPlan plan,
+  );
+}
+
 abstract interface class DeveloperRepository {
   String get developerDataRoot;
 
@@ -196,26 +288,6 @@ abstract interface class DeveloperRepository {
     ModManifest manifest,
   );
 
-  /// Ensures `Packages/io.github.furroxide.topiaforge.ugc-companion` exists in a Unity project, copying it from the repo template
-  /// when missing (or when [update] is true). Returns true when the package is present afterwards.
-  Future<bool> ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  });
-
-  /// Writes `ProjectSettings/TopiaForgeUgcCompanion.json` — the seed the companion's editor bootstrap reads to
-  /// configure the UGC Live Sync window (watch folder, scene, live-sync on) on next project load. Returns the
-  /// written file path.
-  Future<String> writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  });
-
   Future<DeveloperWorkspace> resolveDeveloperProject(
     String projectPath, {
     bool restore = true,
@@ -228,7 +300,7 @@ abstract interface class DeveloperRepository {
   /// Independent of any project, so it works for a fresh machine. Consuming mods requires none of these.
   Future<EnvironmentReport> checkEnvironment();
 
-  /// Performs safe auto-fixes (installs the UGC Automerge sidecar's npm deps, ensures data folders) and returns
+  /// Performs safe auto-fixes (ensures data folders) and returns
   /// the post-fix environment plus an action log. Never installs SDKs. Shared by the CLI `setup` command and the
   /// launcher's Developer tab so both behave identically.
   Future<DeveloperSetupResult> runSetup();
@@ -256,12 +328,6 @@ abstract interface class DeveloperRepository {
     String configuration = 'Release',
   });
 
-  /// Persists UGC live-sync settings into the project's `topiaforge.project.json` (under `unityCompanion`).
-  Future<DeveloperProject> updateUgcLiveSync(
-    String projectPath,
-    UgcLiveSyncSettings settings,
-  );
-
   /// Lists the tracked developer projects (VCC-style registry, persisted to `developer_projects.json`).
   Future<List<RegisteredProject>> listProjects();
 
@@ -269,11 +335,11 @@ abstract interface class DeveloperRepository {
   /// Throws if the directory is not a recognized project. Returns the updated project list.
   Future<List<RegisteredProject>> addExistingProject(String path);
 
-  /// Removes a project from the registry (untrack only — never deletes files). Returns the updated list.
+  /// Removes a project from the registry (untrack only; never deletes files). Returns the updated list.
   Future<List<RegisteredProject>> removeProject(String path);
 
-  /// Creates a new Unity authoring project from the bundled template (copies it, installs the UGC companion
-  /// package, registers it). The VCC-style "new project from template" flow. Returns the updated project list.
+  /// Creates a new Unity authoring project from the bundled template (copies it and registers it).
+  /// The VCC-style "new project from template" flow. Returns the updated project list.
   Future<List<RegisteredProject>> createUnityProject({
     required String parentDirectory,
     required String name,
@@ -345,7 +411,7 @@ abstract interface class DeveloperRepository {
   /// Builds the paired world prefab into an AssetBundle by running the Unity editor headlessly
   /// (`-batchmode -executeMethod` against the world-companion package's builder) and verifies the bundle
   /// landed in the paired mod's `AssetBundles/` folder. [modPath]/[bundleName]/[unityExePath] override the
-  /// config/auto-detected values. Never throws for build failures — inspect the result.
+  /// config/auto-detected values. Never throws for build failures; inspect the result.
   Future<WorldBundleBuildResult> buildWorldBundle({
     required String unityProjectPath,
     String modPath = '',

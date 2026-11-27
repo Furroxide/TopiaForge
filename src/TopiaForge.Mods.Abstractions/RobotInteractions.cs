@@ -109,6 +109,12 @@ namespace TopiaForge.Mods
 
         /// <summary>Synchronous callback invoked when the player activates the prompt.</summary>
         public Action<RobotInteractionContext>? Interact { get; }
+
+        internal Func<IRobotAgent?>? ResolveOwner { get; private set; }
+
+        internal RobotCustomInteraction BindOwner(Func<IRobotAgent?> resolveOwner) =>
+            new RobotCustomInteraction(Prompt, Interact, Distance, ScreenRectExpansion, CanInteract)
+            { ResolveOwner = resolveOwner ?? throw new ArgumentNullException(nameof(resolveOwner)) };
     }
 
     /// <summary>Unity-free context passed to custom RobotKit interaction callbacks.</summary>

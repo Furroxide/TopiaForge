@@ -54,7 +54,7 @@ namespace TopiaForge.UiGallery.Pages
             page.Label("The ten-line consumer path: the same pane hosted in a standard kit window.", TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
             page.Button("OPEN SHOP WINDOW", () =>
             {
-                window ??= page.Host.ShopWindow("gallery-shop", "GALLERY SHOP", catalog, wallet);
+                window ??= page.Host.ShopWindow("gallery-shop", "GALLERY SHOP", catalog, wallet, persistent: true);
                 window.Show();
             }, TopiaForgeButtonStyle.Outline);
         }

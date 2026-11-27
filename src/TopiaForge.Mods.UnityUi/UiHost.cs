@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,19 +14,21 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed partial class UiHost : IDisposable
     {
+        private readonly List<object> hotkeyRegistrations = new List<object>();
         private readonly List<GameObject> layerRoots = new List<GameObject>();
         private readonly List<CanvasScaler> scalers = new List<CanvasScaler>();
         private readonly List<ITopiaForgeThemeAware> themeAware = new List<ITopiaForgeThemeAware>();
         private readonly List<TopiaForgeWidget> widgets = new List<TopiaForgeWidget>();
         private readonly List<TopiaForgeWindow> windows = new List<TopiaForgeWindow>();
         private readonly List<TopiaForgeFullscreenTool> fullscreenTools = new List<TopiaForgeFullscreenTool>();
+        private readonly List<TopiaForgeOverlay> overlays = new List<TopiaForgeOverlay>();
         private readonly List<TopiaForgeModalInstance> modalInstances = new List<TopiaForgeModalInstance>();
         private TopiaForgeModals? modals;
         private TopiaForgeResolvedTheme? paperTheme;
         private TopiaForgeResolvedTheme? hudTheme;
         private TopiaForgeRgba? accent;
         private bool disposed;
-        private bool initReported;
+        internal bool PlainText { get; set; }
 
         internal UiHost(TopiaForgeUiOptions options)
         {
@@ -72,6 +75,17 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             return hudTheme;
+        }
+
+        internal TopiaForgeResolvedTheme ThemeFor(TopiaForgeWidget widget) =>
+            widget.ThemeSlot?.ResolveTheme(widget.Scheme, EffectiveHighContrast, themeRevision) ?? Theme(widget.Scheme);
+
+        internal void SetSurfaceTheme(GameObject canvas, UiThemeDescriptor? descriptor,
+            Func<UiTextStyle, TMPro.TMP_FontAsset?>? registeredFonts = null)
+        {
+            ThrowIfDisposed();
+            var slot = canvas.GetComponent<TopiaForgeLayerSlot>();
+            if (slot != null && slot.SelectTheme(descriptor, registeredFonts)) WalkThemeAware(slot);
         }
 
         /// <summary>Sets this host's accent override and re-tints its live widgets.</summary>
@@ -146,7 +160,9 @@ namespace TopiaForge.Mods.UnityUi
         public object Hotkey(TopiaForgeKey key, Action action)
         {
             ThrowIfDisposed();
-            return TopiaForgeHotkeys.Register(OwnerId, key, action);
+            var registration = TopiaForgeHotkeys.Register(OwnerId, key, action);
+            hotkeyRegistrations.Add(registration);
+            return registration;
         }
 
         /// <summary>Creates a canvas layer in a sorting band and wraps it as a container.</summary>
@@ -154,7 +170,28 @@ namespace TopiaForge.Mods.UnityUi
         {
             ThrowIfDisposed();
             ReportInitOnce();
-            var root = TopiaForgeLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent);
+            return TrackLayer(TopiaForgeLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent), scheme);
+        }
+
+        internal TopiaForgeContainer KitLayer(string name, TopiaForgeLayerBand band, TopiaForgeScheme scheme,
+            bool interactive, bool persistent)
+        {
+            ThrowIfDisposed();
+            ReportInitOnce();
+            return TrackLayer(TopiaForgeLayers.CreateKitCanvas(OwnerId + ":" + name, band, interactive, persistent), scheme);
+        }
+
+        internal TopiaForgeContainer TrustLayer(bool persistent, bool overlay = false)
+        {
+            ThrowIfDisposed();
+            ReportInitOnce();
+            return TrackLayer(TopiaForgeLayers.CreateTrustCanvas(OwnerId + ":trust", persistent, overlay), TopiaForgeScheme.Paper);
+        }
+
+        private TopiaForgeContainer TrackLayer(GameObject root, TopiaForgeScheme scheme)
+        {
+            if (PlainText) root.AddComponent<TopiaForgePlainTextRoot>();
+            TopiaForgeLayers.WatchLoss(root, HandleLayerLost);
             layerRoots.Add(root);
             var scaler = root.GetComponent<CanvasScaler>();
             TopiaForgeLayers.ApplyScaler(scaler, EffectiveUiScale);
@@ -212,7 +249,7 @@ namespace TopiaForge.Mods.UnityUi
                     ? window.CanvasRoot
                     : widget is TopiaForgeFullscreenTool fullscreen
                         ? fullscreen.CanvasRoot
-                        : widget.Go;
+                        : widget is TopiaForgeOverlay overlay ? overlay.CanvasRoot : widget.Go;
                 DestroySubtree(root);
             }
         }
@@ -233,108 +270,35 @@ namespace TopiaForge.Mods.UnityUi
             disposed = true;
             TopiaForgeTheme.Changed -= OnThemeChanged;
             AccessibilityProfileChanged = null;
-            TopiaForgeHotkeys.UnregisterOwner(OwnerId);
-            while (modalInstances.Count > 0)
-            {
-                modalInstances[modalInstances.Count - 1].Teardown();
-            }
-
-            for (var index = fullscreenTools.Count - 1; index >= 0; index--)
-            {
-                fullscreenTools[index].Teardown();
-            }
-
+            foreach (var registration in hotkeyRegistrations) TopiaForgeHotkeys.Unregister(registration);
+            hotkeyRegistrations.Clear();
+            var failures = new List<Exception>();
+            foreach (var modal in modalInstances.ToArray()) AttemptCleanup(modal.Teardown, failures);
+            modalInstances.Clear();
+            foreach (var tool in fullscreenTools.ToArray()) AttemptCleanup(tool.Teardown, failures);
             fullscreenTools.Clear();
-
-            for (var index = windows.Count - 1; index >= 0; index--)
-            {
-                windows[index].Teardown();
-            }
-
+            foreach (var overlay in overlays.ToArray()) AttemptCleanup(overlay.Teardown, failures);
+            overlays.Clear();
+            foreach (var window in windows.ToArray()) AttemptCleanup(window.Teardown, failures);
             windows.Clear();
-            for (var index = widgets.Count - 1; index >= 0; index--)
-            {
-                TopiaForgeTween.Cancel(widgets[index]);
-            }
-
+            foreach (var widget in widgets.ToArray()) AttemptCleanup(() => TopiaForgeTween.Cancel(widget), failures);
             widgets.Clear();
             themeAware.Clear();
-            foreach (var root in layerRoots)
+            foreach (var root in layerRoots.ToArray())
             {
-                if (root != null)
-                {
-                    TopiaForgeLayers.Release(root);
-                    UnityEngine.Object.Destroy(root);
-                }
+                AttemptCleanup(() => TopiaForgeLayers.Release(root), failures);
+                if (root != null) AttemptCleanup(() => UnityEngine.Object.Destroy(root), failures);
             }
-
             layerRoots.Clear();
             scalers.Clear();
-            TopiaForgeUi.OnHostDisposed(this);
+            AttemptCleanup(() => TopiaForgeUi.OnHostDisposed(this), failures);
+            if (failures.Count > 0) throw new AggregateException("UI host cleanup failed.", failures);
         }
 
-        private void DestroySubtree(GameObject root)
+        private static void AttemptCleanup(Action cleanup, List<Exception> failures)
         {
-            if (root == null)
-            {
-                return;
-            }
-
-            for (var index = modalInstances.Count - 1; index >= 0; index--)
-            {
-                var modalRoot = modalInstances[index].CanvasRoot;
-                if (modalRoot == root || modalRoot != null && modalRoot.transform.IsChildOf(root.transform))
-                {
-                    modalInstances[index].Teardown();
-                }
-            }
-
-            for (var index = windows.Count - 1; index >= 0; index--)
-            {
-                var window = windows[index];
-                if (window.Go == root || window.Go != null && window.Go.transform.IsChildOf(root.transform))
-                {
-                    window.Teardown();
-                    windows.RemoveAt(index);
-                }
-            }
-
-            for (var index = fullscreenTools.Count - 1; index >= 0; index--)
-            {
-                var fullscreen = fullscreenTools[index];
-                if (fullscreen.Go == root || fullscreen.Go != null && fullscreen.Go.transform.IsChildOf(root.transform))
-                {
-                    fullscreen.Teardown();
-                    fullscreenTools.RemoveAt(index);
-                }
-            }
-
-            for (var index = widgets.Count - 1; index >= 0; index--)
-            {
-                var widget = widgets[index];
-                if (widget.Go != root && (widget.Go == null || !widget.Go.transform.IsChildOf(root.transform)))
-                {
-                    continue;
-                }
-
-                TopiaForgeTween.Cancel(widget);
-                if (widget is ITopiaForgeThemeAware aware)
-                {
-                    themeAware.Remove(aware);
-                }
-
-                widgets.RemoveAt(index);
-            }
-
-            var layerIndex = layerRoots.IndexOf(root);
-            if (layerIndex >= 0)
-            {
-                TopiaForgeLayers.Release(root);
-                layerRoots.RemoveAt(layerIndex);
-                scalers.RemoveAt(layerIndex);
-            }
-
-            UnityEngine.Object.Destroy(root);
+            try { cleanup(); }
+            catch (Exception exception) { failures.Add(exception); }
         }
 
         private void OnThemeChanged()
@@ -342,7 +306,7 @@ namespace TopiaForge.Mods.UnityUi
             RefreshResolvedTheme(reapplyScalers: true);
         }
 
-        private void WalkThemeAware()
+        private void WalkThemeAware(TopiaForgeLayerSlot? layer = null)
         {
             for (var index = themeAware.Count - 1; index >= 0; index--)
             {
@@ -354,31 +318,17 @@ namespace TopiaForge.Mods.UnityUi
                     continue;
                 }
 
-                var scheme = aware is TopiaForgeWidget widget ? widget.Scheme : TopiaForgeScheme.Paper;
+                var widget = aware as TopiaForgeWidget;
+                if (layer != null && !ReferenceEquals(widget?.ThemeSlot, layer)) continue;
                 try
                 {
-                    aware.ApplyTheme(Theme(scheme));
+                    aware.ApplyTheme(widget == null ? Theme(TopiaForgeScheme.Paper) : ThemeFor(widget));
                 }
                 catch (Exception exception)
                 {
                     TopiaForgeLog.Warn("UiHost '" + OwnerId + "' could not refresh a widget theme: " + exception.Message);
                 }
             }
-        }
-
-        private void ReportInitOnce()
-        {
-            if (initReported)
-            {
-                return;
-            }
-
-            initReported = true;
-            TopiaForgeLog.Info(
-                "UiHost '" + OwnerId + "' initialized (fonts: " + TopiaForgeFonts.ResolvedTier +
-                ", input: " + (TopiaForgeInput.LegacyAvailable ? "legacy/both" : "input-system") +
-                ", ui-scale: " + EffectiveUiScale.ToString("0.##") +
-                ", high-contrast: " + (EffectiveHighContrast ? "on" : "off") + ").");
         }
 
         private void ThrowIfDisposed()

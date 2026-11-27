@@ -10,9 +10,10 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     'io.github.furroxide.topiaforge.prompts': 'TopiaForge.Mods.Prompts',
     'io.github.furroxide.topiaforge.robotkit': 'TopiaForge.Mods.RobotKit',
     'io.github.furroxide.topiaforge.multiplayer': 'TopiaForge.Mods.Multiplayer',
-    'io.github.furroxide.topiaforge.ugc.livesync': 'TopiaForge.Mods.Ugc',
     'io.github.furroxide.topiaforge.worlds': 'TopiaForge.Mods.Worlds',
   };
+  static const _multiplayerGeneratorPackage =
+      'TopiaForge.Mods.Multiplayer.Generators';
   Directory get _modTemplatesRoot =>
       Directory(p.join(_repositoryRoot.path, 'templates', 'mod'));
 
@@ -73,131 +74,41 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     return templates;
   }
 
-  /// Scaffolds the mod source files + `topiaforge.mod.json` into [root]. Falls back to the built-in minimal
-  /// generator when the requested template directory is absent (synthetic test environments).
-  Future<void> _scaffoldModFromTemplate(
-    String root,
-    String id,
-    String name,
-    ModScaffoldOptions options,
-    bool includeUnityCompanion,
-  ) async {
-    final templateDir = Directory(
-      p.join(_modTemplatesRoot.path, options.template),
-    );
-    final hasTemplateDir =
-        templateDir.existsSync() &&
-        File(p.join(templateDir.path, 'template.json')).existsSync();
-    if (!hasTemplateDir && options.template != 'minimal') {
-      final available = (await _listModTemplates())
-          .map((template) => template.id)
-          .join(', ');
-      throw StateError(
-        'Unknown mod template "${options.template}" (available: $available).',
-      );
-    }
-
-    final tokens = _modTemplateTokens(id, name);
-    ModTemplateInfo? info;
-    if (hasTemplateDir) {
-      info = await _instantiateModTemplate(templateDir, root, tokens);
-    } else {
-      await _writeStarterModSources(root, id, name);
-    }
-
-    // Base manifest ← template defaults ← author's explicit overrides,
-    // followed by a ModManifest round-trip for canonical field names/ordering.
-    // Identity and license deliberately remain non-publishable until chosen by
-    // the author; templates must never claim ownership on their behalf.
-    var manifestMap = <String, Object?>{
-      r'$schema': ModManifest.canonicalSchemaUrl,
-      'schemaVersion': ModManifest.currentSchemaVersion,
-      'name': id,
-      'displayName': name,
-      'version': '0.1.0',
-      'author': {'name': TopiaForgeScaffoldDefaults.authorName},
-      'description': '',
-      'entryAssembly': '${tokens['ASSEMBLY_NAME']}.dll',
-      'entryType': '${tokens['ASSEMBLY_NAME']}.${tokens['TYPE_NAME']}Mod',
-      'dependencies': <String, Object?>{},
-      'optionalDependencies': <String, Object?>{},
-      'supportedGameVersionRange': '0.0.2309',
-      'supportedLoaderVersionRange': _compatibleMinorRange(
-        TopiaForgeRuntimeVersions.loaderVersion,
-      ),
-      'supportedSdkVersionRange': _compatibleMinorRange(
-        TopiaForgeRuntimeVersions.sdkVersion,
-      ),
-      'apiAssemblies': <Object?>[],
-      'license': TopiaForgeScaffoldDefaults.license,
-    };
-    if (info != null && info.manifestDefaults.isNotEmpty) {
-      manifestMap = {...manifestMap, ...info.manifestDefaults};
-    }
-    if (options.authorName == null &&
-        options.authorEmail == null &&
-        options.authorUrl == null) {
-      manifestMap['author'] = {'name': TopiaForgeScaffoldDefaults.authorName};
-    }
-    if (options.license == null) {
-      manifestMap['license'] = TopiaForgeScaffoldDefaults.license;
-    }
-    manifestMap = options.applyTo(manifestMap);
-    final manifest = ModManifest.fromJson(manifestMap);
-    _writeDeveloperTextAtomic(
-      File(p.join(root, 'topiaforge.mod.json')),
-      _prettyJson(manifest.toJson()),
-    );
-    _writeScaffoldLicense(root, manifest, options.licenseText);
-
-    if (includeUnityCompanion) {
-      await _writeUnityCompanionScaffold(root, name);
-    }
-  }
-
   Future<void> _ensureSdkPackageReferences(
     String root,
     SdkReferencePack sdk,
   ) async {
-    final manifest = await _readModManifest(root);
-    final modulePackages = manifest.dependencies
-        .map(
-          (dependency) => _sdkModulePackagesByRuntimeDependency[dependency.id],
-        )
-        .whereType<String>()
-        .where(sdk.containsPackage)
-        .toSet();
-    final projects =
-        Directory(root)
-            .listSync(recursive: true, followLinks: false)
-            .whereType<File>()
-            .where((file) => p.extension(file.path).toLowerCase() == '.csproj')
-            .where(
-              (file) =>
-                  !p.split(file.path).contains('unity-companion') &&
-                  !p.split(file.path).contains('obj') &&
-                  !p.split(file.path).contains('bin'),
-            )
-            .toList()
-          ..sort((left, right) => left.path.compareTo(right.path));
+    final modulePackages = await _sdkModulePackages(root, sdk);
+    final projects = _sdkPinnedProjects(root);
+    final texts = <String, String>{
+      for (final project in projects)
+        project.path: await project.readAsString(),
+    };
+    // A test project that compiles the mod's own sources compiles its
+    // multiplayer contract with them, so it needs the generator that writes
+    // the contract's other half whenever the mod project has it. Without
+    // it, every generated member the mod calls is missing there (CS0103).
+    final sourcesNeedGenerator =
+        sdk.containsPackage(_multiplayerGeneratorPackage) &&
+        projects.any(
+          (project) =>
+              !_isSdkTestProject(project) &&
+              includedPackageReferences(texts[project.path]!, const [
+                _multiplayerGeneratorPackage,
+              ]).isNotEmpty,
+        );
     for (final project in projects) {
-      final isTest = p
-          .basenameWithoutExtension(project.path)
-          .endsWith('.Tests');
-      final packages = <String>{
-        'TopiaForge.Mods.Abstractions',
-        ...modulePackages,
-      };
-      if (!isTest && sdk.containsPackage('TopiaForge.Mods.Analyzers')) {
-        packages.add('TopiaForge.Mods.Analyzers');
-      }
-      if (isTest && sdk.containsPackage('TopiaForge.Mods.Testing')) {
-        packages.add('TopiaForge.Mods.Testing');
-      }
-      final original = await project.readAsString();
+      final isTest = _isSdkTestProject(project);
+      final original = texts[project.path]!;
       final updated = _withExactSdkPackageReferences(
         original,
-        packages: packages,
+        packages: {
+          ..._pinnedSdkPackages(project, original, sdk, modulePackages),
+          if (isTest &&
+              sourcesNeedGenerator &&
+              _compilesSourcesFromOutside(original, project.parent.path))
+            _multiplayerGeneratorPackage,
+        },
         version: sdk.version,
         safeProject: !isTest,
         devPropsPath: p.posix.joinAll(
@@ -213,6 +124,69 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
         _writeDeveloperTextAtomic(project, updated);
       }
     }
+  }
+
+  /// The mod projects under [root] whose SDK packages are pinned: every
+  /// `.csproj` outside `unity-companion`, `obj` and `bin`, in path order.
+  List<File> _sdkPinnedProjects(String root) =>
+      Directory(root)
+          .listSync(recursive: true, followLinks: false)
+          .whereType<File>()
+          .where((file) => p.extension(file.path).toLowerCase() == '.csproj')
+          .where(
+            (file) =>
+                !p.split(file.path).contains('unity-companion') &&
+                !p.split(file.path).contains('obj') &&
+                !p.split(file.path).contains('bin'),
+          )
+          .toList()
+        ..sort((left, right) => left.path.compareTo(right.path));
+
+  bool _isSdkTestProject(File project) =>
+      p.basenameWithoutExtension(project.path).endsWith('.Tests');
+
+  /// The SDK packages that the dependencies in [root]'s manifest imply, of
+  /// those [sdk] holds.
+  Future<Set<String>> _sdkModulePackages(
+    String root,
+    SdkReferencePack sdk,
+  ) async {
+    final manifest = await _readModManifest(root);
+    return manifest.dependencies
+        .map(
+          (dependency) => _sdkModulePackagesByRuntimeDependency[dependency.id],
+        )
+        .whereType<String>()
+        .where(sdk.containsPackage)
+        .toSet();
+  }
+
+  /// The SDK packages [project], whose text is [text], is pinned to [sdk]'s
+  /// version.
+  Set<String> _pinnedSdkPackages(
+    File project,
+    String text,
+    SdkReferencePack sdk,
+    Set<String> modulePackages,
+  ) {
+    final isTest = _isSdkTestProject(project);
+    final sdkPackages = sdk.packages
+        .map((package) => package.id)
+        .where(sdk.containsPackage)
+        .toList();
+    return {
+      'TopiaForge.Mods.Abstractions',
+      ...modulePackages,
+      // The feed holds no other version of an SDK package, so every SDK item
+      // the project has moves with the SDK too, including those the
+      // manifest's dependencies do not imply: the multiplayer generator, the
+      // Unity interop contracts, or an optional module.
+      ...includedPackageReferences(text, sdkPackages),
+      if (!isTest && sdk.containsPackage('TopiaForge.Mods.Analyzers'))
+        'TopiaForge.Mods.Analyzers',
+      if (isTest && sdk.containsPackage('TopiaForge.Mods.Testing'))
+        'TopiaForge.Mods.Testing',
+    };
   }
 
   String _compatibleMinorRange(String version) {
@@ -235,29 +209,50 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     };
   }
 
+  /// [templateDir]'s `template.json`, with `{{TOKEN}}` markers substituted
+  /// in its manifest defaults.
+  Future<ModTemplateInfo> _readModTemplateInfo(
+    Directory templateDir,
+    Map<String, String> tokens,
+  ) async {
+    final metaRaw = utf8.decode(
+      await _readDeveloperFileBounded(
+        File(p.join(templateDir.path, 'template.json')),
+        maxBytes: _maxDeveloperManifestBytes,
+        label: 'Mod template metadata',
+      ),
+    );
+    return ModTemplateInfo.fromJson(
+      jsonDecode(_substituteModTemplateTokens(metaRaw, tokens))
+          as Map<String, Object?>,
+    );
+  }
+
   /// Copies [templateDir] into [root], substituting `{{TOKEN}}` markers in both file paths and text-file
   /// contents. `template.json` (metadata) and any `topiaforge.mod.json` (generated separately) are skipped.
-  /// Returns the parsed template metadata with tokens substituted in its manifest defaults.
-  Future<ModTemplateInfo> _instantiateModTemplate(
+  /// A path that leaves [root] once its tokens are substituted is refused: a token such as the display name is
+  /// the author's own text.
+  Future<void> _instantiateModTemplate(
     Directory templateDir,
     String root,
     Map<String, String> tokens,
   ) async {
-    String substitute(String value) {
-      var result = value;
-      tokens.forEach((key, replacement) {
-        result = result.replaceAll('{{$key}}', replacement);
-      });
-      return result;
-    }
-
+    final base = p.normalize(p.absolute(root));
     for (final entity in templateDir.listSync(recursive: true)) {
       final relative = p.relative(entity.path, from: templateDir.path);
-      final base = p.basename(relative);
-      if (base == 'template.json' || base == 'topiaforge.mod.json') {
+      final name = p.basename(relative);
+      if (name == 'template.json' || name == 'topiaforge.mod.json') {
         continue;
       }
-      final target = p.join(root, substitute(relative));
+      final substituted = _substituteModTemplateTokens(relative, tokens);
+      final target = p.normalize(p.join(base, substituted));
+      if (!p.isWithin(base, target)) {
+        throw StateError(
+          'The mod template path "$relative" leaves the project folder once '
+          'its tokens are substituted: "$substituted". Choose a mod name '
+          'without ".." or a leading path separator.',
+        );
+      }
       if (entity is Directory) {
         Directory(target).createSync(recursive: true);
       } else if (entity is File) {
@@ -272,23 +267,14 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
               label: 'Mod template text file',
             ),
           );
-          await File(target).writeAsString(substitute(content));
+          await File(
+            target,
+          ).writeAsString(_substituteModTemplateTokens(content, tokens));
         } else {
           entity.copySync(target);
         }
       }
     }
-
-    final metaRaw = utf8.decode(
-      await _readDeveloperFileBounded(
-        File(p.join(templateDir.path, 'template.json')),
-        maxBytes: _maxDeveloperManifestBytes,
-        label: 'Mod template metadata',
-      ),
-    );
-    return ModTemplateInfo.fromJson(
-      jsonDecode(substitute(metaRaw)) as Map<String, Object?>,
-    );
   }
 
   Future<ModManifest> _readModManifest(String projectPath) async {
@@ -325,68 +311,15 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     );
     return manifest.validate();
   }
+}
 
-  Directory get _companionTemplateDir => Directory(
-    p.join(
-      _repositoryRoot.path,
-      'templates',
-      'unity-companion',
-      'Packages',
-      'io.github.furroxide.topiaforge.ugc-companion',
-    ),
-  );
-
-  Future<bool> _ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  }) async {
-    final target = Directory(
-      p.join(
-        projectPath,
-        'Packages',
-        'io.github.furroxide.topiaforge.ugc-companion',
-      ),
-    );
-    if (target.existsSync() && !update) {
-      return true;
-    }
-    final source = _companionTemplateDir;
-    if (!source.existsSync()) {
-      return target.existsSync();
-    }
-    _copyDirectory(source, target);
-    return true;
-  }
-
-  Future<String> _writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  }) async {
-    final settingsDir = Directory(p.join(projectPath, 'ProjectSettings'))
-      ..createSync(recursive: true);
-    final file = File(p.join(settingsDir.path, 'TopiaForgeUgcCompanion.json'));
-    _writeDeveloperTextAtomic(
-      file,
-      _prettyJson({
-        'schemaVersion': 2,
-        'watchFolder': watchFolder,
-        if (projectName.isNotEmpty) 'projectName': projectName,
-        if (sceneId.isNotEmpty) 'sceneId': sceneId,
-        if (sceneName.isNotEmpty) 'sceneName': sceneName,
-        if (environment.isNotEmpty) 'environment': environment,
-        'liveSync': liveSync,
-        // The companion's editor bootstrap applies the seed once and stamps appliedUtc; a fresh seededUtc from
-        // the CLI re-arms it.
-        'seededUtc': DateTime.now().toUtc().toIso8601String(),
-      }),
-    );
-    return file.path;
-  }
+/// [value] with every `{{KEY}}` of [tokens] replaced by its value.
+String _substituteModTemplateTokens(String value, Map<String, String> tokens) {
+  var result = value;
+  tokens.forEach((key, replacement) {
+    result = result.replaceAll('{{$key}}', replacement);
+  });
+  return result;
 }
 
 String _withExactSdkPackageReferences(
@@ -397,13 +330,11 @@ String _withExactSdkPackageReferences(
   required String devPropsPath,
 }) {
   var result = project;
-  final projectElement = RegExp(r'<Project(?:\s[^>]*)?>').firstMatch(result);
+  final projectElement = firstStartTag(result, 'Project');
   if (projectElement == null) {
     throw StateError('TopiaForge C# project has no Project element.');
   }
-  if (!RegExp(
-    r'<Import\s+Project="[^"]*topiaforge\.dev\.props"',
-  ).hasMatch(result)) {
+  if (!_importsDevProps(result)) {
     final offset = projectElement.end;
     result =
         '${result.substring(0, offset)}\n'
@@ -411,12 +342,11 @@ String _withExactSdkPackageReferences(
         'Condition="Exists(\'$devPropsPath\')" />'
         '${result.substring(offset)}';
   }
-  final safePattern = RegExp(
-    r'<TopiaForgeSafeProject(?:\s[^>]*)?>[^<]*</TopiaForgeSafeProject>',
-  );
-  if (safePattern.hasMatch(result)) {
-    result = result.replaceFirst(
-      safePattern,
+  final safeElement = firstTextElement(result, 'TopiaForgeSafeProject');
+  if (safeElement != null) {
+    result = result.replaceRange(
+      safeElement.start,
+      safeElement.end,
       '<TopiaForgeSafeProject>${safeProject ? 'true' : 'false'}</TopiaForgeSafeProject>',
     );
   }
@@ -426,16 +356,13 @@ String _withExactSdkPackageReferences(
         "\$(ContinuousIntegrationBuild) == 'true' and Exists('\$(MSBuildProjectDirectory)/packages.lock.json')",
     'TopiaForgeSafeProject': safeProject ? 'true' : 'false',
   };
-  final firstPropertyGroup = RegExp(
-    r'<PropertyGroup(?:\s[^>]*)?>',
-  ).firstMatch(result);
+  final firstPropertyGroup = firstStartTag(result, 'PropertyGroup');
   if (firstPropertyGroup == null) {
     throw StateError('TopiaForge C# project has no PropertyGroup.');
   }
   final propertyLines = <String>[];
   for (final entry in properties.entries) {
-    final existing = RegExp('<${entry.key}(?:\\s[^>]*)?>');
-    if (existing.hasMatch(result)) continue;
+    if (firstStartTag(result, entry.key) != null) continue;
     if (entry.key == 'RestoreLockedMode') {
       propertyLines.add(
         '    <RestoreLockedMode Condition="${entry.value}">true</RestoreLockedMode>',
@@ -451,50 +378,59 @@ String _withExactSdkPackageReferences(
         '${result.substring(offset)}';
   }
 
-  final missing = <String>[];
-  for (final package in packages.toList()..sort()) {
-    final pattern = RegExp(
-      '<PackageReference\\s+Include=["\\\']${RegExp.escape(package)}["\\\'][^>]*(?:/>|>.*?</PackageReference>)',
-      dotAll: true,
+  return withPinnedSdkPackageReferences(
+    result,
+    packages: packages,
+    version: version,
+  );
+}
+
+/// Whether [project] has an `<Import>` outside comments whose `Project`
+/// attribute, in either quote and among any others, ends in
+/// `topiaforge.dev.props`.
+bool _importsDevProps(String project) => startTags(project, 'Import').any(
+  (found) => found.tag.attributes.any((attribute) {
+    if (!isAttributeNamed(project, attribute, 'Project')) return false;
+    final value = trimmedAttributeValue(project, attribute);
+    return project
+        .substring(value.start, value.end)
+        .endsWith('topiaforge.dev.props');
+  }),
+);
+
+/// Whether [project], the text of the project file in [folder], has a
+/// `Compile` item outside comments that includes files from outside
+/// [folder], as the single-project templates' test projects compile the
+/// mod's sources with `<Compile Include="..\..\*.cs" />`.
+bool _compilesSourcesFromOutside(String project, String folder) =>
+    startTags(project, 'Compile', anyCase: true).any(
+      (found) => found.tag.attributes.any((attribute) {
+        if (!isAttributeNamed(project, attribute, 'Include')) return false;
+        final value = trimmedAttributeValue(project, attribute);
+        return project
+            .substring(value.start, value.end)
+            .split(';')
+            .any((spec) => _leavesFolder(spec, folder));
+      }),
     );
-    final match = pattern.firstMatch(result);
-    if (match == null) {
-      missing.add(package);
-      continue;
-    }
-    var item = match.group(0)!;
-    final versionPattern = RegExp(r'\sVersion="[^"]*"');
-    if (versionPattern.hasMatch(item)) {
-      item = item.replaceFirst(versionPattern, ' Version="$version"');
-    } else {
-      item = item.replaceFirst(
-        '<PackageReference ',
-        '<PackageReference Version="$version" ',
-      );
-    }
-    if (topiaForgeAnalyzerPackageIds.contains(package) &&
-        !item.contains('PrivateAssets=')) {
-      item = item.replaceFirst(
-        '<PackageReference ',
-        '<PackageReference PrivateAssets="all" ',
-      );
-    }
-    result = result.replaceRange(match.start, match.end, item);
-  }
-  if (missing.isNotEmpty) {
-    final items = missing
-        .map((package) {
-          final private = topiaForgeAnalyzerPackageIds.contains(package)
-              ? ' PrivateAssets="all"'
-              : '';
-          return '    <PackageReference Include="$package" Version="$version"$private />';
-        })
-        .join('\n');
-    final close = result.lastIndexOf('</Project>');
-    if (close < 0) throw StateError('TopiaForge C# project is malformed.');
-    result =
-        '${result.substring(0, close)}  <ItemGroup>\n$items\n'
-        '  </ItemGroup>\n${result.substring(close)}';
-  }
-  return result;
+
+/// `$(MSBuildProjectDirectory)` and `$(MSBuildThisFileDirectory)` at the
+/// start of a path, with the separators after them. Both are reserved
+/// properties that name the project file's folder, so a path that starts
+/// with one starts there, as a relative path does.
+final _projectFolderPrefix = RegExp(
+  r'^\$\((?:MSBuildProjectDirectory|MSBuildThisFileDirectory)\)[\\/]*',
+  caseSensitive: false,
+);
+
+/// Whether [spec], one path of a `Compile` item's `Include`, names files
+/// outside [folder], the folder of its project file, once its `..` parts
+/// are resolved as MSBuild resolves them, with either separator.
+bool _leavesFolder(String spec, String folder) {
+  final relative = spec
+      .trim()
+      .replaceFirst(_projectFolderPrefix, '')
+      .replaceAll(r'\', '/');
+  final path = p.normalize(p.join(folder, relative));
+  return !p.equals(path, folder) && !p.isWithin(folder, path);
 }

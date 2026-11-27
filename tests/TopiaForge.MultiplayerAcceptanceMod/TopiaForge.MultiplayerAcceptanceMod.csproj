@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <TopiaForgeSafeProject>true</TopiaForgeSafeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationPages.cs" Link="Gallery/FoundationPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationLayoutPages.cs" Link="Gallery/FoundationLayoutPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationGraphPages.cs" Link="Gallery/FoundationGraphPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationArtPages.cs" Link="Gallery/FoundationArtPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/FoundationIntegrationPages.cs" Link="Gallery/FoundationIntegrationPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/ControlGalleryPages.cs" Link="Gallery/ControlGalleryPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/StatusGalleryPages.cs" Link="Gallery/StatusGalleryPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/ActionGalleryPages.cs" Link="Gallery/ActionGalleryPages.cs" />
+    <Compile Include="../../mods/TopiaForge.UiGallery/Pages/PresentationPages.cs" Link="Gallery/PresentationPages.cs" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="topiaforge.mod.json" />
+  </ItemGroup>
+</Project>

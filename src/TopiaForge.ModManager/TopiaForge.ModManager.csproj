@@ -3,14 +3,30 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.ModManager</AssemblyName>
     <RootNamespace>TopiaForge.ModManager</RootNamespace>
-    <Version>1.0.0-rc.1</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
     <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
+    <DefineConstants>$(DefineConstants);TOPIAFORGE_NATIVE_CAPTURE;TOPIAFORGE_LOADER_TRUST_DIALOGS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\mods\Shared\NativePlayerTeleport.cs" Link="Shared\NativePlayerTeleport.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationPages.cs" Link="UiGalleryRecorder\FoundationPages.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationLayoutPages.cs" Link="UiGalleryRecorder\FoundationLayoutPages.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationGraphPages.cs" Link="UiGalleryRecorder\FoundationGraphPages.cs" />
+    <EmbeddedResource Include="../../mods/TopiaForge.UiGallery/ui/themes/survival.json" LogicalName="TopiaForge.UiGallery.survival.json" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationArtPages.cs" Link="UiGalleryRecorder\FoundationArtPages.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\FoundationIntegrationPages.cs" Link="UiGalleryRecorder\FoundationIntegrationPages.cs" />
+    <EmbeddedResource Include="../../tests/TopiaForge.MultiplayerAcceptanceMod/ui/themes/transport-preview.json" LogicalName="TopiaForge.UiGallery.TransportPreview.json" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\ControlGalleryPages.cs" Link="UiGalleryRecorder\ControlGalleryPages.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\StatusGalleryPages.cs" Link="UiGalleryRecorder\StatusGalleryPages.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\ActionGalleryPages.cs" Link="UiGalleryRecorder\ActionGalleryPages.cs" />
+    <Compile Include="..\..\mods\TopiaForge.UiGallery\Pages\PresentationPages.cs" Link="UiGalleryRecorder\PresentationPages.cs" />
+    <Compile Include="..\TopiaForge.Mods.Testing\UiCapturedNode.cs" Link="UiGalleryRecorder\UiCapturedNode.cs" />
+    <Compile Include="..\TopiaForge.Mods.Testing\UiCaptureViewport.cs" Link="UiGalleryRecorder\UiCaptureViewport.cs" />
+    <Compile Include="..\TopiaForge.Mods.Testing\UiTreeCapture.cs" Link="UiGalleryRecorder\UiTreeCapture.cs" />
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
@@ -18,17 +34,23 @@
     <ProjectReference Include="..\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
-    <ProjectReference Include="..\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
     <ProjectReference Include="..\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../../mods/Shared/DiagnosticPathRedactor.cs" Link="Diagnostics/DiagnosticPathRedactor.cs" />
+    <Compile Include="../../mods/Shared/UgcNoOpLaunchRequest.cs" Link="NativeWorld/UgcNoOpLaunchRequest.cs" />
+    <Compile Include="../../mods/Shared/NativeDamageSource.cs" Link="NativeWorld/NativeDamageSource.cs" />
+  </ItemGroup>
+
   <!-- System.Reflection.Metadata is used by the non-executing package validator in
        ModManager.Core. Robotopia's Unity player provides System.Memory,
-       System.Buffers, and System.Runtime.CompilerServices.Unsafe, but it does not
-       provide Metadata or its Immutable dependency. Restore the exact packages
-       here and copy only those two missing assemblies beside the loader. -->
+       System.Buffers, and System.Runtime.CompilerServices.Unsafe. Build 2409 did not
+       provide Metadata or its Immutable dependency; builds 2478 and 2545 preload 8.0
+       copies, which RuntimePayloadDependencyTests proves satisfy every loader reference.
+       Restore the exact packages here and copy those two assemblies beside the loader. -->
   <ItemGroup>
     <PackageReference Include="System.Collections.Immutable"
                       Version="10.0.9"
@@ -56,15 +78,25 @@
     <Reference Include="BepInEx" HintPath="$(BepInExCoreDir)\BepInEx.dll" Private="false" />
     <Reference Include="0Harmony" HintPath="$(BepInExCoreDir)\0Harmony.dll" Private="false" />
     <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
+    <Reference Include="FMODUnity" HintPath="$(RobotopiaManagedDir)\FMODUnity.dll" Private="false" />
     <Reference Include="UniTask" HintPath="$(RobotopiaManagedDir)\UniTask.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.AudioModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AudioModule.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <!-- GUIUtility.systemCopyBuffer: the multiplayer failure view's "Copy details". -->
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.IMGUIModule.dll" Private="false" />
     <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="Unity.InputSystem" HintPath="$(RobotopiaManagedDir)\Unity.InputSystem.dll" Private="false" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextCoreFontEngineModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextCoreFontEngineModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="false" />
+    <!-- Voice chat: push-to-talk reads the Input System when the game has no legacy input, and its census reads the game's
+         PlayerInput bindings; a focused TextMeshPro field means the player types. -->
+    <Reference Include="Unity.InputSystem" HintPath="$(RobotopiaManagedDir)\Unity.InputSystem.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(RobotopiaManagedDir)\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="UnityEngine.TextCoreFontEngineModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextCoreFontEngineModule.dll" Private="false" />
   </ItemGroup>
 </Project>

@@ -31,6 +31,46 @@ namespace TopiaForge.Mods.UnityUi
             Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper);
         }
 
+        /// <summary>
+        /// Destructive confirmation that also says when it ends without confirming: the cancel button, ESC, or anything
+        /// else that closes it. <paramref name="onCancel"/> runs once, after the dialog has closed; confirming never runs it.
+        /// With <paramref name="plainText"/>, the title and body render exactly as written, markup unparsed, for text that
+        /// names what another player wrote, such as their name. With <paramref name="persistent"/>, the dialog survives
+        /// scene loads. It returns the dialog, so its owner can close it once the decision no longer applies, which counts
+        /// as cancelling.
+        /// </summary>
+        public TopiaForgeModalInstance Destructive(
+            string title,
+            string body,
+            string confirmLabel,
+            Action onConfirm,
+            Action onCancel,
+            string cancelLabel = "CANCEL",
+            bool plainText = false,
+            bool persistent = false)
+        {
+            return Destructive(title, body, confirmLabel, onConfirm, onCancel, cancelLabel, plainText, persistent, trust: false);
+        }
+
+        internal TopiaForgeModalInstance Destructive(
+            string title,
+            string body,
+            string confirmLabel,
+            Action onConfirm,
+            Action onCancel,
+            string cancelLabel,
+            bool plainText,
+            bool persistent,
+            bool trust)
+        {
+            if (onCancel == null)
+            {
+                throw new ArgumentNullException(nameof(onCancel));
+            }
+
+            return Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper, onCancel, plainText, persistent, trust);
+        }
+
         /// <summary>HUD-scheme variant for in-gameplay dialogs.</summary>
         public void ConfirmHud(string title, string body, string confirmLabel, Action onConfirm, string cancelLabel = "CANCEL")
         {
@@ -46,19 +86,64 @@ namespace TopiaForge.Mods.UnityUi
             return new TopiaForgeModalInstance(host, title, scheme, width, showTitle: !string.IsNullOrEmpty(title));
         }
 
-        private void Open(string title, string body, string confirmLabel, Action onConfirm, string cancelLabel, bool destructive, TopiaForgeScheme scheme)
+        /// <summary>
+        /// Empty modal shell for custom content that, when <paramref name="persistent"/>, survives scene loads: a dialog
+        /// that follows a flow across them, as joining a session from a running game returns to the main menu first. A
+        /// modal that is not persistent is destroyed with the scene it opened in. The owner closes it either way, and
+        /// disposing the host tears it down.
+        /// </summary>
+        public TopiaForgeModalInstance Custom(string title, TopiaForgeScheme scheme, float width, bool persistent)
         {
-            var modal = new TopiaForgeModalInstance(host, title, scheme, 480f, showTitle: true);
-            modal.Content.Label(body, TopiaForgeTextStyle.Body);
+            return new TopiaForgeModalInstance(host, title, scheme, width, showTitle: !string.IsNullOrEmpty(title), persistent: persistent);
+        }
+
+        internal TopiaForgeModalInstance TrustCustom(string title, float width, bool persistent) =>
+            new TopiaForgeModalInstance(host, title, TopiaForgeScheme.Paper, width, showTitle: !string.IsNullOrEmpty(title),
+                plainTitle: true, persistent: persistent, trust: true);
+
+        private TopiaForgeModalInstance Open(
+            string title,
+            string body,
+            string confirmLabel,
+            Action onConfirm,
+            string cancelLabel,
+            bool destructive,
+            TopiaForgeScheme scheme,
+            Action? onCancel = null,
+            bool plainText = false,
+            bool persistent = false,
+            bool trust = false)
+        {
+            var modal = new TopiaForgeModalInstance(host, title, scheme, 480f, showTitle: true, plainTitle: plainText,
+                persistent: persistent, trust: trust);
+            var confirmed = false;
+            var bodyLabel = modal.Content.Label(body, TopiaForgeTextStyle.Body);
+            if (plainText)
+            {
+                bodyLabel.PlainText();
+            }
             var row = modal.Content.Row(TopiaForgeGap.Sm);
             row.Spacer();
             row.Button(cancelLabel, modal.Close, TopiaForgeButtonStyle.Ghost);
             row.Button(confirmLabel, () =>
             {
+                confirmed = true;
                 modal.Close();
                 TopiaForgeCallbacks.Invoke(onConfirm, "Modal confirmation");
             }, destructive ? TopiaForgeButtonStyle.Danger : TopiaForgeButtonStyle.Filled);
+            if (onCancel != null)
+            {
+                modal.Closed += () =>
+                {
+                    if (!confirmed)
+                    {
+                        TopiaForgeCallbacks.Invoke(onCancel, "Modal cancellation");
+                    }
+                };
+            }
+
             modal.Show();
+            return modal;
         }
     }
 
@@ -67,23 +152,30 @@ namespace TopiaForge.Mods.UnityUi
     {
         private readonly GameObject canvasRoot;
         private readonly UiHost host;
+        private readonly TopiaForgeScheme scheme;
         private readonly TopiaForgeContainer dialog;
+        private readonly TopiaForgeModalColumn layout;
         private readonly UImage backdrop;
+        private readonly UImage fill;
+        private readonly UImage ring;
         private readonly TopiaForgeCursorLease cursorLease = new TopiaForgeCursorLease();
         private bool open;
         private bool closing;
         private bool tornDown;
 
-        internal TopiaForgeModalInstance(UiHost host, string title, TopiaForgeScheme scheme, float width, bool showTitle)
+        internal TopiaForgeModalInstance(UiHost host, string title, TopiaForgeScheme scheme, float width, bool showTitle,
+            bool plainTitle = false, bool persistent = false, bool trust = false)
         {
             this.host = host;
-            var layer = host.Layer("modal", TopiaForgeLayerBand.Modal, scheme, interactive: true, persistent: false);
+            this.scheme = scheme;
+            IsTrust = trust;
+            var layer = trust
+                ? host.TrustLayer(persistent)
+                : host.Layer("modal", TopiaForgeLayerBand.Modal, scheme, interactive: true, persistent: persistent);
             canvasRoot = layer.Go;
             host.RegisterModal(this);
 
-            var theme = host.Theme(scheme);
             backdrop = canvasRoot.AddComponent<UImage>();
-            backdrop.color = theme.Backdrop;
             backdrop.raycastTarget = true;
 
             var panel = layer.CreateChildGameObject("Dialog");
@@ -93,19 +185,23 @@ namespace TopiaForge.Mods.UnityUi
             panelRect.pivot = new Vector2(0.5f, 0.5f);
             panelRect.sizeDelta = new Vector2(width, 200f);
 
-            var fill = CreateDecor(panel.transform, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Dialog), raycast: true);
-            fill.color = theme.Surface;
-            var ring = CreateDecor(panel.transform, "Ring", TopiaForgeSprites.Ring(TopiaForgeRadius.Dialog, TopiaForgeTokens.BorderStrong), raycast: false);
-            ring.color = theme.OutlineStrong;
+            fill = CreateDecor(panel.transform, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Dialog), raycast: true);
+            ring = CreateDecor(panel.transform, "Ring", TopiaForgeSprites.Ring(TopiaForgeRadius.Dialog, TopiaForgeTokens.BorderStrong), raycast: false);
+            RefreshChrome();
 
-            TopiaForgeLayout.ApplyColumn(panel, TopiaForgeGap.Md, TopiaForgeGap.Xl);
+            layout = panel.AddComponent<TopiaForgeModalColumn>();
+            TopiaForgeLayout.ConfigureColumn(layout, TopiaForgeGap.Md, TopiaForgeGap.Xl);
             var fitter = panel.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             dialog = new TopiaForgeContainer(host, scheme, panel);
             if (showTitle)
             {
-                dialog.Label(title, TopiaForgeTextStyle.Title);
+                var titleLabel = dialog.Label(title, TopiaForgeTextStyle.Title);
+                if (plainTitle)
+                {
+                    titleLabel.PlainText();
+                }
             }
 
             Content = dialog;
@@ -119,6 +215,19 @@ namespace TopiaForge.Mods.UnityUi
         public event Action? Closed;
 
         internal GameObject CanvasRoot => canvasRoot;
+        internal bool IsTrust { get; }
+
+        internal void RefreshChrome()
+        {
+            if (tornDown || canvasRoot == null) return;
+            var theme = host.Theme(scheme);
+            if (backdrop != null) backdrop.color = theme.Backdrop;
+            if (fill != null) fill.color = theme.Surface;
+            if (ring != null) ring.color = theme.OutlineStrong;
+        }
+
+        /// <summary>Gets the owner of the host the modal belongs to: whose action dismissing it is.</summary>
+        internal string OwnerId => host.OwnerId;
 
         TopiaForgeLayerBand ITopiaForgeDismissable.Band => TopiaForgeLayerBand.Modal;
 
@@ -140,10 +249,11 @@ namespace TopiaForge.Mods.UnityUi
                 return;
             }
 
+            layout.LimitScrollBody((RectTransform)canvasRoot.transform);
             open = true;
             canvasRoot.SetActive(true);
             cursorLease.Acquire();
-            TopiaForgeDismissStack.Push(this);
+            TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.Navigation, canvasRoot);
             TopiaForgeMotion.ModalIn(dialog);
         }
 
@@ -184,6 +294,27 @@ namespace TopiaForge.Mods.UnityUi
             closing = false;
             host.UnregisterModal(this);
             Closed = null;
+        }
+
+        /// <summary>
+        /// The modal's canvas was destroyed outside the kit, by a scene, the game or another mod: let go of the cursor and the
+        /// Escape stack, and end the dialog as a cancellation, raising <see cref="Closed"/> once.
+        /// </summary>
+        internal void Lose()
+        {
+            if (tornDown)
+            {
+                return;
+            }
+
+            tornDown = true;
+            TopiaForgeTween.Cancel(dialog);
+            cursorLease.Release();
+            TopiaForgeDismissStack.Remove(this);
+            open = false;
+            closing = false;
+            host.UnregisterModal(this);
+            RaiseClosed();
         }
 
         private void CompleteClose()

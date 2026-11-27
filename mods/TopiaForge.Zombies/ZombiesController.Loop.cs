@@ -7,7 +7,7 @@ namespace TopiaForge.Zombies
     {
         private void Update(float eventDeltaTime)
         {
-            if (disposed)
+            if (disposed || !isActive())
             {
                 return;
             }
@@ -49,21 +49,21 @@ namespace TopiaForge.Zombies
             {
                 CancelCharge();
                 hordePressure = Math.Min(1f, hordePressure + (config.PressureRampPerSecond * controlDelta));
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
             if (shop.IsOpen)
             {
                 CancelCharge();
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
             if (!RefreshPlayerEntity())
             {
                 CancelCharge();
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
@@ -74,13 +74,13 @@ namespace TopiaForge.Zombies
             {
                 CancelCharge();
                 hordePressure = Math.Min(1f, hordePressure + (config.PressureRampPerSecond * controlDelta));
-                RefreshHud();
+                RefreshHud(timerPaused: true);
                 return;
             }
 
             UpdateEnemyLifecycles(worldDelta);
 
-            if (phase == ZombiesPhase.Starting || phase == ZombiesPhase.InterWave)
+            if (IsRequisitionsPhase)
             {
                 if (shopAction?.WasPressed == true)
                 {
@@ -116,14 +116,14 @@ namespace TopiaForge.Zombies
                 }
             }
 
-            RefreshHud();
+            RefreshHud(timerPaused: shop.IsOpen);
         }
 
         private bool IsWorldReady()
         {
             if (!context.Scenes.TryGetActive(out var active) || active == null
-                || (!string.IsNullOrWhiteSpace(session.SceneName)
-                    && !string.Equals(active.Name, session.SceneName, StringComparison.OrdinalIgnoreCase)))
+                || (!string.IsNullOrWhiteSpace(session.World.Scene.Name)
+                    && !string.Equals(active.Name, session.World.Scene.Name, StringComparison.OrdinalIgnoreCase)))
             {
                 return false;
             }

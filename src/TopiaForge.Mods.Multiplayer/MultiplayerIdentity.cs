@@ -3,17 +3,17 @@ using System.Collections.Generic;
 
 namespace TopiaForge.Mods
 {
-    /// <summary>Identifies the optional multiplayer contract and loopback runtime provider.</summary>
+    /// <summary>Identifies the optional multiplayer contract and its runtime provider.</summary>
     public static class MultiplayerModule
     {
         /// <summary>Gets the manifest id used to declare the multiplayer runtime provider.</summary>
         public const string Id = "io.github.furroxide.topiaforge.multiplayer";
 
         /// <summary>Gets the live-provider protocol version implemented by this stable contract line.</summary>
-        public const string ProtocolVersion = "1.0.0";
+        public const string ProtocolVersion = "2.1.0";
 
         /// <summary>Gets the mutually negotiated peer range accepted by this stable contract line.</summary>
-        public const string PeerVersionRange = ">=1.0.0 <2.0.0";
+        public const string PeerVersionRange = ">=2.0.0 <3.0.0";
     }
 
     /// <summary>Describes whether the current process has interactive presentation systems.</summary>
@@ -43,7 +43,7 @@ namespace TopiaForge.Mods
     /// <summary>Describes admission and snapshot readiness for a multiplayer session.</summary>
     public enum MultiplayerSessionState
     {
-        /// <summary>The transport or loopback provider is establishing the session.</summary>
+        /// <summary>The provider is establishing the session.</summary>
         Connecting = 0,
 
         /// <summary>Canonical state is being applied before callbacks may run.</summary>
@@ -53,7 +53,13 @@ namespace TopiaForge.Mods
         Ready = 2,
 
         /// <summary>The session has ended and no further work may be submitted.</summary>
-        Ended = 3
+        Ended = 3,
+
+        /// <summary>
+        /// The connection to the host was interrupted and is being resumed within the reconnect grace window.
+        /// Canonical state is frozen until the session returns to <see cref="Ready"/> or ends.
+        /// </summary>
+        Reconnecting = 4
     }
 
     /// <summary>An opaque identity that remains stable for one multiplayer session.</summary>
@@ -199,18 +205,68 @@ namespace TopiaForge.Mods
         /// <summary>Gets the maximum player-facing display-name length accepted from a provider.</summary>
         public const int MaximumDisplayNameLength = 128;
 
+        /// <summary>Gets the largest ping a provider may report.</summary>
+        public const int MaximumPingMilliseconds = 60000;
+
         /// <summary>Creates a participant snapshot.</summary>
         public MultiplayerParticipant(ParticipantId id, string displayName, bool isLocal, bool isConnected)
+            : this(id, displayName, isLocal, isConnected, false, MultiplayerConnectionQuality.Unknown, null, default)
+        {
+        }
+
+        /// <summary>Creates a participant snapshot with host, connection, and player-key details.</summary>
+        /// <param name="id">The session-scoped identity.</param>
+        /// <param name="displayName">The bounded player-facing name.</param>
+        /// <param name="isLocal">Whether the participant belongs to the current process.</param>
+        /// <param name="isConnected">Whether the participant remains connected.</param>
+        /// <param name="isHost">Whether the participant hosts the session.</param>
+        /// <param name="quality">The bucketed connection quality.</param>
+        /// <param name="pingMilliseconds">The measured ping, rounded to the nearest 10 ms, or null when unknown.</param>
+        /// <param name="playerKey">The player's key on this host, or the default value when unknown.</param>
+        public MultiplayerParticipant(
+            ParticipantId id,
+            string displayName,
+            bool isLocal,
+            bool isConnected,
+            bool isHost,
+            MultiplayerConnectionQuality quality,
+            int? pingMilliseconds,
+            MultiplayerPlayerKey playerKey)
+            : this(id, displayName, isLocal, isConnected, isHost, quality, pingMilliseconds, playerKey, Guid.Empty)
+        {
+        }
+
+        /// <summary>Creates a participant snapshot with a host-issued connection lifetime. Empty means unavailable.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        public MultiplayerParticipant(ParticipantId id, string displayName, bool isLocal, bool isConnected, bool isHost,
+            MultiplayerConnectionQuality quality, int? pingMilliseconds, MultiplayerPlayerKey playerKey, Guid lifetimeId)
         {
             if (!id.IsValid)
             {
                 throw new ArgumentException("A participant snapshot requires a valid participant identity.", nameof(id));
             }
 
+            if (!Enum.IsDefined(typeof(MultiplayerConnectionQuality), quality))
+            {
+                throw new ArgumentOutOfRangeException(nameof(quality));
+            }
+
+            if (pingMilliseconds.HasValue &&
+                (pingMilliseconds.Value < 0 || pingMilliseconds.Value > MaximumPingMilliseconds))
+            {
+                throw new ArgumentOutOfRangeException(nameof(pingMilliseconds));
+            }
+
             Id = id;
             DisplayName = MultiplayerIdentityValidation.RequireDisplayName(displayName, nameof(displayName));
             IsLocal = isLocal;
             IsConnected = isConnected;
+            IsHost = isHost;
+            Quality = quality;
+            // Coarse buckets keep ping useful for presentation without exposing fine-grained timing.
+            PingMilliseconds = pingMilliseconds.HasValue ? (pingMilliseconds.Value + 5) / 10 * 10 : (int?)null;
+            PlayerKey = playerKey;
+            LifetimeId = lifetimeId;
         }
 
         /// <summary>Gets the session-scoped identity.</summary>
@@ -224,6 +280,26 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets whether the participant remains connected.</summary>
         public bool IsConnected { get; }
+
+        /// <summary>Gets whether the participant hosts the session.</summary>
+        public bool IsHost { get; }
+
+        /// <summary>Gets the bucketed connection quality.</summary>
+        public MultiplayerConnectionQuality Quality { get; }
+
+        /// <summary>Gets the ping rounded to 10 ms, or null when unknown.</summary>
+        public int? PingMilliseconds { get; }
+
+        /// <summary>Gets the player's key on this host, or the default value when the provider has none.</summary>
+        public MultiplayerPlayerKey PlayerKey { get; }
+
+        /// <summary>
+        /// Gets an opaque host-issued lifetime shared by every peer, including for the host. It changes on each accepted
+        /// connection and session replacement; a stalled link alone preserves it. Empty means the provider has none.
+        /// This value is not a persistence identity. Entity references also bind it to the current session id.
+        /// </summary>
+        [RequiresTopiaForge("0.2.0")]
+        public Guid LifetimeId { get; }
     }
 
     /// <summary>Immutable readiness, side, participant, and clock state for a session.</summary>
@@ -242,6 +318,32 @@ namespace TopiaForge.Mods
             IReadOnlyList<MultiplayerParticipant> participants,
             NetworkTick tick,
             SessionSeed seed)
+            : this(
+                id,
+                state,
+                processKind,
+                executionSides,
+                localParticipantId,
+                participants,
+                tick,
+                seed,
+                null,
+                MultiplayerSessionEndReason.None)
+        {
+        }
+
+        /// <summary>Creates a session snapshot that also names the host and, once ended, why the session ended.</summary>
+        public MultiplayerSessionSnapshot(
+            MultiplayerSessionId id,
+            MultiplayerSessionState state,
+            MultiplayerProcessKind processKind,
+            MultiplayerExecutionSide executionSides,
+            ParticipantId? localParticipantId,
+            IReadOnlyList<MultiplayerParticipant> participants,
+            NetworkTick tick,
+            SessionSeed seed,
+            ParticipantId? hostParticipantId,
+            MultiplayerSessionEndReason endReason)
         {
             if (!id.IsValid)
             {
@@ -335,6 +437,17 @@ namespace TopiaForge.Mods
                     nameof(participants));
             }
 
+            ValidateHost(hostParticipantId, participantCopy);
+            if (!Enum.IsDefined(typeof(MultiplayerSessionEndReason), endReason))
+            {
+                throw new ArgumentOutOfRangeException(nameof(endReason));
+            }
+
+            if (endReason != MultiplayerSessionEndReason.None && state != MultiplayerSessionState.Ended)
+            {
+                throw new ArgumentException("Only an ended session can report an end reason.", nameof(endReason));
+            }
+
             Id = id;
             State = state;
             ProcessKind = processKind;
@@ -343,6 +456,8 @@ namespace TopiaForge.Mods
             Participants = participantCopy.AsReadOnly();
             Tick = tick;
             Seed = seed;
+            HostParticipantId = hostParticipantId;
+            EndReason = endReason;
         }
 
         /// <summary>Gets the opaque session identity.</summary>
@@ -375,6 +490,70 @@ namespace TopiaForge.Mods
         /// <summary>Gets whether local presentation is available in this process.</summary>
         public bool HasPresentation => ProcessKind == MultiplayerProcessKind.Interactive
             && (ExecutionSides & MultiplayerExecutionSide.Client) != 0;
+
+        /// <summary>Gets the participant hosting the session, or null when there is none or the provider did not say.</summary>
+        public ParticipantId? HostParticipantId { get; }
+
+        /// <summary>Gets why the session ended, or <see cref="MultiplayerSessionEndReason.None"/> while it is live.</summary>
+        public MultiplayerSessionEndReason EndReason { get; }
+
+        /// <summary>Tries to find an admitted participant by identity.</summary>
+        public bool TryGetParticipant(ParticipantId id, out MultiplayerParticipant? participant)
+        {
+            for (var index = 0; index < Participants.Count; index++)
+            {
+                var candidate = Participants[index];
+                if (candidate.Id.Equals(id))
+                {
+                    participant = candidate;
+                    return true;
+                }
+            }
+
+            participant = null;
+            return false;
+        }
+
+        private static void ValidateHost(ParticipantId? hostParticipantId, IReadOnlyList<MultiplayerParticipant> participants)
+        {
+            var markedHosts = 0;
+            var hostMarkerMatches = false;
+            foreach (var participant in participants)
+            {
+                if (!participant.IsHost) continue;
+                markedHosts++;
+                hostMarkerMatches = hostParticipantId.HasValue && participant.Id.Equals(hostParticipantId.Value);
+            }
+
+            if (markedHosts > 1)
+            {
+                throw new ArgumentException("A session snapshot can mark at most one host.", nameof(participants));
+            }
+
+            if (!hostParticipantId.HasValue)
+            {
+                if (markedHosts != 0)
+                {
+                    throw new ArgumentException(
+                        "A participant marked as host requires HostParticipantId.",
+                        nameof(hostParticipantId));
+                }
+
+                return;
+            }
+
+            if (!hostParticipantId.Value.IsValid)
+            {
+                throw new ArgumentException("The host participant identity must be valid when present.", nameof(hostParticipantId));
+            }
+
+            if (!hostMarkerMatches)
+            {
+                throw new ArgumentException(
+                    "HostParticipantId must name the one participant marked as host.",
+                    nameof(hostParticipantId));
+            }
+        }
     }
 
     internal static class MultiplayerIdentityValidation

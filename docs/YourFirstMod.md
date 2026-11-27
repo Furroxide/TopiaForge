@@ -21,7 +21,7 @@ loader state. Follow its remediation if a required row is not ready.
 ## 2. Create a project
 
 ```sh
-topiaforge new mod example.first-mod --name "First Mod" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.first-mod --name "First Mod" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 cd example.first-mod
 ```
 
@@ -61,9 +61,10 @@ to the mod lifetime automatically.
 topiaforge dev
 ```
 
-That one command restores exact SDK packages, builds, runs the NUnit project, packs, validates,
-installs, launches Robotopia, and tails attributed logs. It stops before install if any earlier
-stage fails.
+That command restores exact SDK packages, builds, runs the NUnit project, packs, validates,
+and installs. In an interactive terminal it also launches Robotopia and tails attributed logs.
+Redirected runs stop after install unless you request `--launch` or `--tail`. Any earlier failure
+stops the command before install.
 
 The launch-blocking local Windows and same-host WSL2/Proton acceptance gates repeat this journey with a
 clean candidate developer payload built from the frozen SHA: its CLI runs `new mod`, then
@@ -84,10 +85,10 @@ Edit the default greeting in `ExampleFirstModConfig.cs`, add a test assertion, a
 ## Where next
 
 - Use [Core services](CoreServices.md) to add input, player, physics, entities, assets, audio, or UI.
-- Add creator content, robots, worlds, time control, prompt overrides, UGC, or multiplayer through
+- Add creator content, robots, worlds, time control, prompt overrides, or multiplayer through
   [Specialist modules](Modules.md).
-- Use [Creator Tools](CreatorTools.md) when your mod should contribute safe catalog content or work
+- Use [Creator Content](Modules.md#creator-content) when your mod should contribute safe catalog content or work
   with reversible creator sessions.
 - Read [Test a mod](TestingMods.md) before adding behavior with several resource handles.
-- Use [Manifest V5](ManifestV5.md) for dependencies, constraints, capabilities, optional multiplayer metadata, and exported contracts.
+- Use [Manifest V6](ManifestV6.md) for dependencies, constraints, capabilities, optional multiplayer metadata, and exported contracts.
 - See [Diagnostics](Diagnostics.md) when a stable `TF` code appears.

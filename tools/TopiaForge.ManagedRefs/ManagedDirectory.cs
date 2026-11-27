@@ -17,6 +17,7 @@ internal sealed class ManagedDirectoryValidator : IManagedDirectoryValidator
     internal static readonly IReadOnlyDictionary<string, string> RequiredAssemblies =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            ["FMODUnity.dll"] = "FMODUnity",
             ["GameCode.dll"] = "GameCode",
             ["UniTask.dll"] = "UniTask",
             ["Unity.InputSystem.dll"] = "Unity.InputSystem",

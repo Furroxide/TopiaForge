@@ -307,6 +307,7 @@ class RegistryMod {
     this.sourceId = '',
     this.sourceName = '',
     this.installedVersion,
+    this.packageBytes,
   });
 
   final ModManifest manifest;
@@ -316,6 +317,9 @@ class RegistryMod {
   final String sourceId;
   final String sourceName;
   final String? installedVersion;
+
+  /// The archive size in bytes, when the source states it.
+  final int? packageBytes;
 
   bool get isInstalled => installedVersion != null;
 
@@ -354,11 +358,42 @@ class LaunchResult {
     required this.started,
     required this.message,
     this.processId,
+    this.requestId,
+    this.process,
+    this.issues = const [],
+    this.blocks = const [],
+    this.latestActivity,
+    this.replacedGame,
   });
 
   final bool started;
   final String message;
   final int? processId;
+  bool get processStarted => started;
+  final String? requestId;
+  final LaunchProcessIdentity? process;
+  final List<LauncherIssue> issues;
+  final List<LaunchBlock> blocks;
+  final LaunchActivity? latestActivity;
+
+  /// How the running game this launch replaced ended, and whether that leaves
+  /// this start in safe mode; null when it replaced none.
+  final ReplacedGame? replacedGame;
+
+  /// This result, saying how the running game it replaced ended.
+  LaunchResult replacing(ReplacedGame? replaced) => LaunchResult(
+    started: started,
+    message: replaced == null
+        ? message
+        : '${replaced.message(started: started)} $message',
+    processId: processId,
+    requestId: requestId,
+    process: process,
+    issues: issues,
+    blocks: blocks,
+    latestActivity: latestActivity,
+    replacedGame: replaced,
+  );
 }
 
 class LauncherSnapshot {
@@ -368,7 +403,6 @@ class LauncherSnapshot {
     required this.installedMods,
     required this.registryMods,
     required this.packageSources,
-    required this.worldCatalog,
     required this.recentLog,
     this.gameInstall,
     this.gameInstallCandidates = const [],
@@ -376,8 +410,10 @@ class LauncherSnapshot {
     this.developerMode = false,
     this.sourceStatuses = const [],
     this.launcherLog = '',
+    this.previewsByProfile = const {},
   });
 
+  final Map<String, LaunchPreview> previewsByProfile;
   final GameInstall? gameInstall;
   final List<GameInstallCandidate> gameInstallCandidates;
   final List<LauncherProfile> profiles;
@@ -385,12 +421,11 @@ class LauncherSnapshot {
   final List<InstalledMod> installedMods;
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
-  final WorldCatalog worldCatalog;
   final String recentLog;
   final LauncherUpdateSettings launcherUpdates;
 
   /// Opt-in developer mode. Off by default so the launcher is a clean install-and-play app for the majority of
-  /// users, who never build a mod. When on, the Developer tab (project tools, UGC live-sync) is revealed.
+  /// users, who never build a mod. When on, the Developer tab (project tools, world authoring) is revealed.
   final bool developerMode;
 
   /// Per-source load health from the most recent catalog load (enabled

@@ -26,6 +26,7 @@ namespace TopiaForge.Mods.UnityUi
             Host = host;
             Scheme = scheme;
             Go = go;
+            ThemeSlot = go.GetComponentInParent<TopiaForgeLayerSlot>(includeInactive: true);
             Rect = TopiaForgeComponents.GetOrAdd<RectTransform>(go);
             host.RegisterWidget(this);
             if (this is ITopiaForgeThemeAware aware)
@@ -47,7 +48,11 @@ namespace TopiaForge.Mods.UnityUi
         public bool Visible => visible;
 
         /// <summary>Gets theme.</summary>
-        protected TopiaForgeResolvedTheme Theme => Host.Theme(Scheme);
+        protected TopiaForgeResolvedTheme Theme => ResolvedTheme;
+
+        internal TopiaForgeLayerSlot? ThemeSlot { get; }
+
+        internal TopiaForgeResolvedTheme ResolvedTheme => Host.ThemeFor(this);
 
         /// <summary>
         /// Shows/hides via CanvasGroup (alpha + interactable + raycasts) — no layout
@@ -69,6 +74,36 @@ namespace TopiaForge.Mods.UnityUi
             visibilityGroup.alpha = value ? 1f : 0f;
             visibilityGroup.interactable = value;
             visibilityGroup.blocksRaycasts = value;
+        }
+
+        /// <summary>
+        /// Shows the widget, or takes it out of the layout so the rest of its parent closes up, through its GameObject's
+        /// active state. <see cref="SetVisible"/> keeps a hidden widget's space, which suits a momentary change; this suits
+        /// content that is absent. Dirty-checked: a call that changes nothing rebuilds no layout.
+        /// </summary>
+        public void SetShown(bool value)
+        {
+            if (Go.activeSelf != value)
+            {
+                Go.SetActive(value);
+            }
+        }
+
+        /// <summary>Clears selection only when it belongs to this subtree, before hiding an interactive composition.</summary>
+        public void ReleaseFocus()
+        {
+            TopiaForgeFocus.Release(Go);
+        }
+
+        /// <summary>
+        /// Pushes a dismissible composition rooted in this widget. Back dismisses only the topmost surface;
+        /// navigation belongs to this subtree only while one of its controls is selected, as for a kit window.
+        /// Text fields own typing separately. Remove the surface with <see cref="TopiaForgeDismissStack.Remove"/>
+        /// when it closes. An inactive or destroyed root takes no input.
+        /// </summary>
+        public void PushDismissable(ITopiaForgeDismissable surface)
+        {
+            TopiaForgeDismissStack.Push(surface, TopiaForgeInputClaim.NavigationWhileSelected, Go);
         }
 
         /// <summary>Destroys the widget's GameObject and unregisters it from theming.</summary>

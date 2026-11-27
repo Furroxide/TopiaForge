@@ -279,7 +279,7 @@ void _expectSdkCsprojVersion(
     path,
     expected,
     issues,
-    expectedAssemblyVersion: _v1StableContractPackageIds.contains(packageId)
+    expectedAssemblyVersion: _stableContractPackageIds.contains(packageId)
         ? _stableMajorAssemblyVersion(expected)
         : null,
   );
@@ -295,7 +295,7 @@ void _expectSdkCsprojVersion(
   }
 }
 
-const _v1StableContractPackageIds = <String>{
+const _stableContractPackageIds = <String>{
   'TopiaForge.Mods.Abstractions',
   'TopiaForge.Mods.Chronos',
   'TopiaForge.Mods.CreatorContent',
@@ -303,13 +303,18 @@ const _v1StableContractPackageIds = <String>{
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',
   'TopiaForge.Mods.Testing',
-  'TopiaForge.Mods.Ugc',
   'TopiaForge.Mods.Worlds',
 };
 
+/// Safe contracts retain 0.1.0.0 throughout 0.x because Mono/BepInEx cannot
+/// redirect assembly bindings. Package and file versions carry the minor bump.
 String? _stableMajorAssemblyVersion(String? packageVersion) {
-  final match = RegExp(r'^(\d+)\.').firstMatch(packageVersion ?? '');
-  return match == null ? null : '${match.group(1)}.0.0.0';
+  final match = RegExp(r'^(\d+)\.(\d+)\.').firstMatch(packageVersion ?? '');
+  if (match == null) {
+    return null;
+  }
+  final major = match.group(1)!;
+  return major == '0' ? '0.1.0.0' : '$major.0.0.0';
 }
 
 String? _numericAssemblyVersion(String? packageVersion) {

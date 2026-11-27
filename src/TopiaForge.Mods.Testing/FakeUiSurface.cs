@@ -4,29 +4,44 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Inspectable fake UI surface.</summary>
-    public sealed class FakeUiSurface : IUiSurface, IUiSurfaceDismissalSource
+    public sealed partial class FakeUiSurface : IUiSurface, IUiSurfaceDismissalSource
     {
+        private readonly FakeUiService owner;
+        private readonly FakeUiWireTarget? wireTarget;
         private Action<FakeUiSurface>? release;
         private IDisposable? lifetimeLease;
         private readonly Dictionary<string, bool> toggleValues = new Dictionary<string, bool>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> sliderValues = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> textValues = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> dropdownValues = new Dictionary<string, string>(StringComparer.Ordinal);
-        private readonly Dictionary<string, string?> listSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
+        private readonly Dictionary<string, (string? Selection, float Offset)> listViewports =
+            new Dictionary<string, (string? Selection, float Offset)>(StringComparer.Ordinal);
         private readonly Dictionary<string, string?> graphSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
         private readonly Dictionary<string, UiGraphViewport> graphViewports = new Dictionary<string, UiGraphViewport>(StringComparer.Ordinal);
         private readonly List<string> callbackErrors = new List<string>();
+        private readonly IReadOnlyList<string> callbackErrorView;
+        private readonly Func<bool>? gameplay;
         private ModErrorCode nextContentErrorCode;
         private string nextContentErrorMessage = string.Empty;
+        private bool shown = true;
+        private ulong revision = 1;
 
-        internal FakeUiSurface(UiSurfaceRequest request, Action<FakeUiSurface> release)
+        internal FakeUiSurface(UiSurfaceRequest request, FakeUiService owner, Action<FakeUiSurface> release,
+            Func<bool>? gameplay, FakeUiWireTarget? wireTarget, FakeUiImages images, UiWireEnvelope? receiver)
         {
+            this.owner = owner;
+            this.wireTarget = wireTarget;
+            callbackErrorView = callbackErrors.AsReadOnly();
             Request = request;
+            if (request.Kind == UiSurfaceKind.Hud)
+                HudOverflowText = UiHudOverflowNotice.Text(owner.HudPackageDisplayName, request.HudAnchor, request.HudVisibility);
             Body = request.Body;
             Content = request.Content;
+            Images = images;
+            Receiver = receiver;
             CaptureState(Content);
             this.release = release;
-            IsVisible = true;
+            this.gameplay = gameplay;
         }
 
         internal void AttachLifetimeLease(IDisposable lease)
@@ -46,8 +61,18 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public string Id => Request.Id;
 
-        /// <inheritdoc/>
-        public bool IsVisible { get; private set; }
+        /// <summary>
+        /// Gets whether the surface shows, as in the game: the mod shows it, and a gameplay HUD only while the fake scenes
+        /// are in gameplay (a loaded gameplay scene is active and no load is pending). At the fake's initial main-menu
+        /// scene a gameplay HUD is hidden until a gameplay scene loads.
+        /// </summary>
+        public bool IsVisible => IsShown && (!FollowsGameplay || gameplay == null || gameplay());
+
+        /// <summary>Gets whether the mod shows the surface, whether or not TopiaForge keeps a gameplay HUD hidden now.</summary>
+        public bool IsShown => shown && release != null;
+
+        private bool FollowsGameplay =>
+            Request.Kind == UiSurfaceKind.Hud && Request.HudVisibility == UiHudVisibility.Gameplay;
 
         /// <summary>Gets the current body text.</summary>
         public string Body { get; private set; }
@@ -56,7 +81,7 @@ namespace TopiaForge.Mods.Testing
         public UiNode? Content { get; private set; }
 
         /// <summary>Gets callback failures captured without interrupting later callback subscribers.</summary>
-        public IReadOnlyList<string> CallbackErrors => callbackErrors.AsReadOnly();
+        public IReadOnlyList<string> CallbackErrors => callbackErrorView;
 
         /// <inheritdoc/>
         public event Action? Dismissed;
@@ -65,76 +90,66 @@ namespace TopiaForge.Mods.Testing
         public void Show()
         {
             EnsureActive();
-            IsVisible = true;
+            if (shown) return;
+            StartOverlayTransition(entering: true);
+            shown = true;
+            if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
         }
 
         /// <inheritdoc/>
         public void Hide()
         {
             EnsureActive();
-            if (!IsVisible) return;
-            IsVisible = false;
-            InvokeDismissed();
+            var wasVisible = IsVisible;
+            if (wasVisible) StartOverlayTransition(entering: false);
+            shown = false;
+            CloseGraphConnections();
+            if (wasVisible && HudOverflowText != null) owner.RefreshHudLayoutNotices();
+            if (wasVisible) InvokeDismissed();
+        }
+
+        /// <summary>
+        /// Simulates the player closing this surface. A remote player's dismissal carries guest origin;
+        /// <see cref="Hide"/> remains a server-initiated operation.
+        /// </summary>
+        [RequiresTopiaForge("0.2.0")]
+        public void DismissFromPlayer()
+        {
+            if (OverlayKind.HasValue &&
+                (OverlayKind != UiOverlayContentKind.Interactive || !Request.Dismissible || !owner.AllowsOverlayInput(this))) return;
+            FakeGuestOrigin.Run(WireBounded, Hide);
         }
 
         /// <inheritdoc/>
         public void SetBody(string body)
         {
             EnsureActive();
-            Body = body ?? string.Empty;
-        }
-
-        /// <inheritdoc/>
-        public OperationResult<bool> SetContent(UiNode content)
-        {
-            if (content == null) throw new ArgumentNullException(nameof(content));
-            if (release == null)
+            if (WireBounded && (body == null || body.Length > 4096))
+                throw new ArgumentException("Remote UI text is limited to 4096 characters.", nameof(body));
+            var next = body ?? string.Empty;
+            if (string.Equals(Body, next, StringComparison.Ordinal)) return;
+            if (OverlayKind.HasValue)
             {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake UI surface is disposed.");
+                ChangeOverlayBody(next);
+                return;
             }
-
-            if (nextContentErrorCode != ModErrorCode.None)
-            {
-                var errorCode = nextContentErrorCode;
-                var message = nextContentErrorMessage;
-                nextContentErrorCode = ModErrorCode.None;
-                nextContentErrorMessage = string.Empty;
-                return OperationResult<bool>.Failure(errorCode, message);
-            }
-
-            try
-            {
-                UiComposition.Validate(content);
-            }
-            catch (ArgumentException exception)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
-            }
-
-            Content = content;
-            toggleValues.Clear();
-            sliderValues.Clear();
-            textValues.Clear();
-            dropdownValues.Clear();
-            listSelections.Clear();
-            graphSelections.Clear();
-            graphViewports.Clear();
-            CaptureState(content);
-            return OperationResult<bool>.Success(true);
+            Body = next;
+            RevalidateGraphConnections();
+            if (HudOverflowText != null && IsVisible) owner.RefreshHudLayoutNotices();
         }
 
         /// <summary>Finds a captured node by stable control id.</summary>
         public bool TryFindNode(string id, out UiNode? node)
         {
             node = null;
-            return release != null && TryFind(Content, id, out node);
+            return release != null && UiLayoutTree.TryFind(Content, id, out node, out _);
         }
 
         /// <summary>Invokes one enabled button by id while isolating all callback subscribers.</summary>
         public OperationResult<bool> ActivateButton(string id)
         {
             if (!TryFindNode(id, out var node) || !(node is UiButton button)) return NotFound(id, "button");
-            if (!button.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             return Invoke(button.Activated, "button '" + id + "'");
         }
 
@@ -142,7 +157,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeToggle(string id, bool value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiToggle toggle)) return NotFound(id, "toggle");
-            if (!toggle.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             toggleValues[id] = value;
             return Invoke(toggle.Changed, value, "toggle '" + id + "'");
         }
@@ -151,12 +166,13 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeSlider(string id, float value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiSlider slider)) return NotFound(id, "slider");
-            if (!slider.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (float.IsNaN(value) || float.IsInfinity(value) || value < slider.Minimum || value > slider.Maximum)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "The fake slider value is outside its range.");
             }
 
+            value = UiSliderSteps.Snap(value, slider.Minimum, slider.Maximum, slider.Divisions);
             sliderValues[id] = value;
             return Invoke(slider.Changed, value, "slider '" + id + "'");
         }
@@ -165,7 +181,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeText(string id, string value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiTextInput input)) return NotFound(id, "text input");
-            if (!input.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             var bounded = UiTextInput.Truncate(value ?? string.Empty, input.MaximumLength);
             textValues[id] = bounded;
             return Invoke(input.Changed, bounded, "text input '" + id + "'");
@@ -175,7 +191,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeDropdown(string id, string value)
         {
             if (!TryFindNode(id, out var node) || !(node is UiDropdown dropdown)) return NotFound(id, "dropdown");
-            if (!dropdown.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             var found = false;
             foreach (var choice in dropdown.Choices)
             {
@@ -195,19 +211,10 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> SelectListItem(string id, string itemId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiVirtualList list)) return NotFound(id, "virtual list");
-            if (!list.Enabled) return Disabled(id);
-            var found = false;
-            foreach (var item in list.Items)
-            {
-                if (string.Equals(item.Id, itemId, StringComparison.Ordinal))
-                {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake list item was not found.");
-            listSelections[id] = itemId;
+            if (!CanInteract(id)) return Disabled(id);
+            var index = ListIndex(list, itemId);
+            if (index < 0) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake list item was not found.");
+            RememberListViewport(list, itemId, index);
             return Invoke(list.Selected, itemId, "virtual list '" + id + "'");
         }
 
@@ -215,12 +222,13 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> SelectGraphNode(string id, string? nodeId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (nodeId != null && FindGraphNode(graph, nodeId) == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake graph node was not found.");
             }
 
+            focusedConnectionGraphId = id;
             graphSelections[id] = nodeId;
             return Invoke(graph.SelectionChanged, nodeId, "graph canvas '" + id + "' selection");
         }
@@ -229,7 +237,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> MoveGraphNode(string id, string nodeId, Vec2 position)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             var graphNode = FindGraphNode(graph, nodeId);
             if (graphNode == null) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake graph node was not found.");
             if (!graphNode.Enabled) return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake graph node is disabled.");
@@ -257,7 +265,7 @@ namespace TopiaForge.Mods.Testing
             string targetPortId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (graph.ConnectionRequested == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept new connections.");
@@ -288,7 +296,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> RemoveGraphConnection(string id, string edgeId)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (graph.ConnectionRemoved == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept connection removal.");
@@ -312,7 +320,7 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> ChangeGraphViewport(string id, UiGraphViewport viewport)
         {
             if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
-            if (!graph.Enabled) return Disabled(id);
+            if (!CanInteract(id)) return Disabled(id);
             if (graph.ViewportChanged == null)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept viewport changes.");
@@ -335,7 +343,15 @@ namespace TopiaForge.Mods.Testing
         public bool TryGetDropdownValue(string id, out string? value) => dropdownValues.TryGetValue(id, out value);
 
         /// <summary>Tries to read the fake's current virtual-list selection.</summary>
-        public bool TryGetSelectedListItem(string id, out string? itemId) => listSelections.TryGetValue(id, out itemId);
+        public bool TryGetSelectedListItem(string id, out string? itemId)
+        {
+            var found = listViewports.TryGetValue(id, out var viewport);
+            itemId = viewport.Selection;
+            return found;
+        }
+
+        internal (string? Selection, float Offset) GetListViewport(string id) => listViewports.TryGetValue(id, out var viewport)
+            ? viewport : default;
 
         /// <summary>Tries to read the fake's current graph selection.</summary>
         public bool TryGetSelectedGraphNode(string id, out string? nodeId) => graphSelections.TryGetValue(id, out nodeId);
@@ -346,7 +362,9 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public void Dispose()
         {
-            IsVisible = false;
+            CloseGraphConnections();
+            if (IsShown) StartOverlayTransition(entering: false);
+            shown = false;
             Dismissed = null;
             var callback = release;
             release = null;
@@ -354,140 +372,5 @@ namespace TopiaForge.Mods.Testing
             System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
         }
 
-        private void CaptureState(UiNode? node)
-        {
-            if (node == null) return;
-            if (node is UiToggle toggle) toggleValues[toggle.Id!] = toggle.Value;
-            else if (node is UiSlider slider) sliderValues[slider.Id!] = slider.Value;
-            else if (node is UiTextInput input) textValues[input.Id!] = input.Value;
-            else if (node is UiDropdown dropdown) dropdownValues[dropdown.Id!] = dropdown.SelectedValue;
-            else if (node is UiVirtualList list) listSelections[list.Id!] = list.SelectedItemId;
-            else if (node is UiGraphCanvas graph)
-            {
-                graphSelections[graph.Id!] = graph.SelectedNodeId;
-                graphViewports[graph.Id!] = graph.Viewport;
-            }
-
-            if (node is UiLayoutNode layout)
-            {
-                foreach (var child in layout.Children) CaptureState(child);
-            }
-            else if (node is UiScroll scroll)
-            {
-                CaptureState(scroll.Content);
-            }
-            else if (node is UiSplitPane split)
-            {
-                CaptureState(split.Primary);
-                CaptureState(split.Secondary);
-            }
-        }
-
-        private static bool TryFind(UiNode? current, string id, out UiNode? node)
-        {
-            node = null;
-            if (current == null || string.IsNullOrWhiteSpace(id)) return false;
-            if (string.Equals(current.Id, id, StringComparison.Ordinal))
-            {
-                node = current;
-                return true;
-            }
-
-            if (current is UiLayoutNode layout)
-            {
-                foreach (var child in layout.Children)
-                {
-                    if (TryFind(child, id, out node)) return true;
-                }
-            }
-            else if (current is UiScroll scroll && TryFind(scroll.Content, id, out node))
-            {
-                return true;
-            }
-            else if (current is UiSplitPane split &&
-                     (TryFind(split.Primary, id, out node) || TryFind(split.Secondary, id, out node)))
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        private OperationResult<bool> Invoke(Action callback, string description)
-        {
-            var failures = 0;
-            foreach (var subscriber in callback.GetInvocationList())
-            {
-                try { ((Action)subscriber)(); }
-                catch (Exception exception)
-                {
-                    failures++;
-                    callbackErrors.Add(description + " callback failed: " + exception.Message);
-                }
-            }
-
-            return CallbackResult(failures);
-        }
-
-        private OperationResult<bool> Invoke<T>(Action<T> callback, T value, string description)
-        {
-            var failures = 0;
-            foreach (var subscriber in callback.GetInvocationList())
-            {
-                try { ((Action<T>)subscriber)(value); }
-                catch (Exception exception)
-                {
-                    failures++;
-                    callbackErrors.Add(description + " callback failed: " + exception.Message);
-                }
-            }
-
-            return CallbackResult(failures);
-        }
-
-        private static OperationResult<bool> CallbackResult(int failures) => failures == 0
-            ? OperationResult<bool>.Success(true)
-            : OperationResult<bool>.Failure(ModErrorCode.External, failures + " fake UI callback subscriber(s) failed.");
-
-        private static OperationResult<bool> NotFound(string id, string kind) =>
-            OperationResult<bool>.Failure(ModErrorCode.NotFound, "No " + kind + " uses id '" + id + "'.");
-
-        private static OperationResult<bool> Disabled(string id) =>
-            OperationResult<bool>.Failure(ModErrorCode.InvalidState, "UI control '" + id + "' is disabled.");
-
-        private static UiGraphNode? FindGraphNode(UiGraphCanvas graph, string id)
-        {
-            foreach (var node in graph.Nodes)
-            {
-                if (string.Equals(node.Id, id, StringComparison.Ordinal)) return node;
-            }
-
-            return null;
-        }
-
-        private static UiGraphPort? FindGraphPort(UiGraphNode node, string id)
-        {
-            foreach (var port in node.Ports)
-            {
-                if (string.Equals(port.Id, id, StringComparison.Ordinal)) return port;
-            }
-
-            return null;
-        }
-
-        private void InvokeDismissed()
-        {
-            var handlers = Dismissed;
-            if (handlers == null) return;
-            Invoke(handlers, "surface '" + Id + "' dismissal");
-        }
-
-        private void EnsureActive()
-        {
-            if (release == null)
-            {
-                throw new ObjectDisposedException(nameof(FakeUiSurface));
-            }
-        }
     }
 }

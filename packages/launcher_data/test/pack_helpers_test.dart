@@ -35,7 +35,7 @@ void main() {
   });
 
   Map<String, Object?> manifestJson() => {
-    'schemaVersion': 5,
+    'schemaVersion': 6,
     'name': 'sample.mod',
     'displayName': 'Sample Mod',
     'version': '1.2.3',
@@ -310,6 +310,10 @@ printf 'dll' > ${_shellQuote(output.path)}
     );
     expect(invocation.skip(1), [
       'build',
+      '--disable-build-servers',
+      '-m:1',
+      '-nr:false',
+      '-p:UseSharedCompilation=false',
       p.join(projectDir.absolute.path, 'Sample.csproj'),
       '-c',
       'Release',

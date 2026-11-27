@@ -7,11 +7,11 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.RobotKit</AssemblyName>
     <RootNamespace>TopiaForge.RobotKit</RootNamespace>
-    <Version>1.0.0-rc.1</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
-    <!-- Genuinely native: this mod uses UnityEngine/Harmony by design, so the safe-API rules do not
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>0.2.0</InformationalVersion>
+    <!-- Genuinely native: this provider uses UnityEngine by design, so the safe-API rules do not
          apply. Main-thread rules still do - opting out of the safe profile does not leave the game loop. -->
     <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
   </PropertyGroup>
@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Analyzers\TopiaForge.Mods.Analyzers.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
@@ -27,10 +28,13 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
+    <Compile Include="..\Shared\NativeDamageSource.cs" Link="Shared\NativeDamageSource.cs" />
+    <Compile Include="..\Shared\UgcImportProblems.cs" Link="Shared\UgcImportProblems.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
+    <Reference Include="FMODUnity" HintPath="$(RobotopiaManagedDir)\FMODUnity.dll" Private="false" />
     <Reference Include="UniTask" HintPath="$(RobotopiaManagedDir)\UniTask.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />

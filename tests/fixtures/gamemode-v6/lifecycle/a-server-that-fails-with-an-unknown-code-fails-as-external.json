@@ -1,0 +1,30 @@
+{
+  "id": "a-server-that-fails-with-an-unknown-code-fails-as-external",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A server controller that fails with a code the SDK does not define ends the session as an external failure that says so.",
+  "scenario": {
+    "role": "host",
+    "factory": "participant",
+    "serverStart": "fails-with-an-unknown-code",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "external",
+          "message": "An implementation returned an unsupported operation error code (99). The arena has no spawn."
+        },
+        "calls": [
+          "server.start"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

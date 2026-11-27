@@ -72,6 +72,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             TopiaForgeDebugOverlay.Dispose();
             TopiaForgeToasts.Reset();
+            TopiaForgeStingerAnnouncements.Reset();
 
             while (Hosts.Count > 0)
             {
@@ -92,7 +93,12 @@ namespace TopiaForge.Mods.UnityUi
             // partially initialized or misbehaving consumer cannot survive loader teardown.
             TopiaForgeTween.Reset();
             TopiaForgeDismissStack.Reset();
+            TopiaForgeInputOwnership.Reset();
+            TopiaForgeNavigation.Reset();
+            TopiaForgePointer.Reset();
+            TopiaForgeScrollFollow.Reset();
             TopiaForgeHotkeys.Reset();
+            TopiaForgeIntent.Reset();
             TopiaForgeCursor.Reset();
             TopiaForgeSafeMode.Reset();
             TopiaForgeEventSystems.Reset();

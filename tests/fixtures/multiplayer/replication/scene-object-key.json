@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "about": "Scene object keys: FNV-1a 64 over the UTF-8 bytes of scene NUL path NUL component, where the path joins name#siblingIndex segments root first with a slash, and every field escapes backslash, slash, hash and NUL with a backslash (NUL becomes \\0).",
+  "fnv1a64": [
+    {"utf8": "", "hash": "cbf29ce484222325"},
+    {"utf8": "a", "hash": "af63dc4c8601ec8c"},
+    {"utf8": "foobar", "hash": "85944171f73967e8"},
+    {"utf8": "TopiaForge", "hash": "fcbf0601badb692d"}
+  ],
+  "cases": [
+    {"scene": "Sandbox", "path": [{"name": "World", "siblingIndex": 0}, {"name": "Props", "siblingIndex": 3}, {"name": "Crate", "siblingIndex": 12}], "component": "UnityEngine.Rigidbody", "preimage": "Sandbox\u0000World#0/Props#3/Crate#12\u0000UnityEngine.Rigidbody", "key": "1606c8d52a5cafb0"},
+    {"scene": "Sandbox", "path": [{"name": "World", "siblingIndex": 0}, {"name": "Props", "siblingIndex": 3}, {"name": "Crate", "siblingIndex": 13}], "component": "UnityEngine.Rigidbody", "preimage": "Sandbox\u0000World#0/Props#3/Crate#13\u0000UnityEngine.Rigidbody", "key": "d92088063be47eb7"},
+    {"scene": "Sandbox", "path": [{"name": "World", "siblingIndex": 0}], "component": "UnityEngine.Transform", "preimage": "Sandbox\u0000World#0\u0000UnityEngine.Transform", "key": "4522db763f088bce"},
+    {"scene": "", "path": [{"name": "", "siblingIndex": 0}], "component": "", "preimage": "\u0000#0\u0000", "key": "47b545802b8b55a4"},
+    {"scene": "A/B", "path": [{"name": "x\\y/z#w\u0000v", "siblingIndex": 2}], "component": "T#1", "preimage": "A\\/B\u0000x\\\\y\\/z\\#w\\0v#2\u0000T\\#1", "key": "8bb83866bb0043a0"},
+    {"scene": "S", "path": [{"name": "a#0/b", "siblingIndex": 0}], "component": "C", "preimage": "S\u0000a\\#0\\/b#0\u0000C", "key": "3d9749ab87edee4f"},
+    {"scene": "S", "path": [{"name": "a", "siblingIndex": 0}, {"name": "b", "siblingIndex": 0}], "component": "C", "preimage": "S\u0000a#0/b#0\u0000C", "key": "bdf1430f9dfc4391"},
+    {"scene": "Café", "path": [{"name": "Über", "siblingIndex": 1}, {"name": "日本", "siblingIndex": 7}, {"name": "🤖", "siblingIndex": 4294967}], "component": "Grüße.Ω", "preimage": "Café\u0000Über#1/日本#7/🤖#4294967\u0000Grüße.Ω", "key": "be6e6a69540ee2f2"},
+    {"scene": "OpenSandbox", "path": [{"name": "Arena", "siblingIndex": 0}, {"name": "Ring", "siblingIndex": 2}, {"name": "Pillar (12)", "siblingIndex": 41}], "component": "UnityEngine.MeshCollider", "preimage": "OpenSandbox\u0000Arena#0/Ring#2/Pillar (12)#41\u0000UnityEngine.MeshCollider", "key": "26d98aa5a6aa4347"}
+  ]
+}

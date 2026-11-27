@@ -36,6 +36,12 @@ void _createRuntimeSources(Directory repoRoot) {
   for (final dll in topiaForgeRuntimeLoaderDlls) {
     File(p.join(loader.path, dll)).writeAsStringSync('');
   }
+  // Licence texts at their canonical paths, as a checkout or release has them.
+  for (final notice in topiaForgeRuntimeLoaderNotices) {
+    File(p.joinAll([repoRoot.path, ...p.posix.split(notice.sourcePath)]))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('${notice.sourcePath} fixture text');
+  }
 }
 
 // The built-in local source derives its catalog from the .topiaforgemod packages in dist/, so the
@@ -96,14 +102,15 @@ File _createPackage(
   String? loaderVersionRange,
   String? sdkVersionRange,
   String category = '',
+  Map<String, Object?>? contributions,
 }) {
   final package = File(p.join(root.path, '$id-$version.topiaforgemod'));
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
         'topiaforge.mod.json',
-        jsonEncode(
-          _manifestJson(
+        jsonEncode({
+          ..._manifestJson(
             id,
             version,
             dependencies: dependencies,
@@ -114,7 +121,12 @@ File _createPackage(
             sdkVersionRange: sdkVersionRange,
             category: category,
           ),
-        ),
+          if (contributions != null) ...{
+            'schemaVersion': 6,
+            'capabilities': ['world-service'],
+            'contributions': contributions,
+          },
+        }),
       ),
     )
     ..addFile(ArchiveFile.string('${_assemblyName(id)}.dll', 'dll'));
@@ -136,7 +148,7 @@ Map<String, Object?> _manifestJson(
   String? sdkVersionRange,
   String category = '',
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': id,
   'displayName': id,
   'version': version,

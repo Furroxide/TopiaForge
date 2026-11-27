@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v6-standalone-fields",
+  "displayName": "Invalid V6 Standalone Fixture",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.InvalidMod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "multiplayer": {
+    "mode": "standalone",
+    "presence": "required",
+    "protocol": { "version": "1.0.0" }
+  }
+}

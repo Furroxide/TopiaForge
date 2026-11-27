@@ -33,6 +33,8 @@ void main() {
     dataRoot: dataRoot.path,
     repositoryRoot: repositoryRoot.path,
     unityEditorScanner: () async => editors,
+    // Unity Hub and Git lookups would otherwise run bounded processes.
+    executableLocator: (_) async => '',
   );
 
   List<UnityEditor> installedEditors() => [

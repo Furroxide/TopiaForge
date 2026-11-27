@@ -1,0 +1,31 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Import through ForceImportBeforeCppTargets for each native C++ project. -->
+  <Target Name="TopiaForgeCheckNativePaths"
+          BeforeTargets="PrepareForBuild;InitializeBuildStatus">
+    <Error Condition="'$(IntDir)' == '' or '$(TLogLocation)' == ''"
+           Code="TFPATH001" Text="Native intermediate and tracking directories must be explicit." />
+    <ItemGroup>
+      <_TopiaForgeEarlyNativePath Include="$(IntDir);$(TLogLocation);$(LastBuildState);$(LastBuildUnsuccessful)" />
+      <_TopiaForgeEarlyNativePath Include="$(TLogLocation)CL.command.1.tlog;$(TLogLocation)CL.read.1.tlog;$(TLogLocation)CL.write.1.tlog" />
+    </ItemGroup>
+    <Error Condition="$([System.String]::Copy('%(_TopiaForgeEarlyNativePath.FullPath)').Length) &gt;= 260"
+           Code="TFPATH001" Text="A native intermediate or tracking path reaches the 260 UTF-16 code-unit limit. Use a shorter build directory." />
+  </Target>
+
+  <Target Name="TopiaForgeCheckNativeObjects"
+          DependsOnTargets="ComputeCLOutputs"
+          BeforeTargets="ClCompile;ResourceCompile;Midl;Link;Lib">
+    <!-- Ask the installed C++ targets to compute their actual object paths.
+         Refuse an unexpected result rather than silently skipping the check. -->
+    <Error Condition="'@(ClCompile)' != '' and '@(Obj)' == ''"
+           Code="TFPATH002" Text="Native object paths must be computed before the compiler starts." />
+    <ItemGroup>
+      <_TopiaForgeNativeOutput Include="@(Obj);@(CLTLogReadFiles);@(CLTLogWriteFiles)" />
+      <_TopiaForgeNativeOutput Include="@(ClCompile-&gt;'%(ProgramDataBaseFileName)');@(ClCompile-&gt;'%(PrecompiledHeaderOutputFile)')" />
+      <_TopiaForgeNativeOutput Include="@(ClCompile-&gt;'%(AssemblerListingLocation)');@(ClCompile-&gt;'%(ModuleOutputFile)');@(ClCompile-&gt;'%(PreprocessOutputPath)')" />
+      <_TopiaForgeNativeOutput Include="@(ResourceCompile-&gt;'%(ResourceOutputFileName)');@(Midl-&gt;'%(OutputDirectory)')" />
+    </ItemGroup>
+    <Error Condition="$([System.String]::Copy('%(_TopiaForgeNativeOutput.FullPath)').Length) &gt;= 260"
+           Code="TFPATH001" Text="A native compiler output path reaches the 260 UTF-16 code-unit limit. Use a shorter build directory." />
+  </Target>
+</Project>

@@ -16,8 +16,17 @@ namespace TopiaForge.Mods.Testing
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         }
 
+        private bool uiFocused;
+        private Func<bool>? overlayFocus;
+
         /// <inheritdoc/>
-        public bool IsUiFocused { get; set; }
+        public bool IsUiFocused
+        {
+            get => uiFocused || overlayFocus?.Invoke() == true;
+            set => uiFocused = value;
+        }
+
+        internal void FollowOverlayFocus(Func<bool> focus) => overlayFocus = focus;
 
         /// <inheritdoc/>
         public IReadOnlyList<InputConflict> GetConflicts()
@@ -90,6 +99,8 @@ namespace TopiaForge.Mods.Testing
             return action;
         }
 
+        internal FakeInputAction? FindAction(string name) => actions.TryGetValue(name, out var action) ? action : null;
+
         /// <summary>Sets an action's value and derives its pressed or released transition.</summary>
         public void SetValue(string name, float value) => GetAction(name).SetValue(value);
 
@@ -142,6 +153,7 @@ namespace TopiaForge.Mods.Testing
 
         /// <inheritdoc/>
         public string Name => definition.Name;
+        internal InputActionDefinition Definition => definition;
 
         /// <inheritdoc/>
         public IReadOnlyList<InputBinding> Bindings => bindings;
@@ -177,12 +189,13 @@ namespace TopiaForge.Mods.Testing
             }
 
             var copy = CopyBindings(newBindings);
+            bindings = copy.AsReadOnly();
             if (copy.Count == 0)
             {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "At least one binding is required.");
+                rawValue = 0f;
+                pressed = false;
+                released = false;
             }
-
-            bindings = copy.AsReadOnly();
             return OperationResult<bool>.Success(true);
         }
 
@@ -197,6 +210,7 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentOutOfRangeException(nameof(value));
             }
 
+            if (bindings.Count == 0) return;
             var wasHeld = rawValue != 0f;
             var isHeld = value != 0f;
             rawValue = value;
@@ -207,6 +221,7 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Sets exact sampled state for an edge-case test.</summary>
         public void SetState(float value, bool wasPressed, bool wasReleased)
         {
+            if (bindings.Count == 0) return;
             rawValue = value;
             pressed = wasPressed;
             released = wasReleased;

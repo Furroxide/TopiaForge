@@ -4,8 +4,11 @@ namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
     /// The kit's single hidden driver MonoBehaviour (the loader dedupes this assembly
-    /// process-wide, so exactly one exists). Ticks the cursor hold, and — in later
-    /// milestones — the tween pool, toast queue, ESC stack, and hotkey poll.
+    /// process-wide, so exactly one exists). Ticks the cursor hold, the tween pool, the
+    /// Back stack, the game's navigate bindings, the kit's own navigation, the mouse on
+    /// kit surfaces, scroll views following the selection, the hotkey poll and the toast
+    /// queue. While it runs, TopiaForge keeps what its surfaces claim away from the game;
+    /// when it stops, it lets go of everything and puts back what it turned on.
     /// </summary>
     internal sealed class TopiaForgeRuntime : MonoBehaviour
     {
@@ -45,6 +48,27 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        private void OnEnable()
+        {
+            TopiaForgeInputOwnership.Install();
+        }
+
+        private void OnDisable()
+        {
+            TopiaForgeInputOwnership.Reset();
+            TopiaForgePointer.Reset();
+            TopiaForgeScrollFollow.Reset();
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            // The Input System releases every key when the game loses focus, and a release while unfocused never arrives.
+            if (!hasFocus)
+            {
+                TopiaForgeInputOwnership.ForgetHeld();
+            }
+        }
+
         private void OnDestroy()
         {
             if (ReferenceEquals(instance, this))
@@ -58,8 +82,13 @@ namespace TopiaForge.Mods.UnityUi
             // The game re-asserts its own cursor lock every frame, so the lease must
             // fight back every frame while held (proven by the Zombies modal behavior).
             TopiaForgeCursor.Tick();
+            TopiaForgeEventSystems.Tick();
             TopiaForgeTween.Tick(Time.unscaledDeltaTime);
             TopiaForgeDismissStack.TickEscape();
+            TopiaForgeNavigateAction.Follow();
+            TopiaForgeNavigation.Tick(Time.unscaledDeltaTime);
+            TopiaForgePointer.Tick();
+            TopiaForgeScrollFollow.Tick();
             TopiaForgeHotkeys.Tick();
             TopiaForgeToasts.Tick(Time.unscaledDeltaTime);
         }

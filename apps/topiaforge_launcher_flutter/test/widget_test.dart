@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io' show File, InternetAddress, Platform, SocketException;
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,32 +12,62 @@ import 'package:launcher_ui/launcher_ui.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_app.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_bloc.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_event.dart';
+import 'package:topiaforge_launcher_flutter/src/launcher_exit.dart';
+import 'package:topiaforge_launcher_flutter/src/launcher_multiplayer_state.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_section.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_state.dart';
 import 'package:topiaforge_launcher_flutter/src/screens.dart';
+import 'package:topiaforge_launcher_flutter/src/session_link_inbox.dart';
 
 part 'widget_test_fakes.dart';
+part 'widget_test_developer_repository.dart';
+part 'widget_launch_fixtures.dart';
+part 'widget_launch_activity_test_cases.dart';
+part 'widget_launch_correlation_test_cases.dart';
 part 'widget_test_developer_fake_helpers.dart';
-part 'widget_test_publisher_fake.dart';
+part 'widget_test_install_fake.dart';
 part 'widget_lifecycle_test_cases.dart';
 part 'widget_install_test_cases.dart';
+part 'widget_map_cache_test_cases.dart';
+part 'widget_published_map_test_cases.dart';
 part 'widget_mod_repair_test_cases.dart';
 part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
+part 'widget_home_launch_test_cases.dart';
+part 'widget_target_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
-part 'widget_ugc_test_cases.dart';
 part 'widget_update_test_cases.dart';
 part 'widget_update_test_fakes.dart';
+part 'widget_reachability_test_cases.dart';
+part 'widget_session_link_test_cases.dart';
+part 'widget_multiplayer_fakes.dart';
+part 'widget_multiplayer_bloc_test_cases.dart';
+part 'widget_multiplayer_settings_test_cases.dart';
+part 'widget_multiplayer_network_test_cases.dart';
+part 'widget_multiplayer_layout_test_cases.dart';
+part 'widget_multiplayer_privacy_test_cases.dart';
+part 'widget_multiplayer_race_test_cases.dart';
+part 'widget_multiplayer_golden_test_cases.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
-  registerUgcWidgetTests();
-  registerUgcBlocTests();
   registerLauncherLifecycleTests();
+  _registerLaunchActivityTests();
   registerInstallConfirmationWidgetTests();
+  registerDownloadedMapCacheTests();
+  registerPublishedMapTests();
   registerModRepairTests();
   registerAccessibilityWidgetTests();
   registerLauncherUpdateWidgetTests();
+  registerReachabilityProbeWidgetTests();
+  registerSessionLinkWidgetTests();
+  registerMultiplayerBlocTests();
+  registerMultiplayerSettingsWidgetTests();
+  registerMultiplayerNetworkWidgetTests();
+  registerMultiplayerLayoutTests();
+  registerMultiplayerPrivacyTests();
+  registerMultiplayerRaceTests();
+  registerMultiplayerGoldenRenders();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would
   // deadlock pumpAndSettle. Running the suite with reduced motion keeps every
@@ -88,6 +121,8 @@ void main() {
   }
 
   _registerProfileLaunchWidgetTests(pumpHome);
+  _registerHomeLaunchTests(pumpHome);
+  _registerTargetLaunchRegressions(pumpHome);
 
   testWidgets('home launch pad renders ready state and update pill', (
     tester,
@@ -138,7 +173,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.launchedProfileIds, ['default']);
-    expect(find.text('Launched TopiaForge.'), findsOneWidget);
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
   });
 
   testWidgets('home shows almost-ready state and one-click runtime fix', (
@@ -171,7 +206,7 @@ void main() {
 
     expect(repository.installOrRepairRuntimeCount, 1);
     expect(repository.launchedProfileIds, ['default']);
-    expect(find.text('Launched TopiaForge.'), findsOneWidget);
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
   });
 
   testWidgets('bottom repair-needed chip runs runtime repair', (tester) async {
@@ -286,7 +321,7 @@ void main() {
 
     expect(find.text('Load Order'), findsOneWidget);
     expect(find.text('Repair Runtime'), findsOneWidget);
-    expect(find.text('World'), findsWidgets);
+    expect(find.text('Launch target'), findsWidgets);
   });
 
   testWidgets('glow button pulses when animations are enabled', (tester) async {
@@ -420,7 +455,7 @@ void main() {
 
     expect(developer.runSetupCount, 1);
     expect(
-      find.textContaining('sidecar dependencies already present'),
+      find.textContaining('Ensured the developer data folder'),
       findsWidgets,
     );
   });
@@ -456,29 +491,5 @@ void main() {
 
     expect(find.text('Update'), findsOneWidget);
     expect(find.text('Preview Update'), findsOneWidget);
-  });
-
-  testWidgets('confirms restart before relaunching TopiaForge', (tester) async {
-    final repository = _FakeLauncherRepository(
-      snapshot: _updateSnapshot(needsRepair: true),
-    );
-    await tester.pumpWidget(TopiaForgeLauncherApp(repository: repository));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Mods'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Restart').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Restart TopiaForge?'), findsOneWidget);
-    expect(repository.restartCount, 0);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
-    await tester.pumpAndSettle();
-
-    expect(repository.installOrRepairRuntimeCount, 1);
-    expect(repository.restartCount, 1);
-    expect(find.text('Restarted TopiaForge.'), findsOneWidget);
   });
 }

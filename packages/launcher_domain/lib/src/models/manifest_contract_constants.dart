@@ -33,8 +33,10 @@ const _knownManifestJsonKeys = <String>{
   'contentTargets',
   'builtWith',
   'worldGamemodes',
+  'contributions',
   'apiAssemblies',
   'multiplayer',
+  'ui',
 };
 
 const _unsupportedManifestFields = <String>{
@@ -66,6 +68,7 @@ const _knownCapabilities = {
   'network',
   'microphone',
   'particles',
+  'peer-network',
   'physics',
   'physics-settings',
   'player-control',

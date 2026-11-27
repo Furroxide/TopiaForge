@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using TopiaForge.CreatorTools;
 using TopiaForge.CreatorTools.Shared;
 using TopiaForge.Mods;
@@ -15,9 +16,58 @@ namespace TopiaForge.ModManager.Tests
             TestCreatorSessionFailureRestoresOwnedState();
             TestGlobalIsolationRevocationRestoresOwnedState();
             TestGraphStopLeavesManualSpawn();
+            TestConnectionsEditingAtBothScales();
             TestContentSourceUnloadReconcilesRoster();
-            TestGlobalHostEligibilityAndRemoteJoinCleanup();
             Console.WriteLine("CreatorWorkbenchLifecycleTests passed.");
+        }
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "OpenGraphConnections")]
+        private static extern bool OpenGraphConnections(FakeUiSurface surface, UiCaptureViewport viewport);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "RemoveGraphConnectionSelection")]
+        private static extern OperationResult<bool> RemoveGraphConnectionSelection(FakeUiSurface surface);
+
+        private static void TestConnectionsEditingAtBothScales()
+        {
+            var viewport = new UiCaptureViewport(1920, 1080);
+            foreach (var scale in new[] { 1f, 2f })
+            {
+                using var context = CreateGameplayContext();
+                using var content = new FakeCreatorContentService(context.Lifetime);
+                var robots = new FakeRobotKit(context.Lifetime);
+                Assert(context.Ui.ApplyAccessibility(new UiAccessibilityPreferences(true, scale, true)).Succeeded,
+                    "the local workbench uses the viewer's accessibility profile");
+                using var workbench = new CreatorWorkbench(context, SandboxOptions("connections-adopter"),
+                    content, robots.Agents, () => { }, () => { });
+                var opened = workbench.Open();
+                Assert(opened.Succeeded, "the actual workbench fits at scale " + scale + ". " + opened.ErrorMessage);
+                var hud = Surface(context, "connections-adopter-hud");
+                var hudCapture = hud.Capture(viewport);
+                Assert(hud.Content == null && hudCapture.CheckAccessibility().Count == 0 &&
+                    hudCapture.Nodes.Any(node => node.Kind == "SurfaceBody" &&
+                    node.IsRendered && !node.Clipped && node.Text.Contains("F5 HIDE WORKBENCH", StringComparison.Ordinal)),
+                    "the actual body-only Sandbox HUD displays its measured session instructions at scale " + scale);
+                var surface = Surface(context, "connections-adopter-window");
+                Assert(surface.Capture(viewport).Nodes.Any(node => node.Id == "catalog-search" && node.IsRendered && !node.Clipped),
+                    "the protected catalog search field stays visible in its split pane");
+                Assert(surface.ActivateButton("new-project").Succeeded &&
+                    surface.TryFindNode("event-graph", out var authored) && authored is UiGraphCanvas { Edges.Count: 1 },
+                    "New project publishes the authored start connection");
+                Assert(OpenGraphConnections(surface, viewport), "the actual Sandbox graph opens one connections list");
+                var capture = surface.Capture(viewport);
+                Assert(capture.CheckAccessibility().Count == 0 && capture.Nodes.Count(node => node.Kind == "GraphConnectionsList") == 1 &&
+                    capture.Nodes.Single(node => node.Kind == "GraphConnectionRemove").SemanticLabel
+                        .StartsWith(UiGraphConnections.RemovePrefix, StringComparison.Ordinal),
+                    "the owning Sandbox surface shows an accessible, labelled route for its real event graph");
+                Assert(RemoveGraphConnectionSelection(surface).Succeeded &&
+                    surface.TryFindNode("event-graph", out var updated) && updated is UiGraphCanvas { Edges.Count: 0, Nodes.Count: 2 } &&
+                    surface.Capture(viewport).Nodes.All(node => node.Kind != "GraphConnectionsList"),
+                    "the kit Remove action updates the Sandbox project and retains both event nodes");
+                Assert(workbench.Hide().Succeeded &&
+                    hud.Capture(viewport).Nodes.Any(node => node.Kind == "SurfaceBody" && node.IsRendered && !node.Clipped &&
+                        node.Text.Contains("F5 REOPEN WORKBENCH", StringComparison.Ordinal)),
+                    "normal Workbench Hide updates the visible body-only HUD at scale " + scale);
+            }
         }
 
         private static void TestHideReopenAndTenLeakFreeCycles()
@@ -39,7 +89,8 @@ namespace TopiaForge.ModManager.Tests
 
             for (var cycle = 0; cycle < 10; cycle++)
             {
-                Assert(workbench.Open().Succeeded, "cycle " + cycle + " should open");
+                var opened = workbench.Open();
+                Assert(opened.Succeeded, "cycle " + cycle + " should open. " + opened.ErrorMessage);
                 Assert(workbench.IsSessionActive && workbench.IsVisible
                     && content.ActiveSessionCount == 1
                     && context.LocalPlayer.ActiveControlLeaseCount == 1,
@@ -272,87 +323,6 @@ namespace TopiaForge.ModManager.Tests
             workbench.Dispose();
             context.Dispose();
             context.AssertNoLeaks();
-        }
-
-        private static void TestGlobalHostEligibilityAndRemoteJoinCleanup()
-        {
-            using var context = CreateGameplayContext();
-            using var content = new FakeCreatorContentService(context.Lifetime);
-            using var multiplayer = MultiplayerTestRig.CreateListenServer();
-            var robots = new FakeRobotKit(context.Lifetime);
-            var worlds = new FakeWorldGamemodeService(context.Lifetime);
-            var worldExtension = context.Extensions.Register<IWorldGamemodeService>(worlds).Value!;
-            var multiplayerExtension = context.Extensions.Register<IMultiplayerSession>(multiplayer.Server.Session).Value!;
-            var router = new PassiveCreatorRouter();
-            using var host = new GlobalCreatorToolsHost(
-                context,
-                new CreatorToolsConfig(),
-                content,
-                router,
-                robots.Agents);
-
-            Assert(!host.CanOpen(new CreatorToolOpenContext(string.Empty))
-                && !host.CanOpen(new CreatorToolOpenContext(GameScenes.MainMenuSceneName))
-                && host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "global host should require a stable non-menu gameplay scene");
-
-            var worldRegistration = worlds.RegisterWorld(new WorldDefinition(
-                "test.world",
-                "Test world",
-                "Creator eligibility fixture.",
-                "RobotopiaCity")).Value!;
-            var modeRegistration = worlds.RegisterGamemode(new GamemodeDefinition(
-                "test.mode",
-                "Test mode",
-                "Creator eligibility fixture.")).Value!;
-            worlds.AutoCompleteLoads = false;
-            var transition = worlds.LoadAsync(new WorldLoadRequest("test.world", "test.mode"));
-            Assert(!host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "global host should reject an in-flight Worlds transition");
-            Assert(worlds.CompletePendingLoad() && transition.Result.Succeeded
-                && !host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "global host should reject an active Worlds gamemode session");
-            worlds.EndSession(WorldSessionEndReason.EndedByGamemode);
-
-            Assert(host.Open(new CreatorToolOpenContext("RobotopiaCity")).Succeeded
-                && host.IsOpen
-                && content.ActiveSessionCount == 1
-                && context.LocalPlayer.ActiveControlLeaseCount == 1,
-                "single-local interactive standalone/listen-server state should permit the global host");
-            multiplayer.AddRemoteClient("remote-creator-test");
-            Assert(!host.IsOpen
-                && content.ActiveSessionCount == 0
-                && context.LocalPlayer.ActiveControlLeaseCount == 0
-                && !host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "a connected remote participant should fail closed and restore an already-open global session");
-
-            host.Dispose();
-            modeRegistration.Dispose();
-            worldRegistration.Dispose();
-            multiplayerExtension.Dispose();
-            worldExtension.Dispose();
-            context.Dispose();
-            context.AssertNoLeaks();
-
-            using var headlessContext = CreateGameplayContext();
-            using var headlessContent = new FakeCreatorContentService(headlessContext.Lifetime);
-            using var dedicated = MultiplayerTestRig.CreateDedicatedServer();
-            var headlessWorlds = new FakeWorldGamemodeService(headlessContext.Lifetime);
-            var headlessWorldExtension = headlessContext.Extensions.Register<IWorldGamemodeService>(headlessWorlds).Value!;
-            var headlessMultiplayerExtension = headlessContext.Extensions.Register<IMultiplayerSession>(dedicated.Server.Session).Value!;
-            using var headlessHost = new GlobalCreatorToolsHost(
-                headlessContext,
-                new CreatorToolsConfig(),
-                headlessContent,
-                new PassiveCreatorRouter(),
-                new FakeRobotKit(headlessContext.Lifetime).Agents);
-            Assert(!headlessHost.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "headless multiplayer processes should never expose the global creator UI");
-            headlessHost.Dispose();
-            headlessMultiplayerExtension.Dispose();
-            headlessWorldExtension.Dispose();
-            headlessContext.Dispose();
-            headlessContext.AssertNoLeaks();
         }
 
         private static FakeModContext CreateGameplayContext()

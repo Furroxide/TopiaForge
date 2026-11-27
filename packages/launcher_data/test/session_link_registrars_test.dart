@@ -1,0 +1,170 @@
+import 'dart:io';
+
+import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_domain/launcher_domain.dart';
+import 'package:path/path.dart' as p;
+import 'package:test/test.dart';
+
+void main() {
+  test('the platform registrar matches the host', () {
+    final registrar = platformSessionLinkRegistrar(
+      executable: Platform.isWindows
+          ? r'C:\TopiaForge\launcher\topiaforge_launcher.exe'
+          : '/opt/topiaforge/launcher/topiaforge_launcher',
+    );
+    if (Platform.isWindows) {
+      expect(registrar, isA<WindowsSessionLinkRegistrar>());
+      expect(
+        (registrar as WindowsSessionLinkRegistrar).executable,
+        r'C:\TopiaForge\launcher\topiaforge_launcher.exe',
+      );
+    } else if (Platform.isLinux) {
+      expect(registrar, isA<LinuxSessionLinkRegistrar>());
+    } else if (Platform.isMacOS) {
+      expect(registrar, isA<BundleSessionLinkRegistrar>());
+    } else {
+      expect(registrar, isA<UnsupportedSessionLinkRegistrar>());
+    }
+  });
+
+  test('the platform registrar names the running launcher by default', () {
+    final registrar = platformSessionLinkRegistrar();
+    if (registrar is WindowsSessionLinkRegistrar) {
+      expect(registrar.executable, Platform.resolvedExecutable);
+    } else if (registrar is LinuxSessionLinkRegistrar) {
+      expect(registrar.executable, Platform.resolvedExecutable);
+    }
+  });
+
+  test(
+    'a launcher on its own data root never touches the registration',
+    () async {
+      final scratch = await Directory.systemTemp.createTemp(
+        'topiaforge-own-root-',
+      );
+      addTearDown(() => scratch.delete(recursive: true));
+
+      final registrar = platformSessionLinkRegistrar(
+        executable: Platform.isWindows
+            ? r'C:\TopiaForge\launcher\topiaforge_launcher.exe'
+            : '/opt/topiaforge/launcher/topiaforge_launcher',
+        dataRoot: scratch.path,
+      );
+
+      if (Platform.isMacOS) {
+        expect(registrar, isA<BundleSessionLinkRegistrar>());
+        return;
+      }
+      expect(registrar, isA<OwnDataRootSessionLinkRegistrar>());
+      for (final result in [
+        await registrar.register(),
+        await registrar.unregister(),
+      ]) {
+        expect(result.registration, SessionLinkRegistration.unsupported);
+        expect(result.detail, contains('own data root'));
+      }
+    },
+  );
+
+  test('the launcher on the default data root registers', () {
+    final registrar = platformSessionLinkRegistrar(
+      dataRoot: resolveTopiaForgeDataRoot(
+        environment: {...Platform.environment}..remove('TOPIAFORGE_DATA_ROOT'),
+      ),
+    );
+    if (Platform.isWindows) {
+      expect(registrar, isA<WindowsSessionLinkRegistrar>());
+    } else if (Platform.isLinux) {
+      expect(registrar, isA<LinuxSessionLinkRegistrar>());
+    }
+  });
+
+  group('on Windows', () {
+    final windowsHost = Platform.isWindows ? null : 'Windows only';
+
+    test(
+      'the roaming folder is the one Windows keeps for the user',
+      () {
+        final folder = windowsRoamingAppDataFolder();
+        expect(folder, isNotNull);
+        expect(p.windows.isAbsolute(folder!), isTrue);
+        expect(Directory(folder).existsSync(), isTrue);
+      },
+      skip: windowsHost,
+    );
+
+    test('a scratch APPDATA never takes the registration', () {
+      const scratch = r'C:\Temp\isolated\Roaming';
+      final registrar = platformSessionLinkRegistrar(
+        executable: r'C:\TopiaForge\launcher\topiaforge_launcher.exe',
+        dataRoot: r'C:\Temp\isolated\Roaming\TopiaForgeLauncher',
+        environment: const {'APPDATA': scratch},
+      );
+      expect(registrar, isA<OwnDataRootSessionLinkRegistrar>());
+    }, skip: windowsHost);
+
+    test('a run with a scratch APPDATA or USERPROFILE leaves the registration '
+        'alone', () async {
+      final scratch = await Directory.systemTemp.createTemp(
+        'topiaforge-isolated-',
+      );
+      addTearDown(() => scratch.delete(recursive: true));
+      final probe = File(p.join(scratch.path, 'probe.dart'))
+        ..writeAsStringSync('''
+import 'package:launcher_data/launcher_data.dart';
+
+void main() {
+  final root = resolveTopiaForgeDataRoot();
+  print(windowsRoamingAppDataFolder());
+  print(root);
+  print(platformSessionLinkRegistrar(dataRoot: root).runtimeType);
+}
+''');
+      final packages = File(
+        p.join('.dart_tool', 'package_config.json'),
+      ).absolute.path;
+      final roaming = p.join(scratch.path, 'AppData', 'Roaming');
+      for (final isolated in [
+        {'APPDATA': roaming},
+        {'APPDATA': roaming, 'USERPROFILE': scratch.path},
+      ]) {
+        // Never registers: the probe only asks which registrar it gets.
+        final result = await Process.run(
+          Platform.resolvedExecutable,
+          ['--packages=$packages', probe.path],
+          environment: {...isolated, 'TOPIAFORGE_DATA_ROOT': ''},
+        );
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        final lines = (result.stdout as String).trim().split(RegExp(r'\r?\n'));
+        expect(lines, [
+          windowsRoamingAppDataFolder(),
+          p.join(roaming, 'TopiaForgeLauncher'),
+          'OwnDataRootSessionLinkRegistrar',
+        ], reason: '$isolated');
+      }
+    }, skip: windowsHost);
+  });
+
+  test('macOS leaves the bundle registration to the system', () async {
+    const registrar = BundleSessionLinkRegistrar();
+    for (final result in [
+      await registrar.register(),
+      await registrar.unregister(),
+    ]) {
+      expect(result.registration, SessionLinkRegistration.managedBySystem);
+      expect(result.detail, contains('application bundle'));
+    }
+  });
+
+  test('other platforms report that they cannot register', () async {
+    const registrar = UnsupportedSessionLinkRegistrar();
+    expect(
+      (await registrar.register()).registration,
+      SessionLinkRegistration.unsupported,
+    );
+    expect(
+      (await registrar.unregister()).registration,
+      SessionLinkRegistration.unsupported,
+    );
+  });
+}

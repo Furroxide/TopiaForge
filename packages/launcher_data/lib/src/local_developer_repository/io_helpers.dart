@@ -1,5 +1,16 @@
 part of '../local_developer_repository.dart';
 
+Map<String, Object?> _decodeDeveloperManifest(List<int> bytes) {
+  final text = utf8.decode(bytes);
+  rejectDuplicateJsonProperties(text, label: 'topiaforge.mod.json');
+  return jsonDecode(text) as Map<String, Object?>;
+}
+
+/// Finds [executable] on PATH, as `where` does on Windows and `which` does
+/// elsewhere: its first match, or '' when there is none. The developer tools'
+/// own lookup runs one of those, bounded to five seconds.
+typedef ExecutableLocator = Future<String> Function(String executable);
+
 extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
   Directory? _findProjectRoot(String startPath) {
     var current = FileSystemEntity.isDirectorySync(startPath)
@@ -7,7 +18,13 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
         : File(startPath).absolute.parent;
     while (true) {
       final projectFile = File(p.join(current.path, 'topiaforge.project.json'));
-      _recoverDeveloperAtomicBackupIfMissing(projectFile);
+      try {
+        _recoverDeveloperAtomicBackupIfMissing(projectFile);
+      } on LauncherFileUnreadable catch (error) {
+        // A folder above the project that cannot be listed holds no project
+        // the tools can use; a held backup of one is reported.
+        if (!error.closedFolder) rethrow;
+      }
       if (projectFile.existsSync()) {
         return current;
       }
@@ -146,34 +163,12 @@ namespace $assembly
     final companion = Directory(p.join(root, 'unity-companion'));
     companion.createSync(recursive: true);
 
-    // Copy the authored UGC companion Unity package from the repo template when available (the CLI runs from
-    // the repo). In synthetic environments (e.g. unit tests) the template may be absent; the README + sample
-    // config are still written so the scaffold is self-describing either way.
-    if (_companionTemplateDir.existsSync()) {
-      _copyDirectory(
-        _companionTemplateDir,
-        Directory(
-          p.join(
-            companion.path,
-            'Packages',
-            'io.github.furroxide.topiaforge.ugc-companion',
-          ),
-        ),
-      );
-    }
-
     await File(p.join(companion.path, 'README.md')).writeAsString(
       '# $name Unity Companion\n\n'
-      'Open this folder as a Unity project, or copy `Packages/io.github.furroxide.topiaforge.ugc-companion` into an existing '
-      'Unity project. Use **TopiaForge → UGC Live Sync** to author UGC content and live-sync it into the '
-      'running game with no restart. See docs/UgcLiveSync.md for the full workflow.\n',
-    );
-
-    // A sample of the runtime config the game mod reads (config/topiaforge.ugc.livesync.json). Copy it there and
-    // set the watch folder to share content between the Unity companion and the game.
-    _writeDeveloperTextAtomic(
-      File(p.join(companion.path, 'topiaforge.ugc.livesync.sample.json')),
-      _prettyJson(const UgcLiveSyncSettings().toRuntimeConfig()),
+      'Place a Unity project here to author AssetBundles for this mod. Scaffold one '
+      'with `topiaforge new unity-world <Name> --dir .`, then build its bundles with '
+      '`topiaforge world build`. Scene and robot authoring lives in the official '
+      'Robotopia Creator at https://robotopia.gg/editor/.\n',
     );
   }
 
@@ -327,11 +322,9 @@ ${references.join('\n')}
             label: 'Directory.Build.local.props',
           ),
         );
-        final match = RegExp(
-          r'<RobotopiaManagedDir>\s*([^<]+?)\s*</RobotopiaManagedDir>',
-        ).firstMatch(text);
-        if (match != null && Directory(match.group(1)!).existsSync()) {
-          return Directory(match.group(1)!).absolute.path;
+        final managed = firstElementText(text, 'RobotopiaManagedDir');
+        if (managed != null && Directory(managed).existsSync()) {
+          return Directory(managed).absolute.path;
         }
       } on Object {
         // Source checkouts without local configuration remain safe-only.
@@ -341,6 +334,8 @@ ${references.join('\n')}
   }
 
   Future<String> _which(String executable) async {
+    final locator = _executableLocator;
+    if (locator != null) return locator(executable);
     final command = Platform.isWindows ? 'where' : 'which';
     final result = await runBoundedProcess(
       command,
@@ -370,35 +365,6 @@ ${references.join('\n')}
           configuredVersion: project?.unityCompanion.unityVersion ?? '',
         )?.path ??
         '';
-  }
-
-  // Locates the UGC Automerge sidecar script. Prefers the resolved repo root (correct when the launcher runs
-  // from a packaged location), then walks up from the current directory for parity with the CLI.
-  String? _findSidecar() {
-    final fromRepo = p.join(
-      _repositoryRoot.path,
-      'tools',
-      'ugc-automerge-sidecar',
-      'index.mjs',
-    );
-    if (File(fromRepo).existsSync()) {
-      return fromRepo;
-    }
-
-    var dir = Directory.current.absolute;
-    while (true) {
-      final candidate = File(
-        p.join(dir.path, 'tools', 'ugc-automerge-sidecar', 'index.mjs'),
-      );
-      if (candidate.existsSync()) {
-        return candidate.path;
-      }
-      final parent = dir.parent;
-      if (parent.path == dir.path) {
-        return null;
-      }
-      dir = parent;
-    }
   }
 
   String _assemblyName(String id) => id
@@ -494,3 +460,14 @@ bool _isTopiaForgeRoot(Directory directory) {
       Directory(p.join(directory.path, 'templates')).existsSync() &&
       Directory(p.join(directory.path, 'dist')).existsSync();
 }
+
+// Each CLI build owns its worker lifetime; outer process limits do not bind
+// MSBuild instances started by a nested restore/build command.
+List<String> _boundedDeveloperDotnetArguments(List<String> arguments) => [
+  arguments.first,
+  '--disable-build-servers',
+  '-m:1',
+  '-nr:false',
+  if (arguments.first == 'build') '-p:UseSharedCompilation=false',
+  ...arguments.skip(1),
+];

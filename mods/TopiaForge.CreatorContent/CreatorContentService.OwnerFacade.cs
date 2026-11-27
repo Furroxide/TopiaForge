@@ -66,7 +66,6 @@ namespace TopiaForge.CreatorContent
                 }
                 catch (ObjectDisposedException)
                 {
-                    value.Dispose();
                     return OperationResult<T>.Failure(ModErrorCode.Cancelled, cancelledMessage);
                 }
             }

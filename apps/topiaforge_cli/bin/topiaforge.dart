@@ -1,18 +1,33 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:topiaforge/src/map_world_authoring.dart';
+import 'package:topiaforge/src/map_world_survey.dart';
+import 'package:topiaforge/src/map_gamemode_template.dart';
+import 'package:topiaforge/src/cli_launch_options.dart';
+import 'package:topiaforge/src/cli_launch_workflow.dart';
+import 'package:topiaforge/src/cli_host_options.dart';
+import 'package:topiaforge/src/cli_host_workflow.dart';
+import 'package:topiaforge/src/cli_terminal.dart';
+import 'package:topiaforge/src/cli_join_options.dart';
+import 'package:topiaforge/src/cli_join_workflow.dart';
+import 'package:topiaforge/src/cli_servers.dart';
+import 'package:topiaforge/src/dev_peer_supervisor.dart';
+import 'package:topiaforge/src/multiplayer_acceptance_spec.dart';
+import 'package:topiaforge/src/multiplayer_acceptance_runner.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:topiaforge/src/launcher_update_index_builder.dart';
 import 'package:topiaforge/src/bounded_file_reader.dart';
-import 'package:topiaforge/src/creator_acceptance_models.dart';
-import 'package:topiaforge/src/creator_acceptance_runner.dart';
+import 'package:topiaforge/src/game_build_bump.dart';
 import 'package:topiaforge/src/game_compat_executable_locator.dart';
 import 'package:topiaforge/src/live_acceptance_models.dart';
 import 'package:topiaforge/src/live_acceptance_runner.dart';
+import 'package:topiaforge/src/live_acceptance_isolation_verifier.dart';
 import 'package:topiaforge/src/mod_registry_index_builder.dart';
 import 'package:topiaforge/src/release_package_builder.dart';
 import 'package:topiaforge/src/release_package_models.dart';
@@ -24,15 +39,23 @@ import 'package:topiaforge/src/release_handoff.dart';
 import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
 import 'package:topiaforge/src/release_readiness.dart';
+import 'package:topiaforge/src/release_prerequisites.dart';
+import 'package:topiaforge/src/release_candidate_qualification.dart';
 import 'package:topiaforge/src/release_update_metadata.dart';
-import 'package:topiaforge/src/ugc_live_sync_transitions.dart';
 
 part 'topiaforge_check_commands.dart';
+part 'topiaforge_compat_commands.dart';
 part 'topiaforge_acceptance_commands.dart';
 part 'topiaforge_dev_commands.dart';
+part 'topiaforge_dev_stages.dart';
+part 'topiaforge_dev_peers.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
 part 'topiaforge_launcher_commands.dart';
+part 'topiaforge_launch_commands.dart';
+part 'topiaforge_multiplayer_commands.dart';
+part 'topiaforge_join_commands.dart';
+part 'topiaforge_multiplayer_acceptance_commands.dart';
 part 'topiaforge_mod_commands.dart';
 part 'topiaforge_manifest_migration_commands.dart';
 part 'topiaforge_mod_module_commands.dart';
@@ -41,18 +64,18 @@ part 'topiaforge_package_validation.dart';
 part 'topiaforge_scaffold_validation.dart';
 part 'topiaforge_registry_commands.dart';
 part 'topiaforge_release_commands.dart';
+part 'topiaforge_release_readiness_commands.dart';
 part 'topiaforge_update_commands.dart';
-part 'topiaforge_ugc_sidecar.dart';
-part 'topiaforge_ugc_dev_commands.dart';
-part 'topiaforge_ugc_unity_commands.dart';
 part 'topiaforge_ui_bundle_commands.dart';
 part 'topiaforge_unity_commands.dart';
 part 'topiaforge_world_commands.dart';
+part 'topiaforge_map_source_commands.dart';
+part 'topiaforge_map_commands.dart';
+part 'topiaforge_map_survey_commands.dart';
 
 Future<void> main(List<String> args) async {
-  final cli = _TopiaForgeCli(LocalDeveloperRepository());
   try {
-    final code = await cli.run(args);
+    final code = await runCli(args);
     exitCode = code;
   } on UsageError catch (error) {
     stderr.writeln(error.message);
@@ -64,6 +87,13 @@ Future<void> main(List<String> args) async {
     exitCode = 1;
   }
 }
+
+/// Runs a command with an optional repository supplied by an embedding host.
+Future<int> runCli(
+  List<String> args, {
+  LocalDeveloperRepository? developerRepository,
+}) =>
+    _TopiaForgeCli(developerRepository ?? LocalDeveloperRepository()).run(args);
 
 /// A wrong-invocation error: printed as plain usage text (no "Bad state:"
 /// noise) and distinguished from operation failures via exit code 2.
@@ -77,7 +107,9 @@ class UsageError implements Exception {
 }
 
 class _TopiaForgeCli {
-  _TopiaForgeCli(this.developerRepository);
+  _TopiaForgeCli(this.developerRepository, {this.acceptanceIsolation});
+
+  final AcceptanceIsolationContext? acceptanceIsolation;
 
   final LocalDeveloperRepository developerRepository;
 
@@ -104,11 +136,13 @@ class _TopiaForgeCli {
       'install' => _install(rest),
       'launch' => _launch(rest, restart: false),
       'restart' => _launch(rest, restart: true),
+      'servers' => _servers(rest),
+      'host' => _host(rest),
+      'join' => _join(rest),
       'dev-install' => _devInstall(rest),
       'doctor' => _doctor(rest),
       'compat' => _compat(rest),
       'setup' => _setup(rest),
-      'ugc' => _ugc(rest),
       'world' => _world(rest),
       'projects' => _projects(rest),
       'unity' => _unity(rest),
@@ -193,15 +227,21 @@ class _TopiaForgeCli {
     }
     if (args.first == 'templates') {
       final templates = await developerRepository.listModTemplates();
+      // Pad to the longest id so every label, unity-world's included, starts in one column.
+      var idWidth = 10;
+      for (final template in templates) {
+        if (template.id.length > idWidth) idWidth = template.id.length;
+      }
       for (final template in templates) {
         final label = template.label.isEmpty ? template.id : template.label;
         stdout.writeln(
-          'mod --template ${template.id.padRight(10)} $label'
+          'mod --template ${template.id.padRight(idWidth)} $label'
           '${template.description.isEmpty ? '' : ' — ${template.description}'}',
         );
       }
       stdout.writeln(
-        'unity-world${' ' * 15} Unity 6 UGC authoring project with the companion package preinstalled',
+        '${'unity-world'.padRight('mod --template '.length + idWidth)} '
+        'Unity 6 custom-world authoring project',
       );
       return 0;
     }
@@ -223,9 +263,12 @@ class _TopiaForgeCli {
       restore: restore,
       includePrerelease: args.contains('--prerelease'),
     );
+    // Only a restore that reported nothing blocking has current SDK packages:
+    // one whose lock files disagree with the pin reports why instead.
+    final current = restore && !workspace.hasBlockingIssues;
     stdout.writeln(
       '${restore ? 'Restored' : 'Resolved'} ${workspace.lock?.packages.length ?? 0} mod package(s).'
-      '${restore ? ' SDK NuGet packages and lock files are current.' : ''}',
+      '${current ? ' SDK NuGet packages and lock files are current.' : ''}',
     );
     _printIssues(workspace.issues);
     return workspace.hasBlockingIssues ? 1 : 0;
@@ -277,6 +320,7 @@ class _TopiaForgeCli {
     String outputDir = '',
     String configuration = 'Release',
     bool includeDevMods = false,
+    CancellationToken? cancellation,
   }) async {
     final repoRoot = _findRepoRoot();
     if (repoRoot == null) {
@@ -305,6 +349,7 @@ class _TopiaForgeCli {
     }
     final packed = <String>[];
     for (final dir in projectDirs) {
+      cancellation?.throwIfCancelled();
       final manifest = readBoundedJsonObjectSync(
         File(p.join(dir, 'topiaforge.mod.json')),
         maxBytes: CliFileLimits.manifest,
@@ -366,6 +411,8 @@ class _TopiaForgeCli {
         provided ??
         await developerRepository.packProject(Directory.current.path);
     final launcher = LocalLauncherRepository(
+      acceptanceIsolation: acceptanceIsolation,
+      dataRoot: acceptanceIsolation?.launcherRoot,
       knownGamePath: _option(args, '--game-dir'),
     );
     final install = await launcher.detectKnownInstall();
@@ -375,27 +422,6 @@ class _TopiaForgeCli {
     await launcher.installPackage(packagePath, install);
     stdout.writeln('Installed $packagePath');
     return 0;
-  }
-
-  Future<int> _launch(List<String> args, {required bool restart}) async {
-    final requestedGamePath = _option(args, '--game-dir');
-    final launcher = LocalLauncherRepository(knownGamePath: requestedGamePath);
-    final snapshot = await launcher.loadSnapshot();
-    final install = requestedGamePath == null
-        ? snapshot.gameInstall
-        : await launcher.detectKnownInstall();
-    if (install == null) {
-      throw StateError(_noInstallRemedy);
-    }
-    final profile = snapshot.profiles.firstWhere(
-      (item) => item.id == snapshot.selectedProfileId,
-      orElse: () => snapshot.profiles.first,
-    );
-    final result = restart
-        ? await launcher.restart(install, profile)
-        : await launcher.launch(install, profile);
-    stdout.writeln(result.message);
-    return result.started ? 0 : 1;
   }
 
   int _unknown(String command) {

@@ -5,17 +5,69 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 
 namespace TopiaForge.ModManager.Tests
 {
     internal static class FirstPartyManifestTests
     {
-        private const string GameRange = "0.0.2309";
-        private const string LoaderRange = ">=1.0.0-rc.1 <2.0.0";
-        private const string SdkRange = ">=1.0.0-rc.1 <2.0.0";
+        // Robotopia compatibility is declared per mod, by whether the mod actually resolves GameCode symbols.
+        // A mod with declared native bindings may claim only the build its bindings were verified against; a mod
+        // that rides the SDK alone gets a bounded range so an ordinary game update does not brick it. Published
+        // builds do not step by a fixed amount, so the ceiling is reviewed at every bump rather than derived, and
+        // it admits nothing beyond that review.
+        private const string BoundGameRange = "0.0.2640";
+        private const string SdkOnlyGameRange = ">=0.0.2640 <0.0.2700";
+        private const string InstalledGameVersion = "0.0.2640";
+
+        // Exactly the mods carrying a bindings/<id>.gamebindings.json manifest.
+        private static readonly HashSet<string> GameBoundModIds = new(StringComparer.Ordinal)
+        {
+            "io.github.furroxide.topiaforge.chronos",
+            "io.github.furroxide.topiaforge.creatorcontent",
+            "io.github.furroxide.topiaforge.no-feedback-url",
+            "io.github.furroxide.topiaforge.perffixes",
+            "io.github.furroxide.topiaforge.performance",
+            "io.github.furroxide.topiaforge.prompts",
+            "io.github.furroxide.topiaforge.robotkit",
+            "io.github.furroxide.topiaforge.worlds",
+        };
+        private const string LoaderRange = ">=0.2.0 <0.3.0";
+        private const string SdkRange = ">=0.2.0 <0.3.0";
+
+        // The network class WS4 of the live-multiplayer plan gives each first-party mod. Four change only the game of the
+        // player who enables them: behaviour-identical engine fixes, performance and quality levers (whose physics knobs
+        // set only a host's own fidelity), the shutdown feedback page, and a developer catalog of widgets. Every other mod
+        // is shared by every peer. The plan's CreatorCloud has no mod of its own here.
+        private static readonly Dictionary<string, ModNetworkClass> Ws4NetworkClasses = new(StringComparer.Ordinal)
+        {
+            ["io.github.furroxide.topiaforge.chronos"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.creatorcontent"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.gravitygun"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.multiplayer"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.no-feedback-url"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.opposite-day"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.perffixes"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.performance"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.prompts"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.robotkit"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.sandbox"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.uigallery"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.worlds"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.zombies"] = ModNetworkClass.Shared,
+        };
+
+        // The mods WS4 leaves unchanged, which stay shared by declaring nothing.
+        private static readonly HashSet<string> Ws4Unchanged = new(StringComparer.Ordinal)
+        {
+            "io.github.furroxide.topiaforge.gravitygun",
+            "io.github.furroxide.topiaforge.opposite-day",
+            "io.github.furroxide.topiaforge.prompts",
+        };
 
         internal static void Run()
         {
+            ReleaseVersionTests.Run();
             var repoRoot = FindRepoRoot();
             var manifestPaths = Directory.GetFiles(
                     Path.Combine(repoRoot, "mods"),
@@ -23,7 +75,7 @@ namespace TopiaForge.ModManager.Tests
                     SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToList();
-            Assert(manifestPaths.Count == 16, "exactly 16 first-party manifests should be release-audited");
+            Assert(manifestPaths.Count == 14, "exactly 14 first-party manifests should be release-audited");
 
             var manifests = new Dictionary<string, ModManifest>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in manifestPaths)
@@ -37,23 +89,34 @@ namespace TopiaForge.ModManager.Tests
                 Assert(manifest.EntryAssembly.StartsWith("TopiaForge.", StringComparison.Ordinal)
                     && manifest.EntryType.StartsWith("TopiaForge.", StringComparison.Ordinal),
                     manifest.Id + " must expose only TopiaForge assembly and type identities");
-                Assert(manifest.SupportedGameVersionRange == GameRange,
-                    manifest.Id + " must pin the audited Robotopia build 2309");
+                var isGameBound = GameBoundModIds.Contains(manifest.Id);
+                var bindingsPath = Path.Combine(repoRoot, "bindings", manifest.Id + ".gamebindings.json");
+                Assert(File.Exists(bindingsPath) == isGameBound,
+                    manifest.Id + " must be classified by whether it actually declares native game bindings");
+                Assert(manifest.SupportedGameVersionRange == (isGameBound ? BoundGameRange : SdkOnlyGameRange),
+                    isGameBound
+                        ? manifest.Id + " declares native bindings, so it must pin the audited Robotopia build"
+                        : manifest.Id + " rides the SDK alone, so it must declare the bounded game range");
                 Assert(manifest.SupportedLoaderVersionRange == LoaderRange,
-                    manifest.Id + " must declare the compatible V1 loader line");
+                    manifest.Id + " must declare the compatible 0.2 loader line");
                 Assert(manifest.SupportedSdkVersionRange == SdkRange,
-                    manifest.Id + " must declare the compatible V1 SDK line");
-                Assert(manifest.License == "MIT",
+                    manifest.Id + " must declare the compatible 0.2 SDK line");
+                Assert(manifest.License == "AGPL-3.0-or-later",
                     manifest.Id + " must use the approved project license");
-                Assert(manifest.LicenseFiles.SequenceEqual(new[] { "LICENSE" }),
-                    manifest.Id + " must include the approved project license in its package");
+                // A mod that vendors third-party source ships that source's notices beside the project license.
+                var expectedLicenseFiles = File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "THIRD_PARTY_NOTICES.md"))
+                    ? new[] { "LICENSE", "THIRD_PARTY_NOTICES.md" }
+                    : new[] { "LICENSE" };
+                Assert(manifest.LicenseFiles.SequenceEqual(expectedLicenseFiles),
+                    manifest.Id + " must include the approved project license in its package, and its third-party " +
+                    "notices when it carries them");
                 AssertDeclaredLicenseFilesResolve(repoRoot, path, manifest);
                 Assert(!manifest.Capabilities.Contains("ai", StringComparer.OrdinalIgnoreCase),
                     manifest.Id + " must use descriptive capabilities instead of the ambiguous ai alias");
 
                 var errors = ManifestValidator.Validate(
                     manifest,
-                    new ManifestValidationContext("0.0.2309", requireKnownGameVersion: true));
+                    new ManifestValidationContext(InstalledGameVersion, requireKnownGameVersion: true));
                 Assert(errors.Count == 0, manifest.Id + " failed strict compatibility validation: " + string.Join("; ", errors));
 
                 var projectPath = Directory.GetFiles(Path.GetDirectoryName(path)!, "*.csproj").Single();
@@ -75,6 +138,11 @@ namespace TopiaForge.ModManager.Tests
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.robotkit"],
                 "network", "remote-ai", "player-token", "microphone", "speech-to-text");
+            // Development opt-in controls activation, not the capabilities a package can exercise. Live sessions
+            // open sockets and can reveal peer addresses; the voice path consumes the runtime's microphone capture.
+            AssertCapabilities(
+                manifests["io.github.furroxide.topiaforge.multiplayer"],
+                "network", "peer-network", "microphone");
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.opposite-day"],
                 "prompt-overrides", "remote-ai");
@@ -100,24 +168,52 @@ namespace TopiaForge.ModManager.Tests
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.sandbox"],
                 "network", "remote-ai", "player-token", "player-control");
-            AssertCapabilities(
-                manifests["io.github.furroxide.topiaforge.creatortools"],
-                "network", "remote-ai", "player-token", "player-control", "physics");
-            AssertLacksCapabilities(
-                manifests["io.github.furroxide.topiaforge.creatortools"],
-                "microphone", "speech-to-text");
             Assert(manifests["io.github.furroxide.topiaforge.creatorcontent"].Category == "Framework",
                 "Creator Content must ship as a normal framework dependency");
-            Assert(manifests["io.github.furroxide.topiaforge.creatortools"].Category == "DevTool",
-                "Creator Tools must remain an explicitly packaged DevTool");
-            Assert(manifests["io.github.furroxide.topiaforge.creatortools"].Dependencies.ContainsKey(
-                    "io.github.furroxide.topiaforge.creatorcontent"),
-                "Creator Tools must require the Creator Content framework");
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.zombies"],
                 "navigation", "scene-management", "network", "remote-ai", "player-token", "microphone", "speech-to-text");
             AssertAdvancedInterop(manifests, manifestPaths);
+            AssertWs4NetworkClasses(manifests);
             Console.WriteLine("FirstPartyManifestTests passed.");
+        }
+
+        /// <summary>
+        /// Holds every first-party manifest to the network class WS4 gives it. A client-local mod declares the mode and
+        /// nothing else, as WS4 writes it; a mod WS4 leaves unchanged declares no block, so every peer shares it
+        /// implicitly. No shared mod may depend on a client-local one, which a peer without it could not load.
+        /// </summary>
+        private static void AssertWs4NetworkClasses(IReadOnlyDictionary<string, ModManifest> manifests)
+        {
+            Assert(manifests.Keys.OrderBy(id => id, StringComparer.Ordinal)
+                    .SequenceEqual(Ws4NetworkClasses.Keys.OrderBy(id => id, StringComparer.Ordinal)),
+                "every first-party mod has the network class WS4 gives it, and no other mod is listed");
+            foreach (var (id, expected) in Ws4NetworkClasses)
+            {
+                var manifest = manifests[id];
+                var actual = ModNetworkClasses.Classify(manifest);
+                Assert(actual == expected, id + " is " + expected + " as WS4 gives it, not " + actual);
+                var multiplayer = manifest.Multiplayer;
+                if (expected == ModNetworkClass.ClientLocal)
+                {
+                    Assert(multiplayer != null && multiplayer.Mode == ModMultiplayerMetadata.ClientLocalMode &&
+                           multiplayer.Presence.Length == 0 && multiplayer.Protocol == null && multiplayer.SynchronizedFiles.Count == 0,
+                        id + " declares client-local and nothing else");
+                }
+
+                if (Ws4Unchanged.Contains(id))
+                {
+                    Assert(multiplayer == null && manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.ImplicitShared,
+                        id + " is unchanged by WS4, so it declares no multiplayer block and every peer shares it implicitly");
+                }
+
+                if (expected != ModNetworkClass.Shared) continue;
+                foreach (var dependency in manifest.Dependencies.Keys.Concat(manifest.OptionalDependencies.Keys))
+                {
+                    Assert(!Ws4NetworkClasses.TryGetValue(dependency, out var dependencyClass) || dependencyClass == ModNetworkClass.Shared,
+                        id + " is shared, so it cannot depend on the client-local " + dependency);
+                }
+            }
         }
 
         private static void AssertAdvancedInterop(
@@ -280,12 +376,11 @@ namespace TopiaForge.ModManager.Tests
                 || manifest.Id == "io.github.furroxide.topiaforge.sandbox"
                 || manifest.Id == "io.github.furroxide.topiaforge.zombies"
                 || manifest.Id == "io.github.furroxide.topiaforge.opposite-day"
-                || manifest.Id == "io.github.furroxide.topiaforge.creatortools"
                 || manifest.Id == "io.github.furroxide.topiaforge.uigallery")
             {
                 // Linked sources ship inside the safe consumer's own assembly, so they must clear the same
-                // bar as code that physically lives in the mod directory. mods/Shared/CreatorTools (23 files)
-                // is compiled into both CreatorTools and Sandbox and was previously scanned by neither.
+                // bar as code that physically lives in the mod directory. The creator workbench
+                // (mods/TopiaForge.Sandbox/CreatorTools) is scanned with the rest of Sandbox.
                 ValidateSafeConsumerSource(
                     manifest,
                     project,
@@ -418,8 +513,8 @@ namespace TopiaForge.ModManager.Tests
             var templates = Directory.GetDirectories(templatesRoot)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToArray();
-            Assert(templates.Length == 7,
-                "V1 must ship exactly seven canonical mod templates");
+            Assert(templates.Length == 8,
+                "V1 must ship exactly eight canonical mod templates");
 
             foreach (var template in templates)
             {
@@ -464,6 +559,20 @@ namespace TopiaForge.ModManager.Tests
                 Assert(source.Contains("TopiaForgeMod", StringComparison.Ordinal)
                     && source.Contains("protected override void OnLoad()", StringComparison.Ordinal),
                     id + " template must demonstrate the V1 authoring base class");
+                if (id == "multiplayer")
+                {
+                    // Every command states the rate and payload it needs, so TFMP014 has nothing to report.
+                    var commands = Regex.Matches(
+                        source,
+                        @"\[MultiplayerCommand\((?<settings>[^\]]*)\)\]",
+                        RegexOptions.CultureInvariant);
+                    var everyCommandIsLimited = commands.Count > 0 && commands.All(command =>
+                        command.Groups["settings"].Value.Contains("MaximumPerSecond", StringComparison.Ordinal)
+                        && command.Groups["settings"].Value.Contains("MaximumPayloadBytes", StringComparison.Ordinal));
+                    Assert(everyCommandIsLimited
+                        && projectText.Contains("TopiaForge.Mods.Multiplayer.Generators", StringComparison.Ordinal),
+                        "multiplayer template must generate its contract and give every command explicit limits");
+                }
                 Assert(!Regex.IsMatch(
                         source,
                         @"InputBinding\.(?:Key|GamepadButton)\s*\(\s*\""F(?:8|10)\""",

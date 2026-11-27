@@ -1,0 +1,32 @@
+{
+  "id": "a-participant-that-throws-ends-the-session",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A participant that throws ends the session as an external failure naming the participant, and the server controller is disposed.",
+  "scenario": {
+    "role": "single-player",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "throws",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "external",
+          "message": "The gamemode's participant controller failed to start: The tool bar exploded."
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "server.stop"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

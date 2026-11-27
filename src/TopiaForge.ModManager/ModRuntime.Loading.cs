@@ -11,7 +11,7 @@ namespace TopiaForge.ModManager
 {
     public sealed partial class ModRuntime
     {
-        private void Load(ModPackage package, IReadOnlyCollection<ModManifest> availableManifests)
+        private void Load(ModPackage package, IReadOnlyCollection<ModManifest> availableManifests, RuntimePackageBindingAttempt? bindingAttempt = null)
         {
             if (!package.IsValid)
             {
@@ -23,6 +23,14 @@ namespace TopiaForge.ModManager
             }
 
             var manifest = package.Manifest!;
+
+            var loaderError = ManifestValidator.LoaderCompatibilityError(manifest.SupportedLoaderVersionRange, validationContext.LoaderVersion);
+            if (loaderError != null)
+            {
+                failedMods[manifest.Id] = loaderError;
+                logger.Warn("Skipping " + manifest.Id + ": " + loaderError);
+                return;
+            }
 
             var compatibility = ManifestRuntimeCompatibility.Evaluate(manifest, validationContext);
             if (!compatibility.IsCompatible)
@@ -55,6 +63,7 @@ namespace TopiaForge.ModManager
             var onLoadStarted = false;
             var loadObserverStarted = false;
             var loadObserverCompleted = false;
+            var recorded = false;
             try
             {
                 var assemblyPath = Path.Combine(package.PackagePath, manifest.EntryAssembly);
@@ -78,9 +87,19 @@ namespace TopiaForge.ModManager
                 }
 
                 loadingOwnerId = manifest.Id;
-                var assembly = Assembly.LoadFrom(assemblyPath);
-                RegisterAssemblyOwner(assembly, manifest.Id);
-                var type = assembly.GetType(manifest.EntryType, throwOnError: false);
+                Type? type;
+                if (bindingAttempt == null)
+                {
+                    var assembly = Assembly.LoadFrom(assemblyPath);
+                    RegisterAssemblyOwner(assembly, manifest.Id);
+                    type = assembly.GetType(manifest.EntryType, throwOnError: false);
+                }
+                else
+                {
+                    // The explicit declaration composition verifies actual entry ownership too, before
+                    // package callbacks execute. Unconfigured V5 loading retains its existing behavior.
+                    type = verifiedDeclarationLoader!.LoadType(package, new ModImplementationBinding { Type = manifest.EntryType });
+                }
                 if (type == null)
                 {
                     failedMods[manifest.Id] = "entry type not found: " + manifest.EntryType;
@@ -110,76 +129,45 @@ namespace TopiaForge.ModManager
                     serviceRegistry,
                     runtimeInfo,
                     coreGameplayServices,
-                    availableManifests);
+                    availableManifests,
+                    Replication);
+                if (activeSessions != null) context.ConfigureSessions(activeSessions);
                 loadObserverStarted = true;
                 loadObserver?.OnLoading(manifest.Id);
                 onLoadStarted = true;
                 instance.OnLoad(context);
                 loadObserverCompleted = true;
                 loadObserver?.OnLoadCompleted(manifest.Id, succeeded: true);
+                var bindingBatch = bindingAttempt == null ? null : declarationBinder!.Bind(package);
                 // Log before committing to loadedMods. Even a custom/failing log sink must leave this path in
                 // the partial-load catch, where OnUnload and owner cleanup run, rather than stranding a ghost.
                 logger.Info("Loaded mod " + manifest.Id + " " + manifest.Version + ".");
                 loadedMods.Add(new LoadedMod(manifest, instance, context));
                 loadedModIds.Add(manifest.Id);
+                recorded = true;
+                multiplayer.Host.Inventory.Add(manifest, package.PackagePath);
                 runtimeInfo.MarkProviderLoaded(manifest);
                 RefreshRuntimeCapabilities();
+                if (bindingAttempt != null && !sessionBindings!.CommitLoaded(bindingAttempt, context, bindingBatch!))
+                    throw new InvalidOperationException("The package binding attempt was revoked before load completed.");
             }
             catch (Exception ex)
             {
+                if (recorded)
+                {
+                    loadedMods.RemoveAll(loaded => ReferenceEquals(loaded.Context, context));
+                    loadedModIds.Remove(manifest.Id);
+                    multiplayer.Host.Inventory.Remove(manifest.Id);
+                }
                 var rootException = UnwrapInvocationException(ex);
                 failedMods[manifest.Id] = rootException.GetType().Name + ": " + rootException.Message;
                 runtimeInfo.MarkProviderFailed(manifest, failedMods[manifest.Id]);
-                Exception? unloadFailure = null;
-                if (loadObserverStarted && !loadObserverCompleted)
-                {
-                    loadObserverCompleted = true;
-                    try
-                    {
-                        loadObserver?.OnLoadCompleted(manifest.Id, succeeded: false);
-                    }
-                    catch (Exception observerException)
-                    {
-                        unloadFailure = observerException;
-                    }
-                }
+                BeginFailedLoadCleanup(manifest.Id, context, instance, onLoadStarted,
+                    loadObserverStarted && !loadObserverCompleted);
+                // Failed diagnostics must not prevent an independent package from loading.
+                try { logger.Error(ex, "Failed to load mod " + manifest.Id + "."); }
+                catch { }
 
-                if (onLoadStarted && instance != null)
-                {
-                    try
-                    {
-                        // Assemblies cannot unload under Mono, so give a partially initialized mod the same
-                        // best-effort chance to detach static/Unity callbacks and destroy objects as a normal unload.
-                        instance.OnUnload();
-                    }
-                    catch (Exception unloadException)
-                    {
-                        unloadFailure = CombineCleanupFailures(unloadFailure, unloadException);
-                    }
-                }
-
-                if (context != null)
-                {
-                    try
-                    {
-                        context.DisposeLifetime();
-                    }
-                    catch (Exception lifetimeException)
-                    {
-                        unloadFailure = CombineCleanupFailures(unloadFailure, lifetimeException);
-                    }
-                }
-
-                // OnLoad may have published services or acquired a scene claim before throwing. A failed mod
-                // is not added to loadedMods, so UnloadAll would never otherwise clean those partial effects.
-                CleanupOwnedFrameworkServices(manifest.Id);
-                serviceRegistry.UnregisterOwner(manifest.Id);
-                // Diagnostics are deliberately last: cleanup is mandatory even if every log sink is broken.
-                logger.Error(ex, "Failed to load mod " + manifest.Id + ".");
-                if (unloadFailure != null)
-                {
-                    logger.Error(unloadFailure, "Failed to clean up partially loaded mod " + manifest.Id + ".");
-                }
             }
             finally
             {

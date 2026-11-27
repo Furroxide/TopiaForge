@@ -42,7 +42,7 @@ namespace TopiaForge.ModManager
 
             public void OnLoad(IModContext context)
             {
-                mod.Load(context);
+                mod.Load(context, attached => GeneratedMultiplayerBinder.Bind(mod, attached));
             }
 
             public void OnUnload()

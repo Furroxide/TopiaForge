@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using TopiaForge.Zombies;
@@ -7,6 +8,37 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class ZombiesControllerTests
     {
+        private static void WaveClearAnnouncesOncePerTransition()
+        {
+            var config = FastConfig();
+            config.ShopEnabled = true;
+            using var harness = new Harness(config);
+            harness.Advance(0.01f);
+            harness.Controller.TestingSetWavePhase();
+            harness.Advance(0.01f);
+            var ui = harness.Context.Ui;
+            var first = ui.ActiveStinger;
+            Assert(first?.Request is
+            { Title: "WAVE CLEAR", Subtitle: "Requisitions open", Glyph: UiGlyph.Check, Role: UiPaintRole.Success, DurationSeconds: 2.5 } &&
+                ui.Stingers.Count == 1 && FindSurface(harness.Context, "zombies-status")
+                    .TryFindNode(ZombiesHudPresenter.PhaseNodeId, out var phase) && phase is UiText { Text: "REQUISITIONS OPEN" },
+                "the wave clear transition announces its Success role once and leaves the available action in the HUD");
+
+            harness.Advance(1f);
+            Assert(ReferenceEquals(ui.ActiveStinger, first) && ui.Stingers.Count == 1,
+                "the inter-wave HUD does not publish or restart the same announcement on subsequent frames");
+            harness.Advance(2.1f);
+            Assert(ui.ActiveStinger == null && ui.Stingers.Count == 1,
+                "the wave clear announcement expires while requisitions remain available");
+
+            harness.Controller.TestingSetWavePhase();
+            harness.Advance(0.01f);
+            Assert(ui.Stingers.Count == 2 && ui.ActiveStinger is { Request.Title: "WAVE CLEAR" },
+                "a later wave clear can announce again after the first expires");
+            harness.Dispose();
+            Assert(ui.ActiveStinger == null, "ending the scoped Zombies controller clears an active wave announcement");
+        }
+
         // Keep deterministic uplink behavior testable even when optional live conversation services are enabled.
         private static void DisabledShopSkipsCreditsAndRequisitionFeedback()
         {
@@ -25,9 +57,15 @@ namespace TopiaForge.ModManager.Tests
             Assert(harness.Controller.TestingScore == 100
                 && harness.Controller.TestingCredits == 0
                 && harness.Controller.TestingPhase == ZombiesPhase.InterWave
-                && hud.Body.IndexOf("CREDITS", StringComparison.Ordinal) < 0
-                && string.Equals(LastToast(harness.Context), "Wave clear.", StringComparison.Ordinal),
-                "disabling requisitions should remove its economy, HUD line, and wave-clear prompt without affecting score");
+                && hud.TryFindNode(ZombiesHudPresenter.IntegrityNodeId, out _)
+                && !hud.TryFindNode(ZombiesHudPresenter.CreditsNodeId, out _)
+                && !hud.TryFindNode(ZombiesHudPresenter.RequisitionsSlotId, out _)
+                && !hud.TryFindNode(ZombiesHudPresenter.JackInSlotId, out _)
+                && !hud.TryFindNode(ZombiesHudPresenter.StandDownSlotId, out _)
+                && hud.TryFindNode(ZombiesHudPresenter.PhaseNodeId, out var phase) && phase is UiText { Text: "INTERMISSION" }
+                && harness.Context.Ui.ActiveStinger?.Request is
+                { Title: "WAVE CLEAR", Subtitle: "", Role: UiPaintRole.Success },
+                "disabling requisitions removes its economy, HUD line, and wave-clear prompt while preserving score");
         }
 
         private static void UplinkFailuresExplainWithoutSpendingCharge()
@@ -100,6 +138,16 @@ namespace TopiaForge.ModManager.Tests
             var spent = harness.Controller.TestingUplinkCharges;
             Assert(spent < config.OverrideCharges, "a successful broadcast spends charge");
 
+            var hud = FindSurface(harness.Context, "zombies-status");
+            harness.Advance(0f);
+            AssertUplink(spent, 0);
+            harness.Advance(2.125f);
+            AssertUplink(spent, 53);
+            var partialTree = hud.Content;
+            harness.Advance(.004f);
+            Assert(ReferenceEquals(partialTree, hud.Content),
+                "World time inside one displayed refill percentage must not replace the HUD tree");
+
             // A stand-down freezes the world. On the control clock the cooldown and charge regeneration kept
             // running through the freeze the player had just created, so broadcasts could be chained forever.
             var frozen = harness.Chronos!.Freeze("test-freeze");
@@ -107,11 +155,34 @@ namespace TopiaForge.ModManager.Tests
             harness.Advance(config.OverrideChargeRegenSeconds * 3f);
             Assert(harness.Controller.TestingUplinkCharges == spent,
                 "uplink charge must not regenerate while the world is frozen");
+            Assert(ReferenceEquals(partialTree, hud.Content),
+                "The displayed uplink refill must stay at 53% while the world clock is frozen");
+            AssertUplink(spent, 53);
 
             frozen.Value!.Dispose();
-            harness.Advance(config.OverrideChargeRegenSeconds + 0.05f);
-            Assert(harness.Controller.TestingUplinkCharges > spent,
-                "uplink charge regenerates once the world is running again");
+            harness.Advance(1.875f);
+            AssertUplink(spent + 1, 0);
+            harness.Advance(config.OverrideChargeRegenSeconds);
+            AssertUplink(config.OverrideCharges, 0);
+
+            void AssertUplink(int available, int percentage)
+            {
+                Assert(harness.Controller.TestingUplinkCharges == available &&
+                    hud.TryFindNode(ZombiesHudPresenter.UplinkNodeId, out var status) &&
+                    status is UiPips { Refill: null } pips && pips.Filled == available &&
+                    pips.Total == config.OverrideCharges && (int)(pips.Fraction * 100f) == percentage,
+                    "The Uplink pips show the authoritative world-time fraction and complete only at ledger expiry");
+                Assert(hud.TryFindNode(ZombiesHudPresenter.JackInSlotId, out var jack) &&
+                    jack is UiActionSlot { ActionName: "jack-in", Charges: { Refill: null } charges } &&
+                    charges.Available == available && charges.Maximum == config.OverrideCharges,
+                    "JACK IN shows the same real charge count without inventing a UI clock deadline");
+                var reading = hud.Capture(new UiCaptureViewport(1920, 1080)).Nodes.Single(node =>
+                    node.Id == ZombiesHudPresenter.UplinkNodeId);
+                var label = "Uplink: " + available + " / " + config.OverrideCharges +
+                    (percentage == 0 ? string.Empty : " (" + percentage + "% refilling)");
+                Assert(reading.IsRendered && reading.SemanticLabel == label,
+                    "The captured Uplink label reports the exact displayed percentage");
+            }
         }
 
         private static void AllyCrossfireIsNotReportedAsPlayerFire()

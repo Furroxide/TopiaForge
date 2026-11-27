@@ -1,10 +1,35 @@
 library;
 
+export 'src/map_world_document.dart';
+
 export 'src/dependency_planner.dart';
 export 'src/developer_project_resolver.dart';
 export 'src/models.dart';
 export 'src/multiplayer_admission.dart';
+export 'src/reachability_probe.dart';
+export 'src/reachability_probe_policy.dart';
 export 'src/repositories.dart';
-export 'src/ugc_node_version_policy.dart';
 export 'src/unity_vpm_resolver.dart';
 export 'src/versioning.dart';
+export 'src/launch_resolution.dart';
+export 'src/manifest_migration.dart';
+export 'src/manifest_feature_requirements.dart';
+export 'src/json_value_preservation.dart';
+export 'src/json_duplicate_properties.dart';
+export 'src/multiplayer.dart';
+export 'src/multiplayer_gateway.dart';
+export 'src/multiplayer_join_gateway.dart';
+export 'src/multiplayer_hosting_gateway.dart';
+export 'src/hosting_receipt.dart';
+export 'src/host_activity_text.dart';
+export 'src/session_link_handling.dart';
+export 'src/cancellation.dart';
+export 'src/join_host_packages.dart';
+export 'src/network_text.dart';
+export 'src/authored_map.dart';
+export 'src/map_anchors.dart';
+export 'src/published_map_sources.dart';
+
+export 'src/join_activity.dart';
+export 'src/join_texts.dart';
+export 'src/join_consent_text.dart';

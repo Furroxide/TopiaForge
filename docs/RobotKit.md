@@ -1,9 +1,11 @@
 ---
 title: RobotKit
-description: Build Robotopia robot, objective, dialogue, voice, and story features through safe V1 contracts.
+description: Build Robotopia robot, objective, dialogue, voice, and story features through safe SDK contracts.
 ---
 
 # RobotKit
+
+For separately spawned, scope-owned powered-down bodies, see [Persistent cosmetic bodies](PersistentBodies.md).
 
 RobotKit is the optional V1 module for working with Robotopia's robots through typed entities,
 movement, damage and death, targets, objectives, interaction, dialogue, voice input, and structured
@@ -32,18 +34,35 @@ integration.
 | `IRobotConversationService` | Run bounded multi-turn dialogue with closed-set decisions. |
 | `IPlayerDialogueInputService` | Typed text helpers and optional push-to-talk capture/transcription. |
 | `IRobotBrainQueryService` | Asynchronous structured queries with typed output fields and stable failures. |
-| `IRobotSceneEditorService` | Optional discovery and exclusive temporary edit leases for approved native and RobotKit-managed robots. |
+| `IRobotSceneEditorService` | Optional discovery and exclusive temporary edit leases for eligible native scene robots, plus personality previews for resolved RobotKit robots. |
 | `IRobotEditTarget` / `IRobotEditLease` | Opaque scene target plus snapshot-backed transform, brain-mode, and autonomous-personality previews with conflict-safe restoration. |
 
-The scene editor is additive: existing `IRobotAgent` and `IRobotAgentService` implementations do not gain new members.
-Every native edit is temporary and exclusive. A lease snapshots each reversible property once, restores changes in
-reverse order, and leaves a property untouched if another system changed it after the preview. `RobotPersonalityDraft`
-uses the verified `PersonalityAsset`/`LLMAgent` surface for autonomous behavior; Creator conversations apply the same
-persona to their explicit `RobotConversationRequest`.
+Use the scene editor for eligible native scene robots; RobotKit-managed robots are not in `Targets`. `TryResolve`
+turns a RobotKit robot into a target that allows only a temporary personality preview: move it and change its brain
+through the routed `IRobotAgent` controls. A personality preview, or waking a robot's native brain, is refused with
+`NotAuthoritative` on a guest's PC and in host code that runs on a guest's input, so a robot never runs text a guest
+wrote.
 
-Every operation either uses a cheap `Try...` query, returns `OperationResult<T>`, or returns
-`Task<OperationResult<T>>` with lifetime cancellation. Check provider availability and
-`Context.Runtime.UnavailableCapabilities` before exposing a feature in Robotopia's UI.
+Robots with components whose type names contain `Quest`, `Checkpoint`, `Achievement`, or `Progress` (ignoring case) are excluded,
+including RobotKit-managed robots resolved for personality previews. This conservative filter protects progression
+state from temporary edits.
+
+Every scene edit is temporary and exclusive. A lease snapshots each reversible property once, restores changes in
+reverse order, and leaves a property untouched if another system changed it after the preview. If the target comes under
+RobotKit management, or a managed target loses that status, further previews fail. Restoring or disposing the lease
+then releases its resources without applying the captured state. Transform and brain previews on an active managed
+target return `Conflict`; previews with valid arguments on a restored lease return `InvalidState`.
+
+`RobotPersonalityDraft` uses the verified `PersonalityAsset`/`LLMAgent` surface for autonomous behavior. Creator
+conversations apply the same persona to their explicit `RobotConversationRequest`.
+
+Use `IRobotAgentService` and its `IRobotAgent` handles on the Robotopia game thread. If work resumes
+on a worker thread, queue the robot work with `Context.Scheduler.NextFrame` and check its result.
+The service rejects off-thread calls with `TFSDK100` before it reads the scene or changes the owned robot list.
+Start `FindReachableSpawnAsync` on the game thread as well.
+
+Check provider availability and `Context.Runtime.UnavailableCapabilities` before exposing a feature
+in Robotopia's UI. Commands report expected failures through `OperationResult<T>`.
 
 ## Custom enemy health
 
@@ -77,6 +96,156 @@ position rewrite. A scene transition or native player recreation can invalidate 
 check `IsAlive`, call `TryGetPlayerEntity` again, and rebind the target when that happens. Keep a
 position-based behavior as the graceful fallback when the optional capability is absent.
 
+## NPCs in imported map worlds
+
+Use the same RobotKit spawn service after the imported world's scene and navigation are ready.
+Resolve it through the consuming `Context`, so the runtime retains that context's authority and lifetime.
+For shared NPCs, spawn from the gamemode server controller. Brains run on the host; replicated bodies
+stay dormant. Entity references, late joins, pose replication and consuming-scope cleanup are automatic.
+Authors do not register a second replica factory or send spawn packets.
+
+Preflight the required cast against `RobotTypes` in the loaded scene and retain its descriptors.
+Pass the selected descriptor's `Id` as `robotTypeId`. An omitted type selects the default;
+an explicit unavailable type returns `Unavailable`, without silently substituting another robot.
+Discovery describes loaded native prefabs, not a promise that every named character exists in every map.
+Robot01 and CopBot have navigated sampled imported-map routes on earlier builds. MuniciPal discovery and
+spawning remain unqualified on build 2640: report it unavailable if absent, rather than relabeling the default
+robot. The synchronous composed factory uses build 2640's private catalog-reference collector, whose signature is
+unchanged from 2597. Its personality and about dependencies are assumed to be distinct from body-part and
+voice-map resolution; one 2640 host start is still needed to confirm it. Build 2640 also changed the native
+builder around it (it lost `ResolvePrefabSceneJson` and gained prefab-expansion state, the project gained
+`prefabScenes`, and import problems now go to a report that RobotKit summarizes as a count), so native
+composition is unverified on 2640. A nonblank personality value does not establish an inline prompt. The game's
+own lore preparation (`AddMissingLoreAsync`) is still asynchronous on 2640 and now also needs a link catalogue
+URL, so this synchronous path does not prepare missing catalog assets.
+When the only unresolved dependencies are the character's personality and about references, MuniciPal is
+offered body-only: RobotKit builds the same body and voice without those two fields, then repeats every check.
+A body-part, voice or other catalogue gap still refuses discovery. Otherwise character data and symbolic
+material values pass through unchanged. This bounded preflight does not establish that a native character's
+catalog assets have been prepared or that a character is qualified on 2640.
+
+A body-only MuniciPal appears in `RobotTypes` like any other type and spawns only Dormant. An Autonomous
+request, or an explicit native talk distance, returns `Unavailable` with the reason, without creating a
+robot. Its native talk is off: the default talk policy is replaced by talk off, a custom interaction is
+kept, and `SetInteraction` with native talk, like `SetBrainMode(Autonomous)`, returns `Unavailable` with the
+same reason. The scene editor resolves it but refuses a personality preview with the same reason.
+Movement, speech, tint and scale work as for any Dormant robot.
+
+Composed MuniciPal discovery is available only during `StartingMode` and `Running` for the current
+live map world. Its native composed body has no `Health`: `ApplyDamage` returns `Unavailable` and `Kill`
+despawns it. Native prefabs are rescanned every two seconds only while none has loaded; once one is
+cached, a current composition ends the rescans. A validated catalogue with no MuniciPal entry backs off
+from two seconds to at most thirty seconds; scene/world/session publications reset that delay.
+Other refusals keep the ordinary two-second retry so temporarily incomplete data can recover.
+
+Refusals appear at Info as `RobotKit composed discovery refused: <code>.`, at most once per code for the
+current world/session. Codes identify unavailable scenes, host count, map root, entry budget, malformed scene,
+missing scene identity, entity shape, asset references, ambiguous identity, absent character or native binding
+failure. Reference-specific codes distinguish unexpected project catalogues, reference DTO shape,
+body-part resolution, voice resolution, invalid collector results and unavailable catalog assets.
+They contain no asset identifiers, native payloads, paths or session values. Check game compatibility
+for `NativeBinding` and `ProjectCatalogShape`; for structural codes check the imported world's supported
+composition data.
+`CatalogAssetsUnavailable` comes from the game's own catalogue, so no map change can fix it.
+A body-only offer appears as `RobotKit composed discovery admitted the body only: CharacterUnprepared.`.
+
+When MuniciPal is missing, a `Spawn` that names it returns `Unavailable` with a fixed sentence for the
+code of the latest discovery run in the current world/session, such as "A MuniciPal body part is missing
+from the game's robot part catalogue. Code: BodyPartUnavailable.". The sentence names no asset or session
+value, so a gamemode can show it to players. Each discovery run clears the previous code first, and a
+body-only offer never explains a missing type.
+
+`ContextUnverified` means a composed robot's native context could not be verified. An incomplete identity
+sample leaves existing composed actors in place, and for up to two seconds of unscaled time composed spawns
+return `Unavailable`. If the context is still unverified at the deadline, the candidate retires: it spawns
+nothing more and the next catalog lookup retries discovery, while robots already spawned from it keep running.
+A definite replacement, ended lifetime or throwing identity getter retires the candidate and destroys its
+robots immediately. Retirement reasons appear at Info as `RobotKit composed context retired: <code>.`, at most
+once per reason for each world and session.
+
+`FindReachableSpawnAsync` automatically links cancellation to the consuming lifetime; an optional
+caller token can end the search sooner. Check its result, then spawn on collision-clear ground at
+the returned position. Check `Spawn` before issuing `MoveTo`.
+Retain and dispose the returned agent when its behavior ends. World replacement and scope teardown retire
+its handle. The owning code can still call `Despawn()` on the game thread to release that robot after
+retirement. `Dispose()` always releases the handle where you are. `Despawn()` asks the host to remove
+the robot: inside a guest's callback it can be refused, and the handle stays until you dispose it.
+Repeated cleanup calls succeed with `false` after the handle has been released. A retired
+client handle releases its local body without routing another robot command. An unreachable route needs
+a bounded retry or an explicit unavailable-order state.
+
+`HasReachedTarget` accepts a successful native walk completion as well as proximity within the
+horizontal stop threshold (at least 0.1 metres). The adapter trusts successful native completion
+even just outside the requested distance, without increasing the author's 0.75-metre stop distance.
+Ignored results, faults and cancelled/replaced intents do not count as native arrival.
+Reissuing the same destination preserves arrival; a changed destination starts a new intent.
+The existing 0.5-metre release hysteresis allows pursuit to resume when the target moves away.
+`IsMoving` remains true while a native walk is still pending, including while it settles near a target.
+
+This spawn path does not import an entity overlay.
+
+## Robot speech
+
+Call `await agent.SayAsync(reply, cancellationToken)` on an agent from the owning host context.
+RobotKit selects listeners within 20 metres using current-world validated presence and the host's
+world-view leases. It privately delivers only the bounded line and its native voice fingerprint to
+eligible guests, then synthesizes locally for each eligible listener.
+Native `AgentHead.Say` calls on these owned robots use the same route automatically. Guests cannot
+originate NPC speech and their replicas remain dormant. Authors write no packet, recipient list or token plumbing.
+
+Lines allow up to 512 plain-text characters. A new line replaces the previous one; cancellation,
+despawn, scope disposal and world changes stop playback. Hiding a robot from a viewer stops that
+viewer's playback while other eligible listeners continue. Missing bindings return `Unavailable`.
+Delivery is best effort: full windows, expired lines and late joins
+do not replay speech. A successful await waits for every accepting listener's native playback completion
+(remote listeners report theirs) and the one-second speech pace. A guest that declines before playback
+reports that promptly without a reason. A decline the host accepts removes only that listener without
+failing the call. `true` means at least one listener played the line to the end. `false` means none accepted
+and the pace elapsed without synthesis. Sequential awaited lines do not cut off their predecessor,
+including when the host is far away. When an admitted listener loses eligibility, such as by leaving
+earshot or having the robot hidden during playback, the other listeners finish and the line still
+succeeds if any of them heard it to the end; it returns `Unavailable` only when nobody did, so do not
+repeat a line on `Unavailable` without checking who could have heard it. At the host's 15-second deadline the remaining copies stop; the line returns `TimedOut` unless a listener had already heard it to the end, in which case it succeeds.
+Caller cancellation, replacement and
+retirement of the owning scope, provider or world return `Cancelled`. Native task completion does not
+verify audible sound. Native subtitle-only and pre-recorded-clip overrides are outside this contract.
+
+Speech requires matching speech schemas on both peers; older builds can join but exchange no robot speech.
+See [the private speech contract](https://github.com/Furroxide/TopiaForge/blob/dev/docs/internal/RobotSpeech.md) for bounds, recovery and native acceptance checks.
+
+### Speech results
+
+Call `SayAsync` on the main thread from the host context that spawned the robot. A refused line returns at once.
+An admitted line that is not cancelled completes no sooner than the one-second speech pace, so awaiting each line
+before the next never cuts off or rate-limits the previous one. A cancelled line returns as soon as it stops.
+
+| Result | What happened | What to do |
+|---|---|---|
+| `Success(true)` | At least one listener played the line to the end, even if others left, failed or had not reported by the 15-second deadline. | Continue. |
+| `Success(false)` | Nobody accepted the line: no listener was in earshot, or each one had the robot hidden or declined it. Nothing was synthesized. | Continue. Repeat the line later only if your design needs it heard. |
+| `Unavailable` | The robot could not speak (no visible current-world body or matching voice binding), or nobody finished the line because listeners left, had the robot hidden or failed playback. | Do not repeat it in a loop. Speak a fresh line when the robot is next needed. |
+| `TimedOut` | Nobody had heard the line to the end by the host's 15-second deadline, and every copy stopped. | Keep lines short enough to finish within 15 seconds. |
+| `Cancelled` | Your token was cancelled, a newer line replaced this one, or the owning scope, provider or world retired. | Stop the dialogue. |
+| `RateLimited` | The robot spoke less than a second ago, or the speech budget is full. | Await each line before the next. Retry a fresh line shortly. |
+| `InvalidArgument` | The text is empty, longer than 512 characters or not plain text. | Fix the text. |
+| `NotAuthoritative` | The caller does not own a current host robot, for example on a guest. | Speak from the host context that owns the robot. |
+
+A dialogue that stops at the first failure and moves on when nobody was near:
+
+```csharp
+async Task<bool> TellAsync(IRobotAgent witness, IReadOnlyList<string> lines, CancellationToken cancellationToken)
+{
+    foreach (var line in lines)
+    {
+        var said = await witness.SayAsync(line, cancellationToken);
+        // said.Value is false when nobody was in earshot; the dialogue still moves on.
+        if (!said.Succeeded) return false; // Stop instead of repeating a line some players heard.
+    }
+
+    return true;
+}
+```
+
 ## Deterministic Robotopia gameplay first
 
 Remote brain text is untrusted presentation. Drive Robotopia state only from bounded, validated fields
@@ -96,3 +265,82 @@ and leak-free reload.
 
 See [Specialist modules](Modules.md#robotkit), [Privacy and capability disclosure](PrivacyAndCapabilities.md),
 and the generated C# API reference.
+
+### Native brains in multiplayer
+
+RobotKit checks the origin of each spawn and routed control call, including calls made through a retained
+host-owned handle. Guest origin includes a client process and host callbacks dispatched for a remote player,
+such as remote UI controls, window dismissals and forwarded entity commands. Running inside a gamemode's
+server controller does not remove that restriction. Nested synchronous callbacks retain it; a captured
+continuation retains the forwarded origin when it returns to the owning thread.
+
+- A host callback acting for a guest cannot spawn `RobotBrainMode.Autonomous`: `Spawn` returns
+  `NotAuthoritative` without creating a robot or a replication record.
+- A `Dormant` request in that callback still succeeds. Native talk is disabled, including the constructor's
+  default native-talk policy; custom interactions are preserved. This normalization is unchanged.
+- Direct client spawns retain defensive normalization to Dormant with native talk disabled. The canonical
+  host body created from a guest's wire request uses the same safe settings, and every replica is Dormant.
+- `SetBrainMode(Autonomous)` and native-talk-enabling `SetInteraction` return `NotAuthoritative` for clients
+  and guest-origin host callbacks. Movement, appearance and other non-AI controls retain their normal
+  ownership and lifetime rules.
+
+Host local-player actions and host or solo calls outside guest-origin callbacks retain Autonomous brains
+and native conversation support. There is no guest-autonomy opt-in. For a guest-triggered feature, request
+Dormant explicitly and check the spawn result before using the handle. These rules cover RobotKit spawning
+and routed agent controls.
+
+#### Host decisions that start with a guest's click
+
+Guest origin follows the work, not the code's role. Work that a guest-origin callback schedules with
+`Context.Scheduler` (`NextFrame`, `After` or `Every`) or continues after an `await` keeps the guest's origin,
+so it is refused in the same way. When the decision belongs to the host, such as a round that starts with
+autonomous patrols once every player has pressed Ready, let the click record the request only, and act on
+it from host code that the server controller registered when it started:
+
+```csharp
+private sealed class Round : IGamemodeController
+{
+    private readonly IRobotAgentService robots;
+    private readonly IDisposable? timer;
+    private bool readyRequested;
+
+    public Round(IGamemodeSession session, IRobotAgentService robots)
+    {
+        this.robots = robots;
+        // Registered while the controller starts, outside every guest callback.
+        timer = session.Context.Scheduler.Every(TimeSpan.FromSeconds(0.1), StartWhenReady).Value;
+    }
+
+    // Wire this to the Ready button. It may run for a guest, so it only records the request.
+    public void ReadyPressed() => readyRequested = true;
+
+    private void StartWhenReady()
+    {
+        if (!readyRequested) return;
+        readyRequested = false;
+        if (!EveryPlayerReady()) return;
+        var patrol = robots.Spawn(new RobotAgentSpawnRequest(PatrolStart, brainMode: RobotBrainMode.Autonomous));
+        // Check the result before using the handle.
+    }
+
+    public void Dispose() => timer?.Dispose();
+}
+```
+
+The host's own state decides whether the round starts and what it spawns. Take nothing from the guest's
+click except the request itself. Register the timer from code that a guest's input did not start: a timer
+registered inside a guest-origin callback keeps that guest's origin for as long as it runs.
+
+The testing kit follows these rules for `FakeRobotAgentService` and its agents. Set `IsClient = true` to
+model a guest process. Remote `FakePlayerDirectory` surface actions establish guest origin automatically;
+`FakeUiSurface.DismissFromPlayer()` simulates a player closing the window, while `Hide()` models a host call.
+Use `agents.RunAsGuest(() => ...)` for other forwarded host callbacks. Nested local surface actions cannot
+remove the outer guest origin. Captured execution contexts retain it on the originating thread, and return or
+exception cleanup restores the caller's scope. The thread that constructs the fake agent service owns guest
+origin: `RunAsGuest` on another thread, and a spawn or native-brain call on another thread while a guest
+scope is visible, throw `InvalidOperationException` instead of answering as the host. An async test must
+resume on the constructing thread before it acts for a guest. `FakeModContext.Scheduler` carries guest origin
+like the runtime: `NextFrame`, `After` and `Every` work scheduled inside a guest scope runs with that guest's
+origin when the test advances the scheduler, and work scheduled outside one runs as the host. A continuation
+after `await Scheduler.DelayAsync(...)` resumes on a pool thread, so a robot call there throws; schedule the
+follow-up with `NextFrame` or `After` instead. Fake modal completions need an explicit `RunAsGuest` scope.

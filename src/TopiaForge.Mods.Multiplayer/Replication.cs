@@ -19,6 +19,21 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>
+    /// Generator SPI marking a contract the runtime binds automatically before the mod loads. It is a separate
+    /// interface so mods compiled before it existed keep loading and keep binding explicitly.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public interface IGeneratedMultiplayerBinding : IGeneratedMultiplayerContract
+    {
+        /// <summary>
+        /// Binds the generated contract to <paramref name="session"/>. Binding is idempotent: a repeated call for the
+        /// same session succeeds without registering twice, and a call for a different session fails with
+        /// <see cref="ModErrorCode.Conflict"/> until the first binding is disposed.
+        /// </summary>
+        OperationResult<IDisposable> BindMultiplayer(IMultiplayerSession session);
+    }
+
+    /// <summary>
     /// Author-facing handle for one generated, snapshot-backed value. Declare this as a field marked with
     /// <see cref="ReplicatedStateAttribute"/>; generated registration connects it to the active session.
     /// </summary>
@@ -102,7 +117,17 @@ namespace TopiaForge.Mods
         public OperationResult<IDisposable> Bind(
             IMultiplayerSession session,
             string id,
-            IMultiplayerCodec<T> codec)
+            IMultiplayerCodec<T> codec) =>
+            Bind(session, id, codec, MultiplayerDelivery.Coalesced, 0);
+
+        /// <summary>Binds like <see cref="Bind(IMultiplayerSession, string, IMultiplayerCodec{T})"/> with delivery knobs.</summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public OperationResult<IDisposable> Bind(
+            IMultiplayerSession session,
+            string id,
+            IMultiplayerCodec<T> codec,
+            MultiplayerDelivery delivery,
+            int maximumUpdatesPerSecond)
         {
             if (session == null) throw new ArgumentNullException(nameof(session));
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("A replicated state id is required.", nameof(id));
@@ -125,7 +150,12 @@ namespace TopiaForge.Mods
                     return OperationResult<IDisposable>.Failure(initial.ErrorCode, initial.ErrorMessage);
                 }
 
-                var registered = session.RegisterState(new ReplicatedStateDefinition<T>(id, providerInitial, codec));
+                var registered = session.RegisterState(new ReplicatedStateDefinition<T>(
+                    id,
+                    providerInitial,
+                    codec,
+                    delivery,
+                    maximumUpdatesPerSecond));
                 if (!registered.TryGetValue(out var state))
                 {
                     return OperationResult<IDisposable>.Failure(registered.ErrorCode, registered.ErrorMessage);
@@ -353,12 +383,25 @@ namespace TopiaForge.Mods
     {
         /// <summary>Creates a replicated-state definition.</summary>
         public ReplicatedStateDefinition(string id, T initialValue, IMultiplayerCodec<T> codec)
+            : this(id, initialValue, codec, MultiplayerDelivery.Coalesced, 0)
+        {
+        }
+
+        /// <summary>Creates a replicated-state definition with delivery knobs.</summary>
+        public ReplicatedStateDefinition(
+            string id,
+            T initialValue,
+            IMultiplayerCodec<T> codec,
+            MultiplayerDelivery delivery,
+            int maximumUpdatesPerSecond)
         {
             Id = MultiplayerIdentityValidation.Require(id, nameof(id));
             InitialValue = initialValue ?? throw new ArgumentNullException(nameof(initialValue));
             Codec = codec ?? throw new ArgumentNullException(nameof(codec));
             if (codec.MaximumEncodedBytes < 0 || codec.MaximumEncodedBytes > 1024 * 1024)
                 throw new ArgumentException("Replicated-state codec bounds must be between zero and 1 MiB.", nameof(codec));
+            Delivery = MultiplayerDeliveryKnobs.RequireDelivery(delivery, nameof(delivery));
+            MaximumUpdatesPerSecond = MultiplayerDeliveryKnobs.RequireRate(maximumUpdatesPerSecond, nameof(maximumUpdatesPerSecond));
         }
 
         /// <summary>Gets the stable mod-local state id.</summary>
@@ -369,6 +412,12 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets the generated bounded codec.</summary>
         public IMultiplayerCodec<T> Codec { get; }
+
+        /// <summary>Gets how committed changes travel to other peers.</summary>
+        public MultiplayerDelivery Delivery { get; }
+
+        /// <summary>Gets the most downstream updates per second, or zero for the provider default.</summary>
+        public int MaximumUpdatesPerSecond { get; }
     }
 
     /// <summary>Provider SPI for one canonical value plus ordered snapshot and delta changes.</summary>
@@ -431,6 +480,30 @@ namespace TopiaForge.Mods
             PredictionMode prediction = PredictionMode.None,
             int maximumPerSecond = 30,
             int maximumPayloadBytes = 16 * 1024)
+            : this(
+                type,
+                stateCodec,
+                inputCodec,
+                handler,
+                prediction,
+                maximumPerSecond,
+                maximumPayloadBytes,
+                MultiplayerDelivery.Coalesced,
+                0)
+        {
+        }
+
+        /// <summary>Creates a replicated-object type definition with delivery knobs.</summary>
+        public ReplicatedObjectTypeDefinition(
+            ReplicatedObjectType<TState, TInput> type,
+            IMultiplayerCodec<TState> stateCodec,
+            IMultiplayerCodec<TInput> inputCodec,
+            Func<ReplicatedObjectCommandContext, TState, TInput, OperationResult<TState>> handler,
+            PredictionMode prediction,
+            int maximumPerSecond,
+            int maximumPayloadBytes,
+            MultiplayerDelivery delivery,
+            int maximumUpdatesPerSecond)
         {
             Type = type ?? throw new ArgumentNullException(nameof(type));
             StateCodec = stateCodec ?? throw new ArgumentNullException(nameof(stateCodec));
@@ -449,6 +522,8 @@ namespace TopiaForge.Mods
             Prediction = prediction;
             MaximumPerSecond = maximumPerSecond;
             MaximumPayloadBytes = maximumPayloadBytes;
+            Delivery = MultiplayerDeliveryKnobs.RequireDelivery(delivery, nameof(delivery));
+            MaximumUpdatesPerSecond = MultiplayerDeliveryKnobs.RequireRate(maximumUpdatesPerSecond, nameof(maximumUpdatesPerSecond));
         }
 
         /// <summary>Gets the generated typed wire reference.</summary>
@@ -474,6 +549,12 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets the maximum encoded state or input payload size.</summary>
         public int MaximumPayloadBytes { get; }
+
+        /// <summary>Gets how committed state changes travel to other peers.</summary>
+        public MultiplayerDelivery Delivery { get; }
+
+        /// <summary>Gets the most downstream updates per second for each instance, or zero for the provider default.</summary>
+        public int MaximumUpdatesPerSecond { get; }
     }
 
     /// <summary>Provider SPI for a lifetime-owned local replicated-object type registration.</summary>
@@ -588,6 +669,34 @@ namespace TopiaForge.Mods
 
         /// <summary>Transfers predictive ownership; only canonical server code may succeed.</summary>
         OperationResult<bool> TransferOwnership(ParticipantId? ownerId);
+
+        /// <summary>
+        /// Applies a canonical state change from server code outside an input handler, such as a tick subscription.
+        /// The updater receives a codec-detached copy and the change commits atomically; non-server callers fail with
+        /// <see cref="ModErrorCode.NotAuthoritative"/>.
+        /// </summary>
+        OperationResult<TState> Apply(Func<TState, OperationResult<TState>> updater);
+    }
+
+    internal static class MultiplayerDeliveryKnobs
+    {
+        internal const int MaximumUpdatesPerSecondLimit = 60;
+
+        internal static MultiplayerDelivery RequireDelivery(MultiplayerDelivery delivery, string parameterName)
+        {
+            if (!Enum.IsDefined(typeof(MultiplayerDelivery), delivery)) throw new ArgumentOutOfRangeException(parameterName);
+            return delivery;
+        }
+
+        internal static int RequireRate(int maximumUpdatesPerSecond, string parameterName)
+        {
+            if (maximumUpdatesPerSecond < 0 || maximumUpdatesPerSecond > MaximumUpdatesPerSecondLimit)
+            {
+                throw new ArgumentOutOfRangeException(parameterName);
+            }
+
+            return maximumUpdatesPerSecond;
+        }
     }
 
     /// <summary>Generator/provider SPI carrying immutable wire-contract inventory used during admission.</summary>

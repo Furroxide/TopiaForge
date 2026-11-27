@@ -3,9 +3,13 @@ import 'package:unorm_dart/unorm_dart.dart' as unicode;
 import 'models.dart';
 import 'versioning.dart';
 
-part 'multiplayer_admission_validation.dart';
+part 'multiplayer_admission_comparisons.dart';
+part 'multiplayer_admission_modes.dart';
 part 'multiplayer_admission_paths.dart';
+part 'multiplayer_admission_validation.dart';
 
+/// Mismatch codes in the C# `MultiplayerAdmissionMismatchCode` order. New
+/// codes are appended so the ordinal sort stays identical in both languages.
 enum MultiplayerAdmissionMismatchCode {
   invalidProfile,
   gameBuildMismatch,
@@ -18,9 +22,22 @@ enum MultiplayerAdmissionMismatchCode {
   exactProfileMismatch,
   clientLocalModOnServer,
   optionalSessionModUnavailable,
+  implicitSharedContentMismatch,
 }
 
 enum MultiplayerAdmissionPolicy { compatible, exactProfile }
+
+/// Describes the process that hosts the logical server side of a session.
+enum MultiplayerAdmissionServerRole {
+  /// A server without a local player. Client-local mods have no place in its
+  /// profile.
+  dedicatedServer,
+
+  /// A player-hosted listen server whose process is also an interactive
+  /// client, so the host's own client-local and server-only mods are both
+  /// legitimate.
+  listenHost,
+}
 
 class MultiplayerAdmissionMod {
   const MultiplayerAdmissionMod({
@@ -96,6 +113,9 @@ class MultiplayerAdmissionReport {
   final List<MultiplayerAdmissionMismatch> inactiveSessionReasons;
 }
 
+/// Applies server-canonical V6 admission rules: implicit sharing for mods
+/// without a multiplayer block, presence, protocol, and content negotiation
+/// for declared session mods, and logical-side rules for the rest.
 class MultiplayerAdmissionPlanner {
   const MultiplayerAdmissionPlanner();
 
@@ -103,6 +123,8 @@ class MultiplayerAdmissionPlanner {
     required MultiplayerAdmissionProfile server,
     required MultiplayerAdmissionProfile client,
     MultiplayerAdmissionPolicy policy = MultiplayerAdmissionPolicy.compatible,
+    MultiplayerAdmissionServerRole serverRole =
+        MultiplayerAdmissionServerRole.dedicatedServer,
   }) {
     final mismatches = <MultiplayerAdmissionMismatch>[];
     final inactiveSessionReasons = <MultiplayerAdmissionMismatch>[];
@@ -160,7 +182,7 @@ class MultiplayerAdmissionPlanner {
     final clientMods = _indexAdmissionProfile(client, 'client', mismatches);
     _rejectStandaloneOnly(serverMods, 'server', mismatches);
     _rejectStandaloneOnly(clientMods, 'client', mismatches);
-    _rejectWrongSideMods(serverMods, clientMods, mismatches);
+    _rejectWrongSideMods(serverMods, clientMods, serverRole, mismatches);
 
     final active = <String>{};
     final ids = <String>{...serverMods.keys, ...clientMods.keys}.toList()
@@ -168,6 +190,12 @@ class MultiplayerAdmissionPlanner {
     for (final id in ids) {
       final serverMod = serverMods[id];
       final clientMod = clientMods[id];
+      if (serverMod?.manifest.isImplicitlyShared == true ||
+          clientMod?.manifest.isImplicitlyShared == true) {
+        _compareImplicitShared(id, serverMod, clientMod, active, mismatches);
+        continue;
+      }
+
       final serverMetadata = serverMod?.manifest.multiplayer;
       final clientMetadata = clientMod?.manifest.multiplayer;
       final serverSession = serverMetadata?.mode == ModMultiplayerMode.session;

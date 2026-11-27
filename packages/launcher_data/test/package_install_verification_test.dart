@@ -64,8 +64,7 @@ void main() {
       final fixture = await _InstallVerificationFixture.create();
       addTearDown(fixture.dispose);
       const lockPath = 'topiaforge.multiplayer.lock.json';
-      const lockBytes =
-          '{"schemaVersion":2,"protocolVersion":"1.0.0","contracts":[]}';
+      const lockBytes = '{"schemaVersion":3,"contracts":[]}';
       final lockHash = sha256.convert(utf8.encode(lockBytes)).toString();
       final dependency = fixture.writePackage(
         'contract.dep',
@@ -314,7 +313,7 @@ Map<String, Object?> _manifest(
   Map<String, String> dependencies = const {},
   List<String> capabilities = const [],
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': id,
   'displayName': id,
   'version': '1.0.0',

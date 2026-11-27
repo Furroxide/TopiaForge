@@ -1,0 +1,4 @@
+# Vendored Concentus source, kept as close to upstream as the provider allows (see THIRD_PARTY_NOTICES.md).
+# Analyzers and formatting treat it as generated code, so upstream style is never rewritten here.
+[*.cs]
+generated_code = true

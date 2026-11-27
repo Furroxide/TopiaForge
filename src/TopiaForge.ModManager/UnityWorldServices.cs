@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager
             this.entities = entities;
         }
 
+        public OperationResult<IBlocker> AddBlocker(BlockerRequest request) => UnityBlocker.Create(entities, request);
+
         public bool TryRaycast(TopiaForge.Mods.Ray ray, float maximumDistance, out PhysicsHit? hit)
         {
             UnityMainThreadGuard.AssertCurrent();
@@ -148,8 +150,8 @@ namespace TopiaForge.ModManager
 
         public bool TryGetTransform(IEntity entity, out TransformState transform)
         {
-            UnityMainThreadGuard.AssertCurrent();
-            return registry.TryGetTransform(entity, out transform);
+            transform = TransformState.Identity;
+            return !lifetime.IsStopping && registry.TryGetTransform(entity, lifetime, out transform);
         }
 
         public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform)

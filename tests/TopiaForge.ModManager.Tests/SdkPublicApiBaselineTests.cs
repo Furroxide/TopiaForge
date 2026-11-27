@@ -16,7 +16,7 @@ namespace TopiaForge.ModManager.Tests
     /// Produces and verifies a deterministic metadata-level baseline for the public mod SDK.
     /// Exact comparison makes every public change reviewable while the pre-release V1 contract is reshaped.
     /// </summary>
-    internal static class SdkPublicApiBaselineTests
+    internal static partial class SdkPublicApiBaselineTests
     {
         private sealed class BaselineSpec
         {
@@ -46,7 +46,7 @@ namespace TopiaForge.ModManager.Tests
             new BaselineSpec(
                 "topiaforge.mods.worlds",
                 "TopiaForge.Mods.Worlds",
-                () => typeof(IWorldGamemodeService).Assembly),
+                () => typeof(IWorldSessionService).Assembly),
             new BaselineSpec(
                 "topiaforge.mods.chronos",
                 "TopiaForge.Mods.Chronos",
@@ -64,10 +64,6 @@ namespace TopiaForge.ModManager.Tests
                 "TopiaForge.Mods.Prompts",
                 () => typeof(IPromptOverrideRegistry).Assembly),
             new BaselineSpec(
-                "topiaforge.mods.ugc",
-                "TopiaForge.Mods.Ugc",
-                () => typeof(IUgcLiveSyncService).Assembly),
-            new BaselineSpec(
                 "topiaforge.mods.testing",
                 "TopiaForge.Mods.Testing",
                 () => typeof(TopiaForge.Mods.Testing.FakeModContext).Assembly)
@@ -75,6 +71,8 @@ namespace TopiaForge.ModManager.Tests
 
         public static void Run()
         {
+            SdkUnityUiCompositionBaselineTests.Run();
+            VersionGateBaselineTests();
             var assembly = typeof(SdkPublicApiBaselineTests).Assembly;
             foreach (var baseline in Baselines)
             {
@@ -89,6 +87,7 @@ namespace TopiaForge.ModManager.Tests
 
                 using var reader = new StreamReader(stream, Encoding.UTF8, true);
                 var expected = Normalize(reader.ReadToEnd());
+                RequireVersionedAdditions(expected, actual);
                 if (!string.Equals(expected, actual, StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException(
@@ -138,10 +137,15 @@ namespace TopiaForge.ModManager.Tests
             foreach (var baseline in Baselines)
             {
                 var path = Path.Combine(baselineDirectory, baseline.Slug + ".api.txt");
-                File.WriteAllText(path, CreateBaseline(baseline), new UTF8Encoding(false));
+                var actual = CreateBaseline(baseline);
+                using var stream = typeof(SdkPublicApiBaselineTests).Assembly.GetManifestResourceStream(baseline.ResourceName)!;
+                using var reader = new StreamReader(stream);
+                RequireVersionedAdditions(Normalize(reader.ReadToEnd()), actual);
+                File.WriteAllText(path, actual, new UTF8Encoding(false));
             }
 
             Console.WriteLine("Updated SDK public API baselines (" + Baselines.Count + " assemblies).");
+            SdkUnityUiCompositionBaselineTests.Update(repositoryRoot);
         }
 
         private static string CreateBaseline(BaselineSpec baseline)
@@ -221,14 +225,14 @@ namespace TopiaForge.ModManager.Tests
                 var accessors = new List<string>();
                 if (getter != null)
                 {
-                    accessors.Add("get" + FormatAccessorFlags(getter));
+                    accessors.Add("get" + FormatAccessorFlags(getter) + FormatRequirement(getter));
                 }
 
                 if (setter != null)
                 {
                     var initOnly = setter.ReturnParameter.GetRequiredCustomModifiers()
                         .Any(modifier => modifier.FullName == "System.Runtime.CompilerServices.IsExternalInit");
-                    accessors.Add((initOnly ? "init" : "set") + FormatAccessorFlags(setter));
+                    accessors.Add((initOnly ? "init" : "set") + FormatAccessorFlags(setter) + FormatRequirement(setter));
                 }
 
                 members.Add("  property " + (accessor?.IsStatic == true ? "static " : string.Empty) +
@@ -244,12 +248,12 @@ namespace TopiaForge.ModManager.Tests
                 var accessors = new List<string>();
                 if (add != null)
                 {
-                    accessors.Add("add" + FormatAccessorFlags(add));
+                    accessors.Add("add" + FormatAccessorFlags(add) + FormatRequirement(add));
                 }
 
                 if (remove != null)
                 {
-                    accessors.Add("remove" + FormatAccessorFlags(remove));
+                    accessors.Add("remove" + FormatAccessorFlags(remove) + FormatRequirement(remove));
                 }
 
                 members.Add("  event " + (accessor?.IsStatic == true ? "static " : string.Empty) +
@@ -454,15 +458,21 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var namedType = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
-            var name = RemoveGenericArity((namedType.FullName ?? namedType.Name).Replace('+', '.'));
+            var name = (namedType.FullName ?? namedType.Name).Replace('+', '.');
             if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var nullableArguments = nullability?.GenericTypeArguments;
-                name += "<" + string.Join(", ", arguments.Select((argument, index) =>
-                    FormatType(argument, nullableArguments != null && index < nullableArguments.Length
-                        ? nullableArguments[index]
-                        : null))) + ">";
+                var index = 0;
+                name = System.Text.RegularExpressions.Regex.Replace(name, @"`(\d+)", match =>
+                {
+                    var count = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                    var rendered = "<" + string.Join(", ", Enumerable.Range(index, count).Select(argumentIndex =>
+                        FormatType(arguments[argumentIndex], nullableArguments != null && argumentIndex < nullableArguments.Length
+                            ? nullableArguments[argumentIndex] : null))) + ">";
+                    index += count;
+                    return rendered;
+                });
             }
 
             return name + FormatNullableSuffix(type, nullability);
@@ -471,26 +481,6 @@ namespace TopiaForge.ModManager.Tests
         private static string FormatNullableSuffix(Type type, NullabilityInfo? nullability)
         {
             return !type.IsValueType && nullability?.ReadState == NullabilityState.Nullable ? "?" : string.Empty;
-        }
-
-        private static string RemoveGenericArity(string name)
-        {
-            var builder = new StringBuilder(name.Length);
-            for (var index = 0; index < name.Length; index++)
-            {
-                if (name[index] != '`')
-                {
-                    builder.Append(name[index]);
-                    continue;
-                }
-
-                while (index + 1 < name.Length && char.IsDigit(name[index + 1]))
-                {
-                    index++;
-                }
-            }
-
-            return builder.ToString();
         }
 
         private static string FormatValue(object? value, Type declaredType)
@@ -542,10 +532,10 @@ namespace TopiaForge.ModManager.Tests
         private static string FormatObsolete(MemberInfo member)
         {
             var obsolete = member.GetCustomAttribute<ObsoleteAttribute>();
-            return obsolete == null
+            return (obsolete == null
                 ? string.Empty
                 : " [obsolete message=" + JsonSerializer.Serialize(obsolete.Message ?? string.Empty) +
-                  " error=" + (obsolete.IsError ? "true" : "false") + "]";
+                  " error=" + (obsolete.IsError ? "true" : "false") + "]") + FormatRequirement(member);
         }
 
         private static string Normalize(string value)

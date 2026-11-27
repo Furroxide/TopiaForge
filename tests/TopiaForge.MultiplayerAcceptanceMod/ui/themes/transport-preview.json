@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "id": "transport-preview",
+  "paper": {
+    "colors": { "surface": { "fill": "#EAF5F9", "on": "#203849" } }
+  },
+  "hud": {
+    "colors": { "surface": { "fill": "#16242E", "on": "#E9F9FF" } }
+  },
+  "typography": {
+    "label": { "trackingEm": 0.025 }
+  },
+  "images": [
+    {
+      "id": "card",
+      "bundlePath": "ui/art/preview.bundle",
+      "assetName": "preview-card",
+      "licensePath": "LICENSES/ui-art.txt",
+      "pixelWidth": 96,
+      "pixelHeight": 48,
+      "isMask": false
+    },
+    {
+      "id": "mark",
+      "bundlePath": "ui/art/preview.bundle",
+      "assetName": "preview-mark",
+      "licensePath": "LICENSES/ui-art.txt",
+      "pixelWidth": 32,
+      "pixelHeight": 32,
+      "isMask": true
+    }
+  ]
+}

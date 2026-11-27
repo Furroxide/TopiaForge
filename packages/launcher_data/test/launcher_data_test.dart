@@ -1,21 +1,37 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_data/src/launch_running_probe.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
+import 'held_file_support.dart';
+import 'open_handle_support.dart';
 
 part 'launcher_data_test_helpers.dart';
 part 'installed_build_provenance_test_part.dart';
 part 'launcher_data_diagnostics_test_part.dart';
 part 'devtool_installation_test_part.dart';
-part 'launcher_data_ugc_test_part.dart';
 part 'profile_launch_test_part.dart';
+part 'launch_selection_regression_test_part.dart';
+part 'launch_v4_integration_test_part.dart';
+part 'launch_v4_admission_test_part.dart';
+part 'launch_safe_mode_recovery_test_part.dart';
+part 'launch_creation_receipt_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
+part 'runtime_loader_notices_test_part.dart';
+part 'restart_requirement_test_part.dart';
+part 'world_catalog_test_part.dart';
+part 'launch_v5_integration_test_part.dart';
+part 'dev_peer_launch_integration_test_part.dart';
+part 'registry_history_test_part.dart';
+part 'owned_game_quit_test_part.dart';
 
 void main() {
   late Directory root;
@@ -23,34 +39,52 @@ void main() {
   late Directory repoRoot;
   late Directory gameRoot;
   late LocalLauncherRepository repository;
+  late bool gameRunning;
+  late bool probeThrows;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('topiaforge-launcher-data-');
+    // Canonicalise immediately: Windows hands back an 8.3 short path when the
+    // account name exceeds eight characters (C:\Users\RUNNER~1 on CI), and macOS
+    // symlinks /var to /private/var. The repository canonicalises the install it
+    // returns, so a raw temp root makes path comparisons environment-dependent.
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-launcher-data-')
+          .resolveSymbolicLinksSync(),
+    );
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
     gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(gameRoot);
     _createRuntimeSources(repoRoot);
     _createRegistry(repoRoot);
+    gameRunning = true;
+    probeThrows = false;
     repository = LocalLauncherRepository(
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
       knownGamePath: gameRoot.path,
       packageMetadataValidator: _acceptPackageMetadata,
+      gameRunningProbe: (_) async {
+        if (probeThrows) {
+          throw StateError('Process list unavailable.');
+        }
+        return gameRunning;
+      },
     );
   });
 
-  tearDown(() {
+  tearDown(() async {
+    await repository.dispose();
     if (root.existsSync()) {
-      root.deleteSync(recursive: true);
+      try {
+        expectNothingOpenUnder(root);
+      } finally {
+        root.deleteSync(recursive: true);
+      }
     }
   });
 
-  _registerUgcDataTests(
-    repository: () => repository,
-    dataRoot: () => dataRoot,
-    gameRoot: () => gameRoot,
-  );
   _registerDiagnosticDataTests(
     repository: () => repository,
     dataRoot: () => dataRoot,
@@ -62,6 +96,34 @@ void main() {
     repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,
   );
+  _registerLaunchSelectionRegressions(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchV4IntegrationTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchV4AdmissionTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchCreationReceiptTests(
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchSafeModeRecoveryTests(
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
   _registerRuntimeRepairSecurityTests(
     repository: () => repository,
     repositoryRoot: () => repoRoot,
@@ -69,6 +131,7 @@ void main() {
   );
   _registerRuntimeLoaderPayloadTests(
     repository: () => repository,
+    repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,
   );
   _registerDevToolInstallationTests(
@@ -76,9 +139,44 @@ void main() {
     root: () => root,
     gameRoot: () => gameRoot,
   );
+  _registerRestartRequirementTests(
+    root: () => root,
+    gameRoot: () => gameRoot,
+    repository: () => repository,
+    setGameRunning: (value) => gameRunning = value,
+    setProbeThrows: (value) => probeThrows = value,
+  );
+  _registerWorldCatalogTests(
+    root: () => root,
+    gameRoot: () => gameRoot,
+    repository: () => repository,
+  );
+
   _registerInstalledBuildProvenanceTests(
     repository: () => repository,
     root: () => root,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchV5IntegrationTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerDevPeerLaunchIntegrationTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerRegistryHistoryTests(
+    root: () => root,
+    repository: () => repository,
+    gameRoot: () => gameRoot,
+  );
+  _registerOwnedGameQuitTests(
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,
   );
 
@@ -366,47 +464,6 @@ void main() {
     expect(
       mods.map((mod) => mod.id),
       containsAll(['dependency.mod', 'main.mod']),
-    );
-  });
-
-  test('adds installed manifest gamemodes to world catalog', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(
-      root,
-      id: 'mode.mod',
-      version: '1.0.0',
-      worldGamemodes: [
-        {
-          'id': 'mode.mod.survival',
-          'name': 'Survival',
-          'description': 'Static gamemode metadata.',
-        },
-      ],
-    );
-
-    await repository.installPackage(package.path, install);
-    final snapshot = await repository.loadSnapshot();
-
-    expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('mode.mod.survival'),
-    );
-  });
-
-  test('adds installed registry gamemodes to world catalog', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(
-      root,
-      id: 'registry.sample',
-      version: '1.0.0',
-    );
-
-    await repository.installPackage(package.path, install);
-    final snapshot = await repository.loadSnapshot();
-
-    expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('registry.sample.survival'),
     );
   });
 

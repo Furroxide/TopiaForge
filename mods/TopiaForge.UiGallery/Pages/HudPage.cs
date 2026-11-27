@@ -46,7 +46,7 @@ namespace TopiaForge.UiGallery.Pages
                 return;
             }
 
-            hud = host.HudLayer("gallery-hud");
+            hud = host.HudLayer("gallery-hud", persistent: true);
             var panel = hud.Scaled.Panel(TopiaForgePanelStyle.HudPanel);
             panel.Dock(TopiaForgeCorner.TopLeft).Size(340f, 190f);
             var column = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);

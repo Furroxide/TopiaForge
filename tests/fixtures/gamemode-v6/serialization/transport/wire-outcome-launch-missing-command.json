@@ -1,0 +1,31 @@
+{
+  "id": "wire-outcome-launch-missing-command",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive outcome codec launch missing command",
+  "transport": "outcome",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "launch",
+    "requestId": "request-01",
+    "sequence": 5,
+    "phase": "running",
+    "status": "succeeded",
+    "sessionId": "session-01",
+    "blocks": []
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

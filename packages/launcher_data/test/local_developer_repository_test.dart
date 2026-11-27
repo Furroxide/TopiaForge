@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
-import 'package:launcher_data/src/ugc_sidecar_runtime.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -24,6 +23,9 @@ void main() {
     repository = LocalDeveloperRepository(
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
+      // Nothing on the machine's PATH: each real lookup is a process bounded
+      // to five seconds, which a loaded runner has missed.
+      executableLocator: (_) async => '',
     );
   });
 
@@ -94,21 +96,11 @@ void main() {
     expect(fallbackEntry, contains('Context.Logger.Info'));
     expect(fallbackEntry, isNot(contains('ITopiaForgeMod')));
     expect(workspace.project!.packageSources, isEmpty);
-    // The Unity companion is scaffolded with a README + a sample runtime config, and the project records it.
+    // The Unity companion is scaffolded with a README, and the project records it.
     expect(workspace.project!.unityCompanion.enabled, isTrue);
     expect(
       File(
         p.join(workspace.projectRoot, 'unity-companion', 'README.md'),
-      ).existsSync(),
-      isTrue,
-    );
-    expect(
-      File(
-        p.join(
-          workspace.projectRoot,
-          'unity-companion',
-          'topiaforge.ugc.livesync.sample.json',
-        ),
       ).existsSync(),
       isTrue,
     );
@@ -214,78 +206,6 @@ void main() {
     );
   });
 
-  test('doctor checks the UGC companion package and watch folder', () async {
-    final workspace = await repository.createModProject(
-      parentDirectory: root.path,
-      id: 'ugc.creator',
-      name: 'UGC Creator',
-      includeUnityCompanion: true,
-    );
-
-    // Inject a watch folder into the project's unityCompanion.liveSync config.
-    final watch = p.join(root.path, 'watch-out');
-    final projectFile = File(
-      p.join(workspace.projectRoot, 'topiaforge.project.json'),
-    );
-    final json =
-        jsonDecode(projectFile.readAsStringSync()) as Map<String, Object?>;
-    json['unityCompanion'] = {
-      'enabled': true,
-      'liveSync': {'watchFolder': watch},
-    };
-    projectFile.writeAsStringSync(jsonEncode(json));
-
-    final report = await repository.runDoctor(
-      projectPath: workspace.projectRoot,
-    );
-
-    // The template is absent in this synthetic repo, so the companion package is reported missing...
-    expect(
-      report.issues.any(
-        (issue) => issue.message.contains('UGC companion package missing'),
-      ),
-      isTrue,
-    );
-    // ...but the configured watch folder is created and reported writable.
-    expect(
-      report.messages.any(
-        (message) => message.contains('UGC watch folder is writable'),
-      ),
-      isTrue,
-    );
-    expect(Directory(watch).existsSync(), isTrue);
-  });
-
-  test('updateUgcLiveSync persists settings into the project', () async {
-    final workspace = await repository.createModProject(
-      parentDirectory: root.path,
-      id: 'ugc.persist',
-      name: 'UGC Persist',
-      includeUnityCompanion: true,
-    );
-
-    final updated = await repository.updateUgcLiveSync(
-      workspace.projectRoot,
-      const UgcLiveSyncSettings(
-        transport: 'automerge',
-        watchFolder: 'shared-out',
-        editorUrl: 'https://h/?project=automerge:doc&scene=main',
-      ),
-    );
-    expect(updated.unityCompanion.enabled, isTrue);
-    expect(updated.unityCompanion.liveSync.transport, 'automerge');
-
-    // Reload from disk to confirm it round-tripped through topiaforge.project.json.
-    final reloaded = await repository.loadDeveloperWorkspace(
-      projectPath: workspace.projectRoot,
-    );
-    expect(reloaded.project!.unityCompanion.liveSync.watchFolder, 'shared-out');
-    expect(
-      reloaded.project!.unityCompanion.liveSync.editorUrl,
-      'https://h/?project=automerge:doc&scene=main',
-    );
-  });
-
   test(
     'project registry tracks created + added projects and sniffs kind',
     () async {
@@ -363,35 +283,6 @@ void main() {
   });
 
   test('runSetup performs safe fixes and returns an environment', () async {
-    // A sidecar with deps already present means no real `npm install` runs (hermetic).
-    final sidecarDir = Directory(
-      p.join(repoRoot.path, 'tools', 'ugc-automerge-sidecar'),
-    )..createSync(recursive: true);
-    File(p.join(sidecarDir.path, 'index.mjs')).writeAsStringSync('// sidecar');
-    const package = {
-      'name': 'topiaforge-sidecar',
-      'version': '1.0.0',
-      'engines': {'node': '>=24.16.0'},
-      'dependencies': <String, String>{},
-    };
-    File(
-      p.join(sidecarDir.path, 'package.json'),
-    ).writeAsStringSync(jsonEncode(package));
-    File(p.join(sidecarDir.path, 'package-lock.json')).writeAsStringSync(
-      jsonEncode({
-        ...package,
-        'lockfileVersion': 3,
-        'requires': true,
-        'packages': {'': package},
-      }),
-    );
-    final inspected = TrustedUgcSidecar.inspectDirectory(sidecarDir);
-    final nodeModules = Directory(p.join(sidecarDir.path, 'node_modules'))
-      ..createSync();
-    File(
-      p.join(nodeModules.path, '.topiaforge-lock-sha256'),
-    ).writeAsStringSync(inspected.lockDigest);
-
     final result = await repository.runSetup();
 
     // checkEnvironment ran (the .NET SDK is always probed) and an action log is produced.
@@ -402,9 +293,10 @@ void main() {
   });
 
   test('Unity Editor check falls back to the Hub install-root scan', () async {
-    // Machine-dependent by nature: the invariant is that editor detection never
-    // throws, and that a Hub-scanned editor implies the check is not "missing"
-    // even when Unity is absent from PATH.
+    // The Hub install-root scan is machine-dependent by nature: the invariant
+    // is that editor detection never throws, and that a Hub-scanned editor
+    // implies the check is not "missing" even when Unity is absent from PATH,
+    // as it is here.
     final environment = await repository.checkEnvironment();
     final unityCheck = environment.checks.firstWhere(
       (check) => check.name == 'Unity Editor',
@@ -445,7 +337,7 @@ Map<String, Object?> _manifestJson(
   String version, {
   List<String> apiAssemblies = const [],
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': id,
   'displayName': id,
   'version': version,

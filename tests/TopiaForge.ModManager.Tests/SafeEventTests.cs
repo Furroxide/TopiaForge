@@ -10,6 +10,7 @@ namespace TopiaForge.ModManager.Tests
         {
             GenericDispatchContinuesAfterFailure();
             ParameterlessDispatchContinuesWhenErrorReporterFails();
+            FallbackWithholdsPrivateMessages();
             Console.WriteLine("SafeEventTests passed.");
         }
 
@@ -36,8 +37,26 @@ namespace TopiaForge.ModManager.Tests
                 SafeEvent.Invoke(handlers, _ => throw new InvalidOperationException("logger failed")));
 
             Assert(reached, "a failing error reporter must not starve later subscribers");
-            Assert(fallback.Contains("subscriber failed") && fallback.Contains("logger failed"),
+            Assert(fallback.Contains("subscriber failed (InvalidOperationException)") && fallback.Contains("reporter also failed (InvalidOperationException)"),
                 "a failed error reporter should use the independent console fallback");
+        }
+
+        private static void FallbackWithholdsPrivateMessages()
+        {
+            var reached = false;
+            Action handlers = () => throw new PrivateFailure();
+            handlers += () => reached = true;
+            var output = CaptureStandardError(() => SafeEvent.Invoke(handlers));
+            Assert(reached && output.Contains(nameof(PrivateFailure)), "an unreported failure keeps its type and later subscribers");
+            reached = false;
+            output = CaptureStandardError(() => SafeEvent.Invoke(handlers, _ => throw new PrivateFailure()));
+            Assert(reached && output.Contains("reporter also failed (PrivateFailure)"), "a failed reporter keeps only its type");
+        }
+
+        private sealed class PrivateFailure : Exception
+        {
+            public override string Message => throw new InvalidOperationException("Private messages must not be read.");
+            public override string ToString() => throw new InvalidOperationException("Private exception text must not be read.");
         }
 
         private static string CaptureStandardError(Action action)

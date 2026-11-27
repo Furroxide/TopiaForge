@@ -432,6 +432,8 @@ namespace TopiaForge.ModManager.Tests
 
         private sealed class FakePhysicsService : IPhysicsService
         {
+            public OperationResult<IBlocker> AddBlocker(BlockerRequest request) =>
+                OperationResult<IBlocker>.Failure(ModErrorCode.Unavailable, "No test blocker backend.");
             private readonly PhysicsHit hit;
             public FakePhysicsService(PhysicsHit hit) => this.hit = hit;
 

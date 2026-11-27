@@ -14,6 +14,11 @@ const _maxReceiptTotalBytes = 2 * 1024 * 1024 * 1024;
 
 Set<String> _packageReceiptCriticalPaths(ModManifest manifest) => <String>{
   'topiaforge.mod.json',
+  for (final world
+      in manifest.contributions?.worlds ?? const <ModWorldDeclaration>[])
+    if (world.content?.kind == ModWorldContent.mapKind &&
+        world.content!.file.isNotEmpty)
+      world.content!.file,
   manifest.entryAssembly.replaceAll('\\', '/'),
   ...manifest.apiAssemblies.map((path) => path.replaceAll('\\', '/')),
   ...(manifest.multiplayer?.synchronizedFiles ?? const <String>[]),

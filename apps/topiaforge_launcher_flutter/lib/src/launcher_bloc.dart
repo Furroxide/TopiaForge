@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,101 +7,166 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import 'launcher_event.dart';
 import 'launcher_build.dart';
+import 'launcher_multiplayer_state.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
+import 'session_link_inbox.dart';
 
 part 'launcher_bloc_actions.dart';
+part 'launcher_map_source_actions.dart';
+part 'launcher_launch_actions.dart';
 part 'launcher_event_dispatch.dart';
 part 'launcher_game_install_actions.dart';
 part 'launcher_profile_actions.dart';
-part 'launcher_developer_ugc_actions.dart';
 part 'launcher_developer_project_actions.dart';
 part 'launcher_developer_actions.dart';
 part 'launcher_runtime_constraints.dart';
 part 'launcher_update_actions.dart';
+part 'launcher_reachability_actions.dart';
+part 'launcher_bloc_helpers.dart';
+part 'launcher_session_link_actions.dart';
+part 'launcher_multiplayer_settings_actions.dart';
+part 'launcher_multiplayer_network_actions.dart';
+part 'launcher_multiplayer_work.dart';
+part 'launcher_multiplayer_join_actions.dart';
+part 'launcher_multiplayer_join_steps.dart';
+part 'launcher_hosting_actions.dart';
+part 'launcher_cleanup_actions.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(
     this._repository, {
     DeveloperRepository? developerRepository,
     LauncherUpdateRepository? updateRepository,
+    ReachabilityProbeGateway? reachabilityProbe,
+    Stream<SessionLinkArrival>? sessionLinks,
+    SessionLinkHandlingGateway? sessionLinkHandling,
+    MultiplayerGateway? multiplayer,
   }) : _developerRepository = developerRepository,
        _updateRepository = updateRepository,
+       _reachabilityProbe = reachabilityProbe,
+       _sessionLinkHandling = sessionLinkHandling,
+       _multiplayer = multiplayer,
        super(LauncherState.initial()) {
     on<LauncherEvent>(_dispatchEvent, transformer: sequential());
-    _ugcPublisherSub = _repository.ugcPublisherEvents.listen((event) {
-      if (isClosed) {
-        return;
-      }
-      switch (event) {
-        case UgcPublisherOutput(:final sessionId, :final line):
-          add(DeveloperUgcSidecarOutput(line, sessionId));
-        case UgcPublisherExited(:final sessionId, :final exitCode):
-          add(DeveloperUgcPublisherExited(sessionId, exitCode));
-      }
-    });
+    _launchActivitySub = _repository.launchActivities.listen(
+      (activity) {
+        if (!isClosed) add(LaunchActivityUpdated(activity));
+      },
+      onError: (Object error) {
+        if (!isClosed) {
+          add(
+            LaunchActivityMonitorFailed(
+              'Runtime status could not be read: $error',
+            ),
+          );
+        }
+      },
+    );
     _updateStatusSub = _updateRepository?.statuses.listen((status) {
       if (!isClosed) add(LauncherUpdateStatusChanged(status));
+    });
+    _sessionLinkSub = sessionLinks?.listen((arrival) {
+      if (!isClosed) add(SessionLinkReceived(arrival));
+    });
+    _linkHandlingSub = sessionLinkHandling?.statuses.listen((status) {
+      if (!isClosed) add(SessionLinkHandlingUpdated(status));
+    });
+    _lanSnapshotSub = multiplayer?.lanSnapshots.listen((snapshot) {
+      if (!isClosed) add(MultiplayerLanSnapshotChanged(snapshot));
     });
   }
 
   final LauncherRepository _repository;
   final DeveloperRepository? _developerRepository;
   final LauncherUpdateRepository? _updateRepository;
+  final ReachabilityProbeGateway? _reachabilityProbe;
+  final SessionLinkHandlingGateway? _sessionLinkHandling;
+  final MultiplayerGateway? _multiplayer;
+  final _multiplayerWork = _MultiplayerWork();
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
-  StreamSubscription<UgcPublisherEvent>? _ugcPublisherSub;
   StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
-
-  // True while a "Go Live" is waiting for the publisher to report its live document URL before launching the game
-  // (so the game auto-connects to the real document, not an empty one).
-  bool _ugcGoLivePending = false;
-  int? _ugcPublisherSessionId;
-  Completer<void>? _ugcMutationLock;
+  StreamSubscription<LaunchActivity>? _launchActivitySub;
+  StreamSubscription<SessionLinkArrival>? _sessionLinkSub;
+  StreamSubscription<SessionLinkHandlingStatus>? _linkHandlingSub;
+  StreamSubscription<LanBrowseSnapshot>? _lanSnapshotSub;
+  int _launchPreviewGeneration = 0;
+  String? _activeLaunchRequest;
+  LaunchActivity? _launchReceipt;
+  // How the game the active launch replaced ended, kept on its status line.
+  ReplacedGame? _replacedGame;
 
   String get dataRoot => _repository.dataRoot;
 
-  Future<T> _withUgcMutation<T>(Future<T> Function() run) async {
-    while (_ugcMutationLock != null) {
-      final pending = _ugcMutationLock!;
-      await pending.future;
-    }
-    final lock = Completer<void>();
-    _ugcMutationLock = lock;
-    try {
-      return await run();
-    } finally {
-      _ugcMutationLock = null;
-      lock.complete();
-    }
+  /// Whether the launcher has multiplayer settings and network diagnostics.
+  bool get hasMultiplayer => _multiplayer != null;
+
+  /// Whether the launcher handles `topiaforge://` links here.
+  bool get hasLinkHandling => _sessionLinkHandling != null;
+
+  /// Whether the launcher can join multiplayer servers here.
+  bool get canJoin => _multiplayer is MultiplayerJoinGateway;
+  bool get canHost => _multiplayer is MultiplayerHostingGateway;
+  bool get canCleanServerContent => _repository is MultiplayerContentHost;
+
+  @override
+  void onChange(Change<LauncherState> change) {
+    super.onChange(change);
+    _multiplayerStateChanged(change.currentState, change.nextState);
   }
 
   @override
   Future<void> close() {
-    final publisherSubscription = _ugcPublisherSub;
-    _ugcPublisherSub = null;
-    // Initiate both stream shutdowns synchronously so no new publisher output
-    // or UI events can enter while pending handlers finish. Repository
-    // disposal then owns sidecar shutdown instead of racing a handler with a
-    // duplicate stop request.
-    final publisherClose = publisherSubscription?.cancel();
+    // Initiate the stream shutdown synchronously so no new UI events can enter
+    // while pending handlers finish.
     final updateClose = _updateStatusSub?.cancel();
     _updateStatusSub = null;
+    final launchClose = _launchActivitySub?.cancel();
+    _launchActivitySub = null;
+    final linkClose = _sessionLinkSub?.cancel();
+    _sessionLinkSub = null;
+    final handlingClose = _linkHandlingSub?.cancel();
+    _linkHandlingSub = null;
+    final lanClose = _lanSnapshotSub?.cancel();
+    _lanSnapshotSub = null;
+    _multiplayerWork.cancelAll();
+    _launchPreviewGeneration++;
     final blocClose = super.close();
     return Future.wait<void>([
-      ?publisherClose,
       ?updateClose,
+      ?launchClose,
+      ?linkClose,
+      ?handlingClose,
+      ?lanClose,
       blocClose,
     ]).whenComplete(() async {
       await _updateRepository?.dispose();
+      await _multiplayer?.dispose();
       await _repository.dispose();
     });
   }
 
   Future<void> _onLoad(LauncherEvent event, Emitter<LauncherState> emit) async {
+    if (event is LauncherStarted && _sessionLinkHandling != null) {
+      add(const SessionLinkHandlingStarted());
+    }
+    if (event is LauncherStarted && _multiplayer != null) {
+      add(const MultiplayerPreferencesRefreshRequested(checkGame: false));
+      _listenForJoinHandoffs();
+    }
     await _guard(emit, 'Refreshed launcher state.', () async {
       final snapshot = await _repository.loadSnapshot();
-      emit(_snapshotState(snapshot, 'Ready.'));
+      final probeSettings = await _reachabilityProbe?.loadSettings();
+      emit(
+        _snapshotState(
+          snapshot,
+          'Ready.',
+        ).copyWith(reachabilityProbe: probeSettings),
+      );
+      final mapSources = await _loadSavedMaps();
+      emit(state.copyWith(publishedMapSources: mapSources));
+      _queueLaunchPreviews();
       if (event is LauncherStarted &&
           snapshot.launcherUpdates.enabled &&
           snapshot.launcherUpdates.checkAutomatically &&
@@ -135,7 +200,12 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     DeveloperModeToggled event,
     Emitter<LauncherState> emit,
   ) async {
-    await _repository.setDeveloperMode(event.enabled);
+    if (!await _savedSetting(
+      emit,
+      () => _repository.setDeveloperMode(event.enabled),
+    )) {
+      return;
+    }
     // Don't strand the user on a now-hidden tab.
     final section = !event.enabled && state.section == LauncherSection.developer
         ? LauncherSection.home
@@ -160,12 +230,20 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     LauncherUpdateSettingsChanged event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, 'Update settings could not be saved.')) {
+      return;
+    }
     final settings = state.launcherUpdates.copyWith(
       enabled: event.enabled,
       checkAutomatically: event.checkAutomatically,
       channel: event.channel,
     );
-    await _repository.saveLauncherUpdateSettings(settings);
+    if (!await _savedSetting(
+      emit,
+      () => _repository.saveLauncherUpdateSettings(settings),
+    )) {
+      return;
+    }
     emit(
       state.copyWith(
         launcherUpdates: settings,
@@ -409,91 +487,11 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
     );
     final profiles = [...state.profiles, profile];
-    await _repository.saveProfiles(profiles, profile.id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: profile.id,
-        statusMessage: 'Imported profile ${profile.name}.',
-      ),
+    await _persistProfiles(
+      profiles,
+      profile.id,
+      emit,
+      'Imported profile ${profile.name}.',
     );
-  }
-
-  LauncherState _snapshotState(
-    LauncherSnapshot snapshot,
-    String statusMessage, {
-    String? selectedModId,
-    IssueSeverity statusSeverity = IssueSeverity.info,
-  }) {
-    final selected =
-        selectedModId ??
-        (snapshot.installedMods.any((mod) => mod.id == state.selectedModId)
-            ? state.selectedModId
-            : null) ??
-        (snapshot.installedMods.isEmpty
-            ? null
-            : snapshot.installedMods.first.id);
-    return state.copyWith(
-      isBusy: false,
-      statusMessage: snapshot.gameInstall == null
-          ? 'Select or detect a Robotopia install to begin.'
-          : statusMessage,
-      statusSeverity: snapshot.gameInstall == null
-          ? IssueSeverity.info
-          : statusSeverity,
-      gameInstall: snapshot.gameInstall,
-      clearGameInstall: snapshot.gameInstall == null,
-      gameInstallCandidates: snapshot.gameInstallCandidates,
-      profiles: snapshot.profiles,
-      selectedProfileId: snapshot.selectedProfileId,
-      installedMods: snapshot.installedMods,
-      registryMods: snapshot.registryMods,
-      packageSources: snapshot.packageSources,
-      sourceStatuses: snapshot.sourceStatuses,
-      worldCatalog: snapshot.worldCatalog,
-      recentLog: snapshot.recentLog,
-      launcherLog: snapshot.launcherLog,
-      resolution: _dependencyPlanner.resolveInstalled(
-        snapshot.installedMods,
-        gameVersion: snapshot.gameInstall?.gameVersion,
-        requireKnownGameVersion: true,
-        platform: _launcherGamePlatform(snapshot.gameInstall),
-        architecture: _launcherGameArchitecture(snapshot.gameInstall),
-        contentTargets: _launcherGameContentTargets(snapshot.gameInstall),
-      ),
-      launcherUpdates: snapshot.launcherUpdates,
-      selectedModId: selected,
-      clearSelectedMod: selected == null,
-      developerMode: snapshot.developerMode,
-      clearError: true,
-    );
-  }
-
-  Future<void> _guard(
-    Emitter<LauncherState> emit,
-    String successMessage,
-    Future<void> Function() run,
-  ) async {
-    emit(state.copyWith(isBusy: true, clearError: true));
-    try {
-      await run();
-      if (state.isBusy) {
-        emit(
-          state.copyWith(
-            isBusy: false,
-            statusMessage: successMessage,
-            clearError: true,
-          ),
-        );
-      }
-    } on Object catch (error) {
-      emit(
-        state.copyWith(
-          isBusy: false,
-          errorMessage: error.toString(),
-          statusMessage: 'Action failed.',
-        ),
-      );
-    }
   }
 }

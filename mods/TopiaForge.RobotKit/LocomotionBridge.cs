@@ -14,12 +14,6 @@ namespace TopiaForge.RobotKit
     // referenced; every entry point degrades to a safe default so a renamed/missing symbol never throws.
     internal static class LocomotionBridge
     {
-        public enum WalkPoll
-        {
-            Pending,
-            Done
-        }
-
         public enum Gait
         {
             Walk,
@@ -63,11 +57,6 @@ namespace TopiaForge.RobotKit
         private static FieldInfo? sprintingSpeedField;       // LocomotionController.sprintingSpeed
         private static FieldInfo? turnSpeedField;            // LocomotionController.turnSpeed
 
-        // Memoized from the first awaiter's runtime type. Load-bearing assumption: every BeginWalk goes through
-        // the same WalkSession.Walk -> UniTask<ActionSuccess>, so all awaiters share one type. If a future
-        // overload ever returns a differently-shaped awaiter, resolve these per-type instead.
-        private static PropertyInfo? awaiterIsCompleted;     // UniTask<ActionSuccess>.Awaiter.IsCompleted
-        private static MethodInfo? awaiterGetResult;         // UniTask<ActionSuccess>.Awaiter.GetResult()
         private static Component? cachedPathfinder;
 
         // Reachability/walkability reflection (RoboPath), resolved lazily on first use and independent of the walk
@@ -102,11 +91,23 @@ namespace TopiaForge.RobotKit
                     return false;
                 }
 
-                // The static convenience overload of Walk (the one that takes the AgentHead as its first arg).
+                // The static convenience overload of Walk (the one that takes the AgentHead as its first arg). Every
+                // position BeginWalk fills is pinned, so a re-typed argument leaves the walk unavailable instead of
+                // failing inside Invoke. TaskGraph is passed as null and never resolved, so it is matched by name.
                 walkMethod = WalkSessionType.GetMethods(StaticFlags).FirstOrDefault(candidate =>
                     candidate.Name == "Walk" &&
                     candidate.GetParameters() is { Length: 11 } parameters &&
-                    parameters[0].ParameterType == AgentHeadType);
+                    parameters[0].ParameterType == AgentHeadType &&
+                    parameters[1].ParameterType == ActionTargetType &&
+                    parameters[2].ParameterType.FullName == "TaskGraph" &&
+                    parameters[3].ParameterType == typeof(CancellationToken) &&
+                    parameters[4].ParameterType == typeof(bool) &&
+                    parameters[5].ParameterType == typeof(float) &&
+                    parameters[6].ParameterType == typeof(float) &&
+                    parameters[7].ParameterType == typeof(TimeSpan) &&
+                    parameters[8].ParameterType == typeof(Func<Vector3, bool>) &&
+                    parameters[9].ParameterType == typeof(bool) &&
+                    parameters[10].ParameterType == typeof(bool));
 
                 mostRelevantHead = AgentHeadType.GetMethod(
                     "MostRelevantHead", StaticFlags, null, new[] { typeof(GameObject) }, null);
@@ -200,13 +201,19 @@ namespace TopiaForge.RobotKit
                     candidate.Name == "Pathfind" &&
                     candidate.GetParameters() is { Length: 6 } parameters &&
                     parameters[0].ParameterType == typeof(Vector3) &&
-                    parameters[1].ParameterType == GoalType);
+                    parameters[1].ParameterType == GoalType &&
+                    parameters[2].ParameterType == PathFindSettingsType &&
+                    parameters[3].ParameterType.FullName == "TaskGraph" &&
+                    parameters[4].ParameterType == typeof(CancellationToken) &&
+                    parameters[5].ParameterType == typeof(GameObject));
 
                 // instance Pathfinder.CreateSampler(PathFindSettings settings, Goal goal, GameObject ignoreObject)
                 createSamplerMethod = PathfinderType.GetMethods(InstanceFlags).FirstOrDefault(candidate =>
                     candidate.Name == "CreateSampler" &&
                     candidate.GetParameters() is { Length: 3 } parameters &&
-                    parameters[1].ParameterType == GoalType);
+                    parameters[0].ParameterType == PathFindSettingsType &&
+                    parameters[1].ParameterType == GoalType &&
+                    parameters[2].ParameterType == typeof(GameObject));
 
                 // Goal(Vector3 position, float minStopDistance, float maxGoalDistance, Func<Vector3,bool> goalFilter)
                 goalFromPosition = GoalType.GetConstructor(
@@ -595,44 +602,9 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        // Poll a walk started by BeginWalk. Pending until the native walk task finishes (success, cancellation,
-        // retries exhausted, or any fault are all treated as Done — the caller decides whether to restart).
-        public static WalkPoll PollWalk(object awaiter)
-        {
-            try
-            {
-                var awaiterType = awaiter.GetType();
-                awaiterIsCompleted ??= awaiterType.GetProperty("IsCompleted", BindingFlags.Public | BindingFlags.Instance);
-                if (awaiterIsCompleted == null)
-                {
-                    return WalkPoll.Done;
-                }
-
-                if (awaiterIsCompleted.GetValue(awaiter) is not bool completed || !completed)
-                {
-                    return WalkPoll.Pending;
-                }
-
-                // UniTask sources are pooled/versioned: call GetResult exactly once, then drop the awaiter.
-                awaiterGetResult ??= awaiterType.GetMethod("GetResult", BindingFlags.Public | BindingFlags.Instance);
-                try
-                {
-                    awaiterGetResult?.Invoke(awaiter, null);
-                }
-                catch (Exception ex)
-                {
-                    // Cancellation/retry/fault all complete the walk; the caller restarts as appropriate.
-                    RobotKitDiagnostics.ReportOnce("native walk completion", ex);
-                }
-
-                return WalkPoll.Done;
-            }
-            catch (Exception ex)
-            {
-                RobotKitDiagnostics.ReportOnce("walk result inspection", ex);
-                return WalkPoll.Done;
-            }
-        }
+        // Completion retains the native success/ignore distinction; cancelled intents cannot arrive.
+        public static NativeWalkCompletion.Result PollWalk(object awaiter, bool cancelled = false) =>
+            NativeWalkCompletion.Poll(awaiter, cancelled);
 
         // Best-effort override of the native gait speed (the field matching the active gait) and turn speed.
         // Zero leaves the prefab's serialized value untouched.

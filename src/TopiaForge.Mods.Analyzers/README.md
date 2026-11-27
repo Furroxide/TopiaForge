@@ -10,7 +10,31 @@ This package is included automatically by the TopiaForge V1 SDK. It reports acti
 - references `TopiaForge.Mods.Interop.Unity` without the root-level `unsafe-native` capability; or
 - references the loader-owned `TopiaForge.Mods.UnityUi` renderer instead of `Context.Ui`; or
 - calls a retired pre-V1 authoring API.
+- uses an SDK API newer than its manifest's minimum loader version (TF1010).
+- declares an invalid map world, an unpacked file or a missing required Worlds dependency (TF1011).
+
+TF1010 reads `RequiresTopiaForge` from shipped SDK metadata. Its code fix raises both the loader and
+SDK floors in simple `>=A <B` manifest ranges without widening their ceilings. Other ranges need an
+intentional manifest edit. See [version gates](https://docs.topiaforge.dev/diagnostics/TF1010).
+
+It also warns when a mod reads an input press or release in a FixedUpdate handler, which misses or
+repeats presses and, in multiplayer, never counts as the player's own action.
 
 Manifest checks parse the JSON structure: matching text in descriptions, dependency range values,
 or `x-*` metadata never satisfies a dependency or capability. Each diagnostic links to a stable
 remediation page. The package has no runtime component.
+## Authored map diagnostics
+
+TF1012 warns when a gamemode reads authored map content without a map-world launch
+target. TF1013 checks literal entity ids and copied anchors files against matching
+`obj/topiaforge-map-survey*.json` snapshots. Refresh them with `topiaforge world survey`.
+Without a matching survey TF1013 is silent. Its code fix offers surveyed ids instead
+of guessing through duplicate names. See [diagnostics](https://docs.topiaforge.dev/reference/diagnostics/).
+
+## World view diagnostics
+
+TF1014 warns about view changes and blockers reachable from participant code.
+Move them into the server controller; runtime authority checks still apply.
+TF1015 offers nearest environment keys only from a verified native catalogue.
+The current catalogue is deliberately unqualified pending native asset capture,
+so this rule does not yet diagnose preset literals in ordinary builds.

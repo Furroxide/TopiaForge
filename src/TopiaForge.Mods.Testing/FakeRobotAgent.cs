@@ -9,11 +9,15 @@ namespace TopiaForge.Mods.Testing
         private Action<FakeRobotAgent>? release;
         private IDisposable? lifetimeLease;
         private RobotInteractionOptions interaction;
+        private readonly Func<bool> isGuestOrigin;
+        private readonly Func<bool> isClient;
 
         internal FakeRobotAgent(
             string id,
             RobotAgentSpawnRequest request,
-            Action<FakeRobotAgent> release)
+            Action<FakeRobotAgent> release,
+            Func<bool> isGuestOrigin,
+            Func<bool> isClient)
         {
             Id = id;
             Name = request.Name ?? id;
@@ -27,6 +31,8 @@ namespace TopiaForge.Mods.Testing
             Scale = request.Scale;
             interaction = request.Interaction;
             this.release = release;
+            this.isGuestOrigin = isGuestOrigin;
+            this.isClient = isClient;
         }
 
         internal void AttachLifetimeLease(IDisposable lease)
@@ -89,7 +95,12 @@ namespace TopiaForge.Mods.Testing
         public bool AutoCompleteMovement { get; set; } = true;
 
         /// <inheritdoc />
-        public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => Mutate(() => BrainMode = mode);
+        public OperationResult<bool> SetBrainMode(RobotBrainMode mode)
+        {
+            if (!Enum.IsDefined(typeof(RobotBrainMode), mode))
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Unknown robot brain mode.");
+            return Mutate(() => BrainMode = mode, mode == RobotBrainMode.Autonomous);
+        }
 
         /// <inheritdoc />
         public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings)
@@ -180,7 +191,8 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentNullException(nameof(options));
             }
 
-            return Mutate(() => interaction = options);
+            return Mutate(() => interaction = options, options.NativeTalkMode == RobotNativeTalkMode.Enabled,
+                options.CustomInteraction != null);
         }
 
         /// <inheritdoc />
@@ -236,12 +248,20 @@ namespace TopiaForge.Mods.Testing
             }
         }
 
-        private OperationResult<bool> Mutate(Action action)
+        private OperationResult<bool> Mutate(Action action, bool requiresNativeBrain = false, bool requiresHostInteraction = false)
         {
             if (!IsAlive)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake robot is not alive.");
             }
+
+            if (requiresNativeBrain && isGuestOrigin())
+                return OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative,
+                    "Autonomous robots and native conversation require a host call outside a guest-origin callback.");
+
+            if (requiresHostInteraction && isClient())
+                return OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative,
+                    "Custom robot interactions must be installed by the host.");
 
             action();
             return OperationResult<bool>.Success(true);

@@ -18,6 +18,23 @@ namespace TopiaForge.Mods.UnityUi
         Debug,
     }
 
+    internal static class TopiaForgeLayerPriority
+    {
+        internal const TopiaForgeLayerBand Overlay = (TopiaForgeLayerBand)6;
+        internal const TopiaForgeLayerBand Manager = (TopiaForgeLayerBand)7;
+        internal const TopiaForgeLayerBand Stinger = (TopiaForgeLayerBand)8;
+        internal const TopiaForgeLayerBand TrustOverlay = (TopiaForgeLayerBand)9;
+
+        internal static int Rank(TopiaForgeLayerBand band) => band switch
+        {
+            Overlay => 30,
+            Stinger => 34,
+            Manager => 38,
+            TrustOverlay => 90,
+            _ => (int)band * 20,
+        };
+    }
+
     /// <summary>
     /// Sequential canvas sorting-order allocation within fixed bands, keeping every kit
     /// canvas above the game's UI and modal surfaces above HUD surfaces regardless of
@@ -38,6 +55,9 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>The default ceiling design-token value.</summary>
         public const int DefaultCeiling = 32000;
 
+        // The first reserved framework band follows the public bands.
+        internal const TopiaForgeLayerBand TrustBand = (TopiaForgeLayerBand)((int)TopiaForgeLayerBand.Debug + 1);
+
         private readonly int[] bases;
         private readonly int[] limits;
         private readonly int[] next;
@@ -52,37 +72,60 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Creates layer-band ranges using the supplied bases and band size.</summary>
         public TopiaForgeLayerBands(int hudBase, int windowBase, int modalBase, int toastBase, int debugBase, int ceiling)
+            : this(hudBase, windowBase, modalBase, toastBase, debugBase, ceiling, includeOverlayBands: false)
+        {
+        }
+
+        internal static TopiaForgeLayerBands ForRuntime() => new TopiaForgeLayerBands(
+            DefaultHudBase, DefaultWindowBase, DefaultModalBase, DefaultToastBase, DefaultDebugBase, DefaultCeiling, includeOverlayBands: true);
+
+        private TopiaForgeLayerBands(int hudBase, int windowBase, int modalBase, int toastBase, int debugBase, int ceiling, bool includeOverlayBands)
         {
             if (!(hudBase < windowBase && windowBase < modalBase && modalBase < toastBase && toastBase < debugBase && debugBase < ceiling))
             {
                 throw new ArgumentException("Layer band bases must be strictly ascending: hud < window < modal < toast < debug < ceiling.");
             }
 
-            bases = new[] { hudBase, windowBase, modalBase, toastBase, debugBase };
-            limits = new[] { windowBase, modalBase, toastBase, debugBase, ceiling };
-            next = new[] { hudBase, windowBase, modalBase, toastBase, debugBase };
-            released = new[]
+            // Leave room between stingers and the manager for captions.
+            const int overlayBase = 31200;
+            const int stingerBase = 31340;
+            const int stingerLimit = 31360;
+            const int managerBase = 31380;
+            const int trustOverlayBase = 31950;
+            const int trustPromptBase = 31960;
+            bases = includeOverlayBands
+                ? new[] { hudBase, windowBase, modalBase, toastBase, debugBase, trustPromptBase, overlayBase, managerBase,
+                    stingerBase, trustOverlayBase }
+                : new[] { hudBase, windowBase, modalBase, toastBase, debugBase };
+            limits = includeOverlayBands
+                ? new[] { windowBase, overlayBase, toastBase, debugBase, trustOverlayBase, ceiling, stingerBase, modalBase,
+                    stingerLimit, trustPromptBase }
+                : new[] { windowBase, modalBase, toastBase, debugBase, ceiling };
+            next = (int[])bases.Clone();
+            released = new SortedSet<int>[bases.Length];
+            allocationCounts = new Dictionary<int, int>[bases.Length];
+            for (var index = 0; index < bases.Length; index++)
             {
-                new SortedSet<int>(),
-                new SortedSet<int>(),
-                new SortedSet<int>(),
-                new SortedSet<int>(),
-                new SortedSet<int>(),
-            };
-            allocationCounts = new[]
-            {
-                new Dictionary<int, int>(),
-                new Dictionary<int, int>(),
-                new Dictionary<int, int>(),
-                new Dictionary<int, int>(),
-                new Dictionary<int, int>(),
-            };
+                released[index] = new SortedSet<int>();
+                allocationCounts[index] = new Dictionary<int, int>();
+            }
         }
 
         /// <summary>Gets the base sorting order for a layer band.</summary>
         public int BaseOf(TopiaForgeLayerBand band)
         {
+            RequirePublicBand(band);
             return bases[(int)band];
+        }
+
+        /// <summary>Gets whether a sorting order lies in a band's range.</summary>
+        public bool Holds(TopiaForgeLayerBand band, int sortingOrder) =>
+            (uint)band < (uint)TrustBand && HoldsAllocatedBand(band, sortingOrder);
+
+        internal bool HoldsAllocatedBand(TopiaForgeLayerBand band, int sortingOrder)
+        {
+            var index = (int)band;
+            return index >= 0 && index < bases.Length && sortingOrder >= bases[index] && sortingOrder < limits[index];
         }
 
         /// <summary>
@@ -90,6 +133,17 @@ namespace TopiaForge.Mods.UnityUi
         /// caller should log and reuse the band's last order rather than throw mid-game).
         /// </summary>
         public bool TryAllocate(TopiaForgeLayerBand band, out int sortingOrder)
+        {
+            RequirePublicBand(band);
+            return TryAllocateBand(band, out sortingOrder);
+        }
+
+        internal static void RequirePublicBand(TopiaForgeLayerBand band)
+        {
+            if ((uint)band >= (uint)TrustBand) throw new ArgumentOutOfRangeException(nameof(band));
+        }
+
+        internal bool TryAllocateBand(TopiaForgeLayerBand band, out int sortingOrder)
         {
             var index = (int)band;
             if (released[index].Count > 0)
@@ -149,6 +203,12 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Remaining allocations available in a band.</summary>
         public int Remaining(TopiaForgeLayerBand band)
+        {
+            RequirePublicBand(band);
+            return ReserveRemaining(band);
+        }
+
+        internal int ReserveRemaining(TopiaForgeLayerBand band)
         {
             var index = (int)band;
             return (limits[index] - next[index]) + released[index].Count;

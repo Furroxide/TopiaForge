@@ -41,6 +41,12 @@ owner-scoped, lifetime-tracked lease that removes them on unload, and their cach
 (`AccessTools`), so a renamed Robotopia member downgrades that one fix to a logged no-op rather than breaking
 the mod.
 
+## In multiplayer
+
+Performance Fixes is client-local: its manifest declares `"multiplayer": {"mode": "client-local"}`. Its fixes
+change no behaviour, only how much work the game does, so each player may run it or not, and nobody else needs it
+to host or join.
+
 ## Build & install
 ```
 dotnet build mods/TopiaForge.PerfFixes/TopiaForge.PerfFixes.csproj -c Release

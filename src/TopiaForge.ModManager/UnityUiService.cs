@@ -4,26 +4,44 @@ using System.Linq;
 using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
+using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
+    /// <summary>
+    /// One mod's (or one scope's) <see cref="IUiService"/>. Every surface and modal it makes lives as long as that mod or
+    /// scope: their canvases survive scene loads, and the lifetime ends them. A gameplay HUD hides by itself outside
+    /// gameplay; a surface whose canvas the game or another mod destroys reports itself hidden for good.
+    /// </summary>
     internal sealed partial class OwnerUiService : IUiService
     {
         private readonly IModLifetime lifetime;
         private readonly IModLogger logger;
         private readonly UiHost host;
+        private readonly UiGameplayGate gameplay;
+        private readonly UnityUiHudPlacement hudPlacement;
+        private readonly UnityUiThemePackages themePackages;
         private readonly HashSet<string> surfaceIds = new HashSet<string>(StringComparer.Ordinal);
+        private readonly List<UnityUiSurface> surfaces = new List<UnityUiSurface>();
+        private static readonly UiColumn EmptyOverlayContent = new UiColumn(Array.Empty<UiNode>());
         private UiAccessibilityPreferences accessibility = UiAccessibilityPreferences.Default;
 
         public OwnerUiService(
             string ownerModId,
             string dataPath,
             IModLifetime lifetime,
-            IModLogger logger)
+            IModLogger logger,
+            UiGameplayGate gameplay,
+            UnityUiHudPlacement hudPlacement,
+            UnityUiThemePackages themePackages)
         {
             UnityMainThreadGuard.AssertCurrent();
             this.lifetime = lifetime;
             this.logger = logger;
+            this.gameplay = gameplay ?? throw new ArgumentNullException(nameof(gameplay));
+            this.hudPlacement = hudPlacement ?? throw new ArgumentNullException(nameof(hudPlacement));
+            galleryCaptureDirectory = dataPath;
+            this.themePackages = themePackages ?? throw new ArgumentNullException(nameof(themePackages));
             host = TopiaForgeUi.Create(new TopiaForgeUiOptions
             {
                 OwnerId = ownerModId,
@@ -32,7 +50,10 @@ namespace TopiaForge.ModManager
                 LogWarn = logger.Warn,
                 LogError = logger.Error
             });
+            host.PlainText = true;
             lifetime.Track(host);
+            host.LayerLost += OnLayerLost;
+            lifetime.Track(gameplay.Subscribe(OnGameplayChanged));
         }
 
         public UiAccessibilityPreferences Accessibility => accessibility;
@@ -56,6 +77,7 @@ namespace TopiaForge.ModManager
                     preferences.ReducedMotion,
                     preferences.MotionIntensity));
                 accessibility = preferences;
+                hudPlacement.Refresh();
                 return OperationResult<UiAccessibilityPreferences>.Success(preferences);
             }
             catch (Exception exception)
@@ -66,7 +88,10 @@ namespace TopiaForge.ModManager
             }
         }
 
-        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request)
+        public OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request) => CreateSurface(request, null);
+
+        private OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request, UiRemoteThemeSelection? remoteTheme,
+            GalleryPreviewPalette? preview = null)
         {
             UnityMainThreadGuard.AssertCurrent();
             if (request == null)
@@ -81,6 +106,37 @@ namespace TopiaForge.ModManager
                     "The mod is stopping and cannot create UI surfaces.");
             }
 
+            UiOverlayContentKind? overlayKind = null;
+            if (request.Kind == UiSurfaceKind.Overlay)
+            {
+                var admission = UiOverlayAdmission.Check(request.Content, request.Dismissible);
+                if (!admission.Succeeded)
+                    return OperationResult<IUiSurface>.Failure(admission.ErrorCode, admission.ErrorMessage);
+                if ((!remoteTheme.HasValue && surfaces.Count(surface => surface.IsAuthoredOverlay) >= UiOverlayLayout.MaximumLive) ||
+                    !TopiaForgeLayers.HasRoom(TopiaForgeLayerPriority.Overlay))
+                    return OperationResult<IUiSurface>.Failure(ModErrorCode.RateLimited, "The UI overlay limit has been reached.");
+                overlayKind = admission.Value;
+            }
+
+            UiThemeDescriptor? theme;
+            if (preview.HasValue)
+            {
+                theme = preview.Value.Descriptor;
+            }
+            else if (remoteTheme.HasValue)
+            {
+                theme = ResolveRemoteTheme(remoteTheme.Value);
+            }
+            else
+            {
+                var described = DescribePresentationTheme(request, out theme);
+                if (!described.Succeeded)
+                    return OperationResult<IUiSurface>.Failure(described.ErrorCode, described.ErrorMessage);
+            }
+
+            try { UiClockBinding.Check(request.Content, clockEpoch()); }
+            catch (ArgumentException exception) { return OperationResult<IUiSurface>.Failure(ModErrorCode.InvalidArgument, exception.Message); }
+
             if (!surfaceIds.Add(request.Id))
             {
                 return OperationResult<IUiSurface>.Failure(
@@ -92,6 +148,7 @@ namespace TopiaForge.ModManager
             TopiaForgeWidget? nativeRoot = null;
             try
             {
+                // Every surface's canvas is persistent: it lives as long as this mod or scope, never as long as a scene.
                 if (request.Kind == UiSurfaceKind.Window)
                 {
                     var window = host.Window(
@@ -99,7 +156,8 @@ namespace TopiaForge.ModManager
                         request.Title,
                         request.Width,
                         request.Height,
-                        TopiaForgeScheme.Paper);
+                        preview?.Scheme ?? TopiaForgeScheme.Paper,
+                        persistent: true);
                     nativeRoot = window;
                     var scroll = window.Content.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.Md);
                     var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
@@ -110,12 +168,12 @@ namespace TopiaForge.ModManager
                         scroll.Content,
                         lifetime,
                         logger,
-                        ReleaseSurfaceId);
+                        ReleaseSurface);
                     nativeRoot = null;
                 }
                 else if (request.Kind == UiSurfaceKind.FullscreenTool)
                 {
-                    var tool = host.FullscreenTool(request.Id, request.Title, TopiaForgeScheme.Paper);
+                    var tool = host.FullscreenTool(request.Id, request.Title, TopiaForgeScheme.Paper, persistent: true);
                     nativeRoot = tool;
                     var scroll = tool.Content.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None).Flex(1f, 1f);
                     var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
@@ -126,34 +184,37 @@ namespace TopiaForge.ModManager
                         scroll.Content,
                         lifetime,
                         logger,
-                        ReleaseSurfaceId);
+                        ReleaseSurface);
+                    nativeRoot = null;
+                }
+                else if (overlayKind.HasValue)
+                {
+                    var overlay = host.Overlay(request.Id, request.Title, request.Width, request.Height,
+                        overlayKind.Value, request.Dismissible);
+                    nativeRoot = overlay;
+                    var body = overlay.Content.Label(request.Body, TopiaForgeTextStyle.Body).AlignCenter();
+                    surface = UnityUiSurface.ForOverlay(request.Id, overlay, body, overlayKind.Value, lifetime, logger,
+                        ReleaseSurface);
                     nativeRoot = null;
                 }
                 else
                 {
-                    var layer = host.HudLayer(request.Id);
-                    nativeRoot = layer;
-                    var panel = layer.Panel(TopiaForgePanelStyle.HudPanel)
-                        .Dock(TopiaForgeCorner.TopLeft)
-                        .Size(request.Width, request.Height);
-                    var column = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
-                    column.Label(request.Title, TopiaForgeTextStyle.Heading);
-                    var scroll = column.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None);
-                    var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
-                    surface = UnityUiSurface.ForWidget(
-                        request.Id,
-                        layer,
-                        body,
-                        scroll.Content,
-                        lifetime,
-                        logger,
-                        ReleaseSurfaceId);
+                    var packageName = remoteTheme is { } remote
+                        ? remote.Envelope != null ? remote.Package?.Manifest.Name : null
+                        : hudNoticePackageName;
+                    surface = CreateHud(request, packageName, ref nativeRoot);
                     nativeRoot = null;
                 }
 
-                if (request.Content != null)
+                surface.SetClock(clock, clockEpoch);
+                var input = new UiSurfaceInputContext(uiInput, host.OwnerId);
+                surface.AttachInput(remoteTheme.HasValue ? input.ForRemote(remoteTheme.Value.Envelope) : input);
+                surface.InitializeTheme(request.Theme, remoteTheme.HasValue, theme, themeScope, themePackages,
+                    remoteTheme?.Package?.Manifest.AdmittedUi);
+                var content = request.Content ?? (overlayKind.HasValue ? EmptyOverlayContent : null);
+                if (content != null)
                 {
-                    var contentResult = surface.SetContent(request.Content);
+                    var contentResult = surface.SetContent(content);
                     if (!contentResult.Succeeded)
                     {
                         AbortSurfaceCreation(surface, nativeRoot, request.Id);
@@ -164,7 +225,9 @@ namespace TopiaForge.ModManager
                 }
 
                 surface.AttachLifetimeLease(lifetime.Track(surface));
-                surface.Show();
+                surfaces.Add(surface);
+                surface.Present();
+                ObserveGalleryFixture(surface, request, remoteTheme, theme, preview);
                 return OperationResult<IUiSurface>.Success(surface);
             }
             catch (Exception exception)
@@ -202,7 +265,9 @@ namespace TopiaForge.ModManager
             {
                 // The confirmation presets are fire-and-forget; the safe SDK contract needs a retained handle
                 // that can distinguish confirmation, cancellation, native close, and lifetime shutdown.
-                modal = host.Modal.Custom(request.Title, TopiaForgeScheme.Paper, 520f);
+                // Persistent, as surfaces are: the question stays open across scene loads until it is answered or closed,
+                // or the mod or scope that asked it ends.
+                modal = host.Modal.Custom(request.Title, TopiaForgeScheme.Paper, 520f, persistent: true);
                 state = new UnityUiModal(modal, completed, logger);
                 modal.Content.Label(request.Body, TopiaForgeTextStyle.Body);
                 var row = modal.Content.Row(TopiaForgeGap.Sm);
@@ -249,7 +314,7 @@ namespace TopiaForge.ModManager
                     "A toast message is required.");
             }
 
-            if (!Enum.IsDefined(typeof(UiTone), tone))
+            if ((uint)tone > (uint)UiTone.Danger)
             {
                 return OperationResult<bool>.Failure(
                     ModErrorCode.InvalidArgument,
@@ -265,7 +330,7 @@ namespace TopiaForge.ModManager
 
             try
             {
-                host.Toast(message, ToNativeTone(tone));
+                PresentGalleryToast(message, tone, legacyRemote: false);
                 return OperationResult<bool>.Success(true);
             }
             catch (Exception exception)
@@ -286,12 +351,53 @@ namespace TopiaForge.ModManager
                     return TopiaForgeTone.Warning;
                 case UiTone.Danger:
                     return TopiaForgeTone.Danger;
+                case UiTone.Muted:
+                    return TopiaForgeTone.Muted;
+                case UiTone.Primary:
+                    return TopiaForgeTone.Primary;
+                case UiTone.Accent:
+                    return TopiaForgeTone.Accent;
                 default:
                     return TopiaForgeTone.Neutral;
             }
         }
 
-        private void ReleaseSurfaceId(string id) => surfaceIds.Remove(id);
+        private void ReleaseSurface(UnityUiSurface surface)
+        {
+            surfaceIds.Remove(surface.Id);
+            surfaces.Remove(surface);
+        }
+
+        private void OnGameplayChanged(bool isGameplay)
+        {
+            for (var index = surfaces.Count - 1; index >= 0; index--)
+            {
+                if (index >= surfaces.Count || !surfaces[index].FollowsGameplay)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    surfaces[index].ApplyGameplay(isGameplay);
+                }
+                catch (Exception exception)
+                {
+                    ReportCleanupFailure(isGameplay ? "showing a gameplay HUD" : "hiding a gameplay HUD", exception);
+                }
+            }
+        }
+
+        private void OnLayerLost(GameObject root)
+        {
+            foreach (var surface in surfaces.ToArray())
+            {
+                if (ReferenceEquals(surface.CanvasRoot, root))
+                {
+                    surface.HandleLost();
+                }
+            }
+        }
 
         private void AbortSurfaceCreation(
             UnityUiSurface? surface,

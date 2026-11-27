@@ -1,0 +1,33 @@
+{
+  "id": "cancelling-while-the-participant-starts-disposes-it-late",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "Cancelling the launch while the participant starts ends it as cancelled; the participant it returns late is disposed first.",
+  "scenario": {
+    "role": "single-player",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "cancelled-while-pending",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "cancelled",
+          "message": "Session startup was cancelled."
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "participant.stop",
+          "server.stop"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

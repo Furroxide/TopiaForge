@@ -56,6 +56,11 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>Provides safe operations over opaque world-entity handles.</summary>
+    /// <remarks>
+    /// Call these operations on Robotopia's game thread. An off-thread call that reaches the engine adapter throws
+    /// an <see cref="InvalidOperationException"/> with diagnostic <c>TFSDK100</c>. Use
+    /// <see cref="IModScheduler.NextFrame"/> to queue entity work from a background thread.
+    /// </remarks>
     public interface IEntityService
     {
         /// <summary>Tries to read a complete transform for an entity created by this runtime.</summary>
@@ -158,6 +163,10 @@ namespace TopiaForge.Mods
     /// <summary>Performs engine-independent world physics queries.</summary>
     public interface IPhysicsService
     {
+        /// <summary>Adds an invisible blocker owned by this context's lifetime. Place it in host code.</summary>
+        [RequiresTopiaForge("0.2.0")]
+        OperationResult<IBlocker> AddBlocker(BlockerRequest request);
+
         /// <summary>Raycasts against ordinary collision layers while ignoring trigger volumes.</summary>
         /// <param name="ray">The normalized world ray.</param>
         /// <param name="maximumDistance">The positive query distance.</param>

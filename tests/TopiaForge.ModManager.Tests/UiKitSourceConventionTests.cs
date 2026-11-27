@@ -10,14 +10,23 @@ namespace TopiaForge.ModManager.Tests
     /// Source-level conventions for the TopiaForgeUi kit that the type system can't express,
     /// enforced by scanning the kit's checked-in sources.
     /// </summary>
-    internal static class UiKitSourceConventionTests
+    internal static partial class UiKitSourceConventionTests
     {
         public static void Run()
         {
             AllTmpComponentsCreatedThroughTopiaForgeTmp();
+            TmpFactoryKeepsThinGlyphsDrawn();
+            SmallTextStylesUseTheMediumFace();
+            SmallTextResolvesToTheBakedMediumAsset();
+            NothingSelectsTheLightFaceForSmallText();
+            BoldStylesStayBold();
+            MediumInstanceMatchesItsRecordedProvenance();
             ComponentLookupHonorsUnityNullSemantics();
             CanvasSortingUsesAllocator();
+            WindowClampWaitsForAMeasuredCanvas();
             ProcessWideUiStateHasShutdownPath();
+            ToastsPresentEveryViewFresh();
+            PaperTextTonesReachLabels();
             UnityUiReferencesStayInternal();
             FirstPartyModsDoNotConstructRawUnityUi();
             FirstPartyModsDoNotMutateGlobalTheme();
@@ -63,6 +72,45 @@ namespace TopiaForge.ModManager.Tests
             if (!factorySeen)
             {
                 throw new InvalidOperationException("Text/TopiaForgeTmp.cs not found under " + kitRoot + " — did the TMP factory move? Update this test.");
+            }
+        }
+
+        // TMP sizes a glyph's quad to its outline plus 1.25 atlas texels. The body face's thin l and I then get
+        // quads narrower than a pixel at UI scale 1.0, and the GPU skips a quad that covers no pixel centre: the
+        // approved privacy text rendered "defau t" in the game. Every label needs extra padding, and a size set
+        // first, because a deferred Awake restores TMP's defaults over both while the size is still unset.
+        private static void TmpFactoryKeepsThinGlyphsDrawn()
+        {
+            var repoRoot = Program.FindRepoRoot();
+            var factory = File.ReadAllText(Path.Combine(repoRoot, "src", "TopiaForge.Mods.UnityUi", "Text", "TopiaForgeTmp.cs"));
+            var created = factory.IndexOf("AddComponent<TextMeshProUGUI>()", StringComparison.Ordinal);
+            var returned = factory.IndexOf("return tmp;", StringComparison.Ordinal);
+            var sized = Regex.Match(factory, @"\btmp\.fontSize\s*=(?!=)", RegexOptions.CultureInvariant);
+            var padded = Regex.Match(factory, @"\btmp\.extraPadding\s*=\s*true\s*;", RegexOptions.CultureInvariant);
+            if (created < 0 || returned < 0 || !sized.Success || !padded.Success
+                || sized.Index < created || sized.Index > returned || padded.Index < created || padded.Index > returned)
+            {
+                throw new InvalidOperationException(
+                    "TopiaForgeTmp.Create must give every label a size and extra padding before returning it; "
+                    + "without them thin glyphs vanish from small kit text.");
+            }
+
+            var disabled = new Regex(@"\.extraPadding\s*=(?!=)(?!\s*true\b)", RegexOptions.CultureInvariant);
+            foreach (var root in new[]
+            {
+                Path.Combine(repoRoot, "src", "TopiaForge.Mods.UnityUi"),
+                Path.Combine(repoRoot, "src", "TopiaForge.ModManager"),
+                Path.Combine(repoRoot, "mods"),
+            })
+            {
+                foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+                {
+                    if (!IsBuildOutput(file) && disabled.IsMatch(File.ReadAllText(file)))
+                    {
+                        throw new InvalidOperationException(
+                            "TMP extra padding is switched off in " + file + " — kit text keeps it on so thin glyphs stay drawn.");
+                    }
+                }
             }
         }
 
@@ -136,9 +184,13 @@ namespace TopiaForge.ModManager.Tests
             RequireSource(topiaForgeUi, "TopiaForgeRuntime.Shutdown();", "TopiaForgeUi shutdown must stop its hidden runtime driver.");
             RequireSource(topiaForgeUi, "TopiaForgeLog.Reset();", "TopiaForgeUi shutdown must release owner logging delegates.");
             RequireSource(topiaForgeUi, "while (Hosts.Count > 0)", "TopiaForgeUi shutdown must reclaim forgotten hosts.");
-            RequireSource(host, "TopiaForgeUi.OnHostDisposed(this);", "Disposed hosts must leave the global host registry.");
+            RequireSource(host, "TopiaForgeUi.OnHostDisposed(this)", "Disposed hosts must leave the global host registry.");
             RequireSource(toast, "TopiaForgeToastHost.Instance.Layer(", "The toast canvas must be owned by its UiHost.");
-            RequireSource(toast, "Queue.Clear();", "Toast shutdown must clear pending notifications.");
+            RequireSource(toast, "Stack.Clear();", "Toast shutdown must clear pending notifications.");
+            RequireSource(
+                File.ReadAllText(Path.Combine(kitRoot, "Core", "TopiaForgeToastStack.cs")),
+                "waiting.Clear();",
+                "Clearing the toast stack must drop its waiting notifications.");
             RequireSource(toast, "Views.Clear();", "Toast shutdown must release pooled view references.");
             if (toast.Contains("TopiaForgeLayers.CreateCanvas(\"TopiaForgeToasts\"", StringComparison.Ordinal))
             {
@@ -158,6 +210,71 @@ namespace TopiaForge.ModManager.Tests
                 "The TopiaForge UI loader must resolve the renamed embedded resource identity.");
         }
 
+        // Toast views are pooled. A view was presented fresh only while it sat at its creation spot, so every toast after a
+        // view's first kept the last exit's fade and slide, and each exit slid it 40 units further: in the game, every toast
+        // after the first was invisible, overlay open or not. TopiaForgeToastStack says when a view is fresh, which the core
+        // tests cover; the Unity side must place and bring in such a view, and slide exits from where toasts rest.
+        private static void ToastsPresentEveryViewFresh()
+        {
+            var widgets = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi", "Widgets");
+            var toast = string.Join("\n", Directory.EnumerateFiles(widgets, "TopiaForgeToast*.cs").Select(File.ReadAllText));
+            RequireSource(toast, "Stack.TryPlace(index, out var top, out var fresh)", "Toasts must be placed as the toast stack says.");
+            RequireSource(toast, "view.Label.textWrappingMode = TextWrappingModes.Normal;", "A longer toast must wrap to its lines, not end after one.");
+            RequireSource(toast, "label.GetPreferredValues(ThreeLines, width, 0f).y", "A toast's text must stop at three lines, so a longer one ends in an ellipsis.");
+            RequireSource(toast, "Stack.SetHeight(index, MeasuredHeight(view), StackGap * view.Scale);", "The column uses the scaled measured height of each wrapped toast.");
+            if (!Regex.IsMatch(toast, @"if \(fresh\)\s*\{[^}]*anchoredPosition = new Vector2\(restingX, targetY\);[^}]*TopiaForgeMotion\.ToastIn\(root, restingX, view\.Content\.Viewer, view\.Scale\);"))
+            {
+                throw new InvalidOperationException("A fresh toast view must be placed at its slot and brought in, whatever it showed before.");
+            }
+
+            RequireSource(toast, "TopiaForgeMotion.ToastOut(view.Root, view.RestingX,", "A toast's exit must slide from where toasts rest, so exits never add up.");
+            if (toast.Contains("Mathf.Approximately(position.x, 0f)", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("A toast view's freshness must come from the toast stack, not from where the view sits.");
+            }
+
+            // The exit's completion frees the view, and the next waiting toast takes it at once. Under reduced motion, or with the
+            // tween pool full, that completion runs inside ToastOut, so a slide started after it pushed the new toast 40 units
+            // aside, partly off the screen, for as long as it showed. The slide must start before the completing fade.
+            var presets = File.ReadAllText(Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi", "Motion", "TopiaForgeMotionPresets.cs"));
+            var exit = Regex.Match(presets, @"void ToastOut\([^)]*\)\s*\{(?<body>[^}]*)\}");
+            var slide = exit.Groups["body"].Value.IndexOf("TopiaForgeTween.MoveX(", StringComparison.Ordinal);
+            var fade = exit.Groups["body"].Value.IndexOf("TopiaForgeTween.FadeTo(", StringComparison.Ordinal);
+            if (!exit.Success || slide < 0 || fade < 0 || slide > fade || !Regex.IsMatch(exit.Groups["body"].Value, @"FadeTo\([^;]*\bonDone\b[^;]*\);"))
+            {
+                throw new InvalidOperationException("A toast's exit must start its slide before the fade whose completion hands the view to the next toast.");
+            }
+        }
+
+        // Status and brand colors are made for fills and rings, and on Paper they fail WCAG AA as text (warning reads at
+        // 2.7:1 on paper). The resolved theme takes each status tone's text color from TopiaForgeSchemes.PaperText, which
+        // the core tests measure, and labels draw body text with it.
+        private static void PaperTextTonesReachLabels()
+        {
+            var kitRoot = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi");
+            var theme = File.ReadAllText(Path.Combine(kitRoot, "Theme", "TopiaForgeResolvedTheme.cs"));
+            foreach (var role in new[] { "Primary", "Accent", "Success", "Warning", "Danger" })
+            {
+                RequireSource(theme, "TopiaForgeSchemes.PaperText(colors." + role + ", HighContrast)", "On Paper, " + role + " text must take its readable color.");
+            }
+
+            var label = File.ReadAllText(Path.Combine(kitRoot, "Widgets", "TopiaForgeLabel.cs"));
+            RequireSource(label, "theme.TextToneColor(tone)", "Labels must draw body text in the tones' readable text colors.");
+            if (Regex.IsMatch(label, @"text\.color = [Tt]heme\.ToneColor\(tone\)"))
+            {
+                throw new InvalidOperationException("A label sets a tone's fill color on its text instead of its readable text color.");
+            }
+
+            // A ghost button has no fill, so its label sits on the surface like any body text: in the brand orange it read at
+            // 2.0 to 2.6:1 on Paper, in high contrast too (REFRESH, ADD TO FAVORITES, MUTE, COPY DETAILS and CLOSE among them).
+            var button = File.ReadAllText(Path.Combine(kitRoot, "Widgets", "TopiaForgeButton.cs"));
+            RequireSource(button, "SetContentColor(theme.ForegroundOn(backdrop, UiTone.Primary));", "A ghost button's label must take readable Primary ink against its actual backdrop.");
+            if (button.Contains("SetContentColor(theme.Primary)", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("A button draws its label in the Primary fill color on its own surface.");
+            }
+        }
+
         private static void RequireSource(string source, string expected, string message)
         {
             if (!source.Contains(expected, StringComparison.Ordinal))
@@ -171,7 +288,6 @@ namespace TopiaForge.ModManager.Tests
             var repositoryRoot = Program.FindRepoRoot();
             var expected = new HashSet<string>(new[]
             {
-                "mods/TopiaForge.UgcLiveSync/TopiaForge.UgcLiveSync.csproj",
                 "mods/TopiaForge.UiGallery/TopiaForge.UiGallery.csproj",
                 "mods/TopiaForge.Worlds/TopiaForge.Worlds.csproj",
                 "src/TopiaForge.ModManager/TopiaForge.ModManager.csproj"

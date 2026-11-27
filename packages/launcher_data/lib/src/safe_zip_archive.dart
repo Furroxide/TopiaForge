@@ -68,7 +68,7 @@ class SafeZipArchive {
         label,
         allowContainedLinks,
       );
-      final decoded = ZipDecoder().decodeBytes(bytes);
+      final decoded = ZipDecoder().decodeBytes(bytes, throwOnError: true);
       _validateEntries(decoded, policy, label, allowContainedLinks, linkNames);
       return SafeZipArchive._(
         decoded,
@@ -214,7 +214,7 @@ class SafeZipEntry {
       entryName: name,
       label: label,
     );
-    _entry.writeContent(bounded, freeMemory: false);
+    _decodeInto(bounded, label);
     if (bounded.length != size) {
       throw StateError(
         '$label expanded to ${bounded.length} bytes but declared $size: $name.',
@@ -242,7 +242,7 @@ class SafeZipEntry {
       label: label,
     );
     try {
-      _entry.writeContent(stream, freeMemory: false);
+      _decodeInto(stream, label);
       stream.closeSync();
       if (stream.length != size) {
         throw StateError(
@@ -255,6 +255,25 @@ class SafeZipEntry {
         output.deleteSync();
       }
       rethrow;
+    }
+  }
+
+  /// Keeps decoding failures visible instead of accepting partial or empty data.
+  /// Resource limits still run through the bounded output; a decoder limit
+  /// reports the declared size, while malformed compressed data names the entry
+  /// as damaged without blaming that size.
+  void _decodeInto(OutputStream output, String label) {
+    try {
+      _entry.writeContent(output, freeMemory: false);
+    } on ArchiveLimitException catch (error) {
+      throw StateError(
+        '$label could not be decoded within the $size bytes it declared: '
+        '$name (${error.message}).',
+      );
+    } on FormatException catch (error) {
+      throw StateError(
+        '$label is damaged and could not be decoded: $name (${error.message}).',
+      );
     }
   }
 }

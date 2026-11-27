@@ -9,10 +9,111 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\mods\TopiaForge.Multiplayer\TopiaForge.Multiplayer.csproj" />
+    <!-- The provider links the engine too; an alias keeps its internal engine types from colliding with the
+         compile-check assembly's. Tests reach provider types through `extern alias provider`. -->
+    <ProjectReference Include="..\..\mods\TopiaForge.Multiplayer\TopiaForge.Multiplayer.csproj" Aliases="provider" />
     <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.CounterSample\TopiaForge.Multiplayer.CounterSample.csproj" />
     <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.DroneSample\TopiaForge.Multiplayer.DroneSample.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
+    <!-- The generator, so the testing kit's binding tests can declare a contract of their own. -->
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer.Generators\TopiaForge.Mods.Multiplayer.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <!-- The compile-check engine assembly grants this harness its internals for the white-box tests. -->
+    <ProjectReference Include="..\..\src\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.csproj" />
+    <!-- ModManager's multiplayer composition root is Unity-free; compiling it here lets the real runtime host and
+         admission planner drive real providers over the virtual network. -->
+    <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Shared/AllocationProbe.cs" Link="TestSupport/AllocationProbe.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeScope.cs" Link="Runtime/UiThemeScope.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeScope.Preload.cs" Link="Runtime/UiThemeScope.Preload.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeAcquisitions.cs" Link="Runtime/UiThemeAcquisitions.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiThemeRegistration.cs" Link="Runtime/UiThemeRegistration.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/IHostDispatcher.cs" Link="Runtime/IHostDispatcher.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerModLifetime.cs" Link="Runtime/OwnerModLifetime.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeWorkTracker.cs" Link="Runtime/AssetNativeWorkTracker.cs" />
+    <Compile Include="../../mods/Shared/DiagnosticPathRedactor.cs" />
+    <!-- The game's binder, which the testing kit's lifecycle runner must match, failures included. -->
+    <Compile Include="..\..\src\TopiaForge.ModManager\GeneratedMultiplayerBinder.cs" Link="Runtime\GeneratedMultiplayerBinder.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntime.cs" Link="Runtime\MultiplayerRuntime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntime.Realm.cs" Link="Runtime\MultiplayerRuntime.Realm.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRealm.cs" Link="Runtime\MultiplayerRealm.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerSpawnLedger.cs" Link="Runtime\MultiplayerSpawnLedger.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntimeHost.cs" Link="Runtime\MultiplayerRuntimeHost.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentInventory.cs" Link="Runtime\MultiplayerContentInventory.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentAdmission.cs" Link="Runtime\MultiplayerContentAdmission.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerDiagnosticRedactor.cs" Link="Runtime\MultiplayerDiagnosticRedactor.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentIdentification.cs" Link="Runtime\MultiplayerContentIdentification.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerWorkScheduler.cs" Link="Runtime\MultiplayerWorkScheduler.cs" />
+    <Compile Include="..\TopiaForge.ModManager.Tests\ManualWorkScheduler.cs" Link="Runtime\ManualWorkScheduler.cs" />
+    <!-- The network world (WS3.6) over the real provider: its Unity-free half, the replication seam it plugs into, and
+         the fake engine the ModManager and ModRuntime harnesses share. -->
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerReplication.cs" Link="Runtime\MultiplayerReplication.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerMicrophoneArbiter.cs" Link="Runtime\MultiplayerMicrophoneArbiter.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\RuntimeReplication.cs" Link="Runtime\RuntimeReplication.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\RuntimeReplication.Authority.cs" Link="Runtime\RuntimeReplication.Authority.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\RuntimeReplication.EntityCommands.cs" Link="Runtime\RuntimeReplication.EntityCommands.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\UnityMainThreadGuard.cs" Link="Runtime\UnityMainThreadGuard.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\World\*.cs" Link="Runtime\World\%(Filename)%(Extension)" />
+    <Compile Include="..\TopiaForge.ModRuntime.Tests\FakeWorldScene.cs" Link="World\FakeWorldScene.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/FakeWorldBlocker.cs" Link="World/FakeWorldBlocker.cs" />
+    <!-- The in-game sessions' presenters and the launch records they report into are Unity-free too, so a session the
+         launcher planned starts here over the real runtime and provider, as the game starts it. -->
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Sessions\*.cs" Link="Runtime\Sessions\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Screens\*.cs" Link="Runtime\Screens\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Launch\*.cs" Link="Runtime\Launch\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Core\TopiaForgePlainText.cs" Link="Runtime\Kit\TopiaForgePlainText.cs" />
+  </ItemGroup>
+
+  <!-- The session's time and the pause guard (WS3.13), which the composition root drives and the replication seam answers
+       from; the game's own clock over Unity lives in Time/Unity/. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Time\*.cs" Link="Runtime\Time\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- The composition root's intent tracking (WS3.4), which its realm reports each change to, and the replication seam's
+       half that answers it. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\MultiplayerIntents.cs" Link="Runtime\MultiplayerIntents.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\MultiplayerRuntime.Intent.cs" Link="Runtime\MultiplayerRuntime.Intent.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\RuntimeReplication.Intent.cs" Link="Runtime\RuntimeReplication.Intent.cs" />
+  </ItemGroup>
+
+  <!-- Presence (WS3.10) over the real provider: its Unity-free half, beside the replication seam whose avatar bodies it
+       wears, and the fake engine the ModManager and ModRuntime harnesses share. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Presence\*.cs" Link="Runtime\Presence\%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Players/*.cs" Link="Runtime/Players/%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Presentation/*.cs" Link="Runtime/Presentation/%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Intent/NetInputService.cs" Link="Runtime/NetInputService.cs" />
+    <Compile Include="..\TopiaForge.ModRuntime.Tests\FakePresenceBackend.cs" Link="Presence\FakePresenceBackend.cs" />
+  </ItemGroup>
+
+  <!-- Voice chat's runtime is Unity-free: its microphone gate, capture, playback and mutes run here over real providers,
+       as the game runs them. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceChatRuntime.cs" Link="Runtime\Voice\VoiceChatRuntime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceChatRuntime.State.cs" Link="Runtime\Voice\VoiceChatRuntime.State.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceTalkStatus.cs" Link="Runtime\Voice\VoiceTalkStatus.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceCapture.cs" Link="Runtime\Voice\VoiceCapture.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoicePlayback.cs" Link="Runtime\Voice\VoicePlayback.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceMuteBook.cs" Link="Runtime\Voice\VoiceMuteBook.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceDevices.cs" Link="Runtime\Voice\VoiceDevices.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceEmitterReader.cs" Link="Runtime\Voice\VoiceEmitterReader.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoicePushToTalk.cs" Link="Runtime\Voice\VoicePushToTalk.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceControls.cs" Link="Runtime\Voice\VoiceControls.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\NativeInputCensus.cs" Link="Runtime\Voice\NativeInputCensus.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.WorldView.cs" Link="Runtime/Multiplayer/RuntimeReplication.WorldView.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/RuntimeWorldViews.cs" Link="Runtime/WorldView/RuntimeWorldViews.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/RuntimeWorldViews.Projection.cs" Link="Runtime/WorldView/RuntimeWorldViews.Projection.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/WorldViewWire.cs" Link="Runtime/WorldView/WorldViewWire.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/WorldViewLeases.cs" Link="Runtime/WorldView/WorldViewLeases.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldView/PlayerWorldViewControls.cs" Link="Runtime/WorldView/PlayerWorldViewControls.cs" />
   </ItemGroup>
 </Project>

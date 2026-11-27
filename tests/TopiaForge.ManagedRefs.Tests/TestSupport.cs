@@ -72,6 +72,9 @@ internal sealed class FakeHttpTransport : IHttpTransport
 
     internal bool FailPublic { get; set; }
 
+    // Each manifest request fails with a dropped connection until this many have failed.
+    internal int ManifestConnectionFailures { get; set; }
+
     public Task<HttpProbeResult> HeadAsync(
         Uri uri,
         string label,
@@ -82,6 +85,7 @@ internal sealed class FakeHttpTransport : IHttpTransport
     {
         cancellationToken.ThrowIfCancellationRequested();
         Calls.Add(new FakeHttpCall("HEAD", uri, bearerToken, hideUri));
+        ThrowIfManifestConnectionFailure(label);
         ThrowIfPublicFailure(uri);
         return Task.FromResult(new HttpProbeResult(1234));
     }
@@ -96,6 +100,7 @@ internal sealed class FakeHttpTransport : IHttpTransport
     {
         cancellationToken.ThrowIfCancellationRequested();
         Calls.Add(new FakeHttpCall("GET-STRING", uri, bearerToken, hideUri));
+        ThrowIfManifestConnectionFailure(label);
         ThrowIfPublicFailure(uri);
         return Task.FromResult(ManifestJson);
     }
@@ -114,6 +119,17 @@ internal sealed class FakeHttpTransport : IHttpTransport
         ThrowIfPublicFailure(uri);
         File.WriteAllBytes(destinationPath, DownloadBytes);
         return Task.CompletedTask;
+    }
+
+    private void ThrowIfManifestConnectionFailure(string label)
+    {
+        if (ManifestConnectionFailures > 0 && label.Contains("manifest", StringComparison.Ordinal))
+        {
+            ManifestConnectionFailures--;
+            throw new InvalidDataException(
+                "synthetic dropped connection",
+                new System.Net.Http.HttpRequestException("synthetic"));
+        }
     }
 
     private void ThrowIfPublicFailure(Uri uri)

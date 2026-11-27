@@ -8,14 +8,14 @@ description: Build accessible Robotopia HUDs, windows, and fullscreen tools thro
 `TopiaForge.Mods.UnityUi` is the in-game UI framework for TopiaForge mods running in Robotopia and
 for the mod manager. Ordinary mods create every HUD, window, fullscreen tool, modal, and toast
 through `Context.Ui`. The service is always present, owner-scoped, rendered by TopiaForgeUi, and
-automatically tied to the mod lifetime.
+tied to the lifetime of the mod, or the scope, that uses it: scene loads never end a surface.
 Do not create an independent canvas, event system, sorting order, cursor controller, or global
 hotkey.
 
 Start with the compiled `ui` template:
 
 ```sh
-topiaforge new mod example.ui --template ui --name "Example UI" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.ui --template ui --name "Example UI" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 ```
 
 The template source lives at `templates/mod/ui/` and is built, tested, packed, and validated in CI.
@@ -42,9 +42,200 @@ an ended session. Its `Dismissed` event fires when a visible surface is hidden b
 through `Hide()`, but not when the surface is disposed. Keep teardown on the owning lifetime rather
 than treating every dismissal as disposal.
 
+### Lifetime and visibility
+
+Every surface and modal lives as long as the mod, or the scope, that created it. Scene loads never
+end one, so a HUD can be made once in `OnLoad`, before the game's first scene, and a window made in a
+world is still there after the next world loads, open or closed as the mod left it. A surface that a
+gamemode session's scope creates ends with that session. No SDK surface ends with a scene: a mod
+cannot see a scene change coming, and every flow it builds, a world session included, already has a
+lifetime of its own. A modal stays open across scene loads until it is answered or closed, or its mod
+or scope ends, which counts as cancelling.
+
+A HUD shows only in gameplay by default (`UiHudVisibility.Gameplay`). TopiaForge hides it at the main
+menu and while any scene loads, and shows it again in the next world, so the mod handles no scenes.
+`IsVisible` reports what the player sees: it is false while TopiaForge keeps the HUD hidden, and a
+`Show()` then makes it appear with gameplay. TopiaForge's hiding never raises `Dismissed`. A HUD that
+should also show at the main menu opts out:
+
+```csharp
+var help = Context.Ui.CreateSurface(new UiSurfaceRequest(
+    "help", "My mod", "Press K in a world.", UiSurfaceKind.Hud, 260f, 96f)
+    .WithHudVisibility(UiHudVisibility.Always));
+```
+
+Windows and fullscreen tools show exactly while the mod shows them.
+
+If the game or another mod destroys a surface's canvas anyway, the surface says so: it is never
+visible again, a visible one raises `Dismissed`, its id is free for a new surface, and the mod's log
+names it. On the lost handle, `SetContent` returns `InvalidState` and `SetBody`, `Show` and `Hide`
+do nothing. Dispose the handle or let the owning scope release it. Create the surface again to
+show it. A modal on such a canvas completes as cancelled.
+
+### Shared gamemode presentation
+
+In a multiplayer session, a gamemode server's `UiSurfaceKind.Hud` surfaces are mirrored read-only to guests, with
+changes combined to at most ten updates per second. Its toasts and framework audio cues are broadcast with rate
+limits and duplicate suppression. Existing HUDs that fit the shared limits appear automatically when a solo game
+opens to players. Windows, tools and modals remain on the host; use `IPlayer.Ui` for a particular player's window or
+confirmation. Participant and ordinary process UI stays local.
+
+Shared HUDs allow 32 surfaces and 28 KiB of encoded content in total, with text fields up to 4,096 characters and
+dimensions from 80 by 80 to 1,920 by 1,440 scaled units. Oversized solo HUDs continue locally when hosting begins,
+including Show/Hide even when no shared slot is available.
+Online calls that exceed the shared limits fail without replacing the previous content. Guests receive the latest
+HUD and active audio loops on join or reconnect; old toasts and one-shot cues are not replayed. Scope disposal removes
+its HUDs and stops its loops. A destroyed host canvas retires its mirror; a destroyed guest canvas is recreated from
+the latest state within the once-per-second retry cadence. Guest text is displayed literally, and shared HUDs cannot
+capture input or run callbacks.
+
+A `UiSurfaceKind.Overlay` shows a centered content plate over a gameplay scrim. The HUD beneath it
+stays alive and keeps updating. An overlay with interactive content takes focus when it is on top.
+Back hides a dismissible overlay. Use `WithDismissible(false)` with an enabled button that offers a
+way forward. The game pause and trust prompts remain available. Read-only overlays leave input
+with the game. Reduced motion makes entry and exit immediate.
+
+A scope can keep four live overlays, including hidden ones. A gamemode server mirrors read-only
+overlays within the same surface and byte quotas as its shared HUDs. Interactive overlays stay
+local unless you address a player through `IPlayer.Ui.CreateSurface`. An overlay keeps its initial
+interaction class, and its viewers must support UI contract 3.
+
+`ctx.Ui.ShowStinger(request)` shows a short centre announcement. A gamemode server also sends it to
+connected guests with UI contract 3 or later. Use `player.Ui.ShowStinger(request)` for one recipient.
+An older targeted player returns `Unavailable`. Each author scope can show one announcement at a time
+and queue three more. Equal title, subtitle, glyph and role coalesce. A full queue returns `RateLimited`.
+Stingers are one-shot events, so players who join or reconnect receive future announcements.
+
+UI contract 3 uses Players presentation event kind 34 for stingers and kind 35 for their retirement.
+A stinger carries the optional audience, authenticated package ID and digest, theme ID and descriptor
+digest, a nonzero session-local scope token, one font-fit byte, and the announcement fields. Value 0
+selects measured kit faces. Value 1 permits the measured declared chain when it is ready and the theme
+matches. A receiver chooses its faces when the event enters the queue and keeps the font, case and
+tracking until retirement. A pending or failed custom face can use the measured kit fallback.
+
+Each recipient queues announcements independently by package and scope token. The sender reserves
+an addressed slot for the display duration plus the longer of the declared theme's slow exit and the
+kit's slow exit. Success acknowledges sender admission for dispatch. Delivery jitter can still
+leave the guest's queue full when a later event arrives. Broadcast uses the same per-recipient
+reservation and may skip a guest. A slower guest may drop a broadcast if its queue is still full
+when the event arrives. The receiver emits one queue-full diagnostic per delivery pattern in a session.
+
+When that scope stops, kind 35 carries the exact recipient, the same authenticated package ID and digest,
+and the scope token. Each token sends at most one retirement to each recipient that previously received
+a counted event. A scope that never sent an event sends no retirement. Retirement travels after the
+stingers on the same reliable stream and bypasses the ordinary event bucket, so a full bucket cannot
+keep the stopped scope's queue open. Both kinds are one-shot events with no retained surface generation
+or replay on reconnect.
+
+See [presentation routing](https://github.com/Furroxide/TopiaForge/blob/5c2e66efe4b7cbb90647c316bb62817d9d8822c8/docs/internal/MultiplayerRuntimeIntegration.md#scoreboard-seam-and-later-presentation) for
+the budgets and transport behavior.
+
+### Where HUDs dock
+
+In every level Robotopia draws its microphone label at the top left, a development build's version at
+the top, a level's objective at the top right (above every mod's UI), a crosshair at the centre, and
+dialogue subtitles across the middle of the bottom edge. A HUD docks by default where none of those
+are: at the bottom left for a gameplay HUD, above a subtitle reserve covering the bottom 12% of the
+screen, and at the middle of the left edge for a HUD shown
+everywhere, which also keeps clear of the main menu's buttons at the bottom left. All HUD panels docked
+to a bottom corner or edge share the subtitle reserve, so their stack stays together; the reserve follows
+the screen size independently of UI scale. `WithHudAnchor`
+picks another place: any corner, or the middle of any edge (`UiHudAnchor`), never the centre.
+
+HUDs docked at one place stack a small gap apart, the first created nearest the edge, so HUDs from
+different mods never overlap, and a hidden HUD gives its space up. A HUD keeps its requested size.
+Its title stays on one line, and its body fills the panel inside its padding, wrapping only past the
+panel's inner width: a 260-unit HUD wraps body text at 224 units, whatever the UI scale.
+
+`ctx.Ui.ShowToast(message, tone)` uses the kit's HUD theme with the viewer's accessibility
+settings. Success, Warning and Danger pair their colors with a check, warning glyph and cross.
+The toast treats its text literally and fits it into three lines, up to 512 characters.
+Four toasts can show, with up to 64 waiting. They stack upward from the bottom-right corner
+above the visible HUDs there and draw above ordinary windows and dialogs.
+
 Destructive actions require a destructive modal and explicit confirmation. Long content belongs in
 a scrollable or virtualized provider surface. Gameplay overlays should avoid steady-state allocation;
 update only when their displayed value changes.
+
+## Local world widgets (0.2)
+
+`UiProgress` renders a bounded fraction through the kit's progress bar. `UiCountdown` takes an
+end time on `Context.Ui.ClockTime`, the unscaled host timeline shared by every UI scope, and updates itself:
+
+```csharp
+var content = new UiColumn(
+    new UiProgress(0.25f, "Tasks"),
+    new UiCountdown(Context.Ui.ClockTime + 30, "Remaining", id: "remaining"));
+var result = Context.Ui.CreateSurface(new UiSurfaceRequest(
+    "status", "Status", "", UiSurfaceKind.Hud, content: content));
+```
+
+The clock uses the current host world/session timeline, shared across UI scopes, with the same
+origin for offline scopes. It continues during pause and slow motion. A countdown rounds remaining seconds up, stops
+at zero, and ends with its composition or surface. No author frame callback is needed. Progress
+and countdown nodes use the surface's semantic tones, UI scale and high-contrast theme.
+
+Use `UiThresholds` to show Warning and Critical states with a glyph and a semantic tone. Progress
+thresholds use fractions from zero to one. For a meter that warns as it rises, pass
+`UiThresholdDirection.AtOrAbove`. Countdown thresholds use the exact remaining time and warn as
+the deadline approaches. The displayed digits still round up to whole seconds.
+
+```csharp
+var progress = UiProgress.WithThresholds(0.88f, "Storage", new UiThresholds(0.85, 0.95, UiThresholdDirection.AtOrAbove));
+var integrity = new UiStatBar("Integrity", 54, 100, new UiThresholds(60, 45), UiStatFormat.ValueOfMaximum);
+var timer = UiCountdown.WithFormat(Context.Ui.ClockTime + 30, "Remaining", UiCountdownFormat.MinutesSeconds,
+    new UiThresholds(10, 5));
+```
+
+`UiStatBar` uses the same units for its value and thresholds. It prints the value, value out of
+maximum, or whole percentage. Its label stays readable on both sides of the moving fill.
+Formatted countdowns read the clock automatically and use tabular Mono digits for seconds,
+minutes and seconds, or hours, minutes and seconds. Expired timers keep their chosen format.
+The original progress and countdown overloads keep their earlier labels and behavior.
+
+Progress and countdown widgets also work in targeted player UI and shared HUDs. In the same epoch the original
+deadline travels unchanged, including in late-join baselines. A countdown created during `OnLoad` keeps its deadline when the initial
+solo multiplayer provider attaches, and opening that same world to peers retains its timeline. Opening a later UI scope never restarts the clock. Offline scopes
+share one origin; joined players estimate the host timeline from authenticated network samples, with a half-RTT
+latency correction. Estimates may differ temporarily because of latency, asymmetric links, frame scheduling or
+drift; corrections never move the current clock backwards. A timer is presentation, not proof that a remote
+player has reached a deadline. Keep authoritative round decisions on the host.
+
+This corrects the pre-release per-scope clock semantics. The clock is neither Unix time nor local wall time,
+and gameplay pause/slow motion does not pause it. To pause a round timer, display the held remaining value
+and create a fresh deadline when resuming. A new solo world or replacement session expires previously bound
+countdowns. When the surface's scope and recipient remain active, a shared HUD or targeted surface keeps its
+other content and shows the expired timer at zero. Use `SetContent` with a new countdown built from the current
+`ClockTime` to start another timer. A new composition cannot reuse a countdown node bound to an ended epoch, on
+any surface kind. Passing the same tree to `SetContent` again keeps its clock binding. The call returns immediately
+when the clock epoch, effective theme, accessibility and viewport still match the last commit. If one changes,
+the retained tree refreshes against the new presentation state and an expired timer still shows zero.
+
+Remote compositions are validated in full before any surface is created. Unsupported nodes, unknown widget
+versions and invalid shapes are refused; authored shape failures return `InvalidArgument` with the cause.
+`RateLimited` means an actual surface, byte or update quota was exhausted. Graph canvases are local-only and
+must be placed in a local surface instead of targeted remote UI. The testing kit uses the same bounded widget
+encoder for remote-player validation. To test delayed scopes deterministically, construct multiple
+`FakeUiService` instances with the same `IGameTime`; its unscaled elapsed time provides their shared origin.
+
+
+Place a label through `Context.Ui.Labels.Add(UiWorldLabelRequest.At(position, "Marker"))`, or use
+`UiWorldLabelRequest.For(entity, "Panel")` to follow an entity automatically. Check the returned
+`OperationResult<IUiWorldLabel>` before using its value. Labels require a loaded gameplay world,
+are local to this player, and never send text or entity identity to peers. Each UI scope has a pool
+of 64 views. Text is plain text, at most 32 characters; `SetText` ignores unchanged values.
+
+Labels fade near their maximum distance (30 meters by default), hide offscreen and behind the
+camera, and respect solid geometry by default. `occlusion: false` explicitly opts out of geometry
+checks. `SetPosition` detaches an entity label to a fixed point. Dispose a handle to release its
+view early; entity despawn, its scene unloading, or owner teardown releases it automatically.
+An old handle cannot change a subsequently reused view. Labels use the HUD scheme and the kit's
+canvas scaling, high-contrast tones and band allocator.
+
+The testing kit exposes `FakeUiService.Labels`, captured `FakeUiWorldLabel` handles, controllable
+occlusion, and `FakeUiSurface.TryGetCountdownSeconds`. Advance the fake clock to test a countdown
+without rebuilding its composition. Projection and physics occlusion still need native testing.
+These additions require a `0.2.0` TopiaForge floor; a current `0.1` runtime does not activate them.
 
 ## Safe declarative controls
 
@@ -68,11 +259,25 @@ isolated, so later subscribers still run. Callbacks stop when the surface or mod
 
 Graph connections are accepted only from an output port to a same-type input port. A canvas accepts
 at most 512 nodes, 1,024 edges, and 32 ports per node; its callbacks report requested changes, so
-the mod remains responsible for validating and publishing the next immutable tree.
+the mod remains responsible for validating and publishing the next immutable tree. A node's header
+selects the node, and each typed port has its own hit target and focus ring. Dragging the card moves
+the node when the canvas supports editing.
+
+In a local Window or FullscreenTool, use **Connections** to inspect the focused graph's
+edges in their authored order. A narrow title bar shows **Links** when the full caption needs more
+room. The action keeps its Connections label in captures. The list exposes both endpoints and a separate **Remove**
+action for the selected edge. It uses the same removal callback as direct graph picking.
+When a connection label needs more room, activate its row to read the next part of the
+endpoint names. The kit reuses up to twelve visible rows and restores focus to a remaining
+row or the graph after the author publishes a replacement.
+
+A virtual list scrolls its selected row into view when needed and leaves room for the row's focus ring.
+The kit measures every row's title, subtitle and badge with the effective theme's typography.
+If any row cannot fit, the kit rejects the new presentation and preserves the current one.
 
 The compiled `ui` template demonstrates the standard form/list controls, accessibility changes,
 result handling, and a configurable nonreserved input action. The
-[Creator Tools](CreatorTools.md) workbench is the task-oriented reference for fullscreen split-pane
+The [Sandbox](Sandbox.md) workbench is the task-oriented reference for fullscreen split-pane
 and graph composition. Prefer updating the body for small status changes; use `SetContent` when the
 control structure itself changes.
 
@@ -80,7 +285,67 @@ control structure itself changes.
 
 Register a descriptive action through `Context.Input` and let users rebind it. Do not reserve F5,
 F8, or F10: those belong to the shared Creator workbench, UiGallery, and manager respectively.
-Gameplay input is suppressed while text entry or another framework surface owns focus.
+
+Surfaces own the input they handle, with no code in the mod:
+
+- **Back**, Escape or a controller's B, dismisses only the topmost surface. The game sees nothing of
+  that press, and a key still held stays the surface's until it is released. The next press, with
+  no surface left, reaches the game as before, so its pause menu opens.
+- **Menu navigation**, the arrows, Tab, Enter and Space, and a controller's left stick, D-pad, A and
+  B, belongs to a modal, a fullscreen tool and the manager overlay while they show. So does whatever
+  else the game's own menu navigation binds while its menus listen: W, A, S and D, and the right
+  stick if the game binds it. The menu beneath never moves or presses. The surface's own controls
+  move and submit at the UI module's own repeat delay and rate, W, A, S and D as the arrows do, and
+  the first press with none of them selected selects the first. A move never leaves the surface,
+  whoever sends it, Unity's UI module included: past its last control, the selection stays where it
+  is. A window takes navigation only while one of its controls is selected, so gameplay keeps Space
+  and the stick otherwise. Even then, a window never takes the keys the game's menus share with its
+  gameplay while that gameplay listens: in a level, W, A, S and D always walk and the right stick
+  always turns the camera while a window is open, and the window's selection never moves on them,
+  whatever the game's menu map is doing. At the game's menus, the main menu and the pause menu, a
+  window with its control selected takes them as it takes the arrows. An unselected window does not
+  block the overlay or another selected window's navigation, but nothing beneath a modal or a key
+  capture moves or presses. A direction held while opening or dismissing a modal does not navigate
+  the next surface; release it and press again.
+- **The keyboard** belongs to a text field while it has focus, and to a key capture while it waits.
+  Typing reaches the field and none of it the game; Escape cancels a capture without closing the
+  window around it. A text field reached while a key is held, by navigation, a click or its surface
+  opening, takes the keyboard only once every key is released, so a held key never types into it.
+- **The mouse** works on every surface that shows the cursor, after the game's pause menu too.
+  Robotopia turns its whole menu map off as its pause menu closes, pointer and all. While a surface
+  shows the cursor, the kit turns the UI module's own pointer actions back on where the game left
+  them off, the position and the buttons only, never navigation, submit or cancel, and turns them off
+  again as the last such surface closes; what the game changes meanwhile stands, and at the game's
+  menus, where its pointer is on, nothing changes. The wheel scrolls the TopiaForge control under
+  the pointer, by as much as the module's own wheel would; the game's own menus never see it. A
+  surface that does not show the cursor, such as a HUD, changes nothing.
+- **Scroll views follow the selection.** A control the keyboard or a controller moves to inside a
+  kit scroll view scrolls into view, just far enough to show it in full. Disabled scroll views keep
+  their position and motion unchanged.
+- **Everything else passes through unchanged**: the mouse's own events, every key no surface
+  handles, and the game's own controls.
+
+A mod's action yields to the UI the same way, control by control (`suppressWhileUiFocused`, the
+default): to every control while a modal, a fullscreen tool, the manager, a key capture or a text
+field holds the focus; to the keys and buttons an open window handles; to every key and controller
+control while one of the game's own text fields has the keyboard; and, for mouse controls, while the
+pointer is over UI. A game control that is merely selected holds nothing, so a mod's own key still
+reaches it at the main menu, over its own window, and in a level after a click on the game's menus.
+While a window navigates with the game's bindings, mod actions yield to those same keys and to a
+bound right stick. Rebinding updates both the claimed keys and their directions, even when the set
+of resolved controls stays the same. When the game's navigate action is disabled, or its gameplay
+listens too, as in a level, those extra controls stay available to gameplay and mods. A press keeps
+the owner it began with until it is released: the key a capture takes, or one held while the window
+it navigated closes, fires no mod action until it is pressed again, and a key a mod's action had
+before a surface took it keeps reaching that action until it is released.
+
+TopiaForge takes these presses from the Input System, which the game's menus, pause and navigation
+read. Code that reads Unity's legacy input still sees every key.
+
+Custom kit compositions can call `root.PushDismissable(surface)` on their own widget subtree. This
+uses the same selection-scoped navigation claim as a kit window; focused fields own typing separately.
+Use the root containing that composition's controls, not a shared HUD root. Remove the surface with
+`TopiaForgeDismissStack.Remove(surface)` when it closes. Inactive or destroyed roots take no input.
 
 ## Accessibility
 
@@ -96,12 +361,224 @@ effective value. TopiaForgeUi propagates it across all owned surfaces. Text and 
 remain meaningful without color or animation, and keyboard navigation/focus must work at every
 supported scale.
 
+Confirmations opened through `Context.Ui.ShowModal(...)` and system toasts use the kit palette.
+TopiaForge's server identity, connection privacy and voice consent prompts use the kit's Paper
+scheme and the player's current accessibility settings. These prompts draw above toasts and hold
+navigation until the player answers or dismisses them. Package themes apply to the owning surfaces.
+
 ## Themes and layout
+
+### Package themes
+
+Declare theme files in your `topiaforge.mod.json`. The packager validates the definitions and adds their SHA-256
+hashes to the packaged manifest.
+
+```json
+{
+  "ui": {
+    "schema": 1,
+    "default": "survival",
+    "themes": [
+      { "id": "survival", "definition": "ui/themes/survival.json" }
+    ]
+  }
+}
+```
+
+Start with the SDK's `topiaforge-ui-theme.schema.json` and `topiaforge-ui-theme.defaults.json` or the UiGallery's
+sample at `mods/TopiaForge.UiGallery/ui/themes/survival.json`. Each file declares one theme id. Supply the Paper,
+HUD, typography or token entries that differ from the kit defaults. The theme uses package-relative resources.
+
+A surface uses its `WithTheme` override first, then the nearest scope's `Context.Ui.Themes.UseTheme` selection,
+then the manifest default, then the kit default. Use the manifest for ordinary surfaces. Pass `null` to
+`UseTheme` to clear the current scope's selection. `PreloadAsync` lets a scope load a declared theme before use
+and observe a registration failure. A selection that would leave an inheriting Card or Box without its named
+style is refused before any surfaces change. Confirmation modals, system toasts and manager prompts use the kit theme.
+Loader trust prompts take priority for Back and navigation while they are visible. Closing one returns control to the
+next eligible surface.
+
+Use semantic roles for text. At 1080p and scale 1.0, the reference heights are Banner 56, Display 40, Title 30,
+Heading 24, Body 20, Label 18, Caption 18, Numeral 32 and Mono 18. The Mono role uses JetBrains Mono NL. The
+renderer keeps text at a readable reference size below scale 1.0 and scales it up with the UI through 2.0.
+High contrast derives from each scheme. Text targets 4.5:1 in normal themes and 7:1 in high contrast. Reduced
+motion skips transitions and pulses.
+
+Guests resolve themes against the same admitted package on their own machines. The version 2 UI envelope carries
+the originating package and digest, its presentation generation, and the theme id and descriptor digest. Legacy
+trees with the kit default retain version 1 encoding. A new role, explicit text id or package theme requires
+version 2 from each recipient. A refused upgrade leaves the previously admitted presentation in place.
 
 TopiaForgeUi chooses Paper tokens for full-screen tools, windows, and dialogs, and HUD tokens for
 gameplay overlays. Safe consumers specify semantic tone (`Neutral`, `Success`, `Warning`, or
 `Danger`) rather than color literals. The provider owns layer bands, focus order, cursor state,
 font fallback, motion, high contrast, and UI scale.
+
+Enabled filled and danger button labels meet 4.5:1 (WCAG AA) at rest and while hovered, selected or
+pressed. Enabled switch thumbs and checkbox checks, and stepper marks, meet 3:1 on their fills.
+Both thresholds include 8-bit color rounding. High contrast raises them to 7:1 and 4.5:1. On brand
+orange (`#FF7A11`), Paper uses `#2D3748` and HUD uses `#10141B`; high contrast can darken the ink
+further. The HUD's bright status fills also use dark ink. An off switch's grey thumb is lightened
+or darkened until it reads on the tint.
+
+What is drawn on a fill is chosen against the fill at rest. Each interaction state then keeps the
+kit's usual tint (a button lightens on hover and darkens on press; a switch or checkbox darkens on
+both, as uGUI's default does) only while the label or mark still reads on the tinted fill. Where it
+would not, the state takes the mirror tint, which moves the fill away from what is drawn on it, so
+that state reads at least as well as rest. Paper's orange therefore lightens when pressed rather
+than darkening toward its dark label, and Paper's danger red darkens when hovered rather than
+lightening toward its white label. Selection moves the same way as hover. When hover and press
+land on the same side of rest, press goes twice as far, so a pressed button looks different from a
+hovered one even with reduced motion, which turns off its sink into its shadow. Fills keep the
+brand's colors, except where nothing would read on them: high contrast darkens Paper's danger red
+so its white label reaches 7:1. A
+slider's handle is the accent on Paper, where a white one vanished on the light track, and stays
+white on the HUD.
+
+On Paper, labels and ghost buttons read in every tone on every surface. Muted text keeps 7:1 (WCAG
+AAA) against the sunken paper a tool's content sits on. Faint text, and body text in a status or
+brand tone, keep 4.5:1 (AA) against the darkest surface text sits on: the tint, or sunken paper
+under the kit's pressed tint. High contrast raises all of them to 7:1. Status and brand colors keep
+their own values for fills, rings and display type, so a `Warning` label reads darker than a
+warning fill.
+
+Badges read in every tone of both schemes too, at 4.5:1, or 7:1 in high contrast, against the badge
+itself. On Paper a badge is a wash of its tone with a ring in it, and its label is the tone darkened
+until it reads on that wash over the darkest surface. On the HUD a badge is solid in its tone, so
+the world behind it cannot change it, and its label is the HUD's text or a dark one, whichever
+reads; an accent neither reads on is lightened or darkened until one does. A card's corner badge
+sits on its preview, so on Paper its wash is flattened onto sunken paper and a picture cannot show
+through. A badge's label is always opaque, whatever opacity a mod's accent carries, and its contrast
+is checked on the colors as uGUI draws them, in 256 steps a channel.
+
+Toasts reuse a few pooled views. Each toast is placed and brought in afresh, whatever its view
+showed before and under reduced motion too, and shows above every window and dialog, stacked up from
+the bottom-right corner.
+
+### Safe layouts
+
+Use the original `UiRow` and `UiColumn` constructors for the standard spacing and alignment. Pass
+`UiFlexLayout` to set token spacing, padding and axis alignment. `UiExpanded` and `UiSpacer` take
+shares of a row or column's finite remaining space. An expanding child needs a bounded main axis,
+so put flexible controls in a row inside a scrolling window.
+
+`UiPadding` insets one child. `UiSizedBox` bounds a child or reserves an empty gap. `UiWrap` flows
+children across rows, and `UiGrid` computes its column count from the available width and its minimum
+cell width. The local player's UI scale can reduce the number of columns. `UiCard` holds an optional
+header and its content. A disabled Card keeps its text readable and disables controls inside it. A
+selected Card shows a selection mark and ring. `UiDivider` is presentation-only.
+
+Use `UiStack` for a bounded, clipped paint area. `UiPositioned` belongs directly inside a Stack.
+Place background Boxes first, then labels and controls. TopiaForge rejects a later independent
+painter that covers a text or control group. The same validate-and-arrange stage checks local
+composition and `FakeUiService` captures. A rejected `SetContent` leaves the previous content and
+control state intact. If a retained HUD no longer fits after a viewport or scale change, it displays
+“Panel does not fit at this scale” and restores the original tree once it fits. The notice keeps
+the surface title and uses another clear position if the current dock cannot hold the text.
+Nearby panels, session chat and caption space keep their positions.
+
+When upgrading a 0.2 layout, check that each control still fits at UI scale 2.0.
+Compositions that previously clipped an action now return a layout error.
+Wrap rigid rows or use a scrollable Window if the controls need more room.
+
+A Window or FullscreenTool checks that each protected control can be revealed in full within its
+outer scroll viewport. Long paragraphs can scroll a readable line at a time. When a resize leaves
+an admitted control unreachable, the layout notice appears and the original layout and scroll
+position return once the controls can fit again.
+
+Composition depth is limited to 32 levels, including the root. The limit is 4,096 node occurrences
+and 256 direct children per container. IDs are unique across the complete tree. Combine redundant
+padding wrappers when a scene needs fewer levels. Stable IDs are also available on layout nodes, so
+the Gallery and tests can inspect their resolved bounds and state.
+
+SDK HUDs keep 24 reference units of safe margin at the viewer’s UI scale. The same fit check
+applies to title-and-body HUDs and updates from `SetBody`. When the retained layout exceeds the
+viewport, the kit tries a readable notice in its current allocation and then measures it in an
+available safe slot. If every slot is occupied, a system toast gives the manifest display name and
+HUD dock once per unfit episode. The capture marks the overflow as queued, and the authored panel
+returns when it fits.
+
+### Artwork and status
+
+`UiIcon` draws one of the kit's 31 glyphs. It uses the glyph's plain-text label unless
+you supply one. Set `decorative: true` for a redundant glyph beside visible text.
+
+Declare sprites and fonts in the package's theme description. Pack sprites in a Unity
+bundle, include the matching receipt and any notices. A receipt gives the packager the
+source dimensions and texture format. Only an Alpha8 mask can take a `UiTone` tint.
+Theme typography roles can select an admitted font from the same pack.
+
+```csharp
+var art = new UiColumn(
+    new UiImage(new UiImageRef("preview-art", "card"), "Supply card",
+        width: 144, height: 88, fit: UiImageFit.Contain),
+    new UiBadge("Ready", UiPaintRole.Success, icon: UiGlyph.Check),
+    new UiPips(total: 5, filled: 3, label: "Energy", fraction: 0.5f));
+```
+
+`Contain` fits the whole sprite inside the frame. `Cover` fills the frame and crops
+the excess inside its edges. Both preserve the sprite's aspect ratio. Each omitted
+frame dimension uses the corresponding source dimension in reference units.
+The same frame survives pending, failed and unavailable art. A semantic image has
+a plain-text label. If it cannot fit inside the frame, the kit shows a readable
+“Image unavailable” panel until the art or layout recovers. A decorative image uses
+a bounded placeholder.
+If a remote HUD's original dock cannot hold the notice, the kit uses available safe
+space while the other docked panels keep their positions.
+
+Badges pair words and optional glyphs with a semantic color. The kit supplies the
+status glyph in high contrast where required. Pips show the exact labeled count,
+empty and filled segments, and an optional fractional next segment.
+
+### Control options and settings
+
+Use `UiTextInput.WithDecoration` with `UiInputDecoration` to give a text field its placeholder and inline error. The
+error carries a warning glyph and is part of the field's accessible description.
+Provide a new tree to clear it.
+
+A stepped `UiSlider` sends the nearest authored step to its callback. Use
+`UiValueFormat.Number(decimals)`, `Percent()`, or `Multiplier(decimals)` for the
+live readout. `Percent()` measures the position within the slider's range.
+`UiCheckbox` has the same value and callback shape as a switch. Both controls keep
+a visible boundary in every state, including when the off switch is pressed.
+
+`UiTabs` accepts two to twelve pages and shows one at a time. Use `UiTabsStyle.Rail`
+for settings sections beside a page and `Bar` for tabs above it. A viewer can switch
+immediately. Pages keep their controls while hidden, and a new tree changes the
+active page when its authored selection changes.
+
+`UiTooltip` wraps a control or passive label. It appears after 450 ms of pointer
+hover or as soon as the trigger gets keyboard or controller focus. Use
+`UiPatterns.ListTile` when a row needs an icon, a title and optional subtitle, or a
+trailing control inside a Card.
+
+For `UiKeyBindingField`, register an action with `IInputService.RegisterAction` and use
+its stable package-local name. Rebind changes only the selected device class. Back
+cancels capture. A reserved control reports its owner and a shared control reports
+the conflicting action. On a targeted window the guest edits their own registration.
+A guest without that action sees the author's default as a read-only hint.
+
+### Action slots and key glyphs
+
+Register a named action with the same package's `IInputService` before admitting
+`UiKeyGlyph` or `UiActionSlot`. Each viewer sees the binding for the device they used most
+recently. If that device has no binding, the cap uses the other device's first binding. A
+viewer with no bindings sees an Info glyph and “Unbound.” Pass an empty collection to
+`IInputAction.Rebind` to clear live bindings. The action stays registered, and
+`ResetBindings` restores its original defaults. Authenticated publisher hints always
+come from the original definition.
+
+```csharp
+var reopenAt = new UiCooldown(Context.Ui.ClockTime + 8, durationSeconds: 8);
+var slot = new UiActionSlot("survey", "Survey", glyph: UiGlyph.Map,
+    cooldown: reopenAt, charges: new UiCharges(1, 3), id: "survey-slot");
+```
+
+Slots are read-only and can appear in a HUD. A lock and its reason have priority over a
+cooldown, charge count or detail. Use `UiWrap` for several slots at larger UI scales.
+Use `UiPips.WithRefill` for a deadline-backed pip track. Cooldowns and refills advance
+from the UI clock without a per-frame content replacement.
+A refill can advance the displayed count once. The authored charge and pip values stay
+available as the source snapshot. A new world or session expires the previous deadline.
 
 ## Testing UI without running Robotopia
 
@@ -112,12 +589,217 @@ failures. It also implements `IUiSurfaceDismissalSource`, so hide/reopen session
 deterministic without Robotopia. Disposing the test context removes every surface and gates further
 callbacks; finish UI tests with `context.AssertNoLeaks()`.
 
+A standalone `FakeUiService` uses the named actions on the `FakeInputService` supplied to `UseInput`. A
+`FakeModContext` wires its own input automatically. Construct `FakePlayerDirectory` with the presenting
+context to test which registered defaults reach a targeted player. The viewer's effective bindings stay separate.
+
+`FakeUiSurface.IsVisible` follows the fake scenes as the game does: a gameplay HUD is visible only
+while a gameplay scene is active and no scene load is pending. `FakeModContext` starts at the main
+menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay HUD on screen.
+`IsShown` says whether the mod shows the surface, whatever TopiaForge does with it.
+
+Badge and pip rows keep the author's `RequestedStyleId` and `RequestedPaintRole` alongside the
+resolved `StyleId` and `EffectivePaintRole`. During theme fallback the requested style stays visible
+in the capture and `StyleId` is empty. The role fields use `UiPaintRole` in code and lowercase
+role names in the JSON capture.
+
+The managed `--ui-kit` suite checks the Gallery's headless manifests for controls, status,
+actions and presentation. It also runs the renderer boundary tests and the paired Gallery and
+Zombies fixtures. The Multiplayer test suite drives both authenticated presentation routes with
+the provider, including mixed UI versions, session replacement and scope retirement.
+
+### Native Gallery capture
+
+When a control's state fills round to the same drawn color, the kit shows a
+separate selection or press mark. Selection uses a three-unit leading bar when
+its fill matches rest. Press uses an inset outline when its fill matches hover
+or rest. Switches and sliders reserve space beside their track for both marks.
+The marks stay visible with reduced motion, and the focus ring and hit area
+retain their own geometry.
+
+The coordinator can set `TOPIAFORGE_UI_GALLERY_CAPTURE=1` at startup on the
+native verification process. In that process, F2 cycles Buttons, Text and
+choice inputs, Toggles, checkboxes and tabs, Key binding fields, then Tooltips
+and list tiles. F3 opens Interaction states and F4 opens Graph connections.
+Each page cycles Kit Paper, Kit HUD, Survival Paper and Survival HUD in that
+order. Pressing a different preview key closes the current preview and
+restarts the selected cycle. The ordinary F8 Gallery starts with Survival
+selected in both scheme views. Choose Kit to use the built-in descriptor.
+
+K2.5 moves the Gallery's Survival default from the manifest to the F8 theme
+selector. The K1 golden captures document the K1 manifest-default route.
+Zombies and the generated UI template exercise manifest-default themes.
+
+Opening a first-party Gallery fixture records its settled geometry and paint. Press F11 to record
+another observation of the current fixture. Hold the intended state until two frames have settled.
+The Gallery writes a JSON tree to `native-captures` in its local data folder. The recorder accepts
+the authored fixture and omits participant identifiers and changed input values. It measures an
+input's authored value while the field still contains that exact value.
+
+The JSON uses the same accessibility checks as `FakeUiService` and records actual TMP measurements
+for the native fixture. Collect the separate raster captures and host and remote guest evidence at
+the phase visual gate.
+
 ## Provider implementation contributors
 
 The internal renderer lives in `src/TopiaForge.Mods.UnityUi` and the F8 UI Gallery remains its manual
 QA catalog. Provider work follows the repository's dirty-setter, pooling, virtualization, theme,
 layer-band, and no-steady-state-allocation rules. Those implementation details are intentionally
 absent from the safe consumer contract.
+
+A kit surface says what it takes when it joins the dismiss stack:
+`TopiaForgeDismissStack.Push(surface, claim, root)`. The input filter looks at each keyboard and
+controller event before any Input System action does. It holds a claimed press at rest in that event,
+and in every later one until the control is released, and the kit reads the press itself. It changes
+no action map, UI module or binding of the game's, so nothing has to be restored, and with no claim
+every event passes at once. The one thing of the game's the kit turns on is the UI module's pointer
+actions, while a surface shows the cursor and only where the game left them off, and it puts back
+exactly what it turned on (`TopiaForgePointer`). A surface whose root is destroyed or hidden claims
+nothing. A taken press never reaches the device, so first-party code that reads a key's press
+through the Input System also reads `TopiaForgeInputOwnership.KeyPressedThisFrame(key)`, as hotkeys
+and key captures do. Each
+frame the kit follows the navigate action Unity's UI module reads, so navigation covers what the game
+binds to it, and whether the game's gameplay maps are on next to it, which tells a level from a menu.
+The control selected inside a surface carries a guard that undoes any move out of the surface, and,
+while the keys the game's menus share with its gameplay reach the game, any move inside a window the
+kit did not send. Kit text fields are TextMesh Pro fields that wait for held keys before they take
+the keyboard, since TextMesh Pro types from the window's own key messages, which no Input System
+filter sees. The game's own UI holds a mod's keys only while one of its text fields has the keyboard;
+the kit reads UI Toolkit's focus by reflection, so it takes no UIElements reference. The decisions
+live in the Unity-free `TopiaForgeInputGate`, `TopiaForgeDismissOrder`, `TopiaForgeNavigationDriver`,
+`TopiaForgeNavigationBindings`, `TopiaForgeTypingStart`, `TopiaForgePointerHold`,
+`TopiaForgeScrollReveal` and `TopiaForgeUiToolkitFocus`, covered by `UiKitInputOwnershipTests`.
+
+Every kit label comes from one TextMesh Pro factory, which turns on extra padding. Quicksand's
+stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops
+whole letters: at UI scale 1.0 in a 1600x900 window, "default" rendered as "defau t".
+
+Every text style's face comes from `TopiaForgeTokens.FaceOf`, and widgets take it from
+`TopiaForgeFonts.For(style)`, never by weight. Body, label and caption text, and any style at body
+size or smaller, use Quicksand Medium (500). Quicksand Light's stems are half a pixel wide at 14 px:
+at UI scale 1.0 in a 1920x1080 window the dot of an i merged with its stem, and "TopiaForge" read as
+"ToplaForge". Headings and numerals keep Quicksand Light, display styles use Audiowide, and bold styles
+are TextMesh Pro's faux bold over their style's face.
+
+A kit canvas starts at zero size, and Unity gives it its real size in its next canvas update. A
+window shown in the frame its canvas is built finds that canvas still 0x0, so it keeps its size and
+position and finishes its screen clamp on the first frame the canvas has a size; clamping against 0x0
+once collapsed the UI Gallery to nothing at 1920x1080. Forcing a canvas update is no substitute: the
+CanvasScaler writes its factor only when it differs from the last one, which starts at 1, so at
+1920x1080 and UI scale 1 the canvas is still 0x0 after `Canvas.ForceUpdateCanvases()`. The clamp
+caps a window from its designed size, so a cap taken on a smaller canvas does not stick. A window also
+re-places itself on the first frame after its canvas changes size, as a new resolution or UI scale
+does, so its title bar never stays off screen. Shown again during its close fade, a window stays
+shown, as a fullscreen tool does.
+
+Every kit canvas holds its sorting slot through one ledger, `TopiaForgeLayerLedger`, and gives it
+back by what was allocated, never by reading the canvas: a canvas that a scene destroyed can no
+longer say which order it held, and a HUD made in each world used to move one slot up the 800-slot
+HUD band with every world change. A component on each canvas releases its slot whenever anything
+destroys it. The host then lets go of what was on that canvas, closing a dialog as a cancellation,
+and raises `UiHost.LayerLost` for the canvas's owner. Kit layers made directly stay scene-owned
+unless created with `persistent: true`, which suits UI built for one scene's objects; the SDK's
+surfaces and modals are always persistent.
+
+## Multiplayer kit widgets
+
+These renderer widgets are the building blocks for multiplayer screens such as the scoreboard, chat,
+voice settings, the connecting overlay and name tags. They are not part of the safe `Context.Ui`
+contract. Their math and state live in the Unity-free `Core/` folder and are covered by
+`UiKitMultiplayerCoreTests`, including a check that the per-frame paths allocate nothing. The UI
+Gallery's ONLINE page shows each one in its states.
+
+### Sortable table (`TopiaForgeTableView<T>`)
+
+`container.TableView(columns)` adds sortable headers over the virtualized list view. Build columns
+with `TopiaForgeTableColumn<T>.Text`, `Number` or `Custom`, then chain `Width` or `Flex`, `Align`,
+and `Sortable`, `SortBy` or `DescendingFirst`. A header click sorts by that column, a second click
+flips the direction, and a chevron marks both. Sorting is stable and never reorders the caller's
+list; if a comparer throws, the rows keep their supplied order and the sort clears, so no chevron
+shows. Selection reports the caller's index and follows its row through re-sorts; `Keyed` makes it
+follow the row through new data too. Rows are the list view's buttons, so focus and keyboard
+behaviour match the list view, and `MoveSelection` is the Up/Down hook. Text cells are plain text,
+so markup in a player name is shown literally.
+
+### Signal bars (`TopiaForgeSignalBars`)
+
+A connection glyph with zero to four bars and an unknown state drawn as flat stubs, so unknown
+differs from no bars by shape. `SetPing` maps a round trip through `TopiaForgeSignalThresholds` (60,
+120, 200 and 350 ms by default), `SetQuality` takes a normalized quality, and `SetLevel` takes a
+bucketed level, so callers translate their own quality type. `ShowMilliseconds` adds a ping label
+that is rewritten only when the value changes.
+
+### Phase stepper (`TopiaForgePhaseStepper`)
+
+`PhaseStepper(...)` and `VerticalPhaseStepper(...)` draw a step rail in which each step is pending,
+active, done, failed or skipped. `Start`, `Advance`, `MoveTo`, `Fail`, `Skip`, `Complete` and `Reset`
+follow `TopiaForgePhaseStepperState`, and `SetDetail` and `SetProgress` fill the line under a step
+("Relay", "3/7"). `MoveTo` keeps skips before its target but returns every later step to pending,
+so retrying an earlier phase never leaves a later one skipped. Status reads without color: a number,
+a check, a cross or a chevron. The active node breathes unless motion is reduced.
+
+### Chat log (`TopiaForgeChatLog`)
+
+A bounded HUD log that evicts its oldest line. Every line passes through `TopiaForgePlainText`:
+rich-text tags, escapes, line breaks and bidirectional overrides cannot restyle or spoof the log, and
+lines are bounded (300 characters by default, author names 32). While closed, the newest lines (eight
+by default) show for 8 seconds and then fade over 1.5; reduced motion hides them at once instead,
+and turning it off mid-fade brings them back. `SetOpen(true)` shows the whole history on a backdrop
+with scrollback. Lines are pooled, so a new
+message rebinds one line. Tones mark player, system, whisper and error lines.
+
+### Talk indicator (`TopiaForgeTalkIndicator`)
+
+A microphone glyph for idle, talking, muted, muted by host, mic busy and no mic. Each state differs in
+glyph or halo (`TopiaForgeTalkPresentation`), and `ShowCaption` names it in text. The talking halo
+breathes with the host's motion intensity and holds still under reduced motion; its driver runs only
+while it breathes. `HideWhenIdle` suits name tags and scoreboard rows.
+
+### Level meter (`TopiaForgeLevelMeter`)
+
+`SetLevel(rms, peak)` takes linear samples every frame and maps them to dBFS through
+`TopiaForgeLevelMath` across `Range` (-60 to 0 dB by default), rising instantly and falling smoothly.
+`SetThreshold` draws the voice-activation marker and `PeakHold` the falling peak mark. The fill tone
+follows the zone: muted below the threshold, success when active, warning when hot and danger when
+clipping.
+
+### Name tags (`TopiaForgeNametagLayer`)
+
+`hud.Nametags()` tracks persistent world-space tags: unlike floaters, a tag stays until it is removed.
+`Track(anchor, name)` follows any `ITopiaForgeNametagAnchor`, such as `TopiaForgeWorldPointAnchor` (an
+engine-independent point) or `TopiaForgeTransformAnchor`, plus a vertical offset. Each frame the layer
+projects anchors with the camera's matrices (`TopiaForgeCameraFrame`), hides tags behind the camera,
+offscreen or out of range, and fades and scales the rest with `TopiaForgeNametagFalloff` (hidden
+within 0.6 m and beyond 40 m by default). A handle sets the name, a secondary line, a badge such as
+HOST, and the talking glyph slot. Names, secondary lines and badges are plain text, and a removed
+handle stays inert even after its pooled tag is reused.
+
+### Dialogs, toasts and layout for flows across scenes
+
+These renderer members serve screens that show what other players wrote and follow a flow across
+scene loads, such as the manager's multiplayer screens. Like the widgets above, they are not part of
+the safe `Context.Ui` contract.
+
+- `Modal.Destructive(title, body, confirmLabel, onConfirm, onCancel, ...)` also says when the dialog
+  ends without a confirmation: `onCancel` runs once, after the dialog has closed, whether through its
+  cancel button, ESC or its owner, and never after confirming. With `plainText: true` the title and
+  body render exactly as written, so markup in a player's name shows as typed; with
+  `persistent: true` the dialog survives scene loads. It returns the dialog, so its owner can close
+  it once the decision no longer applies, which counts as cancelling.
+- `Modal.Custom(title, scheme, width, persistent)` makes the empty shell with the same choice. A
+  persistent modal survives scene loads, as a dialog that follows a flow across them must; one that
+  is not is destroyed with the scene it opened in. The owner closes it either way, and disposing the
+  host tears it down.
+- `TopiaForgeToasts.ShowPlain(...)` shows a toast whose text renders as written, markup unparsed.
+  Bound the text first, through `TopiaForgePlainText`.
+- `widget.SetShown(bool)` takes a widget out of its parent's layout, so the rest closes up, or puts
+  it back. It is dirty-checked: a call that changes nothing rebuilds no layout. `SetVisible` keeps a
+  hidden widget's space, which suits a momentary change.
+- `inputField.Password()` masks what is typed; the text itself is unchanged.
+- `inputField.PlainText()` renders a draft literally. `Focus()` begins kit text entry after every held key is released,
+  including when the field is already selected; moving selection away cancels the pending start. `Blur()` ends it. Before
+  hiding a composer, call its container's `ReleaseFocus()` too: that clears a selected child button as well as a field,
+  while preserving selection in another surface. No native input component needs disabling or restoring.
 
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.

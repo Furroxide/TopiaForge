@@ -1,0 +1,15 @@
+{
+  "bundlePath": "ui/art/preview.bundle",
+  "assets": [
+    {
+      "assetName": "preview-card",
+      "assetPath": "Assets/UiResourceSamples/PreviewCard.png",
+      "license": "CC0-1.0"
+    },
+    {
+      "assetName": "preview-mark",
+      "assetPath": "Assets/UiResourceSamples/PreviewMark.png",
+      "license": "CC0-1.0"
+    }
+  ]
+}

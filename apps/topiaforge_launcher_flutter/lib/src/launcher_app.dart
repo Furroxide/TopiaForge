@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
 
 import 'launcher_bloc.dart';
 import 'launcher_event.dart';
+import 'launcher_exit.dart';
 import 'launcher_keyboard_navigation.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
 import 'screens.dart';
+import 'session_link_inbox.dart';
 
 class TopiaForgeLauncherApp extends StatelessWidget {
   const TopiaForgeLauncherApp({
@@ -17,11 +18,31 @@ class TopiaForgeLauncherApp extends StatelessWidget {
     required this.repository,
     this.developerRepository,
     this.updateRepository,
+    this.reachabilityProbe,
+    this.sessionLinks,
+    this.sessionLinkHandling,
+    this.multiplayer,
+    this.quitLauncher = exitLauncher,
   });
 
   final LauncherRepository repository;
   final DeveloperRepository? developerRepository;
   final LauncherUpdateRepository? updateRepository;
+
+  /// Developer-only NAT reachability probe. Null in tests and whenever the host cannot supply one.
+  final ReachabilityProbeGateway? reachabilityProbe;
+
+  /// `topiaforge://` links from the command line and the runner.
+  final Stream<SessionLinkArrival>? sessionLinks;
+
+  /// The link-handling setting and the system registration.
+  final SessionLinkHandlingGateway? sessionLinkHandling;
+
+  /// Multiplayer preferences and network diagnostics.
+  final MultiplayerGateway? multiplayer;
+
+  /// Quits the launcher once a staged update is being applied.
+  final Future<void> Function() quitLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +53,10 @@ class TopiaForgeLauncherApp extends StatelessWidget {
           repository,
           developerRepository: developerRepository,
           updateRepository: updateRepository,
+          reachabilityProbe: reachabilityProbe,
+          sessionLinks: sessionLinks,
+          sessionLinkHandling: sessionLinkHandling,
+          multiplayer: multiplayer,
         )..add(const LauncherStarted()),
         child: BlocListener<LauncherBloc, LauncherState>(
           listenWhen: (previous, current) =>
@@ -39,7 +64,7 @@ class TopiaForgeLauncherApp extends StatelessWidget {
                   LauncherUpdatePhase.applying &&
               current.launcherUpdateStatus.phase ==
                   LauncherUpdatePhase.applying,
-          listener: (_, _) => SystemNavigator.pop(),
+          listener: (_, _) => quitLauncher(),
           child: MaterialApp(
             title: 'TopiaForge',
             debugShowCheckedModeBanner: false,
@@ -70,38 +95,43 @@ class LauncherShell extends StatelessWidget {
           onSectionSelected: (section) => context.read<LauncherBloc>().add(
             LauncherSectionSelected(section),
           ),
-          child: Scaffold(
-            body: TopiaForgeBackdrop(
-              child: Row(
-                children: [
-                  NavigationRail(
-                    minWidth: compactNavigation ? 64 : 86,
-                    scrollable: true,
-                    labelType: compactNavigation
-                        ? NavigationRailLabelType.none
-                        : NavigationRailLabelType.all,
-                    selectedIndex: selectedIndex < 0 ? null : selectedIndex,
-                    onDestinationSelected: (index) => context
-                        .read<LauncherBloc>()
-                        .add(LauncherSectionSelected(visibleSections[index])),
-                    destinations: [
-                      for (final section in visibleSections)
-                        _destinationFor(section, state.availableModUpdateCount),
-                    ],
-                  ),
-                  const VerticalDivider(width: 1),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _TopBar(state: state),
-                        if (state.isBusy)
-                          const LinearProgressIndicator(minHeight: 3),
-                        Expanded(child: LauncherBody(state: state)),
-                        _StatusBar(state: state),
+          child: JoinFlowHost(
+            child: Scaffold(
+              body: TopiaForgeBackdrop(
+                child: Row(
+                  children: [
+                    NavigationRail(
+                      minWidth: compactNavigation ? 64 : 86,
+                      scrollable: true,
+                      labelType: compactNavigation
+                          ? NavigationRailLabelType.none
+                          : NavigationRailLabelType.all,
+                      selectedIndex: selectedIndex < 0 ? null : selectedIndex,
+                      onDestinationSelected: (index) => context
+                          .read<LauncherBloc>()
+                          .add(LauncherSectionSelected(visibleSections[index])),
+                      destinations: [
+                        for (final section in visibleSections)
+                          _destinationFor(
+                            section,
+                            state.availableModUpdateCount,
+                          ),
                       ],
                     ),
-                  ),
-                ],
+                    const VerticalDivider(width: 1),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _TopBar(state: state),
+                          if (state.isBusy)
+                            const LinearProgressIndicator(minHeight: 3),
+                          Expanded(child: LauncherBody(state: state)),
+                          _StatusBar(state: state),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -262,6 +292,15 @@ class _TopBar extends StatelessWidget {
                   ),
                 ),
               ),
+              if (bloc.canJoin)
+                Tooltip(
+                  message: 'Join a server by address',
+                  child: IconButton(
+                    key: const Key('join-by-address'),
+                    onPressed: () => showDirectConnectDialog(context),
+                    icon: const Icon(Icons.group_add_outlined),
+                  ),
+                ),
               if (!iconOnlyActions)
                 Tooltip(
                   message: 'Refresh launcher state',
