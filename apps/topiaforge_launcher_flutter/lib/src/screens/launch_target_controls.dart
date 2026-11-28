@@ -103,9 +103,9 @@ class _LaunchTargetControls extends StatelessWidget {
           ),
         ] else if (selection.kind == LaunchSelectionKind.unresolvedLegacy) ...[
           const SizedBox(height: 10),
-          Text('Saved selection: ${jsonEncode(selection.legacy)}'),
           const Text(
-            'This older selection has no unique available target. Choose a target above or explicitly use the main menu.',
+            'Your saved launch selection is unavailable. Choose an available '
+            'launch target or use the main menu.',
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(

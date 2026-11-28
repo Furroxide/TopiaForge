@@ -19,7 +19,12 @@ void _registerTargetLaunchRegressions(_PumpHome pumpHome) {
         snapshot: _readySnapshot(profiles: [profile]),
       );
       await pumpHome(tester, repository);
-      expect(find.textContaining(retired), findsWidgets);
+      expect(
+        find.textContaining('Your saved launch selection is unavailable.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('worldSelection'), findsNothing);
+      expect(find.textContaining(retired), findsNothing);
       expect(
         tester.widget<GlowButton>(find.byType(GlowButton)).onPressed,
         isNull,
