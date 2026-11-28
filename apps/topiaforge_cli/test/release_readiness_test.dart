@@ -12,7 +12,7 @@ part 'release_readiness_git_test_part.dart';
 /// Shared across both halves of this suite: the parts are one library, so the
 /// fixtures `setUpAll` fills are top-level rather than locals of `main`.
 const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const _releaseVersion = '0.2.0-rc.1';
+const _releaseVersion = '0.2.0-rc.2';
 late String repositoryRoot;
 late List<int> readinessBytes;
 late List<int> schemaBytes;

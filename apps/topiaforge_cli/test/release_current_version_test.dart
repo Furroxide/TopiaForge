@@ -22,9 +22,9 @@ void main() {
     () async {
       final policy = TopiaForgeReleasePolicy.load(root);
       final catalog = TopiaForgeReleaseCatalog.load(root);
-      expect(policy.productVersion, '0.2.0-rc.1');
+      expect(policy.productVersion, '0.2.0-rc.2');
       final release = catalog.release(policy.productVersion);
-      expect(release.tag, 'v0.2.0-rc.1');
+      expect(release.tag, 'v0.2.0-rc.2');
       expect(release.prerelease, isTrue);
       expect(release.status, 'blocked');
       expect(
@@ -46,7 +46,7 @@ void main() {
       expect(
         issues,
         unorderedEquals([
-          'Release 0.2.0-rc.1 is blocked; set its manually reviewed catalog status to ready.',
+          'Release 0.2.0-rc.2 is blocked; set its manually reviewed catalog status to ready.',
         ]),
       );
     },
@@ -55,12 +55,17 @@ void main() {
   test('historical and independent versions retain their identity', () {
     final catalog = TopiaForgeReleaseCatalog.load(root);
     final historical = catalog.release('0.1.0-rc.1');
-    final current = catalog.release('0.2.0-rc.1');
+    final firstCandidate = catalog.release('0.2.0-rc.1');
+    final current = catalog.release('0.2.0-rc.2');
     final stable = catalog.release('0.2.0');
     expect(historical.tag, 'v0.1.0-rc.1');
     expect(historical.prerelease, isTrue);
     expect(historical.status, 'withdrawn');
     expect(historical.components['sdk'], '0.1.0-rc.1');
+    expect(firstCandidate.tag, 'v0.2.0-rc.1');
+    expect(firstCandidate.status, 'blocked');
+    expect(firstCandidate.components, current.components);
+    expect(firstCandidate.mods, current.mods);
     expect(stable.prerelease, isFalse);
     expect(stable.status, 'blocked');
     expect(current.vpmPackages, historical.vpmPackages);

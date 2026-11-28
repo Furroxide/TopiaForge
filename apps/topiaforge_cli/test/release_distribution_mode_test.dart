@@ -65,7 +65,7 @@ void main() {
         return TopiaForgeReleasePolicy.load(candidate.path);
       }
 
-      // Silence remains signed even after the reviewed RC1 policy opts out.
+      // Silence remains signed even when the reviewed candidate policy opts out.
       final silent = loadWith('silent', {});
       expect(silent.windowsDistribution, 'signed');
       expect(silent.distributesWindowsUnsigned, isFalse);
@@ -74,7 +74,7 @@ void main() {
 
       final reviewed = TopiaForgeReleasePolicy.load(root);
       expect(schema.validate(policyJson).isValid, isTrue);
-      expect(reviewed.productVersion, '0.2.0-rc.1');
+      expect(reviewed.productVersion, '0.2.0-rc.2');
       expect(reviewed.windowsDistribution, 'unsigned');
       expect(reviewed.windowsCertificateSha256, isEmpty);
 
