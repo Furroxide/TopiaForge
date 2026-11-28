@@ -29,6 +29,7 @@ namespace TopiaForge.ModManager.Tests
                 "src/TopiaForge.ModManager/UnityUiLayoutDivider.cs",
                 "src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeGraphCanvas.Retention.cs",
                 "src/TopiaForge.ModManager/UnityUiWorldWidgets.cs",
+                "src/TopiaForge.ModManager/EntityLabelViewReceiver.cs",
                 "src/TopiaForge.ModManager/UnityMainThreadGuard.cs",
                 "src/TopiaForge.ModManager/UiSurfacePresence.cs",
                 "src/TopiaForge.ModManager/UiThemeScope.cs",
