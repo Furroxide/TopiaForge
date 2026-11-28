@@ -136,6 +136,7 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
   }) async {
     installPackageCount += 1;
     lastInstallSourceId = sourceId;
+    _snapshot = installedSnapshot ?? _snapshot;
     return _snapshot.installedMods;
   }
 
@@ -149,7 +150,13 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
   @override
   Future<PackageInboxInstallOutcome> installInboxPackages(
     GameInstall install,
-  ) async => inboxOutcome ?? (throw UnimplementedError());
+  ) async {
+    final outcome = inboxOutcome ?? (throw UnimplementedError());
+    _snapshot = installedSnapshot ?? _snapshot;
+    return outcome;
+  }
+
+  LauncherSnapshot? installedSnapshot;
 
   @override
   Future<List<InstalledMod>> repairInstalledMod(
