@@ -21,16 +21,23 @@ updates:
     commit-message:
       prefix: deps
     groups:
+      # Roslyn updates stay apart so compiler compatibility work does not block
+      # unrelated .NET updates.
+      roslyn:
+        patterns: ["Microsoft.CodeAnalysis.*"]
       dotnet:
         patterns: ["*"]
+        exclude-patterns: ["Microsoft.CodeAnalysis.*"]
     ignore:
       # Roslyn analyzer and source-generator packages are locked to the compiler
       # shipped by the pinned .NET SDK, not to the newest release. An assembly
       # built against a newer Microsoft.CodeAnalysis than the running compiler is
       # refused with CS9057, which silently disables the analyzer and makes every
       # generated member vanish. Dependabot cannot see that constraint, so hold
-      # these at the major version the pinned SDK's compiler accepts.
-      - dependency-name: Microsoft.CodeAnalysis.CSharp
+      # these at the major version the pinned SDK's compiler accepts. The hold
+      # covers every Microsoft.CodeAnalysis package because Workspaces and the
+      # other Roslyn packages can pull in a newer CSharp package.
+      - dependency-name: "Microsoft.CodeAnalysis.*"
         update-types: ["version-update:semver-major"]
 
   # The website is pending on the bootstrap branch. This entry becomes active
