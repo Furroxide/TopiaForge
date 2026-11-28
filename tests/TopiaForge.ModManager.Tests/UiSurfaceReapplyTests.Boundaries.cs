@@ -327,7 +327,8 @@ namespace TopiaForge.ModManager.Tests
                 internal sealed class UnityEntityRegistry { }
                 internal sealed class UnityWorldLabels : IUiWorldLabels, IDisposable
                 {
-                    public UnityWorldLabels(UiHost host, IModLifetime lifetime, UiGameplayGate gameplay, UnityEntityRegistry entities) { }
+                    public UnityWorldLabels(UiHost host, IModLifetime lifetime, UiGameplayGate gameplay,
+                        UnityEntityRegistry entities, Func<IEntity, bool> canShowEntity) { }
                     public OperationResult<IUiWorldLabel> Add(UiWorldLabelRequest request) => throw new NotSupportedException();
                     public void Dispose() { }
                 }
