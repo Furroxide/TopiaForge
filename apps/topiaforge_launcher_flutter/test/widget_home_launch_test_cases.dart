@@ -1,6 +1,28 @@
 part of 'widget_test.dart';
 
 void _registerHomeLaunchTests(_PumpHome pumpHome) {
+  testWidgets(
+    'first run links to bundled packages when no mods are installed',
+    (tester) async {
+      final package = RegistryMod(
+        manifest: _manifest('bundled.mod', version: '0.2.0'),
+        downloadUrl: 'file:///dist/bundled.topiaforgemod',
+        sourceName: 'Bundled Local Packages',
+      );
+      final repository = _FakeLauncherRepository(
+        snapshot: _readySnapshot(registryMods: [package]),
+      );
+      await pumpHome(tester, repository);
+      await tester.tap(find.text('Browse mods'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(package.manifest.name), findsOneWidget);
+      expect(find.textContaining('Bundled Local Packages'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Preview'), findsOneWidget);
+      expect(repository.installPackageCount, 0);
+    },
+  );
+
   testWidgets('home target picker starts the declared target', (tester) async {
     final repository = _FakeLauncherRepository(
       snapshot: _readySnapshot(installedMods: _declaredLaunchMods()),

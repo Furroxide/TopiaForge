@@ -164,6 +164,21 @@ class _HeroLaunchPane extends StatelessWidget {
                             icon: const Icon(Icons.tune),
                             label: const Text('Launch options'),
                           ),
+                          if (state.installedMods.isEmpty &&
+                              state.registryMods.isNotEmpty)
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xB3FFFFFF),
+                              ),
+                              onPressed: () => _add(
+                                context,
+                                const LauncherSectionSelected(
+                                  LauncherSection.browse,
+                                ),
+                              ),
+                              icon: const Icon(Icons.travel_explore),
+                              label: const Text('Browse mods'),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 24),
