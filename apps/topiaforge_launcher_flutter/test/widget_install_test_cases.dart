@@ -29,6 +29,35 @@ void registerInstallConfirmationWidgetTests() {
     );
   });
 
+  testWidgets('inbox install updates launch target choices', (tester) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(),
+      inboxOutcome: PackageInboxInstallOutcome(
+        candidateCount: 1,
+        installedCount: 1,
+        supersededCount: 0,
+        consumedCount: 1,
+        invalidCount: 0,
+        installFailureCount: 0,
+        consumptionFailureCount: 0,
+      ),
+    )..installedSnapshot = _readySnapshot(installedMods: _declaredLaunchMods());
+    await tester.pumpWidget(TopiaForgeLauncherApp(repository: repository));
+    await tester.pumpAndSettle();
+    expect(find.text('No launch targets available'), findsOneWidget);
+
+    await tester.tap(find.text('Mods'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Install Inbox'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zombies'), findsOneWidget);
+  });
+
   testWidgets('partial inbox outcome surfaces issue with warning severity', (
     tester,
   ) async {

@@ -339,6 +339,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
           selectedModId: state.installPlan?.manifest.id,
         ).copyWith(clearInstallPlan: true, clearPreview: true),
       );
+      _queueLaunchPreviews();
     });
   }
 
@@ -359,6 +360,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
           statusSeverity: outcome.severity,
         ),
       );
+      _queueLaunchPreviews();
     });
   }
 
