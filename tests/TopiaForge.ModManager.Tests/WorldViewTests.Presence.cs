@@ -41,11 +41,15 @@ namespace TopiaForge.ModManager.Tests
             Check(!rawWorld.TryResolveRef(reference, out _), "old production source independently cannot resolve a player reference");
             Check(viewer.Replication.TryResolveRef(reference, out var remote) && ReferenceEquals(remote, viewer.AvatarOf(subject)!.Entity),
                 "canonical player lifetime resolves to each process's own current avatar");
+            Check(host.Replication.Views.CanShowEntityLabel(original) && viewer.Replication.Views.CanShowEntityLabel(remote!),
+                "the settled initial view permits labels on a visible avatar");
             using var audience = Lease(seam.PlayerWorldView(renderers[host], viewer.Id.Value).Hide(original));
             using var local = Lease(seam.PlayerWorldView(renderers[host], host.Id.Value).Hide(original));
             rig.Frames(40);
             Check(renderers[host].Hidden.Contains(original) && renderers[viewer].Hidden.Contains(remote!) && renderers[subject].Hidden.Count == 0,
                 "host local and remote audiences hide only the current presence avatar");
+            Check(!host.Replication.Views.CanShowEntityLabel(original) && !viewer.Replication.Views.CanShowEntityLabel(remote!),
+                "an entity label cannot reveal an avatar hidden on the host or on a guest");
             Check(renderers[host].OldSceneGuardWouldReject, "old native scene guard rejects the validated persistent avatar");
             using var participantScope = new FakeModLifetime();
             var participant = host.Replication.Bind("example.mode", new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Participant), participantScope);
@@ -57,7 +61,7 @@ namespace TopiaForge.ModManager.Tests
             // Change the viewer's view during the outage; only the restored link can deliver it.
             Check(directory.TryGet(host.Id, out var hostPlayer) && hostPlayer!.Entity != null, "production directory finds the host player");
             bool ViewerHolds(PresenceNode seen) => viewer.AvatarOf(seen) is { } avatar && renderers[viewer].Hidden.Contains(avatar.Entity);
-            using (Lease(seam.PlayerWorldView(renderers[host], viewer.Id.Value).Hide(hostPlayer.Entity!)))
+            using (Lease(seam.PlayerWorldView(renderers[host], viewer.Id.Value).Hide(hostPlayer!.Entity!)))
             {
                 rig.Frames(4);
                 Check(viewer.AvatarOf(host) != null && !ViewerHolds(host), "a view changed during the outage does not reach the lost link");
@@ -72,6 +76,8 @@ namespace TopiaForge.ModManager.Tests
             Check(!renderers[host].Hidden.Contains(original) && renderers[host].Hidden.Contains(replacement)
                 && !renderers[viewer].Hidden.Contains(remote!) && renderers[viewer].Hidden.Contains(viewerReplacement),
                 "replacement disposes both old native holds and hides new avatars");
+            Check(!host.Replication.Views.CanShowEntityLabel(replacement) && !viewer.Replication.Views.CanShowEntityLabel(viewerReplacement),
+                "the view hold continues to suppress labels after an avatar root changes");
             Check(!host.Replication.TryCreateRef(original, out _) && !renderers[host].Admits(original), "stale avatar handles cannot be named or admitted");
             Check(seam.PlayerWorldView(renderers[host], viewer.Id.Value).Hide(original).ErrorCode == ModErrorCode.InvalidArgument,
                 "new hide call cannot reuse a cached stale player entity");

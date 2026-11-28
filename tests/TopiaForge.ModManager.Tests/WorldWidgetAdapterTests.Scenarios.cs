@@ -125,6 +125,13 @@ namespace TopiaForge.ModManager.Tests
                     var optedOut = (ITopiaForgeNametagPresentation)LastTag(service).Anchor;
                     var calls = Physics.Calls;
                     Check(optedOut.CanShow(Vec3.Zero, entity.Position) && Physics.Calls == calls, "Opt-out does no raycast.");
+                    Add(service, UiWorldLabelRequest.For(entity, "Hidden unit", occlusion: false));
+                    var attached = (ITopiaForgeNametagPresentation)LastTag(service).Anchor;
+                    service.FollowEntityView(candidate => !ReferenceEquals(candidate, entity));
+                    Check(!policy.CanShow(Vec3.Zero, entity.Position) && !attached.CanShow(Vec3.Zero, entity.Position),
+                        "A local view hold suppresses all labels following the entity, even when geometry occlusion is disabled.");
+                    Check(optedOut.CanShow(Vec3.Zero, entity.Position) && Physics.Calls == calls,
+                        "A view hold does not change fixed world cues or do extra raycasts.");
                     service.gameplay.IsGameplay = false;
                     Check(!optedOut.CanShow(Vec3.Zero, entity.Position), "Menu hides even labels with occlusion disabled.");
                 }

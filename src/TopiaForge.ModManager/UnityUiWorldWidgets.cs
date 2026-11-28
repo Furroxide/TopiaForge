@@ -5,13 +5,15 @@ using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed partial class OwnerUiService : IUiClockReceiver
+    internal sealed partial class OwnerUiService : IUiClockReceiver, IEntityLabelViewReceiver
     {
         private Func<double> clock = () => 0;
         private Func<string> clockEpoch = () => "offline";
         public void FollowClock(Func<double> value, Func<string> epoch) { clock = value; clockEpoch = epoch; }
         private UnityWorldLabels? labels;
         private UnityEntityRegistry? labelEntities;
+        private Func<IEntity, bool>? canShowLabel;
+        public void FollowEntityView(Func<IEntity, bool> visible) { canShowLabel = visible; }
         public double ClockTime { get { UnityMainThreadGuard.AssertCurrent(); return clock(); } }
         public IUiWorldLabels Labels
         {
@@ -19,7 +21,7 @@ namespace TopiaForge.ModManager
             {
                 UnityMainThreadGuard.AssertCurrent();
                 if (labels != null) return labels;
-                labels = new UnityWorldLabels(host, lifetime, gameplay, labelEntities!);
+                labels = new UnityWorldLabels(host, lifetime, gameplay, labelEntities!, entity => canShowLabel?.Invoke(entity) != false);
                 if (!lifetime.IsStopping) lifetime.Track(labels);
                 return labels;
             }

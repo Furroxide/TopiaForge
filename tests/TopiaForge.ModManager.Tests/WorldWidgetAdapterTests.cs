@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 "src/TopiaForge.ModManager/UnityWorldLabels.cs",
                 "src/TopiaForge.ModManager/UnityUiWorldWidgets.cs",
+                "src/TopiaForge.ModManager/EntityLabelViewReceiver.cs",
                 "src/TopiaForge.ModManager/UnityMainThreadGuard.cs",
                 "src/TopiaForge.Mods.Abstractions/Internal/UiLabelState.cs",
                 "src/TopiaForge.Mods.Abstractions/UiWorldWidgets.cs",

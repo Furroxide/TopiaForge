@@ -13,14 +13,17 @@ namespace TopiaForge.ModManager
         private readonly IModLifetime lifetime;
         private readonly UiGameplayGate gameplay;
         private readonly UnityEntityRegistry entities;
+        private readonly Func<IEntity, bool> canShowEntity;
         private readonly Binding?[] slots = new Binding?[UiLabelState.MaximumLabels];
         private readonly RaycastHit[] hits = new RaycastHit[32];
         private TopiaForgeHudLayer? hud;
         private TopiaForgeNametagLayer? layer;
         private bool disposed;
-        internal UnityWorldLabels(UiHost host, IModLifetime lifetime, UiGameplayGate gameplay, UnityEntityRegistry entities)
+        internal UnityWorldLabels(UiHost host, IModLifetime lifetime, UiGameplayGate gameplay, UnityEntityRegistry entities,
+            Func<IEntity, bool> canShowEntity)
         {
             this.host = host; this.lifetime = lifetime; this.gameplay = gameplay; this.entities = entities;
+            this.canShowEntity = canShowEntity;
             if (!lifetime.IsStopping) host.LayerLost += Lost;
         }
         public OperationResult<IUiWorldLabel> Add(UiWorldLabelRequest request)
@@ -95,6 +98,8 @@ namespace TopiaForge.ModManager
         private bool ClearLine(Binding item, Vec3 camera, Vec3 position)
         {
             if (!gameplay.IsGameplay || !item.State.IsAlive) return false;
+            var entity = item.State.Entity;
+            if (entity != null && !canShowEntity(entity)) return false;
             if (!item.Occlusion) return true;
             var start = new Vector3(camera.X, camera.Y, camera.Z);
             var end = new Vector3(position.X, position.Y, position.Z);
@@ -102,7 +107,7 @@ namespace TopiaForge.ModManager
             var distance = delta.magnitude;
             if (distance <= 0.1f) return true;
             GameObject? own = null;
-            if (item.State.Entity != null && entities.TryGetGameObject(item.State.Entity, out var gameObject)) own = gameObject;
+            if (entity != null && entities.TryGetGameObject(entity, out var gameObject)) own = gameObject;
             var count = UnityEngine.Physics.RaycastNonAlloc(start, delta / distance, hits, distance - 0.05f,
                 UnityEngine.Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             if (count == hits.Length) return false;

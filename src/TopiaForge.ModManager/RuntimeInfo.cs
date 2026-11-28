@@ -10,6 +10,8 @@ namespace TopiaForge.ModManager
 {
     internal sealed class RuntimeInfo : IRuntimeInfo
     {
+        internal const string EntityLabelViewProvider = "topiaforge.core.entity-label-views";
+        private const string CoreProvider = "topiaforge.core";
         private static readonly IReadOnlyDictionary<string, string> KnownProviders =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -42,7 +44,8 @@ namespace TopiaForge.ModManager
             Platform = DetectPlatform();
             Architecture = NormalizeArchitecture(RuntimeInformation.ProcessArchitecture);
             RuntimeIdentifier = Platform + "-" + Architecture;
-            providerVersions["topiaforge.core"] = SdkVersion;
+            providerVersions[CoreProvider] = SdkVersion;
+            providerVersions[EntityLabelViewProvider] = SdkVersion;
             ProviderVersions = new ReadOnlyDictionary<string, SemanticVersion>(providerVersions);
             unavailableCapabilitiesView = new ReadOnlyDictionary<string, string>(unavailableCapabilities);
         }
@@ -96,9 +99,7 @@ namespace TopiaForge.ModManager
             if (packages == null) throw new ArgumentNullException(nameof(packages));
             unavailableCapabilities.Clear();
             reportedCapabilityOwners.Clear();
-            foreach (var providerId in providerVersions.Keys
-                         .Where(id => !string.Equals(id, "topiaforge.core", StringComparison.OrdinalIgnoreCase))
-                         .ToArray())
+            foreach (var providerId in providerVersions.Keys.Where(id => !IsBuiltInProvider(id)).ToArray())
             {
                 providerVersions.Remove(providerId);
             }
@@ -118,6 +119,7 @@ namespace TopiaForge.ModManager
 
         internal void MarkProviderLoaded(ModManifest manifest)
         {
+            if (IsBuiltInProvider(manifest.Id)) return;
             RemoveReportedCapabilities(manifest.Id);
             if (!SemanticVersion.TryParse(manifest.Version, out var version))
             {
@@ -133,6 +135,7 @@ namespace TopiaForge.ModManager
 
         internal void MarkProviderFailed(ModManifest manifest, string reason)
         {
+            if (IsBuiltInProvider(manifest.Id)) return;
             RemoveReportedCapabilities(manifest.Id);
             providerVersions.Remove(manifest.Id);
             if (!KnownProviders.TryGetValue(manifest.Id, out var capability))
@@ -143,6 +146,9 @@ namespace TopiaForge.ModManager
             unavailableCapabilities[capability] = "The optional " + capability + " provider failed to load: "
                 + (string.IsNullOrWhiteSpace(reason) ? "unknown failure" : reason);
         }
+
+        private static bool IsBuiltInProvider(string id) => string.Equals(id, CoreProvider, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(id, EntityLabelViewProvider, StringComparison.OrdinalIgnoreCase);
 
         internal void ReportCapabilityAvailability(
             string providerId,

@@ -13,6 +13,11 @@ namespace TopiaForge.ModManager.Tests
             runtime.ConfigureProviders(Array.Empty<ModPackage>());
             Assert(runtime.ProviderVersions.ContainsKey("topiaforge.core"),
                 "runtime metadata should always expose the manager-owned core provider version");
+            var builtIn = new ModManifest { Id = RuntimeInfo.EntityLabelViewProvider.ToUpperInvariant(), Version = "1.2.3" };
+            runtime.MarkProviderLoaded(builtIn);
+            runtime.MarkProviderFailed(builtIn, "synthetic failure");
+            Assert(runtime.ProviderVersions.TryGetValue(RuntimeInfo.EntityLabelViewProvider, out var labelProvider)
+                   && labelProvider.Equals(runtime.SdkVersion), "only the manager advertises entity-label view support");
             Assert(runtime.TryGetUnavailableCapability("robotkit", out var missing)
                 && missing!.Contains("not installed", StringComparison.Ordinal),
                 "missing specialist modules should have a stable plain-language reason");

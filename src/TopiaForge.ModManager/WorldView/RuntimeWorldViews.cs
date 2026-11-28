@@ -63,6 +63,7 @@ namespace TopiaForge.ModManager
         // at all. The view a lost link left behind still counts: it holds until the next link's view replaces it.
         internal bool ReadyToDraw => !Client || channel == null
             || viewApplied && appliedSession.Equals(services.Runtime.Control?.SessionSnapshot.Id ?? default);
+        internal bool CanShowEntityLabel(IEntity entity) => ReadyToDraw && !HoldsLocally(entity) && !ShouldHold(entity);
         // Presence made an avatar root and draws it next. Apply the views now so the hold is there for that draw.
         // False when the root should be held and is not: presence leaves it undrawn and asks again next frame.
         internal bool AvatarMade(IEntity root)
